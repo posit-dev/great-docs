@@ -20153,7 +20153,6 @@ def test_process_user_guide_homepage_mode():
         result = docs._process_user_guide()
         assert result is False
 
-
         # Just confirm no crash
 
 
@@ -20397,7 +20396,6 @@ def test_get_package_metadata_cli_config():
         assert result.get("cli_enabled") is True
         assert result.get("cli_module") == "mypkg.cli"
         assert result.get("cli_name") == "main"
-
 
         # Just confirm no crash
 
@@ -42076,10 +42074,7 @@ def test_categorize_referenced_objects_method_ref_categorises_its_class():
         pkg_dir = Path(tmp_dir) / "refpkg"
         pkg_dir.mkdir()
         (pkg_dir / "__init__.py").write_text(
-            "class MyClass:\n"
-            "    def my_method(self):\n"
-            '        """A method."""\n'
-            "        pass\n",
+            'class MyClass:\n    def my_method(self):\n        """A method."""\n        pass\n',
             encoding="utf-8",
         )
 

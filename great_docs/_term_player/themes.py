@@ -208,7 +208,9 @@ def get_theme(name: str) -> Theme:
 
 def _check_color(value: Any, field: str) -> str:
     if not isinstance(value, str) or not _HEX_RE.match(value):
-        raise ValueError(f"termshow theme {field} must be a hex color like '#1e1e2e', got {value!r}")
+        raise ValueError(
+            f"termshow theme {field} must be a hex color like '#1e1e2e', got {value!r}"
+        )
     return value
 
 

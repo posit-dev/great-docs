@@ -266,8 +266,8 @@ def hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
 
 def rgb_to_hsl(r: int, g: int, b: int) -> tuple[int, int, int]:
     """Convert RGB (0-255) to HSL (degrees, percent, percent), rounded to ints."""
-    h, l, s = colorsys.rgb_to_hls(r / 255.0, g / 255.0, b / 255.0)
-    return (round(h * 360) % 360, round(s * 100), round(l * 100))
+    hue, lightness, saturation = colorsys.rgb_to_hls(r / 255.0, g / 255.0, b / 255.0)
+    return (round(hue * 360) % 360, round(saturation * 100), round(lightness * 100))
 
 
 def needs_border_ring(hex_str: str) -> tuple[bool, str]:
@@ -401,7 +401,7 @@ def build_tooltip_html(color: dict[str, Any], show_contrast: str) -> str:
     hex_val = color["hex"]
     name = color.get("name", hex_val)
     r, g, b = hex_to_rgb(hex_val)
-    h, s, l = rgb_to_hsl(r, g, b)
+    hue, saturation, lightness = rgb_to_hsl(r, g, b)
 
     parts = [
         '<div class="gd-cs-tooltip">',
@@ -413,7 +413,7 @@ def build_tooltip_html(color: dict[str, Any], show_contrast: str) -> str:
         f' <button class="gd-cs-tooltip-copy" data-hex="{_esc(hex_val)}" '
         f'aria-label="Copy hex value" title="Copy">&#128203;</button></td></tr>',
         f"<tr><td>RGB</td><td>{r}, {g}, {b}</td></tr>",
-        f"<tr><td>HSL</td><td>{h}&deg;, {s}%, {l}%</td></tr>",
+        f"<tr><td>HSL</td><td>{hue}&deg;, {saturation}%, {lightness}%</td></tr>",
     ]
 
     if show_contrast != "false":

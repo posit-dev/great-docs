@@ -119,9 +119,7 @@ def test_a_custom_section_title_stays_as_written():
         (MODULE, None, "functions", "関数"),
     ],
 )
-def test_member_group_headings_are_translated(
-    source: str, name: str | None, slug: str, title: str
-):
+def test_member_group_headings_are_translated(source: str, name: str | None, slug: str, title: str):
     qmd = _render(source, name, "ja")
 
     assert f"{title} {{.doc-{slug}}}" in qmd

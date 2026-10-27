@@ -73,11 +73,6 @@ def _find_package_skills(package: str) -> list[Path]:
     Looks for `skills/<name>/SKILL.md` inside the installed package directory. Returns a list of
     SKILL.md paths found.
     """
-    try:
-        from importlib.metadata import packages_distributions  # pragma: no cover
-    except ImportError:  # pragma: no cover
-        pass  # pragma: no cover
-
     # Strategy: locate the package's top-level directory and look for skills/
     import importlib
 

@@ -18,7 +18,10 @@ HEAD_TAGS_LOOP = ["$for(gd-head-tags)$", "$gd-head-tags$", "$endfor$"]
 # Removed as one block, since `$endif$` also closes Quarto's own conditionals.
 ROBOTS_LINES = ["$if(robots)$", '<meta name="robots" content="$robots$" />', "$endif$"]
 # Hide the page until theme-init.js reveals it (with a no-JS fallback).
-PAGE_REVEAL_PREFIXES = ("<style>html:not(.theme-loaded)", "<noscript><style>html:not(.theme-loaded)")
+PAGE_REVEAL_PREFIXES = (
+    "<style>html:not(.theme-loaded)",
+    "<noscript><style>html:not(.theme-loaded)",
+)
 
 
 def _quarto_partial() -> Path | None:

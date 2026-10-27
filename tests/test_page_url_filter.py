@@ -45,7 +45,9 @@ def _canonicals(page: Path) -> list[str]:
 
 
 def _og_urls(page: Path) -> list[str]:
-    return re.findall(r'<meta property="og:url" content="([^"]*)">', page.read_text(encoding="utf-8"))
+    return re.findall(
+        r'<meta property="og:url" content="([^"]*)">', page.read_text(encoding="utf-8")
+    )
 
 
 def test_canonical_links_use_page_and_directory_urls(tmp_path):

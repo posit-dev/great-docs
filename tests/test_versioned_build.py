@@ -1279,7 +1279,6 @@ class TestCanonicalUrlInjection:
         assert old["website"]["site-url"] == "https://example.com/pkg/v/0.1/"
         assert "include-in-header" not in old.get("format", {}).get("html", {})
 
-
     def test_latest_version_keeps_the_filter(self, tmp_path: Path):
         latest = self._rewritten(tmp_path, _make_entry("0.2", latest=True), "0.2")
         assert latest["filters"] == ["interlinks", "page-url"]

@@ -25,12 +25,12 @@ import shutil
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, cast
 
 from yaml12 import format_yaml, parse_yaml, write_yaml
 
 from ..._utils import QUARTO_YML_HEADER
-from ..._yaml import split_front_matter
+from ..._yaml import YamlValue, split_front_matter
 from ..page_metadata import rendered_pages
 
 SIDEBAR_IDS = ("reference", "cli-reference", "mcp-reference")
@@ -76,9 +76,10 @@ def prepare(build_dir: Path) -> list[str]:
     if not quarto_yml.is_file():
         return []
     text = quarto_yml.read_text(encoding="utf-8")
-    config = parse_yaml(text) or {}
-    website = config.get("website")
-    if not isinstance(website, dict) or not isinstance(website.get("sidebar"), list):
+    config = cast("dict[str, Any]", parse_yaml(text) or {})
+    website: YamlValue = config.get("website")
+    sidebars = website.get("sidebar") if isinstance(website, dict) else None
+    if not isinstance(sidebars, list):
         return []
 
     project = _Project(build_dir, config)
@@ -93,33 +94,31 @@ def prepare(build_dir: Path) -> list[str]:
         "sidebars": [project.manifest_entry(plan) for plan in plans],
     }
 
-    sidebars = website["sidebar"]
     for plan in plans:
-        full = {**copy.deepcopy(plan.sidebar), "id": FULL_PREFIX + plan.id}
+        sidebars.append({**copy.deepcopy(plan.sidebar), "id": FULL_PREFIX + plan.id})
         plan.sidebar["contents"] = project.navbar_items(plan.sidebar)
-        sidebars.append(full)
         for directory in plan.tag_dirs:
             _tag_directory(build_dir / directory, plan.id)
         _write_template(build_dir / plan.template, plan)
 
     project_config = config.setdefault("project", {})
     entry = f"scripts/{SCRIPT}"
-    post_render = project_config.get("post-render")
+    post_render: YamlValue = project_config.get("post-render")
     if post_render is None:
         project_config["post-render"] = entry
     else:
-        scripts = post_render if isinstance(post_render, list) else [post_render]
+        scripts: list[YamlValue] = post_render if isinstance(post_render, list) else [post_render]
         if entry not in scripts:
             project_config["post-render"] = [*scripts, entry]
 
     (build_dir / "scripts").mkdir(exist_ok=True)
-    shutil.copy2(Path(__file__).parents[2] / "assets" / SCRIPT, build_dir / "scripts" / SCRIPT)
+    _ = shutil.copy2(Path(__file__).parents[2] / "assets" / SCRIPT, build_dir / "scripts" / SCRIPT)
 
-    (build_dir / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    _ = (build_dir / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
     with open(quarto_yml, "w", encoding="utf-8") as f:
         if text.startswith(QUARTO_YML_HEADER):
-            f.write(QUARTO_YML_HEADER)
+            _ = f.write(QUARTO_YML_HEADER)
         write_yaml(config, f)
     return [plan.id for plan in plans]
 
@@ -134,10 +133,10 @@ class _Plan:
     pages: list[str]
     """Inputs that show the sidebar, relative to the project"""
 
-    implicit: set[str] = field(default_factory=set)
+    implicit: set[str] = field(default_factory=set[str])
     """Pages that show the sidebar only because they are listed in it"""
 
-    tag_dirs: list[str] = field(default_factory=list)
+    tag_dirs: list[str] = field(default_factory=list[str])
     """Directories whose metadata names the sidebar for its implicit pages"""
 
     @property
@@ -161,11 +160,13 @@ class _Project:
         self.sidebars: list[dict[str, Any]] = [
             s for s in website.get("sidebar", []) if isinstance(s, dict)
         ]
-        navbar = website.get("navbar") if isinstance(website.get("navbar"), dict) else {}
-        self.navbar = [*(navbar.get("left") or []), *(navbar.get("right") or [])]
+        navbar: dict[str, Any] = (
+            website.get("navbar") if isinstance(website.get("navbar"), dict) else {}
+        )
+        self.navbar: list[YamlValue] = [*(navbar.get("left") or []), *(navbar.get("right") or [])]
         self.page_navigation = bool(website.get("page-navigation"))
         self.bread_crumbs = website.get("bread-crumbs", True) is not False
-        search = website.get("search")
+        search: YamlValue = website.get("search")
         self.merge_navbar_crumbs = not (
             isinstance(search, dict) and search.get("merge-navbar-crumbs") is False
         )
@@ -343,7 +344,7 @@ class _Project:
             if not any(part.startswith(("_", ".")) for part in rel.parts):
                 yield path
 
-    def navbar_items(self, sidebar: dict[str, Any]) -> list[Any]:
+    def navbar_items(self, sidebar: dict[str, Any]) -> list[YamlValue]:
         """
         Return the sidebar links that a short sidebar keeps
 
@@ -357,19 +358,20 @@ class _Project:
         ]
         if not kept:
             kept = list(_leaves(sidebar.get("contents")))[:1]
-        short = []
+        short: list[YamlValue] = []
         for item in kept:
             if isinstance(item, dict):
-                text = _text(item)
-                item = {"text": text, "href": _href(item)} if text else {"href": _href(item)}
-            short.append(item)
+                text, href = _text(item), _href(item)
+                short.append({"text": text, "href": href} if text else {"href": href})
+            else:
+                short.append(item)
         return short
 
     # ── Manifest ─────────────────────────────────────────────────────────────
 
     def manifest_entry(self, plan: _Plan) -> dict[str, Any]:
         """Describe a shared sidebar for the post-render script"""
-        crumbs = {}
+        crumbs: dict[str, list[str | None]] = {}
         for page in plan.pages:
             trail = self.crumbs(plan, page)
             if trail is not None:
@@ -381,7 +383,7 @@ class _Project:
             "crumbs": crumbs,
         }
 
-    def crumbs(self, plan: _Plan, page: str) -> list[str] | None:
+    def crumbs(self, plan: _Plan, page: str) -> list[str | None] | None:
         """
         Return the search crumbs Quarto gives a page from the full sidebar
 
@@ -398,7 +400,7 @@ class _Project:
         trail = _trail(plan.sidebar.get("contents"), href)
         if not trail:
             return None
-        texts = []
+        texts: list[str | None] = []
         for item in trail:
             text = _text(item)
             if text is None and _href(item):
@@ -417,7 +419,7 @@ class _Project:
                     texts.insert(0, text)
         return texts
 
-    def _navbar_item(self, plan: _Plan, page: str) -> Any:
+    def _navbar_item(self, plan: _Plan, page: str) -> YamlValue:
         """Return the navbar item Quarto pairs with a page's sidebar"""
         named = page not in plan.implicit
         for item in self.navbar:
@@ -433,7 +435,7 @@ class _Project:
 # ── Sidebar contents ─────────────────────────────────────────────────────────
 
 
-def _shareable(contents: Any) -> bool:
+def _shareable(contents: YamlValue) -> bool:
     """Check that sidebar contents are plain links and sections"""
     if not isinstance(contents, list):
         return False
@@ -451,41 +453,41 @@ def _shareable(contents: Any) -> bool:
     return True
 
 
-def _leaves(contents: Any) -> Iterator[Any]:
+def _leaves(contents: Iterable[YamlValue] | None) -> Iterator[YamlValue]:
     """Yield the sidebar's links in order, sections with links included"""
     for item in contents or []:
         if _href(item):
             yield item
-        if isinstance(item, dict) and isinstance(item.get("contents"), list):
-            yield from _leaves(item["contents"])
+        if isinstance(item, dict) and isinstance(inner := item.get("contents"), list):
+            yield from _leaves(inner)
 
 
-def _hrefs(contents: Any) -> set[str]:
+def _hrefs(contents: Iterable[YamlValue] | None) -> set[str]:
     return {_output(_href(item)) for item in _leaves(contents)}
 
 
-def _input_hrefs(contents: Any) -> Iterable[str]:
+def _input_hrefs(contents: Iterable[YamlValue] | None) -> Iterable[str]:
     return (_href(item) for item in _leaves(contents))
 
 
-def _trail(contents: Any, href: str) -> list[Any]:
+def _trail(contents: Iterable[YamlValue] | None, href: str) -> list[YamlValue]:
     """Return the sections around a sidebar link and the link, as Quarto finds them"""
     for item in contents or []:
         if _output(_href(item)) == href:
             return [item]
-        if isinstance(item, dict) and isinstance(item.get("contents"), list):
-            inner = _trail(item["contents"], href)
+        if isinstance(item, dict) and isinstance(section := item.get("contents"), list):
+            inner = _trail(section, href)
             if inner:
                 return [item, *inner]
     return []
 
 
-def _href(item: Any) -> str:
+def _href(item: YamlValue) -> str:
     """Return a sidebar or navbar item's target as a project path, or `""`"""
     if isinstance(item, str):
         href = item
-    elif isinstance(item, dict) and isinstance(item.get("href"), str):
-        href = item["href"]
+    elif isinstance(item, dict) and isinstance(target := item.get("href"), str):
+        href = target
     else:
         return ""
     href = href.strip()
@@ -494,11 +496,11 @@ def _href(item: Any) -> str:
     return href.lstrip("/")
 
 
-def _text(item: Any) -> str | None:
+def _text(item: YamlValue) -> str | None:
     if isinstance(item, dict):
         for key in ("text", "section"):
-            if isinstance(item.get(key), str):
-                return item[key]
+            if isinstance(text := item.get(key), str):
+                return text
     return None
 
 
@@ -538,7 +540,7 @@ def _tag_directory(directory: Path, sidebar_id: str) -> None:
     if path.is_file():
         meta = parse_yaml(path.read_text(encoding="utf-8")) or {}
     meta = {**meta, "sidebar": sidebar_id}
-    path.write_text(format_yaml(meta) + "\n", encoding="utf-8")
+    _ = path.write_text(format_yaml(meta) + "\n", encoding="utf-8")
 
 
 def _write_template(path: Path, plan: _Plan) -> None:
@@ -551,4 +553,4 @@ def _write_template(path: Path, plan: _Plan) -> None:
         "bread-crumbs": False,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f"---\n{format_yaml(meta)}\n---\n", encoding="utf-8")
+    _ = path.write_text(f"---\n{format_yaml(meta)}\n---\n", encoding="utf-8")

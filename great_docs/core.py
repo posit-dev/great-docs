@@ -45,6 +45,9 @@ from .config import Config, create_default_config
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
+    import click
+    from PIL import Image
+
     from ._apiref.api_reference import APIReference
     from ._apiref.inventory import InventoryItem
 
@@ -4671,7 +4674,9 @@ class GreatDocs:
         # reference: top-level commands they don't name get no page, sidebar entry or index entry.
         if self._config.cli_sections:
             listed = {
-                name for section in self._config.cli_sections for name in section.get("contents", [])
+                name
+                for section in self._config.cli_sections
+                for name in section.get("contents", [])
             }
             cli_info = {
                 **cli_info,
@@ -7478,8 +7483,6 @@ class GreatDocs:
             Defaults to "numpy" if detection is inconclusive.
         """
         try:
-            import griffe
-
             # Normalize package name
             normalized_name = package_name.replace("-", "_")
 
@@ -7590,9 +7593,6 @@ class GreatDocs:
                 print("Detected numpy docstring style")
                 return "numpy"
 
-        except ImportError:  # pragma: no cover
-            print("Warning: griffe not available for docstring detection, defaulting to numpy")
-            return "numpy"
         except Exception as e:  # pragma: no cover
             print(f"Error detecting docstring style: {type(e).__name__}: {e}")
             return "numpy"

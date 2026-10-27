@@ -17,4 +17,3 @@ class TestInlinesEmpty:
 
         assert str(Inlines0(elements=None)) == ""
         assert str(Inlines0(elements=[])) == ""
-
