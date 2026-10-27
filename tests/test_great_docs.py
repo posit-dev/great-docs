@@ -6488,154 +6488,6 @@ def test_module_submodule_allowed_in_exports():
             sys.path.remove(tmp_dir)
 
 
-def test_categorize_fallback_functions_not_other():
-    """Functions must be categorized as 'functions', not 'other', when griffe
-    cannot load the package and the inspect-based fallback is used."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "fbpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '"""Fallback test package."""\n'
-            '__all__ = ["greet", "farewell"]\n'
-            "\n"
-            "def greet(name: str) -> str:\n"
-            '    """Say hello."""\n'
-            "    return f'Hello, {name}'\n"
-            "\n"
-            "def farewell(name: str) -> str:\n"
-            '    """Say goodbye."""\n'
-            "    return f'Goodbye, {name}'\n"
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            categories = docs._categorize_api_objects_fallback("fbpkg", ["greet", "farewell"])
-
-            assert "greet" in categories["functions"]
-            assert "farewell" in categories["functions"]
-            assert categories["other"] == []
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_categorize_fallback_mixed_types():
-    """Fallback categorization must correctly distinguish classes, functions,
-    exceptions, dataclasses, and constants."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "mixfb"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '"""Mixed fallback test package."""\n'
-            "from dataclasses import dataclass\n"
-            "\n"
-            '__all__ = ["Widget", "Config", "WidgetError", "build", "MAX"]\n'
-            "\n"
-            "class Widget:\n"
-            '    """A widget."""\n'
-            "    pass\n"
-            "\n"
-            "@dataclass\n"
-            "class Config:\n"
-            '    """A config."""\n'
-            "    name: str = 'default'\n"
-            "\n"
-            "class WidgetError(Exception):\n"
-            '    """A widget error."""\n'
-            "    pass\n"
-            "\n"
-            "def build() -> Widget:\n"
-            '    """Build a widget."""\n'
-            "    return Widget()\n"
-            "\n"
-            "MAX = 100\n"
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            categories = docs._categorize_api_objects_fallback(
-                "mixfb", ["Widget", "Config", "WidgetError", "build", "MAX"]
-            )
-
-            assert "Widget" in categories["classes"]
-            assert "Config" in categories["dataclasses"]
-            assert "WidgetError" in categories["exceptions"]
-            assert "build" in categories["functions"]
-            assert "MAX" in categories["constants"]
-            assert categories["other"] == []
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_categorize_fallback_discovers_module_by_dir():
-    """When the normalized project name doesn't match the actual module,
-    the fallback must discover and import the correct module directory."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Project name normalizes to 'my_v2_pkg' but the actual module is 'fallback_discover_pkg'
-        pkg_dir = Path(tmp_dir) / "fallback_discover_pkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '"""Package with mismatched name."""\n'
-            '__all__ = ["do_stuff"]\n'
-            "\n"
-            "def do_stuff():\n"
-            '    """Do stuff."""\n'
-            "    pass\n"
-        )
-
-        # Also create pyproject.toml so _find_package_root works
-        (Path(tmp_dir) / "pyproject.toml").write_text(
-            '[project]\nname = "my-v2-pkg"\nversion = "0.1.0"\n'
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            categories = docs._categorize_api_objects_fallback(
-                "my_v2_pkg",  # wrong name — should discover 'fallback_discover_pkg'
-                ["do_stuff"],
-            )
-
-            assert "do_stuff" in categories["functions"]
-            assert categories["other"] == []
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("fallback_discover_pkg", None)
-
-
-def test_categorize_fallback_skips_metadata():
-    """Metadata variables like __version__ must be skipped by the fallback."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "metapkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '"""Metadata test."""\n'
-            '__version__ = "1.0.0"\n'
-            '__all__ = ["run"]\n'
-            "\n"
-            "def run():\n"
-            '    """Run."""\n'
-            "    pass\n"
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            categories = docs._categorize_api_objects_fallback("metapkg", ["__version__", "run"])
-
-            assert "run" in categories["functions"]
-            assert "__version__" not in categories["functions"]
-            assert "__version__" not in categories["other"]
-            assert "__version__" not in categories["constants"]
-        finally:
-            sys.path.remove(tmp_dir)
-
-
 # =========================================================================
 # GDG Site 144: gdtest_docstring_tables — RST Tables in Docstrings
 # =========================================================================
@@ -17171,33 +17023,6 @@ def test_format_authors_yaml_basic():
         assert "role: Maintainer" in result
 
 
-def test_categorize_api_objects_fallback_basic():
-    """Test _categorize_api_objects_fallback with known stdlib module."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "os"\n', encoding="utf-8")
-
-        # Use 'os' module with known exports
-        result = docs._categorize_api_objects_fallback("os", ["path", "getcwd", "sep"])
-        # path is a module -> other; getcwd is a function; sep is a constant
-        assert "getcwd" in result["functions"]
-        assert "sep" in result["constants"]
-
-
-def test_categorize_api_objects_fallback_exception():
-    """Test _categorize_api_objects_fallback classifies exceptions."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "json"\n', encoding="utf-8")
-
-        result = docs._categorize_api_objects_fallback("json", ["JSONDecodeError"])
-        assert "JSONDecodeError" in result["exceptions"]
-
-
 def test_categorize_referenced_objects_missing_item_raises():
     """Test that _categorize_referenced_objects raises SystemExit for missing config items."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -19601,18 +19426,6 @@ def test_reference_enabled_config():
         gd_yml.write_text("reference: false\n", encoding="utf-8")
         config = Config(Path(tmp_dir))
         assert config.reference_enabled is False
-
-
-def test_categorize_api_objects_fallback_import_failure_b9():
-    """Test _categorize_api_objects_fallback with package that can't import."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._categorize_api_objects_fallback(
-            "nonexistent_pkg_xyz_123", ["func_a", "ClassB"]
-        )
-        assert "other" in result
-        # Should have put items in "other" as fallback
-        assert "func_a" in result["other"] or len(result["other"]) > 0
 
 
 def test_sub_classify_function_regular():
@@ -23126,76 +22939,6 @@ def test_categorize_api_objects_module_export():
             sys.path.remove(tmp_dir)
 
 
-def test_categorize_api_objects_fallback():
-    """Test _categorize_api_objects_fallback with importlib."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "fbpkg_cat_fallback"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "class MyClass: pass\n"
-            "def my_func(): pass\n"
-            "class MyError(Exception): pass\n"
-            'CONST = "val"\n',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorize_api_objects_fallback(
-                "fbpkg_cat_fallback", ["MyClass", "my_func", "MyError", "CONST"]
-            )
-
-            assert "MyClass" in result["classes"]
-            assert "my_func" in result["functions"]
-            assert "MyError" in result["exceptions"]
-            assert "CONST" in result["constants"]
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("fbpkg_cat_fallback", None)
-
-
-def test_categorize_api_objects_fallback_import_failure():
-    """Test _categorize_api_objects_fallback when import fails."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        # No package exists — import will fail
-        result = docs._categorize_api_objects_fallback(
-            "nonexistent_pkg_xyz_123", ["SomeClass", "some_func"]
-        )
-
-        # Should put everything in "other"
-        assert "SomeClass" in result["other"]
-        assert "some_func" in result["other"]
-
-
-def test_categorize_api_objects_fallback_with_dataclass():
-    """Test _categorize_api_objects_fallback detects dataclasses."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "fbdcpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "from dataclasses import dataclass\n"
-            "@dataclass\n"
-            "class Point:\n"
-            "    x: float = 0\n"
-            "    y: float = 0\n",
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorize_api_objects_fallback("fbdcpkg", ["Point"])
-
-            assert "Point" in result["dataclasses"]
-        finally:
-            sys.path.remove(tmp_dir)
-
-
 def test_discover_package_exports_with_all():
     """Test _discover_package_exports uses __all__."""
 
@@ -25065,7 +24808,9 @@ def test_categorize_api_objects_not_in_members():
 
 
 def test_categorize_api_objects_griffe_load_failure():
-    """Test _categorize_api_objects falls back when griffe can't load."""
+    """
+    Group exports under `other` when griffe cannot load an importable package
+    """
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "loadfailpkg"
@@ -25079,11 +24824,38 @@ def test_categorize_api_objects_griffe_load_failure():
             with patch.object(griffe, "load", side_effect=RuntimeError("load failed")):
                 result = docs._categorize_api_objects("loadfailpkg", ["func"])
 
-            # Should fall back to _categorize_api_objects_fallback
-            assert result is not None
+            assert result["other"] == ["func"]
         finally:
             sys.path.remove(tmp_dir)
             sys.modules.pop("loadfailpkg", None)
+
+
+def test_categorize_api_objects_files_exports_under_other_without_griffe(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+):
+    """
+    Exclude metadata and group exports under `other` when griffe cannot load
+
+    A mistyped `module:` setting can leave an importable package in the project
+    root under a different name. Categorising must leave that package unimported.
+    """
+    (tmp_path / "actual_pkg").mkdir()
+    (tmp_path / "actual_pkg" / "__init__.py").write_text(
+        '__all__ = ["make", "Widget"]\n\ndef make(): pass\n\nclass Widget: pass\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
+    docs = GreatDocs(project_path=str(tmp_path))
+
+    try:
+        result = docs._categorize_api_objects("named_pkg", ["__version__", "make", "Widget"])
+        imported = "actual_pkg" in sys.modules
+    finally:
+        sys.modules.pop("actual_pkg", None)
+
+    assert result == {**docs._empty_categories(), "other": ["make", "Widget"]}
+    assert "Could not load package with griffe" in capsys.readouterr().err
+    assert not imported
 
 
 def test_categorize_api_objects_cyclic_alias():
@@ -25326,70 +25098,6 @@ def test_check_links_generic_exception():
             result = docs.check_links(include_source=False, include_docs=True)
 
         assert len(result["broken"]) >= 1
-
-
-def test_categorize_api_objects_fallback_discovers_module():
-    """Test _categorize_api_objects_fallback discovers module by scanning."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "actual_module_name"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "class FoundClass: pass\ndef found_func(): pass\n",
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            # Pass wrong name — should discover actual_module_name
-            result = docs._categorize_api_objects_fallback(
-                "wrong_name_xyz", ["FoundClass", "found_func"]
-            )
-
-            # Should have found the module via scanning
-            assert "FoundClass" in result["classes"] or "FoundClass" in result["other"]
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("actual_module_name", None)
-
-
-def test_categorize_api_objects_fallback_with_async():
-    """Test _categorize_api_objects_fallback detects async functions."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "asyncfb"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("async def afunc(): pass\n", encoding="utf-8")
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorize_api_objects_fallback("asyncfb", ["afunc"])
-
-            assert "afunc" in result["async_functions"]
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("asyncfb", None)
-
-
-def test_categorize_api_objects_fallback_missing_attr():
-    """Test _categorize_api_objects_fallback handles missing attributes."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "missfb"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("x = 1\n", encoding="utf-8")
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorize_api_objects_fallback("missfb", ["NonExistent"])
-
-            assert "NonExistent" in result["other"]
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("missfb", None)
 
 
 def test_build_section_error_handled():
