@@ -144,7 +144,7 @@ If your package ships an [MCP](https://modelcontextprotocol.io/) server, Great D
 
 ### Terminal Recordings
 
-Teach your CLI visually with Termshow: record terminal sessions, edit them in a browser-based visual editor, and embed the results as animated SVG players in your documentation. Recordings are lightweight, theme-aware, and play inline without JavaScript dependencies. It's incredibly useful in onboarding guides, tutorials, and landing pages. For places that can't run the player, such as a GitHub README, `great-docs termshow export` writes the recording as a single animated SVG, with light and dark versions if you want them.
+Teach your CLI visually with Termshow: record terminal sessions, edit them in a browser-based visual editor, and embed the results as animated SVG players in your documentation. Recordings are lightweight, theme-aware, and play inline without JavaScript dependencies. It's incredibly useful in onboarding guides, tutorials, and landing pages. For places that can't run the player, such as a GitHub README, `great-docs termshow export` writes the recording as a single animated SVG, with light and dark versions if you want them. On sites built without Quarto, a `<termshow-player>` element plays recordings on any HTML page.
 
 ### Lightbox
 
@@ -411,6 +411,7 @@ Beyond `init`, `build`, and `preview`, Great Docs includes a full suite of quali
 | `great-docs termshow render` | Render SVG frames without a full site build |
 | `great-docs termshow export` | Export a recording as one animated SVG for READMEs |
 | `great-docs termshow validate` | Check a recording and its script for mistakes |
+| `great-docs termshow assets` | Copy the web player for pages built without Quarto |
 | `great-docs termshow import-cast` | Import an asciinema `.cast` file |
 
 ## Recipes
