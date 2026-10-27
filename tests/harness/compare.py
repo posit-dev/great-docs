@@ -327,7 +327,11 @@ def compare_command(
         Findings, empty when the records agree.
     """
     findings: list[str] = []
-    for key, label in (("status", "exit status"), ("python_processes", "Python processes")):
+    for key, label in (
+        ("status", "exit status"),
+        ("python_processes", "Python processes"),
+        ("watch", "watch run"),
+    ):
         if old.get(key) != new.get(key):
             findings.append(f"{label} {old.get(key)} -> {new.get(key)}")
     findings += compare_files(base, test, old.get("files", []), new.get("files", []))
@@ -393,6 +397,15 @@ def failed_checks(manifest: Mapping[str, Any]) -> list[str]:
             for project in projects
             if f"{project}reference/index.qmd" not in present
         ]
+    watch = manifest["commands"].get("watch")
+    if watch is not None:
+        facts: Mapping[str, bool] = watch.get("watch", {})
+        if not facts.get("previewed"):
+            failures.append("watch never reached the preview after its first build")
+        if watch.get("status") != 0:
+            failures.append(f"watch exited with status {watch.get('status')} after the interrupt")
+        if facts.get("traceback"):
+            failures.append("watch printed a traceback")
     return failures
 
 
@@ -426,6 +439,9 @@ def known_gaps(manifest: Mapping[str, Any]) -> list[Gap]:
                     tuple(f"{r['change']} {r['path']}" for r in files),
                 )
             )
+    watch: Mapping[str, bool] = manifest["commands"].get("watch", {}).get("watch", {})
+    if watch.get("previewed") and not watch.get("rebuilt"):
+        gaps.append(Gap("watch-rebuild", "watch mode does not rebuild after a source edit"))
     return gaps
 
 

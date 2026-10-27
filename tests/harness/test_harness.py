@@ -268,3 +268,49 @@ def test_release_repositories_of_one_package_have_the_same_commits(tmp_path: Pat
 
     assert heads[0] == heads[1]
     assert len(set(heads[0].split())) == 2
+
+
+def _watch_recording(root: Path, status: int | str, **facts: bool) -> Path:
+    """
+    Write a recording of one watch command with the given exit status and watch facts
+
+    Parameters
+    ----------
+    root :
+        Recording directory to create.
+    status :
+        Exit status of the watch command.
+    **facts :
+        Values of `previewed`, `rebuilt` and `traceback`.
+
+    Returns
+    -------
+    :
+        The recording directory.
+    """
+    watch = {"status": status, "watch": {"previewed": True, "traceback": False, **facts}}
+    return _recording(root, {"watch": {}}, extra={"watch": watch})
+
+
+def test_watch_without_rebuild_is_a_known_gap_and_a_crash_fails(tmp_path: Path):
+    stale = _watch_recording(tmp_path / "stale", 0, rebuilt=False)
+    rebuilt = _watch_recording(tmp_path / "rebuilt", 0, rebuilt=True)
+    crashed = _watch_recording(tmp_path / "crashed", 1, rebuilt=False, traceback=True)
+    stuck = _watch_recording(tmp_path / "stuck", "timeout", previewed=False, rebuilt=False)
+
+    result = compare(stale, stale)
+
+    assert result.matches
+    assert result.cases[0].known_gaps == [
+        "watch mode does not rebuild after a source edit [watch-rebuild] (base: same)"
+    ]
+    assert compare(rebuilt, rebuilt).cases[0].known_gaps == []
+    assert compare(stale, rebuilt).cases[0].status == "differ"
+    assert compare(crashed, crashed).cases[0].checks == [
+        "watch exited with status 1 after the interrupt (base: same)",
+        "watch printed a traceback (base: same)",
+    ]
+    assert compare(stale, stuck).cases[0].checks == [
+        "watch never reached the preview after its first build (base: passes)",
+        "watch exited with status timeout after the interrupt (base: passes)",
+    ]

@@ -34,6 +34,7 @@ INHERITED_VARIABLES = ("HOME", "USER", "LOGNAME", "LANG", "TMPDIR", "TERM")
 CENSUS_VARIABLE = "GREAT_DOCS_HARNESS_CENSUS"
 QUARTO_LOG_VARIABLE = "GREAT_DOCS_HARNESS_QUARTO_LOG"
 RENDER_PAGES_VARIABLE = "GREAT_DOCS_HARNESS_RENDER_PAGES"
+PREVIEW_HOLD_VARIABLE = "GREAT_DOCS_HARNESS_PREVIEW_HOLD"
 
 OBSERVER_SOURCE = Path(__file__).resolve().parent / "observer" / "sitecustomize.py"
 
@@ -42,6 +43,7 @@ _STUB_TEMPLATE = """\
 # Quarto stand-in written by the great-docs characterisation harness. `render` and `preview`
 # succeed without output; every other subcommand runs the real Quarto. When ${pages} is
 # set, `render` writes a placeholder `_site/` page for each page that Quarto would render.
+# When ${hold} is set, `preview` runs for that many seconds, as a server would.
 if [ -n "${log}" ]; then
   printf '%s\\n' "$*" >> "${log}"
 fi
@@ -57,7 +59,11 @@ case "$1" in
       done
     fi
     exit 0 ;;
-  preview) exit 0 ;;
+  preview)
+    if [ -n "${hold}" ]; then
+      exec sleep "${hold}"
+    fi
+    exit 0 ;;
 esac
 exec {real} "$@"
 """
@@ -265,6 +271,7 @@ def write_stub(directory: Path, real_quarto: str) -> Path:
         _STUB_TEMPLATE.format(
             log=QUARTO_LOG_VARIABLE,
             pages=RENDER_PAGES_VARIABLE,
+            hold=PREVIEW_HOLD_VARIABLE,
             version=STUB_QUARTO_VERSION,
             real=shlex.quote(real_quarto),
         ),

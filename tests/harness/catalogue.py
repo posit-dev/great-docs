@@ -92,6 +92,7 @@ COMMANDS: Mapping[str, tuple[str, ...]] = {
     "init": ("init", "--force"),
     "build": ("build",),
     "freeze": ("freeze",),
+    "watch": ("build", "--watch"),
 }
 
 # Where `great-docs` looks for an existing configuration, relative to the package root.
@@ -158,6 +159,9 @@ class BuildCase:
         outside any repository.
     render_pages :
         Whether the stub `quarto render` writes a placeholder page for each source page.
+    watch_edit :
+        Source file, relative to the package root, that a `watch` command edits once its
+        first build has started the preview.
     expects_reference :
         Whether every Quarto project the commands leave must hold `reference/index.qmd`.
     """
@@ -169,6 +173,7 @@ class BuildCase:
     arguments: Mapping[str, tuple[str, ...]] = field(default_factory=dict[str, tuple[str, ...]])
     releases: tuple[Release, ...] = ()
     render_pages: bool = False
+    watch_edit: str | None = None
     expects_reference: bool = False
 
     @property
@@ -201,6 +206,13 @@ VARIANTS: tuple[BuildCase, ...] = (
             Release("v0.2", {"src/gdtest_kitchen_sink/__init__.py": KITCHEN_SINK_ADDITION}),
         ),
         render_pages=True,
+    ),
+    # Start watch mode, edit a user-guide page once the preview runs, then interrupt it.
+    BuildCase(
+        "gdtest_page_tags",
+        "watch",
+        commands=("init", "watch"),
+        watch_edit="docs/user_guide/02-configuration.qmd",
     ),
 )
 
