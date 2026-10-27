@@ -134,6 +134,8 @@ and their defaults.
 | `annotations` | list | Text overlays at the edges of the viewport |
 | `highlights` | list | Decorations attached to terminal text |
 | `snippets` | list | Copy buttons shown for a time range |
+| `record` | mapping | How `termshow record --steps` runs the shell (below) |
+| `steps` | list | What `termshow record --steps` types into the shell (below) |
 
 ### `settings`
 
@@ -205,6 +207,51 @@ until the text appears. Pattern targets need a version 2 manifest.
 
 Older scripts may put `region` directly on the highlight instead of under `target`; that form is
 still read but is deprecated.
+
+### `record` and `steps`
+
+These two sections are read only by `great-docs termshow record --steps`, which runs the steps in
+a new shell and writes the recording. Rendering ignores them, and the Termshow Editor keeps them
+as written when it saves.
+
+| `record` key | Default | Description |
+|--------------|---------|-------------|
+| `shell` | `sh` | The command to run, split into words like a shell would |
+| `cols` | `80` | Terminal width |
+| `rows` | `24` | Terminal height |
+| `cwd` | the script's directory | Working directory, relative to the script's directory |
+| `env` | (none) | Environment variables to set. Values may be strings, numbers, or `true`/`false` |
+| `typing_delay` | `0.05` | Seconds between typed characters |
+| `typing_jitter` | `0.3` | How much each delay varies, as a fraction of it (0 to 1) |
+| `timeout` | `10` | Seconds to wait for the prompt or a `wait_for` pattern |
+| `prompt_pattern` | `\$ $` | Regular expression (Python syntax) that matches the shell's prompt |
+
+The shell starts with `PS1="$ "`, `TERM=xterm-256color`, and no history file. `env` can change
+any of these. `COLUMNS` and `LINES` are removed so the terminal size is `cols` by `rows`.
+
+Each step is one of these words or single-action mappings:
+
+| Step | Options | What it does |
+|------|---------|--------------|
+| `enter` | | Press Enter |
+| `hide` | | Stop the recording's clock until `show`. Output still reaches the screen, all at the moment of `hide` |
+| `show` | | Start the clock again |
+| `type: TEXT` | `delay` | Type the text, one character at a time |
+| `run: COMMAND` | `delay`, `timeout` | Type the command, press Enter, and wait for the next prompt |
+| `key: NAME` | `count` (`1`), `delay` | Press a key |
+| `sleep: SECONDS` | | Wait, recording any output |
+| `wait_for: PATTERN` | `timeout`, `screen` (`false`) | Wait until a regular expression (Python syntax) matches the cursor's line, or any row of the screen with `screen: true` |
+| `marker: LABEL` | | Add a marker event. Markers become chapters when the script has no `chapters` |
+
+`delay` and `timeout` override the `record` settings for one step. Key names are `enter`, `tab`,
+`backspace`, `escape`, `space`, `up`, `down`, `left`, `right`, `home`, `end`, `delete`, `pageup`,
+`pagedown`, and `ctrl+` or `alt+` followed by a letter (`ctrl+c`). The cursor's line is matched
+up to the cursor, so a prompt's trailing space counts. With `screen: true`, each row has its
+trailing spaces removed and `^` and `$` match at row boundaries.
+
+After the last step, the recorder sends {{< keys shortcut="Ctrl+D" >}} and adds an `x` event with
+the shell's exit status. If a prompt or a `wait_for` pattern doesn't appear in time, or a step
+comes after the shell has exited, the command stops and writes nothing.
 
 ## Player manifests (`manifest.json`)
 
