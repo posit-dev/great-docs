@@ -4,8 +4,8 @@ Two kinds of problem are reported:
 
 - errors: the file breaks the format. The recording has a malformed header or
   event line, or the script has an unknown key, a value of the wrong type or
-  outside its allowed set, a cut that ends before it starts, or a pattern that
-  isn't a regular expression. The rules come from the published JSON Schemas
+  outside its allowed set, a cut that ends before it starts, a pattern that
+  isn't a regular expression, or a step option that doesn't go with its action. The rules come from the published JSON Schemas
   in `schemas/`, read at run time, so the two can't drift apart.
 - warnings: the file is valid but probably not what was meant. Something
   starts after the recording ends, two cuts or two copy buttons overlap,
@@ -23,6 +23,7 @@ from __future__ import annotations
 import difflib
 import json
 import re
+import shlex
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -284,6 +285,11 @@ def check_script_data(
     if "settings" in data:
         clean["settings"] = _check_settings(data["settings"], error, warn)
 
+    if "record" in data:
+        _check_record(data["record"], error)
+    if "steps" in data:
+        _check_steps(data["steps"], error)
+
     for section, def_name in _SECTIONS.items():
         if section not in data:
             continue
@@ -301,6 +307,41 @@ def check_script_data(
             kept.append((i, item) if ok else None)
         clean[section] = kept
     return clean
+
+
+def _check_record(record: Any, error: Report) -> None:
+    if not _check_value(record, {"$ref": "#/$defs/record"}, "record", error) and not isinstance(
+        record, dict
+    ):
+        return
+    if isinstance(record.get("prompt_pattern"), str):
+        # Matched by the recorder, so Python's regex syntax applies
+        _check_regex(record["prompt_pattern"], "record.prompt_pattern", error, js=False)
+    if isinstance(record.get("shell"), str):
+        try:
+            shlex.split(record["shell"])
+        except ValueError as e:
+            error("record.shell", f"can't be split into words ({e})")
+
+
+def _check_steps(steps: Any, error: Report) -> None:
+    from .steps import ACTIONS
+
+    if not isinstance(steps, list):
+        error("steps", f"must be a list, got {_describe(steps)}")
+        return
+    for i, step in enumerate(steps):
+        where = f"steps[{i}]"
+        if not _check_value(step, {"$ref": "#/$defs/step"}, where, error) or isinstance(step, str):
+            continue
+        action = next(k for k in step if k in ACTIONS)
+        for key in step:
+            if key != action and key not in ACTIONS and key not in ACTIONS[action]:
+                goes_with = [a for a, options in ACTIONS.items() if key in options]
+                error(f"{where}.{key}", f"goes with {_or(goes_with)}, not {action!r}")
+        if action == "wait_for":
+            # Matched by the recorder, so Python's regex syntax applies
+            _check_regex(step["wait_for"], f"{where}.wait_for", error, js=False)
 
 
 def _check_settings(settings: Any, error: Report, warn: Report) -> dict[str, Any]:
@@ -488,6 +529,9 @@ def _check_value(
         if "exclusiveMinimum" in schema and value <= schema["exclusiveMinimum"]:
             error(where, f"must be greater than {schema['exclusiveMinimum']} (got {value})")
             return False
+        if "maximum" in schema and value > schema["maximum"]:
+            error(where, f"can't be more than {schema['maximum']} (got {value})")
+            return False
 
     if isinstance(value, str):
         if schema.get("minLength", 0) > len(value):
@@ -496,6 +540,11 @@ def _check_value(
         if "pattern" in schema and not re.search(schema["pattern"], value):
             if label == "hexColor":
                 error(where, f"must be a hex color like '#1e1e2e', got {value!r}")
+            elif label == "keyName":
+                message = f"must be a key like 'enter', 'up', or 'ctrl+c', got {value!r}"
+                if re.search(schema["pattern"], value.lower()):
+                    message += f" (keys are written in lower case: {value.lower()!r})"
+                error(where, message)
             else:
                 error(where, f"doesn't have the expected form, got {value!r}")
             return False
@@ -541,11 +590,16 @@ def _check_object(
 ) -> bool:
     props = schema.get("properties", {})
     ok = True
-    if schema.get("additionalProperties") is False:
+    extra = schema.get("additionalProperties")
+    if extra is False:
         for key in value:
             if key not in props:
                 error(where, _unknown_key(key, props))
                 ok = False
+    elif isinstance(extra, dict):
+        for key, item in value.items():
+            if key not in props:
+                ok = _check_value(item, extra, f"{where}.{key}", error, root) and ok
     for key in schema.get("required", []):
         if key not in value:
             error(where, f"missing {key!r}")
