@@ -41,6 +41,16 @@ _CODE = re.compile(r"`+([^`]*)`+(?:\{[^}]*\})?")
 _STRONG = re.compile(r"(\*\*|__)(.+?)\1")
 _EMPHASIS = re.compile(r"(?<!\w)([*_])(?!\s)(.+?)(?<!\s)\1(?!\w)")
 _BACKSLASH_ESCAPE = re.compile(r"\\([!-/:-@\[-`{-~])")
+
+# A Pandoc citation key, `@key` or `@{key}`, optionally with the `-` that suppresses the author
+_CITATION_KEY = r"-?@(?:\{[^{}]+\}|\w(?:[\w:.#$%&+?<>~/-]*\w)?)"
+# Code spans, escaped characters and link targets match first so that an `@` inside them is
+# never a citation. An `@` after a word character or a `/` belongs to an address or a URL.
+_CITATIONS = re.compile(
+    r"(?P<kept>`+[^`]*`+|\\.|\]\([^)]*\))"
+    rf"|(?P<bracketed>\s*\[[^\[\]]*(?<![\w\\/]){_CITATION_KEY}[^\[\]]*\](?![(\[{{]))"
+    rf"|(?P<in_text>(?<![\w\\/]){_CITATION_KEY})"
+)
 _SET_ASIDE = re.compile("\ue000(\\d+)\ue001")
 _MARKDOWN_SPECIAL = re.compile(r"([\\`*_\[\]$@~^])")
 
@@ -77,8 +87,9 @@ def plain_text(markdown: str) -> str | None:
 
     Keep the text of links, spans and inline code, and an interlink's target
     as it is displayed: the short name for `~`, otherwise the full name. Drop emphasis markers, images, and the characters `<` and `>`,
-    which Quarto does not escape inside a meta tag. Truncate the result to
-    `MAX_LENGTH` characters at a word boundary.
+    which Quarto does not escape inside a meta tag. Drop bracketed citations
+    such as `[@key]` with the space before them, since only rendering resolves
+    them. Truncate the result to `MAX_LENGTH` characters at a word boundary.
 
     Parameters
     ----------
@@ -98,6 +109,7 @@ def plain_text(markdown: str) -> str | None:
         return f"\ue000{len(escaped) - 1}\ue001"
 
     text = _BACKSLASH_ESCAPE.sub(set_aside, markdown)
+    text = _CITATIONS.sub(lambda m: "" if m.group("bracketed") else m.group(0), text)
     text = _INTERLINK.sub(
         lambda m: m.group(2).rsplit(".", 1)[-1] if m.group(1) else m.group(2), text
     )
@@ -152,19 +164,25 @@ def metadata_value(markdown: str | None) -> str | None:
     return as_metadata(text) if text else None
 
 
-def first_paragraph(body: str) -> FirstParagraph:
+def first_paragraph(body: str, *, citations: bool = False) -> FirstParagraph:
     """
     Find the paragraph a page opens with
 
     Skip blank lines, headings and HTML comments, then judge the first block.
-    A plain paragraph longer than 30 characters is the description. Any other
-    block means the page has no opening paragraph, and nothing after it is
-    considered.
+    A plain paragraph longer than 30 characters is the description, unless
+    citations resolve on the page and the paragraph cites a reference in its
+    text, as in `@key argues`: before rendering, such a citation has no author
+    name to show. Any other block means the page has no opening paragraph, and
+    nothing after it is considered.
 
     Parameters
     ----------
     body
         The page body, without front matter.
+    citations
+        Whether Quarto resolves `@key` as a citation on the page, as
+        `resolves_citations` reports. Without a bibliography, Quarto shows
+        `@key` as written.
 
     Returns
     -------
@@ -193,7 +211,12 @@ def first_paragraph(body: str) -> FirstParagraph:
 
         if reason := _non_paragraph(block[0]):
             return FirstParagraph(fallback=f"starts with {reason}")
-        text = plain_text(" ".join(block))
+        paragraph = " ".join(block)
+        if citations and any(m.group("in_text") for m in _CITATIONS.finditer(paragraph)):
+            return FirstParagraph(
+                fallback="opens with a paragraph that cites a reference in its text"
+            )
+        text = plain_text(paragraph)
         if text is None or len(text) <= SHORT_PARAGRAPH:
             return FirstParagraph(fallback="opens with a paragraph of 30 characters or fewer")
         return FirstParagraph(text=text)
@@ -260,7 +283,31 @@ def default_description(config: Config, package_description: str | None) -> str 
     return plain_text(source) if source else None
 
 
-def page_description(front_matter: YamlMapping, body: str, default: str | None) -> str | None:
+def resolves_citations(front_matter: YamlMapping, config: Config) -> bool:
+    """
+    Check whether Quarto resolves `@key` citations on a page
+
+    Parameters
+    ----------
+    front_matter
+        The page's parsed front matter, empty when it has none.
+    config
+        Project configuration.
+
+    Returns
+    -------
+    :
+        `True` when the project or the page declares a bibliography, or the
+        page lists its references inline.
+    """
+    return bool(config.bibliography) or any(
+        key in front_matter for key in ("bibliography", "references")
+    )
+
+
+def page_description(
+    front_matter: YamlMapping, body: str, default: str | None, *, citations: bool = False
+) -> str | None:
     """
     Choose the `description-meta` value Python writes for a page
 
@@ -272,6 +319,8 @@ def page_description(front_matter: YamlMapping, body: str, default: str | None) 
         The page source after the front matter.
     default
         The site's default description as plain text.
+    citations
+        Whether Quarto resolves `@key` as a citation on the page.
 
     Returns
     -------
@@ -281,7 +330,7 @@ def page_description(front_matter: YamlMapping, body: str, default: str | None) 
     """
     if any(key in front_matter for key in PAGE_KEYS):
         return None
-    text = first_paragraph(body).text or default
+    text = first_paragraph(body, citations=citations).text or default
     return as_metadata(text) if text else None
 
 

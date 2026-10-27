@@ -36,6 +36,10 @@ LONG = "This sentence is comfortably longer than thirty characters."
         ("Tom \\& Jerry \\*literal\\*", "Tom & Jerry *literal*"),
         ("  spread\n   over   lines ", "spread over lines"),
         ("![only an image](a.png)", None),
+        ("Introduced by Knuth [@knuth1984], who argued", "Introduced by Knuth, who argued"),
+        ("As shown [see @parnas1972, p. 3; @knuth1984].", "As shown."),
+        ("Keep `[@key]` and [mail](mailto:a@b.org)", "Keep [@key] and mail"),
+        ("Escaped \\[\\@key\\] stays", "Escaped [@key] stays"),
     ],
 )
 def test_plain_text(markdown: str, expected: str | None):
@@ -105,6 +109,47 @@ def test_first_paragraph_falls_back(body: str, fallback: str):
     assert first_paragraph(body) == FirstParagraph(fallback=fallback)
 
 
+def test_first_paragraph_drops_bracketed_citations():
+    assert first_paragraph(f"{LONG} [@knuth1984]\n") == FirstParagraph(text=LONG)
+
+
+def test_first_paragraph_falls_back_on_an_in_text_citation():
+    body = f"As @parnas1972 showed, {LONG}\n"
+    assert first_paragraph(body, citations=True) == FirstParagraph(
+        fallback="opens with a paragraph that cites a reference in its text"
+    )
+    # Without a bibliography, Quarto shows `@parnas1972` as written
+    assert first_paragraph(body).text == f"As @parnas1972 showed, {LONG}"
+
+
+@pytest.mark.parametrize(
+    "paragraph",
+    [
+        "Write to team@example.org for help with the package.",
+        "Follow https://example.org/@team for news about the package.",
+        "Mention `@decorator` and \\@handle in the opening paragraph.",
+        "See the [maintainer](https://example.org/@team) for the package.",
+    ],
+)
+def test_first_paragraph_keeps_at_signs_that_are_not_citations(paragraph: str):
+    assert first_paragraph(f"{paragraph}\n", citations=True).text is not None
+
+
+@pytest.mark.parametrize(
+    ("bibliography", "front_matter", "expected"),
+    [
+        ([], "", False),
+        (["references.bib"], "", True),
+        ([], "bibliography: page.bib\n", True),
+        ([], "references:\n  - id: knuth1984\n", True),
+    ],
+)
+def test_resolves_citations(bibliography: list[str], front_matter: str, expected: bool):
+    config: Any = SimpleNamespace(bibliography=bibliography)
+    parsed, _ = split_front_matter(f"---\n{front_matter}---\n\nText\n")
+    assert description.resolves_citations(parsed, config) is expected
+
+
 def _config(default: str | None = None) -> Any:
     return SimpleNamespace(seo_default_description=default)
 
@@ -132,6 +177,11 @@ def test_page_description(content: str, expected: str | None) -> None:
 
 def test_page_description_without_a_default() -> None:
     assert page_description(YamlMapping(), "```\ncode\n```\n", None) is None
+
+
+def test_page_description_with_an_in_text_citation():
+    body = f"As @parnas1972 showed, {LONG}\n"
+    assert page_description(YamlMapping(), body, "Site default", citations=True) == "Site default"
 
 
 def test_add_to_raw_page():

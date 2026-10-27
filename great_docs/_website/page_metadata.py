@@ -177,7 +177,12 @@ def write_to_pages(
         page = Page.make(path, project_dir)
         entries: dict[str, Any] = {}
         if write_descriptions and (
-            value := description.page_description(page.front_matter, page.body, default)
+            value := description.page_description(
+                page.front_matter,
+                page.body,
+                default,
+                citations=description.resolves_citations(page.front_matter, config),
+            )
         ):
             entries["description-meta"] = value
         if write_cards:

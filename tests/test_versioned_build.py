@@ -285,7 +285,10 @@ class TestPreprocessVersion:
                 ),
             },
         )
-        config = cast("Config", SimpleNamespace(seo_enabled=True, social_cards_enabled=False))
+        config = cast(
+            "Config",
+            SimpleNamespace(seo_enabled=True, social_cards_enabled=False, bibliography=[]),
+        )
         versions = self._setup_versions()
 
         descriptions = []

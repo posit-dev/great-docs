@@ -212,7 +212,12 @@ def page_entries(
     elif header_description and "description" not in front_matter:
         value = header_description
     else:
-        value = description.page_description(front_matter, body, default)
+        value = description.page_description(
+            front_matter,
+            body,
+            default,
+            citations=description.resolves_citations(front_matter, config),
+        )
     if value:
         card["description"] = value
     return {"open-graph": card, "twitter-card": dict(card)} if card else {}

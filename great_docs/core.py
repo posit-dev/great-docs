@@ -10849,7 +10849,9 @@ title: "Authors and Citation"
         # The wrapper below puts markup above the README, so the README's own
         # opening paragraph must be found before it is wrapped
         if self._config.seo_enabled and not homepage_description:
-            opening = seo_description.first_paragraph(readme_content).text
+            opening = seo_description.first_paragraph(
+                readme_content, citations=bool(self._config.bibliography)
+            ).text
             if opening:
                 homepage_description = {"description-meta": seo_description.as_metadata(opening)}
 
