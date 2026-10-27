@@ -279,3 +279,36 @@ def test_a_project_documents_the_module_it_imports_as(tmp_path: Path) -> None:
     # Callers use the distribution name, not the configured import name.
     assert gd.documented_symbol_names("my-dist") == ["Cache"]
     assert "actual_module.Cache" in {item.name for item in gd.documented_objects("my-dist")}
+
+
+def _write_large_class_under_another_name(root: Path) -> None:
+    """
+    Create a project with a distinct import name and a class with six methods
+    """
+    (root / "pyproject.toml").write_text('[project]\nname = "my-dist"\nversion = "0.1.0"\n')
+    pkg = root / "actual_module"
+    pkg.mkdir()
+    methods = "".join(f'    def m{i}(self):\n        """Method {i}."""\n\n' for i in range(1, 7))
+    (pkg / "__init__.py").write_text(
+        '__all__ = ["Big", "Cache"]\n\n\n'
+        f'class Big:\n    """A class with six methods."""\n\n{methods}\n'
+        'class Cache:\n    """A cache."""\n\n    def get(self):\n        """Get."""\n'
+    )
+
+
+def test_a_project_imported_under_another_name_gets_the_build_sections(tmp_path: Path):
+    """
+    Match the build's method sections when project and import names differ
+
+    A class with more than five methods gets its own section, with a separate page
+    for each method.
+    """
+    _write_large_class_under_another_name(tmp_path)
+    gd = GreatDocs(project_path=str(tmp_path))
+    methods = [f"Big.m{i}" for i in range(1, 7)]
+
+    assert gd.documented_symbol_names("my-dist") == ["Big", "Cache", "Cache.get", *methods]
+    pages = {item.name: item.uri for item in gd.documented_objects("my-dist")}
+    assert [pages[f"actual_module.{method}"] for method in methods] == [
+        f"reference/{method}.html#actual_module.{method}" for method in methods
+    ]

@@ -9068,10 +9068,9 @@ class GreatDocs:
         mode resolving the reference performs a real import of the target
         package.
 
-        Resolve the reference under the configured import name. It can differ
-        from the project name with dashes replaced. Projects may configure
-        that name explicitly. Otherwise, the project would produce no
-        documented objects.
+        Use the import name to discover sections and resolve the reference,
+        matching the build. This name may be configured explicitly and may differ
+        from the project name even after replacing dashes with underscores.
 
         Parameters
         ----------
@@ -9118,7 +9117,7 @@ class GreatDocs:
                 contextlib.redirect_stdout(io.StringIO()),
                 contextlib.redirect_stderr(io.StringIO()),
             ):
-                sections = self._create_api_sections_with_config(package_name)
+                sections = self._create_api_sections_with_config(importable_name)
                 if not sections:
                     yield None
                     return
