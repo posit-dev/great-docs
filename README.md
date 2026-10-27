@@ -144,7 +144,7 @@ If your package ships an [MCP](https://modelcontextprotocol.io/) server, Great D
 
 ### Terminal Recordings
 
-Teach your CLI visually with Termshow: record terminal sessions, edit them in a browser-based visual editor, and embed the results as animated SVG players in your documentation. Recordings are lightweight, theme-aware, and play inline without JavaScript dependencies. It's incredibly useful in onboarding guides, tutorials, and landing pages. For places that can't run the player, such as a GitHub README, `great-docs termshow export` writes the recording as a single animated SVG, with light and dark versions if you want them. On sites built without Quarto, a `<termshow-player>` element plays recordings on any HTML page.
+Teach your CLI visually with Termshow: record terminal sessions (by hand, or from a list of steps that can be re-recorded whenever the output changes), edit them in a browser-based visual editor, and embed the results as animated SVG players in your documentation. Recordings are lightweight, theme-aware, and play inline without JavaScript dependencies. It's incredibly useful in onboarding guides, tutorials, and landing pages. For places that can't run the player, such as a GitHub README, `great-docs termshow export` writes the recording as a single animated SVG, with light and dark versions if you want them. On sites built without Quarto, a `<termshow-player>` element plays recordings on any HTML page.
 
 ### Lightbox
 
@@ -405,7 +405,7 @@ Beyond `init`, `build`, and `preview`, Great Docs includes a full suite of quali
 | `great-docs skill install` | Install AI agent skills for your package |
 | `great-docs skill check` | Check if installed skills are up to date |
 | `great-docs skill list` | List available skills from a package or URL |
-| `great-docs termshow record` | Record a terminal session as a `.termshow` file |
+| `great-docs termshow record` | Record a terminal session as a `.termshow` file, live or from scripted `steps:` |
 | `great-docs termshow edit` | Open the browser-based visual editor for a recording |
 | `great-docs termshow play` | Preview a recording in the terminal |
 | `great-docs termshow render` | Render SVG frames without a full site build |
