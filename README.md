@@ -410,6 +410,7 @@ Beyond `init`, `build`, and `preview`, Great Docs includes a full suite of quali
 | `great-docs termshow play` | Preview a recording in the terminal |
 | `great-docs termshow render` | Render SVG frames without a full site build |
 | `great-docs termshow export` | Export a recording as one animated SVG for READMEs |
+| `great-docs termshow validate` | Check a recording and its script for mistakes |
 | `great-docs termshow import-cast` | Import an asciinema `.cast` file |
 
 ## Recipes

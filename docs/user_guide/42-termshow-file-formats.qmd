@@ -348,7 +348,11 @@ show the SVG files.
 
 ## Validating files
 
-Any JSON Schema validator for draft 2020-12 can check these files. The schemas validate one JSON
+The quickest check is `great-docs termshow validate`, which applies these schemas without any extra
+packages and adds checks a schema can't express, such as annotations timed past the end of the
+recording (see [Validating a Recording](terminal-recordings.qmd#validating-a-recording)).
+
+Any JSON Schema validator for draft 2020-12 can check these files too. The schemas validate one JSON
 value at a time, so a recording is checked line by line: the header against
 `#/$defs/header`, and each event against `#/$defs/event`. In Python, with the `jsonschema` and
 PyYAML packages:

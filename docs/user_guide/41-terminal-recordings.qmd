@@ -1149,6 +1149,54 @@ screen is new. [Cuts](#cuts) remove them from the file; speed changes only make 
 Readers who have turned on reduced motion in their system settings see the last screen as a still
 image.
 
+## Validating a Recording
+
+Most mistakes in a script don't stop the build. A misspelled key or position is quietly ignored,
+and an annotation timed past the end never shows. The `validate` command finds them:
+
+```bash
+great-docs termshow validate docs/assets/my-demo.termshow
+```
+
+It checks the recording and its companion `.termshow.yml` (or the one given with `--script`;
+`--no-script` checks the recording alone). Each problem names the file and the entry it's in:
+
+```
+error: my-demo.termshow.yml: annotations[1].position: must be one of top-left, top, top-right, left, right, bottom-left, bottom, bottom-right; got 'middle'
+warning: my-demo.termshow.yml: annotations[2]: starts at 41s, after the end of the recording (23.39s)
+warning: my-demo.termshow.yml: snippets[0].match: '\$ (uv .+)' isn't on screen between 0.8s and 11.71s
+
+1 error, 2 warnings
+```
+
+**Errors** are things the format doesn't allow: a malformed line in the recording, an unknown key,
+a value of the wrong type or outside its allowed set, a cut or speed segment that ends before it
+starts, or a `match` that isn't a regular expression. The rules are the ones in the published
+[JSON Schemas](termshow-file-formats.qmd#validating-files).
+
+**Warnings** are things that are allowed but probably not what you meant:
+
+- a cut, chapter, annotation, highlight, or snippet that starts after the recording ends
+- cuts that overlap each other, or speed segments that do
+- chapters out of time order, at the same time, or with the same label
+- two annotations in the same position at the same time, which cover each other
+- snippets that overlap (only the first one's copy button shows)
+- a highlight region or line outside the terminal
+- a `match` that never appears on screen while its highlight or snippet is active
+- a `match` that uses Python-only regular expression syntax, such as `(?P<name>...)`, since the
+  player matches with JavaScript
+- a stretch of more than 10 seconds with no output and no cut or speed change over it
+
+Cut and speed segment times are checked against the recording's own length, and everything else
+against the length after cuts and speed changes, the same timelines the player uses.
+
+The command exits with status 1 when it finds errors, so it can run in CI. Add `--strict` to fail on
+warnings too, and pass several files to check them all at once:
+
+```bash
+great-docs termshow validate docs/assets/*.termshow --strict
+```
+
 ## Best Practices
 
 These guidelines help produce recordings that are clear, fast-loading, and pleasant to watch:
