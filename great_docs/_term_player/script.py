@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from bisect import bisect_right
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -305,10 +307,10 @@ def _parse_script_data(data: dict[str, Any]) -> Script:
 def apply_script(recording: Recording, script: Script) -> Recording:
     """Apply a script overlay to a recording, producing a modified recording.
 
-    This applies:
-    - Cuts (segment removal)
-    - Speed map adjustments
-    - Global speed multiplier
+    This retimes every event from the recording's own timeline onto the playback timeline (see
+    `playback_time()`): cut ranges are skipped, speed-map ranges are scaled, and the global speed
+    multiplier is applied last. Events inside a cut are kept and moved to the cut's start, so the
+    screen jumps straight to its state at the end of the cut.
 
     Annotations/highlights are not applied to the recording itself —
     they go into the manifest for the player to handle at runtime.
@@ -327,17 +329,9 @@ def apply_script(recording: Recording, script: Script) -> Recording:
     """
     events = list(recording.events)
 
-    # 1. Apply cuts
-    if script.cuts:
-        events = _apply_cuts(events, script.cuts)
-
-    # 2. Apply speed map
-    if script.speed_map:
-        events = _apply_speed_map(events, script.speed_map)
-
-    # 3. Apply global speed
-    if script.speed != 1.0:
-        events = [Event(time=e.time / script.speed, code=e.code, data=e.data) for e in events]
+    if script.cuts or script.speed_map or script.speed != 1.0:
+        to_playback = playback_time(script)
+        events = [Event(time=to_playback(e.time), code=e.code, data=e.data) for e in events]
 
     # Build new recording
     new_rec = Recording(
@@ -352,74 +346,58 @@ def apply_script(recording: Recording, script: Script) -> Recording:
     return new_rec
 
 
-def _apply_cuts(events: list[Event], cuts: list[Cut]) -> list[Event]:
-    """Remove events within cut ranges and adjust timing."""
-    # Sort cuts by start time
-    sorted_cuts = sorted(cuts, key=lambda c: c.start)
+def playback_time(script: Script) -> Callable[[float], float]:
+    """Build a function that maps a recording time to a playback time.
 
-    result: list[Event] = []
-    time_offset = 0.0
+    `cuts` and `speed_map` both refer to the recording's own timeline. Each stretch of that
+    timeline plays at one rate: not at all inside a cut, at `1 / speed` inside a speed segment,
+    and in real time elsewhere. A cut wins over a speed segment that overlaps it, and where speed
+    segments overlap, the one that starts first applies. The global `speed` setting then divides
+    the result.
 
-    for event in events:
-        in_cut = False
-        for cut in sorted_cuts:
-            if cut.start <= event.time <= cut.end:
-                in_cut = True
-                break
+    Parameters
+    ----------
+    script
+        The script whose cuts, speed map, and speed are applied.
 
-        if not in_cut:
-            # Compute how much time has been cut before this event
-            offset = sum(
-                min(cut.end, event.time) - cut.start
-                for cut in sorted_cuts
-                if cut.start < event.time
-            )
-            new_time = event.time - offset
-            result.append(Event(time=max(0.0, new_time), code=event.code, data=event.data))
-
-    return result
-
-
-def _apply_speed_map(events: list[Event], speed_map: list[SpeedSegment]) -> list[Event]:
-    """Apply segment-specific speed adjustments."""
-    sorted_segs = sorted(speed_map, key=lambda s: s.start)
-
-    result: list[Event] = []
-    for event in events:
-        new_time = _remap_time(event.time, sorted_segs)
-        result.append(Event(time=new_time, code=event.code, data=event.data))
-
-    return result
-
-
-def _remap_time(t: float, segments: list[SpeedSegment]) -> float:
-    """Remap a single timestamp through speed segments.
-
-    Time within a speed segment is scaled by 1/speed.
-    Time outside any segment is unchanged.
+    Returns
+    -------
+    Callable[[float], float]
+        A non-decreasing function from recording time to playback time. Every time inside a cut
+        maps to the playback time of the cut's start.
     """
-    new_t = 0.0
-    prev = 0.0
+    cuts = [c for c in script.cuts if c.end > c.start]
+    segments = sorted(
+        (s for s in script.speed_map if s.end > s.start and s.speed > 0),
+        key=lambda s: s.start,
+    )
+    global_speed = script.speed if script.speed > 0 else 1.0
 
-    for seg in segments:
-        if t <= seg.start:
-            break
+    bounds = sorted(
+        {0.0}
+        | {max(0.0, t) for c in cuts for t in (c.start, c.end)}
+        | {max(0.0, t) for s in segments for t in (s.start, s.end)}
+    )
 
-        # Time before this segment (at normal speed)
-        gap_before = min(t, seg.start) - prev
-        new_t += gap_before
+    def rate_at(t: float) -> float:
+        if any(c.start <= t < c.end for c in cuts):
+            return 0.0
+        for seg in segments:
+            if seg.start <= t < seg.end:
+                return 1.0 / seg.speed
+        return 1.0
 
-        # Time within this segment (scaled)
-        time_in_seg = min(t, seg.end) - seg.start
-        new_t += time_in_seg / seg.speed
+    # The rate is constant between neighboring bounds; record it, and the playback time reached
+    # at each bound, so a lookup is one bisect.
+    rates = [rate_at((a + b) / 2) for a, b in zip(bounds, bounds[1:])] + [1.0]
+    starts = [0.0]
+    for (a, b), rate in zip(zip(bounds, bounds[1:]), rates):
+        starts.append(starts[-1] + (b - a) * rate)
 
-        prev = seg.end
+    def to_playback(t: float) -> float:
+        if t <= 0:
+            return 0.0
+        i = bisect_right(bounds, t) - 1
+        return (starts[i] + (t - bounds[i]) * rates[i]) / global_speed
 
-    # Time after last segment
-    last_end = segments[-1].end if segments else 0.0
-    if t > last_end:
-        # Add gap from last segment end to prev accumulation point
-        remaining = t - max(prev, last_end)
-        new_t += remaining
-
-    return new_t
+    return to_playback
