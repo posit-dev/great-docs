@@ -15,13 +15,10 @@ from great_docs._term_player.script import (
     Script,
     Snippet,
     SpeedSegment,
-    _apply_cuts,
-    _apply_speed_map,
-    _remap_time,
     apply_script,
     load_script,
+    playback_time,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,108 +35,168 @@ def _recording(events: list[Event]) -> Recording:
     return Recording(events=events)
 
 
+def _times(script: Script, *times: float) -> list[float]:
+    """Retime events at the given recording times through a script."""
+    return [e.time for e in apply_script(_recording(_events(*times)), script).events]
+
+
 # ---------------------------------------------------------------------------
-# _apply_cuts
+# Cuts
 # ---------------------------------------------------------------------------
 
 
-class TestApplyCuts:
+class TestCuts:
     def test_no_cuts(self):
-        events = _events(0.0, 1.0, 2.0, 3.0)
-        result = _apply_cuts(events, [])
-        assert [e.time for e in result] == pytest.approx([0.0, 1.0, 2.0, 3.0])
-
-    def test_single_cut_removes_events(self):
-        events = _events(0.0, 1.0, 2.0, 3.0, 4.0, 5.0)
-        cuts = [Cut(start=1.5, end=3.5)]
-        result = _apply_cuts(events, cuts)
-        # Events at 2.0 and 3.0 are inside [1.5, 3.5], removed
-        remaining_data = [e.data for e in result]
-        assert "data_2" not in remaining_data
-        assert "data_3" not in remaining_data
+        assert _times(Script(), 0.0, 1.0, 2.0, 3.0) == pytest.approx([0.0, 1.0, 2.0, 3.0])
 
     def test_cut_adjusts_timing(self):
-        events = _events(0.0, 1.0, 2.0, 3.0, 4.0)
-        cuts = [Cut(start=1.5, end=2.5)]  # 1s cut
-        result = _apply_cuts(events, cuts)
-        # Events at 0.0 and 1.0 are before cut, events at 3.0 and 4.0 are after
-        times = [e.time for e in result]
-        # After cut: 3.0 - 1.0 = 2.0, 4.0 - 1.0 = 3.0
-        assert times[0] == pytest.approx(0.0)
-        assert times[1] == pytest.approx(1.0)
-        assert times[-1] == pytest.approx(3.0)
+        # A 1s cut: later events move 1s earlier
+        times = _times(Script(cuts=[Cut(start=1.5, end=2.5)]), 0.0, 1.0, 2.0, 3.0, 4.0)
+        assert times == pytest.approx([0.0, 1.0, 1.5, 2.0, 3.0])
+
+    def test_events_in_cut_are_kept_at_cut_start(self):
+        # Output printed during a cut still reaches the screen, all at once
+        result = apply_script(
+            _recording(_events(0.0, 1.0, 2.0, 3.0, 4.0, 5.0)),
+            Script(cuts=[Cut(start=1.5, end=3.5)]),
+        )
+        assert [e.data for e in result.events] == [f"data_{i}" for i in range(6)]
+        assert [e.time for e in result.events] == pytest.approx([0.0, 1.0, 1.5, 1.5, 2.0, 3.0])
 
     def test_multiple_cuts(self):
-        events = _events(0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0)
-        cuts = [Cut(start=0.5, end=1.5), Cut(start=4.5, end=5.5)]
-        result = _apply_cuts(events, cuts)
-        # Event at 1.0 removed (in first cut), event at 5.0 removed (in second cut)
-        remaining_data = [e.data for e in result]
-        assert "data_1" not in remaining_data
-        assert "data_5" not in remaining_data
+        times = _times(
+            Script(cuts=[Cut(start=0.5, end=1.5), Cut(start=4.5, end=5.5)]),
+            0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
+        )  # fmt: skip
+        assert times == pytest.approx([0.0, 0.5, 1.0, 2.0, 3.0, 3.5, 4.0])
 
-    def test_event_at_cut_boundary_is_removed(self):
-        events = _events(0.0, 1.0, 2.0, 3.0)
-        # Event exactly at start or end of cut is inside [start, end]
-        cuts = [Cut(start=1.0, end=2.0)]
-        result = _apply_cuts(events, cuts)
-        remaining_data = [e.data for e in result]
-        assert "data_1" not in remaining_data
-        assert "data_2" not in remaining_data
+    def test_events_at_cut_boundaries(self):
+        times = _times(Script(cuts=[Cut(start=1.0, end=2.0)]), 0.0, 1.0, 2.0, 3.0)
+        assert times == pytest.approx([0.0, 1.0, 1.0, 2.0])
+
+    def test_overlapping_cuts_remove_their_union(self):
+        times = _times(Script(cuts=[Cut(start=1.0, end=3.0), Cut(start=2.0, end=4.0)]), 0.0, 5.0)
+        assert times == pytest.approx([0.0, 2.0])
+
+    def test_cut_hiding_final_output(self):
+        # The last output happens inside the cut, but the final screen still shows it
+        result = apply_script(
+            _recording(_events(0.0, 1.0, 3.0)), Script(cuts=[Cut(start=2.0, end=5.0)])
+        )
+        assert [e.time for e in result.events] == pytest.approx([0.0, 1.0, 2.0])
+        assert result.events[-1].data == "data_2"
 
 
 # ---------------------------------------------------------------------------
-# _apply_speed_map / _remap_time
+# Speed map
 # ---------------------------------------------------------------------------
 
 
-class TestRemapTime:
-    def test_no_segments(self):
-        # With a segment that doesn't cover our time, function returns 0
-        # (time before first segment start is not accumulated when t <= seg.start)
-        segs = [SpeedSegment(start=10.0, end=20.0, speed=2.0)]
-        assert _remap_time(5.0, segs) == pytest.approx(0.0)
+def _speed(*segments: SpeedSegment) -> Script:
+    return Script(speed_map=list(segments))
 
-    def test_time_past_segment_start(self):
-        # Segment [2, 6] at 2x speed: time is past start
-        segs = [SpeedSegment(start=2.0, end=6.0, speed=2.0)]
-        # At t=4: gap_before = min(4,2)-0 = 2, time_in_seg = min(4,6)-2 = 2, new_t = 2 + 2/2 = 3
-        assert _remap_time(4.0, segs) == pytest.approx(3.0)
+
+class TestSpeedMap:
+    def test_time_before_segment_is_unchanged(self):
+        f = playback_time(_speed(SpeedSegment(start=10.0, end=20.0, speed=2.0)))
+        assert f(5.0) == pytest.approx(5.0)
+        assert f(10.0) == pytest.approx(10.0)
+
+    def test_time_inside_segment(self):
+        # Segment [2, 6] at 2x: 2s before + 2s/2
+        f = playback_time(_speed(SpeedSegment(start=2.0, end=6.0, speed=2.0)))
+        assert f(4.0) == pytest.approx(3.0)
 
     def test_time_after_segment(self):
-        # Segment [2, 6] at 2x speed
-        # At t=8: 2s before + 4s/2 + 2s after = 2 + 2 + 2 = 6
-        segs = [SpeedSegment(start=2.0, end=6.0, speed=2.0)]
-        assert _remap_time(8.0, segs) == pytest.approx(6.0)
+        # 2s before + 4s/2 + 2s after
+        f = playback_time(_speed(SpeedSegment(start=2.0, end=6.0, speed=2.0)))
+        assert f(8.0) == pytest.approx(6.0)
 
     def test_slow_speed(self):
-        # Segment [1, 3] at 0.5x speed → 2s becomes 4s
-        segs = [SpeedSegment(start=1.0, end=3.0, speed=0.5)]
-        # At t=3: 1s before + 2s/0.5 = 1 + 4 = 5
-        assert _remap_time(3.0, segs) == pytest.approx(5.0)
+        # Segment [1, 3] at 0.5x: 1s before + 2s/0.5
+        f = playback_time(_speed(SpeedSegment(start=1.0, end=3.0, speed=0.5)))
+        assert f(3.0) == pytest.approx(5.0)
 
     def test_multiple_segments(self):
-        segs = [
-            SpeedSegment(start=1.0, end=3.0, speed=2.0),  # 2s → 1s
-            SpeedSegment(start=5.0, end=7.0, speed=0.5),  # 2s → 4s
-        ]
-        # At t=10: 1s + 2s/2 + (5-3)=2s + 2s/0.5 + (10-7)=3s = 1 + 1 + 2 + 4 + 3 = 11
-        assert _remap_time(10.0, segs) == pytest.approx(11.0)
+        f = playback_time(
+            _speed(
+                SpeedSegment(start=5.0, end=7.0, speed=0.5),  # 2s → 4s
+                SpeedSegment(start=1.0, end=3.0, speed=2.0),  # 2s → 1s
+            )
+        )
+        # 1 + 2/2 + 2 + 2/0.5 + 3
+        assert f(10.0) == pytest.approx(11.0)
+
+    def test_events_before_between_and_after_segments(self):
+        times = _times(
+            _speed(
+                SpeedSegment(start=2.0, end=4.0, speed=2.0),
+                SpeedSegment(start=6.0, end=8.0, speed=4.0),
+            ),
+            0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 9.0,
+        )  # fmt: skip
+        assert times == pytest.approx([0.0, 1.0, 2.0, 2.5, 3.0, 4.0, 5.0, 5.5, 6.5])
+
+    def test_overlapping_segments_earlier_start_wins(self):
+        f = playback_time(
+            _speed(
+                SpeedSegment(start=2.0, end=6.0, speed=4.0),
+                SpeedSegment(start=0.0, end=4.0, speed=2.0),
+            )
+        )
+        # [0, 4] at 2x, then [4, 6] at 4x
+        assert f(6.0) == pytest.approx(2.5)
 
 
-class TestApplySpeedMap:
-    def test_speed_map_adjusts_all_events(self):
-        events = _events(0.0, 2.0, 4.0, 6.0)
-        segs = [SpeedSegment(start=2.0, end=4.0, speed=2.0)]
-        result = _apply_speed_map(events, segs)
-        # t=0: 0 (t <= seg.start → 0)
-        # t=2: 0 (t <= seg.start → 0)
-        # t=4: gap_before=min(4,2)-0=2, in_seg=min(4,4)-2=2, new=2+2/2=3
-        # t=6: gap_before=min(6,2)-0=2, in_seg=min(6,4)-2=2, new=2+1=3, prev=4; remaining=6-max(4,4)=2, total=5
-        assert result[0].time == pytest.approx(0.0)
-        assert result[1].time == pytest.approx(0.0)
-        assert result[2].time == pytest.approx(3.0)
-        assert result[3].time == pytest.approx(5.0)
+# ---------------------------------------------------------------------------
+# Cuts and speed map together
+# ---------------------------------------------------------------------------
+
+
+class TestCutsWithSpeedMap:
+    def test_speed_map_uses_recording_timeline(self):
+        # The segment refers to [4, 6] in the recording, not 4s into playback
+        script = Script(
+            cuts=[Cut(start=1.0, end=3.0)],
+            speed_map=[SpeedSegment(start=4.0, end=6.0, speed=2.0)],
+        )
+        assert _times(script, 0.0, 2.0, 4.0, 6.0, 8.0) == pytest.approx([0.0, 1.0, 2.0, 3.0, 5.0])
+
+    def test_cut_inside_speed_segment(self):
+        # [0, 8] at 2x with [2, 4] cut: 2/2 + 4/2
+        script = Script(
+            cuts=[Cut(start=2.0, end=4.0)],
+            speed_map=[SpeedSegment(start=0.0, end=8.0, speed=2.0)],
+        )
+        assert _times(script, 2.0, 3.0, 8.0) == pytest.approx([1.0, 1.0, 3.0])
+
+    def test_segment_overlapping_cut_only_scales_the_rest(self):
+        # Segment [2, 6] at 2x, cut [1, 3]: only [3, 6] is sped up
+        script = Script(
+            cuts=[Cut(start=1.0, end=3.0)],
+            speed_map=[SpeedSegment(start=2.0, end=6.0, speed=2.0)],
+        )
+        assert _times(script, 6.0, 7.0) == pytest.approx([2.5, 3.5])
+
+    def test_global_speed_applies_last(self):
+        script = Script(
+            speed=2.0,
+            cuts=[Cut(start=1.0, end=3.0)],
+            speed_map=[SpeedSegment(start=3.0, end=7.0, speed=4.0)],
+        )
+        # (1 + 4/4 + 1) / 2
+        assert _times(script, 8.0) == pytest.approx([1.5])
+
+    def test_times_never_decrease(self):
+        script = Script(
+            cuts=[Cut(start=0.5, end=1.25), Cut(start=3.0, end=3.5)],
+            speed_map=[
+                SpeedSegment(start=1.0, end=2.0, speed=3.0),
+                SpeedSegment(start=1.5, end=4.0, speed=0.5),
+            ],
+        )
+        times = _times(script, *[i / 4 for i in range(24)])
+        assert times == sorted(times)
 
 
 # ---------------------------------------------------------------------------
@@ -160,8 +217,8 @@ class TestApplyScript:
         rec = _recording(_events(0.0, 1.0, 2.0, 3.0, 4.0))
         script = Script(cuts=[Cut(start=1.5, end=2.5)])
         result = apply_script(rec, script)
-        # Event at 2.0 should be removed
-        assert all(e.data != "data_2" for e in result.events)
+        # The event at 2.0 is kept, at the cut's start
+        assert [e.time for e in result.events] == pytest.approx([0.0, 1.0, 1.5, 2.0, 3.0])
 
     def test_empty_script_no_change(self):
         events = _events(0.0, 1.0, 2.0)
@@ -437,11 +494,10 @@ highlights:
 
 class TestApplyScriptSpeedMap:
     def test_speed_map_applied_through_apply_script(self):
-        """apply_script with a speed_map processes events through _apply_speed_map."""
+        """apply_script retimes events through the speed map."""
         events = _events(0.0, 2.0, 4.0, 6.0)
         rec = _recording(events)
         script = Script(speed_map=[SpeedSegment(start=2.0, end=4.0, speed=2.0)])
         result = apply_script(rec, script)
-        # Events at 0 and 2 remap to 0; event at 4 → 3; event at 6 → 5
-        assert result.events[2].time == pytest.approx(3.0)
-        assert result.events[3].time == pytest.approx(5.0)
+        # Only the 2s inside the segment is halved
+        assert [e.time for e in result.events] == pytest.approx([0.0, 2.0, 3.0, 5.0])
