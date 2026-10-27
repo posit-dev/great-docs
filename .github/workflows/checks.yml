@@ -1,0 +1,66 @@
+name: CI Checks
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  checks:
+    name: "Lint, types and harness"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # The harness checks out the pull request's base commit
+
+      - name: Set up uv and Python 3.13
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.13"
+
+      # `uv.lock` is not committed. Resolve it once and let the harness copy it to
+      # the base worktree so both builds install the same dependency versions.
+      - name: Install dependencies
+        run: |
+          uv lock
+          uv sync --extra dev --frozen
+
+      - name: Check formatting and lint
+        run: make check-format
+
+      - name: Check types
+        run: make type-check-strict
+
+      # Compare pull requests with their base commit so reviewers can assess output
+      # differences. Skip pushes to main: comparing with the previous commit would
+      # fail on every intended output change.
+      - name: Install d2 (the harness requires it on both sides)
+        if: github.event_name == 'pull_request'
+        run: |
+          curl -fsSL https://d2lang.com/install.sh | sh -s -- --version v0.8.2
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/d2" --version
+
+      - name: Set up Quarto (the harness's stub passes `quarto pandoc` to it)
+        if: github.event_name == 'pull_request'
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Compare builds with the base commit
+        id: harness
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: make harness HARNESS_ARGS="--base $BASE_SHA --out $RUNNER_TEMP/harness"
+
+      - name: Upload the harness report
+        if: failure() && steps.harness.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: harness-report
+          path: |
+            ${{ runner.temp }}/harness/report.txt
+            ${{ runner.temp }}/harness/report.json

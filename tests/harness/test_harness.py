@@ -37,6 +37,20 @@ def test_file_rules_remove_commit_and_build_time_only():
     assert counts == {"great-docs-commit": 1, "iso-timestamp": 1}
 
 
+def test_file_rules_remove_a_commit_folded_across_lines():
+    footer = textwrap.dedent(
+        """\
+        center: >-
+          Site created with <strong>Great&nbsp;Docs</strong> (<a
+          href="https://github.com/posit-dev/great-docs/commit/3f8d0ffb">3f8d0ffb</a>).
+        """
+    )
+    text, counts = normalise_text(footer, "x", FILE_RULES)
+
+    assert text == "center: >-\n  Site created with <strong>Great&nbsp;Docs</strong>.\n"
+    assert counts == {"great-docs-commit": 1}
+
+
 def test_path_rules_replace_the_innermost_directory_first(tmp_path: Path):
     package = tmp_path / "job" / "pkg"
     rules = path_rules({"<JOB>": tmp_path / "job", "<PKG>": package})

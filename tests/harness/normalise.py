@@ -59,11 +59,12 @@ class Rule:
 
 
 FILE_RULES: tuple[Rule, ...] = (
-    # A development checkout appends its own commit to the page footer.
+    # A development checkout appends its own commit to the page footer. A YAML writer may
+    # fold the footer, so a line break can stand for either space.
     Rule(
         "great-docs-commit",
         re.compile(
-            r' \(<a href=\\?"https://github\.com/posit-dev/great-docs/commit/[0-9a-f]+\\?">'
+            r'\s+\(<a\s+href=\\?"https://github\.com/posit-dev/great-docs/commit/[0-9a-f]+\\?">'
             r"[0-9a-f]+</a>\)"
         ),
         "",
