@@ -27,6 +27,14 @@ test-synthetic: ## Run synthetic package tests
 test-integration: ## Run integration tests with external packages
 	@$(PYTHON) -m pytest tests/test_integration.py -n auto
 
+.PHONY: harness
+harness: ## Compare init and build results against main for 34 cases with Quarto rendering stubbed
+	@$(PYTHON) -m tests.harness run $(HARNESS_ARGS)
+
+.PHONY: harness-full
+harness-full: ## Compare init and build results against main for all supported Gauntlet packages
+	@$(PYTHON) -m tests.harness run --catalogue full $(HARNESS_ARGS)
+
 .PHONY: test-all
 test-all: ## Run all tests (core + synthetic + integration)
 	@$(PYTHON) -m pytest tests/ -n auto
