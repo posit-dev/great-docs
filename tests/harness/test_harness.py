@@ -7,15 +7,17 @@ import os
 import subprocess
 import sys
 import textwrap
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from tests.harness.catalogue import Release, make_repository
 from tests.harness.compare import compare
 from tests.harness.normalise import FILE_RULES, log_skeleton, normalise_text, path_rules
-from tests.harness.record import read_census, store_blob
-from tests.harness.sides import OBSERVER_SOURCE
+from tests.harness.record import SCHEMA, read_census, store_blob
+from tests.harness.sides import OBSERVER_SOURCE, HarnessError, run_checked
 
 
 def test_file_rules_remove_commit_and_build_time_only():
@@ -119,31 +121,59 @@ def test_observer_counts_exceptions_that_great_docs_handles(tmp_path: Path):
     ]
 
 
-def _recording(root: Path, page: str, census: list[dict[str, Any]]) -> Path:
+def _recording(
+    root: Path,
+    commands: Mapping[str, Mapping[str, str | None]],
+    census: Sequence[Mapping[str, Any]] = (),
+    extra: Mapping[str, Mapping[str, Any]] | None = None,
+    **manifest: Any,
+) -> Path:
     """
-    Write a one-case recording with one generated page and the given exception census
+    Write a one-case recording from the files each command wrote
 
     Parameters
     ----------
     root :
         Recording directory to create.
-    page :
-        Page content stored as a blob.
+    commands :
+        For each command in order, the content of each file it wrote, or `None` for a file
+        it removed. A path that an earlier command wrote counts as changed.
     census :
-        Handled-exception entries to include in the build record.
+        Handled-exception entries of every command.
+    extra :
+        Further record keys per command.
+    **manifest :
+        Further manifest keys, such as `expects_reference`.
 
     Returns
     -------
     :
         The recording directory.
     """
-    digest = store_blob(root / "blobs", page.encode())
-    files = [{"path": "docs/index.qmd", "change": "added", "kind": "text", "sha256": digest}]
-    build = {"status": 0, "files": files, "skeleton": [], "warnings": [], "census": census}
-    manifest = {"case": "demo", "commands": {"build": build}}
+    records: dict[str, Any] = {}
+    written: set[str] = set()
+    for name, pages in commands.items():
+        files: list[dict[str, Any]] = []
+        for path, page in pages.items():
+            if page is None:
+                files.append({"path": path, "change": "removed"})
+                continue
+            change = "changed" if path in written else "added"
+            digest = store_blob(root / "blobs", page.encode())
+            files.append({"path": path, "change": change, "kind": "text", "sha256": digest})
+            written.add(path)
+        records[name] = {
+            "status": 0,
+            "files": files,
+            "skeleton": [],
+            "warnings": [],
+            "census": list(census),
+            **(extra or {}).get(name, {}),
+        }
+    content = {"case": "demo", "order": list(records), "commands": records, **manifest}
     (root / "builds").mkdir(parents=True)
-    _ = (root / "builds" / "demo.json").write_text(json.dumps(manifest), encoding="utf-8")
-    side = {"label": root.name, "cases": ["demo"], "facts": {"python": "3.13"}}
+    _ = (root / "builds" / "demo.json").write_text(json.dumps(content), encoding="utf-8")
+    side = {"schema": SCHEMA, "label": root.name, "cases": ["demo"], "facts": {"python": "3.13"}}
     _ = (root / "side.json").write_text(json.dumps(side), encoding="utf-8")
     return root
 
@@ -157,9 +187,11 @@ def test_comparison_names_the_changed_file_and_the_new_handler(tmp_path: Path):
         "raised_at": ["core.py:10"],
         "handlers": ["GreatDocs._step (core.py:12)"],
     }
-    base = _recording(tmp_path / "base", "# Title\n", [])
-    same = _recording(tmp_path / "same", "# Title\n", [])
-    test = _recording(tmp_path / "test", "# Changed title\n", [handled])
+    base = _recording(tmp_path / "base", {"build": {"docs/index.qmd": "# Title\n"}})
+    same = _recording(tmp_path / "same", {"build": {"docs/index.qmd": "# Title\n"}})
+    test = _recording(
+        tmp_path / "test", {"build": {"docs/index.qmd": "# Changed title\n"}}, [handled]
+    )
 
     assert compare(base, same).matches
     result = compare(base, test)
@@ -170,3 +202,115 @@ def test_comparison_names_the_changed_file_and_the_new_handler(tmp_path: Path):
     assert "+# Changed title" in findings
     assert "NEW handled exception: KeyError" in findings
     assert "handled in GreatDocs._step (core.py:12)" in findings
+
+
+def test_comparison_fails_when_the_test_side_lacks_an_expected_reference_index(tmp_path: Path):
+    project = "docs/_quarto/default"
+    complete = {f"{project}/_quarto.yml": "", f"{project}/reference/index.qmd": ""}
+    partial = {f"{project}/_quarto.yml": ""}
+    without = _recording(tmp_path / "without", {"build": partial}, expects_reference=True)
+    also_without = _recording(tmp_path / "also", {"build": partial}, expects_reference=True)
+    good = _recording(tmp_path / "good", {"build": complete}, expects_reference=True)
+    unexpected = _recording(tmp_path / "unexpected", {"build": partial}, expects_reference=False)
+
+    result = compare(without, also_without)
+
+    assert not result.matches
+    assert result.cases[0].status == "fail"
+    assert result.cases[0].checks == [f"{project}/reference/index.qmd is missing (base: same)"]
+    assert compare(good, good).matches
+    assert compare(unexpected, unexpected).matches
+    assert compare(good, without).cases[0].checks == [
+        f"{project}/reference/index.qmd is missing (base: passes)"
+    ]
+
+
+def test_comparison_refuses_a_recording_from_another_harness_schema(tmp_path: Path):
+    current = _recording(tmp_path / "current", {"build": {}})
+    older = _recording(tmp_path / "older", {"build": {}})
+    side = json.loads((older / "side.json").read_text(encoding="utf-8"))
+    _ = (older / "side.json").write_text(json.dumps({**side, "schema": 1}), encoding="utf-8")
+
+    with pytest.raises(HarnessError, match="schema 1"):
+        _ = compare(older, current)
+
+
+def test_freeze_after_build_reports_what_it_prepares_differently_as_a_known_gap(tmp_path: Path):
+    project = "docs/_quarto/default"
+    built = {f"{project}/_quarto.yml": "a", f"{project}/_inv/index.lua": "", f"{project}/x.qmd": ""}
+    frozen = {f"{project}/_quarto.yml": "b", f"{project}/_inv/index.lua": None}
+    base = _recording(tmp_path / "base", {"build": built, "freeze": frozen})
+    same = _recording(tmp_path / "same", {"build": built, "freeze": frozen})
+    fixed = _recording(tmp_path / "fixed", {"build": built, "freeze": {}})
+
+    result = compare(base, same)
+
+    assert result.matches
+    assert result.cases[0].known_gaps == [
+        "freeze prepares 2 files unlike build [freeze-steps] (base: same)",
+        f"    changed {project}/_quarto.yml",
+        f"    removed {project}/_inv/index.lua",
+    ]
+    assert compare(base, fixed).cases[0].known_gaps == [
+        "closed: freeze prepares 2 files unlike build [freeze-steps]"
+    ]
+
+
+def test_release_repositories_of_one_package_have_the_same_commits(tmp_path: Path):
+    releases = (Release("v0.1"), Release("v0.2", {"pkg.py": "VALUE = 2\n"}))
+    heads: list[str] = []
+    for name in ("one", "two"):
+        package = tmp_path / name
+        package.mkdir()
+        _ = (package / "pkg.py").write_text("VALUE = 1\n", encoding="utf-8")
+        make_repository(package, releases)
+        heads.append(run_checked(["git", "rev-parse", "v0.1", "v0.2"], package))
+
+    assert heads[0] == heads[1]
+    assert len(set(heads[0].split())) == 2
+
+
+def _watch_recording(root: Path, status: int | str, **facts: bool) -> Path:
+    """
+    Write a recording of one watch command with the given exit status and watch facts
+
+    Parameters
+    ----------
+    root :
+        Recording directory to create.
+    status :
+        Exit status of the watch command.
+    **facts :
+        Values of `previewed`, `rebuilt` and `traceback`.
+
+    Returns
+    -------
+    :
+        The recording directory.
+    """
+    watch = {"status": status, "watch": {"previewed": True, "traceback": False, **facts}}
+    return _recording(root, {"watch": {}}, extra={"watch": watch})
+
+
+def test_watch_without_rebuild_is_a_known_gap_and_a_crash_fails(tmp_path: Path):
+    stale = _watch_recording(tmp_path / "stale", 0, rebuilt=False)
+    rebuilt = _watch_recording(tmp_path / "rebuilt", 0, rebuilt=True)
+    crashed = _watch_recording(tmp_path / "crashed", 1, rebuilt=False, traceback=True)
+    stuck = _watch_recording(tmp_path / "stuck", "timeout", previewed=False, rebuilt=False)
+
+    result = compare(stale, stale)
+
+    assert result.matches
+    assert result.cases[0].known_gaps == [
+        "watch mode does not rebuild after a source edit [watch-rebuild] (base: same)"
+    ]
+    assert compare(rebuilt, rebuilt).cases[0].known_gaps == []
+    assert compare(stale, rebuilt).cases[0].status == "differ"
+    assert compare(crashed, crashed).cases[0].checks == [
+        "watch exited with status 1 after the interrupt (base: same)",
+        "watch printed a traceback (base: same)",
+    ]
+    assert compare(stale, stuck).cases[0].checks == [
+        "watch never reached the preview after its first build (base: passes)",
+        "watch exited with status timeout after the interrupt (base: passes)",
+    ]

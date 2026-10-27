@@ -33,19 +33,37 @@ INHERITED_VARIABLES = ("HOME", "USER", "LOGNAME", "LANG", "TMPDIR", "TERM")
 # Read by the observer and by the stub `quarto`, which import nothing from the harness.
 CENSUS_VARIABLE = "GREAT_DOCS_HARNESS_CENSUS"
 QUARTO_LOG_VARIABLE = "GREAT_DOCS_HARNESS_QUARTO_LOG"
+RENDER_PAGES_VARIABLE = "GREAT_DOCS_HARNESS_RENDER_PAGES"
+PREVIEW_HOLD_VARIABLE = "GREAT_DOCS_HARNESS_PREVIEW_HOLD"
 
 OBSERVER_SOURCE = Path(__file__).resolve().parent / "observer" / "sitecustomize.py"
 
 _STUB_TEMPLATE = """\
 #!/bin/sh
 # Quarto stand-in written by the great-docs characterisation harness. `render` and `preview`
-# succeed without output; every other subcommand runs the real Quarto.
+# succeed without output; every other subcommand runs the real Quarto. When ${pages} is
+# set, `render` writes a placeholder `_site/` page for each page that Quarto would render.
+# When ${hold} is set, `preview` runs for that many seconds, as a server would.
 if [ -n "${log}" ]; then
   printf '%s\\n' "$*" >> "${log}"
 fi
 case "$1" in
   --version) echo "{version}"; exit 0 ;;
-  render|preview) exit 0 ;;
+  render)
+    if [ -n "${pages}" ]; then
+      find . -name '*.qmd' ! -path '*/_*' | while IFS= read -r page; do
+        target="_site/${{page#./}}"
+        target="${{target%.qmd}}.html"
+        mkdir -p "${{target%/*}}"
+        printf '<html><body>%s</body></html>\\n' "${{page#./}}" > "$target"
+      done
+    fi
+    exit 0 ;;
+  preview)
+    if [ -n "${hold}" ]; then
+      exec sleep "${hold}"
+    fi
+    exit 0 ;;
 esac
 exec {real} "$@"
 """
@@ -252,6 +270,8 @@ def write_stub(directory: Path, real_quarto: str) -> Path:
     _ = stub.write_text(
         _STUB_TEMPLATE.format(
             log=QUARTO_LOG_VARIABLE,
+            pages=RENDER_PAGES_VARIABLE,
+            hold=PREVIEW_HOLD_VARIABLE,
             version=STUB_QUARTO_VERSION,
             real=shlex.quote(real_quarto),
         ),
@@ -380,7 +400,7 @@ def describe(side: Side, stub_dir: Path) -> Side:
     -------
     :
         The side with its facts: commit, local changes, interpreter, installed
-        distributions, and the versions of `d2`, `ruff`, the real Quarto and the stub.
+        distributions, and the versions of `d2`, `ruff`, Git, the real Quarto and the stub.
 
     Raises
     ------
@@ -398,6 +418,7 @@ def describe(side: Side, stub_dir: Path) -> Side:
             raise HarnessError(f"`{tool}` is not on the {side.label} side's PATH ({path})")
         versions[tool] = run_checked([found, "--version"], side.checkout)
     versions["quarto"] = run_checked([real_quarto(), "--version"], side.checkout)
+    versions["git"] = run_checked(["git", "--version"], side.checkout)
     probe = json.loads(run_checked([str(side.bin / "python"), "-c", _DISTRIBUTIONS], side.checkout))
     python = str(probe["python"])
     if tuple(int(p) for p in python.split(".")[:2]) < (3, 12):

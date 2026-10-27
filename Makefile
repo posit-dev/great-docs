@@ -28,11 +28,11 @@ test-integration: ## Run integration tests with external packages
 	@$(PYTHON) -m pytest tests/test_integration.py -n auto
 
 .PHONY: harness
-harness: ## Compare init and build results against main for 34 cases with Quarto rendering stubbed
+harness: ## Compare init, build, watch and freeze results against main for 40 cases with Quarto rendering stubbed
 	@$(PYTHON) -m tests.harness run $(HARNESS_ARGS)
 
 .PHONY: harness-full
-harness-full: ## Compare init and build results against main for all supported Gauntlet packages
+harness-full: ## Compare init, build, watch and freeze results against main for all supported Gauntlet packages and variants
 	@$(PYTHON) -m tests.harness run --catalogue full $(HARNESS_ARGS)
 
 .PHONY: test-all

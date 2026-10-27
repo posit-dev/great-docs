@@ -86,7 +86,7 @@ def choose_cases(
         python = tuple(int(p) for p in str(side.facts["python"]).split("."))
         cases = full_cases(checkout / "test-packages", python)
     else:
-        cases = tier_cases()
+        cases = tier_cases(checkout / "test-packages")
     return select(cases, only)
 
 

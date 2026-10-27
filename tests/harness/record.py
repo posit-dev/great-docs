@@ -8,7 +8,10 @@ diagnosis, and `blobs/` with normalised file contents indexed by SHA-256 and sha
 A manifest records, for each command of the case: the exit status, every file the command
 added, changed or removed in the project, the step skeleton and `[!!]` warnings of its
 output, the census of exceptions that `great_docs` handled, and the calls that reached the
-stub `quarto`.
+stub `quarto`. A watch command also records whether its first build started the preview,
+whether a source edit reached another file and whether its output holds a traceback. The
+manifest also names the case's variant, the order of its commands and whether it expects an
+API reference.
 """
 
 from __future__ import annotations
@@ -16,15 +19,17 @@ from __future__ import annotations
 import concurrent.futures
 import hashlib
 import json
+import math
 import multiprocessing
 import os
 import shutil
+import signal
 import subprocess
 import time
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 from tests.harness.catalogue import COMMANDS, BuildCase, generate, has_config, pin_mtimes
 from tests.harness.normalise import (
@@ -37,12 +42,31 @@ from tests.harness.normalise import (
     normalise_text,
     path_rules,
 )
-from tests.harness.sides import CENSUS_VARIABLE, QUARTO_LOG_VARIABLE, HarnessError, Side
+from tests.harness.sides import (
+    CENSUS_VARIABLE,
+    PREVIEW_HOLD_VARIABLE,
+    QUARTO_LOG_VARIABLE,
+    RENDER_PAGES_VARIABLE,
+    HarnessError,
+    Side,
+)
 
-SCHEMA = 1
+# Bumped whenever the manifest format changes; comparisons refuse mixed schemas.
+SCHEMA = 2
 
-# Written by Python when it imports the package; not build output.
-SKIPPED_DIRECTORIES = frozenset({"__pycache__"})
+# Not build output: Python writes `__pycache__` when it imports the package, and Git rewrites
+# the stat data in `.git` of a copied repository.
+SKIPPED_DIRECTORIES = frozenset({"__pycache__", ".git"})
+
+# A watch run appends this line to a source file and looks for it in other files.
+WATCH_MARKER = "Line added by the characterisation harness during a watch run."
+# Seconds a watch run waits for its edit to reach another file, and for the command to exit
+# after the interrupt; and the interval between checks.
+REBUILD_SECONDS = 10.0
+STOP_SECONDS = 10.0
+POLL_SECONDS = 0.2
+
+TRACEBACK = "Traceback (most recent call last)"
 
 
 @dataclass(frozen=True)
@@ -319,23 +343,35 @@ def run_command(
         CENSUS_VARIABLE: str(census_dir),
         QUARTO_LOG_VARIABLE: str(quarto_log),
     }
-    argv = [str(job.side.bin / "great-docs"), *COMMANDS[name], "--project-path", str(package)]
+    if job.case.render_pages:
+        env[RENDER_PAGES_VARIABLE] = "1"
+    argv = [
+        str(job.side.bin / "great-docs"),
+        *COMMANDS[name],
+        *job.case.arguments.get(name, ()),
+        "--project-path",
+        str(package),
+    ]
     out_file, err_file = job_dir / f"{name}.out", job_dir / f"{name}.err"
     start = time.perf_counter()
+    watch: dict[str, bool] | None = None
     with out_file.open("wb") as out, err_file.open("wb") as err:
-        try:
-            status: int | str = subprocess.run(
-                argv,
-                cwd=job_dir,
-                env=env,
-                stdin=subprocess.DEVNULL,
-                stdout=out,
-                stderr=err,
-                timeout=job.timeout,
-                check=False,
-            ).returncode
-        except subprocess.TimeoutExpired:
-            status = "timeout"
+        if name == "watch":
+            status, watch = run_watch(job, argv, package, env, out, err, quarto_log)
+        else:
+            try:
+                status = subprocess.run(
+                    argv,
+                    cwd=job_dir,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=out,
+                    stderr=err,
+                    timeout=job.timeout,
+                    check=False,
+                ).returncode
+            except subprocess.TimeoutExpired:
+                status = "timeout"
     seconds = round(time.perf_counter() - start, 2)
 
     after = scan(package)
@@ -350,7 +386,7 @@ def run_command(
     if status != "timeout" and reporters == 0:
         raise HarnessError(f"{job.case.id} {name}: no census reported; the observer did not load")
     calls = quarto_log.read_text(encoding="utf-8").splitlines() if quarto_log.exists() else []
-    record = {
+    record: dict[str, Any] = {
         "status": status,
         "seconds": seconds,
         "files": files,
@@ -360,7 +396,179 @@ def run_command(
         "python_processes": reporters,
         "quarto_calls": sorted(normalise_text(c, "", rules)[0] for c in calls),
     }
+    if watch is not None:
+        record["watch"] = {**watch, "traceback": TRACEBACK in stdout or TRACEBACK in stderr}
     return record, after
+
+
+def run_watch(
+    job: Job,
+    argv: Sequence[str],
+    package: Path,
+    env: Mapping[str, str],
+    out: IO[bytes],
+    err: IO[bytes],
+    quarto_log: Path,
+) -> tuple[int | str, dict[str, bool]]:
+    """
+    Run a watch command through its first build, one source edit and an interrupt
+
+    The stub `quarto preview` runs until interrupted, as a server would. Once it starts, the
+    run appends `WATCH_MARKER` to the case's `watch_edit` file, waits up to `REBUILD_SECONDS`
+    for the marker to reach another file under the package, and then sends `SIGINT` to the
+    command's process group, as Ctrl-C does in a terminal.
+
+    Parameters
+    ----------
+    job :
+        The job the command belongs to.
+    argv :
+        The command.
+    package :
+        The package directory.
+    env :
+        The command's environment.
+    out, err :
+        Files that receive the command's output streams.
+    quarto_log :
+        File where the stub `quarto` logs its calls.
+
+    Returns
+    -------
+    :
+        The exit status, or `timeout` when the command outlives its time or ignores the
+        interrupt; whether the first build started the preview; and whether the edit reached
+        another file.
+    """
+    deadline = time.monotonic() + job.timeout
+    process = subprocess.Popen(
+        argv,
+        cwd=package.parent,
+        env={**env, PREVIEW_HOLD_VARIABLE: str(math.ceil(job.timeout))},
+        stdin=subprocess.DEVNULL,
+        stdout=out,
+        stderr=err,
+        start_new_session=True,
+        preexec_fn=_default_sigint,
+    )
+    previewed = _wait_until(lambda: _previewing(quarto_log), process, deadline)
+    rebuilt = False
+    if previewed and job.case.watch_edit is not None:
+        source = package / job.case.watch_edit
+        with source.open("a", encoding="utf-8") as file:
+            _ = file.write(f"\n{WATCH_MARKER}\n")
+        until = min(deadline, time.monotonic() + REBUILD_SECONDS)
+        rebuilt = _wait_until(lambda: _copied(package, source), process, until)
+    status: int | str = "timeout"
+    if previewed or process.poll() is not None:
+        _signal_group(process, signal.SIGINT)
+        try:
+            status = process.wait(timeout=STOP_SECONDS)
+        except subprocess.TimeoutExpired:
+            pass
+    _signal_group(process, signal.SIGKILL)
+    _ = process.wait()
+    return status, {"previewed": previewed, "rebuilt": rebuilt}
+
+
+def _default_sigint() -> None:
+    """Restore the default action of `SIGINT` in a child process before it starts"""
+    # Python raises `KeyboardInterrupt` only if `SIGINT` is not ignored when it starts, and a
+    # shell that runs the harness in the background starts it with `SIGINT` ignored.
+    _ = signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+
+def _signal_group(process: subprocess.Popen[bytes], number: signal.Signals) -> None:
+    """
+    Send a signal to every process left in a command's process group
+
+    Parameters
+    ----------
+    process :
+        The command, which leads its own process group.
+    number :
+        The signal.
+    """
+    try:
+        os.killpg(process.pid, number)
+    except ProcessLookupError:
+        pass
+
+
+def _wait_until(
+    condition: Callable[[], bool], process: subprocess.Popen[bytes], until: float
+) -> bool:
+    """
+    Poll a condition while a command runs
+
+    Parameters
+    ----------
+    condition :
+        The condition.
+    process :
+        The command; polling stops when it exits.
+    until :
+        `time.monotonic()` value at which polling stops.
+
+    Returns
+    -------
+    :
+        Whether the condition held before polling stopped.
+    """
+    while not condition():
+        if process.poll() is not None or time.monotonic() >= until:
+            return condition()
+        time.sleep(POLL_SECONDS)
+    return True
+
+
+def _previewing(quarto_log: Path) -> bool:
+    """
+    Report whether a command has called the stub `quarto preview`
+
+    Parameters
+    ----------
+    quarto_log :
+        File where the stub logs its calls.
+
+    Returns
+    -------
+    :
+        Whether the log holds a `preview` call.
+    """
+    if not quarto_log.is_file():
+        return False
+    return any(c.startswith("preview") for c in quarto_log.read_text(encoding="utf-8").splitlines())
+
+
+def _copied(package: Path, source: Path) -> bool:
+    """
+    Report whether `WATCH_MARKER` appears in a package file other than the edited source
+
+    Parameters
+    ----------
+    package :
+        The package directory.
+    source :
+        The edited source file.
+
+    Returns
+    -------
+    :
+        Whether another file holds the marker.
+    """
+    marker = WATCH_MARKER.encode()
+    for dirpath, dirnames, filenames in os.walk(package):
+        dirnames[:] = [d for d in dirnames if d not in SKIPPED_DIRECTORIES]
+        for name in filenames:
+            path = Path(dirpath) / name
+            try:
+                if path != source and marker in path.read_bytes():
+                    return True
+            except FileNotFoundError:
+                # A rebuild removed the file during the walk.
+                continue
+    return False
 
 
 def record_case(job: Job) -> dict[str, Any]:
@@ -405,7 +613,10 @@ def record_case(job: Job) -> dict[str, Any]:
         "schema": SCHEMA,
         "case": job.case.id,
         "package": job.case.package,
+        "variant": job.case.variant,
         "overlay": dict(job.case.overlay) if job.case.overlay else None,
+        "expects_reference": job.case.expects_reference,
+        "order": list(commands),
         "commands": commands,
         "normalised": dict(sorted(counts.items())),
     }

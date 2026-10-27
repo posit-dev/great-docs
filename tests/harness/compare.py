@@ -4,6 +4,8 @@ Compare two harness recordings and report every difference
 Compare exit statuses, file changes, step skeletons, warnings, handled exceptions, the
 number of Python processes and calls to the stub `quarto`. Every difference fails the
 comparison, including a handled exception that disappears, so each change requires review.
+A failed test-side check also fails the comparison, even when the base fails the same check.
+Known gaps appear in a separate report section without changing the exit status.
 """
 
 from __future__ import annotations
@@ -15,7 +17,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from tests.harness.sides import environment_differences
+from tests.harness.record import SCHEMA
+from tests.harness.sides import HarnessError, environment_differences
 
 # Limit report size by capping diff lines per file and the number of files with diffs.
 DIFF_LINES = 60
@@ -32,14 +35,42 @@ class CaseResult:
     case :
         Case identifier.
     status :
-        `match`, `differ`, or `missing` when one side has no manifest.
+        `match` when both sides agree and the test side passes its checks; `differ` when
+        they differ; `fail` when they agree but the test side fails a check; `missing`
+        when either side has no manifest.
     findings :
         Report lines, one finding per line, with indented detail lines.
+    checks :
+        Failed test-side checks, each with the base side's result.
+    known_gaps :
+        Report lines for known gaps on either side, with indented details.
     """
 
     case: str
     status: str
     findings: list[str] = field(default_factory=list[str])
+    checks: list[str] = field(default_factory=list[str])
+    known_gaps: list[str] = field(default_factory=list[str])
+
+
+@dataclass(frozen=True)
+class Gap:
+    """
+    A known defect observed in a case's output
+
+    Attributes
+    ----------
+    name :
+        Stable name used to match the gap across both sides.
+    summary :
+        One line stating what the output shows.
+    details :
+        Supporting evidence, such as affected file paths.
+    """
+
+    name: str
+    summary: str
+    details: tuple[str, ...] = ()
 
 
 @dataclass
@@ -296,7 +327,11 @@ def compare_command(
         Findings, empty when the records agree.
     """
     findings: list[str] = []
-    for key, label in (("status", "exit status"), ("python_processes", "Python processes")):
+    for key, label in (
+        ("status", "exit status"),
+        ("python_processes", "Python processes"),
+        ("watch", "watch run"),
+    ):
         if old.get(key) != new.get(key):
             findings.append(f"{label} {old.get(key)} -> {new.get(key)}")
     findings += compare_files(base, test, old.get("files", []), new.get("files", []))
@@ -307,6 +342,134 @@ def compare_command(
         "quarto calls", old.get("quarto_calls", []), new.get("quarto_calls", [])
     )
     return findings
+
+
+def present_files(manifest: Mapping[str, Any]) -> set[str]:
+    """
+    List the files a case's commands wrote and left in place
+
+    Parameters
+    ----------
+    manifest :
+        The case's manifest.
+
+    Returns
+    -------
+    :
+        Project-relative paths that a command added or changed and no later command removed.
+    """
+    present: set[str] = set()
+    commands: Mapping[str, Any] = manifest["commands"]
+    for name in manifest.get("order", list(commands)):
+        for record in commands[name].get("files", []):
+            if record["change"] == "removed":
+                present.discard(record["path"])
+            else:
+                present.add(record["path"])
+    return present
+
+
+def failed_checks(manifest: Mapping[str, Any]) -> list[str]:
+    """
+    Find failed checks in one side's recorded output
+
+    Parameters
+    ----------
+    manifest :
+        The case's manifest.
+
+    Returns
+    -------
+    :
+        One message per failed check, or an empty list when all checks pass.
+    """
+    failures: list[str] = []
+    present = present_files(manifest)
+    if manifest.get("expects_reference"):
+        # A Quarto project is a directory holding `_quarto.yml`; keep its trailing slash.
+        projects = sorted(
+            p.removesuffix("_quarto.yml") for p in present if p.rpartition("/")[2] == "_quarto.yml"
+        )
+        if not projects:
+            failures.append("no Quarto project to hold reference/index.qmd")
+        failures += [
+            f"{project}reference/index.qmd is missing"
+            for project in projects
+            if f"{project}reference/index.qmd" not in present
+        ]
+    watch = manifest["commands"].get("watch")
+    if watch is not None:
+        facts: Mapping[str, bool] = watch.get("watch", {})
+        if not facts.get("previewed"):
+            failures.append("watch never reached the preview after its first build")
+        if watch.get("status") != 0:
+            failures.append(f"watch exited with status {watch.get('status')} after the interrupt")
+        if facts.get("traceback"):
+            failures.append("watch printed a traceback")
+    return failures
+
+
+def known_gaps(manifest: Mapping[str, Any]) -> list[Gap]:
+    """
+    Identify known gaps in one side's recorded output
+
+    Parameters
+    ----------
+    manifest :
+        The case's manifest.
+
+    Returns
+    -------
+    :
+        Observed gaps, or an empty list when none are present.
+    """
+    gaps: list[Gap] = []
+    order: list[str] = manifest.get("order", list(manifest["commands"]))
+    if "freeze" in order and "build" in order[: order.index("freeze")]:
+        # Freeze rebuilds the build directory from scratch, so every file it writes or removes
+        # after a build differs from what the build gave Quarto. A changelog, which freeze is
+        # meant to skip, would appear here too; the freeze case has none.
+        files = manifest["commands"]["freeze"].get("files", [])
+        if files:
+            gaps.append(
+                Gap(
+                    "freeze-steps",
+                    f"freeze prepares {len(files)} file{'' if len(files) == 1 else 's'} "
+                    "unlike build",
+                    tuple(f"{r['change']} {r['path']}" for r in files),
+                )
+            )
+    watch: Mapping[str, bool] = manifest["commands"].get("watch", {}).get("watch", {})
+    if watch.get("previewed") and not watch.get("rebuilt"):
+        gaps.append(Gap("watch-rebuild", "watch mode does not rebuild after a source edit"))
+    return gaps
+
+
+def gap_lines(old: Sequence[Gap], new: Sequence[Gap]) -> list[str]:
+    """
+    Format known gaps with their base-side results and details
+
+    Parameters
+    ----------
+    old, new :
+        Gaps of the base and test sides.
+
+    Returns
+    -------
+    :
+        Test-side gaps with their base-side results and indented details, followed by
+        a closure message for each gap found only on the base side.
+    """
+    base = {gap.name: gap for gap in old}
+    lines: list[str] = []
+    for gap in new:
+        before = base.get(gap.name)
+        known = "none" if before is None else "same" if before == gap else before.summary
+        lines.append(f"{gap.summary} [{gap.name}] (base: {known})")
+        lines += [f"    {detail}" for detail in gap.details]
+    shown = {gap.name for gap in new}
+    lines += [f"closed: {gap.summary} [{gap.name}]" for gap in old if gap.name not in shown]
+    return lines
 
 
 def compare_case(base: Path, test: Path, case: str) -> CaseResult:
@@ -338,7 +501,13 @@ def compare_case(base: Path, test: Path, case: str) -> CaseResult:
         # Detail lines retain their indentation beneath the command-prefixed finding.
         for finding in compare_command(base, test, old["commands"][name], new["commands"][name]):
             findings.append(finding if finding.startswith(" ") else f"{name}: {finding}")
-    return CaseResult(case, "differ" if findings else "match", findings)
+    base_failures = failed_checks(old)
+    checks = [
+        f"{failure} (base: {'same' if failure in base_failures else 'passes'})"
+        for failure in failed_checks(new)
+    ]
+    status = "differ" if findings else "fail" if checks else "match"
+    return CaseResult(case, status, findings, checks, gap_lines(known_gaps(old), known_gaps(new)))
 
 
 def compare(base: Path, test: Path) -> Comparison:
@@ -354,8 +523,18 @@ def compare(base: Path, test: Path) -> Comparison:
     -------
     :
         The comparison.
+
+    Raises
+    ------
+    HarnessError
+        If either recording uses a different manifest schema.
     """
     old, new = _load(base / "side.json"), _load(test / "side.json")
+    for path, meta in ((base, old), (test, new)):
+        if meta.get("schema") != SCHEMA:
+            raise HarnessError(
+                f"{path} has harness schema {meta.get('schema')}, not {SCHEMA}; record it again"
+            )
     cases = list(dict.fromkeys([*old["cases"], *new["cases"]]))
     return Comparison(
         str(base),
@@ -414,7 +593,15 @@ def render(
         if result.status == "match":
             continue
         lines.append(f"{result.case}: {result.status.upper()}")
+        lines += [f"  check failed: {c}" for c in result.checks]
         lines += [f"  {f}" for f in result.findings]
+        lines.append("")
+    gapped = [c for c in comparison.cases if c.known_gaps]
+    if gapped:
+        lines.append("KNOWN GAPS (reported only; they never fail the run)")
+        for result in gapped:
+            lines.append(f"  {result.case}: {result.known_gaps[0]}")
+            lines += [f"  {line}" for line in result.known_gaps[1:]]
         lines.append("")
     differ = [c.case for c in comparison.cases if c.status != "match"]
     verdict = (
