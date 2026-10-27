@@ -42660,3 +42660,50 @@ def test_skills_page_ignores_a_non_string_description(tmp_path: Path) -> None:
     docs._generate_skill_md()
 
     assert "# Skill" in (tmp_path / "great-docs" / "skills.qmd").read_text()
+
+
+def test_blended_index_hero_fence_is_raw_html():
+    """Verify that the blended homepage opens its hero block with a bare raw-HTML fence"""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        Path(tmp_dir, "pyproject.toml").write_text('[project]\nname = "pkg"\n', encoding="utf-8")
+        Path(tmp_dir, "great-docs.yml").write_text(
+            format_yaml({"hero": {"enabled": True, "name": "Pkg", "tagline": "Tagline"}}),
+            encoding="utf-8",
+        )
+        gd_dir = Path(tmp_dir) / "great-docs"
+        ug_dir = gd_dir / "user-guide"
+        ug_dir.mkdir(parents=True)
+        (ug_dir / "introduction.qmd").write_text(
+            '---\ntitle: "Introduction"\n---\n\n# Introduction\n\nWelcome.', encoding="utf-8"
+        )
+        docs = GreatDocs(project_path=tmp_dir)
+        info = {
+            "files": [{"path": Path(tmp_dir) / "user_guide" / "01-introduction.qmd"}],
+            "source_dir": Path(tmp_dir) / "user_guide",
+            "explicit": False,
+        }
+        docs._create_blended_index(info, ["user-guide/introduction.qmd"])
+
+        lines = (gd_dir / "index.qmd").read_text(encoding="utf-8").splitlines()
+
+        assert "gd-hero" in "\n".join(lines)
+        assert "```{=html}" in lines
+        assert not any("pragma" in line for line in lines)
+
+
+def test_readme_homepage_without_margin_starts_with_front_matter_fence():
+    """Verify that a README homepage with an empty metadata margin opens with a bare `---`"""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        Path(tmp_dir, "pyproject.toml").write_text('[project]\nname = "pkg"\n', encoding="utf-8")
+        Path(tmp_dir, "great-docs.yml").write_text("", encoding="utf-8")
+        Path(tmp_dir, "README.md").write_text("# Pkg\n\nA first paragraph.\n", encoding="utf-8")
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+
+        with patch.object(docs, "_build_metadata_margin", return_value=""):
+            docs._create_index_from_readme(force_rebuild=True)
+
+        content = (docs.build_dir / "index.qmd").read_text(encoding="utf-8")
+
+        assert content.startswith("---\n")
+        assert "pragma" not in content
