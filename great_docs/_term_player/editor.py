@@ -131,8 +131,29 @@ def _num(value: Any) -> float:
     return round(float(value), 3)
 
 
-def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
-    """Serialize editor script data back to YAML string."""
+# Top-level sections the editor doesn't show, which are copied as written when it saves
+_KEPT_SECTIONS = ("record", "steps")
+
+
+def _kept_sections(text: str) -> str:
+    """The `record:` and `steps:` sections of a script's text, as written."""
+    blocks: list[list[str]] = []
+    current: list[str] | None = None
+    for line in text.splitlines():
+        if line and not line[0].isspace() and not line.startswith("#"):
+            current = [] if line.split(":", 1)[0].strip() in _KEPT_SECTIONS else None
+            if current is not None:
+                blocks.append(current)
+        if current is not None:
+            current.append(line)
+    return "".join("\n".join(block).rstrip() + "\n\n" for block in blocks)
+
+
+def _serialize_script(script_data: dict[str, Any], source_path: str, kept: str = "") -> str:
+    """Serialize editor script data back to YAML string.
+
+    `kept` is text from `_kept_sections()`, added at the end.
+    """
     lines = [f"source: {_dq(source_path)}", ""] if source_path else []
 
     settings = script_data.get("settings", {})
@@ -258,6 +279,10 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
                 lines.append("    pulse: true")
         lines.append("")
 
+    if kept:
+        lines.append(kept.rstrip())
+        lines.append("")
+
     return "\n".join(lines) + "\n"
 
 
@@ -286,7 +311,7 @@ class EditorHandler(SimpleHTTPRequestHandler):
             body = self.rfile.read(content_length)
             try:
                 script_data = json.loads(body)
-                yaml_str = _serialize_script(script_data, self.source_path)
+                yaml_str = _serialize_script(script_data, self.source_path, self._kept())
                 self.script_path.write_text(yaml_str, encoding="utf-8")
                 self._json_response({"ok": True, "path": str(self.script_path)})
             except Exception as e:
@@ -296,7 +321,7 @@ class EditorHandler(SimpleHTTPRequestHandler):
             body = self.rfile.read(content_length)
             try:
                 script_data = json.loads(body)
-                yaml_str = _serialize_script(script_data, self.source_path)
+                yaml_str = _serialize_script(script_data, self.source_path, self._kept())
                 self._json_response({"yaml": yaml_str})
             except Exception as e:
                 self._json_response({"error": str(e)}, status=400)
@@ -316,6 +341,12 @@ class EditorHandler(SimpleHTTPRequestHandler):
                 self._json_response({"error": str(e)}, status=500)
         else:
             self.send_error(404)
+
+    def _kept(self) -> str:
+        """The script file's `record:` and `steps:`, which a save must not drop."""
+        if not self.script_path.exists():
+            return ""
+        return _kept_sections(self.script_path.read_text(encoding="utf-8"))
 
     def _json_response(self, data: Any, status: int = 200) -> None:
         body = json.dumps(data).encode("utf-8")
