@@ -77,7 +77,6 @@ class DCDocstringSectionInitParameters(DCDocstringSection):
     kind: DCDocstringSectionKind = DCDocstringSectionKind.init_parameters
 
 
-
 def transform(el: object) -> object:
     """Cast `el` to a more specific docstring element, falling back to `el` itself"""
 

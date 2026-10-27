@@ -4674,7 +4674,9 @@ class GreatDocs:
         # reference: top-level commands they don't name get no page, sidebar entry or index entry.
         if self._config.cli_sections:
             listed = {
-                name for section in self._config.cli_sections for name in section.get("contents", [])
+                name
+                for section in self._config.cli_sections
+                for name in section.get("contents", [])
             }
             cli_info = {
                 **cli_info,

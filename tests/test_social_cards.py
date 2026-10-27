@@ -115,7 +115,9 @@ class TestRegister:
 
     def test_disabled(self, tmp_path: Path):
         quarto: dict = {}
-        social_cards.register(quarto, _make_config(tmp_path, "social_cards: false\n"), None, tmp_path)
+        social_cards.register(
+            quarto, _make_config(tmp_path, "social_cards: false\n"), None, tmp_path
+        )
         assert quarto == {}
 
     def test_independent_of_seo(self, tmp_path: Path):

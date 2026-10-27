@@ -315,7 +315,9 @@ class TestCheckSkill:
 
             results = check_skill(root=root, quiet=True)
 
-            assert [(r["name"], r["installed_pkg_version"]) for r in results] == [("my-pkg", "unknown")]
+            assert [(r["name"], r["installed_pkg_version"]) for r in results] == [
+                ("my-pkg", "unknown")
+            ]
 
     def test_check_multiple_agents(self):
         with tempfile.TemporaryDirectory() as tmp:
