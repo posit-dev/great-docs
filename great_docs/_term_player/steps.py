@@ -81,6 +81,15 @@ def key_sequence(name: str) -> str | None:
     return None
 
 
+def screen_text(emulator: TerminalEmulator) -> str:
+    """The screen's text, with trailing spaces removed from each row and blank rows at the end
+    left out."""
+    rows = ["".join(c.char for c in row).rstrip() for row in emulator.screen.cells]
+    while rows and not rows[-1]:
+        rows.pop()
+    return "\n".join(rows)
+
+
 class StepsError(Exception):
     """A script's steps can't be run, or a step failed."""
 
@@ -437,11 +446,7 @@ class _Session:
     # The screen -------------------------------------------------------------------------------
 
     def screen_text(self) -> str:
-        """The screen's text, with trailing spaces removed from each row."""
-        rows = ["".join(c.char for c in row).rstrip() for row in self.emulator.screen.cells]
-        while rows and not rows[-1]:
-            rows.pop()
-        return "\n".join(rows)
+        return screen_text(self.emulator)
 
     def cursor_line(self) -> str:
         """The text of the cursor's row, up to the cursor or to the last character."""
