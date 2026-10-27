@@ -1166,7 +1166,7 @@ The `record` section sets up the shell:
 - `timeout` (10 seconds) is how long to wait for a prompt or a pattern. `timeout` on a `run` or
   `wait_for` step overrides it.
 
-The full list is in [Termshow File Formats](termshow-file-formats.qmd#record-and-steps).
+The full list is in [Termshow File Formats](termshow-file-formats.qmd#record-steps-and-check).
 
 ### When a step fails
 
@@ -1191,6 +1191,59 @@ great-docs termshow validate docs/assets/install-guide.termshow.yml
 ```
 
 Scripted recording needs macOS or Linux, since it runs the shell in a pseudo-terminal.
+
+### Checking for drift
+
+A recording shows what your tool printed on the day you recorded it. `termshow check` runs the
+steps again and tells you whether the output still matches:
+
+```bash
+great-docs termshow check docs/assets/*.termshow.yml
+```
+
+For each script, the screen in the new run is compared with the committed recording at every
+`marker` and at the end. Only the text is compared, not timing or colors, so a slower machine or
+a different color theme doesn't count as a change. When something differs, you get a diff for
+each place it does, and the command exits with status 1, so it can fail a CI job:
+
+```
+✗ docs/assets/install-guide.termshow has drifted:
+
+  --- install-guide.termshow, at marker 'Verify'
+  +++ the steps now, at marker 'Verify'
+  @@ -1,3 +1,3 @@
+   $ pip install mypackage
+  -Successfully installed mypackage-1.4.0
+  +Successfully installed mypackage-1.5.0
+   $
+```
+
+Once you've looked at the changes, `--update` records the drifted recordings again, keeping
+their scripts as they are:
+
+```bash
+great-docs termshow check docs/assets/*.termshow.yml --update
+```
+
+Some text changes on every run: version numbers, dates, timings, temporary paths. List patterns
+for it in the script's `check` section, and the matching text is left out of the comparison:
+
+```yaml
+check:
+  ignore:
+    - 'mypackage-\d+\.\d+\.\d+'
+    - '\d+(\.\d+)? ?s\b'
+    - '/tmp/\S+'
+```
+
+The patterns are Python regular expressions, matched against each row of the screen. They're
+matched against the commands too, so keep them specific enough not to hide a change you'd want
+to see. `--ignore REGEX` on the command line adds a pattern for one run.
+
+Only what's on the screen at each point is compared, so output that has scrolled off the top by
+the next marker isn't. A `marker` between commands compares each command's output before the
+next one pushes it away, and a taller terminal (`record.rows`) helps with commands that print a
+lot. The check runs at the recording's size, whatever the script's `record` section says now.
 
 ## Importing Existing Recordings
 
