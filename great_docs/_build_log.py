@@ -364,7 +364,7 @@ class MultiProgressBar:
         self._finished_slots: set[int] = set()
         self._drawn = False
         self._all_finished = False
-        self._label_width = max((len(l) for l in labels), default=12)
+        self._label_width = max((len(label) for label in labels), default=12)
         # CI mode: track last emitted percentage bucket per slot
         self._ci_buckets = [-1] * self._n
 

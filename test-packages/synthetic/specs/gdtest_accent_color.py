@@ -220,16 +220,12 @@ SPEC = {
             "user-guide/palette-vs-accent.html",
         ],
         "files_contain": {
-            # The accent_color style tag should be injected
+            # The accent_color style tag should be injected, and the default hr
+            # should use the accent (no explicit color class)
             "user-guide/string-accent.html": [
                 "accent_color overrides",
                 "--gd-accent: #0d9488",
                 "gd-hr",
-            ],
-            # Default hr should use the accent (no explicit color class)
-            "user-guide/string-accent.html": [
-                "gd-hr",
-                "accent_color overrides",
             ],
             # Palette colors should still use their own tokens
             "user-guide/palette-vs-accent.html": [
