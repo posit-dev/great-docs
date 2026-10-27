@@ -15193,14 +15193,19 @@ anchor-sections: true
         html_config["template-partials"] = partials
 
     def _prerender_term_player(self, log) -> None:  # pragma: no cover
-        """Pre-render .termshow recordings into SVG keyframes + manifest.json.
+        """
+        Pre-render `.termshow` recordings for the Quarto shortcode
 
-        Discovers all .termshow files in the project root, applies any
-        companion .termshow.yml scripts, and renders SVG frames into
-        great-docs/termshow/<relative path without extension>/ so the Quarto
-        shortcode can reference them. Keying output by relative path (rather
-        than basename) keeps same-named recordings in different directories
-        from overwriting each other.
+        Render recordings from the source directory as SVG keyframes and a
+        `manifest.json`, applying companion `.termshow.yml` scripts when present.
+        Write output to `<build directory>/termshow/<relative path without suffix>/`.
+        Paths are relative to the source directory, so recordings with the same name
+        in different directories have separate output directories.
+
+        Parameters
+        ----------
+        log :
+            Build logger that receives progress and warning messages.
         """
 
         # Find all .termshow files in the project root (they live outside
@@ -15215,15 +15220,12 @@ anchor-sections: true
         if not termshow_files:
             return
 
-        try:
-            from great_docs._term_player import (
-                apply_script,
-                generate_manifest,
-                parse_termshow,
-            )
-            from great_docs._term_player.script import load_script
-        except ImportError:
-            return
+        from great_docs._term_player import (
+            apply_script,
+            generate_manifest,
+            parse_termshow,
+        )
+        from great_docs._term_player.script import load_script
 
         rendered_count = 0
         manifest_bytes = 0
