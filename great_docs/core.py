@@ -1784,15 +1784,20 @@ class GreatDocs:
 
     def _get_package_metadata(self) -> dict:
         """
-        Extract package metadata from pyproject.toml and great-docs configuration.
+        Read project metadata and selected in-memory configuration values
 
-        Reads project metadata (license, authors, URLs, etc.) from pyproject.toml
-        and Great Docs configuration from great-docs.yml.
+        Read project fields such as the license, authors, URLs and dependencies from
+        `pyproject.toml`. If the description is missing, use `setup.cfg` to fill
+        supported empty fields.
+
+        Use the instance's current configuration without reloading it. When
+        `pyproject.toml` exists, cache the first result and return it on later calls.
+        Otherwise, read the current configuration on each call.
 
         Returns
         -------
-        dict
-            Dictionary containing package metadata and great-docs configuration.
+        :
+            Project fields and configuration values, keyed by name.
         """
         cache = getattr(self, "_package_metadata_cache", None)
         if cache is not None:
@@ -1966,12 +1971,6 @@ class GreatDocs:
 
                 except Exception:  # pragma: no cover
                     pass
-
-        # Read Great Docs configuration from great-docs.yml
-        # Reload config to ensure we have the latest
-        self._config = Config(
-            package_root, config_path=self.layout.config_path, cache_dir=self.layout.cache_dir
-        )
 
         # Map config properties to metadata dict for backward compatibility
         metadata["rich_authors"] = self._config.authors
