@@ -154,6 +154,9 @@ class BuildCase:
         configuration, as in the Gauntlet.
     arguments :
         Arguments added after a command's own, keyed by command.
+    root_layout :
+        Whether the package keeps its documentation sources, configuration included, at its
+        root instead of in `docs/`.
     releases :
         Commits of a Git repository made in the package, oldest first; empty for a package
         outside any repository.
@@ -171,6 +174,7 @@ class BuildCase:
     overlay: Mapping[str, Any] = field(default_factory=dict[str, Any])
     commands: tuple[str, ...] = ("init", "build")
     arguments: Mapping[str, tuple[str, ...]] = field(default_factory=dict[str, tuple[str, ...]])
+    root_layout: bool = False
     releases: tuple[Release, ...] = ()
     render_pages: bool = False
     watch_edit: str | None = None
@@ -214,6 +218,9 @@ VARIANTS: tuple[BuildCase, ...] = (
         commands=("init", "watch"),
         watch_edit="docs/user_guide/02-configuration.qmd",
     ),
+    # Keep `great-docs.yml`, without `module:`, and the user guide at the package root, so the
+    # build writes to `great-docs/`.
+    BuildCase("gdtest_page_status", "root_layout", root_layout=True),
 )
 
 
@@ -352,6 +359,13 @@ def generate(case: BuildCase, test_packages: Path, parent: Path) -> Path:
         _ = pyproject.write_text(
             f'[project]\nname = "{name}"\nversion = "0.1.0"\n', encoding="utf-8"
         )
+    if case.root_layout:
+        docs = package / "docs"
+        for source in sorted(docs.iterdir()):
+            if (package / source.name).exists():
+                raise ValueError(f"{case.id}: {source.name} exists in docs/ and at the root")
+            _ = source.rename(package / source.name)
+        docs.rmdir()
     if case.releases:
         make_repository(package, case.releases)
     pin_mtimes(package)
