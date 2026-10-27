@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
+from tests.harness.sides import run_checked
+
 TIER: tuple[str, ...] = (
     "gdtest_minimal",
     "gdtest_kitchen_sink",
@@ -62,6 +64,29 @@ SHOW_DATES_OVERLAY: Mapping[str, Any] = {
     "social_cards": {"enabled": True},
 }
 
+# A public function that the second release of `gdtest_kitchen_sink` adds.
+KITCHEN_SINK_ADDITION = '''
+
+def summarise(values: list[float]) -> float:
+    """
+    Add up the values.
+
+    Parameters
+    ----------
+    values
+        The values to add.
+
+    Returns
+    -------
+    float
+        Their sum.
+    """
+    return sum(values)
+
+
+__all__ += ["summarise"]
+'''
+
 # Arguments after `great-docs` for each command a case can run.
 COMMANDS: Mapping[str, tuple[str, ...]] = {
     "init": ("init", "--force"),
@@ -80,6 +105,34 @@ CONFIG_LOCATIONS = (
 
 # Modification time of every generated file: 2025-01-01T00:00:00Z.
 PINNED_MTIME = 1735689600
+
+# Fixed identities and an empty Git configuration give every copy of a release repository the
+# same commit hashes; each release's commit is dated one day after the previous one.
+GIT_ENVIRONMENT: Mapping[str, str] = {
+    "GIT_AUTHOR_NAME": "Great Docs harness",
+    "GIT_AUTHOR_EMAIL": "harness@example.com",
+    "GIT_COMMITTER_NAME": "Great Docs harness",
+    "GIT_COMMITTER_EMAIL": "harness@example.com",
+    "GIT_CONFIG_GLOBAL": os.devnull,
+    "GIT_CONFIG_NOSYSTEM": "1",
+}
+
+
+@dataclass(frozen=True)
+class Release:
+    """
+    A commit of a package's Git repository and the tag that names it
+
+    Attributes
+    ----------
+    tag :
+        Tag on the commit.
+    appended :
+        Text appended to files before the commit, keyed by path relative to the package root.
+    """
+
+    tag: str
+    appended: Mapping[str, str] = field(default_factory=dict[str, str])
 
 
 @dataclass(frozen=True)
@@ -100,6 +153,11 @@ class BuildCase:
         configuration, as in the Gauntlet.
     arguments :
         Arguments added after a command's own, keyed by command.
+    releases :
+        Commits of a Git repository made in the package, oldest first; empty for a package
+        outside any repository.
+    render_pages :
+        Whether the stub `quarto render` writes a placeholder page for each source page.
     expects_reference :
         Whether every Quarto project the commands leave must hold `reference/index.qmd`.
     """
@@ -109,6 +167,8 @@ class BuildCase:
     overlay: Mapping[str, Any] = field(default_factory=dict[str, Any])
     commands: tuple[str, ...] = ("init", "build")
     arguments: Mapping[str, tuple[str, ...]] = field(default_factory=dict[str, tuple[str, ...]])
+    releases: tuple[Release, ...] = ()
+    render_pages: bool = False
     expects_reference: bool = False
 
     @property
@@ -128,6 +188,19 @@ VARIANTS: tuple[BuildCase, ...] = (
         "freeze",
         commands=("init", "build", "freeze"),
         arguments={"freeze": ("docs/user_guide/01-getting-started.qmd",)},
+    ),
+    # Build two versions from a repository with two tags. Version 0.2 is the checkout, at tag
+    # `v0.2`; version 0.1 takes its API from tag `v0.1`, which lacks one function. Quarto
+    # must leave pages in `_site/`, or the versioned build stops before assembling the site.
+    BuildCase(
+        "gdtest_kitchen_sink",
+        "versions",
+        {"versions": [{"tag": "0.2"}, {"tag": "0.1", "git_ref": "v0.1"}]},
+        releases=(
+            Release("v0.1"),
+            Release("v0.2", {"src/gdtest_kitchen_sink/__init__.py": KITCHEN_SINK_ADDITION}),
+        ),
+        render_pages=True,
     ),
 )
 
@@ -253,7 +326,7 @@ def generate(case: BuildCase, test_packages: Path, parent: Path) -> Path:
     Returns
     -------
     :
-        The package directory.
+        The package directory, a Git repository when the case has releases.
     """
     catalog = _synthetic(test_packages, "catalog")
     generator = _synthetic(test_packages, "generator")
@@ -267,8 +340,44 @@ def generate(case: BuildCase, test_packages: Path, parent: Path) -> Path:
         _ = pyproject.write_text(
             f'[project]\nname = "{name}"\nversion = "0.1.0"\n', encoding="utf-8"
         )
+    if case.releases:
+        make_repository(package, case.releases)
     pin_mtimes(package)
     return package
+
+
+def make_repository(package: Path, releases: Sequence[Release]) -> None:
+    """
+    Commit and tag each release of a package in a new Git repository
+
+    Every repository made from the same package and releases has the same commit hashes.
+
+    Parameters
+    ----------
+    package :
+        Package directory, which becomes the repository's work tree on branch `main`.
+    releases :
+        Releases, oldest first; the work tree ends at the last.
+
+    Raises
+    ------
+    HarnessError
+        If a Git command fails.
+    """
+    for day, release in enumerate(releases):
+        for path, text in release.appended.items():
+            with (package / path).open("a", encoding="utf-8") as file:
+                _ = file.write(text)
+        date = f"@{PINNED_MTIME + day * 86400} +0000"
+        env = {**os.environ, **GIT_ENVIRONMENT, "GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date}
+        if day == 0:
+            _ = run_checked(["git", "init", "--quiet", "--initial-branch", "main"], package, env)
+        for argv in (
+            ["git", "add", "--all"],
+            ["git", "commit", "--quiet", "--message", f"Release {release.tag}"],
+            ["git", "tag", release.tag],
+        ):
+            _ = run_checked(argv, package, env)
 
 
 def has_config(package: Path) -> bool:

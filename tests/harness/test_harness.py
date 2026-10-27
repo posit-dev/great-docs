@@ -13,10 +13,11 @@ from typing import Any
 
 import pytest
 
+from tests.harness.catalogue import Release, make_repository
 from tests.harness.compare import compare
 from tests.harness.normalise import FILE_RULES, log_skeleton, normalise_text, path_rules
 from tests.harness.record import SCHEMA, read_census, store_blob
-from tests.harness.sides import OBSERVER_SOURCE, HarnessError
+from tests.harness.sides import OBSERVER_SOURCE, HarnessError, run_checked
 
 
 def test_file_rules_remove_commit_and_build_time_only():
@@ -253,3 +254,17 @@ def test_freeze_after_build_reports_what_it_prepares_differently_as_a_known_gap(
     assert compare(base, fixed).cases[0].known_gaps == [
         "closed: freeze prepares 2 files unlike build [freeze-steps]"
     ]
+
+
+def test_release_repositories_of_one_package_have_the_same_commits(tmp_path: Path):
+    releases = (Release("v0.1"), Release("v0.2", {"pkg.py": "VALUE = 2\n"}))
+    heads: list[str] = []
+    for name in ("one", "two"):
+        package = tmp_path / name
+        package.mkdir()
+        _ = (package / "pkg.py").write_text("VALUE = 1\n", encoding="utf-8")
+        make_repository(package, releases)
+        heads.append(run_checked(["git", "rev-parse", "v0.1", "v0.2"], package))
+
+    assert heads[0] == heads[1]
+    assert len(set(heads[0].split())) == 2

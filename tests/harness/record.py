@@ -37,13 +37,20 @@ from tests.harness.normalise import (
     normalise_text,
     path_rules,
 )
-from tests.harness.sides import CENSUS_VARIABLE, QUARTO_LOG_VARIABLE, HarnessError, Side
+from tests.harness.sides import (
+    CENSUS_VARIABLE,
+    QUARTO_LOG_VARIABLE,
+    RENDER_PAGES_VARIABLE,
+    HarnessError,
+    Side,
+)
 
 # Bumped whenever the manifest format changes; comparisons refuse mixed schemas.
 SCHEMA = 2
 
-# Written by Python when it imports the package; not build output.
-SKIPPED_DIRECTORIES = frozenset({"__pycache__"})
+# Not build output: Python writes `__pycache__` when it imports the package, and Git rewrites
+# the stat data in `.git` of a copied repository.
+SKIPPED_DIRECTORIES = frozenset({"__pycache__", ".git"})
 
 
 @dataclass(frozen=True)
@@ -320,6 +327,8 @@ def run_command(
         CENSUS_VARIABLE: str(census_dir),
         QUARTO_LOG_VARIABLE: str(quarto_log),
     }
+    if job.case.render_pages:
+        env[RENDER_PAGES_VARIABLE] = "1"
     argv = [
         str(job.side.bin / "great-docs"),
         *COMMANDS[name],
