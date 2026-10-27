@@ -194,6 +194,7 @@ class TestTermGroup:
         assert "record" in result.output
         assert "render" in result.output
         assert "import-cast" in result.output
+        assert "import-tape" in result.output
         assert "edit" in result.output
 
 
