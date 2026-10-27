@@ -51,7 +51,6 @@ TIER: tuple[str, ...] = (
     "gdtest_config_combo_d",
     "gdtest_go_cli",
     "gdtest_termshow",
-    # A scalar `changelog:` value makes the build exit 1; kept so the harness records that failure.
     "gdtest_config_combo_e",
 )
 

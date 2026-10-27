@@ -29,7 +29,7 @@ SPEC = {
             "branch": "develop",
             "path": "lib",
         },
-        "changelog": "CHANGELOG.md",
+        "changelog": {"enabled": True},
     },
     "files": {
         "gdtest_config_combo_e/__init__.py": '''\
