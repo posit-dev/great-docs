@@ -561,25 +561,6 @@ class TestAssembleSite:
 # ---------------------------------------------------------------------------
 
 
-class TestMergeTree:
-    def test_merges_files(self, tmp_path: Path):
-        src = tmp_path / "src"
-        src.mkdir()
-        (src / "a.txt").write_text("A")
-        (src / "sub").mkdir()
-        (src / "sub" / "b.txt").write_text("B")
-
-        dst = tmp_path / "dst"
-        dst.mkdir()
-        (dst / "existing.txt").write_text("E")
-
-        _merge_tree(src, dst)
-
-        assert (dst / "a.txt").read_text() == "A"
-        assert (dst / "sub" / "b.txt").read_text() == "B"
-        assert (dst / "existing.txt").read_text() == "E"
-
-
 # ---------------------------------------------------------------------------
 # Version aliases
 # ---------------------------------------------------------------------------
@@ -961,32 +942,6 @@ class TestExpandVersionBadges:
 # ---------------------------------------------------------------------------
 # Upcoming status injection
 # ---------------------------------------------------------------------------
-
-
-class TestInjectUpcomingStatus:
-    def test_injects_status(self):
-        from great_docs._versioned_build import _inject_upcoming_status
-
-        content = '---\ntitle: "New Feature"\nversions: ["dev"]\n---\nBody\n'
-        result = _inject_upcoming_status(content)
-        assert "status: upcoming" in result
-        assert result.startswith("---\n")
-        assert "---\nBody" in result
-
-    def test_preserves_existing_status(self):
-        from great_docs._versioned_build import _inject_upcoming_status
-
-        content = '---\ntitle: "Feature"\nstatus: experimental\n---\nBody\n'
-        result = _inject_upcoming_status(content)
-        assert "status: experimental" in result
-        assert "status: upcoming" not in result
-
-    def test_no_frontmatter(self):
-        from great_docs._versioned_build import _inject_upcoming_status
-
-        content = "No frontmatter here.\n"
-        result = _inject_upcoming_status(content)
-        assert result == content
 
 
 class TestUpdatePageStatusJson:

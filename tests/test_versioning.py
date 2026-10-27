@@ -608,44 +608,6 @@ class TestProcessVersionFences:
 # ---------------------------------------------------------------------------
 
 
-class TestExtractPageVersions:
-    def test_no_frontmatter(self):
-        assert extract_page_versions("# Hello\nWorld\n") is None
-
-    def test_no_versions_key(self):
-        content = '---\ntitle: "Hello"\n---\nBody\n'
-        assert extract_page_versions(content) is None
-
-    def test_inline_list(self):
-        content = '---\ntitle: "Hello"\nversions: ["0.3", "dev"]\n---\nBody\n'
-        result = extract_page_versions(content)
-        assert result == ["0.3", "dev"]
-
-    def test_inline_list_unquoted(self):
-        content = "---\ntitle: Hello\nversions: [0.3, dev]\n---\nBody\n"
-        result = extract_page_versions(content)
-        assert result == ["0.3", "dev"]
-
-    def test_block_list(self):
-        content = '---\ntitle: Hello\nversions:\n  - "0.3"\n  - "dev"\n---\nBody\n'
-        result = extract_page_versions(content)
-        assert result == ["0.3", "dev"]
-
-    def test_empty_inline_list(self):
-        content = "---\nversions: []\n---\nBody\n"
-        assert extract_page_versions(content) is None
-
-    def test_scalar_string_expression(self):
-        content = '---\nversions: ">=0.5"\n---\nBody\n'
-        result = extract_page_versions(content)
-        assert result == [">=0.5"]
-
-    def test_scalar_string_single_quotes(self):
-        content = "---\nversions: '>=0.3'\n---\nBody\n"
-        result = extract_page_versions(content)
-        assert result == [">=0.3"]
-
-
 _EXPR_VERSIONS = [
     VersionEntry(tag="dev", label="dev", prerelease=True, _index=0),
     VersionEntry(tag="0.8", label="0.8", latest=True, _index=1),

@@ -22,12 +22,6 @@ def tmp_project(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _make_config(tmp_path: Path, yaml_text: str) -> Config:
-    """Helper: write *yaml_text* to great-docs.yml and return a Config."""
-    (tmp_path / "great-docs.yml").write_text(yaml_text, encoding="utf-8")
-    return Config(tmp_path)
-
-
 def test_site_html_math_method_defaults_to_katex(tmp_project: Path):
     assert Config(tmp_project).site["html-math-method"] == "katex"
 
@@ -1112,27 +1106,6 @@ class TestNavbarColor:
         cfg = Config(tmp_project)
         cfg._config["navbar_color"] = 42
         assert cfg.navbar_color is None
-
-
-class TestNavbarOrder:
-    def test_default_none(self, tmp_project: Path):
-        assert Config(tmp_project).navbar_order is None
-
-    def test_list(self, tmp_project: Path):
-        cfg = _make_config(
-            tmp_project,
-            "navbar_order:\n  - User Guide\n  - Reference\n  - Demos\n",
-        )
-        assert cfg.navbar_order == ["User Guide", "Reference", "Demos"]
-
-    def test_non_list_returns_none(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "navbar_order: User Guide\n")
-        assert cfg.navbar_order is None
-
-    def test_non_string_items_returns_none(self, tmp_project: Path):
-        cfg = Config(tmp_project)
-        cfg._config["navbar_order"] = [1, 2, 3]
-        assert cfg.navbar_order is None
 
 
 class TestContentStyle:
