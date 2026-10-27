@@ -2705,7 +2705,7 @@ class GreatDocs:
         """
         # Build a page-centric index: href → [tag1, tag2, ...]
         page_tags: dict[str, list[str]] = {}
-        shadow_tags = set(self._config.tags_shadow)
+        shadow_tags = list(dict.fromkeys(self._config.tags_shadow))
 
         for tag_name, pages in tag_index.items():
             for page in pages:
@@ -2783,7 +2783,7 @@ class GreatDocs:
             "tag_meta": tag_meta,
             "tooltip_templates": tooltip_templates,
             "icons": resolved_icons,
-            "shadow": list(shadow_tags),
+            "shadow": shadow_tags,
             "hierarchical": self._config.tags_hierarchical,
             "default_location": self._config.tags_location,
             "page_tag_locations": page_tag_locations,
