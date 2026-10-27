@@ -221,6 +221,8 @@ VARIANTS: tuple[BuildCase, ...] = (
     # Keep `great-docs.yml`, without `module:`, and the user guide at the package root, so the
     # build writes to `great-docs/`.
     BuildCase("gdtest_page_status", "root_layout", root_layout=True),
+    # Put the hero on the homepage that the build blends from the first user-guide page.
+    BuildCase("gdtest_homepage_ug_subdirs", "hero", {"hero": {"enabled": True}}),
 )
 
 
