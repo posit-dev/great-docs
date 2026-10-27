@@ -4397,10 +4397,72 @@ def term_export(
         click.echo(picture_snippet(sides[0][0].name, sides[1][0].name, alt))
 
 
+@click.command("validate")
+@click.argument("sources", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option(
+    "--script",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="Path to .termshow.yml script (with a single recording)",
+)
+@click.option("--no-script", is_flag=True, help="Check the recording without its script")
+@click.option("--strict", is_flag=True, help="Fail on warnings as well as errors")
+def term_validate(
+    sources: tuple[str, ...], script: str | None, no_script: bool, strict: bool
+) -> None:
+    """Check recordings and their scripts for mistakes.
+
+    Errors are things the format doesn't allow: a malformed recording line,
+    an unknown script key, a misspelled theme or position, a cut that ends
+    before it starts, or a pattern that isn't a regular expression.
+
+    Warnings are things that are allowed but probably not meant: an
+    annotation that starts after the recording ends, overlapping cuts or
+    snippets, chapters out of order, two annotations in the same spot, or a
+    `match` pattern that never appears on screen while it's active.
+
+    Each recording's companion .termshow.yml is checked with it. A script can
+    also be given on its own, and its recording is found next to it. Exits
+    with status 1 if there are errors (or, with --strict, warnings).
+
+    Examples:
+      great-docs termshow validate demos/install.termshow
+      great-docs termshow validate demos/*.termshow --strict
+    """
+    from ._term_player.validate import ERROR, validate
+
+    if script and len(sources) > 1:
+        raise click.BadParameter("use it with a single recording", param_hint="--script")
+
+    errors = warnings = 0
+    for source in sources:
+        source_path = Path(source)
+        script_for = script
+        if source_path.name.endswith(".termshow.yml"):
+            script_for = script or source
+            source_path = source_path.with_name(source_path.name[: -len(".yml")])
+            if not source_path.exists():
+                raise click.ClickException(f"No recording {source_path} for the script {source}")
+        problems = validate(source_path, script_for, use_script=not no_script)
+        if not problems:
+            click.echo(f"✓ {source_path}: no problems")
+        for problem in problems:
+            click.echo(f"{problem.severity}: {problem}")
+        errors += sum(1 for p in problems if p.severity == ERROR)
+        warnings += sum(1 for p in problems if p.severity != ERROR)
+
+    if errors or warnings:
+        plural = lambda n, word: f"{n} {word}{'' if n == 1 else 's'}"  # noqa: E731
+        click.echo(f"\n{plural(errors, 'error')}, {plural(warnings, 'warning')}")
+    if errors or (strict and warnings):
+        raise SystemExit(1)
+
+
 termshow.add_command(term_record)
 termshow.add_command(term_render)
 termshow.add_command(term_play)
 termshow.add_command(term_export)
+termshow.add_command(term_validate)
 termshow.add_command(term_import_cast)
 
 
