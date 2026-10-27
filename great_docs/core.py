@@ -6894,7 +6894,7 @@ class GreatDocs:
         # Build hero block for insertion
         hero_block = ""
         if hero_html:
-            hero_block = f"""```{{=html}}  # pragma: no cover
+            hero_block = f"""```{{=html}}
 {hero_html}```
 
 """
@@ -11097,7 +11097,7 @@ body-classes: "gd-homepage"
 {readme_content}
 """
         else:
-            qmd_content = f"""---  # pragma: no cover
+            qmd_content = f"""---
 {page_keys}
 toc: false
 body-classes: "gd-homepage"
