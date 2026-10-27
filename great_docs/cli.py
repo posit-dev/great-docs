@@ -4551,6 +4551,98 @@ def _has_steps(script: str) -> bool:
     return isinstance(data, dict) and "steps" in data
 
 
+@click.command("check")
+@click.argument("scripts", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option(
+    "--ignore",
+    "ignore",
+    multiple=True,
+    metavar="REGEX",
+    help="Leave text matching this pattern out of the comparison (repeatable)",
+)
+@click.option("--update", is_flag=True, help="Re-record the recordings that have drifted")
+@click.option("--shell", type=str, default=None, help="Run the steps in this shell instead")
+def term_check(scripts: tuple[str, ...], ignore: tuple[str, ...], update: bool, shell: str | None):
+    """Check that recordings made from steps still match what the steps produce.
+
+    Each script's steps are run again, as `record --steps` would, and the
+    screen is compared with the committed recording at every marker and at
+    the end. Timing isn't compared. Give the .termshow.yml scripts, or the
+    .termshow recordings they belong to.
+
+    Text that changes from run to run, such as a version number or a
+    temporary path, can be left out with --ignore or the script's
+    `check.ignore` list.
+
+    Exits with status 1 if any recording has drifted or a step failed. With
+    --update, recordings that have drifted are recorded again instead.
+
+    Examples:
+      great-docs termshow check docs/assets/*.termshow.yml
+      great-docs termshow check docs/assets/install.termshow --ignore 'v\\d+\\.\\d+'
+    """
+    import re
+
+    from ._term_player.check import CheckError, check_script
+    from ._term_player.importer import _write_termshow
+    from ._term_player.steps import StepsError
+
+    for pattern in ignore:
+        try:
+            re.compile(pattern)
+        except re.error as e:
+            raise click.BadParameter(
+                f"{pattern!r} isn't a valid regular expression ({e})", param_hint="--ignore"
+            ) from None
+
+    drifted = failed = 0
+    for script in scripts:
+        script_path = Path(script)
+        if script_path.name.endswith(".termshow"):
+            script_path = script_path.with_name(script_path.name + ".yml")
+        click.echo(f"Checking {script_path}", err=True)
+        try:
+            result = check_script(script_path, ignore=ignore, shell=shell)
+        except CheckError as e:
+            click.echo(f"✗ {script_path}: {e}")
+            failed += 1
+            continue
+        except StepsError as e:
+            click.echo(f"✗ {script_path}: {e}")
+            if e.screen:
+                click.echo("\nThe screen at the time:")
+                for line in e.screen.splitlines():
+                    click.echo(f"  │ {line}")
+            failed += 1
+            continue
+
+        screens = f"{result.snapshots} screen{'' if result.snapshots == 1 else 's'}"
+        if not result.drifted:
+            click.echo(f"✓ {result.recording_path} is up to date ({screens} compared)")
+            continue
+        drifted += 1
+        click.echo(f"✗ {result.recording_path} has drifted:\n")
+        for difference in result.differences:
+            for line in difference.lines:
+                color = {"+": "green", "-": "red", "@": "cyan"}.get(line[:1])
+                if line.startswith(("+++", "---")):
+                    color = None
+                click.secho(f"  {line}", fg=color)
+            click.echo()
+        if update:
+            _write_termshow(result.recording, result.recording_path)
+            click.echo(f"↻ Recorded {result.recording_path} again")
+
+    if len(scripts) > 1:
+        click.echo(
+            f"\n{len(scripts) - drifted - failed} of {len(scripts)} up to date"
+            + (f", {drifted} {'updated' if update else 'drifted'}" if drifted else "")
+            + (f", {failed} couldn't be checked" if failed else "")
+        )
+    if failed or (drifted and not update):
+        raise SystemExit(1)
+
+
 @click.command("assets")
 @click.argument("dest", type=click.Path(file_okay=False))
 def term_assets(dest: str) -> None:
@@ -4576,6 +4668,7 @@ termshow.add_command(term_render)
 termshow.add_command(term_play)
 termshow.add_command(term_export)
 termshow.add_command(term_validate)
+termshow.add_command(term_check)
 termshow.add_command(term_assets)
 termshow.add_command(term_import_cast)
 
