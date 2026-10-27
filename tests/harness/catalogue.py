@@ -223,6 +223,9 @@ VARIANTS: tuple[BuildCase, ...] = (
     BuildCase("gdtest_page_status", "root_layout", root_layout=True),
     # Put the hero on the homepage that the build blends from the first user-guide page.
     BuildCase("gdtest_homepage_ug_subdirs", "hero", {"hero": {"enabled": True}}),
+    # Leave the README homepage's metadata margin empty: a Go project has no PyPI link and no
+    # Python API for `llms.txt`, and the overlay turns off the skill link.
+    BuildCase("gdtest_go_cli", "empty_margin", {"skill": {"enabled": False}}),
 )
 
 
