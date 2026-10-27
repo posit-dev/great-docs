@@ -362,6 +362,11 @@ Only the first block after the page title counts as the opening paragraph. A pag
 anything else, such as a code block, a callout, an image, a list or a table, gets the default
 description. The homepage's opening paragraph is read from your README after badges are removed.
 
+Citations in brackets, such as `[@knuth1984]`, are left out of a description. When the site or the
+page has a bibliography, an opening paragraph that cites a reference in its text, as in
+`@knuth1984 argues`, also gets the default description: the author's name is only known once the
+page renders.
+
 Run `great-docs lint --check descriptions` to list the pages that get the default description (see
 [Docs Linting](linting.qmd#search-descriptions)).
 

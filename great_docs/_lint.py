@@ -1160,7 +1160,8 @@ def _check_page_descriptions(docs: GreatDocs, project_root: Path, result: LintRe
     """
     from ._website.seo import description
 
-    if not docs._config.seo_enabled:
+    config = docs._config
+    if not config.seo_enabled:
         return
 
     homepage, _ = docs._find_index_source_file()
@@ -1173,7 +1174,8 @@ def _check_page_descriptions(docs: GreatDocs, project_root: Path, result: LintRe
             # The homepage is described after badges and hero elements are removed
             _, cleaned = docs._build_hero_section(body)
             body = cleaned if cleaned is not None else body
-        fallback = description.first_paragraph(body).fallback
+        citations = description.resolves_citations(front_matter, config)
+        fallback = description.first_paragraph(body, citations=citations).fallback
         if fallback is None:
             continue
 
