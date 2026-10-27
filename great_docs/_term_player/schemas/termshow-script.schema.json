@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/posit-dev/great-docs/main/great_docs/_term_player/schemas/termshow-script.schema.json",
   "title": "Termshow script (.termshow.yml)",
-  "description": "Presentation layer for a `.termshow` recording: settings, chapters, cuts, annotations, highlights and snippets. Times are in seconds: `cuts` and `speed_map` use the recording's original timeline, and everything else uses the playback timeline (after cuts and speed changes).",
+  "description": "Presentation layer for a `.termshow` recording: settings, chapters, cuts, annotations, highlights and snippets, plus optional `record` and `steps` sections that describe a session to record. Times are in seconds: `cuts` and `speed_map` use the recording's original timeline, and everything else uses the playback timeline (after cuts and speed changes).",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -40,6 +40,12 @@
       "description": "Copy buttons shown in the title bar for a time range.",
       "type": "array",
       "items": { "$ref": "#/$defs/snippet" }
+    },
+    "record": { "$ref": "#/$defs/record" },
+    "steps": {
+      "description": "A session to type in a terminal, for `great-docs termshow record --steps`, which runs the steps and writes the recording. Ignored when rendering.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/step" }
     }
   },
   "$defs": {
@@ -360,6 +366,137 @@
           "type": "string"
         }
       }
+    },
+    "record": {
+      "description": "How `great-docs termshow record --steps` runs the steps: the shell, the terminal size, and timing defaults. Ignored when rendering.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "shell": {
+          "description": "Command that starts the shell, split into words the way a shell would (`bash --norc`).",
+          "type": "string",
+          "minLength": 1,
+          "default": "sh"
+        },
+        "cols": {
+          "description": "Terminal width in columns.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 80
+        },
+        "rows": {
+          "description": "Terminal height in rows.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 24
+        },
+        "cwd": {
+          "description": "Directory to start in, relative to the script file. Defaults to the script's directory.",
+          "type": "string"
+        },
+        "env": {
+          "description": "Environment variables to set on top of the current environment.",
+          "type": "object",
+          "additionalProperties": { "type": ["string", "number", "boolean"] }
+        },
+        "typing_delay": {
+          "description": "Seconds between typed characters.",
+          "type": "number",
+          "minimum": 0,
+          "default": 0.05
+        },
+        "typing_jitter": {
+          "description": "How much each typing delay varies at random, as a fraction of it. 0 types at an even pace.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.3
+        },
+        "timeout": {
+          "description": "Seconds to wait for a prompt or a `wait_for` pattern before giving up.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 10
+        },
+        "prompt_pattern": {
+          "description": "Python regular expression that matches the shell's prompt on the cursor's line, so the recorder knows when the shell is ready for input. The default matches the `$ ` prompt the recorder sets.",
+          "type": "string",
+          "minLength": 1,
+          "default": "\\$ $"
+        }
+      }
+    },
+    "keyName": {
+      "description": "A key to press: `enter`, `tab`, `backspace`, `escape`, `space`, `up`, `down`, `left`, `right`, `home`, `end`, `delete`, `pageup`, `pagedown`, or `ctrl+` or `alt+` and a letter.",
+      "type": "string",
+      "pattern": "^(?:enter|tab|backspace|escape|space|up|down|left|right|home|end|delete|pageup|pagedown|(?:ctrl|alt)\\+[a-z])$"
+    },
+    "step": {
+      "description": "One thing to do in the terminal: `enter`, `hide`, or `show` on its own, or a mapping with one action (`type`, `run`, `key`, `sleep`, `wait_for`, `marker`) and that action's options.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["enter", "hide", "show"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "oneOf": [
+            { "required": ["type"] },
+            { "required": ["run"] },
+            { "required": ["key"] },
+            { "required": ["sleep"] },
+            { "required": ["wait_for"] },
+            { "required": ["marker"] }
+          ],
+          "properties": {
+            "type": {
+              "description": "Text to type, one character at a time. Doesn't press Enter.",
+              "type": "string"
+            },
+            "run": {
+              "description": "A command to type, followed by Enter. The step ends when the prompt comes back.",
+              "type": "string"
+            },
+            "key": { "$ref": "#/$defs/keyName" },
+            "sleep": {
+              "description": "Seconds to wait.",
+              "type": "number",
+              "minimum": 0
+            },
+            "wait_for": {
+              "description": "Python regular expression to wait for on the cursor's line, or on the whole screen with `screen: true`.",
+              "type": "string",
+              "minLength": 1
+            },
+            "marker": {
+              "description": "Label for a marker at this point. Markers become chapters when the script has no `chapters`.",
+              "type": "string"
+            },
+            "delay": {
+              "description": "With `type`, `run`, or `key`: seconds between characters or key presses, in place of `record.typing_delay`.",
+              "type": "number",
+              "minimum": 0
+            },
+            "count": {
+              "description": "With `key`: how many times to press it.",
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "timeout": {
+              "description": "With `run` or `wait_for`: seconds to wait, in place of `record.timeout`.",
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "screen": {
+              "description": "With `wait_for`: match the whole screen instead of the cursor's line.",
+              "type": "boolean",
+              "default": false
+            }
+          }
+        }
+      ]
     }
   }
 }
