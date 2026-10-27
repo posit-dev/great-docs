@@ -767,20 +767,48 @@ cuts:
     type: ellipsis
 ```
 
-The `from` and `to` fields define the time range to skip (in seconds). The `type` field
-controls what viewers see during the cut:
+The `from` and `to` fields define the time range to skip, in seconds of the original recording.
+Anything printed during that range isn't lost: playback jumps straight to the screen as it was at
+the end of the cut. Cutting a download hides the progress bar but keeps the "done" line it
+finished on.
+
+The `type` field marks what kind of skip it is:
 
 | Value | Effect |
 |-------|--------|
 | `jump` | Seamless jump (no visual indicator) |
-| `ellipsis` | Shows "…" briefly to indicate skipped time |
+| `ellipsis` | Marks a skip that viewers should notice. The Termshow Editor previews it with a brief "…"; the player currently jumps the same way as `jump` |
 
 Use `jump` for short gaps where continuity isn't important (e.g., trimming a 2-second pause
-between commands). Use `ellipsis` for longer skips where viewers should know time was removed
-(e.g., a 30-second download reduced to a single "…" flash).
+between commands), and `ellipsis` for longer skips (e.g., a 30-second download).
 
 Cuts are non-destructive: they are stored in the script file, not applied to the raw recording.
 You can always remove or adjust them later.
+
+### Speeding up a section
+
+When a stretch is worth keeping but drags, play it faster instead of cutting it. A `speed_map`
+entry plays a range of the original recording at a different speed:
+
+```yaml
+speed_map:
+  - from: 20.0
+    to: 32.0
+    speed: 4      # 12 seconds of test output pass in 3
+```
+
+A `speed` below 1 slows a range down. `settings.speed` then applies to the whole result.
+
+### How cuts and speed changes combine
+
+Cuts and speed segments both use the original recording's times, so you can read them straight
+off the recording without working out where earlier cuts have moved things. Where they overlap,
+the cut wins: only the part of a speed segment outside the cut is played, at that segment's
+speed. If two speed segments overlap, the one that starts first applies.
+
+Chapters, annotations, highlights, and snippets are different: their times are on the
+**playback** timeline, the one shown on the player after cuts and speed changes. The Termshow
+Editor's timeline shows the original recording, so use the Preview to check overlay timing.
 
 ## Snippets
 

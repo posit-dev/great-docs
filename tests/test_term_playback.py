@@ -93,10 +93,12 @@ class TestPlayCommand:
         (tmp_path / "demo.termshow.yml").write_text(
             "cuts:\n  - from: 0.5\n    to: 1.5\n", encoding="utf-8"
         )
-        result = self._run([str(source)])
+        with patch("great_docs._term_player.playback.play_recording") as play:
+            result = self._run([str(source)])
         assert result.exit_code == 0, result.output
-        assert "second" not in result.output
-        assert "third" in result.output
+        # "second" is printed during the cut, so it's shown at the cut's start
+        recording = play.call_args.args[0]
+        assert [e.time for e in recording.events] == pytest.approx([0.0, 0.5, 1.0])
 
     def test_no_script_ignores_companion(self, tmp_path: Path):
         source = _write_termshow(tmp_path)

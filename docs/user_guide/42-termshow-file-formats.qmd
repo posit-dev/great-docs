@@ -113,6 +113,12 @@ Times in a script use two timelines:
   **playback timeline**: the time a viewer sees on the player, after cuts and speed changes are
   applied.
 
+To map a recording time `t` to playback time, walk the original timeline from 0 to `t`. Each
+stretch counts for nothing if it's inside any cut, for `length / speed` if it's inside a speed
+segment, and for its length otherwise. Where speed segments overlap, the one with the earliest
+`from` applies. Divide the total by `settings.speed`. Events inside a cut therefore all land at
+the cut's start, so their output still reaches the screen, and event order never changes.
+
 The Terminal Recordings guide explains what each feature looks like. This section lists the keys
 and their defaults.
 

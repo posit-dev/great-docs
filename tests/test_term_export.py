@@ -166,8 +166,10 @@ class TestTiming:
         assert _duration(svg) == pytest.approx(1.5)
 
     def test_speed_map_applied(self):
-        svg = export_svg(_manifest({"speed_map": [{"from": 1, "to": 3, "speed": 4}]}), end_pause=0)
-        assert _duration(svg) == pytest.approx(1.5)
+        m = _manifest({"speed_map": [{"from": 1, "to": 3, "speed": 4}]})
+        # The output at 1s comes before the sped-up range, so it keeps its time
+        assert [k.time for k in m.keyframes] == pytest.approx([0.0, 1.0, 1.5])
+        assert _duration(export_svg(m, end_pause=0)) == pytest.approx(1.5)
 
     def test_no_loop_stops_on_last_screen(self):
         svg = export_svg(_manifest(), loop=False)
