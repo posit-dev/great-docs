@@ -75,7 +75,7 @@ type-check: ## Run type checking with mypy
 
 .PHONY: type-check-strict
 type-check-strict: ## Run strict type checking with pyright
-	@$(PYTHON) -m pyright
+	@$(PYTHON) -m pyright --pythonpath $(PYTHON)
 
 .PHONY: check
 check: lint test ## Run all checks (lint and test)
