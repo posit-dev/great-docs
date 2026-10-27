@@ -4135,25 +4135,99 @@ def termshow():
 
 
 @click.command("record")
-@click.argument("output", type=click.Path())
+@click.argument("output", type=click.Path(), required=False)
+@click.option(
+    "--steps",
+    "steps_file",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="Run the steps in this .termshow.yml script instead of recording live",
+)
 @click.option("--cols", type=int, default=None, help="Terminal width in columns")
 @click.option("--rows", type=int, default=None, help="Terminal height in rows")
 @click.option("--shell", type=str, default=None, help="Shell to spawn (default: $SHELL)")
 @click.option("--capture-input", is_flag=True, help="Also capture keyboard input events")
 def term_record(
-    output: str, cols: int | None, rows: int | None, shell: str | None, capture_input: bool
+    output: str | None,
+    steps_file: str | None,
+    cols: int | None,
+    rows: int | None,
+    shell: str | None,
+    capture_input: bool,
 ) -> None:
     """Record a terminal session to a .termshow file.
 
     Spawns an interactive shell and captures all output with timing.
     Press Ctrl+D or type 'exit' to stop recording.
+
+    With --steps, nothing is typed by hand: the script's `steps:` are run in
+    a hidden terminal and the session is saved. OUTPUT defaults to the
+    recording the script belongs to (demo.termshow for demo.termshow.yml),
+    and --cols, --rows, and --shell override the script's `record:` settings.
+
+    Examples:
+      great-docs termshow record docs/assets/install.termshow
+      great-docs termshow record --steps docs/assets/install.termshow.yml
     """
+    if steps_file:
+        _record_steps(steps_file, output, cols=cols, rows=rows, shell=shell)
+        return
+    if output is None:
+        raise click.UsageError("Missing argument 'OUTPUT'.")
+
     from ._term_player.recorder import record_session
 
     if not output.endswith(".termshow"):
         output += ".termshow"
 
     record_session(output, shell=shell, cols=cols, rows=rows, capture_input=capture_input)
+
+
+def _record_steps(
+    steps_file: str, output: str | None, *, cols: int | None, rows: int | None, shell: str | None
+) -> None:
+    """`termshow record --steps`: run a script's steps and save the recording."""
+    from dataclasses import replace
+
+    from ._term_player.importer import _write_termshow
+    from ._term_player.steps import StepsError, load_steps, record_steps
+
+    script_path = Path(steps_file)
+    if output is None:
+        if not script_path.name.endswith(".termshow.yml"):
+            raise click.UsageError(
+                f"Give an OUTPUT path: {script_path.name} isn't named NAME.termshow.yml"
+            )
+        output_path = script_path.with_name(script_path.name[: -len(".yml")])
+    else:
+        output_path = Path(output if output.endswith(".termshow") else output + ".termshow")
+
+    try:
+        settings, steps = load_steps(script_path)
+    except StepsError as e:
+        raise click.ClickException(str(e)) from None
+    overrides = {"cols": cols, "rows": rows, "shell": shell}
+    settings = replace(settings, **{k: v for k, v in overrides.items() if v is not None})
+
+    def progress(i: int, step) -> None:
+        click.secho(f"  {i + 1}/{len(steps)} {step.describe()}", dim=True, err=True)
+
+    count = f"{len(steps)} step{'' if len(steps) == 1 else 's'}"
+    click.echo(f"Running {count} from {script_path} in {settings.shell!r}", err=True)
+    try:
+        recording = record_steps(settings, steps, title=output_path.stem, on_step=progress)
+    except StepsError as e:
+        click.echo(f"✗ {e}", err=True)
+        if e.screen:
+            click.echo("\nThe screen at the time:", err=True)
+            for line in e.screen.splitlines():
+                click.echo(f"  │ {line}", err=True)
+        raise SystemExit(1) from None
+
+    _write_termshow(recording, output_path)
+    click.echo(
+        f"✓ Recorded {output_path} ({recording.duration:.1f}s, {len(recording.events)} events)"
+    )
 
 
 @click.command("render")
@@ -4429,7 +4503,7 @@ def term_validate(
       great-docs termshow validate demos/install.termshow
       great-docs termshow validate demos/*.termshow --strict
     """
-    from ._term_player.validate import ERROR, validate
+    from ._term_player.validate import ERROR, check_script_text, validate
 
     if script and len(sources) > 1:
         raise click.BadParameter("use it with a single recording", param_hint="--script")
@@ -4441,11 +4515,19 @@ def term_validate(
         if source_path.name.endswith(".termshow.yml"):
             script_for = script or source
             source_path = source_path.with_name(source_path.name[: -len(".yml")])
-            if not source_path.exists():
+            if not source_path.exists() and not _has_steps(script_for):
                 raise click.ClickException(f"No recording {source_path} for the script {source}")
-        problems = validate(source_path, script_for, use_script=not no_script)
+        if source_path.exists():
+            problems = validate(source_path, script_for, use_script=not no_script)
+            checked = str(source_path)
+        else:
+            # A script with steps that hasn't been recorded yet is checked on its own
+            script_path = Path(script_for)
+            problems = []
+            check_script_text(script_path.read_text(encoding="utf-8"), script_path.name, problems)
+            checked = f"{script_path} (not recorded yet)"
         if not problems:
-            click.echo(f"✓ {source_path}: no problems")
+            click.echo(f"✓ {checked}: no problems")
         for problem in problems:
             click.echo(f"{problem.severity}: {problem}")
         errors += sum(1 for p in problems if p.severity == ERROR)
@@ -4456,6 +4538,17 @@ def term_validate(
         click.echo(f"\n{plural(errors, 'error')}, {plural(warnings, 'warning')}")
     if errors or (strict and warnings):
         raise SystemExit(1)
+
+
+def _has_steps(script: str) -> bool:
+    """Whether a script has a `steps:` section, so it can be recorded from."""
+    from yaml12 import parse_yaml
+
+    try:
+        data = parse_yaml(Path(script).read_text(encoding="utf-8"))
+    except ValueError:
+        return False
+    return isinstance(data, dict) and "steps" in data
 
 
 @click.command("assets")
