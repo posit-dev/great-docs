@@ -10,7 +10,7 @@ from pathlib import Path
 from yaml12 import parse_yaml
 import pytest
 
-from great_docs._term_player.editor import _build_editor_data, _serialize_script
+from great_docs._term_player.editor import _build_editor_data, _kept_sections, _serialize_script
 from great_docs._term_player.parser import Event, Recording, TermInfo
 from great_docs._term_player.script import (
     Annotation,
@@ -411,6 +411,52 @@ class TestSerializeScript:
         assert parsed.get("annotations") is None
         assert parsed.get("cuts") is None
         assert parsed.get("snippets") is None
+
+
+class TestKeptSections:
+    """The editor doesn't edit `record:` or `steps:`, so a save keeps them as written."""
+
+    _TEXT = (
+        "source: demo.termshow\n"
+        "record:\n"
+        "  shell: bash --norc  # no rc files\n"
+        "  cols: 90\n"
+        "chapters:\n"
+        "  - at: 1\n"
+        "    label: Old\n"
+        "steps:\n"
+        "  - run: ls\n"
+        "  # Pause before the next one\n"
+        "  - sleep: 1\n"
+        "\n"
+        "  - enter\n"
+    )
+
+    def test_extracts_sections_as_written(self):
+        assert _kept_sections(self._TEXT) == (
+            "record:\n"
+            "  shell: bash --norc  # no rc files\n"
+            "  cols: 90\n"
+            "\n"
+            "steps:\n"
+            "  - run: ls\n"
+            "  # Pause before the next one\n"
+            "  - sleep: 1\n"
+            "\n"
+            "  - enter\n"
+            "\n"
+        )
+
+    def test_nothing_to_keep(self):
+        assert _kept_sections("source: demo.termshow\nchapters: []\n") == ""
+
+    def test_save_keeps_them(self):
+        script_data = {"settings": {}, "chapters": [{"time": 2.0, "label": "New"}]}
+        yaml_str = _serialize_script(script_data, "demo.termshow", _kept_sections(self._TEXT))
+        parsed = parse_yaml(yaml_str)
+        assert parsed["record"] == {"shell": "bash --norc", "cols": 90}
+        assert parsed["steps"] == [{"run": "ls"}, {"sleep": 1}, "enter"]
+        assert parsed["chapters"] == [{"at": 2.0, "label": "New"}]
 
 
 # ---------------------------------------------------------------------------
