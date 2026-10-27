@@ -289,6 +289,8 @@ def check_script_data(
         _check_record(data["record"], error)
     if "steps" in data:
         _check_steps(data["steps"], error)
+    if "check" in data:
+        _check_check(data["check"], error)
 
     for section, def_name in _SECTIONS.items():
         if section not in data:
@@ -322,6 +324,19 @@ def _check_record(record: Any, error: Report) -> None:
             shlex.split(record["shell"])
         except ValueError as e:
             error("record.shell", f"can't be split into words ({e})")
+
+
+def _check_check(check: Any, error: Report) -> None:
+    if not _check_value(check, {"$ref": "#/$defs/check"}, "check", error) and not isinstance(
+        check, dict
+    ):
+        return
+    ignore = check.get("ignore")
+    if isinstance(ignore, list):
+        for i, pattern in enumerate(ignore):
+            if isinstance(pattern, str) and pattern:
+                # Matched by `termshow check`, so Python's regex syntax applies
+                _check_regex(pattern, f"check.ignore[{i}]", error, js=False)
 
 
 def _check_steps(steps: Any, error: Report) -> None:

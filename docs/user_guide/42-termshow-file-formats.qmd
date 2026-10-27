@@ -136,6 +136,7 @@ and their defaults.
 | `snippets` | list | Copy buttons shown for a time range |
 | `record` | mapping | How `termshow record --steps` runs the shell (below) |
 | `steps` | list | What `termshow record --steps` types into the shell (below) |
+| `check` | mapping | How `termshow check` compares a new run with the recording (below) |
 
 ### `settings`
 
@@ -208,11 +209,12 @@ until the text appears. Pattern targets need a version 2 manifest.
 Older scripts may put `region` directly on the highlight instead of under `target`; that form is
 still read but is deprecated.
 
-### `record` and `steps`
+### `record`, `steps`, and `check`
 
-These two sections are read only by `great-docs termshow record --steps`, which runs the steps in
-a new shell and writes the recording. Rendering ignores them, and the Termshow Editor keeps them
-as written when it saves.
+These sections are read only by `great-docs termshow record --steps`, which runs the steps in a
+new shell and writes the recording, and `great-docs termshow check`, which runs them again and
+compares the result with the recording. Rendering ignores them, and the Termshow Editor keeps
+them as written when it saves.
 
 | `record` key | Default | Description |
 |--------------|---------|-------------|
@@ -252,6 +254,13 @@ trailing spaces removed and `^` and `$` match at row boundaries.
 After the last step, the recorder sends {{< keys shortcut="Ctrl+D" >}} and adds an `x` event with
 the shell's exit status. If a prompt or a `wait_for` pattern doesn't appear in time, or a step
 comes after the shell has exited, the command stops and writes nothing.
+
+`check` has one key, `ignore`: a list of Python regular expressions. `termshow check` replays
+both recordings through the terminal emulator and compares the screen text (each row with its
+trailing spaces removed) at every `m` event and at the end. Before comparing, each pattern's
+matches in each row are replaced with `…` on both sides. Timing, colors, and how the output was
+split into events aren't compared. If the two recordings have different markers, only the end is
+compared. The new run uses the recording's `cols` and `rows`.
 
 ## Player manifests (`manifest.json`)
 

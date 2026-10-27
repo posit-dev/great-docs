@@ -132,11 +132,11 @@ def _num(value: Any) -> float:
 
 
 # Top-level sections the editor doesn't show, which are copied as written when it saves
-_KEPT_SECTIONS = ("record", "steps")
+_KEPT_SECTIONS = ("record", "steps", "check")
 
 
 def _kept_sections(text: str) -> str:
-    """The `record:` and `steps:` sections of a script's text, as written."""
+    """The `record:`, `steps:`, and `check:` sections of a script's text, as written."""
     blocks: list[list[str]] = []
     current: list[str] | None = None
     for line in text.splitlines():

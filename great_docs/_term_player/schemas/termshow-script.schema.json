@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/posit-dev/great-docs/main/great_docs/_term_player/schemas/termshow-script.schema.json",
   "title": "Termshow script (.termshow.yml)",
-  "description": "Presentation layer for a `.termshow` recording: settings, chapters, cuts, annotations, highlights and snippets, plus optional `record` and `steps` sections that describe a session to record. Times are in seconds: `cuts` and `speed_map` use the recording's original timeline, and everything else uses the playback timeline (after cuts and speed changes).",
+  "description": "Presentation layer for a `.termshow` recording: settings, chapters, cuts, annotations, highlights and snippets, plus optional `record`, `steps`, and `check` sections that describe a session to record and how to check it. Times are in seconds: `cuts` and `speed_map` use the recording's original timeline, and everything else uses the playback timeline (after cuts and speed changes).",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -46,7 +46,8 @@
       "description": "A session to type in a terminal, for `great-docs termshow record --steps`, which runs the steps and writes the recording. Ignored when rendering.",
       "type": "array",
       "items": { "$ref": "#/$defs/step" }
-    }
+    },
+    "check": { "$ref": "#/$defs/check" }
   },
   "$defs": {
     "time": {
@@ -364,6 +365,18 @@
         "label": {
           "description": "Button label.",
           "type": "string"
+        }
+      }
+    },
+    "check": {
+      "description": "How `great-docs termshow check` compares a new run of the steps with the recording. Ignored when rendering.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ignore": {
+          "description": "Python regular expressions for text that changes from run to run, such as version numbers, dates, or temporary paths. Matching text is left out of the comparison.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
         }
       }
     },
