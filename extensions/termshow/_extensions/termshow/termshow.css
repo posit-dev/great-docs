@@ -23,6 +23,11 @@
     U+2705, U+2714, U+2716, U+2718, U+26A0;
 }
 
+/* <termshow-player> elements are inline by default; the player adds .gd-termshow */
+termshow-player {
+  display: block;
+}
+
 .gd-termshow {
   --gd-tp-bg: #1e1e2e;
   --gd-tp-fg: #cdd6f4;

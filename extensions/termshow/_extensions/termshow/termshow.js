@@ -12,12 +12,17 @@
  * A manifest rendered with a light/dark theme pair carries a `dark` member
  * with the dark theme's colors and rows; the player draws whichever side
  * matches the page's color mode and redraws when the mode changes.
+ *
+ * Players come from two places: `<div class="gd-termshow" data-manifest=...>`
+ * containers written by the Quarto shortcode, and `<termshow-player src=...>`
+ * elements, which work on any HTML page.
  */
 (function () {
   'use strict';
 
   const PLAYER_CLASS = 'gd-termshow';
   const ACTIVE_CLASS = 'gd-tp-active';
+  const ELEMENT_NAME = 'termshow-player';
 
   /**
    * Fetch a resource as text or JSON, with file:// fallback via XHR.
@@ -45,33 +50,90 @@
   }
 
   /**
-   * Initialize all termshow player instances on the page.
+   * Initialize all shortcode player containers on the page.
    */
   function initAll() {
     const players = document.querySelectorAll(`.${PLAYER_CLASS}`);
-    players.forEach((el) => initPlayer(el));
+    players.forEach((el) => initContainer(el));
+  }
+
+  /**
+   * Initialize a shortcode container, which carries its options as data-*
+   * attributes. `<termshow-player>` elements set themselves up.
+   */
+  function initContainer(container) {
+    if (container.localName === ELEMENT_NAME) return;
+    const manifestUrl = container.dataset.manifest;
+    if (!manifestUrl) return;
+    initPlayer(
+      container,
+      manifestUrl,
+      readOptions((name) => container.getAttribute('data-' + name)),
+      readInline(container)
+    );
+  }
+
+  /**
+   * Read player options through `get(name)`, which returns an attribute's
+   * value or null. Flags are on when present, unless set to "false".
+   */
+  function readOptions(get) {
+    const flag = (name, fallback) => {
+      const value = get(name);
+      return value == null ? fallback : value !== 'false';
+    };
+    return {
+      autoplay: flag('autoplay', false),
+      speed: parseFloat(get('speed')) || 1.0,
+      pauseOnChapters: flag('pause-on-chapters', false),
+      loop: flag('loop', false),
+      poster: parseFloat(get('poster')) || 0,
+      controls: flag('controls', true),
+      theme: get('theme') || 'auto',
+    };
+  }
+
+  /**
+   * Read the manifest (and version 1 frames) embedded in a container as
+   * `<script type="application/json">` elements.
+   */
+  function readInline(container) {
+    const parse = (selector) => {
+      const el = container.querySelector(selector);
+      if (!el) return null;
+      try { return JSON.parse(el.textContent); } catch (e) { return null; }
+    };
+    return { manifest: parse('script.gd-tp-manifest'), frames: parse('script.gd-tp-frames') };
+  }
+
+  /**
+   * The manifest URL for a `src` attribute: a `.json` file as given, or a
+   * render directory's `manifest.json`.
+   */
+  function manifestUrlFor(src) {
+    if (!src) return null;
+    if (/\.json([?#]|$)/.test(src)) return src;
+    return src.replace(/\/?$/, '/') + 'manifest.json';
+  }
+
+  /** Fire a media-style event (`ready`, `play`, `pause`, `ended`) on a player. */
+  function emit(container, type) {
+    if (container && container.dispatchEvent && typeof Event === 'function') {
+      container.dispatchEvent(new Event(type));
+    }
   }
 
   /**
    * Initialize a single termshow player instance.
+   *
+   * The manifest is fetched from `manifestUrl` when there is one, falling back
+   * to `inline` data; with no URL, the inline manifest is used directly.
+   * Returns a controller for the player, or null if it's already running.
    */
-  function initPlayer(container) {
-    const manifestUrl = container.dataset.manifest;
-    if (!manifestUrl) return;
-
+  function initPlayer(container, manifestUrl, options, inline) {
     // Prevent double-init
-    if (container.classList.contains(ACTIVE_CLASS)) return;
+    if (container.classList.contains(ACTIVE_CLASS)) return null;
     container.classList.add(ACTIVE_CLASS);
-
-    const options = {
-      autoplay: container.dataset.autoplay === 'true',
-      speed: parseFloat(container.dataset.speed) || 1.0,
-      pauseOnChapters: container.dataset.pauseOnChapters === 'true',
-      loop: container.dataset.loop === 'true',
-      poster: parseFloat(container.dataset.poster) || 0,
-      controls: container.dataset.controls !== 'false',
-      theme: container.dataset.theme || 'auto',
-    };
 
     // Player chrome theme: "dark"/"light" force it; "auto" is resolved by
     // `applyMode()` once the manifest is loaded
@@ -94,20 +156,9 @@
       // 'light' or 'dark': the chrome, and the side drawn for a theme pair
       mode: null,
       shownIdx: -1,
-      baseUrl: manifestUrl.substring(0, manifestUrl.lastIndexOf('/') + 1),
+      baseUrl: manifestUrl ? manifestUrl.substring(0, manifestUrl.lastIndexOf('/') + 1) : '',
+      destroyed: false,
     };
-
-    // Try to read inline manifest + frames (embedded by Lua filter)
-    var inlineManifest = null;
-    var inlineFrames = null;
-    var manifestEl = container.querySelector('script.gd-tp-manifest');
-    var framesEl = container.querySelector('script.gd-tp-frames');
-    if (manifestEl) {
-      try { inlineManifest = JSON.parse(manifestEl.textContent); } catch (e) {}
-    }
-    if (framesEl) {
-      try { inlineFrames = JSON.parse(framesEl.textContent); } catch (e) {}
-    }
 
     // Title bar (separate from viewport, above it)
     const chapterBar = document.createElement('div');
@@ -167,6 +218,7 @@
 
     // Initialize with manifest (inline or fetched)
     function activate(manifest, frames) {
+      if (state.destroyed) return;
       state.manifest = manifest;
       state.frames = frames;
       state.svgCache = {};
@@ -203,6 +255,7 @@
       updateChapterBar(chapterBar, manifest, 0);
       // Show the poster frame (playback still starts from 0)
       showFrame(state, svgContainer, findKeyframeIndex(manifest.keyframes, options.poster));
+      emit(container, 'ready');
       if (options.autoplay) {
         play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
       }
@@ -222,20 +275,19 @@
       }
     }
 
-    if (inlineManifest) {
+    if (manifestUrl) {
       // Always try fetching the external manifest first (it reflects the latest
       // termshow render without requiring an HTML rebuild). Fall back to inline
       // data if the fetch fails (file:// protocol, offline, etc.).
-      fetchResource(manifestUrl, true)
-        .then(function (manifest) { activate(manifest, null); })
-        .catch(function () { activate(inlineManifest, inlineFrames); });
-    } else {
-      // No inline data: fetch is the only option
-      fetchResource(manifestUrl, true)
-        .then(function (manifest) { activate(manifest, null); })
-        .catch(function (err) {
-          console.warn('[termshow] Failed to load manifest:', manifestUrl, err);
-        });
+      fetchResource(manifestUrl, true).then(
+        function (manifest) { activate(manifest, null); },
+        function (err) {
+          if (inline.manifest) activate(inline.manifest, inline.frames);
+          else console.warn('[termshow] Failed to load manifest:', manifestUrl, err);
+        }
+      );
+    } else if (inline.manifest) {
+      activate(inline.manifest, inline.frames);
     }
 
     // Restore tabindex on first user interaction (for keyboard nav)
@@ -488,11 +540,60 @@
           break;
       }
     });
+
+    // Leave the ended state, so the player can play or seek again
+    function clearEnded() {
+      state.ended = false;
+      controls.playBtn.textContent = '\u25b6';
+      controls.playBtn.setAttribute('aria-label', 'Play');
+      centerBtn.innerHTML = '<span class="gd-tp-icon-play">\u25b6</span>';
+      container.classList.remove('gd-tp-ended');
+    }
+
+    // Controller for scripting the player (the `<termshow-player>` methods)
+    return {
+      play() {
+        if (!state.manifest || state.playing) return;
+        if (state.ended) {
+          clearEnded();
+          state.currentTime = 0;
+          state.currentKeyframeIdx = -1;
+        }
+        play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
+      },
+      pause() {
+        if (state.playing) pause(state, controls, container, centerOverlay);
+      },
+      seek(time) {
+        if (!state.manifest) return;
+        if (state.ended) clearEnded();
+        state.chapterPaused = false;
+        container.classList.remove('gd-tp-chapter-paused');
+        seek(state, Number(time) || 0, svgContainer, annotationLayer, controls);
+        updateChapterBar(chapterBar, state.manifest, state.currentTime);
+      },
+      get currentTime() { return state.currentTime; },
+      get duration() { return state.manifest ? state.manifest.duration : NaN; },
+      get paused() { return !state.playing; },
+      // Stop playback and remove the player, leaving an empty container
+      destroy() {
+        state.destroyed = true;
+        state.playing = false;
+        if (state.animFrameId) cancelAnimationFrame(state.animFrameId);
+        const at = modeListeners.indexOf(applyMode);
+        if (at >= 0) modeListeners.splice(at, 1);
+        container.innerHTML = '';
+        Array.from(container.classList)
+          .filter((name) => name.indexOf('gd-tp-') === 0)
+          .forEach((name) => container.classList.remove(name));
+      },
+    };
   }
 
   // --- Playback ---
 
   function play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar) {
+    const wasPlaying = state.playing;
     state.playing = true;
     state.ended = false;
     state.chapterPaused = false;
@@ -525,6 +626,7 @@
             '<span>\u21ba</span>';
           container.classList.remove('gd-tp-playing');
           container.classList.add('gd-tp-ended');
+          emit(container, 'ended');
           return;
         }
       }
@@ -550,9 +652,11 @@
     }
 
     state.animFrameId = requestAnimationFrame(tick);
+    if (!wasPlaying) emit(container, 'play');
   }
 
   function pause(state, controls, container, centerOverlay) {
+    const wasPlaying = state.playing;
     state.playing = false;
     if (state.animFrameId) {
       cancelAnimationFrame(state.animFrameId);
@@ -571,6 +675,7 @@
         container.classList.remove('gd-tp-chapter-paused');
       }
     }
+    if (wasPlaying) emit(container, 'pause');
   }
 
   function seek(state, time, svgContainer, annotationLayer, controls) {
@@ -1360,6 +1465,70 @@
     return m + ':' + (s < 10 ? '0' : '') + s;
   }
 
+  // --- <termshow-player> element ---
+
+  const ELEMENT_ATTRIBUTES = [
+    'src', 'autoplay', 'loop', 'speed', 'pause-on-chapters', 'poster', 'controls', 'theme',
+  ];
+
+  /**
+   * Define `<termshow-player>`. Its attributes mirror the shortcode options;
+   * `src` is a render directory or a manifest URL, and a manifest can also be
+   * embedded as `<script type="application/json" class="gd-tp-manifest">`.
+   * The player is built inside the element (no shadow DOM), so it takes the
+   * page's termshow.css like shortcode players do.
+   */
+  function defineElement() {
+    if (typeof customElements === 'undefined' || typeof HTMLElement === 'undefined') return;
+    if (customElements.get(ELEMENT_NAME)) return;
+
+    class TermshowPlayer extends HTMLElement {
+      static get observedAttributes() { return ELEMENT_ATTRIBUTES; }
+
+      connectedCallback() {
+        if (this._player) return;
+        // Children (an inline manifest) may not be parsed yet
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', () => {
+            if (this.isConnected) this.connectedCallback();
+          }, { once: true });
+          return;
+        }
+        if (!this._inline) this._inline = readInline(this);
+        this.classList.add(PLAYER_CLASS);
+        this._player = initPlayer(
+          this,
+          manifestUrlFor(this.getAttribute('src')),
+          readOptions((name) => this.getAttribute(name)),
+          this._inline
+        );
+      }
+
+      disconnectedCallback() {
+        if (this._player) this._player.destroy();
+        this._player = null;
+      }
+
+      // Any attribute change reloads the player with the new settings
+      attributeChangedCallback(name, oldValue, newValue) {
+        if (oldValue === newValue || !this._player) return;
+        this._player.destroy();
+        this._player = null;
+        this.connectedCallback();
+      }
+
+      play() { if (this._player) this._player.play(); }
+      pause() { if (this._player) this._player.pause(); }
+      seek(time) { if (this._player) this._player.seek(time); }
+      get currentTime() { return this._player ? this._player.currentTime : 0; }
+      set currentTime(time) { this.seek(time); }
+      get duration() { return this._player ? this._player.duration : NaN; }
+      get paused() { return this._player ? this._player.paused : true; }
+    }
+
+    customElements.define(ELEMENT_NAME, TermshowPlayer);
+  }
+
   // --- Initialization ---
 
   // Exposed for tests and for embedding outside the Quarto shortcode
@@ -1367,6 +1536,10 @@
   window.Termshow.renderFrame = renderFrameSvg;
   window.Termshow.locateMatch = locateMatch;
   window.Termshow.colorMode = colorMode;
+  window.Termshow.readOptions = readOptions;
+  window.Termshow.manifestUrlFor = manifestUrlFor;
+
+  defineElement();
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initAll);
@@ -1380,13 +1553,14 @@
       for (const node of mutation.addedNodes) {
         if (node.nodeType === 1) {
           if (node.classList && node.classList.contains(PLAYER_CLASS)) {
-            initPlayer(node);
+            initContainer(node);
           }
           const nested = node.querySelectorAll && node.querySelectorAll(`.${PLAYER_CLASS}`);
-          if (nested) nested.forEach((el) => initPlayer(el));
+          if (nested) nested.forEach((el) => initContainer(el));
         }
       }
     }
   });
-  observer.observe(document.body, { childList: true, subtree: true });
+  // The script may run in <head>, before there's a body to watch
+  observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
 })();

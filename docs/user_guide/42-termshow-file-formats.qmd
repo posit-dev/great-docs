@@ -210,7 +210,9 @@ still read but is deprecated.
 
 The manifest is a JSON object that holds a rendered recording. The build writes it to
 `termshow/NAME/manifest.json`, together with one SVG file per unique screen, and embeds it in the
-page inside a `<script type="application/json">` element. This page describes **version 2**.
+page inside a `<script type="application/json">` element. A
+[`<termshow-player>` element](terminal-recordings.qmd#using-the-player-on-any-web-page) can also
+load it by URL. This page describes **version 2**.
 
 ### Top-level members
 

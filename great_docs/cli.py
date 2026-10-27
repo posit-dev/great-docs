@@ -4458,11 +4458,32 @@ def term_validate(
         raise SystemExit(1)
 
 
+@click.command("assets")
+@click.argument("dest", type=click.Path(file_okay=False))
+def term_assets(dest: str) -> None:
+    """Copy the web player into a directory, for pages built without Quarto.
+
+    Writes termshow.js, termshow.css, and the fonts the stylesheet uses, then
+    prints the HTML that loads them. Point a <termshow-player> element's src
+    at a `termshow render` output directory to embed a recording.
+
+    Examples:
+      great-docs termshow assets site/player
+    """
+    from ._term_player.web import copy_player, player_snippet
+
+    files = copy_player(dest)
+    click.echo(f"✓ Copied {len(files)} player files to {dest}/")
+    click.echo("\nAdd this to a page, with src pointing at a rendered recording:\n")
+    click.echo(player_snippet(Path(dest).as_posix()))
+
+
 termshow.add_command(term_record)
 termshow.add_command(term_render)
 termshow.add_command(term_play)
 termshow.add_command(term_export)
 termshow.add_command(term_validate)
+termshow.add_command(term_assets)
 termshow.add_command(term_import_cast)
 
 
