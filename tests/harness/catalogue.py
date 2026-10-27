@@ -1,15 +1,16 @@
 """
 Build cases and package generation for the characterisation harness
 
-A build case specifies a Gauntlet package, an optional configuration overlay and the
-commands to run. The default tier contains 33 packages selected to exercise build features,
-plus a `show_dates` overlay. The full catalogue includes every Gauntlet package supported by
-the build interpreter.
+A build case specifies a Gauntlet package, the commands to run and, for a variant, how the
+package or its configuration differs from the spec. The default tier contains 33 packages
+selected to exercise build features, plus their variants. The full catalogue includes every
+Gauntlet package supported by the build interpreter, plus the variants of those packages.
 """
 
 from __future__ import annotations
 
 import copy
+import dataclasses
 import importlib
 import os
 import sys
@@ -55,7 +56,6 @@ TIER: tuple[str, ...] = (
 )
 
 # The overlay covers sitemap, page-date and social-card generation absent from the specs.
-SHOW_DATES_PACKAGE = "gdtest_kitchen_sink"
 SHOW_DATES_OVERLAY: Mapping[str, Any] = {
     "show_dates": True,
     "seo": {"canonical": {"base_url": "https://example.com/kitchen-sink/"}},
@@ -90,41 +90,58 @@ class BuildCase:
     ----------
     package :
         Gauntlet spec name, which is also the package directory name.
-    overlay_name :
-        Name of the configuration overlay, or `None` for the spec's own configuration.
+    variant :
+        Name of the variant, or `None` for the package as its spec describes it.
     overlay :
         Mapping merged into the spec's configuration.
     commands :
         Keys of `COMMANDS`, run in order. `init` runs only when the package ships no
         configuration, as in the Gauntlet.
+    arguments :
+        Arguments added after a command's own, keyed by command.
+    expects_reference :
+        Whether every Quarto project the commands leave must hold `reference/index.qmd`.
     """
 
     package: str
-    overlay_name: str | None = None
+    variant: str | None = None
     overlay: Mapping[str, Any] = field(default_factory=dict[str, Any])
     commands: tuple[str, ...] = ("init", "build")
+    arguments: Mapping[str, tuple[str, ...]] = field(default_factory=dict[str, tuple[str, ...]])
+    expects_reference: bool = False
 
     @property
     def id(self) -> str:
         """Identifier of the case in recordings and reports"""
-        return f"{self.package}+{self.overlay_name}" if self.overlay_name else self.package
+        return f"{self.package}+{self.variant}" if self.variant else self.package
 
 
-def tier_cases() -> list[BuildCase]:
+# Cases beyond one per package; each follows its package in a catalogue.
+VARIANTS: tuple[BuildCase, ...] = (
+    BuildCase("gdtest_kitchen_sink", "show_dates", SHOW_DATES_OVERLAY),
+)
+
+
+def tier_cases(test_packages: Path) -> list[BuildCase]:
     """
-    List the default cases, including the page-date overlay
+    List the default cases, including the variants of tier packages
+
+    Parameters
+    ----------
+    test_packages :
+        The `test-packages` directory that holds the catalogue.
 
     Returns
     -------
     :
-        The 33 tier packages and the `show_dates` overlay on `gdtest_kitchen_sink`.
+        The 33 tier packages, each followed by its variants.
     """
-    return with_overlay(TIER)
+    return with_variants(TIER, test_packages)
 
 
 def full_cases(test_packages: Path, python: tuple[int, ...]) -> list[BuildCase]:
     """
-    List every Gauntlet package the child interpreter supports, plus the overlay
+    List every Gauntlet package the child interpreter supports, plus the variants
 
     Parameters
     ----------
@@ -137,7 +154,7 @@ def full_cases(test_packages: Path, python: tuple[int, ...]) -> list[BuildCase]:
     Returns
     -------
     :
-        One case per package in catalogue order, with the overlay after its package.
+        One case per package in catalogue order, each followed by its variants.
     """
     catalog = _synthetic(test_packages, "catalog")
     names: list[str] = []
@@ -147,28 +164,34 @@ def full_cases(test_packages: Path, python: tuple[int, ...]) -> list[BuildCase]:
         minimum = catalog.get_spec(name).get("min_python")
         if minimum is None or python >= tuple(minimum):
             names.append(name)
-    return with_overlay(names)
+    return with_variants(names, test_packages)
 
 
-def with_overlay(packages: Iterable[str]) -> list[BuildCase]:
+def with_variants(packages: Iterable[str], test_packages: Path) -> list[BuildCase]:
     """
-    Make one case per package, adding the `show_dates` overlay after its package
+    Make one case per package, adding each package's variants after it
 
     Parameters
     ----------
     packages :
         Gauntlet spec names.
+    test_packages :
+        The `test-packages` directory that holds the catalogue.
 
     Returns
     -------
     :
-        The cases in the given order.
+        The cases in the given order, with the reference expectation of each spec.
     """
+    catalog = _synthetic(test_packages, "catalog")
     cases: list[BuildCase] = []
     for name in packages:
-        cases.append(BuildCase(name))
-        if name == SHOW_DATES_PACKAGE:
-            cases.append(BuildCase(name, "show_dates", SHOW_DATES_OVERLAY))
+        # The rule of `test_reference_index_exists` in `tests/test_gdg_rendered.py`: a spec
+        # that lists its exports expects an API reference.
+        expected = catalog.get_spec(name).get("expected", {})
+        expects = bool(expected.get("export_names"))
+        for case in (BuildCase(name), *(v for v in VARIANTS if v.package == name)):
+            cases.append(dataclasses.replace(case, expects_reference=expects))
     return cases
 
 

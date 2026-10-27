@@ -4,6 +4,7 @@ Compare two harness recordings and report every difference
 Compare exit statuses, file changes, step skeletons, warnings, handled exceptions, the
 number of Python processes and calls to the stub `quarto`. Every difference fails the
 comparison, including a handled exception that disappears, so each change requires review.
+A failed test-side check also fails the comparison, even when the base fails the same check.
 """
 
 from __future__ import annotations
@@ -15,7 +16,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from tests.harness.sides import environment_differences
+from tests.harness.record import SCHEMA
+from tests.harness.sides import HarnessError, environment_differences
 
 # Limit report size by capping diff lines per file and the number of files with diffs.
 DIFF_LINES = 60
@@ -32,14 +34,19 @@ class CaseResult:
     case :
         Case identifier.
     status :
-        `match`, `differ`, or `missing` when one side has no manifest.
+        `match` when both sides agree and the test side passes its checks; `differ` when
+        they differ; `fail` when they agree but the test side fails a check; `missing`
+        when either side has no manifest.
     findings :
         Report lines, one finding per line, with indented detail lines.
+    checks :
+        Failed test-side checks, each with the base side's result.
     """
 
     case: str
     status: str
     findings: list[str] = field(default_factory=list[str])
+    checks: list[str] = field(default_factory=list[str])
 
 
 @dataclass
@@ -309,6 +316,62 @@ def compare_command(
     return findings
 
 
+def present_files(manifest: Mapping[str, Any]) -> set[str]:
+    """
+    List the files a case's commands wrote and left in place
+
+    Parameters
+    ----------
+    manifest :
+        The case's manifest.
+
+    Returns
+    -------
+    :
+        Project-relative paths that a command added or changed and no later command removed.
+    """
+    present: set[str] = set()
+    commands: Mapping[str, Any] = manifest["commands"]
+    for name in manifest.get("order", list(commands)):
+        for record in commands[name].get("files", []):
+            if record["change"] == "removed":
+                present.discard(record["path"])
+            else:
+                present.add(record["path"])
+    return present
+
+
+def failed_checks(manifest: Mapping[str, Any]) -> list[str]:
+    """
+    Find failed checks in one side's recorded output
+
+    Parameters
+    ----------
+    manifest :
+        The case's manifest.
+
+    Returns
+    -------
+    :
+        One message per failed check, or an empty list when all checks pass.
+    """
+    failures: list[str] = []
+    present = present_files(manifest)
+    if manifest.get("expects_reference"):
+        # A Quarto project is a directory holding `_quarto.yml`; keep its trailing slash.
+        projects = sorted(
+            p.removesuffix("_quarto.yml") for p in present if p.rpartition("/")[2] == "_quarto.yml"
+        )
+        if not projects:
+            failures.append("no Quarto project to hold reference/index.qmd")
+        failures += [
+            f"{project}reference/index.qmd is missing"
+            for project in projects
+            if f"{project}reference/index.qmd" not in present
+        ]
+    return failures
+
+
 def compare_case(base: Path, test: Path, case: str) -> CaseResult:
     """
     Compare one build case between two recordings
@@ -338,7 +401,13 @@ def compare_case(base: Path, test: Path, case: str) -> CaseResult:
         # Detail lines retain their indentation beneath the command-prefixed finding.
         for finding in compare_command(base, test, old["commands"][name], new["commands"][name]):
             findings.append(finding if finding.startswith(" ") else f"{name}: {finding}")
-    return CaseResult(case, "differ" if findings else "match", findings)
+    base_failures = failed_checks(old)
+    checks = [
+        f"{failure} (base: {'same' if failure in base_failures else 'passes'})"
+        for failure in failed_checks(new)
+    ]
+    status = "differ" if findings else "fail" if checks else "match"
+    return CaseResult(case, status, findings, checks)
 
 
 def compare(base: Path, test: Path) -> Comparison:
@@ -354,8 +423,18 @@ def compare(base: Path, test: Path) -> Comparison:
     -------
     :
         The comparison.
+
+    Raises
+    ------
+    HarnessError
+        If either recording uses a different manifest schema.
     """
     old, new = _load(base / "side.json"), _load(test / "side.json")
+    for path, meta in ((base, old), (test, new)):
+        if meta.get("schema") != SCHEMA:
+            raise HarnessError(
+                f"{path} has harness schema {meta.get('schema')}, not {SCHEMA}; record it again"
+            )
     cases = list(dict.fromkeys([*old["cases"], *new["cases"]]))
     return Comparison(
         str(base),
@@ -414,6 +493,7 @@ def render(
         if result.status == "match":
             continue
         lines.append(f"{result.case}: {result.status.upper()}")
+        lines += [f"  check failed: {c}" for c in result.checks]
         lines += [f"  {f}" for f in result.findings]
         lines.append("")
     differ = [c.case for c in comparison.cases if c.status != "match"]

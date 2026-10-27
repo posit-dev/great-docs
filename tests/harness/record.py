@@ -39,7 +39,8 @@ from tests.harness.normalise import (
 )
 from tests.harness.sides import CENSUS_VARIABLE, QUARTO_LOG_VARIABLE, HarnessError, Side
 
-SCHEMA = 1
+# Bumped whenever the manifest format changes; comparisons refuse mixed schemas.
+SCHEMA = 2
 
 # Written by Python when it imports the package; not build output.
 SKIPPED_DIRECTORIES = frozenset({"__pycache__"})
@@ -319,7 +320,13 @@ def run_command(
         CENSUS_VARIABLE: str(census_dir),
         QUARTO_LOG_VARIABLE: str(quarto_log),
     }
-    argv = [str(job.side.bin / "great-docs"), *COMMANDS[name], "--project-path", str(package)]
+    argv = [
+        str(job.side.bin / "great-docs"),
+        *COMMANDS[name],
+        *job.case.arguments.get(name, ()),
+        "--project-path",
+        str(package),
+    ]
     out_file, err_file = job_dir / f"{name}.out", job_dir / f"{name}.err"
     start = time.perf_counter()
     with out_file.open("wb") as out, err_file.open("wb") as err:
@@ -405,7 +412,10 @@ def record_case(job: Job) -> dict[str, Any]:
         "schema": SCHEMA,
         "case": job.case.id,
         "package": job.case.package,
+        "variant": job.case.variant,
         "overlay": dict(job.case.overlay) if job.case.overlay else None,
+        "expects_reference": job.case.expects_reference,
+        "order": list(commands),
         "commands": commands,
         "normalised": dict(sorted(counts.items())),
     }
