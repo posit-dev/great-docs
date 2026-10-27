@@ -66,6 +66,10 @@ The command creates two files:
 With the raw recording saved and the script template in place, you're ready to shape the
 presentation.
 
+If you'd rather write down what to type and have Termshow record it for you, see
+[Scripted Recordings](#scripted-recordings). A scripted recording can be made again whenever the
+output changes.
+
 ### 2. Edit the script file
 
 Open `docs/assets/install-guide.termshow.yml` and uncomment/fill in the sections you need (or use the
@@ -1068,6 +1072,125 @@ Guidelines for effective use of highlights:
 
 Highlights are your most expressive tool for directing the viewer's eye. Used judiciously, they
 turn a passive recording into an active guided tour of the terminal output.
+
+## Scripted Recordings
+
+A recording made by hand has your typos and pauses in it, and when the tool's output changes you
+have to record it again. Instead, you can list the steps in the script and let Termshow type them:
+
+```yaml
+record:
+  shell: bash --norc
+  cols: 90
+  rows: 20
+
+steps:
+  - marker: Install
+  - run: pip install mypackage
+  - marker: Verify
+  - run: python -c "import mypackage; print(mypackage.__version__)"
+  - sleep: 2
+```
+
+Save this as `docs/assets/install-guide.termshow.yml` and record it:
+
+```bash
+great-docs termshow record --steps docs/assets/install-guide.termshow.yml
+```
+
+The steps run in a new shell, out of sight, and the session is saved as
+`docs/assets/install-guide.termshow`, next to the script. Commands take as long as they really
+take, and the typing has a steady rhythm with a little variation that's the same every time.
+Because the steps live in the script, recording again after a release gives you an up-to-date
+demo with the same chapters, annotations, and cuts.
+
+### Steps
+
+Each step is a single word or a mapping with one action:
+
+- `run: COMMAND` types the command, presses Enter, and waits for the next prompt.
+- `type: TEXT` types text without pressing Enter, and `enter` presses it.
+- `key: NAME` presses a key such as `tab`, `up`, `escape`, or `ctrl+c`. Add `count` to press it
+  more than once.
+- `sleep: SECONDS` waits, still recording whatever the terminal shows.
+- `wait_for: PATTERN` waits until a regular expression matches the line the cursor is on. With
+  `screen: true`, it matches any row of the screen instead.
+- `marker: LABEL` marks a point in the recording. When the script has no `chapters`, markers
+  become chapters.
+- `hide` and `show` leave a stretch out of the recording, such as setup you don't want to show.
+
+Here's a script that types into an interactive program, waits for its output, and sets up a
+directory without showing it:
+
+```yaml
+record:
+  typing_delay: 0.08
+  env:
+    NO_COLOR: 1
+
+steps:
+  - hide
+  - run: cd "$(mktemp -d)" && clear
+  - show
+  - type: python3 -q
+  - enter
+  - wait_for: '>>> $'
+    timeout: 5
+  - type: 6 * 7
+  - enter
+  - wait_for: "^42$"
+    screen: true
+  - key: ctrl+d
+  - wait_for: '\$ $'
+```
+
+`run` waits for the shell's prompt, which is `$ ` by default. Use `type` and `wait_for` for
+programs that show a different prompt, as above, or set `record.prompt_pattern` when the whole
+session runs in a program with its own prompt. While a stretch is hidden, the recording's clock
+is stopped, so the hidden commands' output appears all at once when the recording resumes.
+Follow setup that prints something with `clear` to keep it off the screen.
+
+### Settings
+
+The `record` section sets up the shell:
+
+- `shell` is the command to run (`sh` by default). Use `bash --norc` or `zsh -f` to skip your
+  startup files, so the recording doesn't depend on how your own shell is set up.
+- `cols` and `rows` set the terminal size (80 by 24 by default). `--cols` and `--rows` on the
+  command line override them, as `--shell` overrides `shell`.
+- `cwd` is the directory to start in, relative to the script.
+- `env` sets environment variables. The shell starts with a plain `$ ` prompt and no history
+  file, so nothing you record ends up in your own history.
+- `typing_delay` (0.05 seconds) and `typing_jitter` (0.3) set the typing speed and how much it
+  varies. `delay` on a `type`, `run`, or `key` step overrides the speed for that step.
+- `timeout` (10 seconds) is how long to wait for a prompt or a pattern. `timeout` on a `run` or
+  `wait_for` step overrides it.
+
+The full list is in [Termshow File Formats](termshow-file-formats.qmd#record-and-steps).
+
+### When a step fails
+
+If a prompt or pattern doesn't appear in time, the command stops, says which step failed, and
+shows the screen as it was. No recording is written, so the previous one is left as it was:
+
+```
+✗ steps[3] (wait_for: ^42$): '^42$' didn't appear on the screen within 10s
+
+The screen at the time:
+  │ $ python3 -q
+  │ >>> 6 * 7
+  │ 43
+  │ >>>
+```
+
+`great-docs termshow validate` checks the steps and settings, so you can catch typos before
+recording. It works on a script that hasn't been recorded yet, too:
+
+```bash
+great-docs termshow validate docs/assets/install-guide.termshow.yml
+```
+
+Scripted recording needs macOS or Linux, since it runs the shell in a pseudo-terminal.
 
 ## Importing Existing Recordings
 
