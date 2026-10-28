@@ -14878,8 +14878,9 @@ anchor-sections: true
         """
         Pre-render `.termshow` recordings for the Quarto shortcode
 
-        Render recordings from the source directory as SVG keyframes and a
-        `manifest.json`, applying companion `.termshow.yml` scripts when present.
+        Render recordings from the source directory as SVG keyframes, a
+        `manifest.json` and a transcript (`_transcript.md`), applying companion
+        `.termshow.yml` scripts when present.
         Write output to `<build directory>/termshow/<relative path without suffix>/`.
         Paths are relative to the source directory, so recordings with the same name
         in different directories have separate output directories.
@@ -14908,6 +14909,7 @@ anchor-sections: true
             parse_termshow,
         )
         from great_docs._term_player.script import load_script
+        from great_docs._term_player.transcript import write_transcript
 
         rendered_count = 0
         manifest_bytes = 0
@@ -14917,7 +14919,7 @@ anchor-sections: true
             output_dir = self.build_dir / "termshow" / rel_stem
 
             try:
-                recording = parse_termshow(str(ts_file))
+                original = recording = parse_termshow(str(ts_file))
 
                 # Apply script if companion .termshow.yml exists
                 script = None
@@ -14932,6 +14934,9 @@ anchor-sections: true
                     output_dir=str(output_dir),
                     keyframe_interval=2.0,
                 )
+                # The text of the recording, which the shortcode embeds for screen
+                # readers and the page's Markdown version shows
+                write_transcript(original, script, output_dir)
                 rendered_count += 1
                 manifest_bytes += manifest.stats.manifest_bytes
             except Exception as e:
