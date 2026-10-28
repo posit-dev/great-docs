@@ -2,8 +2,10 @@
 Command line of the characterisation harness
 
 `run` records a base commit and the checkout under test and compares them; `record` and
-`compare` do the two halves separately. Exit status: 0 when every case matches, 1 on any
-difference, 2 when the harness refuses to run.
+`compare` do the two halves separately. Exit status: 0 when no case regressed, 1 on a
+regression (or, with `--strict`, on any difference), 2 when the harness refuses to run.
+Differences that aren't regressions are reported, and in GitHub Actions also raised as a
+warning annotation, without failing the run.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from tests.harness.catalogue import BuildCase, full_cases, select, tier_cases
-from tests.harness.compare import compare, write_reports
+from tests.harness.compare import Comparison, compare, write_reports
 from tests.harness.record import generate_all, record
 from tests.harness.sides import (
     HarnessError,
@@ -34,6 +36,9 @@ from tests.harness.sides import (
     real_quarto,
     write_stub,
 )
+
+
+STRICT_HELP = "fail on any difference, not only on regressions"
 
 
 def cache_directory(given: Path | None) -> Path:
@@ -112,6 +117,32 @@ def prepare_work(cache: Path) -> tuple[Path, Path, Path]:
     return work, stub_dir, install_observer(work / "observer")
 
 
+def exit_status(comparison: Comparison, strict: bool) -> int:
+    """
+    Choose the exit status of a comparison, warning GitHub Actions about passing differences
+
+    Parameters
+    ----------
+    comparison :
+        The comparison.
+    strict :
+        Fail on any difference, not only on regressions.
+
+    Returns
+    -------
+    :
+        0 when the comparison passes, else 1.
+    """
+    passes = comparison.passes(strict)
+    if passes and not comparison.matches and os.environ.get("GITHUB_ACTIONS") == "true":
+        differ = sum(c.status != "match" for c in comparison.cases)
+        print(
+            f"::warning title=Harness differences::{differ} of {len(comparison.cases)} cases "
+            "differ from the base commit, with no regressions. Review the report."
+        )
+    return 0 if passes else 1
+
+
 def command_run(args: argparse.Namespace) -> int:
     """
     Record the base commit and the checkout under test, then compare them
@@ -149,9 +180,9 @@ def command_run(args: argparse.Namespace) -> int:
         if not args.keep:
             shutil.rmtree(work)
     comparison = compare(out / "base", out / "test")
-    print(write_reports(comparison, out))
+    print(write_reports(comparison, out, args.strict))
     print(f"{len(cases)} cases on two sides in {wall} s; recordings and reports in {out}")
-    return 0 if comparison.matches else 1
+    return exit_status(comparison, args.strict)
 
 
 def command_record(args: argparse.Namespace) -> int:
@@ -197,11 +228,11 @@ def command_compare(args: argparse.Namespace) -> int:
     Returns
     -------
     :
-        0 when they match, 1 otherwise.
+        0 when the comparison passes, 1 otherwise.
     """
     comparison = compare(args.base.resolve(), args.test.resolve())
-    print(write_reports(comparison, (args.out or args.test.parent).resolve()))
-    return 0 if comparison.matches else 1
+    print(write_reports(comparison, (args.out or args.test.parent).resolve(), args.strict))
+    return exit_status(comparison, args.strict)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -228,6 +259,7 @@ def parser() -> argparse.ArgumentParser:
     _ = run.add_argument("--base", default="main", help="base revision (default: main)")
     _ = run.add_argument("--checkout", type=Path, default=None, help="checkout under test")
     _ = run.add_argument("--out", type=Path, default=None, help="directory for recordings")
+    _ = run.add_argument("--strict", action="store_true", help=STRICT_HELP)
     common(run)
     run.set_defaults(handler=command_run)
 
@@ -241,6 +273,7 @@ def parser() -> argparse.ArgumentParser:
     _ = cmp.add_argument("base", type=Path)
     _ = cmp.add_argument("test", type=Path)
     _ = cmp.add_argument("--out", type=Path, default=None, help="directory for the reports")
+    _ = cmp.add_argument("--strict", action="store_true", help=STRICT_HELP)
     cmp.set_defaults(handler=command_compare)
     return top
 
