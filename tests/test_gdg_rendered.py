@@ -1092,6 +1092,39 @@ def test_local_citations_render_as_a_list(pkg_name: str):
 
 
 @requires_bs4
+def test_termshow_transcripts():
+    """
+    Verify each terminal recording carries a transcript
+
+    The page holds the recording's text after the player, for screen readers,
+    and the page's Markdown version has it in place of the player's poster.
+    """
+    pkg = "gdtest_termshow"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    page = _site_dir(pkg) / "user-guide" / "quick-start.html"
+    soup = _load_html(page)
+    players = soup.select("div.gd-termshow")
+    transcripts = soup.select("div.gd-termshow-transcript")
+    assert players and len(transcripts) == len(players)
+    region = transcripts[0]
+    assert region.get("role") == "region"
+    label = soup.find(id=region.get("aria-labelledby"))
+    assert label is not None and "getting-started" in label.get_text()
+    assert "$ pip install my-tool" in region.select_one("pre code").get_text()
+    assert region.find("strong", string="Install") is not None
+
+    md = page.with_suffix(".md").read_text(encoding="utf-8")
+    assert "Transcript of the terminal recording: getting-started" in md
+    assert re.search(r"``` ?console\n\$ pip install my-tool\n", md)
+    assert "frame-000.svg" not in md
+
+    # The transcripts are read by the shortcode, not rendered as pages
+    assert not list(_site_dir(pkg).rglob("_transcript.html"))
+
+
+@requires_bs4
 def test_citation_references_resolve_both_ways():
     """
     Verify rendered citation links resolve in both directions
