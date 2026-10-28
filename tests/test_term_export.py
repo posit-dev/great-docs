@@ -72,6 +72,11 @@ class TestStructure:
         assert root.find(f"{SVG_NS}title").text == "Demo"
         assert root.get("aria-label") == "Demo"
 
+    def test_spaces_are_kept(self):
+        # For rasterizers that ignore `white-space:pre`
+        root = ET.fromstring(export_svg(_manifest()))
+        assert root.get("{http://www.w3.org/XML/1998/namespace}space") == "preserve"
+
     def test_size_matches_cell_grid_without_chrome(self):
         m = _manifest()
         root = ET.fromstring(export_svg(m))

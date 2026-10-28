@@ -286,9 +286,10 @@ def export_svg(
     styles.append("@media (prefers-reduced-motion:reduce){*{animation:none!important}}")
 
     title = manifest.title or "Terminal recording"
+    # `xml:space` keeps leading and repeated spaces in rasterizers that ignore `white-space:pre`
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.1f} {height:.1f}" '
-        f'width="{width:.1f}" height="{height:.1f}" role="img" '
+        f'width="{width:.1f}" height="{height:.1f}" xml:space="preserve" role="img" '
         f'aria-label="{html.escape(title, quote=True)}">',
         f"<title>{xml_escape(title)}</title>",
         "<style>" + "".join(styles) + "</style>",

@@ -312,6 +312,12 @@ class TestNotConverted:
         assert "#   line 1: Output demo.gif" in text
         assert "#   line 3: Set Width 900 (VHS sizes the terminal in pixels" in text
 
+    def test_output_names_the_export_command(self):
+        (gif,) = parse_tape('Output "demo.gif"').skipped
+        assert gif.reason.endswith("`termshow export -o demo.gif` makes the GIF")
+        (frames,) = parse_tape("Output frames/").skipped
+        assert "makes a GIF, a video, or an SVG" in frames.reason
+
     def test_header_without_names(self):
         text = parse_tape("Output demo.gif\nEnter").to_yaml()
         assert text.startswith("# Not converted:\n#   line 1: Output demo.gif")

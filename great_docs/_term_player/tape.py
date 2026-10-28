@@ -372,7 +372,17 @@ class _Converter:
     # Commands with no equivalent --------------------------------------------------------------
 
     def cmd_output(self, rest: str) -> None:
-        self.skip("the recording is saved next to the script; `termshow export` makes an SVG")
+        target = rest.strip().strip("\"'")
+        if Path(target).suffix.lower() in (".gif", ".mp4", ".webm"):
+            self.skip(
+                "the recording is saved next to the script; "
+                f"`termshow export -o {target}` makes the {Path(target).suffix[1:].upper()}"
+            )
+        else:
+            self.skip(
+                "the recording is saved next to the script; `termshow export` makes a GIF, "
+                "a video, or an SVG"
+            )
 
     def cmd_require(self, rest: str) -> None:
         self.skip("not checked; the step that uses it fails if it's missing")

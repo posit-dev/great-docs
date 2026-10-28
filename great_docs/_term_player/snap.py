@@ -107,6 +107,7 @@ def snap_svg(
     dark: bool = False,
     annotations: bool = False,
     font_file: str | Path | None = None,
+    cells: tuple[int, int] | None = None,
 ) -> str:
     """Draw the screen at one moment as a still SVG.
 
@@ -123,6 +124,9 @@ def snap_svg(
         Draw the annotations showing at that time.
     font_file
         A `.woff2`, `.woff`, `.ttf`, or `.otf` file to embed and use for the terminal text.
+    cells
+        The terminal's size as `(cols, rows)`, instead of the screen's own size, so screens of
+        different sizes can be drawn in one size of window (as a video's frames must be).
 
     Returns
     -------
@@ -148,9 +152,9 @@ def snap_svg(
     cell_w = screen.font_size * 0.6
     cell_h = screen.font_size * screen.line_height
     pad = screen.padding
-    cols = frame.size[0] if frame.size else manifest.cols
+    cols, rows = cells or (frame.size[0] if frame.size else manifest.cols, len(frame.lines))
     term_w = cols * cell_w + pad * 2
-    term_h = len(frame.lines) * cell_h + pad * 2
+    term_h = rows * cell_h + pad * 2
     chapter = _chapter_at(manifest, time)
     # The same title bar as the animated export, so stills match it
     bar_h = _BAR_HEIGHT if manifest.window_chrome != "none" or manifest.chapters else 0.0
@@ -246,7 +250,9 @@ def find_rasterizer() -> str | None:
     return None
 
 
-def rasterize(svg: str, output: str | Path, *, scale: float = 1.0) -> None:
+def rasterize(
+    svg: str, output: str | Path, *, scale: float = 1.0, background: str | None = None
+) -> None:
     """Write an SVG document as a PNG file.
 
     Parameters
@@ -257,6 +263,8 @@ def rasterize(svg: str, output: str | Path, *, scale: float = 1.0) -> None:
         The PNG file to write.
     scale
         How many pixels each SVG unit becomes; `2` suits high-density screens.
+    background
+        A color to fill the transparent parts with (the window's rounded corners).
 
     Raises
     ------
@@ -275,8 +283,12 @@ def rasterize(svg: str, output: str | Path, *, scale: float = 1.0) -> None:
         source.write_text(svg, encoding="utf-8")
         if Path(tool).name.startswith("rsvg-convert"):
             argv = [tool, "--zoom", f"{scale:g}", "--output", str(output), str(source)]
+            fill = ["--background-color", background]
         else:
             argv = [tool, "--zoom", f"{scale:g}", str(source), str(output)]
+            fill = ["--background", background]
+        if background:
+            argv[1:1] = fill
         result = subprocess.run(argv, capture_output=True, text=True)
     if result.returncode != 0:
         message = result.stderr.strip() or f"exit status {result.returncode}"
