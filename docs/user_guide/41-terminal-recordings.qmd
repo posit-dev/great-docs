@@ -1448,7 +1448,7 @@ numbers, and the same list is kept as a comment at the top of the script:
 ```
 ✓ Converted demo.tape → demo.termshow.yml (8 steps)
   Not converted:
-    line 1: Output demo.gif (the recording is saved next to the script; `termshow export` makes an SVG)
+    line 1: Output demo.gif (the recording is saved next to the script; `termshow export -o demo.gif` makes the GIF)
     line 3: Set Width 1200 (VHS sizes the terminal in pixels; set `record.cols` instead)
   Record it with: great-docs termshow record --steps demo.termshow.yml
 ```
@@ -1573,6 +1573,51 @@ Annotations, highlights, snippets and the prompt replacement need the Termshow p
 left out, and the command lists any the script has. Pass `--no-script` to export the recording
 exactly as it was recorded. The SVG options (`--chapter-cards`, `--no-loop`, and so on) don't apply
 here.
+
+## Exporting a GIF or Video
+
+Some places can't show an animated SVG either: pull request comments, chat messages, slides, and
+social posts. For those, export a GIF, an MP4, or a WebM video:
+
+```bash
+great-docs termshow export docs/assets/my-demo.termshow --gif
+great-docs termshow export docs/assets/my-demo.termshow -o my-demo.mp4
+```
+
+The format comes from `--gif`, `--mp4`, or `--webm`, or else from the `-o` file's extension. Each
+screen is drawn the same way as a [screenshot](#taking-a-screenshot), with the theme, window chrome,
+chapter labels, prompt replacement, and annotations, and `ffmpeg` joins the screens into the file.
+The companion `.termshow.yml` is applied first, so cuts and speed changes are already taken out of
+the timeline.
+
+These options apply:
+
+| Option | Effect |
+|--------|--------|
+| `-o`, `--output` | Output file. The default is the recording's name with `.gif`, `.mp4`, or `.webm`. |
+| `--fps` | Frames per second (default `20` for a GIF and `30` for a video). |
+| `--scale` | Pixels per SVG unit (default `1` for a GIF and `2` for a video). |
+| `--max-idle` | Shorten any pause longer than this many seconds to this length. |
+| `--end-pause` | Seconds to hold the last screen (default `2`). |
+| `--no-loop` | Play a GIF once instead of repeating it. |
+| `--no-annotations` | Leave out the annotations. |
+| `--script`, `--no-script` | Use a different script file, or ignore the script. |
+
+The export needs `ffmpeg` (`brew install ffmpeg` or `apt install ffmpeg`), plus `rsvg-convert` or
+`resvg` to draw the screens, as for PNG screenshots. As in a PNG screenshot, the terminal text uses
+a monospace font installed on your machine, so `--font-file` and `--chapter-cards` only apply to
+the SVG export. Annotations appear and disappear at once, without the SVG's fade.
+
+A GIF stores each screen once, shown for as long as it stays up, so a recording with long pauses
+stays small. Output that changes faster than the frame rate (a quick burst of lines, say) shows
+only its final screen. MP4 and WebM files play at a fixed frame rate and are usually the smaller
+choice for long recordings with a lot of scrolling. GitHub won't take an image or a video over
+10 MB in an issue or pull request, so the command warns past that size. A lower `--fps` or
+`--scale`, `--max-idle`, or [cuts](#cuts) all make the file smaller.
+
+With a [light and dark pair](#light-and-dark-pairs), two files are written, ending in `-light` and
+`-dark`. For a GIF, the command also prints a `<picture>` snippet like the
+[SVG export's](#light-and-dark-readmes).
 
 ## Taking a Screenshot
 
