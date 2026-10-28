@@ -12,7 +12,8 @@
 --    custom nodes only to a filter's own top-level handlers; a walk over a
 --    copy of the document sees bare divs.
 -- 3. Join HTML tables that the Markdown reader split into one raw block per
---    tag. Keep this pass separate: Block handlers run before Blocks handlers
+--    tag, and give terminal recordings' transcripts their own raw blocks.
+--    Keep this pass separate: Block handlers run before Blocks handlers
 --    within a filter, and flattening reads each raw block alone.
 -- 4. Flatten the document into elements GitHub-Flavored Markdown can hold.
 -- 5. Write the companion and return the snapshot.
@@ -173,6 +174,25 @@ local function join_html_tables(blocks)
         end
     end
     return out
+end
+
+--- Give a terminal recording's transcript its own blocks.
+---
+--- The `termshow` shortcode returns the player and the transcript after it
+--- as one raw inline. Keep only the transcript: the player's poster shows
+--- the recording's first screen, and reading the transcript as inlines
+--- would flatten its code blocks.
+---@param para pandoc.Para
+---@return pandoc.RawBlock|nil
+local function termshow_transcript(para)
+    local el = para.content[1]
+    if #para.content ~= 1 or el.t ~= "RawInline" or el.format ~= "html"
+        or not el.text:match('^<div class="gd%-termshow"') then
+        return nil
+    end
+    local start = el.text:find('<div class="gd-termshow-transcript"', 1, true)
+    if start == nil then return nil end
+    return pandoc.RawBlock("html", el.text:sub(start))
 end
 
 --- Report whether a link target names a file inside the site.
@@ -336,7 +356,7 @@ local write = {
 return {
     { Pandoc = function(doc) snapshot = doc:clone() end },
     convert,
-    { Blocks = join_html_tables },
+    { Para = termshow_transcript, Blocks = join_html_tables },
     flatten,
     write,
 }
