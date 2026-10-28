@@ -183,7 +183,8 @@ def _header_to_recording(header: dict) -> Recording:
         rec.term.rows = term_data.get("rows", header.get("height", 24))
         rec.term.type = term_data.get("type", "xterm-256color")
 
-        theme_data = term_data.get("theme", {})
+        # Asciicast v2 puts the theme at the top level
+        theme_data = term_data.get("theme", header.get("theme"))
         if isinstance(theme_data, dict):
             rec.term.theme = _parse_theme(theme_data)
     else:

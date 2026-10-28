@@ -4402,14 +4402,21 @@ def term_play(source: str, speed: float, script: str | None, no_script: bool) ->
     "fmt",
     flag_value="svg",
     default=True,
-    help="Write an animated SVG (the default, and currently the only format)",
+    help="Write an animated SVG (the default)",
 )
+@click.option(
+    "--cast",
+    "fmt",
+    flag_value="cast",
+    help="Write an asciicast file for asciinema (version 3 unless --v2 is given)",
+)
+@click.option("--v2", is_flag=True, help="With --cast, write asciicast version 2")
 @click.option(
     "--output",
     "-o",
     type=click.Path(dir_okay=False),
     default=None,
-    help="Output file (default: the recording's name with .svg)",
+    help="Output file (default: the recording's name with .svg or .cast)",
 )
 @click.option(
     "--script", type=click.Path(exists=True), default=None, help="Path to .termshow.yml script"
@@ -4434,6 +4441,7 @@ def term_play(source: str, speed: float, script: str | None, no_script: bool) ->
 def term_export(
     source: str,
     fmt: str,
+    v2: bool,
     output: str | None,
     script: str | None,
     no_script: bool,
@@ -4443,7 +4451,7 @@ def term_export(
     no_annotations: bool,
     font_file: str | None,
 ) -> None:
-    """Export a recording as one self-contained animated SVG.
+    """Export a recording as an animated SVG or an asciicast file.
 
     The SVG plays with CSS alone, so it works as an image in a GitHub or
     GitLab README. The companion .termshow.yml script's cuts, speed changes,
@@ -4453,14 +4461,33 @@ def term_export(
     NAME-dark.svg), along with a <picture> snippet that picks one by the
     reader's color scheme.
 
+    With --cast, the recording is written for asciinema's player, CLI, and
+    asciinema.org. The script's cuts and speed changes are applied, its
+    chapters become markers, and its theme (the light side of a pair) is
+    kept. Annotations, highlights, and snippets are left out.
+
     Examples:
       great-docs termshow export demos/install.termshow
       great-docs termshow export demos/install.termshow --svg -o install.svg
+      great-docs termshow export demos/install.termshow --cast
     """
     from ._term_player import apply_script, generate_manifest, parse_asciicast, parse_termshow
     from ._term_player.export import SIZE_WARNING_BYTES, export_svg, picture_snippet
     from ._term_player.script import load_script
 
+    if fmt == "cast":
+        svg_only = {
+            "--no-loop": no_loop,
+            "--end-pause": end_pause != 2.0,
+            "--chapter-cards": chapter_cards,
+            "--no-annotations": no_annotations,
+            "--font-file": font_file,
+        }
+        given = [name for name, value in svg_only.items() if value]
+        if given:
+            raise click.UsageError(f"{', '.join(given)} only applies to --svg")
+    elif v2:
+        raise click.UsageError("--v2 only applies to --cast")
     if end_pause < 0:
         raise click.BadParameter("can't be negative", param_hint="--end-pause")
 
@@ -4475,11 +4502,16 @@ def term_export(
         script_path = Path(script) if script else source_path.with_suffix(".termshow.yml")
         if script_path.exists():
             script_obj = load_script(script_path)
-            recording = apply_script(recording, script_obj)
-
-    manifest = generate_manifest(recording, script_obj)
 
     out_path = Path(output) if output else source_path.with_suffix(f".{fmt}")
+    if fmt == "cast":
+        _export_cast(recording, script_obj, source_path, out_path, version=2 if v2 else 3)
+        return
+
+    if script_obj is not None:
+        recording = apply_script(recording, script_obj)
+    manifest = generate_manifest(recording, script_obj)
+
     if manifest.dark is not None:
         sides = [
             (out_path.with_name(f"{out_path.stem}-light{out_path.suffix}"), False),
@@ -4521,6 +4553,34 @@ def term_export(
         alt = manifest.title or "Terminal recording"
         click.echo("\nPaste this where the recording should appear:\n")
         click.echo(picture_snippet(sides[0][0].name, sides[1][0].name, alt))
+
+
+def _export_cast(recording, script, source_path: Path, out_path: Path, *, version: int) -> None:
+    """Write `termshow export --cast`'s file and report what went into it."""
+    from ._term_player.cast import export_asciicast, left_out
+
+    if out_path.resolve() == source_path.resolve():
+        raise click.UsageError(
+            f"{out_path} is the recording being exported; choose another name with -o"
+        )
+    text = export_asciicast(recording, script, version=version)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(text, encoding="utf-8")
+
+    import json
+
+    codes = [json.loads(line)[1] for line in text.splitlines()[1:]]
+    events, markers = len(codes), codes.count("m")
+    click.echo(f"✓ Exported {out_path} (asciicast v{version}, {len(text.encode()) / 1024:.1f} KB)")
+    summary = f"  Events: {events}"
+    if markers:
+        summary += f" | Markers: {markers}"
+    click.echo(summary)
+    if script is not None and script.dark_theme is not None:
+        click.echo("  The script's theme is a light/dark pair; the light side was used.")
+    missing = left_out(script)
+    if missing:
+        click.echo(f"  Left out (they need the Termshow player): {', '.join(missing)}.", err=True)
 
 
 @click.command("validate")

@@ -1549,6 +1549,31 @@ screen is new. [Cuts](#cuts) remove them from the file; speed changes only make 
 Readers who have turned on reduced motion in their system settings see the last screen as a still
 image.
 
+## Exporting to asciicast
+
+To play a recording with asciinema's own player or CLI, or to upload it to
+[asciinema.org](https://asciinema.org), export it as an asciicast file:
+
+```bash
+great-docs termshow export docs/assets/my-demo.termshow --cast
+```
+
+This writes `my-demo.cast` in [asciicast v3](https://docs.asciinema.org/manual/asciicast/v3/), the
+format asciinema 3 reads. Add `--v2` for older tools, such as asciinema 2.x and players that only
+read version 2. Use `-o` to pick another name; the export won't overwrite the recording it reads.
+
+The companion `.termshow.yml` is applied as far as asciicast allows:
+
+- cuts and speed changes are taken out of the timeline
+- chapters become markers, which asciinema's player shows on its progress bar and can pause at
+- the script's theme goes in the header, so the colors match. For a light and dark pair, the light
+  side is used
+
+Annotations, highlights, snippets and the prompt replacement need the Termshow player, so they're
+left out, and the command lists any the script has. Pass `--no-script` to export the recording
+exactly as it was recorded. The SVG options (`--chapter-cards`, `--no-loop`, and so on) don't apply
+here.
+
 ## Validating a Recording
 
 Most mistakes in a script don't stop the build. A misspelled key or position is quietly ignored,

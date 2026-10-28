@@ -220,6 +220,13 @@ class TestParseAsciicastStr:
         rec = parse_asciicast_str(json.dumps(header))
         assert rec.term.type == "rxvt-unicode"
 
+    def test_v2_top_level_theme(self):
+        theme = {"fg": "#111111", "bg": "#eeeeee", "palette": ":".join(["#123456"] * 16)}
+        header = {"version": 2, "width": 80, "height": 24, "theme": theme}
+        rec = parse_asciicast_str(json.dumps(header))
+        assert (rec.term.theme.fg, rec.term.theme.bg) == ("#111111", "#eeeeee")
+        assert rec.term.theme.palette == ["#123456"] * 16
+
     def test_empty_input(self):
         rec = parse_asciicast_str("")
         assert rec.events == []

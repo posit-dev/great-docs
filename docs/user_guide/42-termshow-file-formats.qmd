@@ -98,7 +98,10 @@ Readers must ignore event codes they don't recognize.
 
 The format follows [asciicast v3](https://docs.asciinema.org/manual/asciicast/v3/) closely:
 relative delays, the same event codes, and a `term` object in the header. `great-docs termshow
-import` converts asciicast v2 and v3 files.
+import-cast` converts asciicast v2 and v3 files, and `great-docs termshow export --cast` writes
+them. The export uses `term.cols`, `term.rows`, `term.type` and `term.theme` (with the palette
+joined by colons) for version 3, and `width`, `height`, `env.TERM` and a top-level `theme` for
+version 2, which has no `x` events.
 
 ## Scripts (`.termshow.yml`)
 
