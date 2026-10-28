@@ -408,9 +408,14 @@
           "type": "string"
         },
         "env": {
-          "description": "Environment variables to set on top of the current environment.",
+          "description": "Environment variables to set for the shell.",
           "type": "object",
           "additionalProperties": { "type": ["string", "number", "boolean"] }
+        },
+        "inherit_env": {
+          "description": "Start the shell with the whole current environment. By default it only gets PATH, HOME, USER, LOGNAME, LANG, LC_*, TMPDIR, TZ, and VIRTUAL_ENV, so the recording doesn't depend on what your shell, editor, or CI service has set.",
+          "type": "boolean",
+          "default": false
         },
         "typing_delay": {
           "description": "Seconds between typed characters.",
