@@ -36,8 +36,8 @@ jobs:
         run: make type-check-strict
 
       # Compare pull requests with their base commit so reviewers can assess output
-      # differences. Skip pushes to main: comparing with the previous commit would
-      # fail on every intended output change.
+      # differences. Regressions fail the step; other differences raise a warning and appear
+      # in the job summary. Skip pushes to main: the pull request already showed them.
       - name: Install d2 (the harness requires it on both sides)
         if: github.event_name == 'pull_request'
         run: |
@@ -56,11 +56,29 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: make harness HARNESS_ARGS="--base $BASE_SHA --out $RUNNER_TEMP/harness"
 
+      - name: Summarise the harness report
+        if: always() && (steps.harness.outcome == 'success' || steps.harness.outcome == 'failure')
+        env:
+          REPORT: ${{ runner.temp }}/harness/report.txt
+        run: |
+          [ -f "$REPORT" ] || exit 0
+          {
+            echo "### Harness: $(tail -n 1 "$REPORT")"
+            echo
+            echo "The full report is in the \`harness-report\` artifact."
+            # A long fence, since the report's diffs can hold Markdown code fences
+            echo
+            echo '`````'
+            head -n 400 "$REPORT"
+            echo '`````'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload the harness report
-        if: failure() && steps.harness.outcome == 'failure'
+        if: always() && (steps.harness.outcome == 'success' || steps.harness.outcome == 'failure')
         uses: actions/upload-artifact@v7
         with:
           name: harness-report
+          if-no-files-found: ignore
           path: |
             ${{ runner.temp }}/harness/report.txt
             ${{ runner.temp }}/harness/report.json
