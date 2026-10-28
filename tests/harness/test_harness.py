@@ -14,7 +14,8 @@ from typing import Any
 import pytest
 
 from tests.harness.catalogue import Release, make_repository
-from tests.harness.compare import compare
+from tests.harness.__main__ import exit_status
+from tests.harness.compare import compare, render
 from tests.harness.normalise import FILE_RULES, log_skeleton, normalise_text, path_rules
 from tests.harness.record import SCHEMA, read_census, store_blob
 from tests.harness.sides import OBSERVER_SOURCE, HarnessError, run_checked
@@ -216,6 +217,10 @@ def test_comparison_names_the_changed_file_and_the_new_handler(tmp_path: Path):
     assert "+# Changed title" in findings
     assert "NEW handled exception: KeyError" in findings
     assert "handled in GreatDocs._step (core.py:12)" in findings
+    # Differences without a regression pass, except in strict mode
+    assert not result.cases[0].regressed
+    assert result.passes()
+    assert not result.passes(strict=True)
 
 
 def test_comparison_fails_when_the_test_side_lacks_an_expected_reference_index(tmp_path: Path):
@@ -232,6 +237,7 @@ def test_comparison_fails_when_the_test_side_lacks_an_expected_reference_index(t
     assert not result.matches
     assert result.cases[0].status == "fail"
     assert result.cases[0].checks == [f"{project}/reference/index.qmd is missing (base: same)"]
+    assert not result.passes()
     assert compare(good, good).matches
     assert compare(unexpected, unexpected).matches
     assert compare(good, without).cases[0].checks == [
@@ -328,3 +334,62 @@ def test_watch_without_rebuild_is_a_known_gap_and_a_crash_fails(tmp_path: Path):
         "watch never reached the preview after its first build (base: passes)",
         "watch exited with status timeout after the interrupt (base: passes)",
     ]
+
+
+def test_a_command_that_starts_failing_is_a_regression(tmp_path: Path):
+    def side(name: str, status: int) -> Path:
+        return _recording(tmp_path / name, {"build": {}}, extra={"build": {"status": status}})
+
+    ok, broken, other = side("ok", 0), side("broken", 1), side("other", 2)
+
+    result = compare(ok, broken)
+    assert result.cases[0].regressions == ["build: exit status 0 -> 1"]
+    assert not result.passes()
+    assert compare(broken, other).cases[0].regressions == ["build: exit status 1 -> 2"]
+    # A fix is a difference, not a regression
+    fixed = compare(broken, ok)
+    assert fixed.cases[0].status == "differ" and fixed.passes()
+
+
+def test_a_command_run_on_one_side_only_is_a_regression(tmp_path: Path):
+    base = _recording(tmp_path / "base", {"init": {}, "build": {}})
+    test = _recording(tmp_path / "test", {"build": {}})
+
+    result = compare(base, test)
+
+    assert result.cases[0].regressions == ["init: run on one side only"]
+    assert not result.passes()
+
+
+def test_report_verdict_and_exit_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    base = _recording(tmp_path / "base", {"build": {"docs/index.qmd": "a"}})
+    changed = _recording(tmp_path / "changed", {"build": {"docs/index.qmd": "b"}})
+    broken = _recording(
+        tmp_path / "broken", {"build": {"docs/index.qmd": "a"}}, extra={"build": {"status": 1}}
+    )
+    meta = json.loads((base / "side.json").read_text(encoding="utf-8"))
+    meta["facts"] |= {"checkout": "/x", "commit": "0" * 40}
+
+    def verdict(result: Any, strict: bool = False) -> str:
+        return render(result, meta, meta, strict).splitlines()[-1]
+
+    differs = compare(base, changed)
+    assert verdict(compare(base, base)) == "MATCH: all 1 cases"
+    assert verdict(differs) == "DIFFER: 1 of 1 cases; no regressions, so the run passes"
+    assert verdict(differs, strict=True) == (
+        "DIFFER: 1 of 1 cases; no regressions, but strict mode fails on any difference"
+    )
+    regressed = compare(base, broken)
+    assert verdict(regressed) == "DIFFER: 1 of 1 cases; 1 regressed"
+    assert "demo: DIFFER (regression)" in render(regressed, meta, meta)
+    assert "  regression: build: exit status 0 -> 1" in render(regressed, meta, meta)
+
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    assert exit_status(differs, strict=False) == 0
+    assert capsys.readouterr().out.startswith("::warning title=Harness differences::1 of 1")
+    assert exit_status(differs, strict=True) == 1
+    assert exit_status(regressed, strict=False) == 1
+    assert exit_status(compare(base, base), strict=False) == 0
+    assert capsys.readouterr().out == ""
