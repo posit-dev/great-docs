@@ -411,7 +411,7 @@ Beyond `init`, `build`, and `preview`, Great Docs includes a full suite of quali
 | `great-docs termshow render` | Render SVG frames without a full site build |
 | `great-docs termshow export` | Export a recording as one animated SVG for READMEs |
 | `great-docs termshow validate` | Check a recording and its script for mistakes |
-| `great-docs termshow check` | Re-run scripted steps and report recordings whose output has changed |
+| `great-docs termshow check` | Re-run scripted steps and report recordings whose output has changed (`--json` for CI) |
 | `great-docs termshow assets` | Copy the web player for pages built without Quarto |
 | `great-docs termshow import-cast` | Import an asciinema `.cast` file |
 | `great-docs termshow import-tape` | Convert a VHS `.tape` file to a script with `steps:` |
