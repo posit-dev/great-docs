@@ -144,7 +144,7 @@ If your package ships an [MCP](https://modelcontextprotocol.io/) server, Great D
 
 ### Terminal Recordings
 
-Teach your CLI visually with Termshow: record terminal sessions (by hand, or from a list of steps that `termshow check` can re-run in CI to catch demos that have gone out of date), edit them in a browser-based visual editor, and embed the results as animated SVG players in your documentation. Recordings are lightweight, theme-aware, and play inline without JavaScript dependencies. It's incredibly useful in onboarding guides, tutorials, and landing pages. If you already have VHS tapes, `great-docs termshow import-tape` turns them into Termshow scripts. For places that can't run the player, such as a GitHub README, `great-docs termshow export` writes the recording as a single animated SVG, with light and dark versions if you want them. On sites built without Quarto, a `<termshow-player>` element plays recordings on any HTML page.
+Teach your CLI visually with Termshow: record terminal sessions (by hand, or from a list of steps that `termshow check` can re-run in CI to catch demos that have gone out of date), edit them in a browser-based visual editor, and embed the results as animated SVG players in your documentation. Recordings are lightweight, theme-aware, and play inline without JavaScript dependencies. It's incredibly useful in onboarding guides, tutorials, and landing pages. If you already have VHS tapes, `great-docs termshow import-tape` turns them into Termshow scripts. For places that can't run the player, such as a GitHub README, `great-docs termshow export` writes the recording as a single animated SVG, with light and dark versions if you want them; with `--cast` it writes an asciicast file for asciinema instead. On sites built without Quarto, a `<termshow-player>` element plays recordings on any HTML page.
 
 ### Lightbox
 
@@ -270,7 +270,7 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 
 - Color swatches (inline and grid)
 - Lightbox (zoom, galleries, annotations, before/after compare)
-- Terminal recordings (record, edit, embed, export as animated SVG)
+- Terminal recordings (record, edit, embed, export as animated SVG or asciicast)
 - Collapsible details sections
 - Keyboard keys styling
 - Horizontal rules with accent colors
@@ -409,7 +409,7 @@ Beyond `init`, `build`, and `preview`, Great Docs includes a full suite of quali
 | `great-docs termshow edit` | Open the browser-based visual editor for a recording |
 | `great-docs termshow play` | Preview a recording in the terminal |
 | `great-docs termshow render` | Render SVG frames without a full site build |
-| `great-docs termshow export` | Export a recording as one animated SVG for READMEs |
+| `great-docs termshow export` | Export a recording as one animated SVG for READMEs, or as asciicast (`--cast`) |
 | `great-docs termshow validate` | Check a recording and its script for mistakes |
 | `great-docs termshow check` | Re-run scripted steps and report recordings whose output has changed (`--json` for CI) |
 | `great-docs termshow assets` | Copy the web player for pages built without Quarto |
