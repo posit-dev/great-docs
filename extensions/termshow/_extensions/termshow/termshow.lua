@@ -24,6 +24,11 @@
 -- network fetches (including with file:// protocol). A version 2 manifest
 -- carries the screens themselves (the player draws them as SVG); for older
 -- version 1 output the SVG frame files are inlined alongside it.
+--
+-- When the rendered output has a transcript (_transcript.md), it follows
+-- the player as HTML, hidden from view but read by screen readers. The
+-- player replaces everything inside its own element when it starts, so the
+-- transcript sits next to it rather than inside.
 
 local function escape_attr(s)
     if s == nil then return "" end
@@ -70,6 +75,25 @@ end
 --- Return the manifest's format version (1 when it can't be read).
 local function manifest_version(manifest_json)
     return tonumber(manifest_json:match('^%s*{%s*"version"%s*:%s*(%d+)')) or 1
+end
+
+-- Numbers the transcripts on a page, for their ids
+local transcript_count = 0
+
+--- Return a transcript's Markdown as HTML.
+---
+--- Code blocks are written by hand, so they stay plain `<pre><code>` without
+--- syntax highlighting markup.
+local function transcript_html(markdown)
+    local doc = pandoc.read(markdown, "markdown")
+    doc = doc:walk({
+        CodeBlock = function(block)
+            local text = block.text:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
+            return pandoc.RawBlock("html",
+                '<pre><code class="language-console">' .. text .. "</code></pre>")
+        end,
+    })
+    return pandoc.write(doc, "html")
 end
 
 --- Register CSS/JS/font assets as a Quarto HTML dependency (once per document).
@@ -208,6 +232,18 @@ return {
         table.insert(parts, ' (requires JavaScript for playback)</p>')
         table.insert(parts, '\n  </noscript>')
         table.insert(parts, '\n</div>')
+
+        local transcript = manifest_json and read_project_file(tp_dir .. "_transcript.md")
+        if transcript and transcript:match("%S") then
+            transcript_count = transcript_count + 1
+            local id = "gd-termshow-transcript-" .. transcript_count
+            table.insert(parts, '\n<div class="gd-termshow-transcript" role="region" ')
+            table.insert(parts, 'aria-labelledby="' .. id .. '">')
+            table.insert(parts, '\n<p id="' .. id .. '">Transcript of the terminal recording: ')
+            table.insert(parts, escape_attr(basename) .. '</p>\n')
+            table.insert(parts, transcript_html(transcript))
+            table.insert(parts, '\n</div>')
+        end
 
         return pandoc.RawInline("html", table.concat(parts))
     end

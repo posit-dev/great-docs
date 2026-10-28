@@ -1612,6 +1612,68 @@ font installed on your machine. With a [light and dark pair](#light-and-dark-pai
 written, ending in `-light` and `-dark`, along with a `<picture>` snippet like the
 [export's](#light-and-dark-readmes).
 
+## Transcripts
+
+A recording is a moving picture of text, which screen readers can't read and search engines can't
+index. So the build writes a transcript of each one: all the text the player shows, as plain
+Markdown. The shortcode puts it after the player, hidden from view but read by screen readers as a
+region named "Transcript of the terminal recording". The page's
+[Markdown version](05-configuration.qmd#markdown-pages) has the transcript in place of the player, so agents reading
+the page get the commands and their output as text.
+
+To read a transcript, or to put one on another page:
+
+```bash
+great-docs termshow transcript docs/assets/my-demo.termshow
+```
+
+For a recording with two chapters and an annotation, it prints something like this:
+
+````markdown
+**Install**
+
+> Install from PyPI with pip
+
+```console
+$ pip install my-tool
+Successfully installed my-tool-1.0.0
+```
+
+**Initialize**
+
+```console
+$ my-tool init
+✔ Project created successfully!
+```
+````
+
+The transcript is made from the session as it plays, with the companion `.termshow.yml` applied:
+
+- colors and escape codes are removed, and lines that scroll off the top or are cleared away are
+  kept, so nothing the recording showed is lost
+- each chapter starts with its label in bold, and each annotation is a quoted note where it shows
+- the prompt replacement is applied
+- cuts and speed changes don't change the text, only where chapters and notes fall
+- a full-screen program, such as `less`, `vim` or `htop`, keeps only its last screen
+- the idle prompt at the end is left out
+
+Without a script, the recording's markers are used as chapters. Pass `--no-script` to leave the
+script out, or `-o` to write a file instead of printing (it won't overwrite the recording).
+
+### Captions
+
+The command also writes [WebVTT](https://www.w3.org/TR/webvtt1/) files, for a video made from the
+recording or for a player of your own. `--vtt` writes the annotations as captions, each shown for
+its `duration`; `--vtt-chapters` writes a chapters track, each chapter running until the next one
+or the end:
+
+```bash
+great-docs termshow transcript docs/assets/my-demo.termshow --vtt -o my-demo.vtt
+great-docs termshow transcript docs/assets/my-demo.termshow --vtt-chapters -o my-demo-chapters.vtt
+```
+
+Times are on the playback timeline, after cuts and speed changes.
+
 ## Validating a Recording
 
 Most mistakes in a script don't stop the build. A misspelled key or position is quietly ignored,
@@ -1690,8 +1752,9 @@ The Termshow pipeline has two phases:
    are identical rows, which is what keeps the data small: most of a terminal stays the same from
    one moment to the next
 4. Generates `manifest.json` with timing, chapters, annotations, and those compact screens, plus
-   one SVG file per unique screen (used for the poster image)
-5. The Quarto shortcode filter embeds the manifest inline as JSON
+   one SVG file per unique screen (used for the poster image), and the
+   [transcript](#transcripts), `_transcript.md`
+5. The Quarto shortcode filter embeds the manifest inline as JSON, and the transcript after it
 
 **Page load** (JavaScript, no network requests):
 
@@ -2028,8 +2091,9 @@ the recording into SVG frames:
 great-docs termshow render my-demo.termshow
 ```
 
-This produces a `termshow/<name>/` directory containing SVG keyframes and a `manifest.json`. Move or
-copy this directory into your Quarto project root if it isn't there already.
+This produces a `termshow/<name>/` directory containing SVG keyframes, a `manifest.json`, and the
+[transcript](#transcripts) the shortcode puts after the player. Move or copy this directory into
+your Quarto project root if it isn't there already.
 
 ### Register termshow output as a resource
 
@@ -2126,6 +2190,10 @@ Render the recording into the site as well:
 ```bash
 great-docs termshow render my-demo.termshow -o site/termshow/my-demo
 ```
+
+The element doesn't show the [transcript](#transcripts) that the shortcode adds. To give screen
+readers the recording's text, put the transcript in the page next to the element, from
+`site/termshow/my-demo/_transcript.md` or `great-docs termshow transcript`.
 
 ### Add the element
 

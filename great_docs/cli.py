@@ -4243,10 +4243,12 @@ def term_render(source: str, output_dir: str | None, interval: float, script: st
     """Render a .termshow recording into SVG frames.
 
     Processes the recording through the virtual terminal emulator and
-    produces SVG keyframes + a manifest.json for the player.
+    produces SVG keyframes + a manifest.json for the player, along with
+    the recording's transcript (_transcript.md).
     """
     from ._term_player import apply_script, generate_manifest, parse_asciicast, parse_termshow
     from ._term_player.script import load_script
+    from ._term_player.transcript import write_transcript
 
     source_path = Path(source)
 
@@ -4266,6 +4268,7 @@ def term_render(source: str, output_dir: str | None, interval: float, script: st
         if script_path.exists():
             script_obj = load_script(script_path)
 
+    original = recording
     if script_obj:
         recording = apply_script(recording, script_obj)
 
@@ -4277,6 +4280,7 @@ def term_render(source: str, output_dir: str | None, interval: float, script: st
     manifest = generate_manifest(
         recording, script_obj, output_dir=output_dir, keyframe_interval=interval
     )
+    write_transcript(original, script_obj, output_dir)
 
     stats = manifest.stats
     click.echo(
@@ -4712,6 +4716,79 @@ def term_snap(
         click.echo(picture_snippet(sides[0][0].name, sides[1][0].name, alt))
 
 
+@click.command("transcript")
+@click.argument("source", type=click.Path(exists=True))
+@click.option(
+    "--markdown",
+    "fmt",
+    flag_value="markdown",
+    default=True,
+    help="Write the recording's text as Markdown (the default)",
+)
+@click.option("--vtt", "fmt", flag_value="vtt", help="Write the annotations as WebVTT captions")
+@click.option(
+    "--vtt-chapters", "fmt", flag_value="chapters", help="Write the chapters as a WebVTT track"
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(dir_okay=False),
+    default=None,
+    help="Output file (default: print to the terminal)",
+)
+@click.option(
+    "--script", type=click.Path(exists=True), default=None, help="Path to .termshow.yml script"
+)
+@click.option("--no-script", is_flag=True, help="Ignore any companion .termshow.yml script")
+def term_transcript(
+    source: str, fmt: str, output: str | None, script: str | None, no_script: bool
+) -> None:
+    """Write the text of a recording, or captions for it.
+
+    The transcript holds everything the recording shows, including lines
+    that scroll away, as plain text without colors. The companion
+    .termshow.yml script's chapters split it into sections, its annotations
+    become notes, and its prompt replacement is applied, unless --no-script
+    is given. A full-screen program, like less or vim, keeps only its last
+    screen.
+
+    With --vtt, the annotations are written as WebVTT captions; with
+    --vtt-chapters, the chapters are written as a WebVTT chapters track.
+    Both are on the playback timeline (after cuts and speed changes).
+
+    Great Docs builds write each recording's transcript next to its player,
+    for screen readers, search, and the page's Markdown version.
+
+    Examples:
+      great-docs termshow transcript demos/install.termshow
+      great-docs termshow transcript demos/install.termshow -o install.md
+      great-docs termshow transcript demos/install.termshow --vtt -o install.vtt
+    """
+    from ._term_player.transcript import transcript_markdown, transcript_vtt
+
+    source_path = Path(source)
+    recording, script_obj = _load_term_source(source_path, script, no_script)
+    if fmt == "markdown":
+        text = transcript_markdown(recording, script_obj)
+        empty = "The recording shows no text." if not text else ""
+    else:
+        text = transcript_vtt(recording, script_obj, chapters=fmt == "chapters")
+        what = "chapters" if fmt == "chapters" else "annotations"
+        empty = f"The recording has no {what}." if "-->" not in text else ""
+
+    if output is None:
+        click.echo(text, nl=False)
+    else:
+        out_path = Path(output)
+        if out_path.resolve() == source_path.resolve():
+            raise click.UsageError(f"{out_path} is the recording itself; choose another name")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(text, encoding="utf-8")
+        click.echo(f"✓ Wrote {out_path} ({len(text.encode()) / 1024:.1f} KB)")
+    if empty:
+        click.echo(empty, err=True)
+
+
 @click.command("validate")
 @click.argument("sources", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False))
 @click.option(
@@ -4949,6 +5026,7 @@ termshow.add_command(term_render)
 termshow.add_command(term_play)
 termshow.add_command(term_export)
 termshow.add_command(term_snap)
+termshow.add_command(term_transcript)
 termshow.add_command(term_validate)
 termshow.add_command(term_check)
 termshow.add_command(term_assets)

@@ -389,8 +389,10 @@ class TerminalEmulator:
                 # DECTCEM: Cursor visibility
                 self._cursor_visible = set_mode
             elif p == 1049:
-                # Alt screen buffer
+                # Alt screen buffer, saving the cursor on entry and
+                # restoring it on exit
                 if set_mode and not self._using_alt:
+                    self._saved_cursor = (self._cursor_row, self._cursor_col)
                     self._alt_screen = self._screen
                     self._screen = self._blank_screen()
                     self._using_alt = True
@@ -398,6 +400,8 @@ class TerminalEmulator:
                     self._screen = self._alt_screen or self._blank_screen()
                     self._alt_screen = None
                     self._using_alt = False
+                    if self._saved_cursor:
+                        self._cursor_row, self._cursor_col = self._saved_cursor
             elif p == 47 or p == 1047:
                 # Also alt screen (without save/restore cursor)
                 if set_mode and not self._using_alt:

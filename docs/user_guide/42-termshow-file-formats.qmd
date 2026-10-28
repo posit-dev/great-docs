@@ -277,6 +277,10 @@ page inside a `<script type="application/json">` element. A
 [`<termshow-player>` element](terminal-recordings.qmd#using-the-player-on-any-web-page) can also
 load it by URL. This page describes **version 2**.
 
+Next to the manifest, the build also writes `_transcript.md`, the recording's text as Markdown (see
+[Transcripts](terminal-recordings.qmd#transcripts)). It isn't part of the manifest format: the
+shortcode reads it when present, and a recording rendered without one plays the same.
+
 ### Top-level members
 
 These members describe the whole recording:
