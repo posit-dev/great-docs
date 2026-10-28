@@ -1574,6 +1574,44 @@ left out, and the command lists any the script has. Pass `--no-script` to export
 exactly as it was recorded. The SVG options (`--chapter-cards`, `--no-loop`, and so on) don't apply
 here.
 
+## Taking a Screenshot
+
+For a poster image, a social card, or a slide, take a still of one moment:
+
+```bash
+great-docs termshow snap docs/assets/my-demo.termshow --at 12.5 -o my-demo.png
+```
+
+The screenshot looks like a frame of the [animated SVG](#exporting-an-animated-svg): the same
+theme, window chrome, and prompt replacement, with the current chapter's label in the title bar.
+The companion `.termshow.yml` is applied first, so `--at` is a time on the playback timeline, after
+cuts and speed changes, which is the time the player shows.
+
+Pick the moment with one of these (the default is `--end`):
+
+| Option | Moment |
+|--------|--------|
+| `--at SECONDS` | That playback time. |
+| `--chapter LABEL` | The chapter's last screen, just before the next chapter starts. The label's case doesn't matter. |
+| `--end` | The last screen. |
+
+The other options are:
+
+| Option | Effect |
+|--------|--------|
+| `-o`, `--output` | Output file, ending in `.svg` or `.png`. The default is the recording's name with `-snap.svg`. |
+| `--png` | Write a PNG (named with `-snap.png` unless `-o` is given). |
+| `--scale` | Pixels per SVG unit in a PNG (default `2`, which stays sharp on high-density screens). |
+| `--annotations` | Draw the annotations showing at that moment. |
+| `--font-file` | Embed a font for the terminal text (SVG only). |
+| `--script`, `--no-script` | Use a different script file, or ignore the script. |
+
+A PNG is made from the SVG by `rsvg-convert` or `resvg`, whichever is installed (`brew install
+librsvg` or `apt install librsvg2-bin` gets `rsvg-convert`). The terminal text uses a monospace
+font installed on your machine. With a [light and dark pair](#light-and-dark-pairs), two files are
+written, ending in `-light` and `-dark`, along with a `<picture>` snippet like the
+[export's](#light-and-dark-readmes).
+
 ## Validating a Recording
 
 Most mistakes in a script don't stop the build. A misspelled key or position is quietly ignored,
