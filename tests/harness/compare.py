@@ -2,10 +2,15 @@
 Compare two harness recordings and report every difference
 
 Compare exit statuses, file changes, step skeletons, warnings, handled exceptions, the
-number of Python processes and calls to the stub `quarto`. Every difference fails the
-comparison, including a handled exception that disappears, so each change requires review.
-A failed test-side check also fails the comparison, even when the base fails the same check.
-Known gaps appear in a separate report section without changing the exit status.
+number of Python processes and calls to the stub `quarto`. Every difference is reported,
+including a handled exception that disappears, so each change can be reviewed.
+
+Regressions fail the comparison: a failed test-side check (even when the base fails the same
+check), a command that now exits with a non-zero status, a command run on one side only, a
+case recorded on one side only, and environments that differ. Other differences, such as
+changed files or new warnings, fail it only in strict mode; a change that alters output on
+purpose reports them without failing. Known gaps appear in a separate report section and
+never fail the comparison.
 """
 
 from __future__ import annotations
@@ -40,6 +45,8 @@ class CaseResult:
         when either side has no manifest.
     findings :
         Report lines, one finding per line, with indented detail lines.
+    regressions :
+        Findings that fail the comparison outside strict mode.
     checks :
         Failed test-side checks, each with the base side's result.
     known_gaps :
@@ -51,6 +58,12 @@ class CaseResult:
     findings: list[str] = field(default_factory=list[str])
     checks: list[str] = field(default_factory=list[str])
     known_gaps: list[str] = field(default_factory=list[str])
+    regressions: list[str] = field(default_factory=list[str])
+
+    @property
+    def regressed(self) -> bool:
+        """Whether the case fails the comparison outside strict mode"""
+        return self.status == "missing" or bool(self.checks or self.regressions)
 
 
 @dataclass(frozen=True)
@@ -97,6 +110,25 @@ class Comparison:
     def matches(self) -> bool:
         """Whether the environments agree and every case matches"""
         return not self.environment and all(c.status == "match" for c in self.cases)
+
+    def passes(self, strict: bool = False) -> bool:
+        """
+        Whether the comparison passes
+
+        Parameters
+        ----------
+        strict :
+            Fail on any difference, not only on regressions.
+
+        Returns
+        -------
+        :
+            `True` when every case matches, or, outside strict mode, when the environments
+            agree and no case regressed.
+        """
+        if strict:
+            return self.matches
+        return not self.environment and not any(c.regressed for c in self.cases)
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -494,10 +526,15 @@ def compare_case(base: Path, test: Path, case: str) -> CaseResult:
         return CaseResult(case, "missing", [f"no manifest in {side}"])
     old, new = _load(a), _load(b)
     findings: list[str] = []
+    regressions: list[str] = []
     for name in dict.fromkeys([*old["commands"], *new["commands"]]):
         if name not in old["commands"] or name not in new["commands"]:
             findings.append(f"{name}: run on one side only")
+            regressions.append(findings[-1])
             continue
+        before, after = old["commands"][name].get("status"), new["commands"][name].get("status")
+        if before != after and after != 0:
+            regressions.append(f"{name}: exit status {before} -> {after}")
         # Detail lines retain their indentation beneath the command-prefixed finding.
         for finding in compare_command(base, test, old["commands"][name], new["commands"][name]):
             findings.append(finding if finding.startswith(" ") else f"{name}: {finding}")
@@ -507,7 +544,8 @@ def compare_case(base: Path, test: Path, case: str) -> CaseResult:
         for failure in failed_checks(new)
     ]
     status = "differ" if findings else "fail" if checks else "match"
-    return CaseResult(case, status, findings, checks, gap_lines(known_gaps(old), known_gaps(new)))
+    gaps = gap_lines(known_gaps(old), known_gaps(new))
+    return CaseResult(case, status, findings, checks, gaps, regressions)
 
 
 def compare(base: Path, test: Path) -> Comparison:
@@ -545,7 +583,10 @@ def compare(base: Path, test: Path) -> Comparison:
 
 
 def render(
-    comparison: Comparison, base_meta: Mapping[str, Any], test_meta: Mapping[str, Any]
+    comparison: Comparison,
+    base_meta: Mapping[str, Any],
+    test_meta: Mapping[str, Any],
+    strict: bool = False,
 ) -> str:
     """
     Format the comparison as a plain-text report
@@ -556,6 +597,8 @@ def render(
         The comparison.
     base_meta, test_meta :
         Contents of each side's `side.json`.
+    strict :
+        Whether every difference fails the comparison.
 
     Returns
     -------
@@ -592,8 +635,10 @@ def render(
     for result in comparison.cases:
         if result.status == "match":
             continue
-        lines.append(f"{result.case}: {result.status.upper()}")
+        regressed = " (regression)" if result.regressed else ""
+        lines.append(f"{result.case}: {result.status.upper()}{regressed}")
         lines += [f"  check failed: {c}" for c in result.checks]
+        lines += [f"  regression: {r}" for r in result.regressions]
         lines += [f"  {f}" for f in result.findings]
         lines.append("")
     gapped = [c for c in comparison.cases if c.known_gaps]
@@ -604,12 +649,19 @@ def render(
             lines += [f"  {line}" for line in result.known_gaps[1:]]
         lines.append("")
     differ = [c.case for c in comparison.cases if c.status != "match"]
+    regressed = [c.case for c in comparison.cases if c.regressed]
     verdict = (
         f"MATCH: all {len(comparison.cases)} cases"
         if comparison.matches
         else f"DIFFER: {len(differ)} of {len(comparison.cases)} cases"
         + (", environment" if comparison.environment else "")
     )
+    if regressed:
+        verdict += f"; {len(regressed)} regressed"
+    elif comparison.passes(strict) and not comparison.matches:
+        verdict += "; no regressions, so the run passes"
+    elif strict and not comparison.environment:
+        verdict += "; no regressions, but strict mode fails on any difference"
     lines.append(verdict)
     return "\n".join(lines)
 
@@ -636,7 +688,7 @@ def _build_status(recording: Path, case: str) -> int | str | None:
     return _load(path)["commands"].get("build", {}).get("status")
 
 
-def write_reports(comparison: Comparison, directory: Path) -> str:
+def write_reports(comparison: Comparison, directory: Path, strict: bool = False) -> str:
     """
     Write `report.txt` and `report.json` for a comparison
 
@@ -646,6 +698,8 @@ def write_reports(comparison: Comparison, directory: Path) -> str:
         The comparison.
     directory :
         Destination directory.
+    strict :
+        Whether every difference fails the comparison.
 
     Returns
     -------
@@ -654,9 +708,14 @@ def write_reports(comparison: Comparison, directory: Path) -> str:
     """
     base_meta = _load(Path(comparison.base) / "side.json")
     test_meta = _load(Path(comparison.test) / "side.json")
-    text = render(comparison, base_meta, test_meta)
+    text = render(comparison, base_meta, test_meta, strict)
     directory.mkdir(parents=True, exist_ok=True)
     _ = (directory / "report.txt").write_text(text + "\n", encoding="utf-8")
-    payload = {"matches": comparison.matches, **asdict(comparison)}
+    payload = {
+        "matches": comparison.matches,
+        "passes": comparison.passes(strict),
+        "strict": strict,
+        **asdict(comparison),
+    }
     _ = (directory / "report.json").write_text(json.dumps(payload, indent=1), encoding="utf-8")
     return text
