@@ -1161,6 +1161,10 @@ The `record` section sets up the shell:
 - `cwd` is the directory to start in, relative to the script.
 - `env` sets environment variables. The shell starts with a plain `$ ` prompt and no history
   file, so nothing you record ends up in your own history.
+- `inherit_env` (`false`) passes on your whole environment. By default the shell only gets a few
+  variables from it, such as `PATH`, `HOME`, and `LANG`, so the recording doesn't pick up
+  whatever your shell profile, editor, or CI service has set. That's what keeps a recording
+  made on your machine the same as one made in CI. List anything else the steps need in `env`.
 - `typing_delay` (0.05 seconds) and `typing_jitter` (0.3) set the typing speed and how much it
   varies. `delay` on a `type`, `run`, or `key` step overrides the speed for that step.
 - `timeout` (10 seconds) is how long to wait for a prompt or a pattern. `timeout` on a `run` or
@@ -1244,6 +1248,101 @@ Only what's on the screen at each point is compared, so output that has scrolled
 the next marker isn't. A `marker` between commands compares each command's output before the
 next one pushes it away, and a taller terminal (`record.rows`) helps with commands that print a
 lot. The check runs at the recording's size, whatever the script's `record` section says now.
+
+### Keeping demos up to date in CI
+
+This GitHub Actions workflow does two jobs. On every pull request it checks the demos, and the
+job fails if one has drifted, with the diff in its log. Once a week, or when you run it by hand,
+it records the drifted demos again and opens a pull request with the new recordings, so a
+release that changes your tool's output leads to a demo update you only have to review:
+
+```{.yaml filename=".github/workflows/demos.yml"}
+name: Terminal demos
+
+on:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install great-docs .
+      - run: great-docs termshow check docs/assets/*.termshow.yml
+
+  update:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install great-docs .
+      - run: great-docs termshow check docs/assets/*.termshow.yml --update
+      # For recordings that a README shows as an animated SVG
+      - run: |
+          for recording in docs/assets/*.termshow; do
+            great-docs termshow export "$recording"
+          done
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: update-terminal-demos
+          commit-message: Record the terminal demos again
+          title: Update the terminal demos
+          body: "`great-docs termshow check --update` found demos whose output has changed."
+```
+
+`pip install great-docs .` installs your package along with Great Docs, so the steps run the
+version of your tool in the pull request. The `update` job can only open a pull request if the
+repository allows it: turn on **Allow GitHub Actions to create and approve pull requests** under
+**Settings → Actions → General**. Both jobs fail if a step fails, such as a command that isn't
+installed on the runner.
+
+A recording made on your Mac and checked on a Linux runner can differ in ways that have nothing
+to do with your tool: `sh` is a different shell on each, and paths and some commands' output
+differ too. Two things help. Set `record.shell` to `bash --norc` in each script, so the same
+shell runs everywhere. And let the `update` job make the recordings, so the ones you commit come
+from the same kind of machine that checks them.
+
+To use the results in another tool, or in a job summary, add `--json`. The output is one JSON
+object, and the exit status is the same as without it:
+
+```bash
+great-docs termshow check docs/assets/*.termshow.yml --json > drift.json
+```
+
+```json
+{
+  "version": 1,
+  "summary": {"up_to_date": 0, "drifted": 1, "updated": 0, "failed": 0},
+  "results": [
+    {
+      "script": "docs/assets/install-guide.termshow.yml",
+      "recording": "docs/assets/install-guide.termshow",
+      "status": "drifted",
+      "compared": 3,
+      "differences": [
+        {"at": "marker 'Verify'", "diff": ["--- install-guide.termshow, at marker 'Verify'", "..."]}
+      ]
+    }
+  ]
+}
+```
+
+`status` is `up_to_date`, `drifted`, `updated` (with `--update`), or `failed`. A failed result
+has an `error` message instead of `differences`, and a `screen` with the screen's text when a
+step timed out.
 
 ## Importing Existing Recordings
 

@@ -4614,7 +4614,16 @@ def _has_steps(script: str) -> bool:
 )
 @click.option("--update", is_flag=True, help="Re-record the recordings that have drifted")
 @click.option("--shell", type=str, default=None, help="Run the steps in this shell instead")
-def term_check(scripts: tuple[str, ...], ignore: tuple[str, ...], update: bool, shell: str | None):
+@click.option(
+    "--json", "as_json", is_flag=True, help="Print the results as JSON, for CI and other tools"
+)
+def term_check(
+    scripts: tuple[str, ...],
+    ignore: tuple[str, ...],
+    update: bool,
+    shell: str | None,
+    as_json: bool,
+):
     """Check that recordings made from steps still match what the steps produce.
 
     Each script's steps are run again, as `record --steps` would, and the
@@ -4629,10 +4638,15 @@ def term_check(scripts: tuple[str, ...], ignore: tuple[str, ...], update: bool, 
     Exits with status 1 if any recording has drifted or a step failed. With
     --update, recordings that have drifted are recorded again instead.
 
+    With --json, the results are printed as one JSON object instead, with
+    the same exit status. Progress still goes to stderr.
+
     Examples:
       great-docs termshow check docs/assets/*.termshow.yml
       great-docs termshow check docs/assets/install.termshow --ignore 'v\\d+\\.\\d+'
+      great-docs termshow check docs/assets/*.termshow.yml --json > drift.json
     """
+    import json
     import re
 
     from ._term_player.check import CheckError, check_script
@@ -4647,52 +4661,78 @@ def term_check(scripts: tuple[str, ...], ignore: tuple[str, ...], update: bool, 
                 f"{pattern!r} isn't a valid regular expression ({e})", param_hint="--ignore"
             ) from None
 
-    drifted = failed = 0
+    results = []
     for script in scripts:
         script_path = Path(script)
         if script_path.name.endswith(".termshow"):
             script_path = script_path.with_name(script_path.name + ".yml")
         click.echo(f"Checking {script_path}", err=True)
+        entry = {"script": script_path.as_posix(), "recording": None}
         try:
             result = check_script(script_path, ignore=ignore, shell=shell)
-        except CheckError as e:
-            click.echo(f"✗ {script_path}: {e}")
-            failed += 1
-            continue
-        except StepsError as e:
-            click.echo(f"✗ {script_path}: {e}")
-            if e.screen:
-                click.echo("\nThe screen at the time:")
-                for line in e.screen.splitlines():
-                    click.echo(f"  │ {line}")
-            failed += 1
+        except (CheckError, StepsError) as e:
+            entry |= {"status": "failed", "error": str(e)}
+            if isinstance(e, StepsError) and e.screen:
+                entry["screen"] = e.screen
+            results.append(entry)
+            if not as_json:
+                _echo_check_failure(entry)
             continue
 
-        screens = f"{result.snapshots} screen{'' if result.snapshots == 1 else 's'}"
-        if not result.drifted:
-            click.echo(f"✓ {result.recording_path} is up to date ({screens} compared)")
-            continue
-        drifted += 1
-        click.echo(f"✗ {result.recording_path} has drifted:\n")
-        for difference in result.differences:
-            for line in difference.lines:
-                color = {"+": "green", "-": "red", "@": "cyan"}.get(line[:1])
-                if line.startswith(("+++", "---")):
-                    color = None
-                click.secho(f"  {line}", fg=color)
-            click.echo()
-        if update:
+        entry |= {
+            "recording": result.recording_path.as_posix(),
+            "status": "drifted" if result.drifted else "up_to_date",
+            "compared": result.snapshots,
+            "differences": [{"at": d.where, "diff": d.lines} for d in result.differences],
+        }
+        if result.drifted and update:
             _write_termshow(result.recording, result.recording_path)
-            click.echo(f"↻ Recorded {result.recording_path} again")
+            entry["status"] = "updated"
+        results.append(entry)
+        if not as_json:
+            _echo_check_result(entry)
 
-    if len(scripts) > 1:
+    counts = {
+        status: sum(r["status"] == status for r in results)
+        for status in ("up_to_date", "drifted", "updated", "failed")
+    }
+    if as_json:
+        click.echo(json.dumps({"version": 1, "summary": counts, "results": results}, indent=2))
+    elif len(scripts) > 1:
+        changed = counts["drifted"] + counts["updated"]
         click.echo(
-            f"\n{len(scripts) - drifted - failed} of {len(scripts)} up to date"
-            + (f", {drifted} {'updated' if update else 'drifted'}" if drifted else "")
-            + (f", {failed} couldn't be checked" if failed else "")
+            f"\n{counts['up_to_date']} of {len(scripts)} up to date"
+            + (f", {changed} {'updated' if update else 'drifted'}" if changed else "")
+            + (f", {counts['failed']} couldn't be checked" if counts["failed"] else "")
         )
-    if failed or (drifted and not update):
+    if counts["failed"] or counts["drifted"]:
         raise SystemExit(1)
+
+
+def _echo_check_failure(entry: dict) -> None:
+    click.echo(f"✗ {entry['script']}: {entry['error']}")
+    if entry.get("screen"):
+        click.echo("\nThe screen at the time:")
+        for line in entry["screen"].splitlines():
+            click.echo(f"  │ {line}")
+
+
+def _echo_check_result(entry: dict) -> None:
+    recording = entry["recording"]
+    if entry["status"] == "up_to_date":
+        screens = f"{entry['compared']} screen{'' if entry['compared'] == 1 else 's'}"
+        click.echo(f"✓ {recording} is up to date ({screens} compared)")
+        return
+    click.echo(f"✗ {recording} has drifted:\n")
+    for difference in entry["differences"]:
+        for line in difference["diff"]:
+            color = {"+": "green", "-": "red", "@": "cyan"}.get(line[:1])
+            if line.startswith(("+++", "---")):
+                color = None
+            click.secho(f"  {line}", fg=color)
+        click.echo()
+    if entry["status"] == "updated":
+        click.echo(f"↻ Recorded {recording} again")
 
 
 @click.command("assets")

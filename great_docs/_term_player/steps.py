@@ -14,6 +14,7 @@ import random
 import re
 import select
 import shlex
+import shutil
 import sys
 import time
 from collections.abc import Callable
@@ -61,6 +62,9 @@ DEFAULT_ENV = {
     "HISTFILE": "",
     "BASH_SILENCE_DEPRECATION_WARNING": "1",
 }
+# Kept from the current environment unless `record.inherit_env` is set, so a recording doesn't
+# depend on what your own shell, editor, or CI service has set. `LC_*` variables are kept too.
+KEPT_ENV = ("PATH", "HOME", "USER", "LOGNAME", "LANG", "TMPDIR", "TZ", "VIRTUAL_ENV")
 # Removed from the environment, since they'd override the terminal size
 _SIZE_VARS = ("COLUMNS", "LINES")
 
@@ -79,6 +83,22 @@ def key_sequence(name: str) -> str | None:
         if modifier == "alt":
             return "\x1b" + letter
     return None
+
+
+def shell_env(settings: RecordSettings, environ: dict[str, str] | None = None) -> dict[str, str]:
+    """The environment the shell starts with.
+
+    Only `KEPT_ENV` and `LC_*` are taken from `environ` (the current environment), unless
+    `settings.inherit_env` is set. `DEFAULT_ENV` and the script's `record.env` go on top.
+    """
+    environ = dict(os.environ if environ is None else environ)
+    if settings.inherit_env:
+        env = {k: v for k, v in environ.items() if k not in _SIZE_VARS}
+    else:
+        env = {k: v for k, v in environ.items() if k in KEPT_ENV or k.startswith("LC_")}
+    env.update(DEFAULT_ENV)
+    env.update(settings.env)
+    return env
 
 
 def screen_text(emulator: TerminalEmulator) -> str:
@@ -108,6 +128,7 @@ class RecordSettings:
     rows: int = 24
     cwd: Path | None = None
     env: dict[str, str] = field(default_factory=dict)
+    inherit_env: bool = False
     typing_delay: float = 0.05
     typing_jitter: float = 0.3
     timeout: float = 10.0
@@ -324,9 +345,10 @@ class _Session:
             argv = shlex.split(self.settings.shell)
         except ValueError as e:
             raise StepsError(f"can't read record.shell: {e}") from None
-        env = {k: v for k, v in os.environ.items() if k not in _SIZE_VARS}
-        env.update(DEFAULT_ENV)
-        env.update(self.settings.env)
+        env = shell_env(self.settings)
+        if not self.settings.inherit_env:
+            # Programs that start a subshell use the one being recorded
+            env.setdefault("SHELL", shutil.which(argv[0]) or argv[0])
         winsize = struct.pack("HHHH", self.settings.rows, self.settings.cols, 0, 0)
 
         pid, fd = pty.fork()

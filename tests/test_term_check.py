@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import re
+import shlex
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -311,3 +315,168 @@ class TestCheckCommand:
         result = CliRunner().invoke(cli, ["termshow", "check", str(script), "--ignore", "("])
         assert result.exit_code == 2
         assert "isn't a valid regular expression" in result.output
+
+
+def _check_json(*args: str) -> tuple[int, dict]:
+    result = CliRunner().invoke(cli, ["termshow", "check", "--json", *args])
+    # Progress goes to stderr, so stdout is only the JSON
+    return result.exit_code, json.loads(result.stdout)
+
+
+@posix_only
+class TestCheckJson:
+    def test_up_to_date(self, tmp_path: Path):
+        script = _project(tmp_path)
+        _record(script)
+        code, data = _check_json(str(script))
+        assert code == 0
+        assert data == {
+            "version": 1,
+            "summary": {"up_to_date": 1, "drifted": 0, "updated": 0, "failed": 0},
+            "results": [
+                {
+                    "script": script.as_posix(),
+                    "recording": (tmp_path / "demo.termshow").as_posix(),
+                    "status": "up_to_date",
+                    "compared": 3,
+                    "differences": [],
+                }
+            ],
+        }
+
+    def test_drifted(self, tmp_path: Path):
+        script = _project(tmp_path)
+        _record(script)
+        _project(tmp_path, name="there")
+        code, data = _check_json(str(script))
+        assert code == 1
+        assert data["summary"]["drifted"] == 1
+        (result,) = data["results"]
+        assert result["status"] == "drifted"
+        assert [d["at"] for d in result["differences"]] == ["marker 'Version'", "the end"]
+        assert "+hello there" in result["differences"][0]["diff"]
+
+    def test_updated(self, tmp_path: Path):
+        script = _project(tmp_path)
+        _record(script)
+        _project(tmp_path, name="there")
+        code, data = _check_json(str(script), "--update")
+        assert code == 0
+        assert data["summary"] == {"up_to_date": 0, "drifted": 0, "updated": 1, "failed": 0}
+        assert data["results"][0]["differences"]
+        assert check_script(script).drifted is False
+
+    def test_failed(self, tmp_path: Path):
+        missing = _project(tmp_path)
+        code, data = _check_json(str(missing))
+        assert code == 1
+        (result,) = data["results"]
+        assert result["status"] == "failed"
+        assert result["recording"] is None
+        assert "doesn't exist yet" in result["error"]
+        assert "screen" not in result
+
+    def test_failed_step_has_the_screen(self, tmp_path: Path):
+        script = _project(tmp_path)
+        _record(script)
+        script.write_text(_SCRIPT + "  - wait_for: never\n    timeout: 0.3\n", encoding="utf-8")
+        code, data = _check_json(str(script))
+        assert code == 1
+        assert "'never' didn't appear" in data["results"][0]["error"]
+        assert 'echo "version $(cat version.txt)"' in data["results"][0]["screen"]
+
+    def test_several_scripts(self, tmp_path: Path):
+        (tmp_path / "a").mkdir()
+        (tmp_path / "b").mkdir()
+        good, bad = _project(tmp_path / "a"), _project(tmp_path / "b")
+        _record(good)
+        _record(bad)
+        _project(tmp_path / "b", name="there")
+        code, data = _check_json(str(good), str(bad))
+        assert code == 1
+        assert data["summary"] == {"up_to_date": 1, "drifted": 1, "updated": 0, "failed": 0}
+        assert [r["status"] for r in data["results"]] == ["up_to_date", "drifted"]
+
+
+# ---------------------------------------------------------------------------
+# The CI recipe in the guide
+# ---------------------------------------------------------------------------
+
+_GUIDE = Path(__file__).resolve().parents[1] / "docs/user_guide/41-terminal-recordings.qmd"
+
+
+def _guide_block(opening: str) -> str:
+    text = _GUIDE.read_text(encoding="utf-8")
+    return re.search(re.escape(opening) + r"\n(.*?)^```", text, re.S | re.M)[1]
+
+
+class TestGuideWorkflow:
+    def _workflow(self) -> dict:
+        from yaml12 import parse_yaml
+
+        return parse_yaml(_guide_block('```{.yaml filename=".github/workflows/demos.yml"}'))
+
+    def _commands(self) -> list[list[str]]:
+        commands = []
+        for job in self._workflow()["jobs"].values():
+            for step in job["steps"]:
+                for line in step.get("run", "").splitlines():
+                    words = shlex.split(line.strip())
+                    if words[:1] == ["great-docs"]:
+                        commands.append(words[1:])
+        return commands
+
+    def test_jobs(self):
+        workflow = self._workflow()
+        assert set(workflow["on"]) == {"pull_request", "schedule", "workflow_dispatch"}
+        assert set(workflow["jobs"]) == {"check", "update"}
+        assert workflow["jobs"]["update"]["permissions"] == {
+            "contents": "write",
+            "pull-requests": "write",
+        }
+
+    def test_commands_exist(self):
+        commands = self._commands()
+        assert [c[:2] for c in commands] == [
+            ["termshow", "check"],
+            ["termshow", "check"],
+            ["termshow", "export"],
+        ]
+        assert "--update" in commands[1]
+        for words in commands:
+            group = cli.commands[words[0]]
+            command = group.commands[words[1]]
+            options = {o for p in command.params for o in getattr(p, "opts", [])}
+            for word in words[2:]:
+                if word.startswith("-"):
+                    assert word in options, f"{' '.join(words)}: no option {word}"
+
+    def test_actionlint(self, tmp_path: Path):
+        actionlint = shutil.which("actionlint")
+        if actionlint is None:
+            pytest.skip("actionlint isn't installed")
+        workflows = tmp_path / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        workflow = workflows / "demos.yml"
+        workflow.write_text(
+            _guide_block('```{.yaml filename=".github/workflows/demos.yml"}'), encoding="utf-8"
+        )
+        result = subprocess.run(
+            [actionlint, str(workflow)], cwd=tmp_path, capture_output=True, text=True
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+
+@posix_only
+def test_guide_json_example_matches(tmp_path: Path):
+    text = _GUIDE.read_text(encoding="utf-8")
+    blocks = re.findall(r"^```json\n(.*?)^```", text, re.S | re.M)
+    (example,) = [json.loads(b) for b in blocks if '"summary"' in b]
+    script = _project(tmp_path)
+    _record(script)
+    _project(tmp_path, name="there")
+    _, data = _check_json(str(script))
+    assert set(example) == set(data)
+    assert set(example["summary"]) == set(data["summary"])
+    assert set(example["results"][0]) == set(data["results"][0])
+    assert set(example["results"][0]["differences"][0]) == set(data["results"][0]["differences"][0])

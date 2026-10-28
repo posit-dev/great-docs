@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import shlex
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -15,6 +16,8 @@ from click.testing import CliRunner
 from great_docs._term_player.parser import parse_termshow
 from great_docs._term_player.steps import (
     ACTIONS,
+    DEFAULT_ENV,
+    KEPT_ENV,
     KEYS,
     WORDS,
     RecordSettings,
@@ -23,6 +26,7 @@ from great_docs._term_player.steps import (
     key_sequence,
     load_steps,
     record_steps,
+    shell_env,
 )
 from great_docs._term_player.validate import check_script_data, validate
 from great_docs.cli import cli
@@ -167,6 +171,59 @@ class TestSchemaMatchesCode:
             if "default" in prop:
                 assert prop["default"] == getattr(defaults, name), name
 
+    def test_kept_env_is_documented(self):
+        description = _SCHEMA["$defs"]["record"]["properties"]["inherit_env"]["description"]
+        for name in (*KEPT_ENV, "LC_*"):
+            assert name in description
+
+
+class TestShellEnv:
+    ENVIRON = {
+        "PATH": "/usr/bin",
+        "HOME": "/home/me",
+        "LANG": "en_US.UTF-8",
+        "LC_ALL": "en_US.UTF-8",
+        "PYTHONSTARTUP": "/editor/pythonrc.py",
+        "CI": "true",
+        "NO_COLOR": "1",
+        "COLUMNS": "200",
+        "PS1": "% ",
+    }
+
+    def test_only_kept_variables(self):
+        env = shell_env(RecordSettings(), self.ENVIRON)
+        assert env == {
+            "PATH": "/usr/bin",
+            "HOME": "/home/me",
+            "LANG": "en_US.UTF-8",
+            "LC_ALL": "en_US.UTF-8",
+            **DEFAULT_ENV,
+        }
+
+    def test_inherit_env(self):
+        env = shell_env(RecordSettings(inherit_env=True), self.ENVIRON)
+        assert env["PYTHONSTARTUP"] == "/editor/pythonrc.py"
+        assert env["CI"] == "true"
+        assert "COLUMNS" not in env
+        assert env["PS1"] == DEFAULT_ENV["PS1"]
+
+    def test_record_env_goes_on_top(self):
+        settings = RecordSettings(env={"PS1": "> ", "CI": "1", "PATH": "/opt/bin"})
+        env = shell_env(settings, self.ENVIRON)
+        assert (env["PS1"], env["CI"], env["PATH"]) == ("> ", "1", "/opt/bin")
+
+    def test_current_environment(self, monkeypatch):
+        monkeypatch.setenv("TERMSHOW_TEST_LEAK", "1")
+        assert "TERMSHOW_TEST_LEAK" not in shell_env(RecordSettings())
+        assert shell_env(RecordSettings(inherit_env=True))["TERMSHOW_TEST_LEAK"] == "1"
+
+    def test_loaded_from_the_script(self, tmp_path: Path):
+        script = _write(tmp_path, "record:\n  inherit_env: true\nsteps:\n  - enter\n")
+        assert load_steps(script)[0].inherit_env is True
+        assert _errors({"record": {"inherit_env": "yes"}}) == [
+            "record.inherit_env: must be true or false, got 'yes'"
+        ]
+
 
 # ---------------------------------------------------------------------------
 # Validation
@@ -256,6 +313,14 @@ class TestRecordSteps:
         recording = record_steps(settings, [Step("run", "echo $GREETING"), Step("run", "pwd")])
         assert "hi there" in _output(recording)
         assert str(tmp_path.resolve()) in _output(recording).replace("\r\n", "")
+
+    def test_clean_environment(self, monkeypatch):
+        monkeypatch.setenv("TERMSHOW_TEST_LEAK", "leaked")
+        step = Step("run", 'echo "[${TERMSHOW_TEST_LEAK:-clean}] [$SHELL]"')
+        output = _output(record_steps(_fast(), [step]))
+        assert f"[clean] [{shutil.which('sh')}]" in output
+        output = _output(record_steps(_fast(inherit_env=True), [step]))
+        assert "[leaked]" in output
 
     def test_typing_takes_time(self):
         settings = RecordSettings(typing_delay=0.05, typing_jitter=0)

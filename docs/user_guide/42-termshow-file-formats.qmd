@@ -223,13 +223,17 @@ them as written when it saves.
 | `rows` | `24` | Terminal height |
 | `cwd` | the script's directory | Working directory, relative to the script's directory |
 | `env` | (none) | Environment variables to set. Values may be strings, numbers, or `true`/`false` |
+| `inherit_env` | `false` | Start the shell with the whole current environment, not just the variables listed below |
 | `typing_delay` | `0.05` | Seconds between typed characters |
 | `typing_jitter` | `0.3` | How much each delay varies, as a fraction of it (0 to 1) |
 | `timeout` | `10` | Seconds to wait for the prompt or a `wait_for` pattern |
 | `prompt_pattern` | `\$ $` | Regular expression (Python syntax) that matches the shell's prompt |
 
-The shell starts with `PS1="$ "`, `TERM=xterm-256color`, and no history file. `env` can change
-any of these. `COLUMNS` and `LINES` are removed so the terminal size is `cols` by `rows`.
+Only `PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `LC_*`, `TMPDIR`, `TZ`, and `VIRTUAL_ENV` are
+taken from the current environment, unless `inherit_env` is `true`. `SHELL` is set to the shell
+being recorded. The shell then gets `PS1="$ "`, `TERM=xterm-256color`, and no history file, and
+`env` can change any of these. With `inherit_env`, `COLUMNS` and `LINES` are still removed so
+the terminal size is `cols` by `rows`, and `SHELL` is left as it is.
 
 Each step is one of these words or single-action mappings:
 
