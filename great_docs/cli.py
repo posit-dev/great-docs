@@ -4414,13 +4414,17 @@ def term_play(source: str, speed: float, script: str | None, no_script: bool) ->
     flag_value="cast",
     help="Write an asciicast file for asciinema (version 3 unless --v2 is given)",
 )
+@click.option("--gif", "fmt", flag_value="gif", help="Write an animated GIF (needs ffmpeg)")
+@click.option("--mp4", "fmt", flag_value="mp4", help="Write an MP4 video (needs ffmpeg)")
+@click.option("--webm", "fmt", flag_value="webm", help="Write a WebM video (needs ffmpeg)")
 @click.option("--v2", is_flag=True, help="With --cast, write asciicast version 2")
 @click.option(
     "--output",
     "-o",
     type=click.Path(dir_okay=False),
     default=None,
-    help="Output file (default: the recording's name with .svg or .cast)",
+    help="Output file (default: the recording's name with the format's extension). Its "
+    "extension picks the format when no format option is given",
 )
 @click.option(
     "--script", type=click.Path(exists=True), default=None, help="Path to .termshow.yml script"
@@ -4442,7 +4446,27 @@ def term_play(source: str, speed: float, script: str | None, no_script: bool) ->
     default=None,
     help="Embed this .woff2/.woff/.ttf/.otf font for the terminal text",
 )
+@click.option(
+    "--fps",
+    type=click.IntRange(min=1, max=60),
+    default=None,
+    help="Frames per second of a GIF or video  [default: 20 for GIF, 30 for video]",
+)
+@click.option(
+    "--scale",
+    type=float,
+    default=None,
+    help="Pixels per SVG unit in a GIF or video  [default: 1 for GIF, 2 for video]",
+)
+@click.option(
+    "--max-idle",
+    type=float,
+    default=None,
+    help="Shorten pauses longer than this many seconds in a GIF or video",
+)
+@click.pass_context
 def term_export(
+    ctx: click.Context,
     source: str,
     fmt: str,
     v2: bool,
@@ -4454,16 +4478,24 @@ def term_export(
     chapter_cards: bool,
     no_annotations: bool,
     font_file: str | None,
+    fps: int | None,
+    scale: float | None,
+    max_idle: float | None,
 ) -> None:
-    """Export a recording as an animated SVG or an asciicast file.
+    """Export a recording as an animated SVG, a GIF or video, or an asciicast file.
 
     The SVG plays with CSS alone, so it works as an image in a GitHub or
     GitLab README. The companion .termshow.yml script's cuts, speed changes,
     chapters, and annotations are applied unless --no-script is given.
 
-    With a light/dark theme pair, two files are written (NAME-light.svg and
-    NAME-dark.svg), along with a <picture> snippet that picks one by the
-    reader's color scheme.
+    With --gif, --mp4, or --webm, each screen is drawn like a screenshot
+    and ffmpeg joins them, for places that can't show an animated SVG, such
+    as pull request comments, chat, and slides. This needs ffmpeg and
+    rsvg-convert (or resvg).
+
+    With a light/dark theme pair, two files are written (NAME-light and
+    NAME-dark), along with a <picture> snippet that picks one by the
+    reader's color scheme (for SVG and GIF).
 
     With --cast, the recording is written for asciinema's player, CLI, and
     asciinema.org. The script's cuts and speed changes are applied, its
@@ -4473,26 +4505,44 @@ def term_export(
     Examples:
       great-docs termshow export demos/install.termshow
       great-docs termshow export demos/install.termshow --svg -o install.svg
+      great-docs termshow export demos/install.termshow --gif --max-idle 2
+      great-docs termshow export demos/install.termshow -o install.mp4
       great-docs termshow export demos/install.termshow --cast
     """
     from ._term_player import apply_script, generate_manifest
     from ._term_player.export import SIZE_WARNING_BYTES, export_svg, picture_snippet
+    from ._term_player.video import VIDEO_FORMATS
 
-    if fmt == "cast":
-        svg_only = {
-            "--no-loop": no_loop,
-            "--end-pause": end_pause != 2.0,
-            "--chapter-cards": chapter_cards,
-            "--no-annotations": no_annotations,
-            "--font-file": font_file,
-        }
-        given = [name for name, value in svg_only.items() if value]
-        if given:
-            raise click.UsageError(f"{', '.join(given)} only applies to --svg")
-    elif v2:
-        raise click.UsageError("--v2 only applies to --cast")
+    suffix = Path(output).suffix.lower().lstrip(".") if output else ""
+    if ctx.get_parameter_source("fmt") == click.core.ParameterSource.DEFAULT:
+        if suffix in VIDEO_FORMATS or suffix == "cast":
+            fmt = suffix
+    elif suffix in (*VIDEO_FORMATS, "svg", "cast") and suffix != fmt:
+        raise click.UsageError(f"--{fmt} writes a .{fmt} file, but -o ends in .{suffix}")
+
+    # The formats each option applies to
+    applies = {
+        "--no-loop": (no_loop, ("svg", "gif")),
+        "--end-pause": (end_pause != 2.0, ("svg", *VIDEO_FORMATS)),
+        "--chapter-cards": (chapter_cards, ("svg",)),
+        "--no-annotations": (no_annotations, ("svg", *VIDEO_FORMATS)),
+        "--font-file": (font_file, ("svg",)),
+        "--fps": (fps is not None, VIDEO_FORMATS),
+        "--scale": (scale is not None, VIDEO_FORMATS),
+        "--max-idle": (max_idle is not None, VIDEO_FORMATS),
+        "--v2": (v2, ("cast",)),
+    }
+    for name, (given, formats) in applies.items():
+        if given and fmt not in formats:
+            names = [f"--{f}" for f in formats]
+            listed = ", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else names[0]
+            raise click.UsageError(f"{name} only applies to {listed}")
     if end_pause < 0:
         raise click.BadParameter("can't be negative", param_hint="--end-pause")
+    if scale is not None and scale <= 0:
+        raise click.BadParameter("must be more than 0", param_hint="--scale")
+    if max_idle is not None and max_idle <= 0:
+        raise click.BadParameter("must be more than 0", param_hint="--max-idle")
 
     source_path = Path(source)
     recording, script_obj = _load_term_source(source_path, script, no_script)
@@ -4505,6 +4555,18 @@ def term_export(
     if script_obj is not None:
         recording = apply_script(recording, script_obj)
     manifest = generate_manifest(recording, script_obj)
+
+    if fmt in VIDEO_FORMATS:
+        options = dict(
+            fps=fps,
+            scale=scale,
+            loop=not no_loop,
+            end_pause=end_pause,
+            annotations=not no_annotations,
+            max_idle=max_idle,
+        )
+        _export_video(manifest, out_path, fmt, options)
+        return
 
     if manifest.dark is not None:
         sides = [
@@ -4544,6 +4606,44 @@ def term_export(
         f" | Unique rows: {len(manifest.lines)}"
     )
     if len(sides) == 2:
+        alt = manifest.title or "Terminal recording"
+        click.echo("\nPaste this where the recording should appear:\n")
+        click.echo(picture_snippet(sides[0][0].name, sides[1][0].name, alt))
+
+
+def _export_video(manifest, out_path: Path, fmt: str, options: dict) -> None:
+    """Write `termshow export --gif/--mp4/--webm`'s files and report what went into them."""
+    from ._term_player.export import picture_snippet
+    from ._term_player.video import SIZE_WARNING_BYTES, VideoError, export_video
+
+    if manifest.dark is not None:
+        sides = [
+            (out_path.with_name(f"{out_path.stem}-light{out_path.suffix}"), False),
+            (out_path.with_name(f"{out_path.stem}-dark{out_path.suffix}"), True),
+        ]
+    else:
+        sides = [(out_path, False)]
+
+    for path, dark in sides:
+        try:
+            result = export_video(manifest, path, fmt, dark=dark, **options)
+        except (VideoError, ValueError) as e:
+            raise click.ClickException(str(e)) from e
+        size = path.stat().st_size
+        click.echo(f"✓ Exported {path} ({size / 1024:.1f} KB, {result.width}×{result.height})")
+        if size > SIZE_WARNING_BYTES:
+            click.echo(
+                f"  Warning: over {SIZE_WARNING_BYTES // (1024 * 1024)} MB, which GitHub won't "
+                "take in an issue or pull request. A lower --fps or --scale, --max-idle, or "
+                "cuts in the script make it smaller.",
+                err=True,
+            )
+
+    click.echo(
+        f"  Duration: {result.duration:.1f}s | Frames: {result.stills}"
+        f" | Unique images: {result.images}"
+    )
+    if len(sides) == 2 and fmt == "gif":
         alt = manifest.title or "Terminal recording"
         click.echo("\nPaste this where the recording should appear:\n")
         click.echo(picture_snippet(sides[0][0].name, sides[1][0].name, alt))
