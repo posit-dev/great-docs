@@ -155,12 +155,8 @@ def export_svg(
         styles.append(_font_face(Path(font_file)))
         font_family = f'"{_EMBEDDED_FONT}", {font_family}'
     styles.append(
-        f".t{{font-family:{font_family};font-size:{screen.font_size}px;"
-        f"white-space:pre;dominant-baseline:text-before-edge}}"
-        ".b{font-weight:700}.i{font-style:italic}.u{text-decoration:underline}"
-        ".s{text-decoration:line-through}.d{opacity:0.6}"
-        f".ui{{font-family:{_UI_FONT}}}"
-        "@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}"
+        _text_styles(font_family, screen.font_size)
+        + "@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}"
         ".cur{animation:blink 1s step-end infinite}"
     )
 
@@ -345,6 +341,17 @@ def _fmt_pct(p: float) -> str:
 def _keyframes(name: str, stops: dict[str, str]) -> str:
     """A `@keyframes` rule. Stops are in time order; a repeated percentage keeps its last value."""
     return f"@keyframes {name}{{" + "".join(f"{p}%{{{v}}}" for p, v in stops.items()) + "}"
+
+
+def _text_styles(font_family: str, font_size: int) -> str:
+    """The CSS for terminal text (class `t` and the short style classes) and UI text."""
+    return (
+        f".t{{font-family:{font_family};font-size:{font_size}px;"
+        f"white-space:pre;dominant-baseline:text-before-edge}}"
+        ".b{font-weight:700}.i{font-style:italic}.u{text-decoration:underline}"
+        ".s{text-decoration:line-through}.d{opacity:0.6}"
+        f".ui{{font-family:{_UI_FONT}}}"
+    )
 
 
 def _has_content(line: Line) -> bool:
