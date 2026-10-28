@@ -4471,9 +4471,8 @@ def term_export(
       great-docs termshow export demos/install.termshow --svg -o install.svg
       great-docs termshow export demos/install.termshow --cast
     """
-    from ._term_player import apply_script, generate_manifest, parse_asciicast, parse_termshow
+    from ._term_player import apply_script, generate_manifest
     from ._term_player.export import SIZE_WARNING_BYTES, export_svg, picture_snippet
-    from ._term_player.script import load_script
 
     if fmt == "cast":
         svg_only = {
@@ -4492,16 +4491,7 @@ def term_export(
         raise click.BadParameter("can't be negative", param_hint="--end-pause")
 
     source_path = Path(source)
-    if source_path.suffix == ".cast":
-        recording = parse_asciicast(source_path)
-    else:
-        recording = parse_termshow(source_path)
-
-    script_obj = None
-    if not no_script:
-        script_path = Path(script) if script else source_path.with_suffix(".termshow.yml")
-        if script_path.exists():
-            script_obj = load_script(script_path)
+    recording, script_obj = _load_term_source(source_path, script, no_script)
 
     out_path = Path(output) if output else source_path.with_suffix(f".{fmt}")
     if fmt == "cast":
@@ -4555,6 +4545,24 @@ def term_export(
         click.echo(picture_snippet(sides[0][0].name, sides[1][0].name, alt))
 
 
+def _load_term_source(source_path: Path, script: str | None, no_script: bool):
+    """Read a .cast or .termshow recording and its script (None with --no-script, or when
+    there's no script). The script isn't applied."""
+    from ._term_player import parse_asciicast, parse_termshow
+    from ._term_player.script import load_script
+
+    if source_path.suffix == ".cast":
+        recording = parse_asciicast(source_path)
+    else:
+        recording = parse_termshow(source_path)
+    script_obj = None
+    if not no_script:
+        script_path = Path(script) if script else source_path.with_suffix(".termshow.yml")
+        if script_path.exists():
+            script_obj = load_script(script_path)
+    return recording, script_obj
+
+
 def _export_cast(recording, script, source_path: Path, out_path: Path, *, version: int) -> None:
     """Write `termshow export --cast`'s file and report what went into it."""
     from ._term_player.cast import export_asciicast, left_out
@@ -4581,6 +4589,127 @@ def _export_cast(recording, script, source_path: Path, out_path: Path, *, versio
     missing = left_out(script)
     if missing:
         click.echo(f"  Left out (they need the Termshow player): {', '.join(missing)}.", err=True)
+
+
+@click.command("snap")
+@click.argument("source", type=click.Path(exists=True))
+@click.option("--at", "at", type=float, default=None, help="Playback time in seconds")
+@click.option("--chapter", default=None, help="Take the last screen of the chapter with this label")
+@click.option("--end", is_flag=True, help="Take the last screen (the default)")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(dir_okay=False),
+    default=None,
+    help="Output .svg or .png file (default: the recording's name with -snap.svg)",
+)
+@click.option("--png", is_flag=True, help="Write a PNG (needs rsvg-convert or resvg)")
+@click.option(
+    "--scale",
+    type=float,
+    default=None,
+    help="Pixels per SVG unit in a PNG  [default: 2]",
+)
+@click.option("--annotations", is_flag=True, help="Draw the annotations showing at that moment")
+@click.option(
+    "--font-file",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="Embed this .woff2/.woff/.ttf/.otf font for the terminal text (SVG only)",
+)
+@click.option(
+    "--script", type=click.Path(exists=True), default=None, help="Path to .termshow.yml script"
+)
+@click.option("--no-script", is_flag=True, help="Ignore any companion .termshow.yml script")
+def term_snap(
+    source: str,
+    at: float | None,
+    chapter: str | None,
+    end: bool,
+    output: str | None,
+    png: bool,
+    scale: float | None,
+    annotations: bool,
+    font_file: str | None,
+    script: str | None,
+    no_script: bool,
+) -> None:
+    """Take a screenshot of one moment in a recording.
+
+    The screenshot is a still SVG, or a PNG with --png or an -o name ending
+    in .png, for poster images, social cards, and slides. It uses the
+    companion .termshow.yml script's cuts, speed changes, theme, window
+    chrome, and prompt replacement unless --no-script is given, and --at
+    is a time on the resulting playback timeline.
+
+    With a light/dark theme pair, two files are written (NAME-light and
+    NAME-dark), along with a <picture> snippet that picks one by the
+    reader's color scheme.
+
+    Examples:
+      great-docs termshow snap demos/install.termshow
+      great-docs termshow snap demos/install.termshow --at 12.5 -o shot.svg
+      great-docs termshow snap demos/install.termshow --chapter Install --png
+    """
+    from ._term_player import apply_script, generate_manifest
+    from ._term_player.export import picture_snippet
+    from ._term_player.snap import SnapError, rasterize, snap_svg, snap_time
+
+    if sum([at is not None, chapter is not None, end]) > 1:
+        raise click.UsageError("use only one of --at, --chapter, and --end")
+    if output is not None:
+        suffix = Path(output).suffix.lower()
+        if suffix not in (".svg", ".png"):
+            raise click.UsageError(f"-o must end in .svg or .png, got {output!r}")
+        if png and suffix == ".svg":
+            raise click.UsageError("--png writes a PNG, but -o ends in .svg")
+        png = png or suffix == ".png"
+    if not png:
+        if scale is not None:
+            raise click.UsageError("--scale only applies to PNG output")
+    elif font_file is not None:
+        raise click.UsageError("--font-file only applies to SVG output")
+    if scale is not None and scale <= 0:
+        raise click.BadParameter("must be more than 0", param_hint="--scale")
+
+    source_path = Path(source)
+    recording, script_obj = _load_term_source(source_path, script, no_script)
+    if script_obj is not None:
+        recording = apply_script(recording, script_obj)
+    manifest = generate_manifest(recording, script_obj)
+
+    try:
+        time = snap_time(manifest, at=at, chapter=chapter)
+    except SnapError as e:
+        raise click.UsageError(str(e)) from e
+
+    ext = ".png" if png else ".svg"
+    out_path = Path(output) if output else source_path.with_name(f"{source_path.stem}-snap{ext}")
+    if manifest.dark is not None:
+        sides = [
+            (out_path.with_name(f"{out_path.stem}-light{ext}"), False),
+            (out_path.with_name(f"{out_path.stem}-dark{ext}"), True),
+        ]
+    else:
+        sides = [(out_path, False)]
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    for path, dark in sides:
+        try:
+            svg = snap_svg(manifest, time, dark=dark, annotations=annotations, font_file=font_file)
+            if png:
+                rasterize(svg, path, scale=2.0 if scale is None else scale)
+            else:
+                path.write_text(svg, encoding="utf-8")
+        except (SnapError, ValueError) as e:
+            raise click.ClickException(str(e)) from e
+        click.echo(f"✓ Saved {path} ({path.stat().st_size / 1024:.1f} KB)")
+
+    click.echo(f"  At {time:.2f}s of {manifest.duration:.2f}s")
+    if len(sides) == 2:
+        alt = manifest.title or "Terminal recording"
+        click.echo("\nPaste this where the screenshot should appear:\n")
+        click.echo(picture_snippet(sides[0][0].name, sides[1][0].name, alt))
 
 
 @click.command("validate")
@@ -4819,6 +4948,7 @@ termshow.add_command(term_record)
 termshow.add_command(term_render)
 termshow.add_command(term_play)
 termshow.add_command(term_export)
+termshow.add_command(term_snap)
 termshow.add_command(term_validate)
 termshow.add_command(term_check)
 termshow.add_command(term_assets)
