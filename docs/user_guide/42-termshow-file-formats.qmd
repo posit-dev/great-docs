@@ -20,7 +20,9 @@ everything you need.
 | `NAME.termshow.yml` | You, or the Termshow Editor | How to present it: settings, chapters, cuts, overlays |
 | `manifest.json` | `great-docs build` or `great-docs termshow render` | Everything the player needs, ready to embed in a page |
 
-The first two are source files you keep in your repository. The manifest is build output.
+The first two are source files you keep in your repository. The manifest is build output. A
+[bundle](#bundles) (`NAME.termshow.json`, from `great-docs termshow export --bundle`) is a manifest
+in a single file, with nothing else beside it.
 
 Each file has a JSON Schema (draft 2020-12). They ship with the `great-docs` package, under
 `great_docs/_term_player/schemas/`, and are published at these URLs:
@@ -29,7 +31,7 @@ Each file has a JSON Schema (draft 2020-12). They ship with the `great-docs` pac
 |------|--------|
 | `.termshow` | <https://raw.githubusercontent.com/posit-dev/great-docs/main/great_docs/_term_player/schemas/termshow-recording.schema.json> |
 | `.termshow.yml` | <https://raw.githubusercontent.com/posit-dev/great-docs/main/great_docs/_term_player/schemas/termshow-script.schema.json> |
-| `manifest.json` | <https://raw.githubusercontent.com/posit-dev/great-docs/main/great_docs/_term_player/schemas/termshow-manifest.schema.json> |
+| `manifest.json`, `.termshow.json` | <https://raw.githubusercontent.com/posit-dev/great-docs/main/great_docs/_term_player/schemas/termshow-manifest.schema.json> |
 
 ## Conventions
 
@@ -302,6 +304,7 @@ These members describe the whole recording:
 | `annotations` | no | Script annotations, with `at` renamed to `time` |
 | `highlights` | no | Script highlights, with `at` renamed to `time`; members at their default value are left out |
 | `snippets` | no | Script snippets, with `at` renamed to `time` |
+| `transcript` | no | The recording's text as Markdown; only in [bundles](#bundles) |
 
 ### Keyframes
 
@@ -315,7 +318,8 @@ is at time `0`. Several keyframes can share one screen, which is common during p
 - `frame` is an index into `frames`.
 - `file` names that screen's SVG file, relative to the manifest. It's written immediately after
   `time`, as shown. The SVG files serve as poster images, and as a fallback for players that
-  can't draw a frame themselves.
+  can't draw a frame themselves. A [bundle](#bundles) has no SVG files, so its keyframes have no
+  `file`: `{"time":4.5,"frame":12}`.
 
 ### Frames and lines
 
@@ -407,8 +411,8 @@ The build writes manifests as compact JSON with these properties, which consumer
 - No whitespace between tokens, and non-ASCII text written as-is, not as `\u` escapes.
 - `</` is written as `<\/`, so the JSON can be embedded in an HTML `<script>` element safely.
   (`<\/` is a valid JSON escape, so a JSON parser reads it back as `</`.)
-- `version` is the first member. In each keyframe, `file` immediately follows `time`. Tools
-  that can't parse JSON, such as the Quarto Lua filter, depend on these two orderings.
+- `version` is the first member. In each keyframe with a `file`, it immediately follows `time`.
+  Tools that can't parse JSON, such as the Quarto Lua filter, depend on these two orderings.
 
 ### Version 1 and versioning
 
@@ -418,14 +422,43 @@ Pages built by Great Docs 0.17 and earlier contain **version 1** manifests. Thes
 
 New optional members can be added without changing the version, since readers ignore members
 they don't recognize. A change that would break existing readers requires a new version number.
-Because every keyframe keeps its `file`, a player that meets a version it doesn't know can still
-show the SVG files.
+Because every keyframe in a render keeps its `file`, a player that meets a version it doesn't
+know can still show the SVG files. A bundle has no such fallback.
+
+## Bundles (`.termshow.json`) {#bundles}
+
+A bundle is a version 2 manifest that stands alone: everything the player needs is in one file,
+named `NAME.termshow.json`. `great-docs termshow export --bundle` writes one, and the
+[`<termshow-player>` element](terminal-recordings.qmd#using-the-player-on-any-web-page) and the
+shortcode both play it. It follows the manifest format above, with two differences:
+
+- keyframes have no `file` member, since there are no SVG files with it
+- it has a `transcript` member: the recording's text as Markdown, the same as `_transcript.md`
+  next to a render (see [Transcripts](terminal-recordings.qmd#transcripts))
+
+```json
+{"version":2,"title":"Install","duration":12.4,"term":{"cols":80,"rows":24},"keyframes":[{"time":0,"frame":0},…],"screen":{…},"lines":[…],"frames":[…],"transcript":"**Install**\n\n```console\n$ pip install my-tool\n```\n"}
+```
+
+It's serialized the same way as a manifest, so it's safe inside a `<script>` element too. The
+reference player puts the transcript after the player as a region named "Transcript of the
+terminal recording", hidden from view but read by screen readers. A player that doesn't use it
+should still offer the text some other way.
+
+The transcript's Markdown is limited to what `great-docs` writes, so a player can turn it into HTML
+without a full Markdown parser:
+
+- a chapter label is a paragraph in bold, `**Label**`
+- an annotation is a block quote, each line starting with `>`
+- the terminal's text is in a code block with the `console` language, fenced with three backticks,
+  or more when the text holds a run of three
+- outside code blocks, a backslash before any of `` \ ` * _ [ ] < > `` escapes it
 
 ## Validating files
 
 The quickest check is `great-docs termshow validate`, which applies these schemas without any extra
 packages and adds checks a schema can't express, such as annotations timed past the end of the
-recording (see [Validating a Recording](terminal-recordings.qmd#validating-a-recording)).
+recording, or a bundle's keyframes pointing at screens it doesn't have (see [Validating a Recording](terminal-recordings.qmd#validating-a-recording)).
 
 Any JSON Schema validator for draft 2020-12 can check these files too. The schemas validate one JSON
 value at a time, so a recording is checked line by line: the header against
