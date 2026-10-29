@@ -11,6 +11,7 @@ from great_docs._term_player.emulator import (
     ScreenState,
     TerminalEmulator,
     _parse_params,
+    char_width,
 )
 
 
@@ -858,3 +859,177 @@ class TestEraseDisplayAbove:
 
         # Row 2 should be untouched
         assert _screen_text(emu, 2) == "CCCC"
+
+
+# ---------------------------------------------------------------------------
+# Wide and zero-width characters
+# ---------------------------------------------------------------------------
+
+
+def _chars(emu: TerminalEmulator, row: int = 0) -> list[str]:
+    return [cell.char for cell in emu.screen.cells[row]]
+
+
+class TestCharWidth:
+    @pytest.mark.parametrize(
+        ("ch", "width"),
+        [
+            ("a", 1),
+            ("│", 1),
+            ("é", 1),
+            ("🎉", 2),
+            ("中", 2),
+            ("Ａ", 2),
+            ("\u0301", 0),
+            ("\u200d", 0),
+            ("\ufe0f", 0),
+            ("\U000e0100", 0),
+        ],
+    )
+    def test_width(self, ch, width):
+        assert char_width(ch) == width
+
+    def test_matches_build_log_padding(self):
+        """The build log pads its boxes to the widths the emulator gives."""
+        from great_docs._build_log import _display_width
+
+        for text in ["Site ready 🎉", "中文 docs", "plain"]:
+            assert _display_width(text) == sum(char_width(ch) for ch in text)
+
+
+class TestWideChars:
+    def test_wide_char_takes_two_cells(self):
+        emu = TerminalEmulator(cols=10, rows=2)
+        emu.feed("a🎉b")
+        assert _chars(emu)[:4] == ["a", "🎉", "", "b"]
+        assert emu.screen.cursor_col == 4
+
+    def test_box_border_lines_up(self):
+        """A box row with an emoji ends at the same column as one without."""
+        emu = TerminalEmulator(cols=20, rows=2)
+        emu.feed("│ ready 🎉 │\r\n│ plain    │")
+        assert _chars(emu, 0).index("│", 1) == _chars(emu, 1).index("│", 1) == 11
+
+    def test_text_keeps_its_characters(self):
+        emu = TerminalEmulator(cols=10, rows=2)
+        emu.feed("中文!")
+        assert _screen_text(emu, 0) == "中文!"
+
+    def test_wraps_when_only_half_fits(self):
+        emu = TerminalEmulator(cols=5, rows=2)
+        emu.feed("abcd🎉")
+        assert _chars(emu, 0) == ["a", "b", "c", "d", " "]
+        assert _chars(emu, 1)[:2] == ["🎉", ""]
+        assert emu.screen.cursor_col == 2
+
+    def test_fills_the_last_two_columns(self):
+        emu = TerminalEmulator(cols=5, rows=2)
+        emu.feed("abc🎉")
+        assert _chars(emu, 0) == ["a", "b", "c", "🎉", ""]
+        assert emu.screen.cursor_row == 0
+
+    def test_continuation_has_the_same_style(self):
+        emu = TerminalEmulator(cols=10, rows=2)
+        emu.feed("\x1b[31m🎉")
+        cells = emu.screen.cells[0]
+        assert cells[0].style.fg == cells[1].style.fg
+
+    def test_single_column_terminal(self):
+        emu = TerminalEmulator(cols=1, rows=2)
+        emu.feed("🎉")
+        assert _chars(emu) == ["🎉"]
+
+    def test_overwriting_the_second_half_blanks_the_first(self):
+        emu = TerminalEmulator(cols=10, rows=2)
+        emu.feed("a🎉b\x1b[1;3Hz")
+        assert _chars(emu)[:4] == ["a", " ", "z", "b"]
+
+    def test_overwriting_the_first_half_blanks_the_second(self):
+        emu = TerminalEmulator(cols=10, rows=2)
+        emu.feed("a🎉b\x1b[1;2Hz")
+        assert _chars(emu)[:4] == ["a", "z", " ", "b"]
+
+    def test_wide_over_wide_offset_by_one(self):
+        emu = TerminalEmulator(cols=10, rows=2)
+        emu.feed("🎉🎉\x1b[1;2H中")
+        assert _chars(emu)[:4] == [" ", "中", "", " "]
+
+
+class TestZeroWidthChars:
+    def test_combining_mark_joins_previous_cell(self):
+        emu = TerminalEmulator(cols=10, rows=2)
+        emu.feed("e\u0301x")
+        assert _chars(emu)[:2] == ["e\u0301", "x"]
+        assert emu.screen.cursor_col == 2
+
+    def test_combining_mark_after_wide_char(self):
+        emu = TerminalEmulator(cols=10, rows=2)
+        emu.feed("🎉\ufe0fx")
+        assert _chars(emu)[:3] == ["🎉\ufe0f", "", "x"]
+
+    def test_joiner_sequence_is_one_character(self):
+        emu = TerminalEmulator(cols=10, rows=2)
+        emu.feed("👨\u200d👩x")
+        assert _chars(emu)[:3] == ["👨\u200d👩", "", "x"]
+        assert emu.screen.cursor_col == 3
+
+    def test_combining_mark_at_line_start_is_dropped(self):
+        emu = TerminalEmulator(cols=10, rows=2)
+        emu.feed("\u0301x")
+        assert _chars(emu)[:2] == ["x", " "]
+
+    def test_combining_mark_after_deferred_wrap(self):
+        emu = TerminalEmulator(cols=3, rows=2)
+        emu.feed("abe\u0301")
+        assert _chars(emu) == ["a", "b", "e\u0301"]
+
+
+class TestWideCharRepair:
+    @pytest.mark.parametrize(
+        "seq",
+        [
+            "\x1b[1;3H\x1b[K",  # EL to the right, from the second half
+            "\x1b[1;2H\x1b[1K",  # EL to the left, up to the first half
+            "\x1b[1;3H\x1b[J",  # ED below
+            "\x1b[1;2H\x1b[1J",  # ED above
+            "\x1b[1;3H\x1b[X",  # ECH on the second half
+            "\x1b[1;2H\x1b[X",  # ECH on the first half
+        ],
+    )
+    def test_erase_half_blanks_both(self, seq):
+        emu = TerminalEmulator(cols=10, rows=2)
+        emu.feed("a🎉b" + seq)
+        assert "🎉" not in _chars(emu)
+        assert "" not in _chars(emu)
+
+    def test_delete_first_half(self):
+        emu = TerminalEmulator(cols=10, rows=2)
+        emu.feed("a🎉b\x1b[1;2H\x1b[P")
+        assert _chars(emu)[:3] == ["a", " ", "b"]
+
+    def test_delete_before_keeps_wide_char_whole(self):
+        emu = TerminalEmulator(cols=10, rows=2)
+        emu.feed("a🎉b\x1b[1;1H\x1b[P")
+        assert _chars(emu)[:3] == ["🎉", "", "b"]
+
+    def test_insert_between_halves(self):
+        emu = TerminalEmulator(cols=10, rows=2)
+        emu.feed("a🎉b\x1b[1;3H\x1b[@")
+        assert "🎉" not in _chars(emu)
+        assert "" not in _chars(emu)
+
+    def test_insert_pushes_wide_char_off_the_edge(self):
+        emu = TerminalEmulator(cols=4, rows=2)
+        emu.feed("ab🎉\x1b[1;1H\x1b[@")
+        assert _chars(emu) == [" ", "a", "b", " "]
+
+    def test_resize_through_wide_char(self):
+        emu = TerminalEmulator(cols=10, rows=2)
+        emu.feed("ab🎉")
+        emu.resize(3, 2)
+        assert _chars(emu) == ["a", "b", " "]
+
+    def test_erase_left_after_deferred_wrap(self):
+        emu = TerminalEmulator(cols=3, rows=2)
+        emu.feed("abc\x1b[1K")
+        assert _chars(emu) == [" ", " ", " "]
