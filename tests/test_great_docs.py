@@ -23854,9 +23854,7 @@ def test_build_hero_section_disabled():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs._config = MagicMock()
-        docs._config.seo_default_description = None
-        docs._config.hero_explicitly_disabled = True
+        docs._config = mock_config(hero_explicitly_disabled=True)
 
         html, cleaned = docs._build_hero_section()
         assert html == ""
@@ -23868,16 +23866,16 @@ def test_build_hero_section_auto_badges():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs._config = MagicMock()
-        docs._config.seo_default_description = None
-        docs._config.hero_explicitly_disabled = False
-        docs._config.hero_badges = "auto"
-        docs._config.hero_enabled = True
-        docs._config.hero_logo = None
-        docs._config.hero_logo_height = "80px"
-        docs._config.hero_name = "TestPkg"
-        docs._config.hero_tagline = "A test package"
-        docs._config.logo = None
+        docs._config = mock_config(
+            hero_explicitly_disabled=False,
+            hero_badges="auto",
+            hero_enabled=True,
+            hero_logo=None,
+            hero_logo_height="80px",
+            hero_name="TestPkg",
+            hero_tagline="A test package",
+            logo=None,
+        )
 
         badges = [{"alt": "CI", "img": "https://img.shields.io/badge", "url": "https://ci.com"}]
 
@@ -23905,15 +23903,15 @@ def test_build_hero_section_no_content():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs._config = MagicMock()
-        docs._config.seo_default_description = None
-        docs._config.hero_explicitly_disabled = False
-        docs._config.hero_badges = "auto"
-        docs._config.hero_enabled = False
-        docs._config.hero_logo = None
-        docs._config.hero_name = None
-        docs._config.hero_tagline = None
-        docs._config.logo = None
+        docs._config = mock_config(
+            hero_explicitly_disabled=False,
+            hero_badges="auto",
+            hero_enabled=False,
+            hero_logo=None,
+            hero_name=None,
+            hero_tagline=None,
+            logo=None,
+        )
 
         with (
             patch.object(docs, "_detect_hero_logo", return_value=None),
@@ -23934,17 +23932,16 @@ def test_build_hero_section_with_logo_dict():
         docs.build_dir = Path(tmp_dir) / "great-docs"
         docs.build_dir.mkdir()
 
-        docs._config = MagicMock()
-
-        docs._config.seo_default_description = None
-        docs._config.hero_explicitly_disabled = False
-        docs._config.hero_badges = []
-        docs._config.hero_enabled = True
-        docs._config.hero_logo = {"light": "logo-light.svg", "dark": "logo-dark.svg"}
-        docs._config.hero_logo_height = "60px"
-        docs._config.hero_name = "Pkg"
-        docs._config.hero_tagline = "Tagline"
-        docs._config.logo = None
+        docs._config = mock_config(
+            hero_explicitly_disabled=False,
+            hero_badges=[],
+            hero_enabled=True,
+            hero_logo={"light": "logo-light.svg", "dark": "logo-dark.svg"},
+            hero_logo_height="60px",
+            hero_name="Pkg",
+            hero_tagline="Tagline",
+            logo=None,
+        )
 
         # Create logo files in project root
         pkg_root = Path(tmp_dir)
@@ -23963,9 +23960,7 @@ def test_add_api_reference_config_disabled():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs._config = MagicMock()
-        docs._config.seo_default_description = None
-        docs._config.reference_enabled = False
+        docs._config = mock_config(reference_enabled=False)
 
         docs._add_api_reference_config()
 
@@ -23977,9 +23972,7 @@ def test_add_api_reference_config_already_exists():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs._config = MagicMock()
-        docs._config.seo_default_description = None
-        docs._config.reference_enabled = True
+        docs._config = mock_config(reference_enabled=True, is_python_project=True)
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         (docs.build_dir / "_quarto.yml").write_text(
@@ -23996,9 +23989,7 @@ def test_add_api_reference_config_no_package():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs._config = MagicMock()
-        docs._config.seo_default_description = None
-        docs._config.reference_enabled = True
+        docs._config = mock_config(reference_enabled=True, is_python_project=True)
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         (docs.build_dir / "_quarto.yml").write_text(format_yaml({"website": {}}), encoding="utf-8")
@@ -24017,9 +24008,7 @@ def test_add_api_reference_config_no_exports():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs._config = MagicMock()
-        docs._config.seo_default_description = None
-        docs._config.reference_enabled = True
+        docs._config = mock_config(reference_enabled=True, is_python_project=True)
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         (docs.build_dir / "_quarto.yml").write_text(format_yaml({"website": {}}), encoding="utf-8")
@@ -24040,14 +24029,15 @@ def test_add_api_reference_config_success():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs._config = MagicMock()
-        docs._config.seo_default_description = None
-        docs._config.reference_enabled = True
-        docs._config.reference_title = "API Reference"
-        docs._config.reference_desc = None
-        docs._config.dynamic = True
-        docs._config.parser = "numpy"
-        docs._config.jupyter = None
+        docs._config = mock_config(
+            reference_enabled=True,
+            is_python_project=True,
+            reference_title="API Reference",
+            reference_desc=None,
+            dynamic=True,
+            parser="numpy",
+            jupyter=None,
+        )
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         config = {"website": {"navbar": {"left": []}, "sidebar": []}}
@@ -24072,9 +24062,7 @@ def test_add_api_reference_config_eof_error():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs._config = MagicMock()
-        docs._config.seo_default_description = None
-        docs._config.reference_enabled = True
+        docs._config = mock_config(reference_enabled=True, is_python_project=True)
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         (docs.build_dir / "_quarto.yml").write_text(format_yaml({"website": {}}), encoding="utf-8")
@@ -24123,15 +24111,14 @@ def test_refresh_api_reference_config_fallback_to_explicit():
         config = {"api-reference": {"package": "mypkg"}}
         (docs.build_dir / "_quarto.yml").write_text(format_yaml(config), encoding="utf-8")
 
-        docs._config = MagicMock()
-
-        docs._config.seo_default_description = None
-        docs._config.parser = "numpy"
-        docs._config.dynamic = True
-        docs._config.reference_title = None
-        docs._config.reference_desc = None
-        docs._config.jupyter = None
-        docs._config.reference = [{"title": "API", "contents": ["ClassA"]}]
+        docs._config = mock_config(
+            parser="numpy",
+            dynamic=True,
+            reference_title=None,
+            reference_desc=None,
+            jupyter=None,
+            reference=[{"title": "API", "contents": ["ClassA"]}],
+        )
 
         user_sections = [{"title": "API", "contents": ["ClassA"]}]
 
