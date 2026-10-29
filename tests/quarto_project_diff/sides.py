@@ -1,5 +1,5 @@
 """
-Checkouts and controlled build environments for harness comparisons
+Checkouts and controlled build environments for the two sides of a comparison
 
 A side is a checkout with its own virtual environment. The base side is a detached worktree
 of the base commit, kept in the cache directory with a virtual environment synced from the
@@ -27,20 +27,20 @@ STUB_QUARTO_VERSION = "1.9.18"
 # Fail proxied GitHub and PyPI requests consistently, regardless of network availability.
 DEAD_PROXY = "http://127.0.0.1:9"
 
-# Variables passed through from the harness's environment, besides `LC_*`.
+# Variables passed through from this process's environment, besides `LC_*`.
 INHERITED_VARIABLES = ("HOME", "USER", "LOGNAME", "LANG", "TMPDIR", "TERM")
 
-# Read by the observer and by the stub `quarto`, which import nothing from the harness.
-CENSUS_VARIABLE = "GREAT_DOCS_HARNESS_CENSUS"
-QUARTO_LOG_VARIABLE = "GREAT_DOCS_HARNESS_QUARTO_LOG"
-RENDER_PAGES_VARIABLE = "GREAT_DOCS_HARNESS_RENDER_PAGES"
-PREVIEW_HOLD_VARIABLE = "GREAT_DOCS_HARNESS_PREVIEW_HOLD"
+# Read by the observer and by the stub `quarto`, which import nothing from this package.
+CENSUS_VARIABLE = "GREAT_DOCS_QUARTO_PROJECT_DIFF_CENSUS"
+QUARTO_LOG_VARIABLE = "GREAT_DOCS_QUARTO_PROJECT_DIFF_QUARTO_LOG"
+RENDER_PAGES_VARIABLE = "GREAT_DOCS_QUARTO_PROJECT_DIFF_RENDER_PAGES"
+PREVIEW_HOLD_VARIABLE = "GREAT_DOCS_QUARTO_PROJECT_DIFF_PREVIEW_HOLD"
 
 OBSERVER_SOURCE = Path(__file__).resolve().parent / "observer" / "sitecustomize.py"
 
 _STUB_TEMPLATE = """\
 #!/bin/sh
-# Quarto stand-in written by the great-docs characterisation harness. `render` and `preview`
+# Quarto stand-in written by the great-docs Quarto project diff. `render` and `preview`
 # succeed without output; every other subcommand runs the real Quarto. When ${pages} is
 # set, `render` writes a placeholder `_site/` page for each page that Quarto would render.
 # When ${hold} is set, `preview` runs for that many seconds, as a server would.
@@ -69,8 +69,8 @@ exec {real} "$@"
 """
 
 
-class HarnessError(RuntimeError):
-    """An unmet requirement that prevents a harness run or recording"""
+class RequirementError(RuntimeError):
+    """An unmet requirement that prevents a run or recording"""
 
 
 @dataclass(frozen=True)
@@ -117,7 +117,7 @@ def run_checked(argv: Sequence[str], cwd: Path, env: Mapping[str, str] | None = 
     cwd :
         Working directory.
     env :
-        Environment; the harness's own when `None`.
+        Environment; this process's own when `None`.
 
     Returns
     -------
@@ -126,7 +126,7 @@ def run_checked(argv: Sequence[str], cwd: Path, env: Mapping[str, str] | None = 
 
     Raises
     ------
-    HarnessError
+    RequirementError
         If the command cannot start or exits non-zero.
     """
     try:
@@ -140,16 +140,16 @@ def run_checked(argv: Sequence[str], cwd: Path, env: Mapping[str, str] | None = 
             check=False,
         )
     except OSError as exc:
-        raise HarnessError(f"Cannot run {shlex.join(argv)}: {exc}") from exc
+        raise RequirementError(f"Cannot run {shlex.join(argv)}: {exc}") from exc
     if proc.returncode != 0:
         tail = (proc.stderr or proc.stdout).strip()[-2000:]
-        raise HarnessError(f"{shlex.join(argv)} exited {proc.returncode}:\n{tail}")
+        raise RequirementError(f"{shlex.join(argv)} exited {proc.returncode}:\n{tail}")
     return proc.stdout.strip()
 
 
-def harness_checkout() -> Path:
+def own_checkout() -> Path:
     """
-    Locate the checkout that holds this harness
+    Locate the checkout that holds this tool
 
     Returns
     -------
@@ -175,13 +175,13 @@ def checkout_side(checkout: Path) -> Side:
 
     Raises
     ------
-    HarnessError
+    RequirementError
         If the checkout has no `.venv/bin/great-docs`.
     """
     checkout = checkout.resolve()
     venv = checkout / ".venv"
     if not (venv / "bin" / "great-docs").exists():
-        raise HarnessError(
+        raise RequirementError(
             f"{checkout} has no .venv/bin/great-docs; run "
             "`env -u VIRTUAL_ENV uv sync --extra dev --frozen` there first"
         )
@@ -203,7 +203,7 @@ def base_side(checkout: Path, ref: str, cache: Path, python_version: str) -> Sid
     ref :
         Base revision, for example `main`.
     cache :
-        The harness cache directory.
+        The cache directory.
     python_version :
         Interpreter version for the environment, matching the test side.
 
@@ -214,17 +214,17 @@ def base_side(checkout: Path, ref: str, cache: Path, python_version: str) -> Sid
 
     Raises
     ------
-    HarnessError
+    RequirementError
         If the revision is unknown, `uv.lock` or `uv` is missing, the worktree has local
         changes, or the sync fails.
     """
     sha = run_checked(["git", "rev-parse", "--verify", f"{ref}^{{commit}}"], checkout)
     lock_file = checkout / "uv.lock"
     if not lock_file.is_file():
-        raise HarnessError(f"{checkout} has no uv.lock to copy into the base worktree")
+        raise RequirementError(f"{checkout} has no uv.lock to copy into the base worktree")
     uv = shutil.which("uv")
     if uv is None:
-        raise HarnessError("`uv` is not on PATH; the base worktree needs it")
+        raise RequirementError("`uv` is not on PATH; the base worktree needs it")
     worktrees = cache / "worktrees"
     worktrees.mkdir(parents=True, exist_ok=True)
     tree = worktrees / sha[:12]
@@ -235,9 +235,11 @@ def base_side(checkout: Path, ref: str, cache: Path, python_version: str) -> Sid
                 ["git", "worktree", "add", "--force", "--detach", str(tree), sha], checkout
             )
         if run_checked(["git", "rev-parse", "HEAD"], tree) != sha:
-            raise HarnessError(f"{tree} is not at {sha}; remove it with `git worktree remove`")
+            raise RequirementError(f"{tree} is not at {sha}; remove it with `git worktree remove`")
         if run_checked(["git", "status", "--porcelain"], tree):
-            raise HarnessError(f"{tree} has local changes; remove it with `git worktree remove`")
+            raise RequirementError(
+                f"{tree} has local changes; remove it with `git worktree remove`"
+            )
         _ = shutil.copyfile(lock_file, tree / "uv.lock")
         env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
         _ = run_checked(
@@ -285,7 +287,7 @@ def install_observer(directory: Path) -> Path:
     """
     Copy the census observer into a directory of its own for `PYTHONPATH`
 
-    The copy keeps every other module of the harness off the build's import path.
+    The copy keeps every other module of this package off the build's import path.
 
     Parameters
     ----------
@@ -316,7 +318,7 @@ def search_path(side: Side, stub_dir: Path) -> str:
     Returns
     -------
     :
-        The search path, ending with the harness's own `PATH`.
+        The search path, ending with this process's own `PATH`.
     """
     return os.pathsep.join([str(stub_dir), str(side.bin), os.environ.get("PATH", "")])
 
@@ -325,7 +327,7 @@ def child_environment(side: Side, stub_dir: Path, observer_dir: Path) -> dict[st
     """
     Compose the environment shared by every command a side runs
 
-    Only an allowlist of the harness's variables passes through, so tokens, coverage and
+    Only an allowlist of this process's variables passes through, so tokens, coverage and
     virtual-environment settings of the caller do not reach the build.
 
     Parameters
@@ -359,7 +361,7 @@ def child_environment(side: Side, stub_dir: Path, observer_dir: Path) -> dict[st
 
 def real_quarto() -> str:
     """
-    Find the real Quarto on the harness's `PATH`
+    Find the real Quarto on this process's `PATH`
 
     Returns
     -------
@@ -368,12 +370,12 @@ def real_quarto() -> str:
 
     Raises
     ------
-    HarnessError
+    RequirementError
         If Quarto is missing; `quarto pandoc` converts some packages' README files.
     """
     found = shutil.which("quarto")
     if found is None:
-        raise HarnessError("Quarto is not on PATH; the stub passes `quarto pandoc` to it")
+        raise RequirementError("Quarto is not on PATH; the stub passes `quarto pandoc` to it")
     return found
 
 
@@ -404,7 +406,7 @@ def describe(side: Side, stub_dir: Path) -> Side:
 
     Raises
     ------
-    HarnessError
+    RequirementError
         If `d2` or `ruff` is missing from the side's `PATH`, or the interpreter is older
         than 3.12.
     """
@@ -415,14 +417,14 @@ def describe(side: Side, stub_dir: Path) -> Side:
     for tool in ("d2", "ruff"):
         found = shutil.which(tool, path=path)
         if found is None:
-            raise HarnessError(f"`{tool}` is not on the {side.label} side's PATH ({path})")
+            raise RequirementError(f"`{tool}` is not on the {side.label} side's PATH ({path})")
         versions[tool] = run_checked([found, "--version"], side.checkout)
     versions["quarto"] = run_checked([real_quarto(), "--version"], side.checkout)
     versions["git"] = run_checked(["git", "--version"], side.checkout)
     probe = json.loads(run_checked([str(side.bin / "python"), "-c", _DISTRIBUTIONS], side.checkout))
     python = str(probe["python"])
     if tuple(int(p) for p in python.split(".")[:2]) < (3, 12):
-        raise HarnessError(f"The census needs Python 3.12 or later; {side.label} has {python}")
+        raise RequirementError(f"The census needs Python 3.12 or later; {side.label} has {python}")
     distributions = {
         name: version for name, version in probe["distributions"].items() if name != "great-docs"
     }
@@ -498,10 +500,10 @@ def outside_git(path: Path) -> None:
 
     Raises
     ------
-    HarnessError
+    RequirementError
         If the directory or one of its parents holds `.git`.
     """
     resolved = path.resolve()
     for directory in (resolved, *resolved.parents):
         if (directory / ".git").exists():
-            raise HarnessError(f"{path} is inside the git repository at {directory}")
+            raise RequirementError(f"{path} is inside the git repository at {directory}")

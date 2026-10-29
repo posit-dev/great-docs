@@ -31,8 +31,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Any
 
-from tests.harness.catalogue import COMMANDS, BuildCase, generate, has_config, pin_mtimes
-from tests.harness.normalise import (
+from tests.quarto_project_diff.catalogue import (
+    COMMANDS,
+    BuildCase,
+    generate,
+    has_config,
+    pin_mtimes,
+)
+from tests.quarto_project_diff.normalise import (
     FILE_RULES,
     Rule,
     log_skeleton,
@@ -42,12 +48,12 @@ from tests.harness.normalise import (
     normalise_text,
     path_rules,
 )
-from tests.harness.sides import (
+from tests.quarto_project_diff.sides import (
     CENSUS_VARIABLE,
     PREVIEW_HOLD_VARIABLE,
     QUARTO_LOG_VARIABLE,
     RENDER_PAGES_VARIABLE,
-    HarnessError,
+    RequirementError,
     Side,
 )
 
@@ -59,7 +65,7 @@ SCHEMA = 2
 SKIPPED_DIRECTORIES = frozenset({"__pycache__", ".git"})
 
 # A watch run appends this line to a source file and looks for it in other files.
-WATCH_MARKER = "Line added by the characterisation harness during a watch run."
+WATCH_MARKER = "Line added by the Quarto project diff during a watch run."
 # Seconds a watch run waits for its edit to reach another file, and for the command to exit
 # after the interrupt; and the interval between checks.
 REBUILD_SECONDS = 10.0
@@ -229,7 +235,7 @@ def read_census(directory: Path, rules: Sequence[Rule]) -> tuple[list[dict[str, 
     Parameters
     ----------
     directory :
-        Directory named by `GREAT_DOCS_HARNESS_CENSUS` for the command.
+        Directory named by `GREAT_DOCS_QUARTO_PROJECT_DIFF_CENSUS` for the command.
     rules :
         Path rules for messages.
 
@@ -330,7 +336,7 @@ def run_command(
 
     Raises
     ------
-    HarnessError
+    RequirementError
         If the command finished but no process reported a census, which means the observer
         did not load.
     """
@@ -384,7 +390,9 @@ def run_command(
 
     census, reporters = read_census(census_dir, rules)
     if status != "timeout" and reporters == 0:
-        raise HarnessError(f"{job.case.id} {name}: no census reported; the observer did not load")
+        raise RequirementError(
+            f"{job.case.id} {name}: no census reported; the observer did not load"
+        )
     calls = quarto_log.read_text(encoding="utf-8").splitlines() if quarto_log.exists() else []
     record: dict[str, Any] = {
         "status": status,
@@ -474,7 +482,7 @@ def run_watch(
 def _default_sigint() -> None:
     """Restore the default action of `SIGINT` in a child process before it starts"""
     # Python raises `KeyboardInterrupt` only if `SIGINT` is not ignored when it starts, and a
-    # shell that runs the harness in the background starts it with `SIGINT` ignored.
+    # shell that runs this tool in the background starts it with `SIGINT` ignored.
     _ = signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 
@@ -641,7 +649,7 @@ def generate_all(cases: Iterable[BuildCase], test_packages: Path, work: Path) ->
     cases :
         The build cases.
     test_packages :
-        The `test-packages` directory of the harness's checkout.
+        The `test-packages` directory of the checkout that holds this tool.
     work :
         Work directory; packages go to `work/pristine/<case>`.
 

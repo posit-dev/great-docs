@@ -1,5 +1,5 @@
 """
-Build cases and package generation for the characterisation harness
+Build cases and package generation for the Quarto project diff
 
 A build case specifies a Gauntlet package, the commands to run and, for a variant, how the
 package or its configuration differs from the spec. The default tier contains 33 packages
@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
-from tests.harness.sides import run_checked
+from tests.quarto_project_diff.sides import run_checked
 
 TIER: tuple[str, ...] = (
     "gdtest_minimal",
@@ -110,10 +110,10 @@ PINNED_MTIME = 1735689600
 # Fixed identities and an empty Git configuration give every copy of a release repository the
 # same commit hashes; each release's commit is dated one day after the previous one.
 GIT_ENVIRONMENT: Mapping[str, str] = {
-    "GIT_AUTHOR_NAME": "Great Docs harness",
-    "GIT_AUTHOR_EMAIL": "harness@example.com",
-    "GIT_COMMITTER_NAME": "Great Docs harness",
-    "GIT_COMMITTER_EMAIL": "harness@example.com",
+    "GIT_AUTHOR_NAME": "Great Docs project diff",
+    "GIT_AUTHOR_EMAIL": "project-diff@example.com",
+    "GIT_COMMITTER_NAME": "Great Docs project diff",
+    "GIT_COMMITTER_EMAIL": "project-diff@example.com",
     "GIT_CONFIG_GLOBAL": os.devnull,
     "GIT_CONFIG_NOSYSTEM": "1",
 }
@@ -139,7 +139,7 @@ class Release:
 @dataclass(frozen=True)
 class BuildCase:
     """
-    A Gauntlet package and the commands the harness runs on it
+    A Gauntlet package and the commands to run on it
 
     Attributes
     ----------
@@ -392,7 +392,7 @@ def make_repository(package: Path, releases: Sequence[Release]) -> None:
 
     Raises
     ------
-    HarnessError
+    RequirementError
         If a Git command fails.
     """
     for day, release in enumerate(releases):

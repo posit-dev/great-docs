@@ -19,9 +19,18 @@ from the repository root using the Makefile.
 - `make check`: Lint + core tests combined.
 - `make type-check`: Run mypy across multiple Python versions.
 - `make type-check-strict`: Run strict pyright over the paths listed in `tool.pyright.include`.
+- `make quarto-project-diff`: Compare Quarto projects from `init`, `build`, `build --watch`
+  and `freeze` with those from `main` for 40 Gauntlet packages, with rendering stubbed.
+  See the docstring in `tests/quarto_project_diff/__init__.py` for requirements and options.
 
 Default to `make test` during iteration. Run `make test-synthetic` or `make test-integration`
 when your changes touch areas those suites cover.
+
+Run `make quarto-project-diff` when your changes touch `great_docs/`. For changes that
+should leave every build unchanged, such as refactors, run it with
+`QUARTO_PROJECT_DIFF_ARGS="--fail-on difference"` and put
+`<!-- quarto-project-diff: fail-on difference -->` in the pull request's description so CI
+checks it the same way.
 
 ## Code style
 
