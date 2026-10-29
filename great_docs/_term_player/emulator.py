@@ -7,11 +7,13 @@ snapshotted for SVG rendering. Handles:
 - Screen operations (ED, EL, scroll)
 - 256-color and truecolor (24-bit) SGR
 - Alternative screen buffer
+- Wide (CJK, emoji) and zero-width (combining, joiner) characters
 """
 
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -47,7 +49,12 @@ class CellStyle:
 
 @dataclass(slots=True)
 class Cell:
-    """A single character cell in the terminal grid."""
+    """A single character cell in the terminal grid.
+
+    A wide character fills two cells: its own, then one whose `char` is
+    `""`. A cell's `char` can also hold several code points, when combining
+    marks or a zero-width joiner sequence follow the first.
+    """
 
     char: str = " "
     style: CellStyle = field(default_factory=CellStyle)
@@ -104,6 +111,49 @@ _CSI_RE = re.compile(r"\x1b\[([0-9;?]*)([^@-~]?)([A-Za-z@-~])")
 _OSC_RE = re.compile(r"\x1b\].*?(?:\x1b\\|\x07)")
 # Regex for simple escape sequences
 _ESC_SIMPLE_RE = re.compile(r"\x1b[()][0-9A-B]|\x1b[=>DMEH78]")
+
+_ZWJ = "\u200d"
+# Besides combining marks, these take no column: the zero-width space,
+# non-joiner and joiner, and the BOM. So do the variation selectors
+_ZERO_WIDTH = {"\u200b", "\u200c", _ZWJ, "\ufeff"}
+
+
+def char_width(ch: str) -> int:
+    """Return the number of terminal columns a character takes: 0, 1 or 2.
+
+    Wide characters are the ones Unicode gives an East Asian Width of wide
+    or fullwidth, which takes in CJK and most emoji. This is the same rule
+    that `great_docs._build_log` pads its boxes with.
+    """
+    if " " <= ch <= "~":
+        return 1
+    if ch in _ZERO_WIDTH or "\ufe00" <= ch <= "\ufe0f" or "\U000e0100" <= ch <= "\U000e01ef":
+        return 0
+    if unicodedata.category(ch) in ("Mn", "Me"):
+        return 0
+    if unicodedata.east_asian_width(ch) in ("W", "F"):
+        return 2
+    return 1
+
+
+def _is_wide(cell: Cell) -> bool:
+    """Whether a cell holds a wide character (the first of its two cells)."""
+    return bool(cell.char) and char_width(cell.char[0]) == 2
+
+
+def _repair_wide(row: list[Cell]) -> None:
+    """Blank any half of a wide character whose other half is gone.
+
+    Erasing, inserting or deleting cells can split a wide character. Like
+    xterm, the half that's left over becomes a blank.
+    """
+    last = len(row) - 1
+    for c, cell in enumerate(row):
+        if cell.char == "":
+            if c == 0 or not _is_wide(row[c - 1]):
+                row[c] = Cell(style=cell.style)
+        elif _is_wide(cell) and (c == last or row[c + 1].char != ""):
+            row[c] = Cell(style=cell.style)
 
 
 class TerminalEmulator:
@@ -225,15 +275,46 @@ class TerminalEmulator:
 
     def _put_char(self, ch: str) -> None:
         """Place a character at the cursor position and advance."""
-        if self._cursor_col >= self.cols:
-            # Wrap to next line
+        # A zero-width character, or anything after a zero-width joiner,
+        # joins the character before the cursor
+        prev = self._prev_cell()
+        width = char_width(ch)
+        if prev is not None and (width == 0 or prev.char.endswith(_ZWJ)):
+            prev.char += ch
+            return
+        if width == 0:
+            return
+        if self.cols < 2:
+            width = 1
+
+        if self._cursor_col + width > self.cols:
+            # Wrap to next line. A wide character that would only half fit
+            # wraps too
             self._cursor_col = 0
             self._linefeed()
 
-        row = self._cursor_row
+        row = self._screen[self._cursor_row]
         col = self._cursor_col
-        self._screen[row][col] = Cell(char=ch, style=self._style.copy())
-        self._cursor_col += 1
+        # Overwriting either half of a wide character blanks the other half
+        for c in range(col, col + width):
+            if row[c].char == "" and c > 0:
+                row[c - 1] = Cell(style=row[c - 1].style)
+            if c + 1 < self.cols and row[c + 1].char == "":
+                row[c + 1] = Cell(style=row[c + 1].style)
+        row[col] = Cell(char=ch, style=self._style.copy())
+        if width == 2:
+            row[col + 1] = Cell(char="", style=self._style.copy())
+        self._cursor_col += width
+
+    def _prev_cell(self) -> Cell | None:
+        """The cell of the character just before the cursor, if any."""
+        col = min(self._cursor_col, self.cols) - 1
+        if col < 0:
+            return None
+        row = self._screen[self._cursor_row]
+        if row[col].char == "" and col > 0:
+            col -= 1
+        return row[col]
 
     def _linefeed(self) -> None:
         """Move cursor down one line, scrolling if at bottom of scroll region."""
@@ -337,6 +418,7 @@ class TerminalEmulator:
             row.extend(Cell() for _ in range(n))
             # Trim back to cols
             self._screen[self._cursor_row] = row[: self.cols]
+            _repair_wide(self._screen[self._cursor_row])
         elif final == "@":
             # ICH: Insert Characters
             n = params[0] if params else 1
@@ -345,6 +427,7 @@ class TerminalEmulator:
             for _ in range(n):
                 row.insert(col, Cell())
             self._screen[self._cursor_row] = row[: self.cols]
+            _repair_wide(self._screen[self._cursor_row])
         elif final == "r":
             # DECSTBM: Set Top and Bottom Margins
             top = (params[0] if params else 1) - 1
@@ -381,6 +464,7 @@ class TerminalEmulator:
             n = params[0] if params else 1
             for c in range(self._cursor_col, min(self._cursor_col + n, self.cols)):
                 self._screen[self._cursor_row][c] = Cell()
+            _repair_wide(self._screen[self._cursor_row])
 
     def _handle_dec_mode(self, params: list[int], *, set_mode: bool) -> None:
         """Handle DEC private mode set/reset."""
@@ -521,12 +605,14 @@ class TerminalEmulator:
                 self._screen[self._cursor_row][c] = Cell()
             for r in range(self._cursor_row + 1, self.rows):
                 self._screen[r] = self._blank_row()
+            _repair_wide(self._screen[self._cursor_row])
         elif mode == 1:
             # Erase above (including current position)
             for r in range(self._cursor_row):
                 self._screen[r] = self._blank_row()
-            for c in range(self._cursor_col + 1):
+            for c in range(min(self._cursor_col + 1, self.cols)):
                 self._screen[self._cursor_row][c] = Cell()
+            _repair_wide(self._screen[self._cursor_row])
         elif mode == 2 or mode == 3:
             # Erase all
             self._screen = self._blank_screen()
@@ -538,10 +624,12 @@ class TerminalEmulator:
             # Erase to right
             for c in range(self._cursor_col, self.cols):
                 self._screen[row][c] = Cell()
+            _repair_wide(self._screen[row])
         elif mode == 1:
             # Erase to left
-            for c in range(self._cursor_col + 1):
+            for c in range(min(self._cursor_col + 1, self.cols)):
                 self._screen[row][c] = Cell()
+            _repair_wide(self._screen[row])
         elif mode == 2:
             # Erase entire line
             self._screen[row] = self._blank_row()
@@ -569,6 +657,7 @@ class TerminalEmulator:
                     row.extend(Cell() for _ in range(cols - old_cols))
                 else:
                     self._screen[r] = row[:cols]
+                    _repair_wide(self._screen[r])
 
         # Clamp cursor
         self._cursor_row = min(self._cursor_row, rows - 1)
