@@ -100,6 +100,18 @@ great-docs build
 
 Edit `docs/great-docs.yml` and authored sources, not files inside `docs/_quarto/`.
 
+### Parallel Rendering [version-badge new 0.18] {#parallel-rendering}
+
+For large sites, `--jobs` renders the pages with several Quarto processes at once. Use a number, or
+`auto` to choose one from your CPU count:
+
+```{.bash filename="Terminal"}
+great-docs build --jobs auto
+```
+
+This feature is experimental. See [Parallel Rendering](46-parallel-rendering.qmd) for how it works,
+how much faster it is, and which sites it applies to.
+
 ## Build Output Structure
 
 After a successful build, the output directory has this layout:
@@ -363,7 +375,9 @@ great-docs timings
 ```
 
 Pages served from the [Quarto freeze cache](freeze.qmd) are marked with a ❄ indicator. This view
-makes it easy to spot which pages are worth optimizing or splitting up.
+makes it easy to spot which pages are worth optimizing or splitting up. A
+[parallel build](46-parallel-rendering.qmd) also uses these timings to split the pages into groups
+that take about the same time to render.
 
 ### Filtering Results
 
