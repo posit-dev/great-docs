@@ -473,10 +473,12 @@ class _Session:
     def cursor_line(self) -> str:
         """The text of the cursor's row, up to the cursor or to the last character."""
         screen = self.emulator.screen
-        text = "".join(c.char for c in screen.cells[screen.cursor_row])
-        stripped = text.rstrip()
-        # Keep spaces before the cursor, so the `$ ` of a prompt still ends in a space
-        return text[: screen.cursor_col] if screen.cursor_col > len(stripped) else stripped
+        row = screen.cells[screen.cursor_row]
+        stripped = "".join(c.char for c in row).rstrip()
+        # Keep spaces before the cursor, so the `$ ` of a prompt still ends in a space.
+        # Columns aren't string indices, as a cell can hold no character or several
+        before = "".join(c.char for c in row[: screen.cursor_col])
+        return before if before.rstrip() == stripped else stripped
 
     # Ending -----------------------------------------------------------------------------------
 
