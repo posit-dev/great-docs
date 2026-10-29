@@ -1,0 +1,168 @@
+---
+title: "Parallel Rendering"
+guide-section: "Build & Deploy"
+bread-crumbs: false
+tags: [Build, CLI]
+status: experimental
+versions: ">=0.18"
+---
+
+# Parallel Rendering
+
+Rendering pages with Quarto takes up most of a build, and Quarto renders them one after another in
+a single process. For a package with a large API (a thousand or more reference pages, plus a User
+Guide) that can mean builds of half an hour or more. With `--jobs`, Great Docs splits the pages
+into groups and renders them with several Quarto processes at once, so the render takes a fraction
+of the time.
+
+::: {.callout-warning}
+## This feature is experimental
+
+Parallel rendering is off by default and may change in future releases. It is designed to produce
+the same site as an ordinary build, and it falls back to rendering in one process for the kinds of
+site it knows it can't split. Still, it hasn't yet been tried on as many sites as the ordinary
+build. If a parallel build looks different from an ordinary one, please [open an
+issue](https://github.com/posit-dev/great-docs/issues).
+:::
+
+## Turning It On
+
+Pass `--jobs auto` to let Great Docs choose the number of processes from your CPU count:
+
+```{.bash filename="Terminal"}
+great-docs build --jobs auto
+```
+
+Or give a number yourself (`-j` is the short form):
+
+```{.bash filename="Terminal"}
+great-docs build -j 4
+```
+
+To use parallel rendering for every build without changing the command, set the
+`GREAT_DOCS_RENDER_JOBS` environment variable. This is handy in CI:
+
+```{.bash filename="Terminal"}
+export GREAT_DOCS_RENDER_JOBS=auto
+great-docs build
+```
+
+The Python API takes the same values:
+
+```{.python filename="Python"}
+from great_docs import GreatDocs
+
+docs = GreatDocs()
+docs.build(jobs="auto")
+```
+
+With `auto`, Great Docs uses one process per performance core on Apple silicon Macs and one per CPU
+elsewhere, up to a maximum of eight. Each process is a full Quarto render with its own memory, so a
+smaller number is the safer choice on a machine that's short of memory.
+
+## How Much Faster?
+
+The speedup depends on the number of pages and on how many processes your machine can run at once.
+Sites with fewer than 40 pages render in one process, since starting several processes would cost
+more time than it saves. In our tests on a laptop with six performance cores:
+
+| Site | Ordinary build | `--jobs auto` |
+|------|----------------|---------------|
+| 395 pages | 2 min 36 s | 52 s |
+| 1,865 pages | 19 min 9 s | 3 min 12 s |
+
+The gain grows with the size of the site. Part of it comes from parallelism, and part from a leaner
+Quarto configuration that each process reads. Quarto rereads the configuration for every page, so
+trimming it saves more time the more pages there are.
+
+The pages are split using the per-page times from the last build (see
+[Build Timings](13-building.qmd#build-timings)), so groups take about the same time each. A second
+parallel build is usually a little faster than the first for this reason.
+
+## What You'll See
+
+The build log reports how the pages were split:
+
+```{.default filename="Build log excerpt"}
+━━ Step 19/20 ─ Build site with Quarto ━━━━━━━━━━━━━━━━━━
+      Rendering 1865 pages in 33 groups with 6 Quarto processes
+   ✔ Site rendered  3m 12.2s
+```
+
+When a site can't be split safely, the log says why and the build carries on in one process:
+
+```{.default filename="Build log excerpt"}
+      Rendering in one process: only 12 pages
+```
+
+Either way, the site is assembled in `docs/_site/` as usual, and the per-page timings and the
+[freeze cache](37-freeze.qmd) are saved as after an ordinary build.
+
+## How It Works
+
+Each Quarto process works in its own copy of the build directory, so no two processes ever write to
+the same file. Every copy holds the whole project, which means each process sees all of the pages
+when it builds the navigation, resolves cross-references, and fills in the search index. A parallel
+build goes like this:
+
+1. The pre-render scripts (such as the one that restores the freeze cache) run once.
+2. The pages are planned into groups, keeping the pages of a blog listing together.
+3. The processes take groups from a shared queue, largest first, until all are rendered.
+4. The rendered pages, search index, sitemap, and freeze cache entries from every copy are merged
+   into the site.
+5. The post-render scripts run once, as after an ordinary render.
+
+If anything unexpected happens along the way (Quarto doesn't render a page it should have, or the
+outputs can't be merged), the parallel output is discarded and the site is rendered the ordinary
+way.
+
+## Which Builds Use It
+
+Parallel rendering applies to ordinary single-version builds. It is ignored for:
+
+- [multi-version sites](30-multi-version-docs.qmd), which already build their versions in parallel
+- `great-docs build --watch`, which uses Quarto's preview server
+- `great-docs build --from-repo`, which doesn't take `--jobs` yet
+
+A site also renders in one process when it has fewer than 40 pages, a page with a `listing:` at the
+top of the site, a listing that includes pages from outside its own directory, or a file with a
+glob character (such as `*` or `[`) in its path.
+
+## Things to Keep in Mind
+
+**Code cells on different pages can run at the same time.** With the default `freeze: auto`, only
+pages whose source changed run their code, but those that do may run alongside each other. Each
+process has its own copy of the project, so files written with relative paths stay separate. Code
+that uses a shared resource (an absolute path, a local database, a fixed network port) could see
+two pages at once.
+
+**Pre-render scripts may run twice.** If the parallel render falls back to one process after your
+`pre_render` scripts have run, the ordinary render runs them again. Scripts that can safely run
+twice (as the built-in freeze restore does) are unaffected.
+
+**The search index and sitemap are in a different order.** Their entries are the same as in an
+ordinary build, but in another order, which makes no difference to search or to search engines.
+
+**Windows is untested.** Parallel rendering should work there, but it has so far been used only on
+macOS and Linux.
+
+## Checking a Parallel Build
+
+To compare a parallel build with an ordinary one, build the site both ways and diff the results:
+
+```{.bash filename="Terminal"}
+great-docs build && cp -R docs/_site /tmp/site-ordinary
+great-docs build --jobs auto
+diff -r /tmp/site-ordinary docs/_site
+```
+
+Expect `search.json` and `sitemap.xml` to differ in their order only. Any other difference is worth
+reporting.
+
+## Next Steps
+
+Parallel rendering pairs well with the other ways of keeping builds quick.
+
+- [Freeze & Caching](37-freeze.qmd) avoids running unchanged code cells on every build
+- [Building & Previewing](13-building.qmd) covers the build pipeline and the per-page build timings
+- [Multi-Version Docs](30-multi-version-docs.qmd) explains how versioned sites are built
