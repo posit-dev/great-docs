@@ -176,6 +176,14 @@ site-build: ## Build the great-docs site
 adopters: ## Regenerate ADOPTERS.md from a GitHub code search (requires gh CLI)
 	@$(PYTHON) scripts/update_adopters.py
 
+.PHONY: landing-demo
+landing-demo: ## Regenerate the README's animated demo (docs/assets/landing-demo-{light,dark}.svg) from its recording
+	@great-docs termshow export docs/assets/landing-demo.termshow --svg \
+		--font-file great_docs/assets/_extensions/termshow/JetBrainsMono-Regular.subset.woff2 \
+		-o docs/assets/landing-demo.svg
+	@# READMEs of released versions on PyPI still show landing-demo.svg
+	@cp docs/assets/landing-demo-dark.svg docs/assets/landing-demo.svg
+
 .PHONY: signature-grammar
 signature-grammar: ## Regenerate the signature highlighting grammar from Pygments
 	@$(PYTHON) scripts/make_signature_grammar.py
