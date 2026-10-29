@@ -285,6 +285,29 @@ class TestValidation:
             assert list(validator.iter_errors(bad)), bad
 
 
+class TestCursorLine:
+    """The text a `wait_for` without `screen: true` is matched against."""
+
+    def _line(self, output: str) -> str:
+        from great_docs._term_player.steps import _Session
+
+        session = _Session(RecordSettings(cols=20, rows=2))
+        session.emulator.feed(output)
+        return session.cursor_line()
+
+    def test_keeps_spaces_before_the_cursor(self):
+        assert self._line("$ ") == "$ "
+
+    def test_text_after_the_cursor(self):
+        assert self._line("$ hello\x1b[1;3H") == "$ hello"
+
+    def test_wide_char_before_the_prompt(self):
+        assert self._line("🐍 $ ") == "🐍 $ "
+
+    def test_wide_char_after_the_cursor(self):
+        assert self._line("$ 🎉\x1b[1;3H") == "$ 🎉"
+
+
 # ---------------------------------------------------------------------------
 # Running the steps
 # ---------------------------------------------------------------------------

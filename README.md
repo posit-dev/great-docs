@@ -43,7 +43,10 @@ Great Docs turns your Python package into a polished documentation site in minut
 And it's battle-tested: every release runs against [300+ synthetic packages](https://posit-dev.github.io/gdg/) in the Great Docs Gauntlet, backed by a suite of 26,000+ tests.
 
 <p align="center">
-<img src="https://posit-dev.github.io/great-docs/assets/landing-demo.svg" alt="Great Docs in action: init, build, and preview a documentation site" width="720">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://posit-dev.github.io/great-docs/assets/landing-demo-dark.svg">
+  <img src="https://posit-dev.github.io/great-docs/assets/landing-demo-light.svg" alt="Great Docs in action: init, build, and preview a documentation site" width="720">
+</picture>
 </p>
 <p align="center"><em>From zero to a live site in three commands.</em></p>
 

@@ -633,10 +633,10 @@ class BuildLog:
         inner_plain_len = len(f"━━{label}{sep} {title} ")
 
         if self._is_tty:
-            coloured = (
-                f"{c.BOLD_CYAN}━━{c.BOLD_WHITE}{label}{c.BOLD_CYAN}{sep}"
-                f" {c.BOLD_WHITE}{title}{c.RESET} "
-            )
+            # The step title is bold in the terminal's own text colour; white
+            # is barely visible on a light background
+            bold = f"{c.RESET}{c.BOLD}"
+            coloured = f"{c.BOLD_CYAN}━━{bold}{label}{c.BOLD_CYAN}{sep}{bold} {title}{c.RESET} "
             line = self._pad_rail(coloured, inner_plain_len)
         else:
             line = f"-- Step {n:>2d}/{self.total_steps} - {title} "

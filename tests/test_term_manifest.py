@@ -422,6 +422,15 @@ class TestApplyPromptPatternSubstitution:
         # "$ cmd" matches
         assert result.cells[1][0].char == "❯"
 
+    def test_wide_char_before_prompt(self):
+        """The prompt character is found by column, not by string index."""
+        from great_docs._term_player.emulator import TerminalEmulator
+
+        emu = TerminalEmulator(cols=10, rows=1)
+        emu.feed("🐍 $ ls")
+        result = _apply_prompt_pattern_substitution(emu.screen, r"^\S+ \$ ", "❯")
+        assert [c.char for c in result.cells[0][:6]] == ["🐍", "", " ", "❯", " ", "l"]
+
 
 class TestPromptSubstitutionIntegration:
     def test_generate_manifest_with_prompt(self, tmp_path: Path):

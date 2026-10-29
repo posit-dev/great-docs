@@ -209,6 +209,23 @@ class TestCollectTextSpans:
         spans = _collect_text_spans(row, theme)
         assert len(spans) >= 2
 
+    def test_text_after_wide_char_starts_at_its_column(self):
+        """The font may not draw an emoji two cells wide, so what follows
+        it gets a span at its own column."""
+        state = _simple_screen(cols=12, text="│ ok 🎉 │")
+        spans = _collect_text_spans(state.cells[0], Theme())
+        assert [(col, text) for col, text, *_ in spans] == [(0, "│ ok 🎉"), (7, " │")]
+
+    def test_wide_char_at_the_end(self):
+        state = _simple_screen(cols=6, text="ab中")
+        spans = _collect_text_spans(state.cells[0], Theme())
+        assert [(col, text) for col, text, *_ in spans] == [(0, "ab中")]
+
+    def test_wide_chars_side_by_side(self):
+        state = _simple_screen(cols=6, text="中文")
+        spans = _collect_text_spans(state.cells[0], Theme())
+        assert [(col, text) for col, text, *_ in spans] == [(0, "中"), (2, "文")]
+
 
 # ---------------------------------------------------------------------------
 # render_frame
