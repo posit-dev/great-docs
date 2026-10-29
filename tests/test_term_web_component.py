@@ -18,14 +18,20 @@ ROOT = Path(__file__).resolve().parents[1]
 _PUBLISHED_DIR = ROOT / "extensions" / "termshow" / "_extensions" / "termshow"
 
 # Loads the player with a stub DOM and a recording `customElements` registry,
-# then runs the given expression against `window.Termshow` and `defined`
+# then runs the given expression against `window.Termshow` and `defined`. With
+# "reduce" as the last argument, the reader prefers reduced motion.
 _RUN_JS = r"""
 const fs = require('fs');
 const vm = require('vm');
-const [playerPath, expr] = process.argv.slice(1);
+const [playerPath, expr, motion] = process.argv.slice(1);
 const defined = {};
 const context = {
-  window: { location: { protocol: 'https:' } },
+  window: {
+    location: { protocol: 'https:' },
+    matchMedia: (query) => ({
+      matches: motion === 'reduce' && query.includes('prefers-reduced-motion'),
+    }),
+  },
   document: {
     readyState: 'complete',
     querySelectorAll: () => [],
@@ -46,9 +52,9 @@ process.stdout.write(JSON.stringify(out));
 """
 
 
-def _run(expr: str):
+def _run(expr: str, motion: str = "no-preference"):
     result = subprocess.run(
-        ["node", "-e", _RUN_JS, str(PLAYER_DIR / "termshow.js"), expr],
+        ["node", "-e", _RUN_JS, str(PLAYER_DIR / "termshow.js"), expr, motion],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -112,6 +118,113 @@ class TestElement:
     )
     def test_manifest_url(self, src: str, url: str | None):
         assert _run(f"Termshow.manifestUrlFor({json.dumps(src)})") == url
+
+
+CHAPTERS = [{"time": 0, "label": "Start"}, {"time": 2, "label": "Build"}, {"time": 5, "label": ""}]
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+class TestPlayback:
+    @pytest.mark.parametrize(
+        ("time", "label"), [(0, "Start"), (1.99, "Build"), (4, "Build"), (6, "")]
+    )
+    def test_chapter_at(self, time: float, label: str):
+        m = json.dumps({"chapters": CHAPTERS})
+        assert _run(f"Termshow.chapterAt({m}, {time})") == label
+
+    def test_chapter_at_without_chapters(self):
+        assert _run("Termshow.chapterAt({}, 3)") == ""
+
+    @pytest.mark.parametrize(("time", "after"), [(0, 2), (1.5, 2), (2, 5), (5, None)])
+    def test_next_chapter(self, time: float, after: float | None):
+        assert _run(f"Termshow.nextChapterTime({json.dumps(CHAPTERS)}, {time})") == after
+
+    @pytest.mark.parametrize(("time", "before"), [(0, 0), (2.2, 0), (3, 2), (9, 5)])
+    def test_previous_chapter(self, time: float, before: float):
+        # A little way into a chapter goes back to its start
+        assert _run(f"Termshow.prevChapterTime({json.dumps(CHAPTERS)}, {time})") == before
+
+    def test_no_chapters_to_jump_to(self):
+        assert _run("[Termshow.nextChapterTime([], 1), Termshow.prevChapterTime([], 1)]") == [
+            None,
+            None,
+        ]
+
+    def test_overlays_fade(self):
+        # Halfway through fading in, and fully shown in the middle
+        assert _run(
+            "[Termshow.fadeOpacity(0.15, 2, 0.3, 0.3), Termshow.fadeOpacity(1, 2, 0.3, 0.3)]"
+        ) == [
+            pytest.approx(0.5),
+            1,
+        ]
+
+    def test_overlays_appear_at_once_with_reduced_motion(self):
+        assert _run("Termshow.fadeOpacity(0.01, 2, 0.3, 0.3)", motion="reduce") == 1
+
+
+def _css_block(css: str, selector: str) -> str:
+    match = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", css)
+    assert match, selector
+    return match.group(1)
+
+
+def _css_vars(block: str) -> dict[str, str]:
+    return dict(re.findall(r"--gd-tp-([\w-]+):\s*(#[0-9a-fA-F]{6})", block))
+
+
+def _contrast(a: str, b: str) -> float:
+    def luminance(color: str) -> float:
+        rgb = [int(color[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+        lin = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
+        return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+    hi, lo = sorted((luminance(a), luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+class TestAccessibleStyles:
+    css = (PLAYER_DIR / "termshow.css").read_text(encoding="utf-8")
+
+    @pytest.mark.parametrize("theme", ["dark", "light"])
+    def test_control_colors_meet_wcag_aa(self, theme: str):
+        dark = _css_vars(_css_block(self.css, ".gd-termshow"))
+        colors = (
+            dark
+            if theme == "dark"
+            else {**dark, **_css_vars(_css_block(self.css, ".gd-termshow.gd-tp-light"))}
+        )
+        bar = colors["controls-bg"]
+        # Text: 4.5:1 (the times, the speed, the chapter bar's label)
+        assert _contrast(colors["fg"], bar) >= 4.5
+        assert _contrast(colors["muted"], bar) >= 4.5
+        assert _contrast(colors["fg"], colors["bg"]) >= 4.5
+        # Parts of controls and focus rings: 3:1, the progress fill against the bar and
+        # the unplayed track, and chapter markers against the bar
+        assert _contrast(colors["accent"], bar) >= 3
+        assert _contrast(colors["accent"], colors["progress-bg"]) >= 3
+        assert _contrast(colors["chapter-color"], bar) >= 3
+
+    def test_chapter_bar_follows_the_theme(self):
+        # (A fixed white was unreadable on light themes)
+        assert "color: var(--gd-tp-fg)" in _css_block(self.css, ".gd-tp-chapter-bar")
+
+    def test_focus_is_visible(self):
+        for selector in (".gd-tp-viewport:focus-visible", ".gd-tp-timeline:focus-visible"):
+            assert "outline: 2px solid var(--gd-tp-accent)" in _css_block(self.css, selector)
+        assert ".gd-tp-play-btn:focus-visible,\n.gd-tp-speed-btn:focus-visible" in self.css
+
+    def test_reduced_motion_stops_animation(self):
+        start = self.css.index("@media (prefers-reduced-motion: reduce)")
+        block = self.css[start : self.css.index("\n}\n", start)]
+        for selector in (
+            ".gd-tp-annotation",
+            ".gd-tp-highlight",
+            ".gd-tp-cursor",
+            ".gd-tp-hl-pulse",
+        ):
+            assert selector in block
+        assert "animation: none !important" in block
 
 
 class TestPlayerFiles:

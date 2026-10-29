@@ -643,18 +643,45 @@ the middle 40% of the viewport are ignored to avoid conflicts with the center ov
 
 ### Keyboard Shortcuts
 
-The player supports keyboard navigation once it has focus. Click anywhere on the viewport to
-activate it, then use the following keys:
+The player responds to these keys while it has focus: tab to it, or click anywhere on the viewport.
 
 | Key | Action |
 |-----|--------|
 | {{< keys "Space" >}} | Play / Pause (or reset from ended state) |
 | {{< keys "→" >}} | Seek forward 5 seconds |
 | {{< keys "←" >}} | Seek backward 5 seconds |
-| `]` | Jump to next chapter |
-| `[` | Jump to previous chapter |
+| {{< keys "Home" >}} / {{< keys "End" >}} | Go to the start / end |
+| `]` or `.` | Jump to next chapter |
+| `[` or `,` | Jump to previous chapter |
 
-All shortcuts require the player to have focus. Click anywhere on the player viewport first.
+The keys work wherever focus is inside the player (the viewport, the play button, the timeline), and
+nowhere else, so they never get in the way of the rest of the page. Shortcuts with
+{{< keys "Ctrl" >}}, {{< keys "Alt" >}}, or {{< keys "Cmd" >}} are left to the browser. When the
+timeline has focus, {{< keys "↑" >}} and {{< keys "↓" >}} also seek by 5 seconds and
+{{< keys "Page Up" >}} / {{< keys "Page Down" >}} move between chapters, as on any slider.
+
+### Accessibility
+
+The player is built to meet WCAG 2.1 AA, in both its dark and light colors.
+
+- **Keyboard**: the viewport, play button, timeline, and speed button are reached with
+  {{< keys "Tab" >}} in that order, and each shows a focus ring. Without a control bar
+  (`controls="false"`), the viewport can always take focus, so a recording that plays on its own
+  can still be paused.
+- **Screen readers**: the viewport is labelled with the recording's title. The timeline is a slider
+  that reads out the time and chapter (for example, "0:12 of 1:30, chapter: Install"). Stopping at
+  a chapter, jumping to one, and reaching the end are announced. The recording's text is in a
+  [transcript](#transcripts) that follows the player.
+- **Reduced motion**: when the reader has asked their system for reduced motion, the player shows
+  the poster frame and waits instead of autoplaying. Pressing play steps through the recording one
+  chapter at a time, as with `pause_on_chapters`, and it doesn't loop. Annotations, highlights, and
+  copy buttons appear and disappear without fading, and the cursor doesn't blink.
+- **Contrast and size**: text in the controls has a contrast of at least 4.5:1, and the progress
+  bar, chapter markers, and focus rings at least 3:1. Buttons, copy buttons, and the timeline's
+  clickable area are at least 24 pixels tall.
+
+The player's own colors are fixed, but a recording's colors come from its theme. If you make a
+custom theme, check that its text stands out from its background.
 
 ## Chapters
 
