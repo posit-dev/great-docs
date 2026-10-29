@@ -15,7 +15,7 @@ import pytest
 
 from tests.quarto_project_diff.catalogue import Release, make_repository
 from tests.quarto_project_diff.__main__ import exit_status
-from tests.quarto_project_diff.compare import compare, render
+from tests.quarto_project_diff.compare import FailOn, compare, render
 from tests.quarto_project_diff.normalise import FILE_RULES, log_skeleton, normalise_text, path_rules
 from tests.quarto_project_diff.record import SCHEMA, read_census, store_blob
 from tests.quarto_project_diff.sides import OBSERVER_SOURCE, RequirementError, run_checked
@@ -217,10 +217,10 @@ def test_comparison_names_the_changed_file_and_the_new_handler(tmp_path: Path):
     assert "+# Changed title" in findings
     assert "NEW handled exception: KeyError" in findings
     assert "handled in GreatDocs._step (core.py:12)" in findings
-    # Differences without a regression pass, except in strict mode
+    # Differences without a regression pass, unless the run fails on any difference
     assert not result.cases[0].regressed
     assert result.passes()
-    assert not result.passes(strict=True)
+    assert not result.passes("difference")
 
 
 def test_comparison_fails_when_the_test_side_lacks_an_expected_reference_index(tmp_path: Path):
@@ -372,14 +372,15 @@ def test_report_verdict_and_exit_status(
     meta = json.loads((base / "side.json").read_text(encoding="utf-8"))
     meta["facts"] |= {"checkout": "/x", "commit": "0" * 40}
 
-    def verdict(result: Any, strict: bool = False) -> str:
-        return render(result, meta, meta, strict).splitlines()[-1]
+    def verdict(result: Any, fail_on: FailOn = "regression") -> str:
+        return render(result, meta, meta, fail_on).splitlines()[-1]
 
     differs = compare(base, changed)
     assert verdict(compare(base, base)) == "MATCH: all 1 cases"
+    assert verdict(compare(base, base), "difference") == "MATCH: all 1 cases"
     assert verdict(differs) == "DIFFER: 1 of 1 cases; no regressions, so the run passes"
-    assert verdict(differs, strict=True) == (
-        "DIFFER: 1 of 1 cases; no regressions, but strict mode fails on any difference"
+    assert verdict(differs, "difference") == (
+        "DIFFER: 1 of 1 cases; no regressions, but --fail-on difference fails the run"
     )
     regressed = compare(base, broken)
     assert verdict(regressed) == "DIFFER: 1 of 1 cases; 1 regressed"
@@ -387,9 +388,9 @@ def test_report_verdict_and_exit_status(
     assert "  regression: build: exit status 0 -> 1" in render(regressed, meta, meta)
 
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
-    assert exit_status(differs, strict=False) == 0
+    assert exit_status(differs, "regression") == 0
     assert capsys.readouterr().out.startswith("::warning title=Quarto project differences::1 of 1")
-    assert exit_status(differs, strict=True) == 1
-    assert exit_status(regressed, strict=False) == 1
-    assert exit_status(compare(base, base), strict=False) == 0
+    assert exit_status(differs, "difference") == 1
+    assert exit_status(regressed, "regression") == 1
+    assert exit_status(compare(base, base), "regression") == 0
     assert capsys.readouterr().out == ""

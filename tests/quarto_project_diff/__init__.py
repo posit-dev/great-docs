@@ -17,14 +17,14 @@ Run it from the repository root of a checkout whose `.venv` was created with
 make quarto-project-diff          # base `main`, 40 cases
 make quarto-project-diff-full     # every Gauntlet package and its variants
 make quarto-project-diff QUARTO_PROJECT_DIFF_ARGS="--base HEAD~1 --only gdtest_minimal"
-make quarto-project-diff QUARTO_PROJECT_DIFF_ARGS="--strict"  # fail on any difference
+make quarto-project-diff QUARTO_PROJECT_DIFF_ARGS="--fail-on difference"
 ```
 
 Every difference is reported. The exit status is 1 on a regression: a failed check, a command
 that now exits with a non-zero status, a command or case recorded on one side only, or
 environments that differ. Other differences, such as changed files or new warnings, leave the
-exit status at 0, since a change can alter output on purpose; `--strict` makes them fail too,
-for changes that should leave the output alone. Status 2 means the tool refused to run: a
+exit status at 0, since a change can alter output on purpose; `--fail-on difference` makes
+them fail too, for changes that should leave the output alone. Status 2 means the tool refused to run: a
 required tool (`d2`, `ruff`, `quarto`, `git` or `uv`) is missing, environments differ, or a
 recording uses another manifest schema. Known gaps appear in a separate report section without
 changing the exit status.
