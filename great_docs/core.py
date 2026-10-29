@@ -211,6 +211,27 @@ def _gitignore_has_entry(content: str, entry: str) -> bool:
     return entry in (line.strip() for line in content.splitlines())
 
 
+def _is_status_script_entry(entry: object) -> bool:
+    """
+    Check whether an `include-after-body` entry loads the page status script
+
+    Recognise file references by `page-status-badges` and inline script
+    content by `renderPageBadge`.
+
+    Parameters
+    ----------
+    entry
+        An `include-after-body` item from `_quarto.yml`.
+
+    Returns
+    -------
+    :
+        Whether the entry is the referenced or the inlined script.
+    """
+    text = str(entry)
+    return "page-status-badges" in text or "renderPageBadge" in text
+
+
 class GreatDocs:
     """
     GreatDocs class for creating beautiful API documentation sites.
@@ -3059,7 +3080,7 @@ class GreatDocs:
         # Insert before the page-status-badges script entry (if present)
         insert_idx = None
         for idx, item in enumerate(entries):
-            if "page-status-badges" in str(item) or "renderPageBadge" in str(item):
+            if _is_status_script_entry(item):
                 insert_idx = idx
                 break
         if insert_idx is not None:
@@ -12293,7 +12314,7 @@ anchor-sections: true
                 ]
 
             has_page_status = any(  # pragma: no cover
-                "page-status-badges" in str(item)
+                _is_status_script_entry(item)
                 for item in config["format"]["html"]["include-after-body"]
             )
             if not has_page_status:  # pragma: no cover

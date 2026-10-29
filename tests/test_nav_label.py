@@ -152,3 +152,32 @@ def test_prefixes_join_any_include_in_header_form(tmp_path: Path, headers: objec
     *existing, added = quarto_config["format"]["html"]["include-in-header"]
     assert existing == kept
     assert added["text"].startswith("<style>:root{--gd-nav-prefix-api:")
+
+
+def test_registering_twice_keeps_one_prefix_style(tmp_path: Path):
+    """Verify that a repeated pass leaves a single navigation prefix style"""
+    quarto_config: dict = {"format": {"html": {"include-in-header": [{"text": "<meta>"}]}}}
+    config = Config(tmp_path)
+
+    label.register(quarto_config, config)
+    label.register(quarto_config, config)
+
+    headers = quarto_config["format"]["html"]["include-in-header"]
+    assert [h for h in headers if "--gd-nav-prefix-api" in str(h)] == headers[1:]
+    assert len(headers) == 2
+
+
+def test_registering_replaces_prefixes_of_another_language(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Verify that changing the language replaces the navigation prefix style"""
+    quarto_config: dict = {"format": {"html": {}}}
+    config = Config(tmp_path)
+
+    monkeypatch.setattr(label, "get_translations_bundle", lambda lang: {"api": "A1", "cli": "C1"})
+    label.register(quarto_config, config)
+    monkeypatch.setattr(label, "get_translations_bundle", lambda lang: {"api": "A2", "cli": "C2"})
+    label.register(quarto_config, config)
+
+    (header,) = quarto_config["format"]["html"]["include-in-header"]
+    assert '"A2"' in header["text"]
