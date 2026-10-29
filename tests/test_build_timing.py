@@ -94,6 +94,29 @@ class TestWriteBuildTiming:
         # No versions key for single-version
         assert "versions" not in data
 
+    def test_parallel_render_stats(self, tmp_path: Path):
+        """A parallel build records Quarto's start-up time, which the next one reads."""
+        from great_docs import _parallel_render
+
+        gd = self._make_gd(tmp_path)
+        gd.layout.site_dir.mkdir(parents=True)
+        stats = {"processes": 6, "groups": 37, "startup_seconds": 4.9}
+
+        result = gd._write_build_timing(
+            page_timings=[{"page": "index.qmd", "seconds": 1.0}], render=stats
+        )
+        assert result is not None
+        assert json.loads(result.read_text())["render"] == stats
+        assert _parallel_render.read_startup(result) == 4.9
+
+    def test_ordinary_build_has_no_render_stats(self, tmp_path: Path):
+        gd = self._make_gd(tmp_path)
+        gd.layout.site_dir.mkdir(parents=True)
+
+        result = gd._write_build_timing(page_timings=[{"page": "index.qmd", "seconds": 1.0}])
+        assert result is not None
+        assert "render" not in json.loads(result.read_text())
+
     def test_multi_version(self, tmp_path: Path):
         gd = self._make_gd(tmp_path)
         site_dir = gd.layout.site_dir
