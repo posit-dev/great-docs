@@ -189,6 +189,7 @@ from great_docs.pandoc.inlines import (
     inlinecontent_to_str,
     shortcode,
 )
+from tests.support import mock_config, stubbed_build
 
 
 def test_great_docs_init():
@@ -8718,34 +8719,28 @@ def test_detect_module_name_returns_none():
         assert docs._detect_module_name() is None
 
 
-@patch("great_docs.core._ensure_quarto_installed")
-@patch.object(GreatDocs, "_generate_skill_md")
-@patch.object(GreatDocs, "_generate_llms_full_txt")
-@patch.object(GreatDocs, "_generate_llms_txt")
-@patch.object(GreatDocs, "_prepare_build_directory")
-@patch.object(GreatDocs, "_discover_click_cli")
-def test_build_cli_reference_uses_module_name(
-    mock_discover, mock_prep, mock_llms, mock_llms_full, mock_skill, mock_quarto
-):
+def test_build_cli_reference_uses_module_name(tmp_path):
     """Regression: build() discovers the Click CLI in the importable module,
     not the PyPI project name, when the two diverge."""
-    mock_discover.return_value = None
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "my-dist"\n')
+    (tmp_path / "great-docs.yml").write_text("module: actual_module\ncli:\n  enabled: true\n")
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs._has_api_reference = False
+    docs.build_dir.mkdir(parents=True)
+    (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        root = Path(tmp_dir)
-        (root / "pyproject.toml").write_text('[project]\nname = "my-dist"\n')
-        (root / "great-docs.yml").write_text("module: actual_module\ncli:\n  enabled: true\n")
+    run = (
+        "_detect_package_name",
+        "_get_package_metadata",
+        "_resolve_importable_name",
+        "_detect_module_name",
+    )
+    with stubbed_build(docs, run=run) as stubs:
+        docs.build(refresh=False)
 
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-        (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
-        # The CLI step swallows errors, so the build runs on until the API
-        # reference step fails for want of an `api-reference:` section.
-        with pytest.raises(SystemExit):
-            docs.build(refresh=False)
-
-        mock_discover.assert_called_once_with("actual_module", display_name="my-dist")
+    stubs.steps["_discover_click_cli"].assert_called_once_with(
+        "actual_module", display_name="my-dist"
+    )
 
 
 @patch("great_docs._api_diff.snapshot_from_griffe")
@@ -21858,691 +21853,266 @@ def test_inject_section_body_class_no_frontmatter():
         assert "No frontmatter" in content
 
 
-def test_build_prepare_and_render_flow():
+def _buildable_docs(
+    tmp_path: Path,
+    *,
+    api_reference: bool = False,
+    quarto_yml: str = QUARTO_YML_HEADER,
+    **settings: object,
+) -> GreatDocs:
+    """
+    Create a project for build tests with empty configuration defaults
+
+    Parameters
+    ----------
+    tmp_path
+        The project directory.
+    api_reference
+        Whether the project has an API reference.
+    quarto_yml
+        The text of the build directory's `_quarto.yml`.
+    **settings
+        `Config` property values, by name.
+
+    Returns
+    -------
+    :
+        The project with an empty `great-docs.yml`, a configuration double and a build
+        directory containing `_quarto.yml`.
+    """
+    docs = GreatDocs(project_path=str(tmp_path))
+    # `GreatDocs.build()` requires a configuration file, even with a configuration double.
+    (tmp_path / "great-docs.yml").write_text("", encoding="utf-8")
+    docs._config = mock_config(**settings)
+    docs._has_api_reference = api_reference
+    docs.build_dir.mkdir(parents=True)
+    (docs.build_dir / "_quarto.yml").write_text(quarto_yml, encoding="utf-8")
+    return docs
+
+
+def test_build_prepare_and_render_flow(tmp_path):
     """Test build() happy path: prepares, renders, runs quarto render."""
+    docs = _buildable_docs(
+        tmp_path,
+        api_reference=True,
+        quarto_yml=QUARTO_YML_HEADER + "api-reference:\n  package: mypkg\n",
+    )
+    mock_builder = MagicMock()
+    mock_builder_class = MagicMock(return_value=mock_builder)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        # Create the config file so build() doesn't raise
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+    with (
+        stubbed_build(docs, _detect_package_name="mypkg"),
+        patch("great_docs._apiref.api_reference.APIReference", mock_builder_class),
+    ):
+        docs.build(watch=False, refresh=True)
 
-        mock_builder = MagicMock()
-        mock_builder_class = MagicMock()
-        mock_builder_class.return_value = mock_builder
-
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_refresh_api_reference_config"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch(
-                "great_docs._apiref.api_reference.APIReference",
-                mock_builder_class,
-            ),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            # Simulate quarto render success
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter([])
-            proc.wait.return_value = None
-            proc.returncode = 0
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = True
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = False
-            docs._config.sections = None
-            docs._config.dynamic = False
-
-            # Ensure project_path exists for _quarto.yml writes
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(
-                QUARTO_YML_HEADER + "api-reference:\n  package: mypkg\n", encoding="utf-8"
-            )
-
-            docs.build(watch=False, refresh=True)
-
-            mock_builder_class.assert_called_once()
-            mock_builder.build.assert_called_once()
+    mock_builder_class.assert_called_once()
+    mock_builder.build.assert_called_once()
 
 
-def test_build_no_api_reference():
+def test_build_no_api_reference(tmp_path):
     """Test build() when _has_api_reference is False skips renderer."""
+    docs = _buildable_docs(tmp_path)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
-
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_refresh_api_reference_config"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter([])
-            proc.wait.return_value = None
-            proc.returncode = 0
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = False
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = False
-            docs._config.sections = None
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
-            docs.build(watch=False, refresh=False)
+    with stubbed_build(docs):
+        docs.build(watch=False, refresh=False)
 
 
-def test_build_dynamic_fallback_to_static():
+def test_build_dynamic_fallback_to_static(tmp_path):
     """Test build() falls back to static mode when dynamic mode fails."""
+    docs = _buildable_docs(
+        tmp_path,
+        api_reference=True,
+        quarto_yml=QUARTO_YML_HEADER
+        + format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
+        dynamic=True,
+    )
+    mock_builder = MagicMock()
+    mock_builder.build.side_effect = [RuntimeError("Dynamic mode failed"), None]
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+    with (
+        stubbed_build(docs, _detect_package_name="mypkg"),
+        patch(
+            "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
+        ),
+    ):
+        docs.build(watch=False, refresh=True)
 
-        call_count = 0
-
-        def build_side_effect():
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise RuntimeError("Dynamic mode failed")
-
-        mock_builder = MagicMock()
-        mock_builder.build.side_effect = build_side_effect
-        mock_builder_class = MagicMock()
-        mock_builder_class.return_value = mock_builder
-
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_refresh_api_reference_config"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch(
-                "great_docs._apiref.api_reference.APIReference",
-                mock_builder_class,
-            ),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter([])
-            proc.wait.return_value = None
-            proc.returncode = 0
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = True
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = False
-            docs._config.sections = None
-            docs._config.dynamic = True
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(
-                QUARTO_YML_HEADER
-                + format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
-                encoding="utf-8",
-            )
-
-            docs.build(watch=False, refresh=True)
-
-            assert call_count == 2  # first dynamic, then static
+    assert mock_builder.build.call_count == 2  # first dynamic, then static
 
 
-def test_build_dynamic_fallback_preserves_the_quarto_yml_header():
+def test_build_dynamic_fallback_preserves_the_quarto_yml_header(tmp_path):
     """The static-analysis retry rewrites api-reference.dynamic without losing the ownership header."""
+    docs = _buildable_docs(
+        tmp_path,
+        api_reference=True,
+        quarto_yml=QUARTO_YML_HEADER
+        + format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
+        dynamic=True,
+    )
+    mock_builder = MagicMock()
+    mock_builder.build.side_effect = [RuntimeError("Dynamic mode failed"), None]
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+    with (
+        stubbed_build(docs, run=("_write_quarto_yml",), _detect_package_name="mypkg"),
+        patch(
+            "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
+        ),
+    ):
+        docs.build(watch=False, refresh=True)
 
-        call_count = 0
-
-        def build_side_effect():
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise RuntimeError("Dynamic mode failed")
-
-        mock_builder = MagicMock()
-        mock_builder.build.side_effect = build_side_effect
-        mock_builder_class = MagicMock()
-        mock_builder_class.return_value = mock_builder
-
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_refresh_api_reference_config"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch(
-                "great_docs._apiref.api_reference.APIReference",
-                mock_builder_class,
-            ),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter([])
-            proc.wait.return_value = None
-            proc.returncode = 0
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = True
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = False
-            docs._config.sections = None
-            docs._config.dynamic = True
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.build_dir / "_quarto.yml"
-            quarto_yml.write_text(
-                QUARTO_YML_HEADER
-                + format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
-                encoding="utf-8",
-            )
-
-            docs.build(watch=False, refresh=True)
-
-            assert quarto_yml.read_text(encoding="utf-8").startswith(QUARTO_YML_HEADER)
+    quarto_yml = docs.build_dir / "_quarto.yml"
+    assert quarto_yml.read_text(encoding="utf-8").startswith(QUARTO_YML_HEADER)
 
 
-def test_build_static_mode_failure_exits():
+def test_build_static_mode_failure_exits(tmp_path):
     """Test build() exits when static mode also fails."""
+    docs = _buildable_docs(
+        tmp_path,
+        api_reference=True,
+        quarto_yml=QUARTO_YML_HEADER
+        + format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
+        dynamic=True,
+    )
+    mock_builder = MagicMock()
+    mock_builder.build.side_effect = RuntimeError("Build always fails")
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
-
-        mock_builder = MagicMock()
-        mock_builder.build.side_effect = RuntimeError("Build always fails")
-        mock_builder_class = MagicMock()
-        mock_builder_class.return_value = mock_builder
-
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_refresh_api_reference_config"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch(
-                "great_docs._apiref.api_reference.APIReference",
-                mock_builder_class,
-            ),
-        ):
-            docs._has_api_reference = True
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.changelog_enabled = False
-            docs._config.sections = None
-            docs._config.dynamic = True
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(
-                QUARTO_YML_HEADER
-                + format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
-                encoding="utf-8",
-            )
-
-            with pytest.raises(SystemExit):
-                docs.build(watch=False, refresh=True)
+    with (
+        stubbed_build(docs, _detect_package_name="mypkg"),
+        patch(
+            "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
+        ),
+        pytest.raises(SystemExit),
+    ):
+        docs.build(watch=False, refresh=True)
 
 
-def test_build_non_dynamic_failure_exits():
+def test_build_non_dynamic_failure_exits(tmp_path):
     """Test build() exits when non-dynamic build fails."""
+    docs = _buildable_docs(
+        tmp_path,
+        api_reference=True,
+        quarto_yml=QUARTO_YML_HEADER + format_yaml({"api-reference": {"package": "mypkg"}}),
+    )
+    mock_builder = MagicMock()
+    mock_builder.build.side_effect = RuntimeError("Build failed")
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
-
-        mock_builder = MagicMock()
-        mock_builder.build.side_effect = RuntimeError("Build failed")
-        mock_builder_class = MagicMock()
-        mock_builder_class.return_value = mock_builder
-
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_refresh_api_reference_config"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch(
-                "great_docs._apiref.api_reference.APIReference",
-                mock_builder_class,
-            ),
-        ):
-            docs._has_api_reference = True
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.changelog_enabled = False
-            docs._config.sections = None
-            docs._config.dynamic = False
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(
-                QUARTO_YML_HEADER + format_yaml({"api-reference": {"package": "mypkg"}}),
-                encoding="utf-8",
-            )
-
-            with pytest.raises(SystemExit):
-                docs.build(watch=False, refresh=True)
+    with (
+        stubbed_build(docs, _detect_package_name="mypkg"),
+        patch(
+            "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
+        ),
+        pytest.raises(SystemExit),
+    ):
+        docs.build(watch=False, refresh=True)
 
 
-def test_build_with_changelog():
+def test_build_with_changelog(tmp_path):
     """Test build() generates changelog when enabled."""
+    docs = _buildable_docs(tmp_path, changelog_enabled=True)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+    with stubbed_build(
+        docs,
+        _detect_package_name="mypkg",
+        _get_package_metadata={"cli_enabled": False},
+        _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
+        _generate_changelog_page="changelog.qmd",
+    ) as stubs:
+        docs.build(watch=False, refresh=False)
 
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_get_package_metadata", return_value={"cli_enabled": False}),
-            patch.object(
-                docs,
-                "_get_github_repo_info",
-                return_value=("owner", "repo", "https://github.com/owner/repo"),
-            ),
-            patch.object(docs, "_generate_changelog_page", return_value="changelog.qmd"),
-            patch.object(docs, "_add_changelog_to_navbar"),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter([])
-            proc.wait.return_value = None
-            proc.returncode = 0
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = False
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = True
-            docs._config.sections = None
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
-            docs.build(watch=False, refresh=False)
-
-            docs._generate_changelog_page.assert_called_once()
-            docs._add_changelog_to_navbar.assert_called_once()
+    stubs.steps["_generate_changelog_page"].assert_called_once()
+    stubs.steps["_add_changelog_to_navbar"].assert_called_once()
 
 
-def test_build_changelog_error_handled():
+def test_build_changelog_error_handled(tmp_path):
     """Test build() handles changelog generation errors gracefully."""
+    docs = _buildable_docs(tmp_path, changelog_enabled=True)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+    with stubbed_build(
+        docs,
+        _detect_package_name="mypkg",
+        _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
+    ) as stubs:
+        stubs.steps["_generate_changelog_page"].side_effect = RuntimeError("API error")
 
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(
-                docs,
-                "_get_github_repo_info",
-                return_value=("owner", "repo", "https://github.com/owner/repo"),
-            ),
-            patch.object(docs, "_generate_changelog_page", side_effect=RuntimeError("API error")),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter([])
-            proc.wait.return_value = None
-            proc.returncode = 0
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = False
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = True
-            docs._config.sections = None
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
-            # Should not raise
-            docs.build(watch=False, refresh=False)
+        # Should not raise
+        docs.build(watch=False, refresh=False)
 
 
-def test_build_with_cli_documentation():
+def test_build_with_cli_documentation(tmp_path):
     """Test build() generates CLI docs when cli_enabled."""
+    docs = _buildable_docs(tmp_path)
+    cli_info = {"name": "mycli", "commands": [], "help_text": "Help"}
+    cli_files = [{"path": "cli/index.qmd"}]
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+    with stubbed_build(
+        docs,
+        _detect_package_name="mypkg",
+        _get_package_metadata={"cli_enabled": True},
+        _discover_click_cli=cli_info,
+        _generate_cli_reference_pages=cli_files,
+        _count_cli_sidebar_items=3,
+    ) as stubs:
+        docs.build(watch=False, refresh=False)
 
-        cli_info = {"name": "mycli", "commands": [], "help_text": "Help"}
-        cli_files = [{"path": "cli/index.qmd"}]
-
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(
-                docs,
-                "_get_package_metadata",
-                return_value={"cli_enabled": True},
-            ),
-            patch.object(docs, "_discover_click_cli", return_value=cli_info),
-            patch.object(docs, "_generate_cli_reference_pages", return_value=cli_files),
-            patch.object(docs, "_update_sidebar_with_cli"),
-            patch.object(docs, "_count_cli_sidebar_items", return_value=3),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter([])
-            proc.wait.return_value = None
-            proc.returncode = 0
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = False
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = False
-            docs._config.sections = None
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
-            docs.build(watch=False, refresh=False)
-
-            docs._discover_click_cli.assert_called_once()
-            docs._generate_cli_reference_pages.assert_called_once()
-            docs._update_sidebar_with_cli.assert_called_once()
+    stubs.steps["_discover_click_cli"].assert_called_once()
+    stubs.steps["_generate_cli_reference_pages"].assert_called_once()
+    stubs.steps["_update_sidebar_with_cli"].assert_called_once()
 
 
-def test_build_with_sections():
+def test_build_with_sections(tmp_path):
     """Test build() processes custom sections when configured."""
+    docs = _buildable_docs(tmp_path, sections=[{"title": "Recipes"}])
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+    with stubbed_build(docs, _process_sections=2) as stubs:
+        docs.build(watch=False, refresh=False)
 
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_process_sections", return_value=2),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter([])
-            proc.wait.return_value = None
-            proc.returncode = 0
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = False
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = False
-            docs._config.sections = [{"title": "Recipes"}]
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
-            docs.build(watch=False, refresh=False)
-
-            docs._process_sections.assert_called_once()
+    stubs.steps["_process_sections"].assert_called_once()
 
 
-def test_build_with_assets_triggers_config_update():
+def test_build_with_assets_triggers_config_update(tmp_path):
     """Test build() updates quarto config when assets are copied."""
+    docs = _buildable_docs(tmp_path)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+    with stubbed_build(docs, _copy_assets=True) as stubs:
+        docs.build(watch=False, refresh=False)
 
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", return_value=True),
-            patch.object(docs, "_update_quarto_config"),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter([])
-            proc.wait.return_value = None
-            proc.returncode = 0
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = False
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = False
-            docs._config.sections = None
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
-            docs.build(watch=False, refresh=False)
-
-            docs._update_quarto_config.assert_called_once()
+    stubs.steps["_update_quarto_config"].assert_called_once()
 
 
-def test_build_watch_mode():
+def test_build_watch_mode(tmp_path):
     """Test build() in watch mode calls quarto preview."""
+    docs = _buildable_docs(tmp_path)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+    with stubbed_build(docs), patch("subprocess.run") as mock_run:
+        docs.build(watch=True, refresh=False)
 
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch("subprocess.run") as mock_run,
-        ):
-            docs._has_api_reference = False
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = False
-            docs._config.sections = None
-            # Disable the attribution footer so its git remote lookup (a second
-            # subprocess.run) doesn't run; this test only cares about the
-            # quarto preview invocation.
-            docs._config.attribution = False
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
-            docs.build(watch=True, refresh=False)
-
-            mock_run.assert_called_once()
-            assert mock_run.call_args[0][0] == ["quarto", "preview", "--no-browser"]
+    mock_run.assert_called_once()
+    assert mock_run.call_args[0][0] == ["quarto", "preview", "--no-browser"]
 
 
-def test_build_quarto_render_failure():
+def test_build_quarto_render_failure(tmp_path):
     """Test build() exits when quarto render fails."""
+    docs = _buildable_docs(tmp_path)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+    with stubbed_build(docs) as stubs:
+        stubs.render.stderr = iter(["Error: something\n"])
+        stubs.render.returncode = 1
 
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter(["Error: something\n"])
-            proc.wait.return_value = None
-            proc.returncode = 1
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = False
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = False
-            docs._config.sections = None
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
-            with pytest.raises(SystemExit):
-                docs.build(watch=False, refresh=False)
-
-
-def test_build_cli_error_handled():
-    """Test build() handles CLI documentation errors gracefully."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
-
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(
-                docs,
-                "_get_package_metadata",
-                return_value={"cli_enabled": True},
-            ),
-            patch.object(docs, "_discover_click_cli", side_effect=ImportError("click")),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter([])
-            proc.wait.return_value = None
-            proc.returncode = 0
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = False
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = False
-            docs._config.sections = None
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
+        with pytest.raises(SystemExit):
             docs.build(watch=False, refresh=False)
+
+
+def test_build_cli_error_handled(tmp_path):
+    """Test build() handles CLI documentation errors gracefully."""
+    docs = _buildable_docs(tmp_path)
+
+    with stubbed_build(
+        docs, _detect_package_name="mypkg", _get_package_metadata={"cli_enabled": True}
+    ) as stubs:
+        stubs.steps["_discover_click_cli"].side_effect = ImportError("click")
+
+        docs.build(watch=False, refresh=False)
 
 
 def test_discover_click_cli_not_enabled():
@@ -25077,215 +24647,60 @@ def test_check_links_generic_exception():
         assert len(result["broken"]) >= 1
 
 
-def test_build_section_error_handled():
+def test_build_section_error_handled(tmp_path):
     """Test build() handles section processing errors gracefully."""
+    docs = _buildable_docs(tmp_path, sections=[{"title": "Test"}])
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+    with stubbed_build(docs) as stubs:
+        stubs.steps["_process_sections"].side_effect = RuntimeError("section problem")
 
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_process_sections", side_effect=RuntimeError("section problem")),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter([])
-            proc.wait.return_value = None
-            proc.returncode = 0
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = False
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = False
-            docs._config.sections = [{"title": "Test"}]
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
-            # Should not raise
-            docs.build(watch=False, refresh=False)
+        # Should not raise
+        docs.build(watch=False, refresh=False)
 
 
-def test_build_user_guide_error_handled():
+def test_build_user_guide_error_handled(tmp_path):
     """Test build() handles user guide processing errors."""
+    docs = _buildable_docs(tmp_path)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+    with stubbed_build(docs) as stubs:
+        stubs.steps["_process_user_guide"].side_effect = RuntimeError("UG error")
 
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_process_user_guide", side_effect=RuntimeError("UG error")),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter([])
-            proc.wait.return_value = None
-            proc.returncode = 0
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = False
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = False
-            docs._config.sections = None
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
-            # Should not raise
-            docs.build(watch=False, refresh=False)
+        # Should not raise
+        docs.build(watch=False, refresh=False)
 
 
-def test_build_copy_assets_error_handled():
+def test_build_copy_assets_error_handled(tmp_path):
     """Test build() handles asset copy errors."""
+    docs = _buildable_docs(tmp_path)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+    with stubbed_build(docs) as stubs:
+        stubs.steps["_copy_assets"].side_effect = RuntimeError("copy failed")
 
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", side_effect=RuntimeError("copy failed")),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter([])
-            proc.wait.return_value = None
-            proc.returncode = 0
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = False
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = False
-            docs._config.sections = None
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
-            # Should not raise
-            docs.build(watch=False, refresh=False)
+        # Should not raise
+        docs.build(watch=False, refresh=False)
 
 
-def test_build_changelog_no_releases():
+def test_build_changelog_no_releases(tmp_path):
     """Test build() handles no releases found for changelog."""
+    docs = _buildable_docs(tmp_path, changelog_enabled=True)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
-
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(
-                docs,
-                "_get_github_repo_info",
-                return_value=("owner", "repo", "https://github.com/owner/repo"),
-            ),
-            patch.object(docs, "_generate_changelog_page", return_value=None),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter([])
-            proc.wait.return_value = None
-            proc.returncode = 0
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = False
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = True
-            docs._config.sections = None
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
-            docs.build(watch=False, refresh=False)
+    with stubbed_build(
+        docs,
+        _detect_package_name="mypkg",
+        _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
+        _generate_changelog_page=None,
+    ):
+        docs.build(watch=False, refresh=False)
 
 
-def test_build_changelog_no_repo():
+def test_build_changelog_no_repo(tmp_path):
     """Test build() skips changelog when no github repo info."""
+    docs = _buildable_docs(tmp_path, changelog_enabled=True)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
-
-        with (
-            patch("great_docs.core._ensure_quarto_installed"),
-            patch.object(docs, "_prepare_build_directory"),
-            patch.object(docs, "_generate_llms_txt"),
-            patch.object(docs, "_generate_llms_full_txt"),
-            patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_get_github_repo_info", return_value=(None, None, None)),
-            patch.object(docs, "_process_user_guide"),
-            patch.object(docs, "_copy_assets", return_value=False),
-            patch.object(docs, "_get_quarto_env", return_value={}),
-            patch("subprocess.Popen") as mock_popen,
-        ):
-            proc = MagicMock()
-            proc.stdout = iter([])
-            proc.stderr = iter([])
-            proc.wait.return_value = None
-            proc.returncode = 0
-            mock_popen.return_value = proc
-
-            docs._has_api_reference = False
-            docs._config = MagicMock()
-            docs._config.seo_default_description = None
-            docs._config.versions = None
-            docs._config.has_versions = False
-            docs._config.changelog_enabled = True
-            docs._config.sections = None
-
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
-            docs.build(watch=False, refresh=False)
+    with stubbed_build(
+        docs, _detect_package_name="mypkg", _get_github_repo_info=(None, None, None)
+    ):
+        docs.build(watch=False, refresh=False)
 
 
 def _make_uqc_docs(tmp_dir, gd_yml_content="", pyproject_content=None, quarto_content=None):
