@@ -1549,6 +1549,10 @@
 
   // Also handle Quarto's dynamic content loading
   const observer = new MutationObserver((mutations) => {
+    // While the page is still being parsed, a container can be seen before
+    // its children (the poster, the rest of the manifest) have arrived;
+    // `initAll` sets those players up once the document is complete
+    if (document.readyState === 'loading') return;
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
         if (node.nodeType === 1) {
