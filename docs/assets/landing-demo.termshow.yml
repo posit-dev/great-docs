@@ -1,26 +1,69 @@
+# The README's demo, and the one on the homepage. Record it again with
+# `great-docs termshow record --steps docs/assets/landing-demo.termshow.yml`
+# and export the README's SVGs with `make landing-demo`.
 source: assets/landing-demo.termshow
-
 settings:
+  theme:
+    light: catppuccin-latte
+    dark: catppuccin-mocha
   window_chrome: colorful
-
-chapters:
-  - at: 0
-    label: "Initialize"
-  - at: 11.5
-    label: "Build"
-  - at: 29.23
-    label: "Preview"
-
+# Each snippet starts at its marker. Builds take a little more or less time
+# from one recording to the next, so check these after recording again
 snippets:
-  - at: 1.4
-    duration: 9
+  - at: 0.6
+    duration: 6.4
     text: "great-docs init"
     label: "Init"
-  - at: 12.5
-    duration: 15.1
+  - at: 7.0
+    duration: 11.7
     text: "great-docs build"
     label: "Build"
-  - at: 29.59
-    duration: 6.62
+  - at: 18.7
+    duration: 5.4
     text: "great-docs preview"
     label: "Preview"
+
+record:
+  shell: bash --norc
+  env:
+    # Keep `great-docs preview` from opening a browser
+    BROWSER: "true"
+
+steps:
+  # Write the demo package to /tmp/weathervault. PYTHONPATH stands in for
+  # installing it, so Great Docs can import it
+  - hide
+  - run: >-
+      python ../../scripts/make_landing_demo_pkg.py /tmp/weathervault &&
+      cd /tmp && export PYTHONPATH=/tmp/weathervault && clear
+  - show
+  - sleep: 0.6
+  - marker: Initialize
+  - run: cd weathervault
+  - type: great-docs init
+  - enter
+  - wait_for: '\[Y/n\]: $'
+  - sleep: 0.8
+  - type: y
+  - enter
+  - wait_for: '\$ $'
+  - sleep: 3
+  - marker: Build
+  - run: great-docs build
+    timeout: 180
+  - sleep: 2.5
+  - marker: Preview
+  - type: great-docs preview
+  - enter
+  - wait_for: 'Press Ctrl\+C'
+    screen: true
+  - sleep: 3
+  - key: ctrl+c
+  - wait_for: '\$ $'
+  - sleep: 1
+
+check:
+  ignore:
+    - '<?\d+(\.\d+)?s\b'
+    - '~\d+ min'
+    - 'Rendering pages +\d+%'
