@@ -1,5 +1,5 @@
 """
-Compare two harness recordings and report every difference
+Compare two recordings and report every difference
 
 Compare exit statuses, file changes, step skeletons, warnings, handled exceptions, the
 number of Python processes and calls to the stub `quarto`. Every difference is reported,
@@ -22,8 +22,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from tests.harness.record import SCHEMA
-from tests.harness.sides import HarnessError, environment_differences
+from tests.quarto_project_diff.record import SCHEMA
+from tests.quarto_project_diff.sides import RequirementError, environment_differences
 
 # Limit report size by capping diff lines per file and the number of files with diffs.
 DIFF_LINES = 60
@@ -564,14 +564,14 @@ def compare(base: Path, test: Path) -> Comparison:
 
     Raises
     ------
-    HarnessError
+    RequirementError
         If either recording uses a different manifest schema.
     """
     old, new = _load(base / "side.json"), _load(test / "side.json")
     for path, meta in ((base, old), (test, new)):
         if meta.get("schema") != SCHEMA:
-            raise HarnessError(
-                f"{path} has harness schema {meta.get('schema')}, not {SCHEMA}; record it again"
+            raise RequirementError(
+                f"{path} has recording schema {meta.get('schema')}, not {SCHEMA}; record it again"
             )
     cases = list(dict.fromkeys([*old["cases"], *new["cases"]]))
     return Comparison(
@@ -614,7 +614,7 @@ def render(
     facts = base_meta["facts"]
     tools = facts.get("tools", {})
     lines = [
-        "Great Docs characterisation harness",
+        "Great Docs Quarto project diff",
         side_line(base_meta),
         side_line(test_meta),
         f"python {facts.get('python')}, stub quarto {facts.get('stub_quarto_version')} "

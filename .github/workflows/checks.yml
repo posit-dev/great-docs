@@ -54,7 +54,7 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: make harness HARNESS_ARGS="--base $BASE_SHA --out $RUNNER_TEMP/harness"
+        run: make quarto-project-diff QUARTO_PROJECT_DIFF_ARGS="--base $BASE_SHA --out $RUNNER_TEMP/harness"
 
       - name: Summarise the harness report
         if: always() && (steps.harness.outcome == 'success' || steps.harness.outcome == 'failure')

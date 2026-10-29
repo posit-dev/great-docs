@@ -1,5 +1,5 @@
 """
-Text normalisation and log summaries for harness recordings
+Text normalisation and log summaries for recordings
 
 Rules remove text that varies between runs or checkouts without a change in behaviour.
 Each manifest counts replacements by rule.

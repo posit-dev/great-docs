@@ -1,8 +1,8 @@
 """
 Counts of exceptions handled by `great_docs`
 
-Python imports this observer at start-up when the harness adds its directory to
-`PYTHONPATH`. If `GREAT_DOCS_HARNESS_CENSUS` names a directory, the process writes
+Python imports this observer at start-up when the Quarto project diff adds its directory to
+`PYTHONPATH`. If `GREAT_DOCS_QUARTO_PROJECT_DIFF_CENSUS` names a directory, the process writes
 `<pid>.json` there at exit, with a count for each distinct handled exception.
 
 The observer patches nothing and imports no `great_docs` module. It needs `sys.monitoring`
@@ -19,13 +19,13 @@ import sys
 from pathlib import Path
 from types import CodeType, TracebackType
 
-CENSUS_VARIABLE = "GREAT_DOCS_HARNESS_CENSUS"
+CENSUS_VARIABLE = "GREAT_DOCS_QUARTO_PROJECT_DIFF_CENSUS"
 
 # Exception type, message, raising function, raising location, handling function, handling
 # location. Locations are `file:line` relative to the `great_docs` package directory.
 CensusKey = tuple[str, str, str, str, str, str]
 
-# Retain enough text for path normalisation before the harness truncates messages.
+# Retain enough text for path normalisation before the recorder truncates messages.
 # Truncating a path here could prevent its replacement.
 _MESSAGE_LIMIT = 4000
 
@@ -173,7 +173,7 @@ def _start() -> None:
     monitoring = sys.monitoring
     for tool in (3, 4):
         try:
-            monitoring.use_tool_id(tool, "great-docs-harness")
+            monitoring.use_tool_id(tool, "great-docs-quarto-project-diff")
         except ValueError:
             continue
         _ = monitoring.register_callback(tool, monitoring.events.EXCEPTION_HANDLED, census.handled)

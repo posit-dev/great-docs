@@ -1,4 +1,4 @@
-"""Harness regression tests without package builds"""
+"""Tests of the Quarto project diff that build no package"""
 
 from __future__ import annotations
 
@@ -13,12 +13,12 @@ from typing import Any
 
 import pytest
 
-from tests.harness.catalogue import Release, make_repository
-from tests.harness.__main__ import exit_status
-from tests.harness.compare import compare, render
-from tests.harness.normalise import FILE_RULES, log_skeleton, normalise_text, path_rules
-from tests.harness.record import SCHEMA, read_census, store_blob
-from tests.harness.sides import OBSERVER_SOURCE, HarnessError, run_checked
+from tests.quarto_project_diff.catalogue import Release, make_repository
+from tests.quarto_project_diff.__main__ import exit_status
+from tests.quarto_project_diff.compare import compare, render
+from tests.quarto_project_diff.normalise import FILE_RULES, log_skeleton, normalise_text, path_rules
+from tests.quarto_project_diff.record import SCHEMA, read_census, store_blob
+from tests.quarto_project_diff.sides import OBSERVER_SOURCE, RequirementError, run_checked
 
 
 def test_file_rules_remove_commit_and_build_time_only():
@@ -117,7 +117,7 @@ def test_observer_counts_exceptions_that_great_docs_handles(tmp_path: Path):
     env = {
         **os.environ,
         "PYTHONPATH": os.pathsep.join([str(tmp_path / "src"), str(OBSERVER_SOURCE.parent)]),
-        "GREAT_DOCS_HARNESS_CENSUS": str(census),
+        "GREAT_DOCS_QUARTO_PROJECT_DIFF_CENSUS": str(census),
     }
     _ = subprocess.run([sys.executable, "-c", script], env=env, cwd=tmp_path, check=True)
 
@@ -245,13 +245,13 @@ def test_comparison_fails_when_the_test_side_lacks_an_expected_reference_index(t
     ]
 
 
-def test_comparison_refuses_a_recording_from_another_harness_schema(tmp_path: Path):
+def test_comparison_refuses_a_recording_from_another_recording_schema(tmp_path: Path):
     current = _recording(tmp_path / "current", {"build": {}})
     older = _recording(tmp_path / "older", {"build": {}})
     side = json.loads((older / "side.json").read_text(encoding="utf-8"))
     _ = (older / "side.json").write_text(json.dumps({**side, "schema": 1}), encoding="utf-8")
 
-    with pytest.raises(HarnessError, match="schema 1"):
+    with pytest.raises(RequirementError, match="schema 1"):
         _ = compare(older, current)
 
 
@@ -388,7 +388,7 @@ def test_report_verdict_and_exit_status(
 
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     assert exit_status(differs, strict=False) == 0
-    assert capsys.readouterr().out.startswith("::warning title=Harness differences::1 of 1")
+    assert capsys.readouterr().out.startswith("::warning title=Quarto project differences::1 of 1")
     assert exit_status(differs, strict=True) == 1
     assert exit_status(regressed, strict=False) == 1
     assert exit_status(compare(base, base), strict=False) == 0

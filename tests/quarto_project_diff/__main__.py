@@ -1,9 +1,9 @@
 """
-Command line of the characterisation harness
+Command line of the Quarto project diff
 
 `run` records a base commit and the checkout under test and compares them; `record` and
 `compare` do the two halves separately. Exit status: 0 when no case regressed, 1 on a
-regression (or, with `--strict`, on any difference), 2 when the harness refuses to run.
+regression (or, with `--strict`, on any difference), 2 when the tool refuses to run.
 Differences that aren't regressions are reported, and in GitHub Actions also raised as a
 warning annotation, without failing the run.
 """
@@ -18,20 +18,20 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 
-from tests.harness.catalogue import BuildCase, full_cases, select, tier_cases
-from tests.harness.compare import Comparison, compare, write_reports
-from tests.harness.record import generate_all, record
-from tests.harness.sides import (
-    HarnessError,
+from tests.quarto_project_diff.catalogue import BuildCase, full_cases, select, tier_cases
+from tests.quarto_project_diff.compare import Comparison, compare, write_reports
+from tests.quarto_project_diff.record import generate_all, record
+from tests.quarto_project_diff.sides import (
+    RequirementError,
     Side,
     base_side,
     checkout_side,
     child_environment,
     describe,
     environment_differences,
-    harness_checkout,
     install_observer,
     outside_git,
+    own_checkout,
     python_version,
     real_quarto,
     write_stub,
@@ -53,16 +53,16 @@ def cache_directory(given: Path | None) -> Path:
     Returns
     -------
     :
-        `given`, else `$GREAT_DOCS_HARNESS_CACHE`, else `$XDG_CACHE_HOME/great-docs-harness`,
-        else `~/.cache/great-docs-harness`.
+        `given`, else `$GREAT_DOCS_QUARTO_PROJECT_DIFF_CACHE`, else `$XDG_CACHE_HOME/great-docs-quarto-project-diff`,
+        else `~/.cache/great-docs-quarto-project-diff`.
     """
     if given is not None:
         return given.resolve()
-    if os.environ.get("GREAT_DOCS_HARNESS_CACHE"):
-        return Path(os.environ["GREAT_DOCS_HARNESS_CACHE"]).resolve()
+    if os.environ.get("GREAT_DOCS_QUARTO_PROJECT_DIFF_CACHE"):
+        return Path(os.environ["GREAT_DOCS_QUARTO_PROJECT_DIFF_CACHE"]).resolve()
     xdg = os.environ.get("XDG_CACHE_HOME")
     root = Path(xdg) if xdg else Path.home() / ".cache"
-    return (root / "great-docs-harness").resolve()
+    return (root / "great-docs-quarto-project-diff").resolve()
 
 
 def choose_cases(
@@ -137,7 +137,7 @@ def exit_status(comparison: Comparison, strict: bool) -> int:
     if passes and not comparison.matches and os.environ.get("GITHUB_ACTIONS") == "true":
         differ = sum(c.status != "match" for c in comparison.cases)
         print(
-            f"::warning title=Harness differences::{differ} of {len(comparison.cases)} cases "
+            f"::warning title=Quarto project differences::{differ} of {len(comparison.cases)} cases "
             "differ from the base commit, with no regressions. Review the report."
         )
     return 0 if passes else 1
@@ -157,7 +157,7 @@ def command_run(args: argparse.Namespace) -> int:
     :
         The exit status.
     """
-    checkout = (args.checkout or harness_checkout()).resolve()
+    checkout = (args.checkout or own_checkout()).resolve()
     cache = cache_directory(args.cache_dir)
     work, stub_dir, observer = prepare_work(cache)
     try:
@@ -167,10 +167,10 @@ def command_run(args: argparse.Namespace) -> int:
         base, test = describe(base, stub_dir), describe(test, stub_dir)
         drift = environment_differences(base.facts, test.facts)
         if drift:
-            raise HarnessError("The two environments differ:\n  " + "\n  ".join(drift))
-        cases = choose_cases(args.catalogue, args.only, harness_checkout(), test)
+            raise RequirementError("The two environments differ:\n  " + "\n  ".join(drift))
+        cases = choose_cases(args.catalogue, args.only, own_checkout(), test)
         out = (args.out or cache / "runs" / work.name).resolve()
-        pristine = generate_all(cases, harness_checkout() / "test-packages", work)
+        pristine = generate_all(cases, own_checkout() / "test-packages", work)
         sides = [
             (side, out / side.label, child_environment(side, stub_dir, observer))
             for side in (base, test)
@@ -204,8 +204,8 @@ def command_record(args: argparse.Namespace) -> int:
     out = args.out.resolve()
     try:
         side = describe(checkout_side(args.checkout), stub_dir)
-        cases = choose_cases(args.catalogue, args.only, harness_checkout(), side)
-        pristine = generate_all(cases, harness_checkout() / "test-packages", work)
+        cases = choose_cases(args.catalogue, args.only, own_checkout(), side)
+        pristine = generate_all(cases, own_checkout() / "test-packages", work)
         environment = child_environment(side, stub_dir, observer)
         sides = [(side, out, environment)]
         wall = record(sides, cases, pristine, work, args.workers, args.timeout, args.keep)
@@ -237,14 +237,14 @@ def command_compare(args: argparse.Namespace) -> int:
 
 def parser() -> argparse.ArgumentParser:
     """
-    Create the parser for the harness commands
+    Create the command-line parser
 
     Returns
     -------
     :
         The parser with the `run`, `record` and `compare` commands.
     """
-    top = argparse.ArgumentParser(prog="python -m tests.harness", description=__doc__)
+    top = argparse.ArgumentParser(prog="python -m tests.quarto_project_diff", description=__doc__)
     commands = top.add_subparsers(dest="command", required=True)
 
     def common(sub: argparse.ArgumentParser) -> None:
@@ -280,7 +280,7 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """
-    Run the harness command line
+    Run the command line
 
     Parameters
     ----------
@@ -295,8 +295,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         return args.handler(args)
-    except (HarnessError, ValueError) as exc:
-        print(f"harness refused: {exc}", file=sys.stderr)
+    except (RequirementError, ValueError) as exc:
+        print(f"Quarto project diff refused: {exc}", file=sys.stderr)
         return 2
 
 
