@@ -9,6 +9,7 @@ except PackageNotFoundError:  # pragma: no cover
     __version__ = "0.0.0"
 
 from . import _builtin  # noqa: F401  — registers great-docs' built-in event handlers
+from ._build.steps import BuildError
 from ._skill_install import check_skill, install_skill, list_skills
 from ._tbl_display import disable_tbl_preview, enable_tbl_preview
 from ._tbl_explorer import tbl_explorer
@@ -18,6 +19,7 @@ from .config import Config, create_default_config, load_config
 from .core import GreatDocs
 
 __all__ = [
+    "BuildError",
     "Config",
     "GreatDocs",
     "check_skill",

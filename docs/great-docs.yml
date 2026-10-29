@@ -323,6 +323,10 @@ reference:
         - GreatDocs.build
         - GreatDocs.preview
         - GreatDocs.check_links
+    - title: Errors
+      desc: The exception raised when a build fails.
+      contents:
+        - BuildError
     - title: Table Preview/Explorer
       desc: >-
         Generate styled HTML table previews from any tabular data source with `tbl_preview()`, and
