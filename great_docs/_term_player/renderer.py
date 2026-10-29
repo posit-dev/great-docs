@@ -261,6 +261,10 @@ def _collect_text_spans(row: list[Cell], theme: Theme) -> list[tuple[int, str, s
 
     Returns list of (start_col, text, fg_color, css_classes).
     Skips trailing spaces for efficiency.
+
+    A span ends after a wide character. The font draws it at its own width,
+    which needn't be two cells, so the text after it starts a new span at
+    its own column.
     """
     spans: list[tuple[int, str, str, str]] = []
 
@@ -278,15 +282,21 @@ def _collect_text_spans(row: list[Cell], theme: Theme) -> list[tuple[int, str, s
     current_classes = ""
     start = 0
     text_parts: list[str] = []
+    after_wide = False
 
     for col in range(last_nonspace + 1):
         cell = row[col]
+        if cell.char == "":
+            # The second cell of a wide character
+            after_wide = True
+            continue
         fg = _resolve_fg(cell, theme)
         classes = _style_classes(cell.style)
 
-        if fg == current_fg and classes == current_classes:
+        if fg == current_fg and classes == current_classes and not after_wide:
             text_parts.append(cell.char)
         else:
+            after_wide = False
             if text_parts:
                 spans.append((start, "".join(text_parts), current_fg or theme.fg, current_classes))
             current_fg = fg
