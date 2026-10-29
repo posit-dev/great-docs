@@ -21817,11 +21817,20 @@ def test_build_prepare_and_render_flow(tmp_path):
 
 
 def test_build_no_api_reference(tmp_path):
-    """Test build() when _has_api_reference is False skips renderer."""
+    """
+    Check that builds without an API reference skip its renderer and still write page metadata
+    """
     docs = _buildable_docs(tmp_path)
+    mock_builder_class = MagicMock()
 
-    with stubbed_build(docs):
+    with (
+        stubbed_build(docs) as stubs,
+        patch("great_docs._apiref.api_reference.APIReference", mock_builder_class),
+    ):
         docs.build(watch=False, refresh=False)
+
+    mock_builder_class.assert_not_called()
+    stubs.steps["_write_page_metadata"].assert_called_once()
 
 
 def test_build_dynamic_fallback_to_static(tmp_path):
@@ -21930,8 +21939,13 @@ def test_build_with_changelog(tmp_path):
     stubs.steps["_add_changelog_to_navbar"].assert_called_once()
 
 
-def test_build_changelog_error_handled(tmp_path):
-    """Test build() handles changelog generation errors gracefully."""
+def test_build_changelog_error_handled(tmp_path, capsys):
+    """
+    Check that changelog failures warn and skip the navbar entry
+
+    `build()` prints `Error generating changelog: API error` and still writes
+    page metadata.
+    """
     docs = _buildable_docs(tmp_path, changelog_enabled=True)
 
     with stubbed_build(
@@ -21941,8 +21955,11 @@ def test_build_changelog_error_handled(tmp_path):
     ) as stubs:
         stubs.steps["_generate_changelog_page"].side_effect = RuntimeError("API error")
 
-        # Should not raise
         docs.build(watch=False, refresh=False)
+
+    assert "Error generating changelog: API error" in capsys.readouterr().out
+    stubs.steps["_add_changelog_to_navbar"].assert_not_called()
+    stubs.steps["_write_page_metadata"].assert_called_once()
 
 
 def test_build_with_cli_documentation(tmp_path):
@@ -22009,8 +22026,13 @@ def test_build_quarto_render_failure(tmp_path):
             docs.build(watch=False, refresh=False)
 
 
-def test_build_cli_error_handled(tmp_path):
-    """Test build() handles CLI documentation errors gracefully."""
+def test_build_cli_error_handled(tmp_path, capsys):
+    """
+    Check that CLI discovery failures warn and skip CLI page generation
+
+    `build()` prints `Error generating CLI docs: click` and still writes page
+    metadata.
+    """
     docs = _buildable_docs(tmp_path)
 
     with stubbed_build(
@@ -22019,6 +22041,10 @@ def test_build_cli_error_handled(tmp_path):
         stubs.steps["_discover_click_cli"].side_effect = ImportError("click")
 
         docs.build(watch=False, refresh=False)
+
+    assert "Error generating CLI docs: click" in capsys.readouterr().out
+    stubs.steps["_generate_cli_reference_pages"].assert_not_called()
+    stubs.steps["_write_page_metadata"].assert_called_once()
 
 
 def test_discover_click_cli_not_enabled():
@@ -24540,41 +24566,61 @@ def test_check_links_generic_exception():
         assert len(result["broken"]) >= 1
 
 
-def test_build_section_error_handled(tmp_path):
-    """Test build() handles section processing errors gracefully."""
+def test_build_section_error_handled(tmp_path, capsys):
+    """
+    Check that custom section failures warn and still write page metadata
+
+    `build()` prints `Error processing sections: section problem`.
+    """
     docs = _buildable_docs(tmp_path, sections=[{"title": "Test"}])
 
     with stubbed_build(docs) as stubs:
         stubs.steps["_process_sections"].side_effect = RuntimeError("section problem")
 
-        # Should not raise
         docs.build(watch=False, refresh=False)
 
+    assert "Error processing sections: section problem" in capsys.readouterr().out
+    stubs.steps["_write_page_metadata"].assert_called_once()
 
-def test_build_user_guide_error_handled(tmp_path):
-    """Test build() handles user guide processing errors."""
+
+def test_build_user_guide_error_handled(tmp_path, capsys):
+    """
+    Check that user guide failures warn and still write page metadata
+
+    `build()` prints `Error processing User Guide: UG error`.
+    """
     docs = _buildable_docs(tmp_path)
 
     with stubbed_build(docs) as stubs:
         stubs.steps["_process_user_guide"].side_effect = RuntimeError("UG error")
 
-        # Should not raise
         docs.build(watch=False, refresh=False)
 
+    assert "Error processing User Guide: UG error" in capsys.readouterr().out
+    stubs.steps["_write_page_metadata"].assert_called_once()
 
-def test_build_copy_assets_error_handled(tmp_path):
-    """Test build() handles asset copy errors."""
+
+def test_build_copy_assets_error_handled(tmp_path, capsys):
+    """
+    Check that asset copy failures warn and still write page metadata
+
+    `build()` prints `Error copying assets: copy failed`.
+    """
     docs = _buildable_docs(tmp_path)
 
     with stubbed_build(docs) as stubs:
         stubs.steps["_copy_assets"].side_effect = RuntimeError("copy failed")
 
-        # Should not raise
         docs.build(watch=False, refresh=False)
+
+    assert "Error copying assets: copy failed" in capsys.readouterr().out
+    stubs.steps["_write_page_metadata"].assert_called_once()
 
 
 def test_build_changelog_no_releases(tmp_path):
-    """Test build() handles no releases found for changelog."""
+    """
+    Check that a changelog without releases gets no navbar entry
+    """
     docs = _buildable_docs(tmp_path, changelog_enabled=True)
 
     with stubbed_build(
@@ -24582,18 +24628,26 @@ def test_build_changelog_no_releases(tmp_path):
         _detect_package_name="mypkg",
         _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
         _generate_changelog_page=None,
-    ):
+    ) as stubs:
         docs.build(watch=False, refresh=False)
+
+    stubs.steps["_generate_changelog_page"].assert_called_once()
+    stubs.steps["_add_changelog_to_navbar"].assert_not_called()
 
 
 def test_build_changelog_no_repo(tmp_path):
-    """Test build() skips changelog when no github repo info."""
+    """
+    Check that projects without a GitHub repository skip the changelog and its navbar entry
+    """
     docs = _buildable_docs(tmp_path, changelog_enabled=True)
 
     with stubbed_build(
         docs, _detect_package_name="mypkg", _get_github_repo_info=(None, None, None)
-    ):
+    ) as stubs:
         docs.build(watch=False, refresh=False)
+
+    stubs.steps["_generate_changelog_page"].assert_not_called()
+    stubs.steps["_add_changelog_to_navbar"].assert_not_called()
 
 
 def _make_uqc_docs(tmp_dir, gd_yml_content="", pyproject_content=None, quarto_content=None):
