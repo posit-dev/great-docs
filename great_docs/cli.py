@@ -4417,14 +4417,21 @@ def term_play(source: str, speed: float, script: str | None, no_script: bool) ->
 @click.option("--gif", "fmt", flag_value="gif", help="Write an animated GIF (needs ffmpeg)")
 @click.option("--mp4", "fmt", flag_value="mp4", help="Write an MP4 video (needs ffmpeg)")
 @click.option("--webm", "fmt", flag_value="webm", help="Write a WebM video (needs ffmpeg)")
+@click.option(
+    "--bundle",
+    "fmt",
+    flag_value="bundle",
+    help="Write a bundle for the Termshow player: the recording in one .termshow.json file",
+)
 @click.option("--v2", is_flag=True, help="With --cast, write asciicast version 2")
 @click.option(
     "--output",
     "-o",
     type=click.Path(dir_okay=False),
     default=None,
-    help="Output file (default: the recording's name with the format's extension). Its "
-    "extension picks the format when no format option is given",
+    help="Output file (default: the recording's name with the format's extension, or "
+    ".termshow.json for a bundle). Its extension picks the format when no format option is "
+    "given",
 )
 @click.option(
     "--script", type=click.Path(exists=True), default=None, help="Path to .termshow.yml script"
@@ -4482,7 +4489,7 @@ def term_export(
     scale: float | None,
     max_idle: float | None,
 ) -> None:
-    """Export a recording as an animated SVG, a GIF or video, or an asciicast file.
+    """Export a recording as an animated SVG, a GIF or video, an asciicast file, or a bundle.
 
     The SVG plays with CSS alone, so it works as an image in a GitHub or
     GitLab README. The companion .termshow.yml script's cuts, speed changes,
@@ -4502,23 +4509,36 @@ def term_export(
     chapters become markers, and its theme (the light side of a pair) is
     kept. Annotations, highlights, and snippets are left out.
 
+    With --bundle, the recording is written as one .termshow.json file
+    with everything the Termshow player needs, including the transcript.
+    Point a <termshow-player> element's src at it, or the termshow
+    shortcode's file.
+
     Examples:
       great-docs termshow export demos/install.termshow
       great-docs termshow export demos/install.termshow --svg -o install.svg
       great-docs termshow export demos/install.termshow --gif --max-idle 2
       great-docs termshow export demos/install.termshow -o install.mp4
       great-docs termshow export demos/install.termshow --cast
+      great-docs termshow export demos/install.termshow --bundle
     """
     from ._term_player import apply_script, generate_manifest
+    from ._term_player.bundle import BUNDLE_SUFFIX
     from ._term_player.export import SIZE_WARNING_BYTES, export_svg, picture_snippet
     from ._term_player.video import VIDEO_FORMATS
 
+    # The file extension of each format, and the format of each extension
+    extensions = {"bundle": BUNDLE_SUFFIX.lstrip(".")}
+    formats = {"json": "bundle"}
     suffix = Path(output).suffix.lower().lstrip(".") if output else ""
+    named = formats.get(suffix, suffix)
     if ctx.get_parameter_source("fmt") == click.core.ParameterSource.DEFAULT:
-        if suffix in VIDEO_FORMATS or suffix == "cast":
-            fmt = suffix
-    elif suffix in (*VIDEO_FORMATS, "svg", "cast") and suffix != fmt:
-        raise click.UsageError(f"--{fmt} writes a .{fmt} file, but -o ends in .{suffix}")
+        if named in (*VIDEO_FORMATS, "cast", "bundle"):
+            fmt = named
+    elif named in (*VIDEO_FORMATS, "svg", "cast", "bundle") and named != fmt:
+        raise click.UsageError(
+            f"--{fmt} writes a .{extensions.get(fmt, fmt)} file, but -o ends in .{suffix}"
+        )
 
     # The formats each option applies to
     applies = {
@@ -4547,9 +4567,12 @@ def term_export(
     source_path = Path(source)
     recording, script_obj = _load_term_source(source_path, script, no_script)
 
-    out_path = Path(output) if output else source_path.with_suffix(f".{fmt}")
+    out_path = Path(output) if output else source_path.with_suffix(f".{extensions.get(fmt, fmt)}")
     if fmt == "cast":
         _export_cast(recording, script_obj, source_path, out_path, version=2 if v2 else 3)
+        return
+    if fmt == "bundle":
+        _export_bundle(recording, script_obj, out_path)
         return
 
     if script_obj is not None:
@@ -4647,6 +4670,21 @@ def _export_video(manifest, out_path: Path, fmt: str, options: dict) -> None:
         alt = manifest.title or "Terminal recording"
         click.echo("\nPaste this where the recording should appear:\n")
         click.echo(picture_snippet(sides[0][0].name, sides[1][0].name, alt))
+
+
+def _export_bundle(recording, script, out_path: Path) -> None:
+    """Write `termshow export --bundle`'s file and report what went into it."""
+    from ._term_player.bundle import make_bundle
+
+    manifest, text = make_bundle(recording, script)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(text, encoding="utf-8")
+    click.echo(f"✓ Exported {out_path} ({len(text.encode()) / 1024:.1f} KB)")
+    click.echo(
+        f"  Duration: {manifest.duration:.1f}s | Unique screens: {len(manifest.frames)}"
+        f" | Unique rows: {len(manifest.lines)}"
+    )
+    click.echo(f'\nPlay it with <termshow-player src="{out_path.name}"></termshow-player>')
 
 
 def _load_term_source(source_path: Path, script: str | None, no_script: bool):
