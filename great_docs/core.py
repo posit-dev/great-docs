@@ -11376,10 +11376,12 @@ anchor-sections: true
         """
         Add or remove the wide layout toggle in a Quarto config
 
-        When enabled, a `gd-wide-layout` meta tag (read by `theme-init.js` before first paint) and
-        a style block with the scale factors go in the header, ahead of `theme-init.js`, and a
-        loader for `wide-layout.js` goes after the body. When disabled, any of these entries left
-        over from a previous build are removed.
+        When enabled, add a `gd-wide-layout` meta tag and a style block with the scale factors
+        to the header, ahead of `theme-init.js`, which reads the tag before first paint.
+        Replace existing entries on each call. Keep an existing `wide-layout.js` loader at its
+        position after the body; append it if missing. Repeated passes preserve the order of
+        scripts on the page. When disabled, remove any of these entries left over from a
+        previous build.
 
         Parameters
         ----------
@@ -11397,6 +11399,11 @@ anchor-sections: true
 
         header: list[Any] = html_fmt["include-in-header"]
         after_body: list[Any] = html_fmt["include-after-body"]
+        # Removing loaders leaves earlier entries intact, so the first loader's index stays valid
+        script_index = next(
+            (i for i, a in enumerate(after_body) if "wide-layout.js" in str(a)),
+            len(after_body),
+        )
         header[:] = [h for h in header if "gd-wide-layout" not in str(h)]
         after_body[:] = [a for a in after_body if "wide-layout.js" not in str(a)]
 
@@ -11423,7 +11430,7 @@ anchor-sections: true
         )
         header.insert(theme_index, header_entry)
 
-        after_body.append(script_include("wide-layout.js"))
+        after_body.insert(script_index, script_include("wide-layout.js"))
 
     def _update_quarto_config(self) -> None:
         """
