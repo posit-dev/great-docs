@@ -28,7 +28,7 @@ def test_site_html_math_method_defaults_to_katex(tmp_project: Path):
 
 
 def test_site_html_math_method_accepts_override(tmp_project: Path):
-    cfg = _make_config(tmp_project, "site:\n  html-math-method: mathjax\n")
+    cfg = write_config(tmp_project, "site:\n  html-math-method: mathjax\n")
     assert cfg.site["html-math-method"] == "mathjax"
 
 
@@ -47,15 +47,12 @@ class TestConfigIsolation:
         assert DEFAULT_CONFIG["changelog"]["max_releases"] == 50
 
     def test_loads_user_config(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "parser: google\n")
+        cfg = write_config(tmp_project, "parser: google\n")
         assert cfg.parser == "google"
 
     def test_yaml_error_prints_warning(self, tmp_project: Path, capsys):
         """Covers lines 167-168 (YAMLError handler)."""
-        (tmp_project / "great-docs.yml").write_text(
-            "invalid: [\nunmatched bracket", encoding="utf-8"
-        )
-        cfg = Config(tmp_project)
+        cfg = write_config(tmp_project, "invalid: [\nunmatched bracket")
         captured = capsys.readouterr()
         assert "Warning: Error parsing great-docs.yml" in captured.out
         # Falls back to defaults
@@ -73,17 +70,17 @@ class TestConfigIsolation:
 
 class TestMergeConfig:
     def test_deep_merge_nested_dicts(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "source:\n  branch: develop\n")
+        cfg = write_config(tmp_project, "source:\n  branch: develop\n")
         # branch overridden, other defaults preserved
         assert cfg.source_branch == "develop"
         assert cfg.source_enabled is True
 
     def test_scalar_replaces_default(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "parser: sphinx\n")
+        cfg = write_config(tmp_project, "parser: sphinx\n")
         assert cfg.parser == "sphinx"
 
     def test_new_key_in_user_config(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "custom_key: custom_value\n")
+        cfg = write_config(tmp_project, "custom_key: custom_value\n")
         assert cfg["custom_key"] == "custom_value"
 
 
@@ -122,21 +119,21 @@ class TestScalarProperties:
         assert Config(tmp_project).exclude == []
 
     def test_exclude_custom(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "exclude:\n  - Foo\n  - Bar\n")
+        cfg = write_config(tmp_project, "exclude:\n  - Foo\n  - Bar\n")
         assert cfg.exclude == ["Foo", "Bar"]
 
     def test_repo_default(self, tmp_project: Path):
         assert Config(tmp_project).repo is None
 
     def test_repo_custom(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "repo: https://github.com/owner/repo\n")
+        cfg = write_config(tmp_project, "repo: https://github.com/owner/repo\n")
         assert cfg.repo == "https://github.com/owner/repo"
 
     def test_github_style_default(self, tmp_project: Path):
         assert Config(tmp_project).github_style == "widget"
 
     def test_github_style_icon(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "github_style: icon\n")
+        cfg = write_config(tmp_project, "github_style: icon\n")
         assert cfg.github_style == "icon"
 
     def test_source_enabled_default(self, tmp_project: Path):
@@ -176,22 +173,22 @@ class TestScalarProperties:
         assert Config(tmp_project).custom_pages == [{"dir": "custom", "output": "custom"}]
 
     def test_custom_pages_false_disables_processing(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "custom_pages: false\n")
+        cfg = write_config(tmp_project, "custom_pages: false\n")
         assert cfg.custom_pages == []
 
     def test_custom_pages_string_uses_basename_for_output(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "custom_pages: marketing/pages\n")
+        cfg = write_config(tmp_project, "custom_pages: marketing/pages\n")
         assert cfg.custom_pages == [{"dir": "marketing/pages", "output": "pages"}]
 
     def test_custom_pages_dict_supports_output_override(self, tmp_project: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "custom_pages:\n  dir: marketing\n  output: py\n",
         )
         assert cfg.custom_pages == [{"dir": "marketing", "output": "py"}]
 
     def test_custom_pages_list_normalizes_multiple_entries(self, tmp_project: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "custom_pages:\n  - marketing\n  - dir: playgrounds/raw\n    output: demos\n",
         )
@@ -207,7 +204,7 @@ class TestScalarProperties:
         assert Config(tmp_project).back_to_top is True
 
     def test_back_to_top_false(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "back_to_top: false\n")
+        cfg = write_config(tmp_project, "back_to_top: false\n")
         assert cfg.back_to_top is False
 
     def test_wide_layout_defaults(self, tmp_project: Path):
@@ -222,16 +219,16 @@ class TestScalarProperties:
         }
 
     def test_wide_layout_bool_shorthand(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "wide_layout: false\n")
+        cfg = write_config(tmp_project, "wide_layout: false\n")
         assert cfg.wide_layout_enabled is False
         assert cfg.wide_layout is None
 
-        cfg = _make_config(tmp_project, "wide_layout: true\n")
+        cfg = write_config(tmp_project, "wide_layout: true\n")
         assert cfg.wide_layout is not None
         assert cfg.wide_layout["content_scale"] == 1.5
 
     def test_wide_layout_custom_values(self, tmp_project: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "wide_layout:\n  default: wide\n  content_scale: 1.75\n"
             "  sidebar_scale: 1\n  min_viewport: 1800\n",
@@ -245,7 +242,7 @@ class TestScalarProperties:
         }
 
     def test_wide_layout_invalid_values_fall_back(self, tmp_project: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "wide_layout:\n  default: huge\n  content_scale: 0.5\n"
             "  sidebar_scale: lots\n  min_viewport: -5\n",
@@ -271,7 +268,7 @@ class TestScalarProperties:
     )
     def test_wide_layout_prose_max_width(self, tmp_project: Path, raw, expected):
         value = raw if not isinstance(raw, str) or raw == "null" else f'"{raw}"'
-        cfg = _make_config(tmp_project, f"wide_layout:\n  prose_max_width: {value}\n")
+        cfg = write_config(tmp_project, f"wide_layout:\n  prose_max_width: {value}\n")
         assert cfg.wide_layout is not None
         assert cfg.wide_layout["prose_max_width"] == expected
 
@@ -279,7 +276,7 @@ class TestScalarProperties:
         assert Config(tmp_project).keyboard_nav is True
 
     def test_keyboard_nav_false(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "keyboard_nav: false\n")
+        cfg = write_config(tmp_project, "keyboard_nav: false\n")
         assert cfg.keyboard_nav is False
 
     def test_parser_default(self, tmp_project: Path):
@@ -318,34 +315,34 @@ class TestScalarProperties:
         assert Config(tmp_project).lang == "en"
 
     def test_lang_custom(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "site:\n  lang: fr\n")
+        cfg = write_config(tmp_project, "site:\n  lang: fr\n")
         assert cfg.lang == "fr"
         assert cfg.site["lang"] == "fr"
 
     def test_site_language_reads_as_site_lang(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "site:\n  language: fr\n")
+        cfg = write_config(tmp_project, "site:\n  language: fr\n")
         assert cfg.lang == "fr"
         assert cfg.site["lang"] == "fr"
         assert "language" not in cfg.site
 
     def test_site_lang_wins_over_site_language(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "site:\n  lang: de\n  language: fr\n")
+        cfg = write_config(tmp_project, "site:\n  lang: de\n  language: fr\n")
         assert cfg.lang == "de"
 
     def test_top_level_language_is_ignored(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "language: fr\n")
+        cfg = write_config(tmp_project, "language: fr\n")
         assert cfg.lang == "en"
 
     def test_user_config_keeps_what_the_user_wrote(self, tmp_project: Path):
         # Lint reports the deprecated spelling, so it must survive the load.
-        cfg = _make_config(tmp_project, "site:\n  language: fr\n")
+        cfg = write_config(tmp_project, "site:\n  language: fr\n")
         assert cfg._user_config == {"site": {"language": "fr"}}
 
     def test_attribution_default(self, tmp_project: Path):
         assert Config(tmp_project).attribution is True
 
     def test_attribution_false(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "attribution: false\n")
+        cfg = write_config(tmp_project, "attribution: false\n")
         assert cfg.attribution is False
 
 
@@ -354,12 +351,12 @@ class TestHomepage:
         assert Config(tmp_project).homepage == "index"
 
     def test_user_guide(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "homepage: user_guide\n")
+        cfg = write_config(tmp_project, "homepage: user_guide\n")
         assert cfg.homepage == "user_guide"
 
     def test_invalid_value_falls_back(self, tmp_project: Path, capsys):
         """Covers lines 365-366 (invalid homepage value)."""
-        cfg = _make_config(tmp_project, "homepage: bogus\n")
+        cfg = write_config(tmp_project, "homepage: bogus\n")
         assert cfg.homepage == "index"
         captured = capsys.readouterr()
         assert "Warning: Invalid homepage value" in captured.out
@@ -370,14 +367,14 @@ class TestUserGuide:
         assert Config(tmp_project).user_guide is None
 
     def test_string(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "user_guide: docs/guides\n")
+        cfg = write_config(tmp_project, "user_guide: docs/guides\n")
         assert cfg.user_guide == "docs/guides"
         assert cfg.user_guide_dir == "docs/guides"
         assert cfg.user_guide_is_explicit is False
 
     def test_list_explicit(self, tmp_project: Path):
         """Covers line 385 (user_guide_is_explicit True branch)."""
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "user_guide:\n  - section: Get Started\n    contents:\n      - intro.qmd\n",
         )
@@ -395,7 +392,7 @@ class TestReference:
         assert cfg.reference_desc is None
 
     def test_list_form(self, tmp_project: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "reference:\n  - title: Core\n    contents:\n      - MyClass\n",
         )
@@ -404,7 +401,7 @@ class TestReference:
 
     def test_dict_form_with_sections(self, tmp_project: Path):
         """Covers lines 432-436 (dict form with embedded sections)."""
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             (
                 "reference:\n"
@@ -422,14 +419,14 @@ class TestReference:
 
     def test_dict_form_without_sections_key(self, tmp_project: Path):
         """Dict form but no 'sections' key → empty list."""
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "reference:\n  title: API Docs\n",
         )
         assert cfg.reference == []
 
     def test_reference_disabled(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "reference: false\n")
+        cfg = write_config(tmp_project, "reference: false\n")
         assert cfg.reference_enabled is False
         assert cfg.reference == []
 
@@ -441,17 +438,17 @@ class TestMarkdownPages:
         assert cfg.markdown_pages_widget is True
 
     def test_false(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "markdown_pages: false\n")
+        cfg = write_config(tmp_project, "markdown_pages: false\n")
         assert cfg.markdown_pages is False
         assert cfg.markdown_pages_widget is False
 
     def test_dict_widget_false(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "markdown_pages:\n  widget: false\n")
+        cfg = write_config(tmp_project, "markdown_pages:\n  widget: false\n")
         assert cfg.markdown_pages is True
         assert cfg.markdown_pages_widget is False
 
     def test_dict_enabled_false(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "markdown_pages:\n  enabled: false\n")
+        cfg = write_config(tmp_project, "markdown_pages:\n  enabled: false\n")
         assert cfg.markdown_pages is False
         assert cfg.markdown_pages_widget is False
 
@@ -464,12 +461,12 @@ class TestMarkdownPagesCanonical:
         assert cfg.markdown_pages_widget is True
 
     def test_bool_false(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "markdown_pages: false\n")
+        cfg = write_config(tmp_path, "markdown_pages: false\n")
         assert cfg.markdown_pages is False
         assert cfg.markdown_pages_widget is False
 
     def test_widget_only(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "markdown_pages:\n  widget: false\n")
+        cfg = write_config(tmp_path, "markdown_pages:\n  widget: false\n")
         assert cfg.markdown_pages is True
         assert cfg.markdown_pages_widget is False
 
@@ -482,7 +479,7 @@ class TestLogo:
 
     def test_string(self, tmp_project: Path):
         """Covers line 503 (logo string → dict expansion)."""
-        cfg = _make_config(tmp_project, "logo: assets/logo.svg\n")
+        cfg = write_config(tmp_project, "logo: assets/logo.svg\n")
         assert cfg.logo == {
             "light": "assets/logo.svg",
             "dark": "assets/logo.svg",
@@ -494,13 +491,13 @@ class TestLogo:
         falls back to the same asset so navbar-logo injection (core.py) never
         sees a `None` `light` path (roborev #801 finding 2).
         """
-        cfg = _make_config(tmp_project, "logo:\n  dark: d.svg\n")
+        cfg = write_config(tmp_project, "logo:\n  dark: d.svg\n")
         assert cfg.logo is not None
         assert cfg.logo["dark"] == "d.svg"
         assert cfg.logo["light"] == "d.svg"
 
     def test_dict(self, tmp_project: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "logo:\n  light: light.svg\n  dark: dark.svg\n  show_title: true\n",
         )
@@ -509,7 +506,7 @@ class TestLogo:
 
     def test_unsupported_type_returns_none(self, tmp_project: Path):
         """Covers line 506 (logo fallback None for non-str/dict)."""
-        cfg = _make_config(tmp_project, "logo: 123\n")
+        cfg = write_config(tmp_project, "logo: 123\n")
         assert cfg.logo is None
 
 
@@ -531,23 +528,23 @@ class TestHero:
 
     def test_auto_enable_with_logo(self, tmp_project: Path):
         """hero=None + logo configured → hero auto-enabled."""
-        cfg = _make_config(tmp_project, "logo: logo.svg\n")
+        cfg = write_config(tmp_project, "logo: logo.svg\n")
         assert cfg.hero_enabled is True
 
     def test_hero_false(self, tmp_project: Path):
         """Covers line 525 (hero=False)."""
-        cfg = _make_config(tmp_project, "hero: false\n")
+        cfg = write_config(tmp_project, "hero: false\n")
         assert cfg.hero_enabled is False
         assert cfg.hero_explicitly_disabled is True
 
     def test_hero_true(self, tmp_project: Path):
         """Covers line 528 (hero=True → enabled)."""
-        cfg = _make_config(tmp_project, "hero: true\n")
+        cfg = write_config(tmp_project, "hero: true\n")
         assert cfg.hero_enabled is True
 
     def test_hero_dict_enabled(self, tmp_project: Path):
         """A dict form with an explicit `enabled: true` and a customization field."""
-        cfg = _make_config(tmp_project, "hero:\n  enabled: true\n  name: My Package\n")
+        cfg = write_config(tmp_project, "hero:\n  enabled: true\n  name: My Package\n")
         assert cfg.hero_enabled is True
 
     def test_hero_dict_any_field_enables_for_backward_compat(self, tmp_project: Path):
@@ -558,7 +555,7 @@ class TestHero:
         configs that set hero sub-fields without `enabled` or a logo must keep
         rendering a hero — silently preserved for compatibility.
         """
-        cfg = _make_config(tmp_project, "hero:\n  name: My Package\n")
+        cfg = write_config(tmp_project, "hero:\n  name: My Package\n")
         assert cfg.hero_enabled is True
 
     def test_hero_logo_only_auto_enables(self, tmp_project: Path):
@@ -568,7 +565,7 @@ class TestHero:
         explicit hero.logo -> detected hero logo -> navbar logo -> detected navbar
         logo), so "auto" must consider both ends of it, not just the navbar logo.
         """
-        cfg = _make_config(tmp_project, "hero:\n  logo: x.svg\n")
+        cfg = write_config(tmp_project, "hero:\n  logo: x.svg\n")
         assert cfg.hero_enabled is True
 
     def test_empty_hero_dict_enables_for_backward_compat(self, tmp_project: Path):
@@ -577,25 +574,25 @@ class TestHero:
         Matches the documented `hero` summary table in user_guide/11-theming.qmd:
         "`false` to disable; `true` to force-enable; dict to customize".
         """
-        cfg = _make_config(tmp_project, "hero: {}\n")
+        cfg = write_config(tmp_project, "hero: {}\n")
         assert cfg.hero_enabled is True
 
     def test_hero_null_with_no_logo_stays_disabled(self, tmp_project: Path):
         """`hero: null` is not a dict, so it falls back to logo-based auto-detection."""
-        cfg = _make_config(tmp_project, "hero: null\n")
+        cfg = write_config(tmp_project, "hero: null\n")
         assert cfg.hero_enabled is False
 
     def test_hero_dict_with_badges_false_and_no_logo_enables(self, tmp_project: Path):
         """Regression: `hero: {name: ..., badges: false}` without a logo still
         enables the hero (roborev #801 finding 1).
         """
-        cfg = _make_config(tmp_project, "hero:\n  name: My Package\n  badges: false\n")
+        cfg = write_config(tmp_project, "hero:\n  name: My Package\n  badges: false\n")
         assert cfg.hero_enabled is True
         assert cfg.hero_badges is None
 
     def test_hero_dict_explicitly_disabled(self, tmp_project: Path):
         """Covers line 540 (hero dict with enabled: false)."""
-        cfg = _make_config(tmp_project, "hero:\n  enabled: false\n")
+        cfg = write_config(tmp_project, "hero:\n  enabled: false\n")
         assert cfg.hero_enabled is False
         assert cfg.hero_explicitly_disabled is True
 
@@ -606,7 +603,7 @@ class TestHero:
         this, core.py's _build_hero_section silently drops the hero logo
         image entirely (final-review finding on roborev #801 batch).
         """
-        cfg = _make_config(tmp_project, "hero:\n  logo:\n    dark: hero-d.svg\n")
+        cfg = write_config(tmp_project, "hero:\n  logo:\n    dark: hero-d.svg\n")
         assert cfg.hero_logo["dark"] == "hero-d.svg"
         assert cfg.hero_logo["light"] == "hero-d.svg"
 
@@ -617,12 +614,12 @@ class TestHeroLogo:
         assert cfg.hero_logo is None
 
     def test_explicit_logo(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "hero:\n  logo: hero.svg\n")
+        cfg = write_config(tmp_project, "hero:\n  logo: hero.svg\n")
         assert cfg.hero_logo == "hero.svg"
 
     def test_suppressed(self, tmp_project: Path):
         """Covers line 567 (hero logo = false)."""
-        cfg = _make_config(tmp_project, "hero:\n  logo: false\n")
+        cfg = write_config(tmp_project, "hero:\n  logo: false\n")
         assert cfg.hero_logo is False
 
     def test_hero_logo_height_default(self, tmp_project: Path):
@@ -630,22 +627,22 @@ class TestHeroLogo:
         assert cfg.hero_logo_height == "200px"
 
     def test_hero_logo_height_custom(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "hero:\n  logo_height: 300px\n")
+        cfg = write_config(tmp_project, "hero:\n  logo_height: 300px\n")
         assert cfg.hero_logo_height == "300px"
 
 
 class TestHeroName:
     def test_default_fallback_to_display_name(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "display_name: My Pkg\n")
+        cfg = write_config(tmp_project, "display_name: My Pkg\n")
         assert cfg.hero_name == "My Pkg"
 
     def test_custom(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "hero:\n  name: Custom Name\n")
+        cfg = write_config(tmp_project, "hero:\n  name: Custom Name\n")
         assert cfg.hero_name == "Custom Name"
 
     def test_suppressed(self, tmp_project: Path):
         """Covers line 587 (hero name = false → False)."""
-        cfg = _make_config(tmp_project, "hero:\n  name: false\n")
+        cfg = write_config(tmp_project, "hero:\n  name: false\n")
         assert cfg.hero_name is False
 
 
@@ -655,12 +652,12 @@ class TestHeroTagline:
         assert cfg.hero_tagline is None
 
     def test_custom(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "hero:\n  tagline: A great package\n")
+        cfg = write_config(tmp_project, "hero:\n  tagline: A great package\n")
         assert cfg.hero_tagline == "A great package"
 
     def test_suppressed(self, tmp_project: Path):
         """Covers line 602 (hero tagline = false → None)."""
-        cfg = _make_config(tmp_project, "hero:\n  tagline: false\n")
+        cfg = write_config(tmp_project, "hero:\n  tagline: false\n")
         assert cfg.hero_tagline is None
 
 
@@ -670,7 +667,7 @@ class TestHeroBadges:
         assert cfg.hero_badges == "auto"
 
     def test_explicit_list(self, tmp_project: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "hero:\n  badges:\n    - url: https://badge.svg\n",
         )
@@ -678,7 +675,7 @@ class TestHeroBadges:
 
     def test_suppressed(self, tmp_project: Path):
         """Covers line 615 (hero badges = false → None)."""
-        cfg = _make_config(tmp_project, "hero:\n  badges: false\n")
+        cfg = write_config(tmp_project, "hero:\n  badges: false\n")
         assert cfg.hero_badges is None
 
 
@@ -692,16 +689,16 @@ class TestHeroCanonical:
         assert cfg.hero_badges == "auto"
 
     def test_false_disables(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "hero: false\n")
+        cfg = write_config(tmp_path, "hero: false\n")
         assert cfg.hero_enabled is False
         assert cfg.hero_explicitly_disabled is True
 
     def test_true_enables(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "hero: true\n")
+        cfg = write_config(tmp_path, "hero: true\n")
         assert cfg.hero_enabled is True
 
     def test_dict_overrides(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "hero:\n  logo_height: 300px\n")
+        cfg = write_config(tmp_path, "hero:\n  logo_height: 300px\n")
         assert cfg.hero_logo_height == "300px"
         assert cfg.hero_badges == "auto"  # untouched sub-default survives
 
@@ -711,18 +708,18 @@ class TestFavicon:
         assert Config(tmp_project).favicon is None
 
     def test_string(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "favicon: favicon.ico\n")
+        cfg = write_config(tmp_project, "favicon: favicon.ico\n")
         assert cfg.favicon == {"icon": "favicon.ico"}
 
     def test_dict(self, tmp_project: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "favicon:\n  icon: favicon.ico\n  apple_touch: apple.png\n",
         )
         assert cfg.favicon == {"icon": "favicon.ico", "apple_touch": "apple.png"}
 
     def test_unsupported_type_returns_none(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "favicon: 42\n")
+        cfg = write_config(tmp_project, "favicon: 42\n")
         assert cfg.favicon is None
 
 
@@ -731,12 +728,12 @@ class TestAnnouncement:
         assert Config(tmp_project).announcement is None
 
     def test_false(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "announcement: false\n")
+        cfg = write_config(tmp_project, "announcement: false\n")
         assert cfg.announcement is None
 
     def test_string(self, tmp_project: Path):
         """Covers line 655 (announcement string → normalized dict)."""
-        cfg = _make_config(tmp_project, "announcement: New release!\n")
+        cfg = write_config(tmp_project, "announcement: New release!\n")
         assert cfg.announcement == {
             "content": "New release!",
             "type": "info",
@@ -748,7 +745,7 @@ class TestAnnouncement:
 
     def test_dict_full(self, tmp_project: Path):
         """Covers line 659 (announcement dict)."""
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             (
                 "announcement:\n"
@@ -770,27 +767,27 @@ class TestAnnouncement:
         }
 
     def test_position_defaults_above_navbar_for_string(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "announcement: Hi\n")
+        cfg = write_config(tmp_project, "announcement: Hi\n")
         assert cfg.announcement["position"] == "above-navbar"
 
     def test_position_defaults_above_navbar_for_dict(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "announcement:\n  content: Hi\n")
+        cfg = write_config(tmp_project, "announcement:\n  content: Hi\n")
         assert cfg.announcement["position"] == "above-navbar"
 
     def test_position_below_navbar(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "announcement:\n  content: Hi\n  position: below-navbar\n")
+        cfg = write_config(tmp_project, "announcement:\n  content: Hi\n  position: below-navbar\n")
         assert cfg.announcement["position"] == "below-navbar"
 
     def test_position_invalid_falls_back_to_above(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "announcement:\n  content: Hi\n  position: sideways\n")
+        cfg = write_config(tmp_project, "announcement:\n  content: Hi\n  position: sideways\n")
         assert cfg.announcement["position"] == "above-navbar"
 
     def test_dict_empty_content_returns_none(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "announcement:\n  type: info\n")
+        cfg = write_config(tmp_project, "announcement:\n  type: info\n")
         assert cfg.announcement is None
 
     def test_unsupported_type_returns_none(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "announcement: 123\n")
+        cfg = write_config(tmp_project, "announcement: 123\n")
         assert cfg.announcement is None
 
 
@@ -800,14 +797,14 @@ class TestAnnouncementCanonical:
         assert Config(tmp_project).announcement is None  # content null
 
     def test_string_shorthand(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, 'announcement: "Heads up"\n')
+        cfg = write_config(tmp_path, 'announcement: "Heads up"\n')
         a = cfg.announcement
         assert a["content"] == "Heads up"
         assert a["type"] == "info"
         assert a["dismissable"] is True
 
     def test_dict_partial(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "announcement:\n  content: Hi\n  type: warning\n")
+        cfg = write_config(tmp_path, "announcement:\n  content: Hi\n  type: warning\n")
         a = cfg.announcement
         assert a["type"] == "warning"
         assert a["dismissable"] is True
@@ -819,19 +816,19 @@ class TestIncludeInHeader:
 
     def test_none_value(self, tmp_project: Path):
         """Covers line 678 (include_in_header: null → [])."""
-        cfg = _make_config(tmp_project, "include_in_header: null\n")
+        cfg = write_config(tmp_project, "include_in_header: null\n")
         assert cfg.include_in_header == []
 
     def test_string(self, tmp_project: Path):
         """Covers line 680 (string → [{"text": ...}])."""
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "include_in_header: '<script src=\"x.js\"></script>'\n",
         )
         assert cfg.include_in_header == [{"text": '<script src="x.js"></script>'}]
 
     def test_list_of_strings(self, tmp_project: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "include_in_header:\n  - '<script>1</script>'\n  - '<script>2</script>'\n",
         )
@@ -842,14 +839,14 @@ class TestIncludeInHeader:
 
     def test_list_of_dicts(self, tmp_project: Path):
         """Covers lines 686-687 (dict items in list)."""
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "include_in_header:\n  - file: extra.html\n",
         )
         assert cfg.include_in_header == [{"file": "extra.html"}]
 
     def test_list_mixed(self, tmp_project: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "include_in_header:\n  - '<script>x</script>'\n  - file: extra.html\n",
         )
@@ -869,7 +866,7 @@ class TestIncludeInHeader:
 
     def test_unsupported_type_returns_empty(self, tmp_project: Path):
         """Covers line 689 (non-str/list/None → [])."""
-        cfg = _make_config(tmp_project, "include_in_header: 42\n")
+        cfg = write_config(tmp_project, "include_in_header: 42\n")
         assert cfg.include_in_header == []
 
 
@@ -878,29 +875,29 @@ class TestFreeze:
         assert Config(tmp_project).freeze == "auto"
 
     def test_auto_string(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "freeze: auto\n")
+        cfg = write_config(tmp_project, "freeze: auto\n")
         assert cfg.freeze == "auto"
 
     def test_true_bool(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "freeze: true\n")
+        cfg = write_config(tmp_project, "freeze: true\n")
         assert cfg.freeze is True
 
     def test_false_disabled(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "freeze: false\n")
+        cfg = write_config(tmp_project, "freeze: false\n")
         assert cfg.freeze is None
 
     def test_dict_form_mode(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "freeze:\n  mode: auto\n  pre_render: restore.py\n")
+        cfg = write_config(tmp_project, "freeze:\n  mode: auto\n  pre_render: restore.py\n")
         assert cfg.freeze == "auto"
 
     def test_dict_form_mode_true(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "freeze:\n  mode: true\n")
+        cfg = write_config(tmp_project, "freeze:\n  mode: true\n")
         # YAML parses `mode: true` as boolean True
         assert cfg.freeze is True
 
     def test_string_true(self, tmp_project: Path):
         """String 'true' is normalized to boolean True."""
-        cfg = _make_config(tmp_project, 'freeze: "true"\n')
+        cfg = write_config(tmp_project, 'freeze: "true"\n')
         assert cfg.freeze is True
 
 
@@ -910,15 +907,15 @@ class TestFreezeCanonical:
         assert Config(tmp_project).freeze == "auto"
 
     def test_null_disables(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "freeze: null\n")
+        cfg = write_config(tmp_path, "freeze: null\n")
         assert cfg.freeze is None
 
     def test_true(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "freeze: true\n")
+        cfg = write_config(tmp_path, "freeze: true\n")
         assert cfg.freeze is True
 
     def test_pre_render_from_dict(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "freeze:\n  mode: auto\n  pre_render: cp.sh\n")
+        cfg = write_config(tmp_path, "freeze:\n  mode: auto\n  pre_render: cp.sh\n")
         assert cfg.pre_render == ["cp.sh"]
 
 
@@ -927,33 +924,33 @@ class TestPreRender:
         assert Config(tmp_project).pre_render == []
 
     def test_single_string(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "pre_render: scripts/restore.py\n")
+        cfg = write_config(tmp_project, "pre_render: scripts/restore.py\n")
         assert cfg.pre_render == ["scripts/restore.py"]
 
     def test_list(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "pre_render:\n  - scripts/a.py\n  - scripts/b.py\n")
+        cfg = write_config(tmp_project, "pre_render:\n  - scripts/a.py\n  - scripts/b.py\n")
         assert cfg.pre_render == ["scripts/a.py", "scripts/b.py"]
 
     def test_from_freeze_dict(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "freeze:\n  mode: auto\n  pre_render: scripts/restore.py\n")
+        cfg = write_config(tmp_project, "freeze:\n  mode: auto\n  pre_render: scripts/restore.py\n")
         assert cfg.pre_render == ["scripts/restore.py"]
 
     def test_freeze_dict_list(self, tmp_project: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "freeze:\n  mode: auto\n  pre_render:\n    - a.py\n    - b.py\n",
         )
         assert cfg.pre_render == ["a.py", "b.py"]
 
     def test_combined_no_duplicates(self, tmp_project: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "freeze:\n  mode: auto\n  pre_render: scripts/restore.py\npre_render: scripts/restore.py\n",
         )
         assert cfg.pre_render == ["scripts/restore.py"]
 
     def test_combined_different_scripts(self, tmp_project: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "freeze:\n  mode: auto\n  pre_render: a.py\npre_render: b.py\n",
         )
@@ -1065,7 +1062,7 @@ class TestNavbarStyle:
         assert Config(tmp_project).navbar_style is None
 
     def test_custom(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "navbar_style: sky\n")
+        cfg = write_config(tmp_project, "navbar_style: sky\n")
         assert cfg.navbar_style == "sky"
 
 
@@ -1075,11 +1072,11 @@ class TestNavbarColor:
 
     def test_string(self, tmp_project: Path):
         """Covers line 720 (string → light+dark dict)."""
-        cfg = _make_config(tmp_project, "navbar_color: '#336699'\n")
+        cfg = write_config(tmp_project, "navbar_color: '#336699'\n")
         assert cfg.navbar_color == {"light": "#336699", "dark": "#336699"}
 
     def test_dict(self, tmp_project: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "navbar_color:\n  light: '#fff'\n  dark: '#333'\n",
         )
@@ -1087,19 +1084,19 @@ class TestNavbarColor:
 
     def test_dict_empty_returns_none(self, tmp_project: Path):
         """Covers line 728 (empty dict → None)."""
-        cfg = _make_config(tmp_project, "navbar_color:\n  invalid_key: foo\n")
+        cfg = write_config(tmp_project, "navbar_color:\n  invalid_key: foo\n")
         assert cfg.navbar_color is None
 
     def test_overridden_by_navbar_style(self, tmp_project: Path):
         """navbar_style takes precedence → navbar_color returns None."""
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "navbar_style: sky\nnavbar_color: '#336699'\n",
         )
         assert cfg.navbar_color is None
 
     def test_false_returns_none(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "navbar_color: false\n")
+        cfg = write_config(tmp_project, "navbar_color: false\n")
         assert cfg.navbar_color is None
 
     def test_unsupported_type_returns_none(self, tmp_project: Path):
@@ -1115,11 +1112,11 @@ class TestContentStyle:
 
     def test_string(self, tmp_project: Path):
         """Covers line 741 (string → preset+pages dict)."""
-        cfg = _make_config(tmp_project, "content_style: peach\n")
+        cfg = write_config(tmp_project, "content_style: peach\n")
         assert cfg.content_style == {"preset": "peach", "pages": "all"}
 
     def test_dict_with_homepage(self, tmp_project: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "content_style:\n  preset: lilac\n  pages: homepage\n",
         )
@@ -1127,23 +1124,23 @@ class TestContentStyle:
 
     def test_dict_invalid_pages_falls_back(self, tmp_project: Path):
         """Covers line 744 (invalid pages value → 'all')."""
-        cfg = _make_config(
+        cfg = write_config(
             tmp_project,
             "content_style:\n  preset: sky\n  pages: invalid\n",
         )
         assert cfg.content_style == {"preset": "sky", "pages": "all"}
 
     def test_dict_missing_preset_returns_none(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "content_style:\n  pages: all\n")
+        cfg = write_config(tmp_project, "content_style:\n  pages: all\n")
         assert cfg.content_style is None
 
     def test_false_returns_none(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "content_style: false\n")
+        cfg = write_config(tmp_project, "content_style: false\n")
         assert cfg.content_style is None
 
     def test_unsupported_type_returns_none(self, tmp_project: Path):
         """Covers line 746 (non-str/dict → None)."""
-        cfg = _make_config(tmp_project, "content_style: 42\n")
+        cfg = write_config(tmp_project, "content_style: 42\n")
         assert cfg.content_style is None
 
 
@@ -1153,11 +1150,11 @@ class TestContentStyleCanonical:
         assert Config(tmp_project).content_style is None
 
     def test_string_shorthand(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "content_style: sky\n")
+        cfg = write_config(tmp_path, "content_style: sky\n")
         assert cfg.content_style == {"preset": "sky", "pages": "all"}
 
     def test_dict(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "content_style:\n  preset: peach\n  pages: homepage\n")
+        cfg = write_config(tmp_path, "content_style:\n  preset: peach\n  pages: homepage\n")
         assert cfg.content_style == {"preset": "peach", "pages": "homepage"}
 
 
@@ -1167,7 +1164,7 @@ class TestLogoCanonical:
         assert Config(tmp_project).logo is None
 
     def test_string_shorthand(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "logo: assets/logo.svg\n")
+        cfg = write_config(tmp_path, "logo: assets/logo.svg\n")
         assert cfg.logo == {
             "light": "assets/logo.svg",
             "dark": "assets/logo.svg",
@@ -1175,13 +1172,13 @@ class TestLogoCanonical:
         }
 
     def test_dict_show_title(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "logo:\n  light: a.svg\n  show_title: true\n")
+        cfg = write_config(tmp_path, "logo:\n  light: a.svg\n  show_title: true\n")
         assert cfg.logo_show_title is True
 
 
 class TestExistsAndToDict:
     def test_exists_true(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "parser: google\n")
+        cfg = write_config(tmp_project, "parser: google\n")
         assert cfg.exists() is True
 
     def test_exists_false(self, tmp_project: Path):
@@ -1218,16 +1215,14 @@ class TestModuleFunctions:
 
 def test_custom_pages_dict_no_output(tmp_path):
     """Dict entry with missing output falls back to dir name."""
-    (tmp_path / "great-docs.yml").write_text("custom_pages:\n  - dir: my_pages\n")
-    cfg = Config(tmp_path)
+    cfg = write_config(tmp_path, "custom_pages:\n  - dir: my_pages\n")
     result = cfg.custom_pages
     assert result == [{"dir": "my_pages", "output": "my_pages"}]
 
 
 def test_custom_pages_dict_empty_output(tmp_path):
     """Dict entry with empty-string output falls back to dir name."""
-    (tmp_path / "great-docs.yml").write_text('custom_pages:\n  - dir: my_pages\n    output: ""\n')
-    cfg = Config(tmp_path)
+    cfg = write_config(tmp_path, 'custom_pages:\n  - dir: my_pages\n    output: ""\n')
     result = cfg.custom_pages
     assert result[0]["output"] == "my_pages"
 
@@ -1237,8 +1232,7 @@ def test_custom_pages_dict_empty_output(tmp_path):
 
 def test_dark_mode_toggle_false(tmp_path):
     """dark_mode_toggle returns False when explicitly disabled."""
-    (tmp_path / "great-docs.yml").write_text("dark_mode_toggle: false\n")
-    cfg = Config(tmp_path)
+    cfg = write_config(tmp_path, "dark_mode_toggle: false\n")
     assert cfg.dark_mode_toggle is False
 
 
@@ -1247,18 +1241,16 @@ def test_dark_mode_toggle_false(tmp_path):
 
 def test_team_author_with_name(tmp_path):
     """team_author returns dict when configured with a name."""
-    (tmp_path / "great-docs.yml").write_text(
-        "team_author:\n  name: Team\n  image: avatar.png\n  url: https://team.dev\n"
+    cfg = write_config(
+        tmp_path, "team_author:\n  name: Team\n  image: avatar.png\n  url: https://team.dev\n"
     )
-    cfg = Config(tmp_path)
     result = cfg.team_author
     assert result == {"name": "Team", "image": "avatar.png", "url": "https://team.dev"}
 
 
 def test_team_author_missing_name(tmp_path):
     """team_author returns None when name is not set."""
-    (tmp_path / "great-docs.yml").write_text("team_author:\n  image: avatar.png\n")
-    cfg = Config(tmp_path)
+    cfg = write_config(tmp_path, "team_author:\n  image: avatar.png\n")
     assert cfg.team_author is None
 
 
@@ -1273,8 +1265,7 @@ def test_team_author_none(tmp_path):
 
 def test_jupyter_custom_kernel(tmp_path):
     """jupyter returns custom kernel name when configured."""
-    (tmp_path / "great-docs.yml").write_text("jupyter: ir\n")
-    cfg = Config(tmp_path)
+    cfg = write_config(tmp_path, "jupyter: ir\n")
     assert cfg.jupyter == "ir"
 
 
@@ -1283,29 +1274,25 @@ def test_jupyter_custom_kernel(tmp_path):
 
 def test_social_cards_image(tmp_path):
     """social_cards_image returns image path from dict config."""
-    (tmp_path / "great-docs.yml").write_text("social_cards:\n  image: card.png\n")
-    cfg = Config(tmp_path)
+    cfg = write_config(tmp_path, "social_cards:\n  image: card.png\n")
     assert cfg.social_cards_image == "card.png"
 
 
 def test_social_cards_image_none(tmp_path):
     """social_cards_image returns None when not dict."""
-    (tmp_path / "great-docs.yml").write_text("social_cards: true\n")
-    cfg = Config(tmp_path)
+    cfg = write_config(tmp_path, "social_cards: true\n")
     assert cfg.social_cards_image is None
 
 
 def test_social_cards_twitter_card(tmp_path):
     """social_cards_twitter_card returns card type."""
-    (tmp_path / "great-docs.yml").write_text("social_cards:\n  twitter_card: summary_large_image\n")
-    cfg = Config(tmp_path)
+    cfg = write_config(tmp_path, "social_cards:\n  twitter_card: summary_large_image\n")
     assert cfg.social_cards_twitter_card == "summary_large_image"
 
 
 def test_social_cards_twitter_site(tmp_path):
     """social_cards_twitter_site returns handle."""
-    (tmp_path / "great-docs.yml").write_text("social_cards:\n  twitter_site: '@myhandle'\n")
-    cfg = Config(tmp_path)
+    cfg = write_config(tmp_path, "social_cards:\n  twitter_site: '@myhandle'\n")
     assert cfg.social_cards_twitter_site == "@myhandle"
 
 
@@ -1314,8 +1301,7 @@ def test_social_cards_twitter_site(tmp_path):
 
 def test_tags_index_page_true(tmp_path):
     """tags_index_page returns True when tags are enabled."""
-    (tmp_path / "great-docs.yml").write_text("tags: true\n")
-    cfg = Config(tmp_path)
+    cfg = write_config(tmp_path, "tags: true\n")
     assert cfg.tags_index_page is True
 
 
@@ -1335,58 +1321,58 @@ class TestShouldSplitMethods:
         assert cfg.should_split_methods(6) is True
 
     def test_true_never_splits(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "inline_methods: true\n")
+        cfg = write_config(tmp_project, "inline_methods: true\n")
         assert cfg.should_split_methods(0) is False
         assert cfg.should_split_methods(100) is False
 
     def test_false_always_splits(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "inline_methods: false\n")
+        cfg = write_config(tmp_project, "inline_methods: false\n")
         assert cfg.should_split_methods(1) is True
         assert cfg.should_split_methods(100) is True
 
     def test_false_does_not_split_zero_methods(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "inline_methods: false\n")
+        cfg = write_config(tmp_project, "inline_methods: false\n")
         assert cfg.should_split_methods(0) is False
 
     def test_custom_threshold(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "inline_methods: 10\n")
+        cfg = write_config(tmp_project, "inline_methods: 10\n")
         assert cfg.should_split_methods(10) is False
         assert cfg.should_split_methods(11) is True
 
     def test_invalid_value_falls_back_to_default(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, 'inline_methods: "abc"\n')
+        cfg = write_config(tmp_project, 'inline_methods: "abc"\n')
         assert cfg.should_split_methods(5) is False
         assert cfg.should_split_methods(6) is True
 
     def test_null_falls_back_to_default(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "inline_methods: null\n")
+        cfg = write_config(tmp_project, "inline_methods: null\n")
         assert cfg.should_split_methods(5) is False
         assert cfg.should_split_methods(6) is True
 
     def test_zero_threshold_splits_any_methods(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "inline_methods: 0\n")
+        cfg = write_config(tmp_project, "inline_methods: 0\n")
         assert cfg.should_split_methods(0) is False
         assert cfg.should_split_methods(1) is True
 
     def test_one_threshold(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "inline_methods: 1\n")
+        cfg = write_config(tmp_project, "inline_methods: 1\n")
         assert cfg.should_split_methods(1) is False
         assert cfg.should_split_methods(2) is True
 
     def test_float_value_truncated_to_int(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "inline_methods: 3.9\n")
+        cfg = write_config(tmp_project, "inline_methods: 3.9\n")
         # float 3.9 → int(3.9) = 3
         assert cfg.should_split_methods(3) is False
         assert cfg.should_split_methods(4) is True
 
     def test_negative_threshold_always_splits(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "inline_methods: -1\n")
+        cfg = write_config(tmp_project, "inline_methods: -1\n")
         # Any method_count > -1 is always true
         assert cfg.should_split_methods(0) is False  # zero-methods guard
         assert cfg.should_split_methods(1) is True
 
     def test_large_threshold_never_splits_in_practice(self, tmp_project: Path):
-        cfg = _make_config(tmp_project, "inline_methods: 1000\n")
+        cfg = write_config(tmp_project, "inline_methods: 1000\n")
         assert cfg.should_split_methods(999) is False
         assert cfg.should_split_methods(1000) is False
         assert cfg.should_split_methods(1001) is True
@@ -1399,18 +1385,18 @@ class TestShouldSplitMethods:
 
 
 def test_legacy_site_keys_lift_to_top_level(tmp_path: Path):
-    cfg = _make_config(tmp_path, "site:\n  show_dates: true\n")
+    cfg = write_config(tmp_path, "site:\n  show_dates: true\n")
     assert cfg.show_dates is True
     assert "show_dates" not in cfg.site
 
 
 def test_explicit_top_level_wins_over_legacy_site(tmp_path: Path):
-    cfg = _make_config(tmp_path, "site:\n  show_dates: false\nshow_dates: true\n")
+    cfg = write_config(tmp_path, "site:\n  show_dates: false\nshow_dates: true\n")
     assert cfg.show_dates is True
 
 
 def test_site_quarto_excludes_css_and_legacy_keys(tmp_path: Path):
-    cfg = _make_config(
+    cfg = write_config(
         tmp_path,
         "site:\n  grid: {sidebar-width: 250px}\n  css: custom.css\n  show_dates: true\n",
     )
@@ -1481,27 +1467,27 @@ class TestTypedEmptyDefaults:
 
 class TestShorthandNormalization:
     def test_page_status_true(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "page_status: true\n")
+        cfg = write_config(tmp_path, "page_status: true\n")
         assert cfg["page_status.enabled"] is True
         assert cfg.page_status_show_in_sidebar is True  # sub-defaults survive
 
     def test_tags_false(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "tags: false\n")
+        cfg = write_config(tmp_path, "tags: false\n")
         assert cfg["tags.enabled"] is False
         assert cfg["tags.hierarchical"] is True
 
     def test_social_cards_false(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "social_cards: false\n")
+        cfg = write_config(tmp_path, "social_cards: false\n")
         assert cfg["social_cards.enabled"] is False
         assert cfg.social_cards_enabled is False
 
     def test_mcp_false(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "mcp: false\n")
+        cfg = write_config(tmp_path, "mcp: false\n")
         assert cfg.mcp_enabled is False
         assert cfg.mcp_categories == {}  # sub-defaults survive
 
     def test_mcp_null(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "mcp:\n")
+        cfg = write_config(tmp_path, "mcp:\n")
         assert cfg.mcp_enabled is False
         assert cfg.mcp_module is None
 
@@ -1510,13 +1496,13 @@ class TestNonMappingConfig:
     """A syntactically valid great-docs.yml that isn't a mapping falls back to defaults."""
 
     def test_list_document(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]):
-        cfg = _make_config(tmp_path, "- one\n- two\n")
+        cfg = write_config(tmp_path, "- one\n- two\n")
         assert cfg.parser == DEFAULT_CONFIG["parser"]
         assert cfg.hero_enabled is False
         assert "must be a mapping" in capsys.readouterr().out
 
     def test_scalar_document(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]):
-        cfg = _make_config(tmp_path, "just a string\n")
+        cfg = write_config(tmp_path, "just a string\n")
         assert cfg.parser == DEFAULT_CONFIG["parser"]
         assert "must be a mapping" in capsys.readouterr().out
 
@@ -1524,76 +1510,76 @@ class TestNonMappingConfig:
 class TestParser:
     @pytest.mark.parametrize("parser", ["numpy", "google", "sphinx"])
     def test_supported_parser_loads(self, tmp_path: Path, parser: str):
-        assert _make_config(tmp_path, f"parser: {parser}\n").parser == parser
+        assert write_config(tmp_path, f"parser: {parser}\n").parser == parser
 
     def test_empty_parser_is_rejected(self, tmp_path: Path):
         with pytest.raises(ConfigError, match="None.*numpy, google, sphinx"):
-            _make_config(tmp_path, "parser:\n")
+            write_config(tmp_path, "parser:\n")
 
     def test_unknown_parser_is_rejected(self, tmp_path: Path):
         with pytest.raises(ConfigError, match="'auto'.*numpy, google, sphinx"):
-            _make_config(tmp_path, "parser: auto\n")
+            write_config(tmp_path, "parser: auto\n")
 
 
 class TestChangelogShorthand:
     def test_false_disables(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "changelog: false\n")
+        cfg = write_config(tmp_path, "changelog: false\n")
         assert cfg.changelog_enabled is False
         assert cfg.changelog_max_releases == DEFAULT_CONFIG["changelog"]["max_releases"]
 
     def test_true_enables_with_default_max_releases(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "changelog: true\n")
+        cfg = write_config(tmp_path, "changelog: true\n")
         assert cfg.changelog_enabled is True
         assert cfg.changelog_max_releases == DEFAULT_CONFIG["changelog"]["max_releases"]
 
     def test_null_keeps_defaults(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "changelog:\n")
+        cfg = write_config(tmp_path, "changelog:\n")
         assert cfg.changelog_enabled is DEFAULT_CONFIG["changelog"]["enabled"]
         assert cfg.changelog_max_releases == DEFAULT_CONFIG["changelog"]["max_releases"]
 
     @pytest.mark.parametrize("value", ["CHANGELOG.md", "5"])
     def test_other_scalar_is_rejected(self, tmp_path: Path, value: str):
         with pytest.raises(ConfigError, match="great-docs.yml.*changelog.*true or false"):
-            _make_config(tmp_path, f"changelog: {value}\n")
+            write_config(tmp_path, f"changelog: {value}\n")
 
 
 class TestSeoShorthandNormalization:
     def test_sitemap_true_expands(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "seo:\n  sitemap: true\n")
+        cfg = write_config(tmp_path, "seo:\n  sitemap: true\n")
         assert cfg["seo.sitemap.enabled"] is True
         assert cfg.sitemap_enabled is True
         assert cfg.sitemap_changefreq["homepage"] == "weekly"  # full default dict, no KeyError
         assert cfg.sitemap_priority["homepage"] == 1.0
 
     def test_sitemap_false_expands(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "seo:\n  sitemap: false\n")
+        cfg = write_config(tmp_path, "seo:\n  sitemap: false\n")
         assert cfg["seo.sitemap.enabled"] is False
         assert cfg.sitemap_enabled is False
 
     def test_robots_true_expands(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "seo:\n  robots: true\n")
+        cfg = write_config(tmp_path, "seo:\n  robots: true\n")
         assert cfg["seo.robots.enabled"] is True
         assert cfg.robots_disallow == []  # sub-defaults survive
 
     def test_top_level_seo_false_expands(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "seo: false\n")
+        cfg = write_config(tmp_path, "seo: false\n")
         assert cfg.seo_enabled is False
 
     def test_top_level_seo_true_expands(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "seo: true\n")
+        cfg = write_config(tmp_path, "seo: true\n")
         assert cfg.seo_enabled is True
         assert cfg.sitemap_enabled is True  # sub-defaults survive
 
     def test_top_level_seo_null_keeps_defaults(self, tmp_path: Path):
         # `seo:` with nothing under it (an empty or commented-out block) parses
         # as None; SEO stays on, as it did before strict subscript reads.
-        cfg = _make_config(tmp_path, "seo:\n")
+        cfg = write_config(tmp_path, "seo:\n")
         assert cfg.seo_enabled is True
         assert cfg.sitemap_enabled is True
         assert cfg.sitemap_changefreq["homepage"] == "weekly"
 
     def test_nested_seo_null_keeps_defaults(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "seo:\n  sitemap:\n")
+        cfg = write_config(tmp_path, "seo:\n  sitemap:\n")
         assert cfg.seo_enabled is True
         assert cfg.sitemap_enabled is True
         assert cfg.sitemap_changefreq["homepage"] == "weekly"
@@ -1619,17 +1605,17 @@ class TestNullMeansUnspecified:
 
     @pytest.mark.parametrize("key", _KEYS)
     def test_null_reads_as_absent(self, tmp_path: Path, key: str):
-        cfg = _make_config(tmp_path, f"{key}:\n")
+        cfg = write_config(tmp_path, f"{key}:\n")
         assert cfg[key] == DEFAULT_CONFIG[key]
 
     @pytest.mark.parametrize(("key", "sub"), _SUB_KEYS)
     def test_null_sub_key_reads_as_absent(self, tmp_path: Path, key: str, sub: str):
-        cfg = _make_config(tmp_path, f"{key}:\n  {sub}:\n")
+        cfg = write_config(tmp_path, f"{key}:\n  {sub}:\n")
         assert cfg[f"{key}.{sub}"] == DEFAULT_CONFIG[key][sub]
 
     def test_null_disables_are_still_off(self, tmp_path: Path):
         # The backward-compatible exceptions: on by default, off when nulled.
-        cfg = _make_config(tmp_path, "social_cards:\nmarkdown_pages:\nmcp:\nfreeze:\n")
+        cfg = write_config(tmp_path, "social_cards:\nmarkdown_pages:\nmcp:\nfreeze:\n")
         assert cfg.social_cards_enabled is False
         assert cfg.markdown_pages is False
         assert cfg.mcp_enabled is False
@@ -1650,26 +1636,26 @@ class TestPypiResolution:
         assert Config(tmp_project).pypi is True
 
     def test_auto_is_off_for_non_python_project(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "project_type: go\n")
+        cfg = write_config(tmp_path, "project_type: go\n")
         assert cfg.pypi is False
 
     def test_auto_links_for_mixed_project(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "project_type: [python, go]\n")
+        cfg = write_config(tmp_path, "project_type: [python, go]\n")
         assert cfg.pypi is True
 
     @pytest.mark.parametrize("project_type", ["python", "go"])
     def test_explicit_true_is_obeyed(self, tmp_path: Path, project_type: str):
-        cfg = _make_config(tmp_path, f"project_type: {project_type}\npypi: true\n")
+        cfg = write_config(tmp_path, f"project_type: {project_type}\npypi: true\n")
         assert cfg.pypi is True
 
     @pytest.mark.parametrize("project_type", ["python", "go"])
     def test_explicit_false_is_obeyed(self, tmp_path: Path, project_type: str):
-        cfg = _make_config(tmp_path, f"project_type: {project_type}\npypi: false\n")
+        cfg = write_config(tmp_path, f"project_type: {project_type}\npypi: false\n")
         assert cfg.pypi is False
 
     @pytest.mark.parametrize("project_type", ["python", "go"])
     def test_explicit_url_is_obeyed(self, tmp_path: Path, project_type: str):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_path,
             f'project_type: {project_type}\npypi: "https://packages.example.com/simple/pkg"\n',
         )
@@ -1677,7 +1663,7 @@ class TestPypiResolution:
 
     def test_explicit_null_is_auto(self, tmp_path: Path):
         """An explicit `null` means auto, never a `None` leaking to the caller."""
-        cfg = _make_config(tmp_path, "project_type: go\npypi:\n")
+        cfg = write_config(tmp_path, "project_type: go\npypi:\n")
         assert cfg.pypi is False
 
 
@@ -1757,25 +1743,19 @@ class TestSingleSourceInvariant:
         )
 
 
-def _make_config(tmp_path: Path, yaml_text: str) -> Config:
-    """Write yaml_text to great-docs.yml and return a Config."""
-    (tmp_path / "great-docs.yml").write_text(yaml_text, encoding="utf-8")
-    return Config(tmp_path)
-
-
 # Legacy key normalisation when site is not a dict
 
 
 class TestLiftLegacySiteKeys:
     def test_site_not_dict_returns_config_unchanged(self, tmp_path):
         """When site is a scalar (not dict), legacy key lifting is skipped."""
-        cfg = _make_config(tmp_path, "site: plain_string\n")
+        cfg = write_config(tmp_path, "site: plain_string\n")
         # Should not raise; config is returned as-is with site as string
         assert cfg._config.get("site") == "plain_string"
 
     def test_site_is_list_returns_config_unchanged(self, tmp_path):
         """When site is a list, legacy key lifting is skipped."""
-        cfg = _make_config(tmp_path, "site:\n  - item1\n  - item2\n")
+        cfg = write_config(tmp_path, "site:\n  - item1\n  - item2\n")
         assert cfg._config.get("site") == ["item1", "item2"]
 
 
@@ -1785,12 +1765,12 @@ class TestLiftLegacySiteKeys:
 class TestCliSections:
     def test_cli_sections_not_list_returns_empty(self, tmp_path):
         """When cli.sections is a non-list value, returns empty list."""
-        cfg = _make_config(tmp_path, "cli:\n  sections: false\n")
+        cfg = write_config(tmp_path, "cli:\n  sections: false\n")
         assert cfg.cli_sections == []
 
     def test_cli_sections_string_returns_empty(self, tmp_path):
         """When cli.sections is a string, returns empty list."""
-        cfg = _make_config(tmp_path, "cli:\n  sections: auto\n")
+        cfg = write_config(tmp_path, "cli:\n  sections: auto\n")
         assert cfg.cli_sections == []
 
 
@@ -1800,7 +1780,7 @@ class TestCliSections:
 class TestMarimoVersion:
     def test_explicit_version_from_config(self, tmp_path):
         """When marimo.version is set, returns that string."""
-        cfg = _make_config(tmp_path, "marimo:\n  version: 0.9.1\n")
+        cfg = write_config(tmp_path, "marimo:\n  version: 0.9.1\n")
         assert cfg.marimo_version == "0.9.1"
 
 
@@ -1810,17 +1790,17 @@ class TestMarimoVersion:
 class TestCustomPages:
     def test_dict_entry_with_empty_dir_skipped(self, tmp_path):
         """Dict entry whose dir is empty string is skipped."""
-        cfg = _make_config(tmp_path, 'custom_pages:\n  - dir: ""\n    output: out\n')
+        cfg = write_config(tmp_path, 'custom_pages:\n  - dir: ""\n    output: out\n')
         assert cfg.custom_pages == []
 
     def test_dict_entry_with_non_string_dir_skipped(self, tmp_path):
         """Dict entry with numeric dir is skipped."""
-        cfg = _make_config(tmp_path, "custom_pages:\n  - dir: 42\n    output: out\n")
+        cfg = write_config(tmp_path, "custom_pages:\n  - dir: 42\n    output: out\n")
         assert cfg.custom_pages == []
 
     def test_dict_entry_missing_dir_skipped(self, tmp_path):
         """Dict entry without a dir key is skipped."""
-        cfg = _make_config(tmp_path, "custom_pages:\n  - output: out\n")
+        cfg = write_config(tmp_path, "custom_pages:\n  - output: out\n")
         assert cfg.custom_pages == []
 
 
@@ -1830,7 +1810,7 @@ class TestCustomPages:
 class TestVersionSelectorEnabled:
     def test_enabled_when_versions_configured(self, tmp_path):
         """Returns the config value when versions are defined."""
-        cfg = _make_config(
+        cfg = write_config(
             tmp_path,
             "versions:\n  - tag: v1.0\n    label: '1.0'\nversion_selector:\n  enabled: true\n",
         )
@@ -1843,12 +1823,12 @@ class TestVersionSelectorEnabled:
 class TestFreezeMode:
     def test_unknown_string_returns_none(self, tmp_path):
         """An unrecognized string freeze mode returns None."""
-        cfg = _make_config(tmp_path, "freeze:\n  mode: invalid_mode\n")
+        cfg = write_config(tmp_path, "freeze:\n  mode: invalid_mode\n")
         assert cfg.freeze is None
 
     def test_string_true_returns_bool_true(self, tmp_path):
         """String 'true' (case-insensitive) returns boolean True."""
-        cfg = _make_config(tmp_path, "freeze:\n  mode: 'True'\n")
+        cfg = write_config(tmp_path, "freeze:\n  mode: 'True'\n")
         assert cfg.freeze is True
 
 
@@ -1858,12 +1838,12 @@ class TestFreezeMode:
 class TestBibliography:
     def test_non_str_non_list_returns_empty(self, tmp_path):
         """When bibliography is not a string or list, returns []."""
-        cfg = _make_config(tmp_path, "bibliography: false\n")
+        cfg = write_config(tmp_path, "bibliography: false\n")
         assert cfg.bibliography == []
 
     def test_string_returns_single_item_list(self, tmp_path):
         """When bibliography is a string, wraps it in a list."""
-        cfg = _make_config(tmp_path, "bibliography: refs.bib\n")
+        cfg = write_config(tmp_path, "bibliography: refs.bib\n")
         assert cfg.bibliography == ["refs.bib"]
 
 
@@ -1873,12 +1853,12 @@ class TestBibliography:
 class TestCssFiles:
     def test_single_string_returns_list(self, tmp_path):
         """A single CSS string is wrapped in a list."""
-        cfg = _make_config(tmp_path, "site:\n  css: styles.css\n")
+        cfg = write_config(tmp_path, "site:\n  css: styles.css\n")
         assert cfg.css == ["styles.css"]
 
     def test_list_filters_non_strings(self, tmp_path):
         """A list of CSS files filters out non-string entries."""
-        cfg = _make_config(tmp_path, "site:\n  css:\n    - custom.css\n    - 42\n    - theme.css\n")
+        cfg = write_config(tmp_path, "site:\n  css:\n    - custom.css\n    - 42\n    - theme.css\n")
         assert cfg.css == ["custom.css", "theme.css"]
 
 
@@ -1888,12 +1868,12 @@ class TestCssFiles:
 class TestNavIcons:
     def test_non_dict_truthy_returns_none(self, tmp_path):
         """When nav_icons is a truthy non-dict (e.g., string), returns None."""
-        cfg = _make_config(tmp_path, "nav_icons: enabled\n")
+        cfg = write_config(tmp_path, "nav_icons: enabled\n")
         assert cfg.nav_icons is None
 
     def test_dict_with_valid_scopes(self, tmp_path):
         """Dict with navbar/sidebar scopes returns properly normalized."""
-        cfg = _make_config(
+        cfg = write_config(
             tmp_path,
             "nav_icons:\n  navbar:\n    Reference: book-open\n  sidebar:\n    Guide: map\n",
         )
@@ -1905,7 +1885,7 @@ class TestNavIcons:
 
     def test_dict_empty_scopes_returns_none(self, tmp_path):
         """Dict with no valid scopes returns None."""
-        cfg = _make_config(tmp_path, "nav_icons:\n  footer:\n    About: info\n")
+        cfg = write_config(tmp_path, "nav_icons:\n  footer:\n    About: info\n")
         assert cfg.nav_icons is None
 
 
@@ -1915,22 +1895,22 @@ class TestNavIcons:
 class TestAccentColor:
     def test_string_returns_both_light_dark(self, tmp_path):
         """A single color string is used for both light and dark."""
-        cfg = _make_config(tmp_path, "accent_color: '#ff6600'\n")
+        cfg = write_config(tmp_path, "accent_color: '#ff6600'\n")
         assert cfg.accent_color == {"light": "#ff6600", "dark": "#ff6600"}
 
     def test_dict_with_light_and_dark(self, tmp_path):
         """Dict with light and dark keys."""
-        cfg = _make_config(tmp_path, "accent_color:\n  light: '#333'\n  dark: '#eee'\n")
+        cfg = write_config(tmp_path, "accent_color:\n  light: '#333'\n  dark: '#eee'\n")
         assert cfg.accent_color == {"light": "#333", "dark": "#eee"}
 
     def test_dict_empty_values_returns_none(self, tmp_path):
         """Dict where all values are falsy returns None."""
-        cfg = _make_config(tmp_path, "accent_color:\n  light: ''\n  dark: ''\n")
+        cfg = write_config(tmp_path, "accent_color:\n  light: ''\n  dark: ''\n")
         assert cfg.accent_color is None
 
     def test_non_str_non_dict_returns_none(self, tmp_path):
         """A non-str, non-dict truthy value returns None."""
-        cfg = _make_config(tmp_path, "accent_color:\n  - red\n  - blue\n")
+        cfg = write_config(tmp_path, "accent_color:\n  - red\n  - blue\n")
         assert cfg.accent_color is None
 
 
@@ -1947,7 +1927,7 @@ class TestNavbarOrder:
 
     def test_valid_list_returns_list(self, tmp_path):
         """When navbar_order is a list of strings, returns it."""
-        cfg = _make_config(tmp_path, "navbar_order:\n  - Reference\n  - Guide\n  - Changelog\n")
+        cfg = write_config(tmp_path, "navbar_order:\n  - Reference\n  - Guide\n  - Changelog\n")
         assert cfg.navbar_order == ["Reference", "Guide", "Changelog"]
 
 
@@ -1959,27 +1939,27 @@ class TestRefSectionOrder:
         assert Config(tmp_path).ref_section_order is None
 
     def test_valid_list(self, tmp_path):
-        cfg = _make_config(tmp_path, "ref_section_order:\n  - cli\n  - python\n  - mcp\n")
+        cfg = write_config(tmp_path, "ref_section_order:\n  - cli\n  - python\n  - mcp\n")
         assert cfg.ref_section_order == ["cli", "api", "mcp"]
 
     def test_api_alias_of_python(self, tmp_path):
-        cfg = _make_config(tmp_path, "ref_section_order:\n  - cli\n  - api\n  - mcp\n")
+        cfg = write_config(tmp_path, "ref_section_order:\n  - cli\n  - api\n  - mcp\n")
         assert cfg.ref_section_order == ["cli", "api", "mcp"]
 
     def test_duplicates_dropped(self, tmp_path):
-        cfg = _make_config(tmp_path, "ref_section_order:\n  - python\n  - cli\n  - api\n")
+        cfg = write_config(tmp_path, "ref_section_order:\n  - python\n  - cli\n  - api\n")
         assert cfg.ref_section_order == ["api", "cli"]
 
     def test_filters_invalid_values(self, tmp_path):
-        cfg = _make_config(tmp_path, "ref_section_order:\n  - cli\n  - bogus\n  - python\n")
+        cfg = write_config(tmp_path, "ref_section_order:\n  - cli\n  - bogus\n  - python\n")
         assert cfg.ref_section_order == ["cli", "api"]
 
     def test_all_invalid_returns_none(self, tmp_path):
-        cfg = _make_config(tmp_path, "ref_section_order:\n  - bogus\n  - nope\n")
+        cfg = write_config(tmp_path, "ref_section_order:\n  - bogus\n  - nope\n")
         assert cfg.ref_section_order is None
 
     def test_non_list_returns_none(self, tmp_path):
-        cfg = _make_config(tmp_path, "ref_section_order: cli\n")
+        cfg = write_config(tmp_path, "ref_section_order: cli\n")
         assert cfg.ref_section_order is None
 
     def test_key_missing_returns_none(self, tmp_path):
@@ -1994,19 +1974,19 @@ class TestRefSectionOrder:
 class TestScaleToFit:
     def test_list_filters_empty_strings(self, tmp_path):
         """List of selectors filters out empty/whitespace-only strings."""
-        cfg = _make_config(
+        cfg = write_config(
             tmp_path, "scale_to_fit:\n  - '.wide-table'\n  - ''\n  - '.code-block'\n"
         )
         assert cfg.scale_to_fit == [".wide-table", ".code-block"]
 
     def test_single_string_returns_list(self, tmp_path):
         """A single string selector is wrapped in a list."""
-        cfg = _make_config(tmp_path, "scale_to_fit: '.data-frame'\n")
+        cfg = write_config(tmp_path, "scale_to_fit: '.data-frame'\n")
         assert cfg.scale_to_fit == [".data-frame"]
 
     def test_non_list_non_str_returns_none(self, tmp_path):
         """A numeric value (not list/str/None/False) returns None."""
-        cfg = _make_config(tmp_path, "scale_to_fit: 42\n")
+        cfg = write_config(tmp_path, "scale_to_fit: 42\n")
         assert cfg.scale_to_fit is None
 
 
@@ -2016,37 +1996,37 @@ class TestScaleToFit:
 class TestScaleToFitMinScale:
     def test_keyword_mobile(self, tmp_path):
         """Recognized keyword 'mobile' is returned lowercased."""
-        cfg = _make_config(tmp_path, "scale_to_fit_min_scale: Mobile\n")
+        cfg = write_config(tmp_path, "scale_to_fit_min_scale: Mobile\n")
         assert cfg.scale_to_fit_min_scale == "mobile"
 
     def test_keyword_tablet(self, tmp_path):
         """Recognized keyword 'tablet'."""
-        cfg = _make_config(tmp_path, "scale_to_fit_min_scale: tablet\n")
+        cfg = write_config(tmp_path, "scale_to_fit_min_scale: tablet\n")
         assert cfg.scale_to_fit_min_scale == "tablet"
 
     def test_unknown_string_returns_none(self, tmp_path):
         """Unrecognized string keyword returns None."""
-        cfg = _make_config(tmp_path, "scale_to_fit_min_scale: xlarge\n")
+        cfg = write_config(tmp_path, "scale_to_fit_min_scale: xlarge\n")
         assert cfg.scale_to_fit_min_scale is None
 
     def test_valid_float(self, tmp_path):
         """Float between 0 and 1 is returned as float."""
-        cfg = _make_config(tmp_path, "scale_to_fit_min_scale: 0.5\n")
+        cfg = write_config(tmp_path, "scale_to_fit_min_scale: 0.5\n")
         assert cfg.scale_to_fit_min_scale == 0.5
 
     def test_float_out_of_range_returns_none(self, tmp_path):
         """Float >= 1 returns None."""
-        cfg = _make_config(tmp_path, "scale_to_fit_min_scale: 1.5\n")
+        cfg = write_config(tmp_path, "scale_to_fit_min_scale: 1.5\n")
         assert cfg.scale_to_fit_min_scale is None
 
     def test_float_zero_returns_none(self, tmp_path):
         """Float == 0 returns None (not in (0,1) range)."""
-        cfg = _make_config(tmp_path, "scale_to_fit_min_scale: 0\n")
+        cfg = write_config(tmp_path, "scale_to_fit_min_scale: 0\n")
         assert cfg.scale_to_fit_min_scale is None
 
     def test_invalid_type_returns_none(self, tmp_path):
         """A list value returns None (cannot convert to float)."""
-        cfg = _make_config(tmp_path, "scale_to_fit_min_scale:\n  - 0.5\n")
+        cfg = write_config(tmp_path, "scale_to_fit_min_scale:\n  - 0.5\n")
         assert cfg.scale_to_fit_min_scale is None
 
 

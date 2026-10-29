@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from great_docs import GreatDocs
+from tests.support import write_config
 
 # ── Setup: make test-packages/synthetic importable ───────────────────────────
 
@@ -929,9 +930,7 @@ def _setup_blended_homepage(pkg_dir: Path, spec: dict) -> GreatDocs:
     strips unknown keys like `homepage`.  This helper merges the spec's
     `config` dict back into the generated file and reloads before proceeding.
     """
-    from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
-
-    from great_docs.config import Config
+    from yaml12 import format_yaml, parse_yaml, read_yaml
 
     docs = GreatDocs(project_path=str(pkg_dir))
     docs.install(force=True)
@@ -942,13 +941,7 @@ def _setup_blended_homepage(pkg_dir: Path, spec: dict) -> GreatDocs:
         with open(config_path, "r", encoding="utf-8") as f:
             existing = read_yaml(f) or {}
         existing.update(spec["config"])
-        with open(config_path, "w", encoding="utf-8") as f:
-            write_yaml(existing, f)
-        docs._config = Config(
-            docs.layout.package_root,
-            config_path=docs.layout.config_path,
-            cache_dir=docs.layout.cache_dir,
-        )
+        docs._config = write_config(docs.layout.package_root, existing)
 
     docs._prepare_build_directory()
     docs._process_user_guide()

@@ -6,11 +6,7 @@ import pytest
 
 from great_docs._icons import LUCIDE_ICONS, get_icon_svg, list_icons
 from great_docs.config import Config
-
-
-def _make_config(tmp_path: Path, yaml_text: str) -> Config:
-    (tmp_path / "great-docs.yml").write_text(yaml_text, encoding="utf-8")
-    return Config(tmp_path)
+from tests.support import write_config
 
 
 class TestLucideIcons:
@@ -93,11 +89,11 @@ class TestNavIconsConfig:
         assert cfg.nav_icons is None
 
     def test_false_is_none(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "nav_icons: false\n")
+        cfg = write_config(tmp_path, "nav_icons: false\n")
         assert cfg.nav_icons is None
 
     def test_navbar_only(self, tmp_path: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_path,
             "nav_icons:\n  navbar:\n    User Guide: book-open\n    Reference: code-2\n",
         )
@@ -108,7 +104,7 @@ class TestNavIconsConfig:
         assert icons["navbar"]["Reference"] == "code-2"
 
     def test_sidebar_only(self, tmp_path: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_path,
             "nav_icons:\n  sidebar:\n    Getting Started: rocket\n",
         )
@@ -118,7 +114,7 @@ class TestNavIconsConfig:
         assert icons["sidebar"]["Getting Started"] == "rocket"
 
     def test_both_navbar_and_sidebar(self, tmp_path: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_path,
             "nav_icons:\n  navbar:\n    Recipes: chef-hat\n  sidebar:\n    Quick Start: rocket\n",
         )
@@ -128,19 +124,19 @@ class TestNavIconsConfig:
         assert icons["sidebar"]["Quick Start"] == "rocket"
 
     def test_empty_dict_returns_none(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "nav_icons:\n  foo: bar\n")
+        cfg = write_config(tmp_path, "nav_icons:\n  foo: bar\n")
         # No 'navbar' or 'sidebar' keys -> None
         assert cfg.nav_icons is None
 
     def test_nav_icons_navbar_property(self, tmp_path: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_path,
             "nav_icons:\n  navbar:\n    Changelog: history\n",
         )
         assert cfg.nav_icons_navbar == {"Changelog": "history"}
 
     def test_nav_icons_sidebar_property(self, tmp_path: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_path,
             "nav_icons:\n  sidebar:\n    Config: settings\n",
         )
@@ -156,7 +152,7 @@ class TestNavIconsConfig:
 
     def test_values_coerced_to_strings(self, tmp_path: Path):
         # Ensure non-string YAML values get coerced
-        cfg = _make_config(
+        cfg = write_config(
             tmp_path,
             "nav_icons:\n  navbar:\n    123: home\n",
         )
