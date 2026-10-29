@@ -153,7 +153,7 @@ def main() -> None:
     classes = [f"Widget{i:04d}" for i in range(args.classes)]
     names = funcs + classes
 
-    parts = [f'"""Synthetic benchmark package"""\n\n__version__ = "0.1.0"\n']
+    parts = ['"""Synthetic benchmark package"""\n\n__version__ = "0.1.0"\n']
     parts.append("__all__ = [\n" + "".join(f'    "{n}",\n' for n in names) + "]\n")
     for i, name in enumerate(funcs):
         other = funcs[(i + 1) % len(funcs)]
