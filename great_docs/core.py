@@ -330,7 +330,7 @@ class GreatDocs:
         # The repository root, so the renderer can build source-link paths
         # relative to it (preserving `src/` and other non-flat layouts)
         # instead of griffe's package-parent-relative path, which 404s.
-        os.environ["PACKAGE_ROOT"] = str(self._find_package_root())
+        os.environ["PACKAGE_ROOT"] = str(self.layout.package_root)
         # Optional explicit source-path override for monorepos (source.path).
         # Cleared when unset so a previous project's override (same process) can't leak
         source_path = self._config.source_path
@@ -554,14 +554,13 @@ class GreatDocs:
                 # Marimo's import accesses sys.stdout.encoding at class-def time,
                 # so ensure the stream has that attribute before importing.
                 import io as _io
-                import sys as _sys
 
-                _orig_stdout = _sys.stdout
-                _orig_stderr = _sys.stderr
-                if not hasattr(_sys.stdout, "encoding"):
-                    _sys.stdout = _io.TextIOWrapper(_io.BytesIO(), encoding="utf-8")
-                if not hasattr(_sys.stderr, "encoding"):
-                    _sys.stderr = _io.TextIOWrapper(_io.BytesIO(), encoding="utf-8")
+                _orig_stdout = sys.stdout
+                _orig_stderr = sys.stderr
+                if not hasattr(sys.stdout, "encoding"):
+                    sys.stdout = _io.TextIOWrapper(_io.BytesIO(), encoding="utf-8")
+                if not hasattr(sys.stderr, "encoding"):
+                    sys.stderr = _io.TextIOWrapper(_io.BytesIO(), encoding="utf-8")
                 try:
                     from great_docs._marimo import generate_islands_for_build
 
@@ -581,14 +580,12 @@ class GreatDocs:
                     # (readers can edit code and re-run, with dependents updating)
                     # rendered with marimo's full editor chrome. Inline island mode
                     # is the lightweight, read-only-code alternative.
-                    import subprocess
-
                     for nb_file in notebooks_src.glob("*.py"):
                         wasm_dir = self.build_dir / "notebooks" / nb_file.stem
                         wasm_dir.mkdir(parents=True, exist_ok=True)
                         result = subprocess.run(
                             [
-                                _sys.executable,
+                                sys.executable,
                                 "-m",
                                 "marimo",
                                 "export",
@@ -628,8 +625,8 @@ class GreatDocs:
                                     encoding="utf-8",
                                 )
                 finally:
-                    _sys.stdout = _orig_stdout
-                    _sys.stderr = _orig_stderr
+                    sys.stdout = _orig_stdout
+                    sys.stderr = _orig_stderr
 
         # Copy lightbox assets (JS + CSS live with the extension but also need
         # to be available as top-level resources for the Lua filter's injection)
@@ -1151,8 +1148,6 @@ class GreatDocs:
             with open(setup_py, "r") as f:
                 content = f.read()
                 # Simple regex to find name="..." in setup()
-                import re
-
                 match = re.search(r'name\s*=\s*["\']([^"\']+)["\']', content)
                 if match:
                     return match.group(1)
@@ -1505,7 +1500,7 @@ class GreatDocs:
         if self._config.module:
             return self._config.module
 
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
 
         # Check for .pyi stub files (common for PyO3/Rust/compiled extensions)
         # These indicate the actual module name for compiled packages
@@ -1636,7 +1631,7 @@ class GreatDocs:
         bool
             True if this appears to be a compiled extension package.
         """
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
 
         # Check for Cargo.toml (Rust/PyO3)
         if (package_root / "Cargo.toml").exists():
@@ -1652,46 +1647,6 @@ class GreatDocs:
 
         return False
 
-    def _find_package_root(self) -> Path:
-        """
-        Return the package root selected for this documentation project
-        """
-        return self.layout.package_root
-
-    def _detect_go_cli_project(self):
-        """Detect whether the project is a Go CLI project.
-
-        Delegates to `great_docs._go_cli.detect_go_cli_project` with the resolved project root. The
-        check is purely file-system based (reads `go.mod` and looks for `main.go` entry-points) and
-        never invokes the Go compiler.
-
-        Returns
-        -------
-        GoCliProject | None
-            A `~great_docs._go_cli.GoCliProject` instance when the project root contains a `go.mod`
-            and at least one main package, or `None` otherwise.
-        """
-        from great_docs._go_cli import detect_go_cli_project
-
-        return detect_go_cli_project(self._find_package_root())
-
-    def _detect_rust_cli_project(self):
-        """Detect whether the project is a Rust CLI project.
-
-        Delegates to `great_docs._rust_cli.detect_rust_cli_project` with the resolved project root.
-        The check is purely file-system based (reads `Cargo.toml` and looks for binary targets) and
-        never invokes the Rust compiler.
-
-        Returns
-        -------
-        RustCliProject | None
-            A `~great_docs._rust_cli.RustCliProject` instance when the project root contains a
-            `Cargo.toml` and at least one binary target, or `None` otherwise.
-        """
-        from great_docs._rust_cli import detect_rust_cli_project
-
-        return detect_rust_cli_project(self._find_package_root())
-
     def _griffe_search_paths(self) -> list[str | Path]:
         """Return search paths for griffe so it can find src/python/lib layouts.
 
@@ -1699,9 +1654,7 @@ class GreatDocs:
         `sys.path` so that griffe can locate packages in non-flat layouts while still falling back
         to the normal import path.
         """
-        import sys
-
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
         extra: list[str | Path] = [package_root]
         for subdir in ("src", "python", "lib"):
             candidate = package_root / subdir
@@ -1730,10 +1683,8 @@ class GreatDocs:
         dict[str, str]
             Environment variables dictionary with QUARTO_PYTHON and PYTHONPATH set.
         """
-        import sys
-
         env = os.environ.copy()
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
 
         # Look for a virtual environment in the project
         venv_paths = [
@@ -1799,7 +1750,7 @@ class GreatDocs:
             return cache
 
         metadata = {}
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
         pyproject_path = package_root / "pyproject.toml"
 
         # Read project metadata from pyproject.toml
@@ -3995,13 +3946,6 @@ class GreatDocs:
 
         return sources
 
-    @staticmethod
-    def _html_escape(text: str) -> str:
-        """Escape HTML-special characters in *text*."""
-        import html
-
-        return html.escape(text, quote=True)
-
     def _derive_page_title(self, path: Path) -> str:
         """Derive a human-readable title from a source filename."""
         name = path.stem.replace("-", " ").replace("_", " ")
@@ -4375,7 +4319,7 @@ class GreatDocs:
             The entry point name (e.g., `"great-docs"` from `"[project.scripts]"`), or `None` if not
             found.
         """
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
         pyproject_path = package_root / "pyproject.toml"
 
         if not pyproject_path.exists():
@@ -4585,8 +4529,6 @@ class GreatDocs:
         # Remove literal \b if present
         description = description.replace("\\b", "")
         # Collapse runs of blank lines to a single blank line
-        import re
-
         description = re.sub(r"\n{3,}", "\n\n", description)
 
         # Clean trailing blanks from examples
@@ -4607,8 +4549,6 @@ class GreatDocs:
         Only wraps tokens not already inside backticks.  Avoids matching
         apostrophes in contractions/possessives (e.g. "package's", "hasn't").
         """
-        import re
-
         if not text:
             return text
 
@@ -5354,30 +5294,6 @@ class GreatDocs:
         return discover_mcp_server(
             module_path=module_path,
             server_var=self._config.mcp_server_var,
-        )
-
-    def _generate_mcp_reference_pages(self, mcp_info: dict) -> list[str | dict]:
-        """
-        Generate Quarto reference pages for MCP server tools/resources/prompts.
-
-        Parameters
-        ----------
-        mcp_info
-            Server metadata from _discover_mcp_server().
-
-        Returns
-        -------
-        list[str | dict]
-            Sidebar items for the generated pages.
-        """
-        from ._mcp_docs import generate_mcp_reference_pages
-
-        mcp_ref_dir = self.build_dir / "reference" / "mcp"
-        return generate_mcp_reference_pages(
-            server_info=mcp_info,
-            output_dir=mcp_ref_dir,
-            categories=self._config.mcp_categories or None,
-            display_name=self._config.mcp_name,
         )
 
     def _update_sidebar_with_mcp(self, mcp_files: list[str | dict]) -> None:
@@ -6873,8 +6789,6 @@ class GreatDocs:
         # `title` already provides the title-block heading; keeping the
         # body `#` would render as a duplicate paragraph because
         # `shift-heading-level-by: -1` demotes it below heading level.
-        import re
-
         body = re.sub(r"^#\s+[^\n]*\n?", "", body, count=1, flags=re.MULTILINE)
 
         # Build hero block for insertion
@@ -6925,10 +6839,9 @@ class GreatDocs:
         :
             The tag or branch name, or `main` as the fallback.
         """
-        import subprocess
         import time
 
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
 
         # First check if there's a configured branch in metadata
         metadata = self._get_package_metadata()
@@ -7010,7 +6923,7 @@ class GreatDocs:
         normalized_name = package_name.replace("-", "_")
 
         # First, try to get explicit package info from pyproject.toml
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
         pyproject_path = package_root / "pyproject.toml"
         explicit_packages = []
 
@@ -8987,7 +8900,6 @@ class GreatDocs:
             The resolved reference, or None when the package documents nothing.
         """
         import io
-        import sys
         from types import ModuleType
 
         added_paths: list[str] = []
@@ -9155,7 +9067,7 @@ class GreatDocs:
         list[dict[str, str]]
             List of author dictionaries with name, email, and role fields.
         """
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
         pyproject_path = package_root / "pyproject.toml"
 
         if not pyproject_path.exists():
@@ -9486,9 +9398,6 @@ class GreatDocs:
         str
             The converted Markdown content.
         """
-        import shutil
-        import subprocess
-
         # Try 'quarto pandoc' first (always available when quarto is installed),
         # then fall back to standalone 'pandoc'
         pandoc_cmd = None
@@ -9606,8 +9515,6 @@ class GreatDocs:
             badge block removed, and a dict of extracted hero elements
             (optional keys: `logo_url`, `tagline`).
         """
-        import re
-
         badge_hosts = (
             "img.shields.io",
             "badge.fury.io",
@@ -9897,7 +9804,7 @@ class GreatDocs:
             The margin content as a Markdown string (without the `::: {.column-margin}`
             wrapper). Empty string if no metadata is available.
         """
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
         metadata = self._get_package_metadata()
 
         # Determine which supporting pages exist (already created by _create_index_from_readme)
@@ -10330,8 +10237,6 @@ title: "Security Policy"
         `#| code-fold: true` into `##| code-fold: true` (a plain comment Quarto
         ignores).
         """
-        import re
-
         fence_re = re.compile(r"^\s*(`{3,}|~{3,})")
         heading_re = re.compile(r"^(#{1,6})(\s+)")
 
@@ -10378,7 +10283,7 @@ title: "Security Policy"
             If `True`, always rebuild `index.qmd` even if it exists. Used by the build command to
             sync with source file changes.
         """
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
 
         # Always create license.qmd if LICENSE file exists
         license_path = package_root / "LICENSE"
@@ -10513,8 +10418,6 @@ To cite {package_name} in publications, please use the following citation.
                 citation_section += "**Source:** `CITATION.cff`\n\n"
 
             # Parse year from date-released field or use current year (used in multiple places)
-            from datetime import datetime
-
             year = datetime.now().year
             if citation_data.get("date-released"):
                 try:
@@ -10738,14 +10641,12 @@ title: "Authors and Citation"
         # If hero displays the package name, strip a matching first heading
         # to avoid visual duplication
         if hero_html and self._config.hero_enabled:
-            import re as _re
-
             hero_name = self._config.hero_name
             if hero_name is None:
                 metadata = self._get_package_metadata()
                 hero_name = metadata.get("name") or self._detect_package_name()
             if hero_name:
-                first_h1 = _re.match(r"^#\s+(.+)$", readme_content.strip(), _re.MULTILINE)
+                first_h1 = re.match(r"^#\s+(.+)$", readme_content.strip(), re.MULTILINE)
                 if first_h1 and first_h1.group(1).strip().lower() == hero_name.strip().lower():
                     readme_content = readme_content.replace(first_h1.group(0), "", 1).lstrip("\n")
 
@@ -11419,8 +11320,6 @@ anchor-sections: true
             return  # pragma: no cover
 
         # Serialize to JSON
-        import json  # pragma: no cover
-
         icon_json = json.dumps(resolved, separators=(",", ":"))  # pragma: no cover
 
         # Read the nav-icons.js source and build a self-contained inline script
@@ -11910,11 +11809,15 @@ anchor-sections: true
             else:
                 package_name = self._detect_package_name()
                 if not package_name and self._config.go_cli_enabled:
-                    go_project = self._detect_go_cli_project()
+                    from great_docs._go_cli import detect_go_cli_project
+
+                    go_project = detect_go_cli_project(self.layout.package_root)
                     if go_project:
                         package_name = go_project.binary_name
                 if not package_name and self._config.rust_cli_enabled:
-                    rust_project = self._detect_rust_cli_project()
+                    from great_docs._rust_cli import detect_rust_cli_project
+
+                    rust_project = detect_rust_cli_project(self.layout.package_root)
                     if rust_project:
                         package_name = rust_project.binary_names[0]
                 if package_name:
@@ -12672,8 +12575,6 @@ anchor-sections: true
         if self._config.attribution:
             # Get the short commit hash of the great-docs source repo (only when
             # running from a development checkout, not a pip-installed copy)
-            import subprocess
-
             gd_version_label = ""
             try:
                 gd_source_dir = Path(__file__).resolve().parent.parent
@@ -13173,8 +13074,6 @@ anchor-sections: true
         Saves to `.great-docs/snapshots/<version>.json` where `<version>` is the current git tag (if
         exactly on one) or `dev`.
         """
-        import subprocess as _sp
-
         from great_docs._api_diff import snapshot_from_griffe
 
         package_name = self._detect_package_name()
@@ -13188,7 +13087,7 @@ anchor-sections: true
         # Determine version label
         version = "dev"
         try:
-            result = _sp.run(
+            result = subprocess.run(
                 ["git", "describe", "--tags", "--exact-match", "HEAD"],
                 cwd=self.project_root,
                 capture_output=True,
@@ -13654,12 +13553,10 @@ anchor-sections: true
         `<docs>/.well-known/agent-skills/<name>/SKILL.md` with a discovery manifest at
         `<docs>/.well-known/agent-skills/index.json` for `npx skills add` auto-discovery.
         """
-        import shutil
-
         if not self._config.skill_enabled:
             return
 
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
 
         # --- Multi-skill mode: skill.skills is configured ---
         if self._config.skill_skills:
@@ -13673,7 +13570,7 @@ anchor-sections: true
                 dest = self.build_dir / "skill.md"
                 shutil.copy2(src, dest)
                 print(f"Copied user SKILL.md from {src}")
-                self._place_well_known_skill(dest)
+                self._place_well_known_skills([(dest, None)])
                 self._generate_skills_page(dest, skill_dir=src.parent)
                 return
             else:
@@ -13692,7 +13589,7 @@ anchor-sections: true
                 dest = self.build_dir / "skill.md"
                 shutil.copy2(skills_path, dest)
                 print(f"Using curated skill from {skills_path}")
-                self._place_well_known_skill(dest)
+                self._place_well_known_skills([(dest, None)])
                 self._generate_skills_page(dest, skill_dir=skills_path.parent)
                 return
 
@@ -13867,7 +13764,7 @@ anchor-sections: true
         print(f"Created {skill_path}")
 
         # Place in .well-known if enabled
-        self._place_well_known_skill(skill_path)
+        self._place_well_known_skills([(skill_path, None)])
 
         # Generate the rendered skills.qmd page
         self._generate_skills_page(skill_path)
@@ -13906,7 +13803,7 @@ anchor-sections: true
             Optional list of additional `(skill_path, skill_dir)` tuples. Each entry is rendered as
             a switchable panel alongside the primary skill.
         """
-        import re
+        import html
 
         from ._translations import get_translation
 
@@ -14199,8 +14096,8 @@ anchor-sections: true
                 active_cls = " gd-skill-pill--active" if idx == 0 else ""
                 selected = "true" if idx == 0 else "false"
                 tabindex = "0" if idx == 0 else "-1"
-                name = self._html_escape(meta["name"])
-                desc = self._html_escape(meta["description"])
+                name = html.escape(meta["name"])
+                desc = html.escape(meta["description"])
                 title_attr = f' title="{desc}"' if desc else ""
                 lines.append(
                     f'  <button class="gd-skill-pill{active_cls}" role="tab" '
@@ -14265,9 +14162,7 @@ anchor-sections: true
 
         def _fence(text: str, min_ticks: int = 4) -> str:
             """Return a backtick fence string longer than any fence in *text*."""
-            import re as _re
-
-            runs = _re.findall(r"`{3,}", text)
+            runs = re.findall(r"`{3,}", text)
             max_run = max((len(r) for r in runs), default=0)
             return "`" * max(min_ticks, max_run + 1)
 
@@ -14280,9 +14175,7 @@ anchor-sections: true
             `{python}` with `{.python}` keeps syntax highlighting but
             prevents execution.
             """
-            import re as _re
-
-            return _re.sub(r"\{python\}", "{.python}", text)
+            return re.sub(r"\{python\}", "{.python}", text)
 
         raw_content = _neutralize_executable_cells(raw_content)
 
@@ -14389,8 +14282,6 @@ anchor-sections: true
         written to `<docs>/skill.md` and used for the skills page. All skills are aggregated into a
         single `.well-known/agent-skills/index.json` discovery manifest.
         """
-        import shutil
-
         skill_entries = self._config.skill_skills
         if not skill_entries:  # pragma: no cover
             return  # pragma: no cover
@@ -14432,23 +14323,6 @@ anchor-sections: true
         extra = placed_skills[1:] if len(placed_skills) > 1 else None
         self._generate_skills_page(primary_path, skill_dir=primary_dir, extra_skills=extra)
 
-    def _place_well_known_skill(self, skill_path: "Path") -> None:
-        """
-        Copy the SKILL.md to .well-known/ directories for auto-discovery.
-
-        Places the skill at two well-known locations:
-
-        1. `.well-known/agent-skills/{name}/SKILL.md` with an `index.json` discovery manifest: the
-        preferred path used by `npx skills add`.
-        2. `.well-known/skills/default/SKILL.md`: legacy fallback.
-
-        Parameters
-        ----------
-        skill_path
-            Path to the skill.md file to copy.
-        """
-        self._place_well_known_skills([(skill_path, None)])
-
     def _place_well_known_skills(
         self,
         skill_entries: "list[tuple[Path, Path | None]]",
@@ -14465,8 +14339,6 @@ anchor-sections: true
             List of `(skill_path, source_dir)` tuples. `source_dir` may be `None`
             and is used to copy additional reference files alongside the `SKILL.md`.
         """
-        import shutil
-
         if not self._config.skill_well_known:
             return
 
@@ -14976,8 +14848,7 @@ anchor-sections: true
         *timings_by_version* is a `{tag: [timings]}` dict. Returns the path written, or `None` if
         there was nothing to write.
         """
-        import json
-        from datetime import datetime, timezone
+        from datetime import timezone
 
         site_dir = self.layout.site_dir
         if not site_dir.exists():
@@ -15301,7 +15172,6 @@ anchor-sections: true
         `build()` would produce, so that freeze cache hashes remain valid across subsequent full
         builds.
         """
-        import os
         from contextlib import redirect_stdout
 
         devnull = open(os.devnull, "w")
@@ -15455,15 +15325,12 @@ anchor-sections: true
 
         _ensure_quarto_installed()
 
-        import re as _re_build
-        import subprocess
-        import sys
         import threading
         from contextlib import contextmanager
 
         from great_docs._build_log import BuildLog, estimate_build_time
 
-        _ansi_re = _re_build.compile(r"\033\[[0-9;]*m")
+        _ansi_re = re.compile(r"\033\[[0-9;]*m")
 
         class _DetailStream:
             """A file-like object that forwards each line to `log.detail()`."""
@@ -15531,10 +15398,9 @@ anchor-sections: true
             # instead of the opaque temp path
             if package_location:
                 try:
-                    import subprocess as _sp_sub
                     import tempfile
 
-                    _git_remote = _sp_sub.run(
+                    _git_remote = subprocess.run(
                         ["git", "config", "--get", "remote.origin.url"],
                         cwd=str(self.project_root),
                         capture_output=True,
@@ -15580,7 +15446,7 @@ anchor-sections: true
             for sec in self._config.sections:
                 sec_dir_name = sec.get("dir", "")
                 if sec_dir_name:
-                    sec_dir = self._find_package_root() / sec_dir_name
+                    sec_dir = self.layout.package_root / sec_dir_name
                     if sec_dir.is_dir():
                         _page_dirs.append(sec_dir)
 
@@ -15647,7 +15513,7 @@ anchor-sections: true
             stderr_lines = []
             quarto_warnings: list[str] = []
             bar_finished = [False]  # mutable flag for closure
-            page_re = _re_build.compile(r"\[\s*(\d+)/(\d+)\]\s+(.+)")
+            page_re = re.compile(r"\[\s*(\d+)/(\d+)\]\s+(.+)")
             # Each entry: (page_path, timestamp)
             _page_timestamps: list[tuple[str, float]] = []
 
@@ -15850,10 +15716,10 @@ anchor-sections: true
             log.step_start(step, "Generate Go CLI reference")
             if self._config.go_cli_enabled:
                 try:
-                    from great_docs._go_cli import introspect_cobra_cli
+                    from great_docs._go_cli import detect_go_cli_project, introspect_cobra_cli
 
                     with _quiet_prints():
-                        go_project = self._detect_go_cli_project()
+                        go_project = detect_go_cli_project(self.layout.package_root)
                     if go_project:
                         with _quiet_prints():
                             cli_info = introspect_cobra_cli(go_project)
@@ -15884,10 +15750,10 @@ anchor-sections: true
             log.step_start(step, "Generate Rust CLI reference")
             if self._config.rust_cli_enabled:
                 try:
-                    from great_docs._rust_cli import introspect_rust_cli
+                    from great_docs._rust_cli import detect_rust_cli_project, introspect_rust_cli
 
                     with _quiet_prints():
-                        rust_project = self._detect_rust_cli_project()
+                        rust_project = detect_rust_cli_project(self.layout.package_root)
                     if rust_project:
                         with _quiet_prints():
                             cli_info = introspect_rust_cli(rust_project)
@@ -15927,8 +15793,15 @@ anchor-sections: true
                     with _quiet_prints():
                         mcp_info = self._discover_mcp_server(mcp_package)
                     if mcp_info:
+                        from ._mcp_docs import generate_mcp_reference_pages
+
                         with _quiet_prints():
-                            mcp_files = self._generate_mcp_reference_pages(mcp_info)
+                            mcp_files = generate_mcp_reference_pages(
+                                server_info=mcp_info,
+                                output_dir=self.build_dir / "reference" / "mcp",
+                                categories=self._config.mcp_categories or None,
+                                display_name=self._config.mcp_name,
+                            )
                         if mcp_files:
                             self._mcp_pages_generated = True
                             with _quiet_prints():
@@ -16449,8 +16322,6 @@ anchor-sections: true
         )
         ```
         """
-        import subprocess
-        import sys
         import tempfile
         import venv
 
@@ -16649,7 +16520,6 @@ anchor-sections: true
         """
         import functools
         import http.server
-        import sys
         import threading
         import webbrowser
 
@@ -16774,8 +16644,6 @@ anchor-sections: true
             return "none"
 
         try:
-            from yaml12 import read_yaml
-
             with open(config_path, "r", encoding="utf-8") as f:
                 cfg = read_yaml(f) or {}
         except Exception:
@@ -16838,7 +16706,6 @@ anchor-sections: true
         """
         import functools
         import http.server
-        import sys
         import threading
         import webbrowser
 

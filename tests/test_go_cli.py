@@ -28,7 +28,6 @@ from great_docs._go_cli import (
     detect_go_cli_project,
     introspect_cobra_cli,
 )
-from great_docs.core import GreatDocs
 
 # ---------------------------------------------------------------------------
 # Paths to committed fixtures
@@ -247,36 +246,6 @@ class TestDetectGoCliProject:
         """go_cli_cobra has no main.go, so it should not be detected as a CLI."""
         result = detect_go_cli_project(COBRA_FIXTURE)
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# GreatDocs._detect_go_cli_project and _find_package_root
-# ---------------------------------------------------------------------------
-
-
-class TestGreatDocsGoIntegration:
-    def test_detect_go_cli_project_on_hello_fixture(self):
-        gd = GreatDocs(project_path=str(HELLO_FIXTURE))
-        result = gd._detect_go_cli_project()
-        assert result is not None
-        assert isinstance(result, GoCliProject)
-        assert result.binary_name == "hello"
-
-    def test_detect_go_cli_project_on_python_project(self, tmp_path: Path):
-        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'mypkg'\n")
-        gd = GreatDocs(project_path=str(tmp_path))
-        assert gd._detect_go_cli_project() is None
-
-    def test_find_package_root_recognizes_go_mod(self, tmp_path: Path):
-        (tmp_path / "go.mod").write_text("module example.com/app\n\ngo 1.21\n")
-        (tmp_path / "cmd" / "app").mkdir(parents=True)
-        (tmp_path / "cmd" / "app" / "main.go").write_text("package main\n")
-        gd = GreatDocs(project_path=str(tmp_path))
-        assert gd._find_package_root() == tmp_path
-
-    def test_find_package_root_on_hello_fixture(self):
-        gd = GreatDocs(project_path=str(HELLO_FIXTURE))
-        assert gd._find_package_root() == HELLO_FIXTURE
 
 
 # ---------------------------------------------------------------------------

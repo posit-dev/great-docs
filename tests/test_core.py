@@ -1839,17 +1839,8 @@ class TestGetTagIconHtml:
 
 
 # ---------------------------------------------------------------------------
-# HTML escape and derive page title
+# Page title derivation
 # ---------------------------------------------------------------------------
-
-
-class TestHtmlEscape:
-    def test_escapes_angle_brackets(self):
-        assert "&lt;" in GreatDocs._html_escape("<script>")
-        assert "&amp;" in GreatDocs._html_escape("A & B")
-
-    def test_escapes_quotes(self):
-        assert "&quot;" in GreatDocs._html_escape('"hello"')
 
 
 class TestDerivePageTitle:

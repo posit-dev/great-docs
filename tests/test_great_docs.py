@@ -14641,7 +14641,7 @@ def test_init_exports_package_root_env(monkeypatch):
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert os.environ.get("PACKAGE_ROOT") == str(docs._find_package_root())
+        assert os.environ.get("PACKAGE_ROOT") == str(docs.layout.package_root)
         # No source.path configured -> SOURCE_PATH stays unset.
         assert "SOURCE_PATH" not in os.environ
 
@@ -17870,27 +17870,6 @@ def test_write_quarto_yml():
         assert "type: website" in content
 
 
-def test_find_package_root_with_pyproject():
-    """Test _find_package_root finds pyproject.toml directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
-        root = docs._find_package_root()
-
-        assert root == Path(tmp_dir).resolve()
-
-
-def test_find_package_root_no_pyproject():
-    """Test _find_package_root falls back to project_root."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        root = docs._find_package_root()
-
-        # Should not crash, returns some Path
-        assert isinstance(root, Path)
-
-
 def test_is_compiled_extension_cargo_toml():
     """Test _is_compiled_extension detects Cargo.toml (Rust/PyO3)."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -21000,19 +20979,6 @@ def test_detect_git_ref():
         docs = GreatDocs(project_path=tmp_dir)
         ref = docs._detect_git_ref()
         assert isinstance(ref, str)
-
-
-def test_find_package_root_searches_upward():
-    """Test _find_package_root searches parent dirs for pyproject.toml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Create pyproject.toml at root
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n', encoding="utf-8")
-        # Create a subdirectory
-        sub = Path(tmp_dir) / "docs"
-        sub.mkdir()
-        docs = GreatDocs(project_path=sub)
-        root = docs._find_package_root()
-        assert root == Path(tmp_dir).resolve()
 
 
 def test_detect_dynamic_mode_pyproject_dynamic():
@@ -24401,10 +24367,7 @@ def test_build_hero_section_with_logo_dict():
         (pkg_root / "logo-light.svg").write_text("<svg/>", encoding="utf-8")
         (pkg_root / "logo-dark.svg").write_text("<svg/>", encoding="utf-8")
 
-        with (
-            patch.object(docs, "_find_package_root", return_value=pkg_root),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-        ):
+        with patch.object(docs, "_get_package_metadata", return_value={}):
             html, _ = docs._build_hero_section()
 
         assert "gd-only-light" in html
@@ -25450,10 +25413,7 @@ def test_update_quarto_config_dark_logo():
             gd_yml_content="logo:\n  light: logo-light.png\n  dark: logo-dark.png\n",
         )
 
-        with (
-            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
-            patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}),
-        ):
+        with patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}):
             docs._update_quarto_config()
 
         with open(quarto_yml) as f:
@@ -25478,10 +25438,7 @@ def test_update_quarto_config_logo_name_collision():
             gd_yml_content="logo:\n  light: light/logo.png\n  dark: dark/logo.png\n",
         )
 
-        with (
-            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
-            patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}),
-        ):
+        with patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}):
             docs._update_quarto_config()
 
         with open(quarto_yml) as f:
@@ -25500,8 +25457,7 @@ def test_update_quarto_config_logo_not_found():
             gd_yml_content="logo:\n  light: nonexistent-logo.png\n",
         )
 
-        with patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)):
-            docs._update_quarto_config()
+        docs._update_quarto_config()
 
 
 def test_update_quarto_config_dark_logo_not_found():
@@ -25515,10 +25471,7 @@ def test_update_quarto_config_dark_logo_not_found():
             gd_yml_content="logo:\n  light: logo.png\n  dark: nonexistent-dark.png\n",
         )
 
-        with (
-            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
-            patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}),
-        ):
+        with patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}):
             docs._update_quarto_config()
 
 
@@ -25534,10 +25487,7 @@ def test_update_quarto_config_favicon_file():
             gd_yml_content="logo:\n  light: logo.png\nfavicon:\n  icon: my-favicon.ico\n",
         )
 
-        with (
-            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
-            patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}),
-        ):
+        with patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}):
             docs._update_quarto_config()
 
         with open(quarto_yml) as f:
@@ -25557,10 +25507,7 @@ def test_update_quarto_config_favicon_not_found():
             gd_yml_content="logo:\n  light: logo.png\nfavicon:\n  source: nonexistent.ico\n",
         )
 
-        with (
-            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
-            patch.object(docs, "_generate_favicons", return_value={}),
-        ):
+        with patch.object(docs, "_generate_favicons", return_value={}):
             docs._update_quarto_config()
 
 
@@ -25583,10 +25530,7 @@ def test_update_quarto_config_favicon_resources_added():
             "apple-touch-icon": "apple-touch-icon.png",
         }
 
-        with (
-            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
-            patch.object(docs, "_generate_favicons", return_value=generated),
-        ):
+        with patch.object(docs, "_generate_favicons", return_value=generated):
             docs._update_quarto_config()
 
         with open(quarto_yml) as f:
@@ -25628,10 +25572,7 @@ def test_update_quarto_config_favicon_absolute_urls_with_site_url():
             "apple-touch-icon": "apple-touch-icon.png",
         }
 
-        with (
-            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
-            patch.object(docs, "_generate_favicons", return_value=generated),
-        ):
+        with patch.object(docs, "_generate_favicons", return_value=generated):
             docs._update_quarto_config()
 
         with open(quarto_yml) as f:
@@ -25679,10 +25620,7 @@ def test_update_quarto_config_favicon_no_links_without_site_url():
             "apple-touch-icon": "apple-touch-icon.png",
         }
 
-        with (
-            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
-            patch.object(docs, "_generate_favicons", return_value=generated),
-        ):
+        with patch.object(docs, "_generate_favicons", return_value=generated):
             docs._update_quarto_config()
 
         with open(quarto_yml) as f:
@@ -25727,10 +25665,7 @@ def test_update_quarto_config_favicon_absolute_urls_from_pyproject():
             "icon-svg": "favicon.svg",
         }
 
-        with (
-            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
-            patch.object(docs, "_generate_favicons", return_value=generated),
-        ):
+        with patch.object(docs, "_generate_favicons", return_value=generated):
             docs._update_quarto_config()
 
         with open(quarto_yml) as f:
@@ -25929,10 +25864,7 @@ def test_update_quarto_config_logo_href():
             gd_yml_content="logo:\n  light: logo.png\n  href: https://example.com\n",
         )
 
-        with (
-            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
-            patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}),
-        ):
+        with patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}):
             docs._update_quarto_config()
 
         with open(quarto_yml) as f:
@@ -40926,35 +40858,6 @@ def test_get_tag_icon_html_found():
 
 
 # ---------------------------------------------------------------------------
-# _html_escape — static method
-# ---------------------------------------------------------------------------
-
-
-def test_html_escape_ampersand():
-    result = GreatDocs._html_escape("A & B")
-    assert "&amp;" in result
-
-
-def test_html_escape_angle_brackets():
-    result = GreatDocs._html_escape("<script>")
-    assert "&lt;" in result
-    assert "&gt;" in result
-
-
-def test_html_escape_quotes():
-    result = GreatDocs._html_escape('"hello"')
-    assert '"' not in result or "&quot;" in result
-
-
-def test_html_escape_empty():
-    assert GreatDocs._html_escape("") == ""
-
-
-def test_html_escape_no_special():
-    assert GreatDocs._html_escape("hello world") == "hello world"
-
-
-# ---------------------------------------------------------------------------
 # _strip_numeric_prefix — instance method
 # ---------------------------------------------------------------------------
 
@@ -41247,7 +41150,7 @@ def test_generate_favicons_svg_no_cairosvg(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _detect_module_name (was _find_package_root)
+# _detect_module_name
 # ---------------------------------------------------------------------------
 
 
@@ -41271,8 +41174,8 @@ def test_detect_module_name_returns_pkg_dir_name_fallback(tmp_path):
     (tmp_path / "__init__.py").write_text("")
     docs = GreatDocs(project_path=str(tmp_path))
 
-    # _find_package_root returns tmp_path, _find_package_init finds tmp_path/__init__.py
-    # pkg_dir = tmp_path, relative_to(tmp_path) gives PosixPath('.'), parts = () → pkg_dir.name
+    # If the package is discovered at the project root, its relative path has
+    # no components, so module discovery falls back to the directory name.
     result = docs._detect_module_name()
 
     # Should return the directory name, not None
