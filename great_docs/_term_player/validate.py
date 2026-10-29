@@ -49,6 +49,9 @@ _SCRIPT_SCHEMA: dict[str, Any] = json.loads(
 _RECORDING_SCHEMA: dict[str, Any] = json.loads(
     (_SCHEMA_DIR / "termshow-recording.schema.json").read_text(encoding="utf-8")
 )
+_MANIFEST_SCHEMA: dict[str, Any] = json.loads(
+    (_SCHEMA_DIR / "termshow-manifest.schema.json").read_text(encoding="utf-8")
+)
 _DEFS: dict[str, Any] = _SCRIPT_SCHEMA["$defs"]
 THEME_NAMES: list[str] = list(_DEFS["themeName"]["enum"])
 
@@ -101,7 +104,8 @@ def validate(
     ----------
     source
         A `.termshow` recording, or an asciinema `.cast` file (which is only
-        checked for being readable).
+        checked for being readable). A bundle (`.termshow.json`) or a
+        `manifest.json` is checked on its own, with no script.
     script
         The script to check with it. Defaults to the companion `.termshow.yml`
         next to the recording, if there is one.
@@ -117,6 +121,9 @@ def validate(
     problems: list[Problem] = []
 
     text = source.read_text(encoding="utf-8")
+    if source.suffix == ".json":
+        check_manifest_text(text, source.name, problems)
+        return problems
     if source.suffix == ".cast":
         recording = _check_asciicast(text, source.name, problems)
     else:
@@ -233,6 +240,74 @@ def _check_asciicast(text: str, name: str, problems: list[Problem]) -> Recording
 # ---------------------------------------------------------------------------
 # The script: structure
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# A bundle or manifest
+# ---------------------------------------------------------------------------
+
+# Stop listing a manifest's errors after this many (a broken one can have thousands)
+_MAX_MANIFEST_ERRORS = 20
+
+
+def check_manifest_text(text: str, name: str, problems: list[Problem] | None = None) -> bool:
+    """Check a bundle (`.termshow.json`) or a `manifest.json` against the manifest format.
+
+    Beyond the schema, the references inside it are checked: keyframes point at frames that
+    exist, in time order from 0, and frames point at rows that exist.
+
+    Returns whether it has no errors.
+    """
+    problems = problems if problems is not None else []
+    found: list[tuple[str, str]] = []
+
+    def error(where: str, message: str) -> None:
+        found.append((where, message))
+
+    try:
+        data = json.loads(text)
+    except ValueError as e:
+        error("", f"isn't valid JSON ({e})")
+        data = None
+    if data is not None and _check_value(data, _MANIFEST_SCHEMA, "", error, _MANIFEST_SCHEMA):
+        _check_manifest_references(data, error)
+
+    for where, message in found[:_MAX_MANIFEST_ERRORS]:
+        problems.append(Problem(name, where, message))
+    if len(found) > _MAX_MANIFEST_ERRORS:
+        more = len(found) - _MAX_MANIFEST_ERRORS
+        problems.append(Problem(name, "", f"{_plural(more, 'more error')} not shown"))
+    return not found
+
+
+def _check_manifest_references(data: dict[str, Any], error: Report) -> None:
+    keyframes = data["keyframes"]
+    if keyframes[0]["time"] != 0:
+        error("keyframes[0].time", f"the first keyframe must be at 0 (got {keyframes[0]['time']})")
+    for i in range(1, len(keyframes)):
+        if keyframes[i]["time"] < keyframes[i - 1]["time"]:
+            error(f"keyframes[{i}].time", "keyframes must be in time order")
+    if data["version"] < 2:
+        return
+
+    frames, lines = data["frames"], data["lines"]
+    for i, keyframe in enumerate(keyframes):
+        if keyframe["frame"] >= len(frames):
+            error(f"keyframes[{i}].frame", _missing(keyframe["frame"], frames, "frame"))
+    for i, frame in enumerate(frames):
+        for j, line in enumerate(frame["lines"]):
+            if line >= len(lines):
+                error(f"frames[{i}].lines[{j}]", _missing(line, lines, "row"))
+    dark = data.get("dark")
+    if dark is not None and len(dark["lines"]) != len(lines):
+        error(
+            "dark.lines",
+            f"must have one row for each of lines ({len(lines)}), got {len(dark['lines'])}",
+        )
+
+
+def _missing(index: int, items: list, word: str) -> str:
+    return f"there's no {word} {index} (there are {_plural(len(items), word)})"
 
 
 def check_script_text(
@@ -564,11 +639,22 @@ def _check_value(
                 error(where, f"doesn't have the expected form, got {value!r}")
             return False
 
+    ok = True
+    for branch in schema.get("allOf", []):
+        ok = _check_value(value, branch, where, error, root) and ok
+    # `then` applies when the value matches `if`, which is checked quietly
+    if "then" in schema and _check_value(value, schema.get("if", {}), where, _quiet, root):
+        ok = _check_value(value, schema["then"], where, error, root) and ok
+
     if isinstance(value, list):
-        return _check_array(value, schema, where, error, root)
+        return _check_array(value, schema, where, error, root) and ok
     if isinstance(value, dict):
-        return _check_object(value, schema, where, error, root)
-    return True
+        return _check_object(value, schema, where, error, root) and ok
+    return ok
+
+
+def _quiet(where: str, message: str) -> None:
+    pass
 
 
 def _check_array(
@@ -594,8 +680,12 @@ def _check_array(
         error(where, f"can have at most {schema['maxItems']} entries, got {len(value)}")
         return False
     ok = True
+    # `prefixItems` gives the first entries' schemas, and `items` the rest
+    prefix = schema.get("prefixItems", [])
+    for i, (item, item_schema) in enumerate(zip(value, prefix)):
+        ok = _check_value(item, item_schema, f"{where}[{i}]", error, root) and ok
     if "items" in schema:
-        for i, item in enumerate(value):
+        for i, item in enumerate(value[len(prefix) :], start=len(prefix)):
             ok = _check_value(item, schema["items"], f"{where}[{i}]", error, root) and ok
     return ok
 

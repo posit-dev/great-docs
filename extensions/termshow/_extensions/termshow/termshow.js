@@ -63,13 +63,15 @@
    */
   function initContainer(container) {
     if (container.localName === ELEMENT_NAME) return;
-    const manifestUrl = container.dataset.manifest;
-    if (!manifestUrl) return;
+    // A bundle embedded by the shortcode has only its inline manifest
+    const manifestUrl = container.dataset.manifest || null;
+    const inline = readInline(container);
+    if (!manifestUrl && !inline.manifest) return;
     initPlayer(
       container,
       manifestUrl,
       readOptions((name) => container.getAttribute('data-' + name)),
-      readInline(container)
+      inline
     );
   }
 
@@ -287,6 +289,11 @@
       chapterText.className = 'gd-tp-chapter-text';
       chapterBar.appendChild(chapterText);
       state.chapterText = chapterText;
+
+      // The element shows a bundle's transcript (the shortcode writes its own)
+      if (options.transcript && typeof manifest.transcript === 'string' && manifest.transcript.trim()) {
+        container.appendChild(buildTranscript(manifest));
+      }
 
       updateChapterBar(chapterBar, manifest, 0);
       // Show the poster frame (playback still starts from 0)
@@ -864,6 +871,68 @@
 
   function escapeXml(text) {
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // --- Transcripts ---
+
+  let transcriptCount = 0;
+
+  // A visually hidden region with a bundle's transcript, for screen readers
+  function buildTranscript(manifest) {
+    const region = document.createElement('div');
+    region.className = 'gd-termshow-transcript';
+    region.setAttribute('role', 'region');
+    const id = 'gd-tp-transcript-' + (++transcriptCount);
+    region.setAttribute('aria-labelledby', id);
+    region.innerHTML = '<p id="' + id + '">' +
+      escapeXml('Transcript of the terminal recording' + (manifest.title ? ': ' + manifest.title : '')) +
+      '</p>\n' + transcriptHtml(manifest.transcript);
+    return region;
+  }
+
+  /**
+   * HTML for a transcript's Markdown, which uses only what `great-docs`
+   * writes: bold chapter labels, notes as quotes, and the terminal's text in
+   * `console` code blocks (fenced with as many backticks as it needs).
+   */
+  function transcriptHtml(markdown) {
+    const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
+    const blockStart = /^(`{3,}|>)/;
+    const out = [];
+    let i = 0;
+    while (i < lines.length) {
+      const fence = lines[i].match(/^`{3,}/);
+      if (fence) {
+        const body = [];
+        i++;
+        while (i < lines.length && lines[i] !== fence[0]) body.push(lines[i++]);
+        i++;
+        out.push('<pre><code class="language-console">' + escapeXml(body.join('\n')) + '</code></pre>');
+      } else if (lines[i].startsWith('>')) {
+        const body = [];
+        while (i < lines.length && lines[i].startsWith('>')) body.push(lines[i++].replace(/^> ?/, ''));
+        out.push('<blockquote>' + transcriptParagraphs(body.join('\n')) + '</blockquote>');
+      } else if (lines[i].trim()) {
+        const body = [];
+        while (i < lines.length && lines[i].trim() && !blockStart.test(lines[i])) body.push(lines[i++]);
+        out.push(transcriptParagraphs(body.join('\n')));
+      } else {
+        i++;
+      }
+    }
+    return out.join('\n');
+  }
+
+  function transcriptParagraphs(text) {
+    return text.split(/\n\s*\n/).filter((p) => p.trim()).map((p) => {
+      const bold = p.match(/^\*\*([\s\S]+)\*\*$/);
+      const html = escapeXml(unescapeMarkdown(bold ? bold[1] : p));
+      return '<p>' + (bold ? '<strong>' + html + '</strong>' : html) + '</p>';
+    }).join('');
+  }
+
+  function unescapeMarkdown(text) {
+    return text.replace(/\\([\\`*_\[\]<>])/g, '$1');
   }
 
   /**
@@ -1573,12 +1642,9 @@
         }
         if (!this._inline) this._inline = readInline(this);
         this.classList.add(PLAYER_CLASS);
-        this._player = initPlayer(
-          this,
-          manifestUrlFor(this.getAttribute('src')),
-          readOptions((name) => this.getAttribute(name)),
-          this._inline
-        );
+        const options = readOptions((name) => this.getAttribute(name));
+        options.transcript = true;
+        this._player = initPlayer(this, manifestUrlFor(this.getAttribute('src')), options, this._inline);
       }
 
       disconnectedCallback() {
@@ -1619,6 +1685,7 @@
   window.Termshow.nextChapterTime = nextChapterTime;
   window.Termshow.prevChapterTime = prevChapterTime;
   window.Termshow.fadeOpacity = fadeOpacity;
+  window.Termshow.transcriptHtml = transcriptHtml;
 
   defineElement();
 

@@ -103,11 +103,19 @@ class Manifest:
     window_chrome: str = "none"
     stats: ManifestStats = field(default_factory=ManifestStats)
 
-    def to_json(self) -> str:
+    def to_json(self, *, files: bool = True, transcript: str = "") -> str:
         """Serialize manifest to a compact JSON string.
 
         The output is safe to embed in an HTML `<script>` element: `</` is
         written as `<\\/` so terminal text can't close the element early.
+
+        Parameters
+        ----------
+        files
+            Give each keyframe the name of its SVG file. A bundle, which comes
+            without the files, leaves them out.
+        transcript
+            The recording's text as Markdown, added as `transcript` when given.
         """
         data = {
             "version": self.version,
@@ -116,7 +124,7 @@ class Manifest:
             "term": {"cols": self.cols, "rows": self.rows},
             "theme": self.theme,
             "chapters": [{"time": round(ch.time, 3), "label": ch.label} for ch in self.chapters],
-            "keyframes": [_serialize_keyframe(kf) for kf in self.keyframes],
+            "keyframes": [_serialize_keyframe(kf, files) for kf in self.keyframes],
             "annotations": [
                 {
                     "time": round(a.time, 3),
@@ -161,6 +169,8 @@ class Manifest:
                     dark["cursor"] = self.dark.cursor
                 dark["lines"] = [_serialize_line(line) for line in self.dark.lines]
                 data["dark"] = dark
+        if transcript:
+            data["transcript"] = transcript
         text = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         return text.replace("</", "<\\/")
 
@@ -459,8 +469,10 @@ def _compute_keyframe_times(
     return sorted(times)
 
 
-def _serialize_keyframe(kf: KeyframeEntry) -> dict:
-    d: dict = {"time": round(kf.time, 3), "file": kf.file}
+def _serialize_keyframe(kf: KeyframeEntry, files: bool = True) -> dict:
+    d: dict = {"time": round(kf.time, 3)}
+    if files:
+        d["file"] = kf.file
     if kf.frame is not None:
         d["frame"] = kf.frame
     return d

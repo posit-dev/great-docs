@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/posit-dev/great-docs/main/great_docs/_term_player/schemas/termshow-manifest.schema.json",
   "title": "Termshow player manifest (manifest.json)",
-  "description": "A rendered recording: everything the player needs to play it. Version 2 stores each unique row and screen once and the player draws frames as SVG; version 1 (legacy) lists one SVG file per keyframe. Readers must ignore members they don't recognize.",
+  "description": "A rendered recording: everything the player needs to play it, as `manifest.json` in a render directory or as a one-file bundle (`.termshow.json`). Version 2 stores each unique row and screen once and the player draws frames as SVG; version 1 (legacy) lists one SVG file per keyframe. Readers must ignore members they don't recognize.",
   "type": "object",
   "required": ["version", "duration", "term", "keyframes"],
   "properties": {
@@ -86,19 +86,39 @@
     "snippets": {
       "type": "array",
       "items": { "$ref": "#/$defs/snippet" }
+    },
+    "transcript": {
+      "description": "The recording's text as Markdown, for screen readers. Written in bundles (`.termshow.json`); a render directory has it in `_transcript.md` instead.",
+      "type": "string"
     }
   },
-  "if": {
-    "properties": { "version": { "const": 2 } }
-  },
-  "then": {
-    "required": ["screen", "lines", "frames"],
-    "properties": {
-      "keyframes": {
-        "items": { "required": ["frame"] }
+  "allOf": [
+    {
+      "if": {
+        "properties": { "version": { "const": 2 } }
+      },
+      "then": {
+        "required": ["screen", "lines", "frames"],
+        "properties": {
+          "keyframes": {
+            "items": { "required": ["frame"] }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "version": { "const": 1 } }
+      },
+      "then": {
+        "properties": {
+          "keyframes": {
+            "items": { "required": ["file"] }
+          }
+        }
       }
     }
-  },
+  ],
   "$defs": {
     "time": {
       "type": "number",
@@ -115,11 +135,11 @@
     },
     "keyframe": {
       "type": "object",
-      "required": ["time", "file"],
+      "required": ["time"],
       "properties": {
         "time": { "$ref": "#/$defs/time" },
         "file": {
-          "description": "SVG file for this screen, relative to the manifest. Written as the member right after `time`.",
+          "description": "SVG file for this screen, relative to the manifest. Written as the member right after `time`. Required in version 1; a bundle (`.termshow.json`), which comes without SVG files, leaves it out.",
           "type": "string",
           "pattern": "^[^/\\\\\"]+\\.svg$"
         },

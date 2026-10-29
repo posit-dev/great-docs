@@ -1601,6 +1601,30 @@ left out, and the command lists any the script has. Pass `--no-script` to export
 exactly as it was recorded. The SVG options (`--chapter-cards`, `--no-loop`, and so on) don't apply
 here.
 
+## Exporting a Bundle
+
+`termshow render` writes a directory of files for the player. A bundle has everything the player
+needs in one file instead:
+
+```bash
+great-docs termshow export docs/assets/my-demo.termshow --bundle
+```
+
+This writes `my-demo.termshow.json`, which you can copy, link to, and publish like any other file.
+An `-o` name ending in `.termshow.json` picks the bundle format without `--bundle`. Inside is the
+recording with its script applied, the same as a render: the screens, chapters, annotations,
+highlights, snippets and theme. It also has the recording's [transcript](#transcripts), which the
+player adds for screen readers.
+
+To play a bundle, point the [`<termshow-player>` element](#using-the-player-on-any-web-page)'s
+`src` at it, or the shortcode's `file` in [any Quarto project](#using-termshow-in-any-quarto-project):
+
+```{shortcodes="false"}
+{{< termshow file="my-demo.termshow.json" >}}
+```
+
+The file format is in [Bundles](termshow-file-formats.qmd#bundles).
+
 ## Exporting a GIF or Video
 
 Some places can't show an animated SVG either: pull request comments, chat messages, slides, and
@@ -1792,6 +1816,14 @@ warnings too, and pass several files to check them all at once:
 
 ```bash
 great-docs termshow validate docs/assets/*.termshow --strict
+```
+
+The command also checks a [bundle](#exporting-a-bundle) or a render's `manifest.json`, for one
+written by another tool or edited by hand. Beyond the schema, it checks that the keyframes are in
+time order from 0, and that each refers to a screen, and each screen to rows, that the file has:
+
+```bash
+great-docs termshow validate my-demo.termshow.json
 ```
 
 ## Best Practices
@@ -2167,6 +2199,12 @@ This produces a `termshow/<name>/` directory containing SVG keyframes, a `manife
 [transcript](#transcripts) the shortcode puts after the player. Move or copy this directory into
 your Quarto project root if it isn't there already.
 
+Or export a [bundle](#exporting-a-bundle), one file you can keep anywhere in the project:
+
+```bash
+great-docs termshow export my-demo.termshow --bundle
+```
+
 ### Register termshow output as a resource
 
 Add the rendered output to your project's resources so Quarto includes it in the build output.
@@ -2178,6 +2216,8 @@ project:
     - termshow/**
 ```
 
+A bundle doesn't need this: the shortcode embeds all of it in the page.
+
 ### Embed with the shortcode
 
 Use the same `{{< termshow >}}` shortcode as in a Great Docs site:
@@ -2185,6 +2225,14 @@ Use the same `{{< termshow >}}` shortcode as in a Great Docs site:
 ```{shortcodes="false"}
 {{< termshow file="my-demo" autoplay="true" loop="true" >}}
 ```
+
+For a bundle, `file` is its path, relative to the document or else to the project root:
+
+```{shortcodes="false"}
+{{< termshow file="my-demo.termshow.json" autoplay="true" >}}
+```
+
+A bundle has no SVG files, so the page has no poster image before the player starts.
 
 All shortcode options (`autoplay`, `loop`, `speed`, `pause_on_chapters`, `controls`, `theme`) work
 identically. The extension handles CSS, JavaScript, and font injection automatically via Quarto's
@@ -2255,17 +2303,21 @@ great-docs termshow assets site/player
 The command prints the tags that load them. The fonts must stay next to `termshow.css`, which
 loads them by relative URL.
 
-### Render the recording
+### Export the recording
 
-Render the recording into the site as well:
+Export the recording into the site as a [bundle](#exporting-a-bundle):
 
 ```bash
-great-docs termshow render my-demo.termshow -o site/termshow/my-demo
+great-docs termshow export my-demo.termshow -o site/my-demo.termshow.json
 ```
 
-The element doesn't show the [transcript](#transcripts) that the shortcode adds. To give screen
-readers the recording's text, put the transcript in the page next to the element, from
-`site/termshow/my-demo/_transcript.md` or `great-docs termshow transcript`.
+The bundle has the recording's [transcript](#transcripts), and the element puts it after the
+player, hidden from view but read by screen readers.
+
+A render directory works too (`great-docs termshow render my-demo.termshow -o
+site/termshow/my-demo`), but it has no transcript inside it. To give screen readers the recording's
+text, put the transcript in the page next to the element, from `site/termshow/my-demo/_transcript.md`
+or `great-docs termshow transcript`.
 
 ### Add the element
 
@@ -2276,25 +2328,26 @@ appear:
 <link rel="stylesheet" href="player/termshow.css">
 <script src="player/termshow.js"></script>
 
-<termshow-player src="termshow/my-demo" autoplay loop></termshow-player>
+<termshow-player src="my-demo.termshow.json" autoplay loop></termshow-player>
 ```
 
-`src` is the render directory, and the player loads the `manifest.json` inside it. It can also be
-the URL of a manifest file. Paths are relative to the page.
+`src` is the URL of a bundle or a manifest file, or a render directory, for which the player loads
+the `manifest.json` inside it. Paths are relative to the page.
 
-Most browsers won't load the manifest for a page opened straight from disk (a `file://` URL), so
-preview the page through a local server, such as `python -m http.server`. Or embed the manifest in
+Most browsers won't load the file for a page opened straight from disk (a `file://` URL), so
+preview the page through a local server, such as `python -m http.server`. Or embed the bundle in
 the element, which needs no server:
 
 ```html
 <termshow-player>
   <script type="application/json" class="gd-tp-manifest">
-    …the contents of manifest.json…
+    …the contents of my-demo.termshow.json…
   </script>
 </termshow-player>
 ```
 
-The build writes `manifest.json` so that it's safe to paste inside a `<script>` element.
+Bundles and `manifest.json` files are written so that they're safe to paste inside a `<script>`
+element.
 
 ### Element attributes
 
@@ -2302,7 +2355,7 @@ The attributes match the [shortcode options](#options):
 
 | Attribute | Default | Description |
 |-----------|---------|-------------|
-| `src` | (none) | Render directory or manifest URL |
+| `src` | (none) | Bundle or manifest URL, or render directory |
 | `autoplay` | off | Start playing once loaded |
 | `loop` | off | Restart from the beginning at the end |
 | `speed` | `1` | Initial playback speed multiplier |
@@ -2345,8 +2398,8 @@ player.addEventListener("ready", () => player.seek(12));
 player.addEventListener("ended", () => console.log("done"));
 ```
 
-In a Quarto or Great Docs page, keep using the `termshow` shortcode: it embeds the manifest and a
-poster image in the page for you.
+In a Quarto or Great Docs page, keep using the `termshow` shortcode: it embeds the recording in the
+page for you.
 
 ## Next Steps
 
