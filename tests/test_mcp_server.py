@@ -31,6 +31,7 @@ from great_docs.mcp import (
     list_tools,
     read_resource,
 )
+from tests.support import mock_config
 
 
 def test_tool_schemas_accept_config_selection() -> None:
@@ -356,12 +357,10 @@ class TestHandleStatus:
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
         mock_docs._detect_package_name.return_value = "mypackage"
-        mock_docs._config.cli_enabled = False
-        mock_docs._config.mcp_enabled = False
+        mock_docs._config = mock_config(cli_enabled=False, mcp_enabled=False, sections=[])
         mock_docs._config.__getitem__ = lambda self, key: (
             [] if key in ("user_guide", "versions") else None
         )
-        mock_docs._config.sections = []
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             result = asyncio.run(_handle_status({}))
         assert "✓" in result[0].text
@@ -569,7 +568,7 @@ class TestHandleScan:
             "functions": ["do_thing", "helper"],
             "classes": [],
         }
-        mock_docs._config.reference = []
+        mock_docs._config = mock_config(reference=[])
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             result = asyncio.run(_handle_scan({}))
         assert "do_thing" in result[0].text
@@ -586,7 +585,7 @@ class TestHandleScan:
             "classes": ["MyClass"],
             "class_method_names": {"MyClass": ["method_a"]},
         }
-        mock_docs._config.reference = []
+        mock_docs._config = mock_config(reference=[])
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             result = asyncio.run(_handle_scan({"verbose": True}))
         assert "MyClass" in result[0].text
@@ -602,7 +601,7 @@ class TestHandleScan:
         mock_docs._normalize_package_name.return_value = "mypkg"
         mock_docs._get_package_exports.return_value = ["do_thing"]
         mock_docs._categorize_api_objects.return_value = {"functions": ["do_thing"]}
-        mock_docs._config.reference = [{"contents": ["do_thing"]}]
+        mock_docs._config = mock_config(reference=[{"contents": ["do_thing"]}])
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             result = asyncio.run(_handle_scan({}))
         assert "[x]" in result[0].text
@@ -671,10 +670,12 @@ class TestHandleStatusWithConfig:
         mock = MagicMock()
         mock._detect_package_name.return_value = pkg
         cfg = features or {}
-        mock._config.cli_enabled = cfg.get("cli", False)
-        mock._config.mcp_enabled = cfg.get("mcp", False)
+        mock._config = mock_config(
+            cli_enabled=cfg.get("cli", False),
+            mcp_enabled=cfg.get("mcp", False),
+            sections=cfg.get("sections", []),
+        )
         mock._config.__getitem__ = lambda self, key: cfg.get(key, [])
-        mock._config.sections = cfg.get("sections", [])
         return mock
 
     def test_shows_package_name(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
