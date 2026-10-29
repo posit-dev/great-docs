@@ -116,6 +116,25 @@
     return src.replace(/\/?$/, '/') + 'manifest.json';
   }
 
+  // Readers who ask for reduced motion: players don't autoplay or loop, they
+  // stop at each chapter, and overlays appear without fading
+  const motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+
+  function reducedMotion() {
+    return !!(motionQuery && motionQuery.matches);
+  }
+
+  /**
+   * Opacity of an overlay `elapsed` seconds into a showing of `length`
+   * seconds, fading in and out over the given times (none with reduced motion).
+   */
+  function fadeOpacity(elapsed, length, fadeIn, fadeOut) {
+    if (reducedMotion()) return 1;
+    const inPart = fadeIn > 0 ? Math.min(1, elapsed / fadeIn) : 1;
+    const outPart = fadeOut > 0 ? Math.min(1, (length - elapsed) / fadeOut) : 1;
+    return Math.min(inPart, outPart);
+  }
+
   /** Fire a media-style event (`ready`, `play`, `pause`, `ended`) on a player. */
   function emit(container, type) {
     if (container && container.dispatchEvent && typeof Event === 'function') {
@@ -164,16 +183,20 @@
     const chapterBar = document.createElement('div');
     chapterBar.className = 'gd-tp-chapter-bar';
 
+    // With reduced motion the player waits for the reader, showing the poster
+    const autoplay = options.autoplay && !reducedMotion();
+
     // Build player DOM
     const viewport = document.createElement('div');
     viewport.className = 'gd-tp-viewport';
     // Defer tabindex until user interaction to prevent Safari from treating
-    // auto-playing players as scroll-restoration targets.
-    if (!options.autoplay) {
+    // auto-playing players as scroll-restoration targets. Without a control
+    // bar the viewport is the only way to pause, so it's always focusable.
+    if (!autoplay || !options.controls) {
       viewport.setAttribute('tabindex', '0');
     }
-    viewport.setAttribute('role', 'application');
-    viewport.setAttribute('aria-label', 'Terminal recording player');
+    viewport.setAttribute('role', 'group');
+    viewport.setAttribute('aria-label', 'Terminal recording');
 
     const svgContainer = document.createElement('div');
     svgContainer.className = 'gd-tp-svg';
@@ -206,11 +229,21 @@
 
     const controls = buildControls();
 
+    // Read out by screen readers: chapter stops and the end of the recording
+    const status = document.createElement('div');
+    status.className = 'gd-tp-status';
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+
     // Replace container content with player structure
     container.innerHTML = '';
     container.appendChild(chapterBar);
     container.appendChild(viewport);
     container.appendChild(controls.root);
+    container.appendChild(status);
+    // For the playback functions outside this one
+    state.announce = announce;
+    state.focusViewport = focusViewport;
     if (!options.controls) {
       controls.root.style.display = 'none';
       container.classList.add('gd-tp-no-controls');
@@ -228,6 +261,8 @@
         watchColorMode();
       }
       controls.duration.textContent = formatTime(manifest.duration);
+      controls.timeline.setAttribute('aria-valuemax', String(Math.round(manifest.duration)));
+      if (manifest.title) viewport.setAttribute('aria-label', 'Terminal recording: ' + manifest.title);
       renderChapterMarkers(controls.timeline, manifest);
 
       // Add traffic light decorations if window_chrome is set
@@ -240,6 +275,7 @@
         chapterBar.classList.add('gd-tp-has-chrome');
         var lights = document.createElement('div');
         lights.className = 'gd-tp-traffic-lights' + (chrome === 'minimal' ? ' gd-tp-chrome-minimal' : '');
+        lights.setAttribute('aria-hidden', 'true');
         lights.innerHTML = '<span class="gd-tp-traffic-dot gd-tp-dot-close"></span>' +
           '<span class="gd-tp-traffic-dot gd-tp-dot-minimize"></span>' +
           '<span class="gd-tp-traffic-dot gd-tp-dot-maximize"></span>';
@@ -255,8 +291,9 @@
       updateChapterBar(chapterBar, manifest, 0);
       // Show the poster frame (playback still starts from 0)
       showFrame(state, svgContainer, findKeyframeIndex(manifest.keyframes, options.poster));
+      updateSlider(state, controls);
       emit(container, 'ready');
-      if (options.autoplay) {
+      if (autoplay) {
         play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
       }
     }
@@ -290,6 +327,63 @@
       activate(inline.manifest, inline.frames);
     }
 
+    // Leave the ended state, so the player can play or seek again
+    function clearEnded() {
+      state.ended = false;
+      controls.playBtn.textContent = '\u25b6';
+      controls.playBtn.setAttribute('aria-label', 'Play');
+      centerBtn.innerHTML = '<span class="gd-tp-icon-play">\u25b6</span>';
+      container.classList.remove('gd-tp-ended');
+    }
+
+    // Leave a chapter stop, so the center overlay can show again
+    function clearChapterPause() {
+      state.chapterPaused = false;
+      container.classList.remove('gd-tp-chapter-paused');
+    }
+
+    // After the end, go back to the first frame without playing
+    function rewind() {
+      clearEnded();
+      state.currentTime = 0;
+      state.currentKeyframeIdx = -1;
+      updateDisplay(state, svgContainer, annotationLayer, controls);
+      updateChapterBar(chapterBar, state.manifest, state.currentTime);
+    }
+
+    function startPlaying() {
+      play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
+    }
+
+    // Play, pause, or (at the end) rewind: what the play button does
+    function togglePlay() {
+      if (!state.manifest) return;
+      ensureTabindex();
+      if (state.playing) pause(state, controls, container, centerOverlay);
+      else if (state.ended) rewind();
+      else startPlaying();
+    }
+
+    function seekTo(time) {
+      if (state.ended) clearEnded();
+      clearChapterPause();
+      seek(state, time, svgContainer, annotationLayer, controls);
+      updateChapterBar(chapterBar, state.manifest, state.currentTime);
+    }
+
+    // Jump to a chapter's start (if there is one), and say which chapter it is
+    function seekToChapter(time) {
+      if (time == null) return;
+      seekTo(time);
+      var label = chapterAt(state.manifest, state.currentTime);
+      if (label) announce('Chapter: ' + label);
+    }
+
+    // Read a message out once (a repeat is changed slightly so it's read again)
+    function announce(text) {
+      status.textContent = text === status.textContent ? text + ' ' : text;
+    }
+
     // Restore tabindex on first user interaction (for keyboard nav)
     function ensureTabindex() {
       if (!viewport.hasAttribute('tabindex')) {
@@ -297,43 +391,19 @@
       }
     }
 
-    // Event listeners
-    controls.playBtn.addEventListener('click', () => {
+    // Move focus to the viewport (when the focused control goes away)
+    function focusViewport() {
       ensureTabindex();
-      if (state.playing) {
-        pause(state, controls, container, centerOverlay);
-      } else if (state.ended) {
-        // Return to initial state (don't autoplay)
-        state.ended = false;
-        state.currentTime = 0;
-        state.currentKeyframeIdx = -1;
-        controls.playBtn.textContent = '\u25b6';
-        controls.playBtn.setAttribute('aria-label', 'Play');
-        centerBtn.innerHTML = '<span class="gd-tp-icon-play">\u25b6</span>';
-        container.classList.remove('gd-tp-ended');
-        updateDisplay(state, svgContainer, annotationLayer, controls);
-        updateChapterBar(chapterBar, state.manifest, state.currentTime);
-      } else {
-        play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
-      }
-    });
+      viewport.focus();
+    }
+
+    // Event listeners
+    controls.playBtn.addEventListener('click', togglePlay);
 
     centerOverlay.addEventListener('click', () => {
       ensureTabindex();
-      if (state.ended) {
-        // Return to initial state (don't autoplay)
-        state.ended = false;
-        state.currentTime = 0;
-        state.currentKeyframeIdx = -1;
-        controls.playBtn.textContent = '\u25b6';
-        controls.playBtn.setAttribute('aria-label', 'Play');
-        centerBtn.innerHTML = '<span class="gd-tp-icon-play">\u25b6</span>';
-        container.classList.remove('gd-tp-ended');
-        updateDisplay(state, svgContainer, annotationLayer, controls);
-        updateChapterBar(chapterBar, state.manifest, state.currentTime);
-        return;
-      }
-      play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
+      if (state.ended) rewind();
+      else startPlaying();
     });
 
     // Double-click/tap on viewport: left 30% rewinds 5s, right 30% fast-forwards 5s
@@ -354,13 +424,7 @@
       } else {
         return; // Middle 40% — no action
       }
-      if (state.ended) {
-        state.ended = false;
-        controls.playBtn.textContent = '\u25b6';
-        controls.playBtn.setAttribute('aria-label', 'Play');
-        centerBtn.innerHTML = '<span class="gd-tp-icon-play">\u25b6</span>';
-        container.classList.remove('gd-tp-ended');
-      }
+      if (state.ended) clearEnded();
       seek(state, newTime, svgContainer, annotationLayer, controls);
       updateChapterBar(chapterBar, state.manifest, state.currentTime);
     }
@@ -386,19 +450,7 @@
       var markerEl = e.target.closest('.gd-tp-chapter-marker');
       if (markerEl) {
         var chapterTime = parseFloat(markerEl.dataset.time);
-        if (!isNaN(chapterTime)) {
-          if (state.ended) {
-            state.ended = false;
-            controls.playBtn.textContent = '\u25b6';
-            controls.playBtn.setAttribute('aria-label', 'Play');
-            centerBtn.innerHTML = '<span class="gd-tp-icon-play">\u25b6</span>';
-            container.classList.remove('gd-tp-ended');
-          }
-          state.chapterPaused = false;
-          container.classList.remove('gd-tp-chapter-paused');
-          seek(state, chapterTime, svgContainer, annotationLayer, controls);
-          updateChapterBar(chapterBar, state.manifest, state.currentTime);
-        }
+        if (!isNaN(chapterTime)) seekTo(chapterTime);
         return;
       }
       e.preventDefault();
@@ -408,15 +460,8 @@
       }
       controls.timeline.classList.add('gd-tp-dragging');
       // Reset ended/chapter-paused state
-      if (state.ended) {
-        state.ended = false;
-        controls.playBtn.textContent = '\u25b6';
-        controls.playBtn.setAttribute('aria-label', 'Play');
-        centerBtn.innerHTML = '<span class="gd-tp-icon-play">\u25b6</span>';
-        container.classList.remove('gd-tp-ended');
-      }
-      state.chapterPaused = false;
-      container.classList.remove('gd-tp-chapter-paused');
+      if (state.ended) clearEnded();
+      clearChapterPause();
 
       function seekFromEvent(ev) {
         var rect = controls.timeline.getBoundingClientRect();
@@ -436,9 +481,7 @@
         controls.timeline.classList.remove('gd-tp-dragging');
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
-        if (wasPlaying) {
-          play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
-        }
+        if (wasPlaying) startPlaying();
       }
 
       document.addEventListener('mousemove', onMove);
@@ -454,15 +497,8 @@
         pause(state, controls, container, centerOverlay);
       }
       controls.timeline.classList.add('gd-tp-dragging');
-      if (state.ended) {
-        state.ended = false;
-        controls.playBtn.textContent = '\u25b6';
-        controls.playBtn.setAttribute('aria-label', 'Play');
-        centerBtn.innerHTML = '<span class="gd-tp-icon-play">\u25b6</span>';
-        container.classList.remove('gd-tp-ended');
-      }
-      state.chapterPaused = false;
-      container.classList.remove('gd-tp-chapter-paused');
+      if (state.ended) clearEnded();
+      clearChapterPause();
 
       function seekFromTouch(ev) {
         var touch = ev.touches[0] || ev.changedTouches[0];
@@ -483,9 +519,7 @@
         controls.timeline.classList.remove('gd-tp-dragging');
         document.removeEventListener('touchmove', onTouchMove);
         document.removeEventListener('touchend', onTouchEnd);
-        if (wasPlaying) {
-          play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
-        }
+        if (wasPlaying) startPlaying();
       }
 
       document.addEventListener('touchmove', onTouchMove, { passive: false });
@@ -497,58 +531,67 @@
       const speeds = [0.5, 1, 1.5, 2, 3];
       const idx = speeds.indexOf(state.speed);
       state.speed = speeds[(idx + 1) % speeds.length];
-      controls.speedBtn.textContent = state.speed + '\u00d7';
+      setSpeedLabel(controls.speedBtn, state.speed);
     });
+    setSpeedLabel(controls.speedBtn, state.speed);
 
-    // Keyboard navigation
-    viewport.addEventListener('keydown', (e) => {
-      if (!state.manifest) return;
+    // Keyboard shortcuts, for keys pressed while focus is anywhere in the
+    // player (keys pressed elsewhere on the page are left alone)
+    container.addEventListener('keydown', (e) => {
+      if (!state.manifest || e.altKey || e.ctrlKey || e.metaKey) return;
+      const target = e.target;
+      const onSlider = target === controls.timeline;
+      const onButton = !!(target.closest && target.closest('button'));
+      const chapters = state.manifest.chapters || [];
 
       switch (e.key) {
         case ' ':
-          e.preventDefault();
-          if (state.playing) pause(state, controls, container, centerOverlay);
-          else if (state.ended) {
-            state.ended = false;
-            state.currentTime = 0;
-            state.currentKeyframeIdx = -1;
-            controls.playBtn.textContent = '\u25b6';
-            controls.playBtn.setAttribute('aria-label', 'Play');
-            centerBtn.innerHTML = '<span class="gd-tp-icon-play">\u25b6</span>';
-            container.classList.remove('gd-tp-ended');
-            updateDisplay(state, svgContainer, annotationLayer, controls);
-            updateChapterBar(chapterBar, state.manifest, state.currentTime);
-          } else {
-            play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
-          }
+          // A focused button handles Space itself
+          if (onButton) return;
+          togglePlay();
           break;
         case 'ArrowRight':
-          e.preventDefault();
-          seek(state, state.currentTime + 5, svgContainer, annotationLayer, controls);
+          seekTo(state.currentTime + 5);
           break;
         case 'ArrowLeft':
-          e.preventDefault();
-          seek(state, state.currentTime - 5, svgContainer, annotationLayer, controls);
+          seekTo(state.currentTime - 5);
           break;
+        case 'ArrowUp':
+          // Arrows up and down scroll the page, except on the slider
+          if (!onSlider) return;
+          seekTo(state.currentTime + 5);
+          break;
+        case 'ArrowDown':
+          if (!onSlider) return;
+          seekTo(state.currentTime - 5);
+          break;
+        case 'Home':
+          seekTo(0);
+          break;
+        case 'End':
+          seekTo(state.manifest.duration);
+          break;
+        case 'PageUp':
+          if (!onSlider) return;
+          seekToChapter(nextChapterTime(chapters, state.currentTime));
+          break;
+        case 'PageDown':
+          if (!onSlider) return;
+          seekToChapter(prevChapterTime(chapters, state.currentTime));
+          break;
+        case ']':
         case '.':
-          e.preventDefault();
-          nextChapter(state, svgContainer, annotationLayer, controls);
+          seekToChapter(nextChapterTime(chapters, state.currentTime));
           break;
+        case '[':
         case ',':
-          e.preventDefault();
-          prevChapter(state, svgContainer, annotationLayer, controls);
+          seekToChapter(prevChapterTime(chapters, state.currentTime));
           break;
+        default:
+          return;
       }
+      e.preventDefault();
     });
-
-    // Leave the ended state, so the player can play or seek again
-    function clearEnded() {
-      state.ended = false;
-      controls.playBtn.textContent = '\u25b6';
-      controls.playBtn.setAttribute('aria-label', 'Play');
-      centerBtn.innerHTML = '<span class="gd-tp-icon-play">\u25b6</span>';
-      container.classList.remove('gd-tp-ended');
-    }
 
     // Controller for scripting the player (the `<termshow-player>` methods)
     return {
@@ -559,18 +602,14 @@
           state.currentTime = 0;
           state.currentKeyframeIdx = -1;
         }
-        play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
+        startPlaying();
       },
       pause() {
         if (state.playing) pause(state, controls, container, centerOverlay);
       },
       seek(time) {
         if (!state.manifest) return;
-        if (state.ended) clearEnded();
-        state.chapterPaused = false;
-        container.classList.remove('gd-tp-chapter-paused');
-        seek(state, Number(time) || 0, svgContainer, annotationLayer, controls);
-        updateChapterBar(chapterBar, state.manifest, state.currentTime);
+        seekTo(Number(time) || 0);
       },
       get currentTime() { return state.currentTime; },
       get duration() { return state.manifest ? state.manifest.duration : NaN; },
@@ -613,7 +652,7 @@
 
       const manifest = state.manifest;
       if (state.currentTime >= manifest.duration) {
-        if (options.loop) {
+        if (options.loop && !reducedMotion()) {
           state.currentTime = 0;
         } else {
           state.currentTime = manifest.duration;
@@ -626,13 +665,16 @@
             '<span>\u21ba</span>';
           container.classList.remove('gd-tp-playing');
           container.classList.add('gd-tp-ended');
+          updateSlider(state, controls);
+          if (state.announce) state.announce('Recording ended');
           emit(container, 'ended');
           return;
         }
       }
 
-      // Check chapter pause
-      if (options.pauseOnChapters && manifest.chapters.length > 0) {
+      // Check chapter pause (with reduced motion, playback steps from chapter
+      // to chapter)
+      if ((options.pauseOnChapters || reducedMotion()) && manifest.chapters.length > 0) {
         const prevTime = state.currentTime - dt;
         for (const ch of manifest.chapters) {
           if (ch.time > 0 && prevTime < ch.time && state.currentTime >= ch.time) {
@@ -641,6 +683,9 @@
             pause(state, controls, container, centerOverlay);
             updateDisplay(state, svgContainer, annotationLayer, controls);
             updateChapterBar(chapterBar, manifest, state.currentTime);
+            if (state.announce) {
+              state.announce('Paused at chapter: ' + (ch.label || 'untitled') + '. Press Play to go on.');
+            }
             return;
           }
         }
@@ -683,26 +728,24 @@
     updateDisplay(state, svgContainer, annotationLayer, controls);
   }
 
-  function nextChapter(state, svgContainer, annotationLayer, controls) {
-    if (!state.manifest || !state.manifest.chapters.length) return;
-    for (const ch of state.manifest.chapters) {
-      if (ch.time > state.currentTime + 0.1) {
-        seek(state, ch.time, svgContainer, annotationLayer, controls);
-        return;
-      }
+  /** Start of the next chapter after `time`, or null after the last one. */
+  function nextChapterTime(chapters, time) {
+    for (const ch of chapters) {
+      if (ch.time > time + 0.1) return ch.time;
     }
+    return null;
   }
 
-  function prevChapter(state, svgContainer, annotationLayer, controls) {
-    if (!state.manifest || !state.manifest.chapters.length) return;
-    const chapters = state.manifest.chapters;
+  /**
+   * Start of the chapter before `time` (a little way into a chapter, its own
+   * start), or 0 before the first one. Null when there are no chapters.
+   */
+  function prevChapterTime(chapters, time) {
+    if (!chapters.length) return null;
     for (let i = chapters.length - 1; i >= 0; i--) {
-      if (chapters[i].time < state.currentTime - 0.5) {
-        seek(state, chapters[i].time, svgContainer, annotationLayer, controls);
-        return;
-      }
+      if (chapters[i].time < time - 0.5) return chapters[i].time;
     }
-    seek(state, 0, svgContainer, annotationLayer, controls);
+    return 0;
   }
 
   // --- Display ---
@@ -716,6 +759,7 @@
     controls.progress.style.width = (progress * 100) + '%';
     controls.time.textContent = formatTime(state.currentTime);
     controls.duration.textContent = formatTime(manifest.duration - state.currentTime);
+    updateSlider(state, controls);
 
     // Find the correct keyframe for current time
     const kfIdx = findKeyframeIndex(manifest.keyframes, state.currentTime);
@@ -733,25 +777,43 @@
     }
 
     // Update copy-snippet buttons
-    updateSnippets(state.snippetLayer, manifest.snippets, state.currentTime, svgContainer);
+    updateSnippets(state, state.snippetLayer, manifest.snippets, state.currentTime, svgContainer);
+  }
+
+  /**
+   * Keep the timeline's slider values current. They change once a second at
+   * most, so screen readers aren't flooded during playback.
+   */
+  function updateSlider(state, controls) {
+    const manifest = state.manifest;
+    if (!manifest) return;
+    const second = Math.floor(state.currentTime);
+    const label = chapterAt(manifest, state.currentTime);
+    if (second === state.sliderSecond && label === state.sliderChapter) return;
+    state.sliderSecond = second;
+    state.sliderChapter = label;
+    const timeline = controls.timeline;
+    timeline.setAttribute('aria-valuenow', String(second));
+    timeline.setAttribute(
+      'aria-valuetext',
+      formatTime(state.currentTime) + ' of ' + formatTime(manifest.duration) +
+        (label ? ', chapter: ' + label : '')
+    );
+  }
+
+  /** The label of the chapter playing at `time` ("" before the first one). */
+  function chapterAt(manifest, time) {
+    const chapters = (manifest && manifest.chapters) || [];
+    for (let i = chapters.length - 1; i >= 0; i--) {
+      if (chapters[i].time <= time + 0.05) return chapters[i].label || '';
+    }
+    return '';
   }
 
   function updateChapterBar(chapterBar, manifest, time) {
     var textEl = chapterBar.querySelector('.gd-tp-chapter-text');
     if (!textEl) return;
-    if (!manifest || !manifest.chapters || manifest.chapters.length === 0) {
-      textEl.textContent = '';
-      return;
-    }
-    // Find the current chapter (last one at or before current time)
-    var label = '';
-    for (let i = manifest.chapters.length - 1; i >= 0; i--) {
-      if (manifest.chapters[i].time <= time + 0.05) {
-        label = manifest.chapters[i].label || '';
-        break;
-      }
-    }
-    textEl.textContent = label;
+    textEl.textContent = chapterAt(manifest, time);
   }
 
   function showFrame(state, svgContainer, idx) {
@@ -930,10 +992,7 @@
       var node = layer._annEls[k];
       if (time >= ann.time && time <= ann.time + ann.duration) {
         // Fade progress (for smooth entry/exit)
-        var elapsed = time - ann.time;
-        var fadeIn = Math.min(1, elapsed / 0.3);
-        var fadeOut = Math.min(1, (ann.duration - elapsed) / 0.3);
-        node.style.opacity = Math.min(fadeIn, fadeOut);
+        node.style.opacity = fadeOpacity(time - ann.time, ann.duration, 0.3, 0.3);
       } else {
         if (node.style.opacity !== '0') node.style.opacity = '0';
       }
@@ -1133,12 +1192,12 @@
       var h = highlights[k];
       var node = layer._hlEls[k];
       if (time >= h.time && time <= h.time + h.duration) {
-        var elapsed = time - h.time;
-        var fadeInDur = h.fade_in != null ? h.fade_in : 0.3;
-        var fadeOutDur = h.fade_out != null ? h.fade_out : 0.3;
-        var fadeIn = fadeInDur > 0 ? Math.min(1, elapsed / fadeInDur) : 1;
-        var fadeOut = fadeOutDur > 0 ? Math.min(1, (h.duration - elapsed) / fadeOutDur) : 1;
-        node.style.opacity = Math.min(fadeIn, fadeOut);
+        node.style.opacity = fadeOpacity(
+          time - h.time,
+          h.duration,
+          h.fade_in != null ? h.fade_in : 0.3,
+          h.fade_out != null ? h.fade_out : 0.3
+        );
 
         // Position using percentage of viewBox (scales with SVG responsively)
         if (h.target && h.target.match) {
@@ -1227,13 +1286,20 @@
     };
   }
 
-  function updateSnippets(layer, snippets, time, svgContainer) {
+  // Hide a copy button; if it had focus, focus moves to the viewport rather
+  // than being lost
+  function hideSnippet(state, el) {
+    if (el.style.display === 'none') return;
+    const focused = el === document.activeElement;
+    el.style.display = 'none';
+    el.style.opacity = '0';
+    if (focused && state.focusViewport) state.focusViewport();
+  }
+
+  function updateSnippets(state, layer, snippets, time, svgContainer) {
     if (!snippets || snippets.length === 0) {
       if (layer._cmdEls) {
-        for (var i = 0; i < layer._cmdEls.length; i++) {
-          layer._cmdEls[i].style.display = 'none';
-          layer._cmdEls[i].style.opacity = '0';
-        }
+        for (var i = 0; i < layer._cmdEls.length; i++) hideSnippet(state, layer._cmdEls[i]);
       }
       return;
     }
@@ -1275,14 +1341,10 @@
       var c = snippets[k];
       if (activeIdx < 0 && time >= c.time && time <= c.time + c.duration) {
         activeIdx = k;
-        var elapsed = time - c.time;
-        var fadeIn = Math.min(1, elapsed / 0.3);
-        var fadeOut = Math.min(1, (c.duration - elapsed) / 0.3);
         layer._cmdEls[k].style.display = 'inline-flex';
-        layer._cmdEls[k].style.opacity = Math.min(fadeIn, fadeOut);
+        layer._cmdEls[k].style.opacity = fadeOpacity(time - c.time, c.duration, 0.3, 0.3);
       } else {
-        layer._cmdEls[k].style.display = 'none';
-        layer._cmdEls[k].style.opacity = '0';
+        hideSnippet(state, layer._cmdEls[k]);
       }
     }
   }
@@ -1343,18 +1405,25 @@
     root.className = 'gd-tp-controls';
 
     const playBtn = document.createElement('button');
+    playBtn.type = 'button';
     playBtn.className = 'gd-tp-play-btn';
     playBtn.textContent = '\u25b6'; // ▶
     playBtn.setAttribute('aria-label', 'Play');
 
+    // The slider's value text gives the times to screen readers
     const time = document.createElement('span');
     time.className = 'gd-tp-time';
     time.textContent = '0:00';
+    time.setAttribute('aria-hidden', 'true');
 
     const timeline = document.createElement('div');
     timeline.className = 'gd-tp-timeline';
     timeline.setAttribute('role', 'slider');
+    timeline.setAttribute('tabindex', '0');
     timeline.setAttribute('aria-label', 'Playback position');
+    timeline.setAttribute('aria-valuemin', '0');
+    timeline.setAttribute('aria-valuemax', '0');
+    timeline.setAttribute('aria-valuenow', '0');
 
     const progress = document.createElement('div');
     progress.className = 'gd-tp-progress';
@@ -1363,11 +1432,11 @@
     const duration = document.createElement('span');
     duration.className = 'gd-tp-duration';
     duration.textContent = '0:00';
+    duration.setAttribute('aria-hidden', 'true');
 
     const speedBtn = document.createElement('button');
+    speedBtn.type = 'button';
     speedBtn.className = 'gd-tp-speed-btn';
-    speedBtn.textContent = '1\u00d7';
-    speedBtn.setAttribute('aria-label', 'Playback speed');
 
     root.appendChild(playBtn);
     root.appendChild(time);
@@ -1376,6 +1445,12 @@
     root.appendChild(speedBtn);
 
     return { root, playBtn, time, timeline, progress, duration, speedBtn };
+  }
+
+  // The speed button shows the speed, and its name includes it
+  function setSpeedLabel(speedBtn, speed) {
+    speedBtn.textContent = speed + '\u00d7';
+    speedBtn.setAttribute('aria-label', 'Playback speed: ' + speed + '\u00d7');
   }
 
   function renderChapterMarkers(timeline, manifest) {
@@ -1389,6 +1464,8 @@
       marker.style.left = pct + '%';
       marker.setAttribute('title', ch.label || 'Chapter');
       marker.dataset.time = ch.time;
+      // Chapters reach screen readers through the slider's value text
+      marker.setAttribute('aria-hidden', 'true');
       timeline.appendChild(marker);
     }
   }
@@ -1538,6 +1615,10 @@
   window.Termshow.colorMode = colorMode;
   window.Termshow.readOptions = readOptions;
   window.Termshow.manifestUrlFor = manifestUrlFor;
+  window.Termshow.chapterAt = chapterAt;
+  window.Termshow.nextChapterTime = nextChapterTime;
+  window.Termshow.prevChapterTime = prevChapterTime;
+  window.Termshow.fadeOpacity = fadeOpacity;
 
   defineElement();
 
