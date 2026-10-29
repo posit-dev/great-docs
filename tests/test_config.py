@@ -14,6 +14,7 @@ from great_docs.config import (
     create_default_config,
     load_config,
 )
+from tests.support import write_config
 
 
 @pytest.fixture
@@ -2047,3 +2048,23 @@ class TestScaleToFitMinScale:
         """A list value returns None (cannot convert to float)."""
         cfg = _make_config(tmp_path, "scale_to_fit_min_scale:\n  - 0.5\n")
         assert cfg.scale_to_fit_min_scale is None
+
+
+def test_user_settings_are_the_file_unmerged(tmp_path: Path):
+    """Check that file settings retain legacy keys and omit defaults"""
+    cfg = write_config(tmp_path, "site:\n  language: fr\n")
+    assert cfg.user_settings == {"site": {"language": "fr"}}
+    assert cfg["site.lang"] == "fr"
+
+
+def test_user_settings_empty_without_file(tmp_path: Path):
+    """Check that a missing file yields empty user settings"""
+    assert Config(tmp_path).user_settings == {}
+
+
+def test_user_settings_copy_is_independent(tmp_path: Path):
+    """Check that changing nested or top-level settings leaves the loaded settings unchanged"""
+    cfg = write_config(tmp_path, "site:\n  lang: fr\n")
+    cfg.user_settings["site"]["lang"] = "de"
+    cfg.user_settings["extra"] = True
+    assert cfg.user_settings == {"site": {"lang": "fr"}}

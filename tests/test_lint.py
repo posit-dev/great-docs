@@ -1079,7 +1079,7 @@ class TestRunLint:
         mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a"]
         mock_gd._config.__getitem__.return_value = "numpy"
-        mock_gd._config._user_config = {"site": {"language": "fr"}}
+        mock_gd._config.user_settings = {"site": {"language": "fr"}}
         mock_gd_cls.return_value = mock_gd
 
         # func_a has no docstring, so the docstrings check would report it.
