@@ -37,6 +37,7 @@ from great_docs._check_examples import (
 )
 from great_docs._layout import Layout
 from great_docs.cli import cli
+from tests.support import mock_config
 
 requires_quarto = pytest.mark.skipif(
     _check_quarto_available() is not None,
@@ -1736,18 +1737,15 @@ class TestExtractDocstringExamples:
     def test_no_reference_enabled(self, tmp_path):
         (tmp_path / "great-docs.yml").write_text("display_name: Test\n")
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"\n')
-        mock_config = MagicMock()
-        mock_config.reference_enabled = False
-        with patch("great_docs.config.Config", return_value=mock_config):
+        config = mock_config(reference_enabled=False)
+        with patch("great_docs.config.Config", return_value=config):
             result = extract_docstring_examples(tmp_path)
         assert result == []
 
     def test_no_package_detected(self, tmp_path):
         (tmp_path / "great-docs.yml").write_text("display_name: Test\n")
-        mock_config = MagicMock()
-        mock_config.reference_enabled = True
-        mock_config.reference = [{"contents": ["Foo"]}]
-        with patch("great_docs.config.Config", return_value=mock_config):
+        config = mock_config(reference_enabled=True, reference=[{"contents": ["Foo"]}])
+        with patch("great_docs.config.Config", return_value=config):
             result = extract_docstring_examples(tmp_path)
         assert result == []
 
@@ -1756,9 +1754,8 @@ class TestExtractDocstringExamples:
         (tmp_path / "docs").mkdir()
         (tmp_path / "docs" / "great-docs.yml").write_text("display_name: Test\n")
         layout = Layout.make(tmp_path)
-        mock_config = MagicMock()
-        mock_config.reference_enabled = False
-        with patch("great_docs.config.Config", return_value=mock_config) as config_cls:
+        config = mock_config(reference_enabled=False)
+        with patch("great_docs.config.Config", return_value=config) as config_cls:
             result = extract_docstring_examples(tmp_path, layout=layout)
         assert result == []
         assert config_cls.call_args.kwargs["config_path"] == layout.config_path

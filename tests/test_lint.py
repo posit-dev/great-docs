@@ -22,6 +22,7 @@ from great_docs._lint import (
     run_lint,
 )
 from great_docs._utils import QUARTO_YML_HEADER
+from tests.support import mock_config
 
 
 @pytest.mark.parametrize("directory", [".", "docs", "website"])
@@ -239,8 +240,7 @@ def _mock_docs() -> MagicMock:
     prevent page checks from treating mocks as source paths.
     """
     docs = MagicMock()
-    docs._config.seo_enabled = False
-    docs._config.sections = []
+    docs._config = mock_config(seo_enabled=False, sections=[])
     docs._find_user_guide_dir.return_value = None
     docs._get_custom_page_sources.return_value = []
     docs._find_index_source_file.return_value = (None, None)
@@ -925,7 +925,6 @@ class TestRunLint:
         mock_gd._detect_package_name.return_value = "mypkg"
         mock_gd._resolve_importable_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a", "func_b"]
-        mock_gd._config.get.return_value = "numpy"
         mock_gd._config.__getitem__.return_value = "numpy"
         mock_gd_cls.return_value = mock_gd
 
@@ -955,7 +954,6 @@ class TestRunLint:
         mock_gd._detect_package_name.return_value = "mypkg"
         mock_gd._resolve_importable_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["StoreCache", "NetCache"]
-        mock_gd._config.get.return_value = "numpy"
         mock_gd._config.__getitem__.return_value = "numpy"
         # The renderer documents NetCache itself but, per its `members: false`
         # config, none of its members — only StoreCache.flush gets a page.
@@ -999,7 +997,6 @@ class TestRunLint:
         mock_gd._detect_package_name.return_value = "mypkg"
         mock_gd._resolve_importable_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a"]
-        mock_gd._config.get.return_value = "numpy"
         mock_gd._config.__getitem__.return_value = "numpy"
         mock_gd.documented_objects.return_value = []
         mock_gd_cls.return_value = mock_gd
@@ -1024,7 +1021,6 @@ class TestRunLint:
         mock_gd._detect_package_name.return_value = "my-dist"
         mock_gd._resolve_importable_name.return_value = "actual_module"
         mock_gd._get_package_exports.return_value = ["func_a"]
-        mock_gd._config.get.return_value = "numpy"
         mock_gd._config.__getitem__.return_value = "numpy"
         mock_gd_cls.return_value = mock_gd
 
@@ -1049,7 +1045,6 @@ class TestRunLint:
         mock_gd._detect_module_name.return_value = None
         mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a"]
-        mock_gd._config.get.return_value = "numpy"
         mock_gd._config.__getitem__.return_value = "numpy"
         mock_gd_cls.return_value = mock_gd
 
@@ -1079,7 +1074,7 @@ class TestRunLint:
         mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a"]
         mock_gd._config.__getitem__.return_value = "numpy"
-        mock_gd._config._user_config = {"site": {"language": "fr"}}
+        mock_gd._config.user_settings = {"site": {"language": "fr"}}
         mock_gd_cls.return_value = mock_gd
 
         # func_a has no docstring, so the docstrings check would report it.
@@ -1106,7 +1101,6 @@ class TestRunLint:
         mock_gd._detect_package_name.return_value = "mypkg"
         mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = None
-        mock_gd._config.get.return_value = "numpy"
         mock_gd._config.__getitem__.return_value = "numpy"
         mock_gd_cls.return_value = mock_gd
 
@@ -1165,7 +1159,6 @@ class TestRunLintQuiet:
         mock_gd._detect_package_name.return_value = "mypkg"
         mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a"]
-        mock_gd._config.get.return_value = "numpy"
         mock_gd._config.__getitem__.return_value = "numpy"
         mock_gd_cls.return_value = mock_gd
 

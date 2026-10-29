@@ -7,13 +7,9 @@ from pathlib import Path
 
 from great_docs.config import Config
 from great_docs.core import GreatDocs
+from tests.support import write_config
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
-
-
-def _make_config(tmp_path: Path, yaml_text: str) -> Config:
-    (tmp_path / "great-docs.yml").write_text(yaml_text, encoding="utf-8")
-    return Config(tmp_path)
 
 
 def _make_qmd(path: Path, title: str, tags: list[str] | None = None, extra: str = "") -> None:
@@ -55,73 +51,73 @@ class TestTagsConfig:
         assert cfg.tags_enabled is False
 
     def test_tags_enabled_true(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n")
+        cfg = write_config(tmp_path, "tags:\n  enabled: true\n")
         assert cfg.tags_enabled is True
 
     def test_tags_enabled_shorthand(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "tags: true\n")
+        cfg = write_config(tmp_path, "tags: true\n")
         assert cfg.tags_enabled is True
 
     def test_tags_enabled_false_shorthand(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "tags: false\n")
+        cfg = write_config(tmp_path, "tags: false\n")
         assert cfg.tags_enabled is False
 
     def test_tags_index_page_default(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n")
+        cfg = write_config(tmp_path, "tags:\n  enabled: true\n")
         assert cfg.tags_index_page is True
 
     def test_tags_index_page_disabled(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n  index_page: false\n")
+        cfg = write_config(tmp_path, "tags:\n  enabled: true\n  index_page: false\n")
         assert cfg.tags_index_page is False
 
     def test_tags_show_on_pages_default(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n")
+        cfg = write_config(tmp_path, "tags:\n  enabled: true\n")
         assert cfg.tags_show_on_pages is True
 
     def test_tags_hierarchical_default(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n")
+        cfg = write_config(tmp_path, "tags:\n  enabled: true\n")
         assert cfg.tags_hierarchical is True
 
     def test_tags_icons_empty(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n")
+        cfg = write_config(tmp_path, "tags:\n  enabled: true\n")
         assert cfg.tags_icons == {}
 
     def test_tags_icons_custom(self, tmp_path: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_path,
             "tags:\n  enabled: true\n  icons:\n    Python: code\n    Tutorial: book-open\n",
         )
         assert cfg.tags_icons == {"Python": "code", "Tutorial": "book-open"}
 
     def test_tags_shadow_empty(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n")
+        cfg = write_config(tmp_path, "tags:\n  enabled: true\n")
         assert cfg.tags_shadow == []
 
     def test_tags_shadow_custom(self, tmp_path: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_path,
             "tags:\n  enabled: true\n  shadow:\n    - internal\n    - draft\n",
         )
         assert cfg.tags_shadow == ["internal", "draft"]
 
     def test_tags_scoped_default(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n")
+        cfg = write_config(tmp_path, "tags:\n  enabled: true\n")
         assert cfg.tags_scoped is False
 
     def test_tags_location_default(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n")
+        cfg = write_config(tmp_path, "tags:\n  enabled: true\n")
         assert cfg.tags_location == "top"
 
     def test_tags_location_bottom(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n  location: bottom\n")
+        cfg = write_config(tmp_path, "tags:\n  enabled: true\n  location: bottom\n")
         assert cfg.tags_location == "bottom"
 
     def test_tags_location_top_explicit(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n  location: top\n")
+        cfg = write_config(tmp_path, "tags:\n  enabled: true\n  location: top\n")
         assert cfg.tags_location == "top"
 
     def test_tags_location_invalid_falls_back_to_top(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n  location: middle\n")
+        cfg = write_config(tmp_path, "tags:\n  enabled: true\n  location: middle\n")
         assert cfg.tags_location == "top"
 
     def test_tags_not_enabled_disables_subordinates(self, tmp_path: Path):

@@ -1718,12 +1718,37 @@ class Config:
         """
         Get the full configuration as a dictionary.
 
+        The configuration includes merged defaults, rewritten legacy keys and
+        expanded shorthands. Use `user_settings` for the settings as written
+        in the file.
+
         Returns
         -------
         dict
             The complete configuration.
         """
         return self._config.copy()
+
+    @property
+    def user_settings(self) -> ConfigDict:
+        """
+        Settings as written in `great-docs.yml`
+
+        Nothing is merged, rewritten or expanded. An absent key stays absent,
+        and a legacy key keeps its written spelling. Use `to_dict()` for the
+        configuration with merged defaults, rewritten legacy keys and expanded
+        shorthands.
+
+        The result is empty when the file is missing, is not a mapping or fails
+        to parse.
+
+        Returns
+        -------
+        :
+            A deep copy of the settings, so changing it leaves the loaded
+            configuration unchanged.
+        """
+        return copy.deepcopy(self._user_config)
 
 
 def load_config(project_root: Path | str) -> Config:

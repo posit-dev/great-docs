@@ -11,26 +11,7 @@ import pytest
 
 from great_docs._website.page_dates import copy_portraits, head_tags, site_authors
 from great_docs.config import Config
-
-
-def _config(project: Path, yaml: str = "show_dates: true\n") -> Config:
-    """
-    Write and load a project configuration
-
-    Parameters
-    ----------
-    project
-        Project directory.
-    yaml
-        Contents of `great-docs.yml`.
-
-    Returns
-    -------
-    :
-        The project configuration.
-    """
-    (project / "great-docs.yml").write_text(yaml, encoding="utf-8")
-    return Config(project)
+from tests.support import write_config
 
 
 def _tags(source: Path, config: Config, authors: list[dict] | None = None) -> dict[str, str]:
@@ -87,7 +68,7 @@ def test_front_matter_dates_win_over_git(tmp_path: Path):
         encoding="utf-8",
     )
 
-    tags = _tags(page, _config(tmp_path))
+    tags = _tags(page, write_config(tmp_path, "show_dates: true\n"))
 
     assert 'content="2026-03-15T10:30:00Z"' in tags["gd-page-modified"]
     assert 'content="2025-06-01T00:00:00"' in tags["gd-page-created"]
@@ -104,7 +85,7 @@ def test_committed_page_takes_dates_from_git(tmp_path: Path):
     _git(repo, "add", ".")
     _git(repo, "commit", "-q", "-m", "Add page")
 
-    tags = _tags(page, _config(tmp_path))
+    tags = _tags(page, write_config(tmp_path, "show_dates: true\n"))
 
     # Older Git writes UTC as `+00:00`, newer Git as `Z`
     committed = datetime(2024, 5, 6, 7, 8, 9, tzinfo=timezone.utc)
@@ -119,7 +100,7 @@ def test_untracked_page_takes_modified_date_from_mtime(tmp_path: Path):
     page = tmp_path / "page.qmd"
     page.write_text("Text\n", encoding="utf-8")
 
-    tags = _tags(page, _config(tmp_path))
+    tags = _tags(page, write_config(tmp_path, "show_dates: true\n"))
 
     assert set(tags) == {"gd-page-modified"}
 
@@ -147,7 +128,7 @@ def test_author_details_come_from_configured_authors(
     page = tmp_path / "page.qmd"
     page.write_text("---\nauthor: Ada\n---\n", encoding="utf-8")
 
-    tags = _tags(page, _config(tmp_path), [entry])
+    tags = _tags(page, write_config(tmp_path, "show_dates: true\n"), [entry])
 
     assert 'content="Ada"' in tags["gd-page-author"]
     assert f'content="{image}"' in tags["gd-page-author-image"]
@@ -160,7 +141,7 @@ def test_author_details_come_from_configured_authors(
 def test_show_author_false_drops_author_tags(tmp_path: Path):
     page = tmp_path / "page.qmd"
     page.write_text("---\nauthor: Ada\n---\n", encoding="utf-8")
-    config = _config(tmp_path, "show_dates: true\nshow_author: false\n")
+    config = write_config(tmp_path, "show_dates: true\nshow_author: false\n")
 
     tags = _tags(page, config, [{"name": "Ada", "github": "ada"}])
 
@@ -171,7 +152,7 @@ def test_author_name_is_escaped(tmp_path: Path):
     page = tmp_path / "page.qmd"
     page.write_text("---\nauthor: 'O''Brien & \"Co\"'\n---\n", encoding="utf-8")
 
-    tags = _tags(page, _config(tmp_path))
+    tags = _tags(page, write_config(tmp_path, "show_dates: true\n"))
 
     assert tags["gd-page-author"] == (
         '<meta name="gd-page-author" content="O&#x27;Brien &amp; &quot;Co&quot;">'
@@ -182,14 +163,14 @@ def test_show_dates_off_builds_no_tags(tmp_path: Path):
     page = tmp_path / "page.qmd"
     page.write_text("Text\n", encoding="utf-8")
 
-    assert head_tags(page, _config(tmp_path, "show_dates: false\n"), []) == []
+    assert head_tags(page, write_config(tmp_path, "show_dates: false\n"), []) == []
 
 
 def test_local_portrait_is_copied_and_addressed_on_the_site(tmp_path: Path):
     """Preserve query strings, fragments and remote portrait URLs"""
     (tmp_path / "img").mkdir()
     (tmp_path / "img" / "ada.png").write_bytes(b"png")
-    config = _config(
+    config = write_config(
         tmp_path,
         "show_dates: true\nauthors:\n"
         "  - {name: Ada, image: 'img/ada.png?v=2#face'}\n"

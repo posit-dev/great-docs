@@ -152,7 +152,7 @@ def run_lint(
 
     # Configuration problems are reported even if the package cannot be loaded.
     if "config" in checks:
-        _check_config_keys(docs._config._user_config, result)
+        _check_config_keys(docs._config.user_settings, result)
 
     # The config check reads only great-docs.yml, so it also works on projects
     # without a Python package.

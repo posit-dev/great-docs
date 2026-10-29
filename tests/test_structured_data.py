@@ -14,6 +14,7 @@ import pytest
 from great_docs._website.page_metadata import Page
 from great_docs._website.seo.structured_data import StructuredData, licence_url
 from great_docs.config import Config
+from tests.support import write_config
 
 BASE_URL = "https://example.org/pkg/"
 METADATA = {
@@ -24,17 +25,10 @@ METADATA = {
 _SCRIPT = re.compile(r'^<script type="application/ld\+json">(.*)</script>$')
 
 
-def _config(tmp_path: Path, yaml: str = "") -> Config:
-    root = tmp_path / "config"
-    root.mkdir(exist_ok=True)
-    (root / "great-docs.yml").write_text(yaml, encoding="utf-8")
-    return Config(root)
-
-
 def _data(
     tmp_path: Path, metadata: dict[str, Any] = METADATA, base_url: str | None = BASE_URL
 ) -> StructuredData:
-    data = StructuredData.make(_config(tmp_path), metadata, "Pkg", base_url)
+    data = StructuredData.make(write_config(tmp_path), metadata, "Pkg", base_url)
     assert data is not None
     return data
 
@@ -57,11 +51,11 @@ def _parse(tag: str | None) -> dict[str, Any] | list[dict[str, Any]]:
     "yaml", ["seo:\n  structured_data:\n    enabled: false\n", "seo:\n  enabled: false\n"]
 )
 def test_make_is_none_when_disabled(tmp_path: Path, yaml: str) -> None:
-    assert StructuredData.make(_config(tmp_path, yaml), METADATA, "Pkg", BASE_URL) is None
+    assert StructuredData.make(write_config(tmp_path, yaml), METADATA, "Pkg", BASE_URL) is None
 
 
 def test_package_object(tmp_path: Path) -> None:
-    config = _config(tmp_path, "seo:\n  structured_data:\n    type: SoftwareApplication\n")
+    config = write_config(tmp_path, "seo:\n  structured_data:\n    type: SoftwareApplication\n")
     data = StructuredData.make(config, METADATA, "Pkg", BASE_URL)
     assert data is not None
     assert data.package == {
@@ -78,7 +72,7 @@ def test_package_object(tmp_path: Path) -> None:
 
 
 def test_package_object_omits_empty_values(tmp_path: Path) -> None:
-    data = StructuredData.make(_config(tmp_path), {}, "", None)
+    data = StructuredData.make(write_config(tmp_path), {}, "", None)
     assert data is not None
     assert data.package == {
         "@context": "https://schema.org",

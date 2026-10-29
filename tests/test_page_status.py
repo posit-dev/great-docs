@@ -10,13 +10,9 @@ from yaml12 import read_yaml
 
 from great_docs.config import Config
 from great_docs.core import GreatDocs
+from tests.support import write_config
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
-
-
-def _make_config(tmp_path: Path, yaml_text: str) -> Config:
-    (tmp_path / "great-docs.yml").write_text(yaml_text, encoding="utf-8")
-    return Config(tmp_path)
 
 
 def _make_qmd(
@@ -59,31 +55,31 @@ class TestPageStatusConfig:
         assert cfg.page_status_enabled is False
 
     def test_enabled_dict(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "page_status:\n  enabled: true\n")
+        cfg = write_config(tmp_path, "page_status:\n  enabled: true\n")
         assert cfg.page_status_enabled is True
 
     def test_enabled_shorthand(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "page_status: true\n")
+        cfg = write_config(tmp_path, "page_status: true\n")
         assert cfg.page_status_enabled is True
 
     def test_disabled_shorthand(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "page_status: false\n")
+        cfg = write_config(tmp_path, "page_status: false\n")
         assert cfg.page_status_enabled is False
 
     def test_show_in_sidebar_default(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "page_status:\n  enabled: true\n")
+        cfg = write_config(tmp_path, "page_status:\n  enabled: true\n")
         assert cfg.page_status_show_in_sidebar is True
 
     def test_show_in_sidebar_disabled(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "page_status:\n  enabled: true\n  show_in_sidebar: false\n")
+        cfg = write_config(tmp_path, "page_status:\n  enabled: true\n  show_in_sidebar: false\n")
         assert cfg.page_status_show_in_sidebar is False
 
     def test_show_on_pages_default(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "page_status:\n  enabled: true\n")
+        cfg = write_config(tmp_path, "page_status:\n  enabled: true\n")
         assert cfg.page_status_show_on_pages is True
 
     def test_show_on_pages_disabled(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "page_status:\n  enabled: true\n  show_on_pages: false\n")
+        cfg = write_config(tmp_path, "page_status:\n  enabled: true\n  show_on_pages: false\n")
         assert cfg.page_status_show_on_pages is False
 
     def test_not_enabled_disables_subordinates(self, tmp_path: Path):
@@ -92,7 +88,7 @@ class TestPageStatusConfig:
         assert cfg.page_status_show_on_pages is False
 
     def test_default_definitions(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, "page_status:\n  enabled: true\n")
+        cfg = write_config(tmp_path, "page_status:\n  enabled: true\n")
         defs = cfg.page_status_definitions
         assert "new" in defs
         assert "deprecated" in defs
@@ -104,7 +100,7 @@ class TestPageStatusConfig:
 
     def test_shorthand_true_preserves_default_definitions(self, tmp_path: Path):
         """Regression: `page_status: true` must not replace definitions with bool."""
-        cfg = _make_config(tmp_path, "page_status: true\n")
+        cfg = write_config(tmp_path, "page_status: true\n")
         defs = cfg.page_status_definitions
         assert isinstance(defs, dict)
         assert len(defs) >= 5
@@ -113,7 +109,7 @@ class TestPageStatusConfig:
         assert defs["new"]["label"] == "New"
 
     def test_custom_definitions_merge(self, tmp_path: Path):
-        cfg = _make_config(
+        cfg = write_config(
             tmp_path,
             "page_status:\n  enabled: true\n  statuses:\n"
             "    draft:\n      label: Draft\n      icon: pencil\n"
