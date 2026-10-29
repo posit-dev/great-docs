@@ -1,21 +1,27 @@
 """
 Shared configuration and build setup for `GreatDocs` tests
 
-`mock_config` provides a `Config` double with empty defaults. `stubbed_build` stubs
-Quarto and build steps while preserving the build's control flow.
+`write_config` writes and loads `great-docs.yml`. `mock_config` provides a `Config` double
+with empty defaults. `stubbed_build` stubs Quarto and build steps while preserving the build's
+control flow.
 """
 
 from __future__ import annotations
 
 import types
 import typing
-from collections.abc import Callable, Generator, Iterable
+from collections.abc import Callable, Generator, Iterable, Mapping
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, NonCallableMagicMock, patch
 
+from yaml12 import format_yaml
+
 from great_docs import Config, GreatDocs
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # Keep these methods in the order `GreatDocs.build()` first calls them.
 # Update this list when a build step moves out of `GreatDocs`.
@@ -71,6 +77,27 @@ _TYPE_CHECKING_NAMES: dict[str, Any] = {"Any": Any, "ConfigDict": dict[str, Any]
 
 # Public attributes that `Config.__init__` sets and the class does not declare.
 _CONFIG_INSTANCE_ATTRIBUTES = ("project_root", "config_path", "cache_dir")
+
+
+def write_config(root: Path, settings: str | Mapping[str, object] = "") -> Config:
+    """
+    Write and load a project's `great-docs.yml`
+
+    Parameters
+    ----------
+    root
+        The project directory.
+    settings
+        YAML text to write unchanged, or a mapping to serialise as YAML.
+
+    Returns
+    -------
+    :
+        The configuration loaded from `root`.
+    """
+    text = settings if isinstance(settings, str) else format_yaml(dict(settings))
+    (root / "great-docs.yml").write_text(text, encoding="utf-8")
+    return Config(root)
 
 
 def mock_config(**values: object) -> NonCallableMagicMock:

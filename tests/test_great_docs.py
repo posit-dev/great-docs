@@ -189,7 +189,7 @@ from great_docs.pandoc.inlines import (
     inlinecontent_to_str,
     shortcode,
 )
-from tests.support import mock_config, stubbed_build
+from tests.support import mock_config, stubbed_build, write_config
 
 
 def test_great_docs_init():
@@ -8723,7 +8723,8 @@ def test_build_cli_reference_uses_module_name(tmp_path):
     """Regression: build() discovers the Click CLI in the importable module,
     not the PyPI project name, when the two diverge."""
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "my-dist"\n')
-    (tmp_path / "great-docs.yml").write_text("module: actual_module\ncli:\n  enabled: true\n")
+    # Write `cli.enabled` before `GreatDocs` reads the project metadata during creation.
+    write_config(tmp_path, "module: actual_module\ncli:\n  enabled: true\n")
     docs = GreatDocs(project_path=str(tmp_path))
     docs._has_api_reference = False
     docs.build_dir.mkdir(parents=True)
@@ -14687,9 +14688,7 @@ def test_detect_git_ref_configured_branch():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("source:\n  branch: release-2.0\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "source:\n  branch: release-2.0\n")
 
         result = docs._detect_git_ref()
 
@@ -15081,12 +15080,9 @@ def test_update_quarto_config_navbar_color_light_dark():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            "navbar_color:\n  light: '#1a1a2e'\n  dark: '#e0e0e0'\n",
-            encoding="utf-8",
+        docs._config = write_config(
+            Path(tmp_dir), "navbar_color:\n  light: '#1a1a2e'\n  dark: '#e0e0e0'\n"
         )
-        docs._config = Config(Path(tmp_dir))
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -15121,9 +15117,7 @@ def test_update_quarto_config_navbar_color_light_only():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("navbar_color:\n  light: '#003366'\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "navbar_color:\n  light: '#003366'\n")
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -15160,10 +15154,9 @@ def test_update_quarto_config_navbar_color_does_not_leak_onto_root():
         (Path(tmp_dir) / "pyproject.toml").write_text(
             '[project]\nname = "mypkg"\n', encoding="utf-8"
         )
-        (Path(tmp_dir) / "great-docs.yml").write_text(
-            "navbar_color:\n  light: '#c76e00'\n  dark: '#0a2540'\n", encoding="utf-8"
+        docs._config = write_config(
+            Path(tmp_dir), "navbar_color:\n  light: '#c76e00'\n  dark: '#0a2540'\n"
         )
-        docs._config = Config(Path(tmp_dir))
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -15212,12 +15205,10 @@ def test_update_quarto_config_announcement_banner():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
+        docs._config = write_config(
+            Path(tmp_dir),
             "announcement:\n  content: 'New release!'\n  type: success\n  dismissable: true\n",
-            encoding="utf-8",
         )
-        docs._config = Config(Path(tmp_dir))
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -15262,12 +15253,9 @@ def test_update_quarto_config_content_style():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            "content_style:\n  preset: gradient\n  pages: all\n",
-            encoding="utf-8",
+        docs._config = write_config(
+            Path(tmp_dir), "content_style:\n  preset: gradient\n  pages: all\n"
         )
-        docs._config = Config(Path(tmp_dir))
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -15308,9 +15296,7 @@ def test_update_quarto_config_navbar_style():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("navbar_style: midnight\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "navbar_style: midnight\n")
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -15388,9 +15374,7 @@ def test_update_quarto_config_cli_enabled_adds_ref_switcher():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("cli:\n  enabled: true\n  module: mypkg.cli\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "cli:\n  enabled: true\n  module: mypkg.cli\n")
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -15466,12 +15450,9 @@ def test_update_quarto_config_page_footer_with_funding():
             encoding="utf-8",
         )
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            "funding:\n  name: ACME Foundation\n  homepage: https://acme.org\n",
-            encoding="utf-8",
+        docs._config = write_config(
+            Path(tmp_dir), "funding:\n  name: ACME Foundation\n  homepage: https://acme.org\n"
         )
-        docs._config = Config(Path(tmp_dir))
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -15506,9 +15487,7 @@ def test_update_quarto_config_page_footer_funding_no_authors():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("funding:\n  name: TestFund\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "funding:\n  name: TestFund\n")
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -15543,9 +15522,7 @@ def test_update_quarto_config_posit_badge():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("funding:\n  name: Posit PBC\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "funding:\n  name: Posit PBC\n")
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -15611,9 +15588,7 @@ def test_update_quarto_config_sidebar_filter_custom_min_items():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("sidebar_filter:\n  min_items: 10\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "sidebar_filter:\n  min_items: 10\n")
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -15683,12 +15658,9 @@ def test_update_quarto_config_site_url():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            'site_url: "http://myserver:3838/data-team/mypackage/"\n',
-            encoding="utf-8",
+        docs._config = write_config(
+            Path(tmp_dir), 'site_url: "http://myserver:3838/data-team/mypackage/"\n'
         )
-        docs._config = Config(Path(tmp_dir))
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -15963,9 +15935,7 @@ def test_create_index_from_readme_hero_section():
             encoding="utf-8",
         )
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("hero:\n  enabled: true\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "hero:\n  enabled: true\n")
 
         readme = Path(tmp_dir) / "README.md"
         readme.write_text("# mypkg\n\nHello world.\n", encoding="utf-8")
@@ -15994,9 +15964,7 @@ def test_create_index_from_readme_hero_strips_duplicate_h1():
             '[project]\nname = "testpkg"\ndescription = "Desc"\n', encoding="utf-8"
         )
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("hero:\n  enabled: true\n  name: testpkg\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "hero:\n  enabled: true\n  name: testpkg\n")
 
         readme = Path(tmp_dir) / "README.md"
         readme.write_text("# testpkg\n\n## Features\n\nSome features.\n", encoding="utf-8")
@@ -16061,9 +16029,7 @@ def test_add_api_reference_config_non_python_project():
         # Go project marker; no pyproject.toml / __init__.py anywhere.
         (Path(tmp_dir) / "go.mod").write_text("module example.com/tool\n", encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("project_type: go\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "project_type: go\n")
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -16091,12 +16057,9 @@ def test_add_api_reference_config_carries_the_callable_signature_settings():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            "callable_signatures:\n  style: plain\n  wrap: width\n",
-            encoding="utf-8",
+        docs._config = write_config(
+            Path(tmp_dir), "callable_signatures:\n  style: plain\n  wrap: width\n"
         )
-        docs._config = Config(Path(tmp_dir))
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -16567,9 +16530,7 @@ def test_prepare_build_directory_optional_js_copy_page():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("markdown_pages_widget: true\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "markdown_pages_widget: true\n")
 
         readme = Path(tmp_dir) / "README.md"
         readme.write_text("# My Pkg\n", encoding="utf-8")
@@ -16713,9 +16674,7 @@ def test_parse_package_exports_with_exclude():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("exclude:\n  - helper_fn\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "exclude:\n  - helper_fn\n")
 
         pkg_dir = Path(tmp_dir) / "mypkg"
         pkg_dir.mkdir()
@@ -16845,12 +16804,9 @@ def test_update_quarto_config_page_footer_author_homepage():
             encoding="utf-8",
         )
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            "authors:\n  - name: Alice\n    homepage: https://alice.dev\n",
-            encoding="utf-8",
+        docs._config = write_config(
+            Path(tmp_dir), "authors:\n  - name: Alice\n    homepage: https://alice.dev\n"
         )
-        docs._config = Config(Path(tmp_dir))
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -17972,9 +17928,7 @@ def test_process_sections_not_list():
     """Test _process_sections returns 0 when sections is not a list."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("sections: not-a-list\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "sections: not-a-list\n")
         result = docs._process_sections()
 
         assert result == 0
@@ -17984,12 +17938,9 @@ def test_process_sections_missing_source_dir():
     """Test _process_sections skips when source directory doesn't exist."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            "sections:\n  - title: Recipes\n    dir: nonexistent\n",
-            encoding="utf-8",
+        docs._config = write_config(
+            Path(tmp_dir), "sections:\n  - title: Recipes\n    dir: nonexistent\n"
         )
-        docs._config = Config(Path(tmp_dir))
         result = docs._process_sections()
 
         assert result == 0
@@ -18003,12 +17954,9 @@ def test_process_sections_no_files_in_dir():
         src_dir = Path(tmp_dir) / "recipes"
         src_dir.mkdir()
         (src_dir / "notes.txt").write_text("not a qmd file\n")
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            "sections:\n  - title: Recipes\n    dir: recipes\n",
-            encoding="utf-8",
+        docs._config = write_config(
+            Path(tmp_dir), "sections:\n  - title: Recipes\n    dir: recipes\n"
         )
-        docs._config = Config(Path(tmp_dir))
         result = docs._process_sections()
 
         assert result == 0
@@ -18043,12 +17991,9 @@ def test_process_sections_default_type():
             "---\ntitle: First Recipe\n---\n\n# First Recipe\n", encoding="utf-8"
         )
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            "sections:\n  - title: Recipes\n    dir: recipes\n",
-            encoding="utf-8",
+        docs._config = write_config(
+            Path(tmp_dir), "sections:\n  - title: Recipes\n    dir: recipes\n"
         )
-        docs._config = Config(Path(tmp_dir))
 
         result = docs._process_sections()
 
@@ -18093,9 +18038,7 @@ def test_parse_package_exports_with_exclusions():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("exclude:\n  - CONSTANT\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "exclude:\n  - CONSTANT\n")
 
         pkg_dir = Path(tmp_dir) / "mypkg"
         pkg_dir.mkdir()
@@ -19129,9 +19072,7 @@ def test_get_cli_help_text_for_llms_with_cli():
         docs = GreatDocs(project_path=tmp_dir)
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("cli:\n  enabled: true\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "cli:\n  enabled: true\n")
 
         mock_cli_info = {
             "entry_point_name": "mypkg",
@@ -19162,9 +19103,7 @@ def test_get_cli_help_text_for_llms_hidden_command():
         docs = GreatDocs(project_path=tmp_dir)
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("cli:\n  enabled: true\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "cli:\n  enabled: true\n")
 
         mock_cli_info = {
             "entry_point_name": "mypkg",
@@ -19583,8 +19522,8 @@ def test_discover_user_guide_explicit_config():
             "---\ntitle: Advanced\n---\n\n# Advanced\n", encoding="utf-8"
         )
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
+        docs._config = write_config(
+            Path(tmp_dir),
             "user_guide:\n"
             "  - section: Getting Started\n"
             "    contents:\n"
@@ -19592,9 +19531,7 @@ def test_discover_user_guide_explicit_config():
             "  - section: Expert\n"
             "    contents:\n"
             "      - advanced.qmd\n",
-            encoding="utf-8",
         )
-        docs._config = Config(Path(tmp_dir))
 
         result = docs._discover_user_guide()
         assert result is not None
@@ -19687,12 +19624,9 @@ def test_process_sections_blog_type():
         )
 
         # Create config with blog section
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            "sections:\n  - title: Blog\n    dir: blog\n    type: blog\n",
-            encoding="utf-8",
+        docs._config = write_config(
+            Path(tmp_dir), "sections:\n  - title: Blog\n    dir: blog\n    type: blog\n"
         )
-        docs._config = Config(Path(tmp_dir))
 
         build_dir = Path(tmp_dir) / "great-docs"
         build_dir.mkdir(parents=True, exist_ok=True)
@@ -19725,12 +19659,9 @@ def test_process_sections_with_index_generation():
             encoding="utf-8",
         )
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            "sections:\n  - title: Tutorials\n    dir: tutorials\n    index: true\n",
-            encoding="utf-8",
+        docs._config = write_config(
+            Path(tmp_dir), "sections:\n  - title: Tutorials\n    dir: tutorials\n    index: true\n"
         )
-        docs._config = Config(Path(tmp_dir))
 
         build_dir = Path(tmp_dir) / "great-docs"
         build_dir.mkdir(parents=True, exist_ok=True)
@@ -19755,12 +19686,7 @@ def test_process_sections_invalid_type():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            "sections:\n  - just a string\n",
-            encoding="utf-8",
-        )
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "sections:\n  - just a string\n")
 
         result = docs._process_sections()
         assert result == 0
@@ -19771,12 +19697,7 @@ def test_process_sections_missing_title_or_dir():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            "sections:\n  - title: NoDir\n",
-            encoding="utf-8",
-        )
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "sections:\n  - title: NoDir\n")
 
         result = docs._process_sections()
         assert result == 0
@@ -19790,12 +19711,9 @@ def test_process_sections_empty_dir():
         empty_dir = Path(tmp_dir) / "empty_section"
         empty_dir.mkdir()
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            "sections:\n  - title: Empty\n    dir: empty_section\n",
-            encoding="utf-8",
+        docs._config = write_config(
+            Path(tmp_dir), "sections:\n  - title: Empty\n    dir: empty_section\n"
         )
-        docs._config = Config(Path(tmp_dir))
 
         result = docs._process_sections()
         assert result == 0
@@ -19943,9 +19861,7 @@ def test_process_user_guide_homepage_mode():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("homepage: user_guide\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "homepage: user_guide\n")
 
         build_dir = Path(tmp_dir) / "great-docs"
         build_dir.mkdir(parents=True, exist_ok=True)
@@ -20186,12 +20102,9 @@ def test_get_package_metadata_cli_config():
         docs = GreatDocs(project_path=tmp_dir)
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            "cli:\n  enabled: true\n  module: mypkg.cli\n  name: main\n",
-            encoding="utf-8",
+        docs._config = write_config(
+            Path(tmp_dir), "cli:\n  enabled: true\n  module: mypkg.cli\n  name: main\n"
         )
-        docs._config = Config(Path(tmp_dir))
 
         result = docs._get_package_metadata()
         assert result.get("cli_enabled") is True
@@ -20276,12 +20189,7 @@ def test_get_package_exports_with_exclude():
         docs = GreatDocs(project_path=tmp_dir)
 
         # Mock the config to have excludes
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            "exclude:\n  - _internal\n  - _private\n",
-            encoding="utf-8",
-        )
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir), "exclude:\n  - _internal\n  - _private\n")
 
         # Create a package with __init__.py containing __all__
         pkg_dir = Path(tmp_dir) / "mypkg"
@@ -20422,9 +20330,7 @@ def test_prepare_build_directory_copies_assets():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
+        docs._config = write_config(Path(tmp_dir))
 
         docs._prepare_build_directory()
 
@@ -24697,11 +24603,10 @@ def _make_uqc_docs(tmp_dir, gd_yml_content="", pyproject_content=None, quarto_co
     pyproject = Path(tmp_dir) / "pyproject.toml"
     pyproject.write_text(pyproject_content, encoding="utf-8")
 
-    gd_yml = Path(tmp_dir) / "great-docs.yml"
-    gd_yml.write_text(gd_yml_content, encoding="utf-8")
+    config = write_config(Path(tmp_dir), gd_yml_content)
 
     docs = GreatDocs(project_path=tmp_dir)
-    docs._config = Config(Path(tmp_dir))
+    docs._config = config
 
     quarto_yml = docs.build_dir / "_quarto.yml"
     quarto_yml.parent.mkdir(parents=True, exist_ok=True)
