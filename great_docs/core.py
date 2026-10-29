@@ -15263,6 +15263,7 @@ anchor-sections: true
         refresh: bool = True,
         version_tags: list[str] | None = None,
         latest_only: bool = False,
+        jobs: int | str | None = None,
     ) -> None:
         """
         Build the documentation site.
@@ -15289,6 +15290,12 @@ anchor-sections: true
         latest_only
             If `True`, build only the latest version (skip historical versions). Ignored when no
             `versions:` config is present.
+        jobs
+            Experimental. Render the pages of a single-version site with this many Quarto processes
+            at once. Use a number, or `"auto"` to choose one from the CPU count. The default (`None`)
+            reads the `GREAT_DOCS_RENDER_JOBS` environment variable and otherwise renders in one
+            process. Sites that can't be split safely are rendered in one process anyway. Ignored
+            for multi-version sites and in watch mode.
 
         Examples
         --------
@@ -15327,7 +15334,20 @@ anchor-sections: true
         import threading
         from contextlib import contextmanager
 
+        from great_docs import _parallel_render
         from great_docs._build_log import BuildLog, estimate_build_time
+
+        # Settle the render process count up front so a bad value fails fast, and read the last
+        # build's page timings before anything clears them (they guide how pages are split)
+        render_jobs = _parallel_render.resolve_jobs(jobs)
+        last_timings = (
+            _parallel_render.read_timings(
+                self.layout.site_dir / "build-timings.json",
+                self.build_dir / "_site" / "build-timings.json",
+            )
+            if render_jobs > 1
+            else {}
+        )
 
         _ansi_re = re.compile(r"\033\[[0-9;]*m")
 
@@ -16169,9 +16189,45 @@ anchor-sections: true
                 else:
                     log.footer(site_path=str(self.layout.site_dir))
             else:
-                bar = log.progress("Rendering pages", 1)
-                result = run_streaming(["quarto", "render"], env=quarto_env, progress_bar=bar)
-                bar.finish()  # no-op if auto-finished at 100%
+                result = None
+                if render_jobs > 1:
+                    # Experimental: split the pages among several Quarto processes
+                    bar = log.progress("Rendering pages", 1)
+                    bar_lock = threading.Lock()
+                    pages_started = [0]
+
+                    def _on_render_start(pages: int, groups: int, workers: int) -> None:
+                        bar.total = max(pages, 1)
+                        log.detail(
+                            f"Rendering {pages} pages in {groups} groups "
+                            f"with {workers} Quarto processes"
+                        )
+
+                    def _on_render_page(_page: str) -> None:
+                        with bar_lock:
+                            pages_started[0] = min(pages_started[0] + 1, bar.total)
+                            bar.update(pages_started[0])
+
+                    result = _parallel_render.render(
+                        self.build_dir,
+                        quarto_env,
+                        render_jobs,
+                        last_timings,
+                        on_start=_on_render_start,
+                        on_page=_on_render_page,
+                    )
+                    bar.finish()
+                    if result.fallback:
+                        log.detail(f"Rendering in one process: {result.fallback}")
+                        result = None
+                    else:
+                        for w in result.warnings:
+                            log.warn(w)
+
+                if result is None:
+                    bar = log.progress("Rendering pages", 1)
+                    result = run_streaming(["quarto", "render"], env=quarto_env, progress_bar=bar)
+                    bar.finish()  # no-op if auto-finished at 100%
 
                 # Retry once on transient Quarto filesystem race conditions
                 # (e.g., "No such file or directory: rename ..." during output
