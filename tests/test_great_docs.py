@@ -27169,7 +27169,7 @@ def test_cli_build_success():
             result = runner.invoke(build, ["--project-path", tmp_dir])
             assert result.exit_code == 0
             mock_instance.build.assert_called_once_with(
-                watch=False, refresh=True, version_tags=None, latest_only=False
+                watch=False, refresh=True, version_tags=None, latest_only=False, jobs=None
             )
 
 
@@ -27185,7 +27185,7 @@ def test_cli_build_with_watch():
             result = runner.invoke(build, ["--project-path", tmp_dir, "--watch"])
             assert result.exit_code == 0
             mock_instance.build.assert_called_once_with(
-                watch=True, refresh=True, version_tags=None, latest_only=False
+                watch=True, refresh=True, version_tags=None, latest_only=False, jobs=None
             )
 
 
@@ -27201,7 +27201,23 @@ def test_cli_build_no_refresh():
             result = runner.invoke(build, ["--project-path", tmp_dir, "--no-refresh"])
             assert result.exit_code == 0
             mock_instance.build.assert_called_once_with(
-                watch=False, refresh=False, version_tags=None, latest_only=False
+                watch=False, refresh=False, version_tags=None, latest_only=False, jobs=None
+            )
+
+
+def test_cli_build_jobs():
+    """CLI build command passes the render process count."""
+    runner = CliRunner()
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        with patch("great_docs.cli.GreatDocs") as MockGD:
+            mock_instance = MagicMock()
+            MockGD.return_value = mock_instance
+
+            result = runner.invoke(build, ["--project-path", tmp_dir, "--jobs", "auto"])
+            assert result.exit_code == 0
+            mock_instance.build.assert_called_once_with(
+                watch=False, refresh=True, version_tags=None, latest_only=False, jobs="auto"
             )
 
 
