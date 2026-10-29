@@ -7,7 +7,8 @@
 --   {{< termshow file="demos/install" autoplay="true" pause_on_chapters="true" >}}
 --
 -- Options:
---   file             (required) Path to .termshow file (without extension)
+--   file             (required) Path to .termshow file (without extension),
+--                    or to a bundle (a .termshow.json file)
 --   autoplay         "true"/"false" - start playing automatically
 --   loop             "true"/"false" - loop playback
 --   speed            number - playback speed multiplier
@@ -25,10 +26,15 @@
 -- carries the screens themselves (the player draws them as SVG); for older
 -- version 1 output the SVG frame files are inlined alongside it.
 --
--- When the rendered output has a transcript (_transcript.md), it follows
--- the player as HTML, hidden from view but read by screen readers. The
--- player replaces everything inside its own element when it starts, so the
--- transcript sits next to it rather than inside.
+-- A bundle (from `great-docs termshow export --bundle`) is read relative to
+-- the document, then to the project, and embedded the same way. It has no
+-- SVG files, so there's no poster image before the player starts.
+--
+-- When the rendered output has a transcript (_transcript.md, or a bundle's
+-- `transcript` member), it follows the player as HTML, hidden from view but
+-- read by screen readers. The player replaces everything inside its own
+-- element when it starts, so the transcript sits next to it rather than
+-- inside.
 
 local function escape_attr(s)
     if s == nil then return "" end
@@ -51,12 +57,37 @@ local function read_project_file(rel_path)
     if quarto and quarto.project and quarto.project.directory then
         base = quarto.project.directory .. "/"
     end
-    local path = base .. rel_path
+    local f = io.open(base .. rel_path, "r")
+    if not f then return nil end
+    local content = f:read("*a")
+    f:close()
+    return content
+end
+
+--- Read a file by its path.
+local function read_file(path)
     local f = io.open(path, "r")
     if not f then return nil end
     local content = f:read("*a")
     f:close()
     return content
+end
+
+--- Read a bundle relative to the document's directory, then the project's.
+local function read_bundle(rel_path)
+    local input = quarto.doc and quarto.doc.input_file
+    local dir = input and input:match("^(.*)[/\\]")
+    return (dir and read_file(dir .. "/" .. rel_path)) or read_project_file(rel_path)
+end
+
+--- Return a bundle's transcript Markdown, or nil.
+local function bundle_transcript(bundle_json)
+    if not (quarto.json and quarto.json.decode) then return nil end
+    local ok, data = pcall(quarto.json.decode, bundle_json)
+    if ok and type(data) == "table" and type(data.transcript) == "string" then
+        return data.transcript
+    end
+    return nil
 end
 
 --- Return the keyframe file to use as the poster for a given time (seconds).
@@ -127,24 +158,38 @@ return {
             return pandoc.Null()
         end
 
-        -- Resolve the rendered output directory
+        -- A bundle, or the rendered output directory
         -- (a trailing ".termshow" extension is optional)
-        local rel = file:gsub("^%./", ""):gsub("%.termshow$", "")
-        local basename = rel:match("([^/]+)$") or rel
-        local tp_dir = "termshow/" .. rel .. "/"
-        local manifest_json = read_project_file(tp_dir .. "manifest.json")
-        if not manifest_json and basename ~= rel then
-            local fallback_dir = "termshow/" .. basename .. "/"
-            local fallback_json = read_project_file(fallback_dir .. "manifest.json")
-            if fallback_json then
-                tp_dir = fallback_dir
-                manifest_json = fallback_json
+        local bundle = file:match("%.json$") ~= nil
+        local rel = file:gsub("^%./", "")
+        local manifest_json, basename, tp_dir
+        if bundle then
+            basename = (rel:match("([^/]+)$") or rel):gsub("%.termshow%.json$", ""):gsub("%.json$", "")
+            manifest_json = read_bundle(rel)
+            if manifest_json then
+                -- Keep "</script>" in the text from ending the script element
+                manifest_json = manifest_json:gsub("</", "<\\/")
+            else
+                quarto.log.warning("[termshow] bundle not found: '" .. file .. "'")
             end
-        end
-        if not manifest_json then
-            quarto.log.warning("[termshow] no rendered output found for '" .. file
-                .. "' (looked in termshow/" .. rel .. "/). Run `great-docs termshow render`"
-                .. " or check the file path.")
+        else
+            rel = rel:gsub("%.termshow$", "")
+            basename = rel:match("([^/]+)$") or rel
+            tp_dir = "termshow/" .. rel .. "/"
+            manifest_json = read_project_file(tp_dir .. "manifest.json")
+            if not manifest_json and basename ~= rel then
+                local fallback_dir = "termshow/" .. basename .. "/"
+                local fallback_json = read_project_file(fallback_dir .. "manifest.json")
+                if fallback_json then
+                    tp_dir = fallback_dir
+                    manifest_json = fallback_json
+                end
+            end
+            if not manifest_json then
+                quarto.log.warning("[termshow] no rendered output found for '" .. file
+                    .. "' (looked in termshow/" .. rel .. "/). Run `great-docs termshow render`"
+                    .. " or check the file path.")
+            end
         end
 
         -- Read options
@@ -166,7 +211,7 @@ return {
         -- Version 1 manifests only reference SVG files; read them in so they
         -- can be inlined
         local frames_json = nil
-        if manifest_json and manifest_version(manifest_json) < 2 then
+        if manifest_json and not bundle and manifest_version(manifest_json) < 2 then
             frames_json = "[]"
             -- Parse keyframes from manifest to know which SVGs to embed
             local frames = {}
@@ -194,13 +239,15 @@ return {
         if manifest_json then
             poster_file = poster_frame(manifest_json, tonumber(poster) or 0) or poster_file
         end
-        local poster_path = offset .. tp_dir .. poster_file
-        local manifest_url = offset .. tp_dir .. "manifest.json"
+        local poster_path = (not bundle) and offset .. tp_dir .. poster_file
+        local manifest_url = (not bundle) and offset .. tp_dir .. "manifest.json"
 
         -- Generate HTML with inline data
         local parts = {}
         table.insert(parts, '<div class="gd-termshow" ')
-        table.insert(parts, 'data-manifest="' .. escape_attr(manifest_url) .. '" ')
+        if manifest_url then
+            table.insert(parts, 'data-manifest="' .. escape_attr(manifest_url) .. '" ')
+        end
         table.insert(parts, 'data-autoplay="' .. escape_attr(autoplay) .. '" ')
         table.insert(parts, 'data-loop="' .. escape_attr(loop) .. '" ')
         table.insert(parts, 'data-speed="' .. escape_attr(speed) .. '" ')
@@ -223,9 +270,11 @@ return {
         end
 
         -- Poster image (visible before JS loads, works with file://)
-        table.insert(parts, '\n  <img src="' .. escape_attr(poster_path) .. '" ')
-        table.insert(parts, 'alt="Terminal recording: ' .. escape_attr(basename) .. '" ')
-        table.insert(parts, 'class="gd-termshow-poster" loading="lazy"/>')
+        if poster_path then
+            table.insert(parts, '\n  <img src="' .. escape_attr(poster_path) .. '" ')
+            table.insert(parts, 'alt="Terminal recording: ' .. escape_attr(basename) .. '" ')
+            table.insert(parts, 'class="gd-termshow-poster" loading="lazy"/>')
+        end
 
         table.insert(parts, '\n  <noscript>')
         table.insert(parts, '\n    <p>Terminal recording: ' .. escape_attr(basename))
@@ -233,7 +282,11 @@ return {
         table.insert(parts, '\n  </noscript>')
         table.insert(parts, '\n</div>')
 
-        local transcript = manifest_json and read_project_file(tp_dir .. "_transcript.md")
+        local transcript = nil
+        if manifest_json then
+            transcript = bundle and bundle_transcript(manifest_json)
+                or (not bundle and read_project_file(tp_dir .. "_transcript.md"))
+        end
         if transcript and transcript:match("%S") then
             transcript_count = transcript_count + 1
             local id = "gd-termshow-transcript-" .. transcript_count
