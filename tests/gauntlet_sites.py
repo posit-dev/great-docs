@@ -23,6 +23,7 @@ import warnings
 from pathlib import Path
 from typing import Callable, Iterable
 
+from great_docs import BuildError
 from great_docs._layout import Layout
 
 # These packages cover both citation backlink forms. The first has three
@@ -36,15 +37,14 @@ CITATION_SITES: tuple[str, ...] = (
 _TEST_PACKAGES_DIR = Path(__file__).resolve().parent.parent / "test-packages"
 RENDERED_DIR = _TEST_PACKAGES_DIR / "_rendered"
 
-# Treat these exceptions as an unavailable rendered fixture. The dependent
-# tests already skip when a site is absent. Fatal API-reference configuration
-# errors raise `SystemExit`; any unlisted exception indicates a builder defect
-# and propagates.
+# Treat these failures as unavailable rendered fixtures; dependent tests skip
+# absent sites. Fatal API reference configuration errors raise `BuildError`.
+# Propagate unlisted exceptions as builder defects.
 BUILD_FAILURES: tuple[type[BaseException], ...] = (
     OSError,
     subprocess.SubprocessError,
     ImportError,
-    SystemExit,
+    BuildError,
     ValueError,
     KeyError,
 )

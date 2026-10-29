@@ -4,7 +4,7 @@ import tempfile
 
 import pytest
 
-from great_docs import GreatDocs
+from great_docs import BuildError, GreatDocs
 from great_docs.core import QuartoNotFoundError, QuartoVersionError, _ensure_quarto_installed
 
 
@@ -49,12 +49,22 @@ def test_quarto_not_found_error_is_runtime_error():
     assert issubclass(QuartoNotFoundError, RuntimeError)
 
 
-def test_build_raises_quarto_not_found_when_quarto_missing(monkeypatch):
+def test_quarto_errors_are_build_errors():
+    assert issubclass(QuartoNotFoundError, BuildError)
+    assert issubclass(QuartoVersionError, BuildError)
+
+
+def test_build_reports_and_raises_quarto_not_found_when_quarto_missing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
     monkeypatch.setattr("great_docs.core.shutil.which", lambda name: None)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         docs.install(force=True)
+        capsys.readouterr()
 
-        with pytest.raises(QuartoNotFoundError, match="great-docs"):
+        with pytest.raises(QuartoNotFoundError, match="great-docs") as excinfo:
             docs.build()
+
+    assert capsys.readouterr().err == f"Error: {excinfo.value}\n"

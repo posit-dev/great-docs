@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
+from great_docs import BuildError
 from great_docs.cli import (
     _detect_current_package,
     _detect_optional_dependencies,
@@ -236,7 +237,7 @@ def test_layout_notice_once_per_build_or_preview_session(
     if mode.startswith("preview"):
         docs.preview()
     elif mode == "render-error":
-        with pytest.raises(SystemExit):
+        with pytest.raises(BuildError):
             docs.build(refresh=False)
     else:
         docs.build(watch=mode == "watch", refresh=False)
@@ -489,6 +490,42 @@ def test_build_command_uses_selected_config(
     )
     assert result.exit_code == 0, result.output
     assert (tmp_path / "website/_quarto/default/selection.txt").read_text() == "selected"
+
+
+@pytest.mark.parametrize("command", ["build", "preview"])
+def test_failed_build_exits_1_and_reports_once(
+    command: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from great_docs import GreatDocs
+
+    def fail(docs: GreatDocs, **kwargs: object) -> None:
+        # Report the failure before raising, as the build log does
+        print("FAIL Quarto render failed")
+        raise BuildError("Quarto render failed")
+
+    monkeypatch.setattr(GreatDocs, "build", fail)
+    result = CliRunner().invoke(cli, [command, "--project-path", str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert result.output.count("Quarto render failed") == 1
+
+
+def test_api_snapshot_reports_missing_reference_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from great_docs import GreatDocs
+
+    def fail(docs: GreatDocs, package_name: str) -> list[str]:
+        raise BuildError("Configured reference item(s) not found in `pkg` v1.0: `gone`")
+
+    monkeypatch.setattr(GreatDocs, "documented_symbol_names", fail)
+    result = CliRunner().invoke(
+        cli, ["api-snapshot", "--project-path", str(tmp_path), "--package", "pkg"]
+    )
+
+    assert result.exit_code == 1
+    assert "Error: Configured reference item(s) not found in `pkg` v1.0: `gone`" in result.output
+    assert result.exception is None or isinstance(result.exception, SystemExit)
 
 
 def test_preview_serves_selected_deployment(

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Callable
 import click
 
 from . import __version__
+from ._build.steps import BuildError
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
 from ._subprocess import TEXT_MODE_KWARGS
 from .config import ConfigError
@@ -408,6 +409,9 @@ def build(
             )
     except KeyboardInterrupt:
         click.echo("\n👋 Stopped watching")
+    except BuildError:
+        # Exit without repeating the build's failure report
+        sys.exit(1)
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -606,6 +610,9 @@ def preview(
         click.echo("\n👋 Server stopped")
     except SystemExit:
         raise
+    except BuildError:
+        # Exit without repeating the build's failure report
+        sys.exit(1)
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -1452,7 +1459,7 @@ def freeze(
     try:
         docs = GreatDocs(project_path=project_path, config_path=config_path)
         docs._prepare_for_freeze()
-    except SystemExit:
+    except (SystemExit, BuildError):
         pass  # Build prep may exit but that's OK
     except Exception as e:
         click.echo(f"Error during build prep: {e}", err=True)
@@ -3807,12 +3814,16 @@ def api_snapshot_cmd(
 
     from great_docs.core import GreatDocs
 
-    documented = (
-        GreatDocs(project_path=str(project_root), config_path=config_path).documented_symbol_names(
-            pkg_name
+    try:
+        documented = (
+            GreatDocs(
+                project_path=str(project_root), config_path=config_path
+            ).documented_symbol_names(pkg_name)
+            or None
         )
-        or None
-    )
+    except BuildError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     # Default snapshot directory
     snap_dir = project_root / ".great-docs" / "snapshots"
