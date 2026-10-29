@@ -11,6 +11,9 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
+from great_docs._term_player.parser import parse_termshow_str
+from great_docs._term_player.script import _parse_script_data
+from great_docs._term_player.transcript import transcript_markdown
 from great_docs._term_player.web import PLAYER_DIR, PLAYER_FILES, copy_player, player_snippet
 from great_docs.cli import cli
 
@@ -262,3 +265,40 @@ class TestPlayerFiles:
         assert sorted(p.name for p in dest.iterdir()) == sorted(PLAYER_FILES)
         assert f'<script src="{dest.as_posix()}/termshow.js"></script>' in result.output
         assert "<termshow-player" in result.output
+
+
+def _transcript_html(markdown: str) -> str:
+    return _run(f"Termshow.transcriptHtml({json.dumps(markdown)})")
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+class TestTranscriptHtml:
+    def test_label_and_text(self):
+        assert _transcript_html("**Start \\<here\\>**\n\n```console\n$ ls <dir> & co\n```\n") == (
+            "<p><strong>Start &lt;here&gt;</strong></p>\n"
+            '<pre><code class="language-console">$ ls &lt;dir&gt; &amp; co</code></pre>'
+        )
+
+    def test_longer_fence_holds_backticks(self):
+        md = "````console\n```\n$ x\n````\n"
+        assert _transcript_html(md) == '<pre><code class="language-console">```\n$ x</code></pre>'
+
+    def test_note_as_quote(self):
+        assert _transcript_html("> one\n> two\n>\n> \\*three\\*\n") == (
+            "<blockquote><p>one\ntwo</p><p>*three*</p></blockquote>"
+        )
+
+    def test_text_is_left_as_written(self):
+        # Only a backslash before Markdown punctuation is an escape
+        assert _transcript_html("a \\_b\\_ c\\d") == "<p>a _b_ c\\d</p>"
+
+    def test_from_a_recording(self):
+        recording = parse_termshow_str(
+            '{"version": 1, "format": "termshow", "term": {"cols": 20, "rows": 3}}\n'
+            '[0.0, "o", "$ echo *hi*\\r\\n*hi*\\r\\n"]'
+        )
+        script = _parse_script_data({"chapters": [{"at": 0, "label": "Say <hi>"}]})
+        assert _transcript_html(transcript_markdown(recording, script)) == (
+            "<p><strong>Say &lt;hi&gt;</strong></p>\n"
+            '<pre><code class="language-console">$ echo *hi*\n*hi*</code></pre>'
+        )
