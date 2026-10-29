@@ -144,7 +144,7 @@ If your package ships an [MCP](https://modelcontextprotocol.io/) server, Great D
 
 ### Terminal Recordings
 
-Teach your CLI visually with Termshow: record terminal sessions (by hand, or from a list of steps that `termshow check` can re-run in CI to catch demos that have gone out of date), edit them in a browser-based visual editor, and embed the results as animated SVG players in your documentation. Recordings are lightweight, theme-aware, and play inline without JavaScript dependencies. It's incredibly useful in onboarding guides, tutorials, and landing pages. If you already have VHS tapes, `great-docs termshow import-tape` turns them into Termshow scripts. For places that can't run the player, such as a GitHub README, `great-docs termshow export` writes the recording as a single animated SVG, with light and dark versions if you want them; `--gif`, `--mp4`, and `--webm` make a GIF or a video for pull requests, chat, and slides (with `ffmpeg`), `--cast` writes an asciicast file for asciinema, and `termshow snap` takes a still SVG or PNG of any moment. Every embedded recording carries a transcript of its text for screen readers and the page's Markdown version, and `termshow transcript` prints it, or the annotations and chapters as WebVTT. The player can be used from the keyboard and with a screen reader, and readers who ask for reduced motion get a still poster that steps through chapter by chapter. On sites built without Quarto, a `<termshow-player>` element plays recordings on any HTML page.
+Teach your CLI visually with Termshow: record terminal sessions (by hand, or from a list of steps that `termshow check` can re-run in CI to catch demos that have gone out of date), edit them in a browser-based visual editor, and embed the results as animated SVG players in your documentation. Recordings are lightweight, theme-aware, and play inline without JavaScript dependencies. It's incredibly useful in onboarding guides, tutorials, and landing pages. If you already have VHS tapes, `great-docs termshow import-tape` turns them into Termshow scripts. For places that can't run the player, such as a GitHub README, `great-docs termshow export` writes the recording as a single animated SVG, with light and dark versions if you want them; `--gif`, `--mp4`, and `--webm` make a GIF or a video for pull requests, chat, and slides (with `ffmpeg`), `--cast` writes an asciicast file for asciinema, `--bundle` puts a recording for the player in one `.termshow.json` file, and `termshow snap` takes a still SVG or PNG of any moment. Every embedded recording carries a transcript of its text for screen readers and the page's Markdown version, and `termshow transcript` prints it, or the annotations and chapters as WebVTT. The player can be used from the keyboard and with a screen reader, and readers who ask for reduced motion get a still poster that steps through chapter by chapter. On sites built without Quarto, a `<termshow-player>` element plays recordings on any HTML page.
 
 ### Lightbox
 
@@ -270,7 +270,7 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 
 - Color swatches (inline and grid)
 - Lightbox (zoom, galleries, annotations, before/after compare)
-- Terminal recordings (record, edit, embed, export as animated SVG, GIF, MP4, WebM, or asciicast, screenshot, transcripts)
+- Terminal recordings (record, edit, embed, export as animated SVG, GIF, MP4, WebM, asciicast, or a single-file bundle, screenshot, transcripts)
 - Collapsible details sections
 - Keyboard keys styling
 - Horizontal rules with accent colors
@@ -409,7 +409,7 @@ Beyond `init`, `build`, and `preview`, Great Docs includes a full suite of quali
 | `great-docs termshow edit` | Open the browser-based visual editor for a recording |
 | `great-docs termshow play` | Preview a recording in the terminal |
 | `great-docs termshow render` | Render SVG frames without a full site build |
-| `great-docs termshow export` | Export a recording as one animated SVG for READMEs, as a GIF or video (`--gif`, `--mp4`, `--webm`), or as asciicast (`--cast`) |
+| `great-docs termshow export` | Export a recording as one animated SVG for READMEs, as a GIF or video (`--gif`, `--mp4`, `--webm`), as asciicast (`--cast`), or as a single-file bundle for the player (`--bundle`) |
 | `great-docs termshow snap` | Take a still SVG or PNG of one moment in a recording |
 | `great-docs termshow transcript` | Print a recording's text as Markdown, or its annotations or chapters as WebVTT |
 | `great-docs termshow validate` | Check a recording and its script for mistakes |
