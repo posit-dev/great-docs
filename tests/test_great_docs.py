@@ -36930,6 +36930,25 @@ def test_wide_layout_meta_precedes_theme_init():
         assert sum("wide-layout.js" in a for a in after_body) == 1
 
 
+def test_repeated_config_pass_keeps_wide_layout_in_place():
+    """
+    Check that a second configuration pass preserves the config and the `wide-layout.js` position
+    """
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+
+        docs._update_quarto_config()
+        first = read_yaml(quarto_yml)
+        docs._update_quarto_config()
+        second = read_yaml(quarto_yml)
+
+        # Other scripts must follow the loader on the first pass to expose a move to the end
+        _, after_body = _wide_entries(first)
+        assert "wide-layout.js" not in after_body[-1]
+        assert second == first
+
+
 def test_theme_init_added_when_details_already_listed():
     """A config that already loads details.js still gets theme-init.js, after the meta tag."""
     from great_docs._website.scripts import script_include
