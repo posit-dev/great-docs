@@ -17650,6 +17650,20 @@ def test_get_package_metadata_setup_cfg():
         assert urls.get("Repository") == "https://github.com/user/legacypkg"
 
 
+def test_get_package_metadata_keeps_in_memory_config_without_pyproject(tmp_path: Path):
+    """
+    Keep in-memory configuration when reading metadata without `pyproject.toml`
+    """
+    (tmp_path / "go.mod").write_text("module example.com/tool\n")
+    (tmp_path / "great-docs.yml").write_text("changelog:\n  max_releases: 10\n")
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs._config._config["changelog"]["max_releases"] = 3
+
+    docs._get_package_metadata()
+
+    assert docs._config.changelog_max_releases == 3
+
+
 def test_discover_user_guide_basic_full_project():
     """Test _discover_user_guide finds user guide files."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -27897,6 +27911,37 @@ def test_cli_changelog_with_max_releases():
             result = runner.invoke(changelog, ["--project-path", tmp_dir, "--max-releases", "10"])
             assert result.exit_code == 0
             assert mock_docs._config._config["changelog"]["max_releases"] == 10
+
+
+def test_cli_changelog_max_releases_without_pyproject(tmp_path: Path):
+    """
+    Honour `changelog --max-releases` for a project without `pyproject.toml`
+    """
+    (tmp_path / "go.mod").write_text("module example.com/tool\n")
+    (tmp_path / "great-docs.yml").write_text("repo: https://github.com/owner/tool\n")
+    (tmp_path / "great-docs").mkdir()
+    response = MagicMock(status_code=200)
+    response.json.return_value = [
+        {
+            "tag_name": f"v1.{i}",
+            "name": f"v1.{i}",
+            "body": "",
+            "published_at": "2026-01-01T00:00:00Z",
+            "html_url": f"https://github.com/owner/tool/releases/tag/v1.{i}",
+            "prerelease": False,
+            "draft": False,
+        }
+        for i in range(5)
+    ]
+
+    with patch("requests.get", return_value=response):
+        result = CliRunner().invoke(
+            changelog, ["--project-path", str(tmp_path), "--max-releases", "3"]
+        )
+
+    assert result.exit_code == 0, result.output
+    page = (tmp_path / "great-docs" / "changelog.qmd").read_text()
+    assert page.count("{.changelog-version}") == 3
 
 
 def test_cli_changelog_error():
