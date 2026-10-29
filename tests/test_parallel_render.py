@@ -225,6 +225,28 @@ def test_read_timings_uses_the_first_readable_file(tmp_path: Path):
     assert pr.read_timings(tmp_path / "missing.json") == {}
 
 
+def test_read_startup_from_the_last_parallel_build(tmp_path: Path):
+    parallel = tmp_path / "parallel.json"
+    parallel.write_text(
+        json.dumps({"pages": [], "render": {"processes": 6, "groups": 37, "startup_seconds": 4.9}})
+    )
+    ordinary = tmp_path / "ordinary.json"
+    ordinary.write_text(json.dumps({"pages": [{"page": "a.qmd", "seconds": 1.5}]}))
+
+    assert pr.read_startup(tmp_path / "missing.json", parallel) == 4.9
+    # The first file with page timings is the last build's, even if it wasn't parallel
+    assert pr.read_startup(ordinary, parallel) is None
+    assert pr.read_startup(tmp_path / "missing.json") is None
+
+
+@pytest.mark.parametrize("seconds", [0, -1, "5", True, None])
+def test_read_startup_ignores_odd_values(tmp_path: Path, seconds):
+    path = tmp_path / "timings.json"
+    path.write_text(json.dumps({"pages": [], "render": {"startup_seconds": seconds}}))
+
+    assert pr.read_startup(path) is None
+
+
 # ── Merging ──────────────────────────────────────────────────────────────────
 
 
@@ -414,6 +436,16 @@ def test_target_overhead_grows_with_the_project():
     assert pr.target_overhead(2000) > pr.target_overhead(1000) > pr.TARGET_OVERHEAD
 
 
+def test_plan_targets_makes_fewer_groups_when_quarto_starts_slowly():
+    inputs = _site(n_ref=300, n_guide=40)
+    costs = {item: 0.5 for item in inputs}
+
+    quick = pr.plan_targets(inputs, costs, 6, overhead=2.0)
+    slow = pr.plan_targets(inputs, costs, 6, overhead=5.0)
+    assert quick is not None and slow is not None
+    assert len(slow) < len(quick)
+
+
 # ── Falling back to a plain render ───────────────────────────────────────────
 
 
@@ -569,3 +601,10 @@ def test_render_reports_every_page_and_cleans_up(sites):
     )
     assert pr.worker_dirs(project) == []
     assert not (project / "_freeze").exists()
+
+
+@_needs_quarto
+def test_render_measures_quarto_startup(sites):
+    _, _, result = sites
+
+    assert result.startup is not None and result.startup > 0
