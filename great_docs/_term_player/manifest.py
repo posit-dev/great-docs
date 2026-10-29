@@ -649,8 +649,10 @@ def _apply_prompt_pattern_substitution(
     new_state = state.copy()
 
     for row_idx in range(new_state.rows):
-        # Extract full row text
-        row_text = "".join(new_state.cells[row_idx][c].char for c in range(new_state.cols))
+        # Extract full row text, and the column each of its characters is in
+        row = new_state.cells[row_idx]
+        row_text = "".join(cell.char for cell in row)
+        char_cols = [c for c, cell in enumerate(row) for _ in cell.char]
 
         m = regex.match(row_text)
         if m:
@@ -658,7 +660,7 @@ def _apply_prompt_pattern_substitution(
             matched = m.group(0)
             for i in range(len(matched) - 1, -1, -1):  # pragma: no branch
                 if matched[i].strip():
-                    new_state.cells[row_idx][i].char = replacement
+                    row[char_cols[i]].char = replacement
                     break
 
     return new_state
