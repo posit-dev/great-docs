@@ -2896,6 +2896,23 @@ class TestFreezeCommandRenderLoop:
         assert result.exit_code in (0, 1)
 
     @patch("great_docs.cli.GreatDocs")
+    @patch("subprocess.run")
+    def test_prepare_for_freeze_build_error_exits(
+        self, mock_run, mock_gd_cls, tmp_path, monkeypatch
+    ):
+        """Stop freezing after preparation fails, without rendering or reporting again"""
+        monkeypatch.chdir(tmp_path)
+        self._make_project(tmp_path)
+        mock_docs = MagicMock()
+        mock_docs._prepare_for_freeze.side_effect = BuildError("reference item(s) not found")
+        mock_gd_cls.return_value = mock_docs
+        result = CliRunner().invoke(cli, ["freeze", "mypage.qmd", "--project-path", str(tmp_path)])
+
+        assert result.exit_code == 1
+        assert "not found" not in result.output
+        mock_run.assert_not_called()
+
+    @patch("great_docs.cli.GreatDocs")
     def test_prepare_for_freeze_exception_exits(self, mock_gd_cls, tmp_path, monkeypatch):
         """Exception from _prepare_for_freeze prints error and exits 1."""
         monkeypatch.chdir(tmp_path)

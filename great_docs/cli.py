@@ -1459,8 +1459,11 @@ def freeze(
     try:
         docs = GreatDocs(project_path=project_path, config_path=config_path)
         docs._prepare_for_freeze()
-    except (SystemExit, BuildError):
+    except SystemExit:
         pass  # Build prep may exit but that's OK
+    except BuildError:
+        # Exit without repeating the preparation failure report
+        sys.exit(1)
     except Exception as e:
         click.echo(f"Error during build prep: {e}", err=True)
         sys.exit(1)
