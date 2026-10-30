@@ -15895,12 +15895,6 @@ anchor-sections: true
                     log.error_detail(err)
                 if not vb_result["versions_built"]:
                     log.step_fail("All version builds failed")
-
-                    # Skip the SEO step
-                    step += 1
-                    log.step_start(step, "Generate SEO files")
-                    log.step_skip(step, "build failed")
-
                     log.footer()
                     raise BuildError("All version builds failed")
                 else:
@@ -16002,12 +15996,6 @@ anchor-sections: true
             if result.returncode != 0:
                 log.step_fail("Quarto render failed")
                 log.error_detail(result.stderr)
-
-                # ── Step 20 skipped on failure ─────────────────────
-                step += 1
-                log.step_start(step, "Generate SEO files")
-                log.step_skip(step, "build failed")
-
                 log.footer()
                 raise BuildError("Quarto render failed")
             else:
