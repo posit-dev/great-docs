@@ -1,59 +1,44 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from great_docs import GreatDocs
+from great_docs._build import quarto
 
 # ---------------------------------------------------------------------------
-# Regex: matches Quarto progress lines and captures page path
+# Page progress in Quarto output
 # ---------------------------------------------------------------------------
 
-_PAGE_RE = re.compile(r"\[\s*(\d+)/(\d+)\]\s+(.+)")
 
-
-class TestPageRegex:
-    """Ensure the regex captures page path from Quarto progress lines."""
+class TestParseProgress:
+    """Page progress parsed from Quarto output"""
 
     def test_basic_line(self):
-        line = "[  1/42] user-guide/overview.html"
-        m = _PAGE_RE.search(line)
-        assert m
-        assert m.group(1) == "1"
-        assert m.group(2) == "42"
-        assert m.group(3).strip() == "user-guide/overview.html"
+        assert quarto.parse_progress("[  1/42] user-guide/overview.html") == quarto.Progress(
+            1, 42, "user-guide/overview.html"
+        )
 
     def test_double_digit(self):
-        line = "[ 12/42] reference/GT.html"
-        m = _PAGE_RE.search(line)
-        assert m
-        assert m.group(1) == "12"
-        assert m.group(3).strip() == "reference/GT.html"
+        assert quarto.parse_progress("[ 12/42] reference/GT.html") == quarto.Progress(
+            12, 42, "reference/GT.html"
+        )
 
     def test_no_leading_space(self):
-        line = "[3/5] recipes/freeze-demo.html"
-        m = _PAGE_RE.search(line)
-        assert m
-        assert m.group(1) == "3"
-        assert m.group(2) == "5"
-        assert m.group(3).strip() == "recipes/freeze-demo.html"
+        assert quarto.parse_progress("[3/5] recipes/freeze-demo.html") == quarto.Progress(
+            3, 5, "recipes/freeze-demo.html"
+        )
 
     def test_non_matching_line(self):
-        line = "WARN: something went wrong"
-        m = _PAGE_RE.search(line)
-        assert m is None
+        assert quarto.parse_progress("WARN: something went wrong") is None
 
     def test_line_with_ansi(self):
         # Quarto sometimes emits ANSI color codes around the line
         line = "\x1b[32m[  5/10] user-guide/config.html\x1b[0m"
-        m = _PAGE_RE.search(line)
-        assert m
-        assert m.group(1) == "5"
-        assert m.group(2) == "10"
+        assert quarto.parse_progress(line) == quarto.Progress(5, 10, "user-guide/config.html")
 
 
 # ---------------------------------------------------------------------------
@@ -250,51 +235,27 @@ class TestWriteBuildTiming:
 
 
 class TestTimingComputation:
-    """Test the delta-computation logic used in both paths."""
+    """Page durations computed from consecutive start times"""
 
     def test_consecutive_timestamps_give_deltas(self):
-        """Simulate the timing computation from _page_timestamps."""
-        import time
+        stamps = [("page-a.html", 10.0), ("page-b.html", 11.5), ("page-c.html", 13.0)]
 
-        # Simulate: 3 pages at known intervals
-        base = time.monotonic()
-        _page_timestamps = [
-            ("page-a.html", base),
-            ("page-b.html", base + 1.5),
-            ("page-c.html", base + 3.0),
+        assert quarto.page_timings(stamps, ended=14.2) == [
+            {"page": "page-a.html", "seconds": 1.5},
+            {"page": "page-b.html", "seconds": 1.5},
+            {"page": "page-c.html", "seconds": 1.2},
         ]
-
-        page_timings = []
-        # Use a fixed "end" time for the last page
-        end_time = base + 4.2
-        for i, (page_path, ts) in enumerate(_page_timestamps):
-            if i + 1 < len(_page_timestamps):
-                duration = _page_timestamps[i + 1][1] - ts
-            else:
-                duration = end_time - ts
-            page_timings.append({"page": page_path, "seconds": round(duration, 3)})
-
-        assert page_timings[0] == {"page": "page-a.html", "seconds": 1.5}
-        assert page_timings[1] == {"page": "page-b.html", "seconds": 1.5}
-        assert page_timings[2] == {"page": "page-c.html", "seconds": 1.2}
 
     def test_single_page(self):
         """A single page gets the full elapsed time."""
-        import time
+        stamps = [("only-page.html", 10.0)]
 
-        base = time.monotonic()
-        _page_timestamps = [("only-page.html", base)]
-        end_time = base + 5.0
+        assert quarto.page_timings(stamps, ended=15.0) == [
+            {"page": "only-page.html", "seconds": 5.0}
+        ]
 
-        page_timings = []
-        for i, (page_path, ts) in enumerate(_page_timestamps):
-            if i + 1 < len(_page_timestamps):
-                duration = _page_timestamps[i + 1][1] - ts
-            else:
-                duration = end_time - ts
-            page_timings.append({"page": page_path, "seconds": round(duration, 3)})
-
-        assert page_timings == [{"page": "only-page.html", "seconds": 5.0}]
+    def test_no_pages(self):
+        assert quarto.page_timings([], ended=15.0) == []
 
 
 # ---------------------------------------------------------------------------
@@ -305,29 +266,15 @@ class TestTimingComputation:
 class TestVersionedBuildTimings:
     """Verify render_versions_parallel returns page_timings in result tuples."""
 
-    def test_non_streaming_returns_empty_timings(self, tmp_path: Path):
-        """Non-streaming (ProcessPoolExecutor) mode returns empty page_timings list."""
-        from great_docs._versioned_build import _render_single_version
-
-        # Create a fake build dir that will fail (no quarto project)
-        fake_dir = tmp_path / "fake"
-        fake_dir.mkdir()
-        (fake_dir / "_quarto.yml").write_text("project:\n  type: website\n")
-
-        # This will fail since there's nothing to render, but we can check the tuple length
-        result = _render_single_version(str(fake_dir), None)
-        # Non-streaming returns 4-tuple (no timings)
-        assert len(result) == 4
-
-    def test_streaming_returns_5_tuple(self, tmp_path: Path):
-        """Streaming mode returns 5-tuple with page_timings as last element."""
-        from great_docs._versioned_build import _render_single_version_streaming
+    def test_returns_5_tuple(self, tmp_path: Path):
+        """Return a five-element result with page timings last"""
+        from great_docs._versioned_build import _render_version
 
         fake_dir = tmp_path / "fake"
         fake_dir.mkdir()
         (fake_dir / "_quarto.yml").write_text("project:\n  type: website\n")
 
-        result = _render_single_version_streaming(str(fake_dir), None)
+        result = _render_version(str(fake_dir), None)
         assert len(result) == 5
         # Last element is page_timings (list)
         assert isinstance(result[4], list)

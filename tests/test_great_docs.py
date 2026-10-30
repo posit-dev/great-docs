@@ -29,8 +29,11 @@ from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
 from yaml12 import format_yaml as _format_yaml
 from yaml12 import parse_yaml as _parse_yaml
 
-from great_docs import Config, GreatDocs, create_default_config, load_config
+from great_docs import BuildError, Config, GreatDocs, create_default_config, load_config
+from great_docs._build import quarto
 from great_docs._content_naming import fix_numeric_prefix_links, strip_numeric_prefix
+from great_docs._website.quarto_yml import edit as edit_quarto_yml
+from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
 from great_docs._website.scripts import script_include, stylesheet_include
 from great_docs._apiref import _globals, content, spec, write
 from great_docs._apiref._docstring_sections import (
@@ -1938,12 +1941,12 @@ reference:
             sys.path.remove(tmp_dir)
 
 
-def test_get_quarto_env_returns_current_python():
-    """Test that _get_quarto_env returns QUARTO_PYTHON with current interpreter."""
+def test_quarto_environment_returns_current_python():
+    """Use the current interpreter for `QUARTO_PYTHON` when no virtual environment exists"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert "QUARTO_PYTHON" in env
         # Should either be the current interpreter or a venv Python
@@ -1959,8 +1962,8 @@ def test_get_quarto_env_returns_current_python():
         )
 
 
-def test_get_quarto_env_detects_venv():
-    """Test that _get_quarto_env detects a virtual environment."""
+def test_quarto_environment_detects_venv():
+    """Use the Python executable from the project's `.venv`"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Create a fake .venv directory structure
@@ -1970,38 +1973,38 @@ def test_get_quarto_env_detects_venv():
         fake_python.write_text("#!/bin/bash\n# fake python")
 
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert "QUARTO_PYTHON" in env
         assert env["QUARTO_PYTHON"] == str(fake_python.resolve())
 
 
-def test_get_quarto_env_preserves_existing_env():
-    """Test that _get_quarto_env preserves existing environment variables."""
+def test_quarto_environment_preserves_existing_env():
+    """Preserve existing environment variables"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         # Should contain existing env vars like PATH
         assert "PATH" in env
         assert env["PATH"] == os.environ.get("PATH")
 
 
-def test_get_quarto_env_sets_pythonutf8():
+def test_quarto_environment_sets_pythonutf8():
     """Issue #200: Quarto subprocess env enables UTF-8 mode on Windows."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
         assert env.get("PYTHONUTF8") == "1"
 
 
-def test_get_quarto_env_preserves_existing_pythonutf8(monkeypatch):
+def test_quarto_environment_preserves_existing_pythonutf8(monkeypatch):
     """Issue #200: do not override an explicit PYTHONUTF8 value."""
     monkeypatch.setenv("PYTHONUTF8", "0")
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
         assert env["PYTHONUTF8"] == "0"
 
 
@@ -3256,7 +3259,7 @@ def test_assets_added_to_quarto_config():
         docs._copy_assets()
 
         # Update Quarto config
-        docs._write_initial_quarto_yml()
+        write_initial_quarto_yml(docs.build_dir, docs._config)
         docs._update_quarto_config()
 
         # Read the generated _quarto.yml
@@ -3296,7 +3299,7 @@ def test_dark_only_logo_does_not_crash_quarto_config():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        docs._write_initial_quarto_yml()
+        write_initial_quarto_yml(docs.build_dir, docs._config)
         docs._update_quarto_config()
 
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -3322,7 +3325,7 @@ def test_assets_not_added_to_quarto_config_when_missing():
         docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         # Update Quarto config without assets
-        docs._write_initial_quarto_yml()
+        write_initial_quarto_yml(docs.build_dir, docs._config)
         docs._update_quarto_config()
 
         # Read the generated _quarto.yml
@@ -3358,7 +3361,7 @@ def test_assets_added_to_config_after_copy():
 
         # Create great-docs directory and initial config (simulating _prepare_build_directory)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._write_initial_quarto_yml()
+        write_initial_quarto_yml(docs.build_dir, docs._config)
         docs._update_quarto_config()
 
         # Read initial config - should NOT have assets/**
@@ -3398,7 +3401,7 @@ def test_assets_config_update_only_when_copied():
 
         # Create great-docs directory and initial config
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._write_initial_quarto_yml()
+        write_initial_quarto_yml(docs.build_dir, docs._config)
         docs._update_quarto_config()
 
         # Try to copy assets when none exist: should return False
@@ -3429,7 +3432,7 @@ def test_skill_render_exclusion_uses_enumerated_globs():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._write_initial_quarto_yml()
+        write_initial_quarto_yml(docs.build_dir, docs._config)
         docs._update_quarto_config()
 
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -7852,7 +7855,7 @@ class TestFaviconLinkInjection:
         docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         # Run the config build
-        docs._write_initial_quarto_yml()
+        write_initial_quarto_yml(docs.build_dir, docs._config)
         docs._update_quarto_config()
 
         # Read the generated _quarto.yml
@@ -8079,7 +8082,7 @@ def test_config_markdown_pages_disabled():
         assert docs._config.markdown_pages_widget is False
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._write_initial_quarto_yml()
+        write_initial_quarto_yml(docs.build_dir, docs._config)
         docs._update_quarto_config()
 
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -8116,7 +8119,7 @@ def test_config_markdown_pages_widget_disabled():
         assert docs._config.markdown_pages_widget is False
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._write_initial_quarto_yml()
+        write_initial_quarto_yml(docs.build_dir, docs._config)
         docs._update_quarto_config()
 
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -8146,7 +8149,7 @@ def test_config_markdown_pages_default_enabled():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._write_initial_quarto_yml()
+        write_initial_quarto_yml(docs.build_dir, docs._config)
         docs._update_quarto_config()
 
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -8182,7 +8185,7 @@ class TestPositBadgeInjection:
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._write_initial_quarto_yml()
+        write_initial_quarto_yml(docs.build_dir, docs._config)
         docs._update_quarto_config()
 
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -8254,7 +8257,7 @@ class TestPositBadgeInjection:
 
             docs = GreatDocs(project_path=tmp_dir)
             docs.build_dir.mkdir(parents=True, exist_ok=True)
-            docs._write_initial_quarto_yml()
+            write_initial_quarto_yml(docs.build_dir, docs._config)
             docs._update_quarto_config()
             docs._update_quarto_config()  # second run
 
@@ -11364,34 +11367,6 @@ def test_insert_before_reference_no_reference_simple_items():
         assert texts == ["Guide", "New"]
 
 
-def test_read_quarto_config_existing():
-    """_read_quarto_config reads and returns config with defaults."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        with open(quarto_yml, "w") as f:
-            write_yaml({"project": {"type": "website"}}, f)
-
-        config = docs._read_quarto_config(quarto_yml)
-
-        assert "website" in config
-        assert "sidebar" in config["website"]
-        assert "navbar" in config["website"]
-
-
-def test_read_quarto_config_missing():
-    """_read_quarto_config returns defaults when file doesn't exist."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = docs._read_quarto_config(Path(tmp_dir) / "missing.yml")
-
-        assert config["website"]["sidebar"] == []
-        assert "left" in config["website"]["navbar"]
-
-
 def test_add_frontmatter_option_new_key():
     """_add_frontmatter_option adds new key to frontmatter."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -12492,22 +12467,6 @@ def test_count_cli_sidebar_items_nested_v2():
     assert GreatDocs._count_cli_sidebar_items(items) == 3
 
 
-def test_write_quarto_yml_no_header_check():
-    """_write_quarto_yml writes YAML config to file."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = tmp / "_quarto.yml"
-
-        config = {"project": {"type": "website"}, "website": {"title": "Test"}}
-        docs._write_quarto_yml(quarto_yml, config)
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        assert result["website"]["title"] == "Test"
-
-
 def test_detect_package_name_from_pyproject_v2():
     """_detect_package_name reads name from pyproject.toml."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -12787,50 +12746,50 @@ def test_generate_landing_page_content_with_user_guide():
         assert "user-guide/index.qmd" in result
 
 
-def test_get_quarto_env_sets_quarto_python():
-    """_get_quarto_env sets QUARTO_PYTHON in env dict."""
+def test_quarto_environment_sets_quarto_python():
+    """Set `QUARTO_PYTHON` to a non-empty executable path"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert "QUARTO_PYTHON" in env
         assert env["QUARTO_PYTHON"]  # non-empty
 
 
-def test_get_quarto_env_sets_pythonpath():
-    """_get_quarto_env sets PYTHONPATH including package root."""
+def test_quarto_environment_sets_pythonpath():
+    """Include the package root in `PYTHONPATH`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert "PYTHONPATH" in env
         assert tmp_dir in env["PYTHONPATH"]
 
 
-def test_get_quarto_env_includes_src_dir():
-    """_get_quarto_env adds src/ to PYTHONPATH if it exists."""
+def test_quarto_environment_includes_src_dir():
+    """Include `src/` in `PYTHONPATH` when the directory exists"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         src_dir = Path(tmp_dir) / "src"
         src_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert str(src_dir) in env["PYTHONPATH"]
 
 
-def test_get_quarto_env_includes_python_dir():
-    """_get_quarto_env adds python/ to PYTHONPATH if it exists."""
+def test_quarto_environment_includes_python_dir():
+    """Include `python/` in `PYTHONPATH` when the directory exists"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         python_dir = Path(tmp_dir) / "python"
         python_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert str(python_dir) in env["PYTHONPATH"]
 
 
-def test_get_quarto_env_venv_detection():
-    """_get_quarto_env detects .venv/bin/python if present."""
+def test_quarto_environment_venv_detection():
+    """Use `.venv/bin/python` when it exists"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         venv_bin = Path(tmp_dir) / ".venv" / "bin"
@@ -12838,18 +12797,18 @@ def test_get_quarto_env_venv_detection():
         venv_python = venv_bin / "python"
         venv_python.write_text("#!/bin/sh\n", encoding="utf-8")
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert env["QUARTO_PYTHON"] == str(venv_python.resolve())
 
 
-def test_get_quarto_env_preserves_existing_pythonpath(monkeypatch):
-    """_get_quarto_env prepends to existing PYTHONPATH."""
+def test_quarto_environment_preserves_existing_pythonpath(monkeypatch):
+    """Prepend the package root to an existing `PYTHONPATH`"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         monkeypatch.setenv("PYTHONPATH", "/existing/path")
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert "/existing/path" in env["PYTHONPATH"]
         assert tmp_dir in env["PYTHONPATH"]
@@ -13831,23 +13790,6 @@ def test_add_frontmatter_option_integer_value():
         assert "depth: 3" in result
 
 
-def test_write_quarto_yml_v2():
-    """_write_quarto_yml writes config with header comment."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gd_dir = Path(tmp_dir) / "great-docs"
-        gd_dir.mkdir()
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = gd_dir / "_quarto.yml"
-        config = {"project": {"type": "website"}, "website": {"title": "Test"}}
-        docs._write_quarto_yml(quarto_yml, config)
-        content = quarto_yml.read_text(encoding="utf-8")
-
-        assert "Generated by Great Docs" in content
-        assert "great-docs.yml" in content
-        assert "website:" in content
-        assert "title: Test" in content
-
-
 def test_build_sections_from_reference_config_basic_functions():
     """_build_sections_from_reference_config creates sections from config."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -14537,11 +14479,11 @@ def test_detect_module_name_pyproject_parse_error():
         assert result is None
 
 
-def test_get_quarto_env_no_extra_dirs():
-    """_get_quarto_env works without src/ or python/ directories."""
+def test_quarto_environment_no_extra_dirs():
+    """Include the package root in `PYTHONPATH` without `src/` or `python/` directories"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert "PYTHONPATH" in env
 
@@ -14551,15 +14493,15 @@ def test_get_quarto_env_no_extra_dirs():
         assert any(tmp_dir in p for p in parts)
 
 
-def test_get_quarto_env_venv_alternative_name():
-    """_get_quarto_env detects venv/ (alternative name) if present."""
+def test_quarto_environment_venv_alternative_name():
+    """Use `venv/bin/python` when it exists"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         venv_bin = Path(tmp_dir) / "venv" / "bin"
         venv_bin.mkdir(parents=True)
         venv_python = venv_bin / "python"
         venv_python.write_text("#!/bin/sh\n", encoding="utf-8")
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert env["QUARTO_PYTHON"] == str(venv_python.resolve())
 
@@ -14762,26 +14704,6 @@ def test_get_docstring_summary_no_docstring():
         result = docs._get_docstring_summary("nonexistent_package_xyz", "whatever")
 
         assert result == ""
-
-
-def test_write_quarto_yml_adds_header():
-    """Test _write_quarto_yml writes config with header comment."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-
-        config = {"project": {"type": "website"}}
-        docs._write_quarto_yml(quarto_yml, config)
-
-        content = quarto_yml.read_text()
-
-        assert "project" in content
-
-        # Header comment should be present
-        assert "#" in content
 
 
 def test_update_sidebar_from_sections_basic():
@@ -16974,8 +16896,8 @@ def test_format_authors_yaml_basic():
         assert "role: Maintainer" in result
 
 
-def test_categorize_referenced_objects_missing_item_raises():
-    """Test that _categorize_referenced_objects raises SystemExit for missing config items."""
+def test_categorize_referenced_objects_missing_item_raises(capsys: pytest.CaptureFixture[str]):
+    """Report missing configured names and raise `BuildError`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Create a minimal package with one export
         pkg_dir = Path(tmp_dir) / "mypkg"
@@ -17001,13 +16923,14 @@ def test_categorize_referenced_objects_missing_item_raises():
 
             # Mock importlib.metadata.version to simulate an installed package
             with patch("importlib.metadata.version", return_value="1.0.0"):
-                with pytest.raises(SystemExit) as exc_info:
+                with pytest.raises(BuildError) as exc_info:
                     docs._categorize_referenced_objects("mypkg", reference_config)
 
             error_msg = str(exc_info.value)
             assert "nonexistent_item" in error_msg
             assert "mypkg" in error_msg
             assert "not found" in error_msg
+            assert capsys.readouterr().err == f"ERROR: {error_msg}\n"
         finally:
             sys.path.remove(tmp_dir)
 
@@ -17812,27 +17735,6 @@ def test_insert_before_reference():
         docs._insert_before_reference(navbar_items, link)
         assert navbar_items[1] == link
         assert navbar_items[2]["text"] == "Reference"
-
-
-def test_read_quarto_config_nonexistent():
-    """Test _read_quarto_config with nonexistent file."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = Path(tmp_dir) / "missing.yml"
-        config = docs._read_quarto_config(quarto_yml)
-        assert config["website"]["sidebar"] == []
-
-
-def test_write_quarto_yml():
-    """Test _write_quarto_yml writes config with header comment."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = Path(tmp_dir) / "_quarto.yml"
-        config = {"project": {"type": "website"}}
-        docs._write_quarto_yml(quarto_yml, config)
-        content = quarto_yml.read_text(encoding="utf-8")
-        assert "Generated by Great Docs" in content
-        assert "type: website" in content
 
 
 def test_is_compiled_extension_cargo_toml():
@@ -20938,11 +20840,11 @@ def test_strip_numeric_prefix_basic():
         assert strip_numeric_prefix("readme.qmd") == "readme.qmd"
 
 
-def test_get_quarto_env():
-    """Test _get_quarto_env returns dict with expected keys."""
+def test_quarto_environment():
+    """Return an environment containing `QUARTO_PYTHON`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
         assert isinstance(env, dict)
         # Should set QUARTO_PYTHON
         assert "QUARTO_PYTHON" in env
@@ -21303,28 +21205,6 @@ def test_parse_user_guide_file_with_section():
         result = docs._parse_user_guide_file(qmd)
         assert result is not None
         assert result["section"] == "Getting Started"
-
-
-def test_read_quarto_config_creates_defaults():
-    """Test _read_quarto_config creates website.sidebar when missing."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        qfile = Path(tmp_dir) / "_quarto.yml"
-        qfile.write_text("project:\n  type: website\n", encoding="utf-8")
-        config = docs._read_quarto_config(qfile)
-        assert "website" in config
-        assert "sidebar" in config["website"]
-        assert "navbar" in config["website"]
-
-
-def test_read_quarto_config_nonexistent_file():
-    """Test _read_quarto_config handles nonexistent file."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        qfile = Path(tmp_dir) / "_quarto.yml"
-        config = docs._read_quarto_config(qfile)
-        assert isinstance(config, dict)
-        assert "website" in config
 
 
 def test_detect_module_name_from_maturin():
@@ -21869,7 +21749,7 @@ def test_build_dynamic_fallback_preserves_the_quarto_yml_header(tmp_path):
     mock_builder.build.side_effect = [RuntimeError("Dynamic mode failed"), None]
 
     with (
-        stubbed_build(docs, run=("_write_quarto_yml",), _detect_package_name="mypkg"),
+        stubbed_build(docs, _detect_package_name="mypkg"),
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
@@ -21880,8 +21760,8 @@ def test_build_dynamic_fallback_preserves_the_quarto_yml_header(tmp_path):
     assert quarto_yml.read_text(encoding="utf-8").startswith(QUARTO_YML_HEADER)
 
 
-def test_build_static_mode_failure_exits(tmp_path):
-    """Test build() exits when static mode also fails."""
+def test_build_static_mode_failure_raises(tmp_path):
+    """Raise `BuildError` when static API reference generation also fails"""
     docs = _buildable_docs(
         tmp_path,
         api_reference=True,
@@ -21897,13 +21777,13 @@ def test_build_static_mode_failure_exits(tmp_path):
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
-        pytest.raises(SystemExit),
+        pytest.raises(BuildError, match="API reference build failed"),
     ):
         docs.build(watch=False, refresh=True)
 
 
-def test_build_non_dynamic_failure_exits(tmp_path):
-    """Test build() exits when non-dynamic build fails."""
+def test_build_non_dynamic_failure_raises(tmp_path):
+    """Raise `BuildError` when non-dynamic API reference generation fails"""
     docs = _buildable_docs(
         tmp_path,
         api_reference=True,
@@ -21917,7 +21797,7 @@ def test_build_non_dynamic_failure_exits(tmp_path):
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
-        pytest.raises(SystemExit),
+        pytest.raises(BuildError, match="API reference build failed"),
     ):
         docs.build(watch=False, refresh=True)
 
@@ -22015,15 +21895,32 @@ def test_build_watch_mode(tmp_path):
 
 
 def test_build_quarto_render_failure(tmp_path):
-    """Test build() exits when quarto render fails."""
+    """Raise `BuildError` when Quarto fails to render"""
     docs = _buildable_docs(tmp_path)
 
     with stubbed_build(docs) as stubs:
         stubs.render.stderr = iter(["Error: something\n"])
         stubs.render.returncode = 1
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(BuildError, match="Quarto render failed"):
             docs.build(watch=False, refresh=False)
+
+
+def test_build_versioned_all_failed_raises(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+    """Report failure and raise `BuildError` when every version fails to render"""
+    docs = _buildable_docs(tmp_path, has_versions=True, versions=["0.2", "0.1"])
+    failed = {"success": False, "errors": ["0.2: render boom"], "versions_built": []}
+
+    with (
+        stubbed_build(docs),
+        patch("great_docs._versioned_build.run_versioned_build", return_value=failed),
+        pytest.raises(BuildError, match="All version builds failed"),
+    ):
+        docs.build(watch=False, refresh=False)
+
+    out = capsys.readouterr().out
+    assert "0.2: render boom" in out
+    assert "All version builds failed" in out
 
 
 def test_build_cli_error_handled(tmp_path, capsys):
@@ -23982,11 +23879,12 @@ def test_add_api_reference_config_success():
             patch.object(docs, "_detect_module_name", return_value="mypkg"),
             patch.object(docs, "_is_compiled_extension", return_value=False),
             patch.object(docs, "_create_api_sections_with_config", return_value=sections),
-            patch.object(docs, "_write_quarto_yml"),
         ):
             docs._add_api_reference_config()
 
         assert docs._has_api_reference is True
+        written = read_yaml(docs.build_dir / "_quarto.yml")
+        assert written["api-reference"]["sections"] == sections
 
 
 def test_add_api_reference_config_eof_error():
@@ -24061,12 +23959,12 @@ def test_refresh_api_reference_config_fallback_to_explicit():
                 "_build_sections_from_reference_config",
                 return_value=user_sections,
             ),
-            patch.object(docs, "_write_quarto_yml") as mock_write,
             patch.object(docs, "_update_sidebar_from_sections"),
         ):
             docs._refresh_api_reference_config()
 
-        mock_write.assert_called()
+        written = read_yaml(docs.build_dir / "_quarto.yml")
+        assert written["api-reference"]["sections"] == user_sections
 
 
 def test_create_blended_index_no_files():
@@ -32052,7 +31950,9 @@ class TestAddSectionToNavbar:
             assert texts.index("Recipes") < texts.index("Reference")
 
     def test_empty_website_initializes_navbar(self):
-        """When website has no navbar, _read_quarto_config initializes it."""
+        """
+        Initialise the navbar before adding a link when `website` has no navbar
+        """
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
             quarto_yml = docs.build_dir / "_quarto.yml"
@@ -32062,7 +31962,6 @@ class TestAddSectionToNavbar:
             docs._add_section_to_navbar("Recipes", "recipes/index.qmd")
             with open(quarto_yml) as f:
                 config = read_yaml(f)
-            # _read_quarto_config initializes navbar.left so the link gets added
             assert any(
                 isinstance(item, dict) and item.get("text") == "Recipes"
                 for item in config["website"]["navbar"]["left"]
@@ -33301,8 +33200,8 @@ class TestInsertBeforeReference:
             assert items[-1]["text"] == "Guide"
 
 
-class TestGetQuartoEnv:
-    """Tests for _get_quarto_env."""
+class TestQuartoEnvironment:
+    """Quarto's Python environment"""
 
     def test_sets_quarto_python(self):
         """Sets QUARTO_PYTHON in environment."""
@@ -33310,7 +33209,7 @@ class TestGetQuartoEnv:
             tmp = Path(tmp_dir)
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             docs = GreatDocs(project_path=tmp_dir)
-            env = docs._get_quarto_env()
+            env = quarto.environment(docs._config)
             assert "QUARTO_PYTHON" in env
             assert env["QUARTO_PYTHON"]
 
@@ -33320,7 +33219,7 @@ class TestGetQuartoEnv:
             tmp = Path(tmp_dir)
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             docs = GreatDocs(project_path=tmp_dir)
-            env = docs._get_quarto_env()
+            env = quarto.environment(docs._config)
             assert "PYTHONPATH" in env
             assert str(tmp) in env["PYTHONPATH"]
 
@@ -33331,7 +33230,7 @@ class TestGetQuartoEnv:
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             (tmp / "src").mkdir()
             docs = GreatDocs(project_path=tmp_dir)
-            env = docs._get_quarto_env()
+            env = quarto.environment(docs._config)
             assert "src" in env["PYTHONPATH"]
 
     def test_includes_python_dir(self):
@@ -33341,7 +33240,7 @@ class TestGetQuartoEnv:
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             (tmp / "python").mkdir()
             docs = GreatDocs(project_path=tmp_dir)
-            env = docs._get_quarto_env()
+            env = quarto.environment(docs._config)
             assert "python" in env["PYTHONPATH"]
 
 
@@ -34542,8 +34441,8 @@ class TestUpdateQuartoConfigStrNormalizationBatch10:
             assert "header.js" in header
 
 
-class TestGetQuartoEnvBatch10:
-    """Cover _get_quarto_env else branch when PYTHONPATH is empty."""
+class TestQuartoEnvironmentBatch10:
+    """Quarto's environment without an existing `PYTHONPATH`"""
 
     def test_no_existing_pythonpath(self):
         """When PYTHONPATH is absent, new paths are set directly."""
@@ -34554,7 +34453,7 @@ class TestGetQuartoEnvBatch10:
             docs = GreatDocs(project_path=tmp_dir)
             with patch.dict(os.environ, {}, clear=True):
                 os.environ.pop("PYTHONPATH", None)
-                env = docs._get_quarto_env()
+                env = quarto.environment(docs._config)
             assert "PYTHONPATH" in env
             assert os.pathsep not in env["PYTHONPATH"] or tmp_dir in env["PYTHONPATH"]
 
@@ -37690,44 +37589,6 @@ def test_derive_page_title_numeric_prefix():
         assert "introduction" in title.lower()
 
 
-# ── _translate_navbar_labels ──────────────────────────────────────────
-
-
-def test_translate_navbar_labels_en():
-    """English language does not modify labels."""
-    with tempfile.TemporaryDirectory() as tmp:
-        (Path(tmp) / "great-docs.yml").write_text("site:\n  lang: en\n")
-        gd = GreatDocs(project_path=tmp)
-        config = {"website": {"navbar": {"left": [{"text": "User Guide", "href": "user-guide/"}]}}}
-        gd._translate_navbar_labels(config)
-        assert config["website"]["navbar"]["left"][0]["text"] == "User Guide"
-
-
-def test_translate_navbar_labels_non_en():
-    """Non-English language translates known labels."""
-    with tempfile.TemporaryDirectory() as tmp:
-        (Path(tmp) / "great-docs.yml").write_text("site:\n  lang: de\n")
-        gd = GreatDocs(project_path=tmp)
-        config = {
-            "website": {
-                "navbar": {
-                    "left": [
-                        {"text": "User Guide", "href": "user-guide/"},
-                        {"text": "Reference", "href": "reference/"},
-                    ]
-                }
-            }
-        }
-        with patch(
-            "great_docs._translations.get_translation",
-            side_effect=lambda key, lang: f"{key}_{lang}",
-        ):
-            gd._translate_navbar_labels(config)
-        labels = [item["text"] for item in config["website"]["navbar"]["left"]]
-        assert "User Guide" not in labels
-        assert "Reference" not in labels
-
-
 # ── _inject_tags_data_inline ─────────────────────────────────────────
 
 
@@ -37845,17 +37706,14 @@ def test_inject_status_data_inline_string_body():
 def test_inline_data_injection_keeps_generated_header(tmp_path: Path, json_name, script, inject):
     gd = GreatDocs(project_path=str(tmp_path))
     gd.build_dir.mkdir()
-    gd._write_initial_quarto_yml()
-    quarto_yml = gd.build_dir / "_quarto.yml"
-    config = read_yaml(quarto_yml)
-    html = config.setdefault("format", {}).setdefault("html", {})
-    html["include-after-body"] = [script]
-    gd._write_quarto_yml(quarto_yml, config)
+    write_initial_quarto_yml(gd.build_dir, gd._config)
+    with edit_quarto_yml(gd.build_dir, gd._config) as config:
+        config["format"]["html"]["include-after-body"] = [script]
     (gd.build_dir / json_name).write_text("{}", encoding="utf-8")
 
     inject(gd)
 
-    assert "_DATA__=" in quarto_yml.read_text(encoding="utf-8")
+    assert "_DATA__=" in (gd.build_dir / "_quarto.yml").read_text(encoding="utf-8")
     validate_build_dir(gd.build_dir)
 
 
@@ -39214,7 +39072,7 @@ def test_announcement_position_in_meta_tag():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._write_initial_quarto_yml()
+        write_initial_quarto_yml(docs.build_dir, docs._config)
         docs._update_quarto_config()
 
         with open(docs.build_dir / "_quarto.yml", "r") as f:
@@ -39236,7 +39094,7 @@ def test_announcement_position_defaults_above_in_meta_tag():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._write_initial_quarto_yml()
+        write_initial_quarto_yml(docs.build_dir, docs._config)
         docs._update_quarto_config()
 
         with open(docs.build_dir / "_quarto.yml", "r") as f:
@@ -40427,32 +40285,6 @@ def test_bump_heading_levels_quarto_cell_option():
     result = GreatDocs._bump_heading_levels(content)
     assert "## Heading" in result
     assert "#| echo: false" in result  # not bumped to ##|
-
-
-# ---------------------------------------------------------------------------
-# _ensure_quarto_installed
-# ---------------------------------------------------------------------------
-
-
-def test_ensure_quarto_installed_raises_when_missing():
-    """_ensure_quarto_installed raises QuartoNotFoundError when quarto not on PATH."""
-    from great_docs.core import QuartoNotFoundError, _ensure_quarto_installed
-
-    with patch("shutil.which", return_value=None):
-        with pytest.raises(QuartoNotFoundError):
-            _ensure_quarto_installed()
-
-
-def test_ensure_quarto_installed_passes_when_present():
-    """_ensure_quarto_installed returns None when quarto is found."""
-    from great_docs.core import _ensure_quarto_installed
-
-    with (
-        patch("shutil.which", return_value="/usr/bin/quarto"),
-        patch("great_docs.core._quarto_version", return_value=(1, 10, 0)),
-    ):
-        result = _ensure_quarto_installed()
-    assert result is None
 
 
 # ---------------------------------------------------------------------------

@@ -23,6 +23,7 @@ import warnings
 from pathlib import Path
 from typing import Callable, Iterable
 
+from great_docs import BuildError
 from great_docs._layout import Layout
 
 # These packages cover both citation backlink forms. The first has three
@@ -36,15 +37,14 @@ CITATION_SITES: tuple[str, ...] = (
 _TEST_PACKAGES_DIR = Path(__file__).resolve().parent.parent / "test-packages"
 RENDERED_DIR = _TEST_PACKAGES_DIR / "_rendered"
 
-# Treat these exceptions as an unavailable rendered fixture. The dependent
-# tests already skip when a site is absent. Fatal API-reference configuration
-# errors raise `SystemExit`; any unlisted exception indicates a builder defect
-# and propagates.
+# Treat these failures as unavailable rendered fixtures; dependent tests skip
+# absent sites. Fatal API reference configuration errors raise `BuildError`.
+# Propagate unlisted exceptions as builder defects.
 BUILD_FAILURES: tuple[type[BaseException], ...] = (
     OSError,
     subprocess.SubprocessError,
     ImportError,
-    SystemExit,
+    BuildError,
     ValueError,
     KeyError,
 )
@@ -353,6 +353,7 @@ def build_site(rendered_dir: Path, name: str) -> Path:
 
     from great_docs import GreatDocs
     from great_docs._apiref.api_reference import APIReference
+    from great_docs._build import quarto
 
     rendered_dir.mkdir(parents=True, exist_ok=True)
     staging = rendered_dir / f".building-{name}-{os.getpid()}"
@@ -377,7 +378,7 @@ def build_site(rendered_dir: Path, name: str) -> Path:
         result = subprocess.run(
             ["quarto", "render"],
             cwd=docs.build_dir,
-            env=docs._get_quarto_env(),
+            env=quarto.environment(docs._config),
             capture_output=True,
             text=True,
             check=False,

@@ -57,8 +57,6 @@ _BUILD_METHODS: tuple[str, ...] = (
     "_process_page_statuses",
     "_copy_assets",
     "_update_quarto_config",
-    "_get_quarto_env",
-    "_write_quarto_yml",
     "_normalize_freeze_shorthand",
     "_write_page_metadata",
     "_prerender_term_player",
@@ -157,9 +155,9 @@ def stubbed_build(
     Stub Quarto and the methods `GreatDocs.build()` calls on an instance
 
     Within the block, `docs.build()` keeps its control flow: the Quarto installation check
-    passes, `quarto render` succeeds silently, and build steps are stubbed unless listed in
-    `run`. Stubs enforce the real methods' call signatures and return empty values of their
-    declared return types unless overridden in `returns`.
+    passes, the render environment is empty and `quarto render` succeeds silently. Build steps
+    are stubbed except those listed in `run`. Stubs enforce the real methods' call signatures
+    and return empty values of their declared return types unless overridden in `returns`.
 
     Parameters
     ----------
@@ -196,7 +194,10 @@ def stubbed_build(
         raise AttributeError(f"GreatDocs has no {missing}; update the method list in {__name__}")
 
     with ExitStack() as stack:
-        stack.enter_context(patch("great_docs.core._ensure_quarto_installed", autospec=True))
+        stack.enter_context(patch("great_docs._build.quarto.ensure_installed", autospec=True))
+        stack.enter_context(
+            patch("great_docs._build.quarto.environment", autospec=True, return_value={})
+        )
         render = stack.enter_context(patch("subprocess.Popen", autospec=True)).return_value
         render.stdout = iter(())
         render.stderr = iter(())

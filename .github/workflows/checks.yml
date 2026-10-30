@@ -7,23 +7,37 @@ on:
   pull_request:
     branches:
       - main
+    # `edited` lets the marker in the description switch the comparison's mode
+    types: [opened, synchronize, reopened, edited]
 
 jobs:
   checks:
-    name: "Lint, types and harness"
+    name: "Lint, types and Quarto project diff"
+    # An edit re-runs the job only when it adds or removes the marker that sets the comparison's
+    # mode, so fixing a title or a typo in the description does not
+    if: >-
+      github.event.action != 'edited'
+      || (github.event.changes.body != null
+      && contains(github.event.changes.body.from, '<!-- quarto-project-diff: fail-on difference -->')
+      != contains(github.event.pull_request.body, '<!-- quarto-project-diff: fail-on difference -->'))
     runs-on: ubuntu-latest
+    env:
+      # `difference` when the pull request's description holds the marker, else `regression`
+      FAIL_ON: >-
+        ${{ contains(github.event.pull_request.body, '<!-- quarto-project-diff: fail-on difference -->')
+        && 'difference' || 'regression' }}
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0 # The harness checks out the pull request's base commit
+          fetch-depth: 0 # The Quarto project diff checks out the pull request's base commit
 
       - name: Set up uv and Python 3.13
         uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: "3.13"
 
-      # `uv.lock` is not committed. Resolve it once and let the harness copy it to
-      # the base worktree so both builds install the same dependency versions.
+      # `uv.lock` is not committed. Resolve it once and let the Quarto project diff copy it
+      # to the base worktree so both builds install the same dependency versions.
       - name: Install dependencies
         run: |
           uv lock
@@ -36,36 +50,53 @@ jobs:
         run: make type-check-strict
 
       # Compare pull requests with their base commit so reviewers can assess output
-      # differences. Regressions fail the step; other differences raise a warning and appear
-      # in the job summary. Skip pushes to main: the pull request already showed them.
-      - name: Install d2 (the harness requires it on both sides)
+      # differences. Regressions fail the step; with the marker, any difference does. Other
+      # differences raise a warning and appear in the job summary. Skip pushes to main: the
+      # pull request already showed them. Skip pull requests that change nothing the
+      # comparison covers.
+      - name: Check whether the pull request changes what the Quarto project diff covers
+        id: covered
         if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git diff --quiet "$BASE_SHA" HEAD -- great_docs tests/quarto_project_diff \
+              test-packages pyproject.toml Makefile .github/workflows/checks.yml; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install d2 (the Quarto project diff requires it on both sides)
+        if: steps.covered.outputs.run == 'true'
         run: |
           curl -fsSL https://d2lang.com/install.sh | sh -s -- --version v0.8.2
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/d2" --version
 
-      - name: Set up Quarto (the harness's stub passes `quarto pandoc` to it)
-        if: github.event_name == 'pull_request'
+      - name: Set up Quarto (the stub `quarto` passes `quarto pandoc` to it)
+        if: steps.covered.outputs.run == 'true'
         uses: quarto-dev/quarto-actions/setup@v2
 
-      - name: Compare builds with the base commit
-        id: harness
-        if: github.event_name == 'pull_request'
+      - name: Quarto project diff (fail on ${{ env.FAIL_ON }})
+        id: quarto_project_diff
+        if: steps.covered.outputs.run == 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: make harness HARNESS_ARGS="--base $BASE_SHA --out $RUNNER_TEMP/harness"
+        run: >-
+          make quarto-project-diff QUARTO_PROJECT_DIFF_ARGS="--base $BASE_SHA
+          --fail-on $FAIL_ON --out $RUNNER_TEMP/quarto-project-diff"
 
-      - name: Summarise the harness report
-        if: always() && (steps.harness.outcome == 'success' || steps.harness.outcome == 'failure')
+      - name: Summarise the Quarto project diff report
+        if: always() && (steps.quarto_project_diff.outcome == 'success' || steps.quarto_project_diff.outcome == 'failure')
         env:
-          REPORT: ${{ runner.temp }}/harness/report.txt
+          REPORT: ${{ runner.temp }}/quarto-project-diff/report.txt
         run: |
           [ -f "$REPORT" ] || exit 0
           {
-            echo "### Harness: $(tail -n 1 "$REPORT")"
+            echo "### Quarto project diff (fail on $FAIL_ON): $(tail -n 1 "$REPORT")"
             echo
-            echo "The full report is in the \`harness-report\` artifact."
+            echo "The full report is in the \`quarto-project-diff-report\` artifact."
             # A long fence, since the report's diffs can hold Markdown code fences
             echo
             echo '`````'
@@ -73,12 +104,12 @@ jobs:
             echo '`````'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload the harness report
-        if: always() && (steps.harness.outcome == 'success' || steps.harness.outcome == 'failure')
+      - name: Upload the Quarto project diff report
+        if: always() && (steps.quarto_project_diff.outcome == 'success' || steps.quarto_project_diff.outcome == 'failure')
         uses: actions/upload-artifact@v7
         with:
-          name: harness-report
+          name: quarto-project-diff-report
           if-no-files-found: ignore
           path: |
-            ${{ runner.temp }}/harness/report.txt
-            ${{ runner.temp }}/harness/report.json
+            ${{ runner.temp }}/quarto-project-diff/report.txt
+            ${{ runner.temp }}/quarto-project-diff/report.json

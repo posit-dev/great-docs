@@ -33,6 +33,7 @@ from mcp.types import (
 )
 from pydantic import AnyUrl
 
+from ._build.steps import BuildError
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, LayoutError
 from ._utils import is_in_great_docs_build_dir, recognised_build_dirs
 
@@ -449,10 +450,17 @@ async def _handle_build(arguments: dict) -> list[TextContent]:
         for ver_dir in _sibling_build_dirs(_get_project_root(project_path), _get_layout(arguments)):
             shutil.rmtree(ver_dir)
 
-    # Capture build output
+    # Include the build log in both success and error responses
     output = io.StringIO()
-    with redirect_stdout(output):
-        docs.build()
+    try:
+        with redirect_stdout(output):
+            docs.build()
+    except BuildError as e:
+        result = _ToolCallContent(
+            [TextContent(type="text", text=f"Build failed: {e}\n\n{output.getvalue()}")]
+        )
+        result.is_error = True
+        return result
 
     return [TextContent(type="text", text=f"Build complete.\n\n{output.getvalue()}")]
 

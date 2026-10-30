@@ -203,7 +203,7 @@ def test_build_collision_precedes_config_refresh(source_project: tuple[Path, Pat
     text = "module: sample\nversions: [v1.5.0, 1.5.0]\n"
     config.write_text(text)
     gd = make_docs(root, source)
-    with patch("great_docs.core._ensure_quarto_installed", side_effect=AssertionError("too late")):
+    with patch("great_docs._build.quarto.ensure_installed", side_effect=AssertionError("too late")):
         with pytest.raises(ValueError, match="URL segment"):
             gd.build(latest_only=True)
     assert config.read_text() == text
@@ -421,7 +421,7 @@ def test_api_reference_build_uses_selected_cwd(
         assert Path.cwd() == gd.build_dir
         raise ReferenceReached
 
-    monkeypatch.setattr("great_docs.core._ensure_quarto_installed", lambda: None)
+    monkeypatch.setattr("great_docs._build.quarto.ensure_installed", lambda: None)
     monkeypatch.setattr(gd, "_prepare_build_directory", prepare_reference)
     monkeypatch.setattr(APIReference, "__init__", lambda self, path: None)
     monkeypatch.setattr(APIReference, "build", check_cwd)

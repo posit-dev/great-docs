@@ -7,6 +7,7 @@ from types import ModuleType
 
 import pytest
 
+from great_docs import BuildError
 from great_docs.core import GreatDocs
 
 
@@ -208,6 +209,26 @@ def test_search_path_failure_preserves_original_error(
 
     with pytest.raises(RuntimeError, match="search path failure"):
         gd.documented_symbol_names("mypkg")
+
+
+def test_missing_configured_name_raises_build_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """
+    Raise `BuildError` when the installed package lacks a configured name
+
+    The query captures the standard-error report. The caller is responsible for displaying it.
+    """
+    _write_pkg(tmp_path)
+    config = tmp_path / "great-docs.yml"
+    config.write_text(config.read_text().replace("- TopClass", "- TopClass\n      - Gone"))
+    monkeypatch.setattr("importlib.metadata.version", lambda name: "0.1.0")
+    gd = GreatDocs(project_path=str(tmp_path))
+
+    with pytest.raises(BuildError, match="`Gone`"):
+        gd.documented_symbol_names("mypkg")
+
+    assert capsys.readouterr().err == ""
 
 
 def test_restores_cached_package_modules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -6,12 +6,12 @@ import re
 import re as _re
 import shutil
 import subprocess
-import threading
 from collections.abc import Iterable
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
+from great_docs._build import quarto
 from great_docs._subprocess import TEXT_MODE_KWARGS
 from great_docs._utils import (
     is_great_docs_build_dir,
@@ -1733,159 +1733,43 @@ def _rewrite_quarto_yml_for_version(
 # Stage 2: Parallel Quarto renders
 # ---------------------------------------------------------------------------
 
-_PAGE_RE = re.compile(r"\[\s*(\d+)/(\d+)\]\s+(.+)")
 
-
-def _render_single_version(  # pragma: no cover
-    build_dir: str,
-    env_vars: dict[str, str] | None,
-) -> tuple[str, int, str, str]:
-    """
-    Render a single version's Quarto project.
-
-    This function is designed to be called in a subprocess pool. Returns
-    `(build_dir, returncode, stdout, stderr)`.
-    """
-    env = os.environ.copy()
-    if env_vars:
-        env.update(env_vars)
-
-    _TRANSIENT_PATTERNS = (
-        "No such file or directory",
-        "renameSync",
-        "os error 2",
-    )
-
-    for attempt in range(2):
-        try:
-            result = subprocess.run(
-                ["quarto", "render"],
-                cwd=build_dir,
-                capture_output=True,
-                **TEXT_MODE_KWARGS,
-                env=env,
-                timeout=600,
-            )
-            # Retry once on transient filesystem race conditions
-            if (
-                result.returncode != 0
-                and attempt == 0
-                and any(p in result.stderr for p in _TRANSIENT_PATTERNS)
-            ):
-                continue
-            return (build_dir, result.returncode, result.stdout, result.stderr)
-        except subprocess.TimeoutExpired:
-            return (build_dir, -1, "", "Quarto render timed out after 600 seconds")
-        except Exception as e:
-            return (build_dir, -1, "", str(e))
-
-    return (build_dir, result.returncode, result.stdout, result.stderr)  # type: ignore[possibly-undefined]
-
-
-def _render_single_version_streaming(  # pragma: no cover
+def _render_version(
     build_dir: str,
     env_vars: dict[str, str] | None,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> tuple[str, int, str, str, list[dict[str, Any]]]:
     """
-    Render a single version with streaming progress.
+    Render a version's Quarto project, retrying once after a transient failure
 
-    Like :func:`_render_single_version` but streams stderr to parse Quarto `[cur/total] page`
-    progress lines and calls *on_progress(current, total)* for each update. Returns
-    `(build_dir, returncode, stdout, stderr, page_timings)`.
+    Parameters
+    ----------
+    build_dir
+        The version's build directory.
+    env_vars
+        Variables to set in Quarto's environment, over this process's.
+    on_progress
+        Called as each page starts, with its position and the total page count.
+
+    Returns
+    -------
+    :
+        `(build_dir, returncode, stdout, stderr, page_timings)`, with `stdout` always empty.
+        If Quarto cannot start, the return code is `-1` and `stderr` contains the error.
     """
-    import time as _time_mod
+    env = {**os.environ, **(env_vars or {})}
 
-    env = os.environ.copy()
-    if env_vars:
-        env.update(env_vars)
+    def on_page(progress: quarto.Progress) -> None:
+        if on_progress is not None:
+            on_progress(progress.current, progress.total)
 
     try:
-        proc = subprocess.Popen(
-            ["quarto", "render"],
-            cwd=build_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            **TEXT_MODE_KWARGS,
-            env=env,
-            bufsize=1,
-        )
-    except Exception as e:
+        result = quarto.render(Path(build_dir), env, on_page=on_page)
+        if result.failed_transiently:
+            result = quarto.render(Path(build_dir), env, on_page=on_page)
+    except OSError as e:
         return (build_dir, -1, "", str(e), [])
-
-    stderr_lines: list[str] = []
-    # Each entry: (page_path, timestamp)
-    _page_timestamps: list[tuple[str, float]] = []
-    _ansi_re = re.compile(r"\033\[[0-9;]*m")
-
-    def _read_stderr():
-        for line in proc.stderr:  # type: ignore[union-attr]
-            stderr_lines.append(line)
-            m = _PAGE_RE.search(line)
-            if m:
-                page_path = _ansi_re.sub("", m.group(3)).strip()
-                _page_timestamps.append((page_path, _time_mod.monotonic()))
-                if on_progress:
-                    on_progress(int(m.group(1)), int(m.group(2)))
-
-    stderr_thread = threading.Thread(target=_read_stderr, daemon=True)
-    stderr_thread.start()
-
-    stdout_data = proc.stdout.read() if proc.stdout else ""  # type: ignore[union-attr]
-    proc.wait()
-    stderr_thread.join(timeout=10)
-
-    # Compute per-page durations from consecutive timestamps
-    page_timings: list[dict[str, Any]] = []
-    for i, (page_path, ts) in enumerate(_page_timestamps):
-        if i + 1 < len(_page_timestamps):
-            duration = _page_timestamps[i + 1][1] - ts
-        else:
-            duration = _time_mod.monotonic() - ts
-        page_timings.append({"page": page_path, "seconds": round(duration, 3)})
-
-    # Retry once on transient filesystem race conditions
-    _TRANSIENT_PATTERNS = (
-        "No such file or directory",
-        "renameSync",
-        "os error 2",
-    )
-    full_stderr = "".join(stderr_lines)
-    if proc.returncode != 0 and any(p in full_stderr for p in _TRANSIENT_PATTERNS):
-        # Reset and retry
-        stderr_lines.clear()
-        _page_timestamps.clear()
-
-        try:
-            proc = subprocess.Popen(
-                ["quarto", "render"],
-                cwd=build_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                **TEXT_MODE_KWARGS,
-                env=env,
-                bufsize=1,
-            )
-        except Exception as e:
-            return (build_dir, -1, "", str(e), [])
-
-        stderr_thread = threading.Thread(target=_read_stderr, daemon=True)
-        stderr_thread.start()
-        stdout_data = proc.stdout.read() if proc.stdout else ""  # type: ignore[union-attr]
-        proc.wait()
-        stderr_thread.join(timeout=10)
-
-        page_timings = []
-        for i, (page_path, ts) in enumerate(_page_timestamps):
-            if i + 1 < len(_page_timestamps):
-                duration = _page_timestamps[i + 1][1] - ts
-            else:
-                duration = _time_mod.monotonic() - ts
-            page_timings.append({"page": page_path, "seconds": round(duration, 3)})
-
-        return (build_dir, proc.returncode, stdout_data, "".join(stderr_lines), page_timings)
-
-    return (build_dir, proc.returncode, stdout_data, full_stderr, page_timings)
+    return (build_dir, result.returncode, "", result.stderr, result.page_timings)
 
 
 def render_versions_parallel(
@@ -1906,8 +1790,8 @@ def render_versions_parallel(
     max_workers
         Max parallel renders. Defaults to `min(cpu_count, 4)`.
     progress_callback
-        Optional `(slot_index, current_page, total_pages)` callback. When provided, renders use
-        streaming mode so progress lines can be reported in real time.
+        Optional callback called as each page starts, with
+        `(slot_index, current_page, total_pages)`.
 
     Returns
     -------
@@ -1918,44 +1802,15 @@ def render_versions_parallel(
     if max_workers is None:
         max_workers = min(os.cpu_count() or 4, 4)
 
-    if progress_callback is None:
-        # Original fire-and-forget mode (ProcessPoolExecutor)
-        results: list[tuple[str, int, str, str, list[dict[str, Any]]]] = []
-
-        if len(build_dirs) == 1:
-            r = _render_single_version(str(build_dirs[0]), env_vars)
-            # Non-streaming mode has no page timings
-            results.append((*r, []))
-            return results
-
-        with ProcessPoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(_render_single_version, str(d), env_vars): d for d in build_dirs}
-            for future in as_completed(futures):
-                results.append((*future.result(), []))
-        return results
-
-    # Streaming mode: use threads so callbacks can update the parent process.
-    dir_to_idx = {str(d): i for i, d in enumerate(build_dirs)}
-    ordered_results: list[tuple[str, int, str, str, list[dict[str, Any]]] | None] = [None] * len(
-        build_dirs
-    )
-
-    def _run(build_dir: Path) -> tuple[str, int, str, str, list[dict[str, Any]]]:
-        idx = dir_to_idx[str(build_dir)]
-
+    def _run(slot: int, build_dir: Path) -> tuple[str, int, str, str, list[dict[str, Any]]]:
         def _on_progress(current: int, total: int) -> None:
-            progress_callback(idx, current, total)
+            if progress_callback is not None:
+                progress_callback(slot, current, total)
 
-        return _render_single_version_streaming(str(build_dir), env_vars, _on_progress)
+        return _render_version(str(build_dir), env_vars, _on_progress)
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(_run, d): d for d in build_dirs}
-        for future in as_completed(futures):
-            r = future.result()
-            idx = dir_to_idx[r[0]]
-            ordered_results[idx] = r
-
-    return [r for r in ordered_results if r is not None]
+        return list(pool.map(_run, range(len(build_dirs)), build_dirs))
 
 
 # ---------------------------------------------------------------------------
