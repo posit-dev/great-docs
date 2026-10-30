@@ -15,6 +15,7 @@ from typing import Any
 
 from yaml12 import parse_yaml
 
+from great_docs._build import quarto
 from great_docs._subprocess import TEXT_MODE_KWARGS
 
 from .manifest import generate_manifest
@@ -436,6 +437,8 @@ def _generate_preview_html(editor_data: dict, script_data: dict) -> str:
     import shutil
     import subprocess
     import tempfile
+
+    quarto.ensure_installed()
 
     # Reconstruct Recording from editor_data
     rec_data = editor_data["recording"]

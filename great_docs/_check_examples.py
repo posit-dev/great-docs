@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -12,6 +11,8 @@ from fnmatch import fnmatch
 from html import unescape
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
+
+from ._build import quarto
 
 if TYPE_CHECKING:
     from ._layout import Layout
@@ -277,19 +278,20 @@ def _resolve_member(
 
 
 def _check_quarto_available() -> str | None:
-    if shutil.which("quarto") is None:
-        return "Quarto is not installed or not on PATH. Install it from https://quarto.org/docs/get-started/"
+    """
+    Check that a supported Quarto CLI is on the `PATH`
+
+    A Quarto whose version cannot be read passes the check.
+
+    Returns
+    -------
+    :
+        Why Quarto cannot run the examples, or `None` when it can.
+    """
     try:
-        proc = subprocess.run(
-            ["quarto", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if proc.returncode != 0:
-            return f"Quarto check failed: {proc.stderr.strip()}"
-    except Exception as e:
-        return f"Could not verify Quarto installation: {e}"
+        quarto.ensure_installed()
+    except (quarto.QuartoNotFoundError, quarto.QuartoVersionError) as error:
+        return str(error)
     return None
 
 
