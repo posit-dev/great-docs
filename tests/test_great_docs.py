@@ -2,6 +2,7 @@
 import importlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -21942,6 +21943,43 @@ def test_build_cli_error_handled(tmp_path, capsys):
     assert "Error generating CLI docs: click" in capsys.readouterr().out
     stubs.steps["_generate_cli_reference_pages"].assert_not_called()
     stubs.steps["_write_page_metadata"].assert_called_once()
+
+
+def test_build_log_numbers_every_step(tmp_path, capsys):
+    """
+    Check that the log numbers all twenty steps in order and reports all twenty as run
+    """
+    docs = _buildable_docs(tmp_path)
+
+    with stubbed_build(docs):
+        docs.build(watch=False, refresh=False)
+
+    out = capsys.readouterr().out
+    headings = re.findall(r"Step\s+(\d+)/(\d+) \S (.+?) [━-]", out)
+    assert [(int(n), int(total)) for n, total, _ in headings] == [(n, 20) for n in range(1, 21)]
+    assert [title for *_, title in headings] == [
+        "Prepare build directory",
+        "Configure API reference",
+        "Generate llms.txt / llms-full.txt",
+        "Generate SKILL.md",
+        "Generate changelog",
+        "Generate CLI reference",
+        "Generate Go CLI reference",
+        "Generate Rust CLI reference",
+        "Generate MCP server reference",
+        "Process User Guide",
+        "Process custom sections",
+        "Process custom pages",
+        "Process page tags",
+        "Process page status badges",
+        "Copy assets",
+        "Generate API reference",
+        "Build interlinks index",
+        "Prepare freeze cache",
+        "Build site with Quarto",
+        "Generate SEO files",
+    ]
+    assert "Build complete — 20/20 steps" in out
 
 
 def test_discover_click_cli_not_enabled():

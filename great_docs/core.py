@@ -17,7 +17,16 @@ from yaml12 import format_yaml, read_yaml
 from ._build import quarto
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
-from ._build.steps import BuildError
+from ._build.steps import (
+    BuildError,
+    Outcome,
+    Skipped,
+    Step,
+    StepError,
+    Warn,
+    count_listed,
+    run_steps,
+)
 from ._content_naming import fix_numeric_prefix_links, section_slug, strip_numeric_prefix
 from ._layout import Layout, LayoutError
 from ._source_refs import source_reference_spans
@@ -61,6 +70,7 @@ if TYPE_CHECKING:
 
     from ._apiref.api_reference import APIReference
     from ._apiref.inventory import InventoryItem
+    from ._build_log import BuildLog
 
 # Injected into marimo `--mode edit` WASM exports (iframe mode). Those load inert
 # — cells are stale and the kernel isn't instantiated, so nothing renders and
@@ -15062,6 +15072,876 @@ anchor-sections: true
 
             click.echo(notice)
 
+    def _step_prepare_build_directory(self) -> Outcome:
+        """
+        Create the build directory and its initial Quarto project
+
+        Returns
+        -------
+        :
+            The step's result line.
+        """
+        self._prepare_build_directory()
+        return "Ready"
+
+    def _log_render_settings(self, log: "BuildLog") -> Outcome:
+        """
+        Show the freeze mode and the pre-render scripts that Quarto will use
+
+        Parameters
+        ----------
+        log
+            The build log.
+
+        Returns
+        -------
+        :
+            `None`; the settings are detail lines of the previous step.
+        """
+        freeze_mode = self._config.freeze
+        if freeze_mode is not None:
+            log.detail(f"Freeze mode: {'auto' if freeze_mode == 'auto' else 'true'}")
+        for script in self._config.pre_render or ():
+            log.detail(f"Pre-render script: {script}")
+        return None
+
+    def _step_api_reference_config(self, refresh: bool) -> Outcome:
+        """
+        Update the API reference configuration from the package's exports
+
+        Parameters
+        ----------
+        refresh
+            Whether to rediscover package exports.
+
+        Returns
+        -------
+        :
+            The result line or skip reason.
+        """
+        if not self._has_api_reference:
+            return Skipped("no API reference")
+        if not refresh:
+            return "Using existing config"
+        self._refresh_api_reference_config()
+        return "API reference refreshed"
+
+    def _step_llms_txt(self) -> Outcome:
+        """
+        Write `llms.txt` and `llms-full.txt`
+
+        Returns
+        -------
+        :
+            The result line or skip reason.
+        """
+        if not self._llms_txt_available():
+            return Skipped("no API reference")
+        self._generate_llms_txt()
+        self._generate_llms_full_txt()
+        return "Created llms.txt + llms-full.txt"
+
+    def _step_skill_md(self) -> Outcome:
+        """
+        Write the agent skill files and the skills page
+
+        Returns
+        -------
+        :
+            The result line or skip reason.
+        """
+        if not self._config.skill_enabled:
+            return Skipped("disabled in config")
+        self._generate_skill_md()
+        return "Created skill.md"
+
+    def _warn_without_site_url(self, log: "BuildLog") -> Outcome:
+        """
+        Warn when the skills page has no site URL for its install instructions
+
+        Parameters
+        ----------
+        log
+            The build log.
+
+        Returns
+        -------
+        :
+            `None`; the warning belongs to the previous step.
+        """
+        if not self._config.skill_enabled:
+            return None
+        urls = self._get_package_metadata().get("urls", {})
+        has_site_url = bool(self._config.site_url or urls.get("Documentation", ""))
+        if not has_site_url and quarto_yml.path(self.build_dir).exists():
+            website = quarto_yml.read(self.build_dir).get("website", {})
+            has_site_url = bool(website.get("site-url", ""))
+        if not has_site_url:
+            log.warn(
+                "No site URL found — skills page will show <site-url> placeholders. "
+                "Set site_url in great-docs.yml or add a Documentation URL to "
+                "[project.urls] in pyproject.toml."
+            )
+        return None
+
+    def _step_changelog(self) -> Outcome:
+        """
+        Write the changelog page from GitHub Releases and link it from the navbar
+
+        Returns
+        -------
+        :
+            The result line or skip reason.
+        """
+        if not self._config.changelog_enabled:
+            return Skipped("disabled in config")
+        owner, repo, _base_url = self._get_github_repo_info()
+        if not (owner and repo):
+            return Skipped("no GitHub repo info")
+        if not self._generate_changelog_page():
+            return "No releases found; skipped"
+        self._add_changelog_to_navbar()
+        return "Changelog from GitHub Releases"
+
+    def _step_cli_reference(self, package_name: str) -> Outcome:
+        """
+        Write reference pages for the package's Click command-line interface
+
+        Parameters
+        ----------
+        package_name
+            The detected package name, or `""` when none was found.
+
+        Returns
+        -------
+        :
+            The result line or skip reason.
+        """
+        if not self._get_package_metadata().get("cli_enabled", False):
+            return Skipped("CLI not enabled")
+        if not package_name:
+            return Skipped("no package detected")
+        # The importable module name can differ from the project name.
+        module = self._resolve_importable_name(package_name)
+        cli_info = self._discover_click_cli(module, display_name=package_name)
+        if not cli_info:
+            return Skipped("no Click CLI found")
+        return self._add_cli_reference(cli_info, "CLI")
+
+    def _step_go_cli_reference(self) -> Outcome:
+        """
+        Write reference pages for the project's Go command-line interface
+
+        Returns
+        -------
+        :
+            The result line or skip reason.
+        """
+        if not self._config.go_cli_enabled:
+            return Skipped("Go CLI not enabled")
+        from great_docs._go_cli import detect_go_cli_project, introspect_cobra_cli
+
+        project = detect_go_cli_project(self.layout.package_root)
+        if not project:
+            return Skipped("no Go CLI project detected")
+        cli_info = introspect_cobra_cli(project)
+        if not cli_info:
+            return Skipped("Go CLI introspection failed (is 'go' on PATH?)")
+        return self._add_cli_reference(cli_info, "Go CLI", f" ({project.binary_name})")
+
+    def _step_rust_cli_reference(self) -> Outcome:
+        """
+        Write reference pages for the project's Rust command-line interface
+
+        Returns
+        -------
+        :
+            The result line or skip reason.
+        """
+        if not self._config.rust_cli_enabled:
+            return Skipped("Rust CLI not enabled")
+        from great_docs._rust_cli import detect_rust_cli_project, introspect_rust_cli
+
+        project = detect_rust_cli_project(self.layout.package_root)
+        if not project:
+            return Skipped("no Rust CLI project detected")
+        cli_info = introspect_rust_cli(project)
+        if not cli_info:
+            return Skipped("Rust CLI introspection failed (is 'cargo' on PATH?)")
+        return self._add_cli_reference(cli_info, "Rust CLI", f" ({project.binary_names[0]})")
+
+    def _add_cli_reference(self, cli_info: dict[str, Any], kind: str, suffix: str = "") -> Outcome:
+        """
+        Write command-line reference pages and add them to the reference sidebar
+
+        Parameters
+        ----------
+        cli_info
+            The command tree to document.
+        kind
+            The interface label in the result line, such as `"Go CLI"`.
+        suffix
+            Text appended to the result line, such as the binary's name.
+
+        Returns
+        -------
+        :
+            The step's result line.
+        """
+        cli_files = self._generate_cli_reference_pages(cli_info)
+        if not cli_files:
+            return f"No {kind} pages generated"  # pragma: no cover
+        self._update_sidebar_with_cli(cli_files)
+        n_pages = self._count_cli_sidebar_items(cli_files)
+        return f"{n_pages} {kind} reference page(s){suffix}"
+
+    def _step_mcp_reference(self, package_name: str) -> Outcome:
+        """
+        Write reference pages and a discovery manifest for the project's MCP server
+
+        Remove the MCP section from the reference configuration when no pages are generated,
+        including when generation raises a handled exception.
+
+        Parameters
+        ----------
+        package_name
+            The detected package name, or `""` when none was found.
+
+        Returns
+        -------
+        :
+            The result line or skip reason.
+        """
+        if not self._config.mcp_enabled:
+            return Skipped("MCP not enabled")
+        try:
+            mcp_package = (
+                self._resolve_importable_name(package_name)
+                if package_name
+                else self._detect_module_name()
+            )
+            mcp_info = self._discover_mcp_server(mcp_package)
+            if not mcp_info:
+                self._mcp_pages_generated = False
+                self._remove_mcp_from_ref_sections()
+                return Skipped("no MCP server found")
+            from ._mcp_docs import generate_mcp_reference_pages
+
+            mcp_files = generate_mcp_reference_pages(
+                server_info=mcp_info,
+                output_dir=self.build_dir / "reference" / "mcp",
+                categories=self._config.mcp_categories or None,
+                display_name=self._config.mcp_name,
+            )
+            if not mcp_files:
+                self._mcp_pages_generated = False
+                self._remove_mcp_from_ref_sections()
+                return "No MCP pages generated"
+            self._mcp_pages_generated = True
+            self._update_sidebar_with_mcp(mcp_files)
+            self._generate_mcp_manifest(mcp_info)
+        except Exception:
+            self._mcp_pages_generated = False
+            self._remove_mcp_from_ref_sections()
+            raise
+        return f"{len(mcp_info.get('tools', []))} MCP tool page(s) + manifest"
+
+    def _step_user_guide(self) -> Outcome:
+        """
+        Copy the user guide into the build directory and add its sidebar
+
+        Returns
+        -------
+        :
+            The result line or skip reason.
+        """
+        if not self._process_user_guide():
+            return Skipped("no user guide found")
+        return "User Guide configured"
+
+    def _step_sections(self) -> Outcome:
+        """
+        Copy the configured custom sections into the build directory
+
+        Returns
+        -------
+        :
+            The result line or skip reason.
+        """
+        if not self._config.sections:
+            return Skipped("no sections configured")
+        n_sections = self._process_sections()
+        if not n_sections:
+            return "No sections to process"
+        return f"{n_sections} section(s) processed"
+
+    def _step_custom_pages(self) -> Outcome:
+        """
+        Copy the custom pages into the build directory
+
+        Returns
+        -------
+        :
+            The result line or skip reason.
+        """
+        n_pages = self._process_custom_pages()
+        if not n_pages:
+            return Skipped("no custom pages")
+        return f"{n_pages} custom page(s)"
+
+    def _step_tags(self) -> Outcome:
+        """
+        Write the tags index page and the tag data for tagged pages
+
+        Returns
+        -------
+        :
+            The result line or skip reason.
+        """
+        if not self._config.tags_enabled:
+            return Skipped("tags not enabled")
+        if not self._process_tags():
+            return Skipped("no tagged pages found")
+        return "Tags processed"
+
+    def _step_page_statuses(self) -> Outcome:
+        """
+        Write the status badge data for pages that declare a status
+
+        Returns
+        -------
+        :
+            The result line or skip reason.
+        """
+        if not self._config.page_status_enabled:
+            return Skipped("page status not enabled")
+        if not self._process_page_statuses():
+            return Skipped("no pages with status")
+        return "Status badges processed"
+
+    def _step_assets(self) -> Outcome:
+        """
+        Copy the project's assets and complete the Quarto configuration
+
+        Earlier steps copy resources such as user-guide images. Register those resources in
+        the Quarto configuration even when the project has no assets directory.
+
+        Returns
+        -------
+        :
+            The result line or skip reason.
+        """
+        assets_copied = self._copy_assets()
+        self._update_quarto_config()
+        if not assets_copied:
+            return Skipped("no assets directory")
+        return "Assets copied"
+
+    def _step_api_reference(self, log: "BuildLog") -> "tuple[Outcome, APIReference | None]":
+        """
+        Write the API reference pages and the inventory of documented objects
+
+        When dynamic introspection fails, the step retries once with static analysis.
+
+        Parameters
+        ----------
+        log
+            The build log.
+
+        Returns
+        -------
+        :
+            The result line or skip reason, and the API reference if one was generated.
+
+        Raises
+        ------
+        StepError
+            If the API reference cannot be generated.
+        """
+        if not self._has_api_reference:
+            return Skipped("API reference disabled"), None
+
+        from great_docs._apiref.api_reference import APIReference
+
+        build_env = quarto.environment(self._config)
+        for p in build_env.get("PYTHONPATH", "").split(os.pathsep):
+            if p and p not in sys.path:
+                sys.path.insert(0, p)  # pragma: no cover
+
+        quarto_yml_path = str(quarto_yml.path(self.build_dir))
+        try:
+            ref = APIReference(quarto_yml_path)
+            ref.build()
+            return "API reference generated", ref
+        except Exception as e:
+            if not self._config.dynamic:
+                message = f"API reference build failed: {e}"
+                raise StepError(message, detail=str(e)) from e
+            log.warn(
+                "Dynamic introspection failed for a resolved item, retrying with static analysis..."
+            )
+            log.detail(str(e))
+            with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+                if "api-reference" in quarto_config:
+                    quarto_config["api-reference"]["dynamic"] = False
+        try:
+            ref = APIReference(quarto_yml_path)
+            ref.build()
+        except Exception as e:
+            raise StepError(f"API reference build failed: {e}") from e
+        return "API reference generated (static analysis)", ref
+
+    def _step_interlinks(self, log: "BuildLog", ref: "APIReference | None") -> Outcome:
+        """
+        Write the index that resolves cross-reference links to documented names
+
+        Parameters
+        ----------
+        log
+            The build log.
+        ref
+            The project's API reference, if it has one.
+
+        Returns
+        -------
+        :
+            The step's result line.
+        """
+        from great_docs._interlinks import AliasClaims, build_project_index
+
+        index, notes = build_project_index(
+            self.build_dir,
+            self._config,
+            self._detect_package_name() or "",
+            AliasClaims.make(ref.items) if ref is not None else AliasClaims(),
+        )
+        for note in notes:
+            log.detail(note)
+        for alias, targets in sorted(index.dropped.items()):
+            log.detail(
+                f"'{alias}' is ambiguous ({', '.join(targets)}); references to it stay unlinked"
+            )
+        return f"Indexed {len(index.names)} name(s)"
+
+    def _step_freeze_cache(self, watch: bool) -> "tuple[Outcome, list[str]]":
+        """
+        Expand the pages' freeze shorthand and write their metadata
+
+        Parameters
+        ----------
+        watch
+            Whether the site is served in watch mode.
+
+        Returns
+        -------
+        :
+            The result line or skip reason, and the pages whose freeze shorthand was expanded.
+        """
+        frozen_pages = self._normalize_freeze_shorthand()
+        self._write_page_metadata(watch)
+        if frozen_pages:
+            return f"Using {len(frozen_pages)} page(s) from the freeze cache", frozen_pages
+        if self.layout.freeze_dir.is_dir():
+            return "Freeze cache will be restored during render", frozen_pages
+        return Skipped("no frozen pages"), frozen_pages
+
+    def _expand_mock_cells(self, log: "BuildLog") -> Outcome:
+        """
+        Expand `source-code: mock` cells before Quarto reads the pages
+
+        Parameters
+        ----------
+        log
+            The build log.
+
+        Returns
+        -------
+        :
+            `None`; the result is a detail line of the previous step.
+        """
+        from great_docs._mock_code import process_directory
+
+        modified = process_directory(self.build_dir)
+        if modified:
+            log.detail(f"Expanded {len(modified)} mock-code cell(s): " + ", ".join(modified))
+        return None
+
+    def _render_d2_diagrams(self, log: "BuildLog") -> Outcome:
+        """
+        Render d2 diagrams as light and dark SVG files, which Quarto cannot generate
+
+        Parameters
+        ----------
+        log
+            The build log.
+
+        Returns
+        -------
+        :
+            `None`; the result is a detail line of the previous step.
+        """
+        from great_docs._d2 import process_directory
+
+        modified = process_directory(self.build_dir, cache_dir=self.layout.cache_dir / "d2")
+        if modified:
+            log.detail(f"Rendered d2 diagrams in {len(modified)} page(s): " + ", ".join(modified))
+        return None
+
+    def _share_sidebars(self, log: "BuildLog", watch: bool) -> Outcome:
+        """
+        Render each long reference sidebar once for reuse across pages
+
+        A versioned build shares the sidebars of each version in its own directory.
+
+        Parameters
+        ----------
+        log
+            The build log.
+        watch
+            Whether the site is served in watch mode.
+
+        Returns
+        -------
+        :
+            `None`; the result is a detail line of the previous step.
+        """
+        if watch or not self._config.has_versions:
+            shared = shared_sidebar.prepare(self.build_dir)
+            if shared:
+                log.detail("Sharing rendered sidebar(s): " + ", ".join(shared))
+        return None
+
+    def _step_render(
+        self,
+        log: "BuildLog",
+        jobs: int,
+        last_timings: dict[str, float],
+        last_startup: float | None,
+    ) -> "tuple[quarto.RenderResult, dict[str, object] | None]":
+        """
+        Render a single-version site with Quarto and show its progress
+
+        Retry a transient failure once in one process, including failures from parallel renders.
+
+        Parameters
+        ----------
+        log
+            The build log.
+        jobs
+            The number of Quarto processes to split the pages among.
+        last_timings
+            The last build's render time of each page, which guides the split.
+        last_startup
+            How long Quarto took to start in the last parallel build, which also guides the
+            split; `None` when unknown.
+
+        Returns
+        -------
+        :
+            The successful render result, and how the parallel render went: its number of
+            processes and groups and how long Quarto took to start. The second is `None`
+            unless a parallel render produced the result.
+
+        Raises
+        ------
+        StepError
+            If Quarto fails to render the site.
+        """
+        import threading
+
+        from great_docs import _parallel_render
+
+        env = quarto.environment(self._config)
+        result = None
+        render_stats: dict[str, object] | None = None
+        if jobs > 1:
+            # Experimental: split the pages among several Quarto processes
+            bar = log.progress("Rendering pages", 1)
+            bar_lock = threading.Lock()
+            pages_started = [0]
+
+            def on_start(pages: int, groups: int, workers: int) -> None:
+                bar.total = max(pages, 1)
+                log.detail(
+                    f"Rendering {pages} pages in {groups} groups with {workers} Quarto processes"
+                )
+
+            def on_page(_page: str) -> None:
+                with bar_lock:
+                    pages_started[0] = min(pages_started[0] + 1, bar.total)
+                    bar.update(pages_started[0])
+
+            result = _parallel_render.render(
+                self.build_dir,
+                env,
+                jobs,
+                last_timings,
+                on_start=on_start,
+                on_page=on_page,
+                overhead=last_startup,
+            )
+            bar.finish()
+            if result.fallback:
+                log.detail(f"Rendering in one process: {result.fallback}")
+                result = None
+            else:
+                for warning in result.warnings:
+                    log.warn(warning)
+                render_stats = {"processes": result.workers, "groups": result.targets}
+                if result.startup is not None:
+                    render_stats["startup_seconds"] = result.startup
+
+        if result is None:
+            result = self._render_with_progress(log, "Rendering pages", env)
+
+        # Retry a transient failure in one process, including failures from parallel renders
+        if result.returncode != 0 and quarto.is_transient_error(result.stderr):
+            log.warn("Quarto hit a transient filesystem error — retrying render...")
+            render_stats = None
+            result = self._render_with_progress(log, "Rendering pages (retry)", env)
+
+        if result.returncode != 0:
+            raise StepError("Quarto render failed", detail=result.stderr)
+        return result, render_stats
+
+    def _render_with_progress(
+        self, log: "BuildLog", label: str, env: dict[str, str]
+    ) -> "quarto.RenderResult":
+        """
+        Render the site with Quarto in one process and show page progress
+
+        Quarto's warnings appear when the bar reaches its last page; warnings reported later
+        are dropped.
+
+        Parameters
+        ----------
+        log
+            The build log.
+        label
+            The progress bar's label.
+        env
+            The environment for Quarto.
+
+        Returns
+        -------
+        :
+            The render result, whether rendering succeeded or failed.
+        """
+        bar = log.progress(label, 1)
+        warnings: list[str] = []
+        finished = False
+
+        def on_page(progress: quarto.Progress) -> None:
+            nonlocal finished
+            if finished:
+                return
+            if progress.total != bar.total:
+                bar.total = progress.total
+            bar.update(progress.current)
+            if progress.current >= progress.total:
+                finished = True
+                bar.finish()
+                for warning in warnings:
+                    log.warn(warning)
+
+        def on_warning(warning: str) -> None:
+            if not finished:
+                warnings.append(warning)
+
+        result = quarto.render(self.build_dir, env, on_page=on_page, on_warning=on_warning)
+        bar.finish()  # The final page may already have finished the bar
+        return result
+
+    def _step_render_versions(
+        self, log: "BuildLog", version_tags: list[str] | None, latest_only: bool
+    ) -> "tuple[Outcome, dict[str, Any]]":
+        """
+        Render the selected versions of a versioned site and assemble them
+
+        Parameters
+        ----------
+        log
+            The build log.
+        version_tags
+            The versions to render, or `None` for every version.
+        latest_only
+            Whether to render only the latest version.
+
+        Returns
+        -------
+        :
+            The result line and the outcome of the versioned build.
+
+        Raises
+        ------
+        StepError
+            If every version fails to render.
+        """
+        from great_docs._versioned_build import run_versioned_build
+        from great_docs._versioning import get_latest_version, parse_versions_config
+
+        versions = parse_versions_config(self._config.versions)
+        if latest_only:
+            latest = get_latest_version(versions)
+            latest_tag = latest.tag if latest else versions[0].tag
+            targets = [v for v in versions if v.tag == latest_tag]
+        elif version_tags:
+            targets = [v for v in versions if v.tag in set(version_tags)]
+        else:
+            targets = list(versions)
+
+        n_versions = len(targets)
+        log.detail(
+            f"Multi-version build: {'1 version' if n_versions == 1 else f'{n_versions} version(s)'}"
+        )
+
+        bars = log.multi_progress([f"v{v.label}" for v in targets])
+
+        def on_progress(slot: int, current: int, total: int) -> None:
+            bars.set_total(slot, total)
+            bars.update(slot, current)
+
+        result = run_versioned_build(
+            source_dir=self.build_dir,
+            project_root=self.project_root,
+            versions_config=self._config.versions,
+            quarto_env=quarto.environment(self._config),
+            version_tags=version_tags,
+            latest_only=latest_only,
+            progress_callback=on_progress,
+            on_renders_done=bars.finish,
+            badge_expiry_raw=self._config["new_is_old"],
+            config=self._config,
+            layout=self.layout,
+            default_description=self._default_description(),
+            structured_data=self._structured_data(),
+        )
+
+        for warning in result.get("warnings", []):
+            log.warn(warning)
+
+        n_built = len(result["versions_built"])
+        if result["success"]:
+            return f"{n_built} version(s) rendered", result
+        for error in result["errors"]:
+            log.error_detail(error)
+        if not n_built:
+            raise StepError("All version builds failed")
+        return f"{n_built} version(s) rendered ({len(result['errors'])} failed)", result
+
+    def _assemble_separate_site(self) -> Outcome:
+        """
+        Copy the rendered site to a site directory outside the build directory
+
+        Returns
+        -------
+        :
+            `None`; the step has no result line.
+        """
+        if self.layout.site_dir != self.build_dir / "_site":
+            from ._versioned_build import assemble_site
+
+            assemble_site(self.build_dir, [], "", self.layout.site_dir, layout=self.layout)
+        return None
+
+    def _step_seo_files(self) -> Outcome:
+        """
+        Write `sitemap.xml` and `robots.txt` for the rendered site
+
+        Returns
+        -------
+        :
+            The step's result line.
+        """
+        self._generate_seo_files()
+        return "sitemap.xml + robots.txt"
+
+    def _log_build_timing(
+        self,
+        log: "BuildLog",
+        page_timings: list[dict[str, object]] | None = None,
+        timings_by_version: dict[str, list[dict[str, object]]] | None = None,
+        render: dict[str, object] | None = None,
+    ) -> Outcome:
+        """
+        Write `build-timings.json` to the site
+
+        Parameters
+        ----------
+        log
+            The build log.
+        page_timings
+            The render time of each page of a single-version site.
+        timings_by_version
+            The render time of each page, by version.
+        render
+            How a parallel render of a single-version site went, which the next parallel
+            build plans with.
+
+        Returns
+        -------
+        :
+            `None`; the result is a detail line of the previous step.
+        """
+        path = self._write_build_timing(
+            page_timings=page_timings, timings_by_version=timings_by_version, render=render
+        )
+        if path:
+            log.detail(f"Wrote {path.name}")
+        return None
+
+    def _log_freeze_cache_saved(self, log: "BuildLog") -> Outcome:
+        """
+        Save the rendered pages' freeze cache for later builds
+
+        Parameters
+        ----------
+        log
+            The build log.
+
+        Returns
+        -------
+        :
+            `None`; the result is a detail line of the previous step.
+        """
+        n_frozen = self._persist_freeze_cache()
+        if n_frozen is not None:
+            log.detail(f"Saved freeze cache ({n_frozen} files)")
+        return None
+
+    def _save_api_snapshot(self, log: "BuildLog") -> Outcome:
+        """
+        Save the current API snapshot for version comparisons
+
+        Parameters
+        ----------
+        log
+            The build log.
+
+        Returns
+        -------
+        :
+            `None`; handled exceptions become warnings attributed to the previous listed step.
+        """
+        try:
+            self._auto_save_snapshot()
+        except Exception as e:
+            log.warn(f"Snapshot auto-save failed: {e}")
+        return None
+
+    def _record_site_ownership(self) -> Outcome:
+        """
+        Record the files of a site directory outside the build directory
+
+        Returns
+        -------
+        :
+            `None`; the step has no result line.
+        """
+        if self.layout.site_dir != self.build_dir / "_site":
+            record_site_ownership(self.layout.site_dir)
+        return None
+
     def build(
         self,
         watch: bool = False,
@@ -15150,9 +16030,6 @@ anchor-sections: true
             print(f"Error: {e}", file=sys.stderr)
             raise
 
-        import threading
-        from contextlib import contextmanager
-
         from great_docs import _parallel_render
         from great_docs._build_log import BuildLog, estimate_build_time
 
@@ -15169,40 +16046,6 @@ anchor-sections: true
             )
             last_timings = _parallel_render.read_timings(*timing_files)
             last_startup = _parallel_render.read_startup(*timing_files)
-
-        class _DetailStream:
-            """A file-like object that forwards each line to `log.detail()`."""
-
-            def __init__(self):
-                self._buf = ""
-
-            def write(self, s):
-                self._buf += s
-                while "\n" in self._buf:
-                    line, self._buf = self._buf.split("\n", 1)
-                    if line.strip():
-                        log.detail(line.rstrip())
-
-            def flush(self):
-                # Flush any remaining partial line
-                if self._buf.strip():
-                    log.detail(self._buf.rstrip())
-                    self._buf = ""
-
-        @contextmanager
-        def _quiet_prints():
-            """Redirect print() to `log.detail()` in real time.
-
-            `log._write()` is unaffected because it writes to the
-            `stream` object captured at init time (not `sys.stdout`).
-            """
-            old_stdout = sys.stdout
-            sys.stdout = _DetailStream()
-            try:
-                yield
-            finally:
-                sys.stdout.flush()
-                sys.stdout = old_stdout
 
         # --- Gather metadata for the build header -------------------------
         package_name = self._detect_package_name() or ""
@@ -15310,737 +16153,252 @@ anchor-sections: true
         except Exception:
             pass  # never let estimation crash the build
 
-        total_steps = 20
         est_seconds = estimate_build_time(
             n_api_items=n_api_items,
             n_total_pages=n_total_pages,
             n_code_cells=n_code_cells,
         )
 
+        # Results shared between build steps
+        ref: APIReference | None = None
+        frozen_pages: list[str] = []
+        render_timings: dict[str, Any] = {}
+
+        def generate_api_reference() -> Outcome:
+            nonlocal ref
+            outcome, ref = self._step_api_reference(log)
+            return outcome
+
+        def prepare_freeze_cache() -> Outcome:
+            outcome, frozen_pages[:] = self._step_freeze_cache(watch)
+            return outcome
+
+        def list_frozen_pages() -> Outcome:
+            for page in frozen_pages:
+                log.detail(f"  - {page}")
+            return None
+
+        def render_site() -> Outcome:
+            result, render_timings["render"] = self._step_render(
+                log, render_jobs, last_timings, last_startup
+            )
+            render_timings["page_timings"] = result.page_timings
+            return "Site rendered"
+
+        def render_versions() -> Outcome:
+            outcome, result = self._step_render_versions(log, version_tags, latest_only)
+            render_timings["timings_by_version"] = result.get("timings_by_version")
+            return outcome
+
+        # Resolve methods when each step runs so tests can replace instance methods after
+        # the table is created.
+        steps = [
+            Step("Prepare build directory", lambda: self._step_prepare_build_directory()),
+            Step(
+                "Show render settings",
+                lambda: self._log_render_settings(log),
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Configure API reference",
+                lambda: self._step_api_reference_config(refresh),
+                user_code=True,
+            ),
+            Step(
+                "Generate llms.txt / llms-full.txt",
+                lambda: self._step_llms_txt(),
+                user_code=True,
+            ),
+            Step("Generate SKILL.md", lambda: self._step_skill_md(), user_code=True),
+            Step(
+                "Check the site URL",
+                lambda: self._warn_without_site_url(log),
+                user_code=True,
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Generate changelog",
+                lambda: self._step_changelog(),
+                warn=Warn(
+                    (Exception,), "Error generating changelog", "Changelog generation had issues"
+                ),
+            ),
+            Step(
+                "Generate CLI reference",
+                lambda: self._step_cli_reference(package_name),
+                warn=Warn((Exception,), "Error generating CLI docs", "CLI generation had issues"),
+                user_code=True,
+            ),
+            Step(
+                "Generate Go CLI reference",
+                lambda: self._step_go_cli_reference(),
+                warn=Warn(
+                    (Exception,), "Error generating Go CLI docs", "Go CLI generation had issues"
+                ),
+                user_code=True,
+            ),
+            Step(
+                "Generate Rust CLI reference",
+                lambda: self._step_rust_cli_reference(),
+                warn=Warn(
+                    (Exception,), "Error generating Rust CLI docs", "Rust CLI generation had issues"
+                ),
+                user_code=True,
+            ),
+            Step(
+                "Generate MCP server reference",
+                lambda: self._step_mcp_reference(package_name),
+                warn=Warn((Exception,), "Error generating MCP docs", "MCP generation had issues"),
+                user_code=True,
+            ),
+            Step(
+                "Process User Guide",
+                lambda: self._step_user_guide(),
+                warn=Warn((Exception,), "Error processing User Guide", "User Guide had issues"),
+                user_code=True,
+            ),
+            Step(
+                "Process custom sections",
+                lambda: self._step_sections(),
+                warn=Warn((Exception,), "Error processing sections", "Sections had issues"),
+            ),
+            Step(
+                "Process custom pages",
+                lambda: self._step_custom_pages(),
+                warn=Warn((Exception,), "Error processing custom pages", "Custom pages had issues"),
+            ),
+            Step(
+                "Process page tags",
+                lambda: self._step_tags(),
+                warn=Warn((Exception,), "Error processing tags", "Tags had issues"),
+            ),
+            Step(
+                "Process page status badges",
+                lambda: self._step_page_statuses(),
+                warn=Warn(
+                    (Exception,), "Error processing page statuses", "Status badges had issues"
+                ),
+            ),
+            Step(
+                "Copy assets",
+                lambda: self._step_assets(),
+                warn=Warn((Exception,), "Error copying assets", "Assets had issues"),
+            ),
+            Step("Generate API reference", generate_api_reference, user_code=True),
+            Step(
+                "Build interlinks index",
+                lambda: self._step_interlinks(log, ref),
+                quiet=False,
+            ),
+            Step("Prepare freeze cache", prepare_freeze_cache, quiet=False),
+            Step("List frozen pages", list_frozen_pages, quiet=False, listed=False),
+            Step(
+                "Expand mock-code cells",
+                lambda: self._expand_mock_cells(log),
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Render d2 diagrams",
+                lambda: self._render_d2_diagrams(log),
+                user_code=True,
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Pre-render terminal recordings",
+                lambda: self._prerender_term_player(log),
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Share sidebars",
+                lambda: self._share_sidebars(log, watch),
+                quiet=False,
+                listed=False,
+            ),
+        ]
+        if watch:
+            render = Step("Build site with Quarto", lambda: "Starting watch mode...")
+        elif self._config.has_versions:
+            render = Step("Build site with Quarto", render_versions, user_code=True, quiet=False)
+        else:
+            render = Step("Build site with Quarto", render_site, quiet=False)
+        steps.append(render)
+        if not self._config.has_versions:
+            steps.append(
+                Step(
+                    "Assemble the site",
+                    lambda: self._assemble_separate_site(),
+                    quiet=False,
+                    listed=False,
+                )
+            )
+        steps += [
+            Step(
+                "Generate SEO files",
+                lambda: self._step_seo_files(),
+                warn=Warn((Exception,), "Error generating SEO files", "SEO files had issues"),
+            ),
+            Step(
+                "Write build timings",
+                lambda: self._log_build_timing(log, **render_timings),
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Save the freeze cache",
+                lambda: self._log_freeze_cache_saved(log),
+                quiet=False,
+                listed=False,
+            ),
+        ]
+        if self._config.has_versions:
+            steps.append(
+                Step(
+                    "Save an API snapshot",
+                    lambda: self._save_api_snapshot(log),
+                    user_code=True,
+                    quiet=False,
+                    listed=False,
+                )
+            )
+        steps.append(
+            Step(
+                "Record site ownership",
+                lambda: self._record_site_ownership(),
+                quiet=False,
+                listed=False,
+            )
+        )
+
         log = BuildLog(
             package_name=package_name,
             package_version=package_version,
             package_location=package_location,
-            total_steps=total_steps,
+            total_steps=count_listed(steps),
             estimated_seconds=est_seconds,
         )
-
         log.header()
 
-        # Step counter
-        step = 0
-
-        def render_site(label: str, env: dict[str, str]) -> quarto.RenderResult:
-            """
-            Render the site with Quarto and show page progress
-
-            Show Quarto warnings when the bar reaches its last page; drop warnings reported later.
-            """
-            bar = log.progress(label, 1)
-            warnings: list[str] = []
-            finished = False
-
-            def on_page(progress: quarto.Progress) -> None:
-                nonlocal finished
-                if finished:
-                    return
-                if progress.total != bar.total:
-                    bar.total = progress.total
-                bar.update(progress.current)
-                if progress.current >= progress.total:
-                    finished = True
-                    bar.finish()
-                    for warning in warnings:
-                        log.warn(warning)
-
-            def on_warning(warning: str) -> None:
-                if not finished:
-                    warnings.append(warning)
-
-            result = quarto.render(self.build_dir, env, on_page=on_page, on_warning=on_warning)
-            bar.finish()  # The final page may already have finished the bar
-            return result
-
-        # ── Step 1: Prepare build directory ────────────────────────────
-        step += 1
-        log.step_start(step, "Prepare build directory")
-        with _quiet_prints():
-            self._prepare_build_directory()
-        log.step_done("Ready")
-
-        # Log freeze/pre-render configuration
-        freeze_mode = self._config.freeze
-        pre_render_scripts = self._config.pre_render
-        if freeze_mode is not None:
-            mode_label = "auto" if freeze_mode == "auto" else "true"
-            log.detail(f"Freeze mode: {mode_label}")
-        if pre_render_scripts:
-            for script in pre_render_scripts:
-                log.detail(f"Pre-render script: {script}")
-
-        # ── Step 2: Configure API reference ────────────────────────
-        step += 1
-        log.step_start(step, "Configure API reference")
-        with self._running_user_code():
-            if refresh and self._has_api_reference:
-                with _quiet_prints():
-                    self._refresh_api_reference_config()
-                log.step_done("API reference refreshed")
-            elif self._has_api_reference:
-                log.step_done("Using existing config")
-            else:
-                log.step_skip(step, "no API reference")
-
-        # ── Step 3: Generate llms.txt / llms-full.txt ──────────────
-        step += 1
-        log.step_start(step, "Generate llms.txt / llms-full.txt")
-        with self._running_user_code():
-            if self._llms_txt_available():
-                with _quiet_prints():
-                    self._generate_llms_txt()
-                    self._generate_llms_full_txt()
-                log.step_done("Created llms.txt + llms-full.txt")
-            else:
-                log.step_skip(step, "no API reference")
-
-        # ── Step 4: Generate SKILL.md ──────────────────────────────
-        step += 1
-        log.step_start(step, "Generate SKILL.md")
-        with self._running_user_code():
-            if self._config.skill_enabled:
-                with _quiet_prints():
-                    self._generate_skill_md()
-                log.step_done("Created skill.md")
-                # Warn if no site URL is available for the skills page install instructions
-                _meta_urls = self._get_package_metadata().get("urls", {})
-                _has_site_url = bool(self._config.site_url or _meta_urls.get("Documentation", ""))
-                if not _has_site_url:
-                    if quarto_yml.path(self.build_dir).exists():
-                        _qc = quarto_yml.read(self.build_dir)
-                        _has_site_url = bool(_qc.get("website", {}).get("site-url", ""))
-                if not _has_site_url:
-                    log.warn(
-                        "No site URL found — skills page will show <site-url> placeholders. "
-                        "Set site_url in great-docs.yml or add a Documentation URL to "
-                        "[project.urls] in pyproject.toml."
-                    )
-            else:
-                log.step_skip(step, "disabled in config")
-
-        # ── Step 6: Generate changelog ─────────────────────────────
-        step += 1
-        log.step_start(step, "Generate changelog")
-        if self._config.changelog_enabled:
-            owner, repo, _base_url = self._get_github_repo_info()
-            if owner and repo:
-                try:
-                    with _quiet_prints():
-                        result_file = self._generate_changelog_page()
-                    if result_file:
-                        self._add_changelog_to_navbar()
-                        log.step_done("Changelog from GitHub Releases")
-                    else:
-                        log.step_done("No releases found; skipped")
-                except Exception as e:
-                    log.warn(f"Error generating changelog: {e}")
-                    log.step_done("Changelog generation had issues")
-            else:
-                log.step_skip(step, "no GitHub repo info")
-        else:
-            log.step_skip(step, "disabled in config")
-
-        # ── Step 7: Generate CLI reference ─────────────────────────
-        step += 1
-        log.step_start(step, "Generate CLI reference")
-        with self._running_user_code():
-            metadata = self._get_package_metadata()
-            if metadata.get("cli_enabled", False) and not package_name:
-                log.step_skip(step, "no package detected")
-            elif metadata.get("cli_enabled", False):
-                # Discover the CLI in the importable module, which can differ
-                # from the PyPI project name.
-                pkg_name = self._resolve_importable_name(package_name)
-                try:
-                    with _quiet_prints():
-                        cli_info = self._discover_click_cli(pkg_name, display_name=package_name)
-                    if cli_info:
-                        with _quiet_prints():
-                            cli_files = self._generate_cli_reference_pages(cli_info)
-                        if cli_files:
-                            with _quiet_prints():
-                                self._update_sidebar_with_cli(cli_files)
-                            n_pages = self._count_cli_sidebar_items(cli_files)
-                            log.step_done(f"{n_pages} CLI reference page(s)")
-                        else:
-                            log.step_done("No CLI pages generated")  # pragma: no cover
-                    else:
-                        log.step_skip(step, "no Click CLI found")
-                except Exception as e:
-                    log.warn(f"Error generating CLI docs: {e}")
-                    log.step_done("CLI generation had issues")
-            else:
-                log.step_skip(step, "CLI not enabled")
-
-        # ── Step 7a: Generate Go CLI reference ─────────────────────
-        step += 1
-        log.step_start(step, "Generate Go CLI reference")
-        with self._running_user_code():
-            if self._config.go_cli_enabled:
-                try:
-                    from great_docs._go_cli import detect_go_cli_project, introspect_cobra_cli
-
-                    with _quiet_prints():
-                        go_project = detect_go_cli_project(self.layout.package_root)
-                    if go_project:
-                        with _quiet_prints():
-                            cli_info = introspect_cobra_cli(go_project)
-                        if cli_info:
-                            with _quiet_prints():
-                                cli_files = self._generate_cli_reference_pages(cli_info)
-                            if cli_files:
-                                with _quiet_prints():
-                                    self._update_sidebar_with_cli(cli_files)
-                                n_pages = self._count_cli_sidebar_items(cli_files)
-                                log.step_done(
-                                    f"{n_pages} Go CLI reference page(s) ({go_project.binary_name})"
-                                )
-                            else:
-                                log.step_done("No Go CLI pages generated")  # pragma: no cover
-                        else:
-                            log.step_skip(step, "Go CLI introspection failed (is 'go' on PATH?)")
-                    else:
-                        log.step_skip(step, "no Go CLI project detected")
-                except Exception as e:
-                    log.warn(f"Error generating Go CLI docs: {e}")
-                    log.step_done("Go CLI generation had issues")
-            else:
-                log.step_skip(step, "Go CLI not enabled")
-
-        # ── Step 7b: Generate Rust CLI reference ──────────────────
-        step += 1
-        log.step_start(step, "Generate Rust CLI reference")
-        with self._running_user_code():
-            if self._config.rust_cli_enabled:
-                try:
-                    from great_docs._rust_cli import detect_rust_cli_project, introspect_rust_cli
-
-                    with _quiet_prints():
-                        rust_project = detect_rust_cli_project(self.layout.package_root)
-                    if rust_project:
-                        with _quiet_prints():
-                            cli_info = introspect_rust_cli(rust_project)
-                        if cli_info:
-                            with _quiet_prints():
-                                cli_files = self._generate_cli_reference_pages(cli_info)
-                            if cli_files:
-                                with _quiet_prints():
-                                    self._update_sidebar_with_cli(cli_files)
-                                n_pages = self._count_cli_sidebar_items(cli_files)
-                                bin_name = rust_project.binary_names[0]
-                                log.step_done(f"{n_pages} Rust CLI reference page(s) ({bin_name})")
-                            else:
-                                log.step_done("No Rust CLI pages generated")  # pragma: no cover
-                        else:
-                            log.step_skip(
-                                step, "Rust CLI introspection failed (is 'cargo' on PATH?)"
-                            )
-                    else:
-                        log.step_skip(step, "no Rust CLI project detected")
-                except Exception as e:
-                    log.warn(f"Error generating Rust CLI docs: {e}")
-                    log.step_done("Rust CLI generation had issues")
-            else:
-                log.step_skip(step, "Rust CLI not enabled")
-
-        # ── Step 7c: Generate MCP server reference ─────────────────
-        step += 1
-        log.step_start(step, "Generate MCP server reference")
-        with self._running_user_code():
-            if self._config.mcp_enabled:
-                try:
-                    mcp_package = (
-                        self._resolve_importable_name(package_name)
-                        if package_name
-                        else self._detect_module_name()
-                    )
-                    with _quiet_prints():
-                        mcp_info = self._discover_mcp_server(mcp_package)
-                    if mcp_info:
-                        from ._mcp_docs import generate_mcp_reference_pages
-
-                        with _quiet_prints():
-                            mcp_files = generate_mcp_reference_pages(
-                                server_info=mcp_info,
-                                output_dir=self.build_dir / "reference" / "mcp",
-                                categories=self._config.mcp_categories or None,
-                                display_name=self._config.mcp_name,
-                            )
-                        if mcp_files:
-                            self._mcp_pages_generated = True
-                            with _quiet_prints():
-                                self._update_sidebar_with_mcp(mcp_files)
-                            # Generate .well-known/mcp.json discovery manifest
-                            with _quiet_prints():
-                                self._generate_mcp_manifest(mcp_info)
-                            n_tools = len(mcp_info.get("tools", []))
-                            log.step_done(f"{n_tools} MCP tool page(s) + manifest")
-                        else:
-                            self._mcp_pages_generated = False
-                            self._remove_mcp_from_ref_sections()
-                            log.step_done("No MCP pages generated")
-                    else:
-                        self._mcp_pages_generated = False
-                        self._remove_mcp_from_ref_sections()
-                        log.step_skip(step, "no MCP server found")
-                except Exception as e:
-                    self._mcp_pages_generated = False
-                    log.warn(f"Error generating MCP docs: {e}")
-                    self._remove_mcp_from_ref_sections()
-                    log.step_done("MCP generation had issues")
-            else:
-                log.step_skip(step, "MCP not enabled")
-
-        # ── Step 8: Process User Guide ─────────────────────────────
-        step += 1
-        log.step_start(step, "Process User Guide")
-        with self._running_user_code():
-            try:
-                with _quiet_prints():
-                    ug_result = self._process_user_guide()
-                if ug_result:
-                    log.step_done("User Guide configured")
-                else:
-                    log.step_skip(step, "no user guide found")
-            except Exception as e:
-                log.warn(f"Error processing User Guide: {e}")
-                log.step_done("User Guide had issues")
-
-        # ── Step 9: Process custom sections ────────────────────────
-        step += 1
-        log.step_start(step, "Process custom sections")
-        if self._config.sections:
-            try:
-                with _quiet_prints():
-                    n_sections = self._process_sections()
-                if n_sections:
-                    log.step_done(f"{n_sections} section(s) processed")
-                else:
-                    log.step_done("No sections to process")
-            except Exception as e:
-                log.warn(f"Error processing sections: {e}")
-                log.step_done("Sections had issues")
-        else:
-            log.step_skip(step, "no sections configured")
-
-        # ── Step 10: Process custom pages ──────────────────────────
-        step += 1
-        log.step_start(step, "Process custom pages")
-        try:
-            with _quiet_prints():
-                n_custom_pages = self._process_custom_pages()
-            if n_custom_pages:
-                log.step_done(f"{n_custom_pages} custom page(s)")
-            else:
-                log.step_skip(step, "no custom pages")
-        except Exception as e:  # pragma: no cover
-            log.warn(f"Error processing custom pages: {e}")
-            log.step_done("Custom pages had issues")
-
-        # ── Step 11: Process page tags ─────────────────────────────
-        step += 1
-        log.step_start(step, "Process page tags")
-        if self._config.tags_enabled:
-            try:
-                with _quiet_prints():
-                    has_tags = self._process_tags()
-                if has_tags:
-                    log.step_done("Tags processed")
-                else:
-                    log.step_skip(step, "no tagged pages found")
-            except Exception as e:
-                log.warn(f"Error processing tags: {e}")
-                log.step_done("Tags had issues")
-        else:
-            log.step_skip(step, "tags not enabled")
-
-        # ── Step 12: Process page status badges ────────────────────
-        step += 1
-        log.step_start(step, "Process page status badges")
-        if self._config.page_status_enabled:
-            try:
-                with _quiet_prints():
-                    has_statuses = self._process_page_statuses()
-                if has_statuses:
-                    log.step_done("Status badges processed")
-                else:
-                    log.step_skip(step, "no pages with status")
-            except Exception as e:
-                log.warn(f"Error processing page statuses: {e}")
-                log.step_done("Status badges had issues")
-        else:
-            log.step_skip(step, "page status not enabled")
-
-        # ── Step 13: Copy assets ───────────────────────────────────
-        step += 1
-        log.step_start(step, "Copy assets")
-        try:
-            with _quiet_prints():
-                assets_copied = self._copy_assets()
-                # Always update quarto config after user guide + assets steps
-                # (registers user-guide/images/** and other dynamic resources)
-                self._update_quarto_config()
-            if assets_copied:
-                log.step_done("Assets copied")
-            else:
-                log.step_skip(step, "no assets directory")
-        except Exception as e:
-            log.warn(f"Error copying assets: {e}")
-            log.step_done("Assets had issues")
-
-        # ── Step 14: Generate API reference ────────────────────────
-        step += 1
-        log.step_start(step, "Generate API reference")
-        with self._running_user_code():
-            if self._has_api_reference:
-                build_env = quarto.environment(self._config)
-                extra_paths = build_env.get("PYTHONPATH", "").split(os.pathsep)
-                for p in extra_paths:
-                    if p and p not in sys.path:
-                        sys.path.insert(0, p)  # pragma: no cover
-
-                quarto_yml_path = quarto_yml.path(self.build_dir)
-                ref = None
-                try:
-                    from great_docs._apiref.api_reference import APIReference
-
-                    ref = APIReference(str(quarto_yml_path))
-                    with _quiet_prints():
-                        ref.build()
-                    log.step_done("API reference generated")
-                except SystemExit:
-                    # Missing config items or other fatal errors — don't mask them
-                    raise
-                except Exception as e:
-                    dynamic = self._config.dynamic
-                    if dynamic:
-                        log.warn(
-                            "Dynamic introspection failed for a resolved item, "
-                            "retrying with static analysis..."
-                        )
-                        log.detail(str(e))
-                        qconfig = quarto_yml.read(self.build_dir)
-                        if "api-reference" in qconfig:
-                            qconfig["api-reference"]["dynamic"] = False
-                            quarto_yml.write(self.build_dir, qconfig, self._config)
-                        try:
-                            ref = APIReference(str(quarto_yml_path))
-                            with _quiet_prints():
-                                ref.build()
-                            log.step_done("API reference generated (static analysis)")
-                        except Exception as e2:
-                            log.step_fail(f"API reference build failed: {e2}")
-                            log.footer()
-                            raise BuildError(f"API reference build failed: {e2}") from e2
-                    else:
-                        log.step_fail(f"API reference build failed: {e}")
-                        log.error_detail(str(e))
-                        log.footer()
-                        raise BuildError(f"API reference build failed: {e}") from e
-            else:
-                ref = None
-                log.step_skip(step, "API reference disabled")
-
-        # ── Step 15: Build the interlinks index ────────────────────
-        step += 1
-        log.step_start(step, "Build interlinks index")
-        from great_docs._interlinks import AliasClaims, build_project_index
-
-        index, interlinks_notes = build_project_index(
-            self.build_dir,
-            self._config,
-            self._detect_package_name() or "",
-            AliasClaims.make(ref.items) if ref is not None else AliasClaims(),
-        )
-        for note in interlinks_notes:
-            log.detail(note)
-        for alias, targets in sorted(index.dropped.items()):
-            log.detail(
-                f"'{alias}' is ambiguous ({', '.join(targets)}); references to it stay unlinked"
-            )
-        log.step_done(f"Indexed {len(index.names)} name(s)")
-
-        # ── Step 16: Prepare freeze cache ──────────────────────────
-        step += 1
-        log.step_start(step, "Prepare freeze cache")
-
-        # Normalize page-level freeze shorthand before Quarto render
-        frozen_pages = self._normalize_freeze_shorthand()
-        self._write_page_metadata(watch)
-        has_freeze_cache = self.layout.freeze_dir.is_dir()
-
-        if frozen_pages or has_freeze_cache:
-            if frozen_pages:
-                n = len(frozen_pages)
-                log.step_done(f"Using {n} page(s) from the freeze cache")
-                for p in frozen_pages:
-                    log.detail(f"  - {p}")
-            else:
-                log.step_done("Freeze cache will be restored during render")
-        else:
-            log.step_skip(step, "no frozen pages")
-
-        # Expand source-code: mock cells before Quarto sees them
-        from great_docs._mock_code import process_directory as _expand_mock_cells
-
-        mock_modified = _expand_mock_cells(self.build_dir)
-        if mock_modified:
-            log.detail(
-                f"Expanded {len(mock_modified)} mock-code cell(s): " + ", ".join(mock_modified)
-            )
-
-        # Pre-render d2 diagrams to light + dark SVGs before Quarto sees them.
-        # (Mermaid is rendered by Quarto client-side; d2 has no native support.)
-        from great_docs._d2 import process_directory as _render_d2
-
-        d2_cache = self.layout.cache_dir / "d2"
-        with self._running_user_code():
-            d2_modified = _render_d2(self.build_dir, cache_dir=d2_cache)
-        if d2_modified:
-            log.detail(
-                f"Rendered d2 diagrams in {len(d2_modified)} page(s): " + ", ".join(d2_modified)
-            )
-
-        # Get environment with QUARTO_PYTHON set
-        quarto_env = quarto.environment(self._config)
-
-        # ── Pre-render termshow recordings ──────────────────────
-        self._prerender_term_player(log)
-
-        # Render each long reference sidebar once rather than on every page.
-        # A versioned build does this in each version's own directory.
-        if watch or not self._config.has_versions:
-            shared = shared_sidebar.prepare(self.build_dir)
-            if shared:
-                log.detail("Sharing rendered sidebar(s): " + ", ".join(shared))
-
-        # ── Step 16: Build site with Quarto ────────────────────────
-        step += 1
-        log.step_start(step, "Build site with Quarto")
         if watch:
-            log.step_done("Starting watch mode...")
+            # Watch mode starts `quarto preview` after the render step and omits the finishing
+            # steps, though the header still counts them.
+            run_steps(steps[: steps.index(render) + 1], log, self.build_dir)
             log.footer(watch_mode=True)
             self._print_layout_notice()
-            quarto_env[shared_sidebar.PREVIEW_ENV] = "1"
+            preview_env = quarto.environment(self._config)
+            preview_env[shared_sidebar.PREVIEW_ENV] = "1"
             subprocess.run(
-                ["quarto", "preview", "--no-browser"], cwd=self.build_dir, env=quarto_env
+                ["quarto", "preview", "--no-browser"], cwd=self.build_dir, env=preview_env
             )
             return
-        elif self._config.has_versions:
-            # ── Multi-version build pipeline ───────────────────────
-            from great_docs._versioned_build import run_versioned_build
-            from great_docs._versioning import parse_versions_config
 
-            versions_parsed = parse_versions_config(self._config.versions)
-
-            # Determine which versions will be built
-            if latest_only:
-                from great_docs._versioning import get_latest_version
-
-                lt = get_latest_version(versions_parsed)
-                lt_tag = lt.tag if lt else versions_parsed[0].tag
-                targets_parsed = [v for v in versions_parsed if v.tag == lt_tag]
-            elif version_tags:
-                tag_set = set(version_tags)
-                targets_parsed = [v for v in versions_parsed if v.tag in tag_set]
-            else:
-                targets_parsed = list(versions_parsed)
-
-            n_versions = len(targets_parsed)
-            label = "1 version" if n_versions == 1 else f"{n_versions} version(s)"
-            log.detail(f"Multi-version build: {label}")
-
-            # Create multi-progress bar for the parallel renders
-            bar_labels = [f"v{v.label}" for v in targets_parsed]
-            mbar = log.multi_progress(bar_labels)
-
-            def _progress_cb(slot: int, current: int, total: int) -> None:
-                mbar.set_total(slot, total)
-                mbar.update(slot, current)
-
-            def _on_renders_done() -> None:
-                mbar.finish()
-
-            with self._running_user_code():
-                vb_result = run_versioned_build(
-                    source_dir=self.build_dir,
-                    project_root=self.project_root,
-                    versions_config=self._config.versions,
-                    quarto_env=quarto_env,
-                    version_tags=version_tags,
-                    latest_only=latest_only,
-                    progress_callback=_progress_cb,
-                    on_renders_done=_on_renders_done,
-                    badge_expiry_raw=self._config["new_is_old"],
-                    config=self._config,
-                    layout=self.layout,
-                    default_description=self._default_description(),
-                    structured_data=self._structured_data(),
-                )
-
-            for warning in vb_result.get("warnings", []):
-                log.warn(warning)
-
-            if not vb_result["success"]:
-                for err in vb_result["errors"]:
-                    log.error_detail(err)
-                if not vb_result["versions_built"]:
-                    log.step_fail("All version builds failed")
-                    log.footer()
-                    raise BuildError("All version builds failed")
-                else:
-                    n_ok = len(vb_result["versions_built"])
-                    n_err = len(vb_result["errors"])
-                    log.step_done(f"{n_ok} version(s) rendered ({n_err} failed)")
-            else:
-                n_ok = len(vb_result["versions_built"])
-                log.step_done(f"{n_ok} version(s) rendered")
-
-            # ── Step 20: Generate SEO files ────────────────────
-            step += 1
-            log.step_start(step, "Generate SEO files")
-            try:
-                with _quiet_prints():
-                    self._generate_seo_files()
-                log.step_done("sitemap.xml + robots.txt")
-            except Exception as e:
-                log.warn(f"Error generating SEO files: {e}")
-                log.step_done("SEO files had issues")
-
-            # ── Write build-timings.json ───────────────────────
-            timing_path = self._write_build_timing(
-                timings_by_version=vb_result.get("timings_by_version"),
-            )
-            if timing_path:
-                log.detail(f"Wrote {timing_path.name}")
-
-            # ── Persist freeze cache ──────────────────────────
-            n_frozen = self._persist_freeze_cache()
-            if n_frozen is not None:
-                log.detail(f"Saved freeze cache ({n_frozen} files)")
-
-            # ── Auto-save API snapshot (Strategy C) ────────────
-            try:
-                with self._running_user_code():
-                    self._auto_save_snapshot()
-            except Exception as e:
-                log.warn(f"Snapshot auto-save failed: {e}")
-
-            if self.layout.site_dir != self.build_dir / "_site":
-                record_site_ownership(self.layout.site_dir)
-            site_path = self.layout.site_dir / "index.html"
-            if site_path.exists():
-                log.footer(site_path=str(site_path))
-            else:
-                log.footer(site_path=str(self.layout.site_dir))
-        else:
-            result = None
-            # How the parallel render went, saved for the next one to plan with
-            render_stats: dict[str, object] | None = None
-            if render_jobs > 1:
-                # Experimental: split the pages among several Quarto processes
-                bar = log.progress("Rendering pages", 1)
-                bar_lock = threading.Lock()
-                pages_started = [0]
-
-                def _on_render_start(pages: int, groups: int, workers: int) -> None:
-                    bar.total = max(pages, 1)
-                    log.detail(
-                        f"Rendering {pages} pages in {groups} groups "
-                        f"with {workers} Quarto processes"
-                    )
-
-                def _on_render_page(_page: str) -> None:
-                    with bar_lock:
-                        pages_started[0] = min(pages_started[0] + 1, bar.total)
-                        bar.update(pages_started[0])
-
-                result = _parallel_render.render(
-                    self.build_dir,
-                    quarto_env,
-                    render_jobs,
-                    last_timings,
-                    on_start=_on_render_start,
-                    on_page=_on_render_page,
-                    overhead=last_startup,
-                )
-                bar.finish()
-                if result.fallback:
-                    log.detail(f"Rendering in one process: {result.fallback}")
-                    result = None
-                else:
-                    for w in result.warnings:
-                        log.warn(w)
-                    render_stats = {"processes": result.workers, "groups": result.targets}
-                    if result.startup is not None:
-                        render_stats["startup_seconds"] = result.startup
-
-            if result is None:
-                result = render_site("Rendering pages", quarto_env)
-
-            # Retry a transient failure in one process, including failures from parallel renders
-            if result.returncode != 0 and quarto.is_transient_error(result.stderr):
-                log.warn("Quarto hit a transient filesystem error — retrying render...")
-                render_stats = None
-                result = render_site("Rendering pages (retry)", quarto_env)
-
-            if result.returncode != 0:
-                log.step_fail("Quarto render failed")
-                log.error_detail(result.stderr)
-                log.footer()
-                raise BuildError("Quarto render failed")
-            else:
-                log.step_done("Site rendered")
-
-                # ── Step 20: Generate SEO files ────────────────────
-                if self.layout.site_dir != self.build_dir / "_site":
-                    from ._versioned_build import assemble_site
-
-                    assemble_site(self.build_dir, [], "", self.layout.site_dir, layout=self.layout)
-
-                step += 1  # pragma: no cover
-                log.step_start(step, "Generate SEO files")  # pragma: no cover
-                try:  # pragma: no cover
-                    with _quiet_prints():  # pragma: no cover
-                        self._generate_seo_files()  # pragma: no cover
-                    log.step_done("sitemap.xml + robots.txt")  # pragma: no cover
-                except Exception as e:  # pragma: no cover
-                    log.warn(f"Error generating SEO files: {e}")  # pragma: no cover
-                    log.step_done("SEO files had issues")  # pragma: no cover
-
-                # ── Write build-timings.json ───────────────────────
-                timing_path = self._write_build_timing(  # pragma: no cover
-                    page_timings=result.page_timings,  # pragma: no cover
-                    render=render_stats,  # pragma: no cover
-                )  # pragma: no cover
-                if timing_path:  # pragma: no cover
-                    log.detail(f"Wrote {timing_path.name}")  # pragma: no cover
-
-                # ── Persist freeze cache ──────────────────────────
-                n_frozen = self._persist_freeze_cache()  # pragma: no cover
-                if n_frozen is not None:  # pragma: no cover
-                    log.detail(f"Saved freeze cache ({n_frozen} files)")  # pragma: no cover
-
-                if self.layout.site_dir != self.build_dir / "_site":
-                    record_site_ownership(self.layout.site_dir)
-
-                site_path = self.layout.site_dir / "index.html"  # pragma: no cover
-                if site_path.exists():  # pragma: no cover
-                    log.footer(site_path=str(site_path))  # pragma: no cover
-                else:  # pragma: no cover
-                    log.footer(  # pragma: no cover
-                        site_path=str(self.layout.site_dir)
-                    )
-
+        run_steps(steps, log, self.build_dir)
+        site_path = self.layout.site_dir / "index.html"
+        log.footer(site_path=str(site_path if site_path.exists() else self.layout.site_dir))
         self._print_layout_notice()
 
     @classmethod
