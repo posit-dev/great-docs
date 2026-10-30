@@ -1507,20 +1507,7 @@ def freeze(
     if build_freeze.is_dir() and rendered:
         click.echo()
         click.echo(f"Persisting _freeze/ → {persist_dir.relative_to(project_root)}/")
-        persist_dir.mkdir(parents=True, exist_ok=True)
-
-        # Merge: copy only updated entries (don't wipe existing cache for other pages)
-        updated_files = 0
-        for item in build_freeze.iterdir():
-            dest = persist_dir / item.name
-            if item.is_dir():
-                if dest.exists():
-                    shutil.rmtree(dest)
-                shutil.copytree(item, dest)
-            else:
-                shutil.copy2(item, dest)
-            updated_files += sum(1 for _ in (dest.rglob("*") if dest.is_dir() else [dest]))
-
+        updated_files = freeze_cache.merge(build_freeze, persist_dir)
         click.echo(f"  Updated {updated_files} cached file(s)")
 
         # Show git status hint

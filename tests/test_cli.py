@@ -3951,8 +3951,40 @@ class TestFreezeFileSearchFallback:
 
 
 class TestFreezePersistCache:
-    def test_persist_existing_dir_replaced(self, tmp_path):
-        """When freeze dir has sub-dir that already exists in persist, it's replaced."""
+    def test_persist_keeps_other_pages_in_the_section(self, tmp_path):
+        """
+        Preserve cached results for other pages in the same section
+
+        Quarto stores a section's pages in one cache directory. Replacing that directory
+        would discard the other pages' results.
+        """
+        (tmp_path / "page.qmd").write_text("---\ntitle: Test\n---\n")
+        build_dir = tmp_path / "great-docs"
+        (build_dir / "guide").mkdir(parents=True)
+        (build_dir / "guide/page.qmd").write_text("---\ntitle: Test\n---\n")
+        rendered = build_dir / "_freeze/guide/page/execute-results/html.json"
+        rendered.parent.mkdir(parents=True)
+        rendered.write_text('{"page": "new"}')
+        other = tmp_path / "_freeze/guide/other/execute-results/html.json"
+        other.parent.mkdir(parents=True)
+        other.write_text('{"page": "other"}')
+
+        with (
+            patch("great_docs.cli.GreatDocs"),
+            patch("subprocess.run", return_value=MagicMock(returncode=0, stderr="")),
+        ):
+            result = CliRunner().invoke(
+                cli, ["freeze", "page.qmd", "--project-path", str(tmp_path)]
+            )
+
+        assert result.exit_code == 0, result.output
+        persisted = tmp_path / "_freeze/guide"
+        assert (persisted / "page/execute-results/html.json").read_text() == '{"page": "new"}'
+        assert (persisted / "other/execute-results/html.json").read_text() == '{"page": "other"}'
+        assert "Updated 1 cached file(s)" in result.output
+
+    def test_persist_replaces_the_rendered_page_results(self, tmp_path):
+        """Replace a rendered page's persisted results with its new results"""
         qmd = tmp_path / "page.qmd"
         qmd.write_text("---\ntitle: Test\n---\n")
 
