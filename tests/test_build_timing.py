@@ -243,29 +243,15 @@ class TestTimingComputation:
 class TestVersionedBuildTimings:
     """Verify render_versions_parallel returns page_timings in result tuples."""
 
-    def test_non_streaming_returns_empty_timings(self, tmp_path: Path):
-        """Non-streaming (ProcessPoolExecutor) mode returns empty page_timings list."""
-        from great_docs._versioned_build import _render_single_version
-
-        # Create a fake build dir that will fail (no quarto project)
-        fake_dir = tmp_path / "fake"
-        fake_dir.mkdir()
-        (fake_dir / "_quarto.yml").write_text("project:\n  type: website\n")
-
-        # This will fail since there's nothing to render, but we can check the tuple length
-        result = _render_single_version(str(fake_dir), None)
-        # Non-streaming returns 4-tuple (no timings)
-        assert len(result) == 4
-
-    def test_streaming_returns_5_tuple(self, tmp_path: Path):
-        """Streaming mode returns 5-tuple with page_timings as last element."""
-        from great_docs._versioned_build import _render_single_version_streaming
+    def test_returns_5_tuple(self, tmp_path: Path):
+        """Return a five-element result with page timings last"""
+        from great_docs._versioned_build import _render_version
 
         fake_dir = tmp_path / "fake"
         fake_dir.mkdir()
         (fake_dir / "_quarto.yml").write_text("project:\n  type: website\n")
 
-        result = _render_single_version_streaming(str(fake_dir), None)
+        result = _render_version(str(fake_dir), None)
         assert len(result) == 5
         # Last element is page_timings (list)
         assert isinstance(result[4], list)

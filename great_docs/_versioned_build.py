@@ -7,7 +7,7 @@ import re as _re
 import shutil
 import subprocess
 from collections.abc import Iterable
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -1734,43 +1734,7 @@ def _rewrite_quarto_yml_for_version(
 # ---------------------------------------------------------------------------
 
 
-def _render_single_version(  # pragma: no cover
-    build_dir: str,
-    env_vars: dict[str, str] | None,
-) -> tuple[str, int, str, str]:
-    """
-    Render a single version's Quarto project.
-
-    This function is designed to be called in a subprocess pool. Returns
-    `(build_dir, returncode, stdout, stderr)`.
-    """
-    env = os.environ.copy()
-    if env_vars:
-        env.update(env_vars)
-
-    for attempt in range(2):
-        try:
-            result = subprocess.run(
-                ["quarto", "render"],
-                cwd=build_dir,
-                capture_output=True,
-                **TEXT_MODE_KWARGS,
-                env=env,
-                timeout=600,
-            )
-            # Retry once on transient filesystem race conditions
-            if result.returncode != 0 and attempt == 0 and quarto.is_transient_error(result.stderr):
-                continue
-            return (build_dir, result.returncode, result.stdout, result.stderr)
-        except subprocess.TimeoutExpired:
-            return (build_dir, -1, "", "Quarto render timed out after 600 seconds")
-        except Exception as e:
-            return (build_dir, -1, "", str(e))
-
-    return (build_dir, result.returncode, result.stdout, result.stderr)  # type: ignore[possibly-undefined]
-
-
-def _render_single_version_streaming(
+def _render_version(
     build_dir: str,
     env_vars: dict[str, str] | None,
     on_progress: Callable[[int, int], None] | None = None,
@@ -1826,8 +1790,8 @@ def render_versions_parallel(
     max_workers
         Max parallel renders. Defaults to `min(cpu_count, 4)`.
     progress_callback
-        Optional `(slot_index, current_page, total_pages)` callback. When provided, renders use
-        streaming mode so progress lines can be reported in real time.
+        Optional callback called as each page starts, with
+        `(slot_index, current_page, total_pages)`.
 
     Returns
     -------
@@ -1838,44 +1802,15 @@ def render_versions_parallel(
     if max_workers is None:
         max_workers = min(os.cpu_count() or 4, 4)
 
-    if progress_callback is None:
-        # Original fire-and-forget mode (ProcessPoolExecutor)
-        results: list[tuple[str, int, str, str, list[dict[str, Any]]]] = []
-
-        if len(build_dirs) == 1:
-            r = _render_single_version(str(build_dirs[0]), env_vars)
-            # Non-streaming mode has no page timings
-            results.append((*r, []))
-            return results
-
-        with ProcessPoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(_render_single_version, str(d), env_vars): d for d in build_dirs}
-            for future in as_completed(futures):
-                results.append((*future.result(), []))
-        return results
-
-    # Streaming mode: use threads so callbacks can update the parent process.
-    dir_to_idx = {str(d): i for i, d in enumerate(build_dirs)}
-    ordered_results: list[tuple[str, int, str, str, list[dict[str, Any]]] | None] = [None] * len(
-        build_dirs
-    )
-
-    def _run(build_dir: Path) -> tuple[str, int, str, str, list[dict[str, Any]]]:
-        idx = dir_to_idx[str(build_dir)]
-
+    def _run(slot: int, build_dir: Path) -> tuple[str, int, str, str, list[dict[str, Any]]]:
         def _on_progress(current: int, total: int) -> None:
-            progress_callback(idx, current, total)
+            if progress_callback is not None:
+                progress_callback(slot, current, total)
 
-        return _render_single_version_streaming(str(build_dir), env_vars, _on_progress)
+        return _render_version(str(build_dir), env_vars, _on_progress)
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(_run, d): d for d in build_dirs}
-        for future in as_completed(futures):
-            r = future.result()
-            idx = dir_to_idx[r[0]]
-            ordered_results[idx] = r
-
-    return [r for r in ordered_results if r is not None]
+        return list(pool.map(_run, range(len(build_dirs)), build_dirs))
 
 
 # ---------------------------------------------------------------------------
