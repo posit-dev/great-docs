@@ -5,9 +5,10 @@ Rendered-output tests read sites under `test-packages/_rendered/`, but a fresh
 checkout contains no rendered sites. This module builds the citation fixtures
 required by a default test run without running a complete `make hub-build`.
 
-The builder runs only the project-preparation, API-reference, and Quarto render
-stages. It omits the discovery and refresh stages used by a complete Gauntlet
-build, so its output can differ from `make hub-build` output.
+The builder uses the preparation steps of `great-docs freeze`, then renders
+each project with Quarto. Preparation includes every build step before rendering
+except the changelog, which needs the network. The builder skips steps after
+rendering, such as SEO file generation, so its output can differ from `make hub-build`.
 """
 
 from __future__ import annotations
@@ -352,9 +353,9 @@ def build_site(rendered_dir: Path, name: str) -> Path:
     from synthetic.generator import generate_package
 
     from great_docs import GreatDocs
-    from great_docs._apiref.api_reference import APIReference
-    from great_docs._build import quarto
+    from great_docs._build import freeze, quarto
     from great_docs._build.pipeline import Run
+    from great_docs._build_log import BuildLog
 
     rendered_dir.mkdir(parents=True, exist_ok=True)
     staging = rendered_dir / f".building-{name}-{os.getpid()}"
@@ -363,20 +364,11 @@ def build_site(rendered_dir: Path, name: str) -> Path:
         _add_to_sys_path(pkg_dir)
 
         docs = GreatDocs(str(pkg_dir))
-        with contextlib.redirect_stdout(io.StringIO()):
-            docs._prepare_build_directory(
-                Run(package_name=docs._detect_package_name() or "", watch=False)
-            )
-
-        # API-reference paths resolve from the working directory. Run this
-        # stage from the generated documentation project.
-        original_dir = Path.cwd()
-        try:
-            os.chdir(docs.build_dir)
-            with contextlib.redirect_stdout(io.StringIO()):
-                APIReference(str(docs.build_dir / "_quarto.yml")).build()
-        finally:
-            os.chdir(original_dir)
+        output = io.StringIO()
+        log = BuildLog(stream=output)
+        run = Run(package_name=docs._detect_package_name() or "", watch=False)
+        with contextlib.redirect_stdout(output):
+            freeze.prepare(docs._preparation_steps(run, log), log, docs.build_dir)
 
         result = subprocess.run(
             ["quarto", "render"],
