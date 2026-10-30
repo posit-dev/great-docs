@@ -882,7 +882,7 @@ class TestCategorizeReferencedObjects:
         assert "BrokenObj" in result["other"]
 
     def test_missing_name_with_installed_package_raises(self, tmp_path, monkeypatch):
-        """Missing name + installed package raises SystemExit."""
+        """Raise `BuildError` when an installed package lacks a configured name"""
         import pytest
 
         gd = self._setup(tmp_path, monkeypatch)
@@ -890,7 +890,9 @@ class TestCategorizeReferencedObjects:
         pkg.members = {}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("importlib.metadata.version", lambda name: "1.2.3")
-        with pytest.raises(SystemExit, match="not found"):
+        from great_docs import BuildError
+
+        with pytest.raises(BuildError, match="not found"):
             gd._categorize_referenced_objects("mypkg", [{"contents": ["Missing"]}])
 
     def test_missing_name_uninstalled_package_goes_to_other(self, tmp_path, monkeypatch):

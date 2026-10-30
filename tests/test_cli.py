@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
+from great_docs import BuildError
 from great_docs.cli import (
     _detect_current_package,
     _detect_optional_dependencies,
@@ -236,7 +237,7 @@ def test_layout_notice_once_per_build_or_preview_session(
     if mode.startswith("preview"):
         docs.preview()
     elif mode == "render-error":
-        with pytest.raises(SystemExit):
+        with pytest.raises(BuildError):
             docs.build(refresh=False)
     else:
         docs.build(watch=mode == "watch", refresh=False)
@@ -489,6 +490,42 @@ def test_build_command_uses_selected_config(
     )
     assert result.exit_code == 0, result.output
     assert (tmp_path / "website/_quarto/default/selection.txt").read_text() == "selected"
+
+
+@pytest.mark.parametrize("command", ["build", "preview"])
+def test_failed_build_exits_1_and_reports_once(
+    command: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from great_docs import GreatDocs
+
+    def fail(docs: GreatDocs, **kwargs: object) -> None:
+        # Report the failure before raising, as the build log does
+        print("FAIL Quarto render failed")
+        raise BuildError("Quarto render failed")
+
+    monkeypatch.setattr(GreatDocs, "build", fail)
+    result = CliRunner().invoke(cli, [command, "--project-path", str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert result.output.count("Quarto render failed") == 1
+
+
+def test_api_snapshot_reports_missing_reference_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from great_docs import GreatDocs
+
+    def fail(docs: GreatDocs, package_name: str) -> list[str]:
+        raise BuildError("Configured reference item(s) not found in `pkg` v1.0: `gone`")
+
+    monkeypatch.setattr(GreatDocs, "documented_symbol_names", fail)
+    result = CliRunner().invoke(
+        cli, ["api-snapshot", "--project-path", str(tmp_path), "--package", "pkg"]
+    )
+
+    assert result.exit_code == 1
+    assert "Error: Configured reference item(s) not found in `pkg` v1.0: `gone`" in result.output
+    assert result.exception is None or isinstance(result.exception, SystemExit)
 
 
 def test_preview_serves_selected_deployment(
@@ -2857,6 +2894,23 @@ class TestFreezeCommandRenderLoop:
 
         # Should NOT exit 1 just because prepare raised SystemExit
         assert result.exit_code in (0, 1)
+
+    @patch("great_docs.cli.GreatDocs")
+    @patch("subprocess.run")
+    def test_prepare_for_freeze_build_error_exits(
+        self, mock_run, mock_gd_cls, tmp_path, monkeypatch
+    ):
+        """Stop freezing after preparation fails, without rendering or reporting again"""
+        monkeypatch.chdir(tmp_path)
+        self._make_project(tmp_path)
+        mock_docs = MagicMock()
+        mock_docs._prepare_for_freeze.side_effect = BuildError("reference item(s) not found")
+        mock_gd_cls.return_value = mock_docs
+        result = CliRunner().invoke(cli, ["freeze", "mypage.qmd", "--project-path", str(tmp_path)])
+
+        assert result.exit_code == 1
+        assert "not found" not in result.output
+        mock_run.assert_not_called()
 
     @patch("great_docs.cli.GreatDocs")
     def test_prepare_for_freeze_exception_exits(self, mock_gd_cls, tmp_path, monkeypatch):

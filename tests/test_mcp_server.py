@@ -531,6 +531,23 @@ class TestHandleBuild:
             result = asyncio.run(_handle_build({"project_path": str(tmp_path)}))
         assert "Build complete" in result[0].text
 
+    def test_failed_build_returns_error_with_log(self, tmp_path: Path):
+        """Return the failure message and build log in an MCP error response"""
+        from great_docs import BuildError
+
+        def fail() -> None:
+            print("Step 16 FAIL Quarto render failed")
+            raise BuildError("Quarto render failed")
+
+        mock_docs = MagicMock()
+        mock_docs.build = MagicMock(side_effect=fail)
+        with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
+            result = asyncio.run(call_tool("gd_build", {"project_path": str(tmp_path)}))
+
+        assert getattr(result, "is_error", False)
+        assert result[0].text.startswith("Build failed: Quarto render failed")
+        assert "Step 16 FAIL Quarto render failed" in result[0].text
+
 
 # ---------------------------------------------------------------------------
 # _handle_scan

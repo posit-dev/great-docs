@@ -14,6 +14,7 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
 
+from ._build.steps import BuildError
 from ._content_naming import fix_numeric_prefix_links, section_slug, strip_numeric_prefix
 from ._layout import Layout, LayoutError
 from ._source_refs import source_reference_spans
@@ -98,12 +99,12 @@ _QUARTO_RENDER_GLOBS = [
 ]
 
 
-class QuartoNotFoundError(RuntimeError):
-    """Raised when the Quarto CLI is not available on the system."""
+class QuartoNotFoundError(BuildError):
+    """A missing Quarto CLI"""
 
 
-class QuartoVersionError(RuntimeError):
-    """Raised when the installed Quarto CLI is older than great-docs supports."""
+class QuartoVersionError(BuildError):
+    """An installed Quarto CLI older than great-docs supports"""
 
 
 # The bundled extensions set the stage at which their filters run, which
@@ -8701,12 +8702,14 @@ class GreatDocs:
 
             if pkg_ver is not None:
                 items_str = ", ".join(f"`{n}`" for n in missing_names)
-                raise SystemExit(
-                    f"ERROR: Configured reference item(s) not found in "
+                message = (
+                    f"Configured reference item(s) not found in "
                     f"`{package_name}` v{pkg_ver}: {items_str}\n"
                     f"Check that the correct version of `{package_name}` is installed "
                     f"and that these names exist in the package's public API."
                 )
+                print(f"ERROR: {message}", file=sys.stderr)
+                raise BuildError(message)
             else:
                 # Package not installed — treat missing items as "other" (old behavior)
                 categories["other"].extend(missing_names)
@@ -15220,6 +15223,16 @@ anchor-sections: true
             process. Sites that can't be split safely are rendered in one process anyway. Ignored
             for multi-version sites and in watch mode.
 
+        Raises
+        ------
+        FileNotFoundError
+            If the project has no `great-docs.yml`.
+        BuildError
+            If the build fails and leaves no usable site: Quarto is missing or too old, a
+            configured reference name is missing from the installed package, the API reference
+            cannot be generated, or Quarto fails to render the site. The failure has already
+            been reported in the build log or on standard error.
+
         Examples
         --------
         Build the documentation (with API refresh):
@@ -15252,7 +15265,11 @@ anchor-sections: true
                 "generate a configuration file."
             )
 
-        _ensure_quarto_installed()
+        try:
+            _ensure_quarto_installed()
+        except BuildError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            raise
 
         import threading
         from contextlib import contextmanager
@@ -15905,12 +15922,12 @@ anchor-sections: true
                         except Exception as e2:
                             log.step_fail(f"API reference build failed: {e2}")
                             log.footer()
-                            sys.exit(1)
+                            raise BuildError(f"API reference build failed: {e2}") from e2
                     else:
                         log.step_fail(f"API reference build failed: {e}")
                         log.error_detail(str(e))
                         log.footer()
-                        sys.exit(1)
+                        raise BuildError(f"API reference build failed: {e}") from e
             else:
                 ref = None
                 log.step_skip(step, "API reference disabled")
@@ -16063,7 +16080,7 @@ anchor-sections: true
                         log.step_skip(step, "build failed")
 
                         log.footer()
-                        sys.exit(1)
+                        raise BuildError("All version builds failed")
                     else:
                         n_ok = len(vb_result["versions_built"])
                         n_err = len(vb_result["errors"])
@@ -16174,7 +16191,7 @@ anchor-sections: true
                     log.step_skip(step, "build failed")
 
                     log.footer()
-                    sys.exit(1)
+                    raise BuildError("Quarto render failed")
                 else:
                     log.step_done("Site rendered")
 

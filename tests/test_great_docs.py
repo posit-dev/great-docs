@@ -29,7 +29,7 @@ from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
 from yaml12 import format_yaml as _format_yaml
 from yaml12 import parse_yaml as _parse_yaml
 
-from great_docs import Config, GreatDocs, create_default_config, load_config
+from great_docs import BuildError, Config, GreatDocs, create_default_config, load_config
 from great_docs._content_naming import fix_numeric_prefix_links, strip_numeric_prefix
 from great_docs._website.quarto_yml import edit as edit_quarto_yml
 from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
@@ -16895,8 +16895,8 @@ def test_format_authors_yaml_basic():
         assert "role: Maintainer" in result
 
 
-def test_categorize_referenced_objects_missing_item_raises():
-    """Test that _categorize_referenced_objects raises SystemExit for missing config items."""
+def test_categorize_referenced_objects_missing_item_raises(capsys: pytest.CaptureFixture[str]):
+    """Report missing configured names and raise `BuildError`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Create a minimal package with one export
         pkg_dir = Path(tmp_dir) / "mypkg"
@@ -16922,13 +16922,14 @@ def test_categorize_referenced_objects_missing_item_raises():
 
             # Mock importlib.metadata.version to simulate an installed package
             with patch("importlib.metadata.version", return_value="1.0.0"):
-                with pytest.raises(SystemExit) as exc_info:
+                with pytest.raises(BuildError) as exc_info:
                     docs._categorize_referenced_objects("mypkg", reference_config)
 
             error_msg = str(exc_info.value)
             assert "nonexistent_item" in error_msg
             assert "mypkg" in error_msg
             assert "not found" in error_msg
+            assert capsys.readouterr().err == f"ERROR: {error_msg}\n"
         finally:
             sys.path.remove(tmp_dir)
 
@@ -21758,8 +21759,8 @@ def test_build_dynamic_fallback_preserves_the_quarto_yml_header(tmp_path):
     assert quarto_yml.read_text(encoding="utf-8").startswith(QUARTO_YML_HEADER)
 
 
-def test_build_static_mode_failure_exits(tmp_path):
-    """Test build() exits when static mode also fails."""
+def test_build_static_mode_failure_raises(tmp_path):
+    """Raise `BuildError` when static API reference generation also fails"""
     docs = _buildable_docs(
         tmp_path,
         api_reference=True,
@@ -21775,13 +21776,13 @@ def test_build_static_mode_failure_exits(tmp_path):
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
-        pytest.raises(SystemExit),
+        pytest.raises(BuildError, match="API reference build failed"),
     ):
         docs.build(watch=False, refresh=True)
 
 
-def test_build_non_dynamic_failure_exits(tmp_path):
-    """Test build() exits when non-dynamic build fails."""
+def test_build_non_dynamic_failure_raises(tmp_path):
+    """Raise `BuildError` when non-dynamic API reference generation fails"""
     docs = _buildable_docs(
         tmp_path,
         api_reference=True,
@@ -21795,7 +21796,7 @@ def test_build_non_dynamic_failure_exits(tmp_path):
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
-        pytest.raises(SystemExit),
+        pytest.raises(BuildError, match="API reference build failed"),
     ):
         docs.build(watch=False, refresh=True)
 
@@ -21893,15 +21894,32 @@ def test_build_watch_mode(tmp_path):
 
 
 def test_build_quarto_render_failure(tmp_path):
-    """Test build() exits when quarto render fails."""
+    """Raise `BuildError` when Quarto fails to render"""
     docs = _buildable_docs(tmp_path)
 
     with stubbed_build(docs) as stubs:
         stubs.render.stderr = iter(["Error: something\n"])
         stubs.render.returncode = 1
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(BuildError, match="Quarto render failed"):
             docs.build(watch=False, refresh=False)
+
+
+def test_build_versioned_all_failed_raises(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+    """Report failure and raise `BuildError` when every version fails to render"""
+    docs = _buildable_docs(tmp_path, has_versions=True, versions=["0.2", "0.1"])
+    failed = {"success": False, "errors": ["0.2: render boom"], "versions_built": []}
+
+    with (
+        stubbed_build(docs),
+        patch("great_docs._versioned_build.run_versioned_build", return_value=failed),
+        pytest.raises(BuildError, match="All version builds failed"),
+    ):
+        docs.build(watch=False, refresh=False)
+
+    out = capsys.readouterr().out
+    assert "0.2: render boom" in out
+    assert "All version builds failed" in out
 
 
 def test_build_cli_error_handled(tmp_path, capsys):
