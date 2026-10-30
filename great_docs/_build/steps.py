@@ -129,6 +129,10 @@ class Step:
     listed
         Whether the step has a numbered heading and a result line. An unlisted step belongs
         to the preceding listed step, including its warning count.
+    remote_content
+        Whether the step publishes content from a remote service, such as GitHub release
+        notes. Freezing pages skips these steps: they need the network and produce no pages
+        with code to execute.
     """
 
     title: str
@@ -138,6 +142,7 @@ class Step:
     user_code: bool = False
     quiet: bool = True
     listed: bool = True
+    remote_content: bool = False
 
 
 def count_listed(steps: Sequence[Step]) -> int:

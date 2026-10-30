@@ -1,5 +1,6 @@
 # pyright: reportPrivateUsage=false
 import importlib
+import io
 import json
 import os
 import re
@@ -31,7 +32,9 @@ from yaml12 import format_yaml as _format_yaml
 from yaml12 import parse_yaml as _parse_yaml
 
 from great_docs import BuildError, Config, GreatDocs, create_default_config, load_config
-from great_docs._build import quarto
+from great_docs._build import freeze, quarto
+from great_docs._build.steps import Step, count_listed
+from great_docs._build_log import BuildLog
 from great_docs._content_naming import fix_numeric_prefix_links, strip_numeric_prefix
 from great_docs._website.quarto_yml import edit as edit_quarto_yml
 from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
@@ -13319,33 +13322,19 @@ def test_generate_llms_full_txt_matches_the_predicate(label):
 
 
 @pytest.mark.parametrize("label", LLMS_TXT_QUARTO_YMLS)
-def test_prepare_for_freeze_writes_the_llms_files_build_would(label, tmp_path):
-    """`_prepare_for_freeze` leaves the llms files a full `build()` would.
-
-    Its docstring promises the build directory ends up in the state a full
-    `build()` would produce, so it has to honour the same predicate. The freeze
-    path used to call the generators directly and bypassed that gate, leaving
-    files behind that `build()` never writes.
+def test_freeze_writes_the_llms_files_build_would(label: str, tmp_path: Path):
+    """
+    Write the llms files exactly when the homepage advertises them, as a build does
     """
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir(parents=True, exist_ok=True)
     _write_llms_txt_quarto_yml(docs.build_dir, label)
+    log = BuildLog(stream=io.StringIO())
 
-    with (
-        patch("great_docs._apiref.api_reference.APIReference"),
-        patch.object(docs, "_prepare_build_directory"),
-        patch.object(docs, "_refresh_api_reference_config"),
-        patch.object(docs, "_generate_skill_md"),
-        patch.object(docs, "_process_user_guide"),
-        patch.object(docs, "_process_sections"),
-        patch.object(docs, "_process_custom_pages"),
-        patch.object(docs, "_copy_assets"),
-        patch.object(docs, "_normalize_freeze_shorthand"),
-        patch.object(docs, "_update_quarto_config"),
-        patch("great_docs._mock_code.process_directory"),
-    ):
-        docs._prepare_for_freeze()
+    llms = ["_llms_txt_available", "_generate_llms_txt", "_generate_llms_full_txt"]
+    with stubbed_build(docs, run=llms):
+        freeze.prepare(docs._preparation_steps(make_run(), log), log, docs.build_dir)
 
     available = docs._llms_txt_available()
     assert (docs.build_dir / "llms.txt").exists() == available, label
@@ -41020,43 +41009,23 @@ def test_categorize_referenced_objects_method_ref_categorises_its_class():
             sys.modules.pop("refpkg", None)
 
 
-# ---------------------------------------------------------------------------
-# _prepare_for_freeze
-# ---------------------------------------------------------------------------
-
-
-def test_prepare_for_freeze_runs_all_steps(tmp_path):
-    """_prepare_for_freeze runs preparation steps with mocked sub-methods."""
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+def test_freeze_runs_every_preparation_step_but_the_changelog(tmp_path: Path):
+    """
+    Run all preparation steps except those that publish remote content
+    """
     docs = GreatDocs(project_path=str(tmp_path))
+    log = BuildLog(stream=io.StringIO())
+    steps = docs._preparation_steps(make_run(), log)
+    ran: list[str] = []
 
-    # Ensure project_path exists (normally created by _prepare_build_directory)
-    docs.build_dir.mkdir(parents=True, exist_ok=True)
+    def record(selected: list[Step], *_: object) -> None:
+        ran.extend(step.title for step in selected)
 
-    # Mock the methods that exist on the class
-    existing_methods = [
-        "_prepare_build_directory",
-        "_refresh_api_reference_config",
-        "_generate_llms_txt",
-        "_generate_llms_full_txt",
-        "_generate_skill_md",
-        "_process_user_guide",
-        "_process_sections",
-        "_process_custom_pages",
-        "_copy_assets",
-        "_normalize_freeze_shorthand",
-        "_update_quarto_config",
-    ]
+    with patch("great_docs._build.freeze.run_steps", record):
+        freeze.prepare(steps, log, docs.build_dir)
 
-    with patch("great_docs._apiref.api_reference.APIReference"):
-        with patch.multiple(docs, **{name: MagicMock() for name in existing_methods}):
-            with patch("great_docs._mock_code.process_directory"):
-                docs._prepare_for_freeze()
-
-    # Should run without error and restore cwd
-    import os
-
-    assert os.getcwd() != str(docs.build_dir)  # cwd restored
+    assert [step.title for step in steps if step.title not in ran] == ["Generate changelog"]
+    assert log.total_steps == count_listed(steps) - 1
 
 
 def _write_user_guide(docs: GreatDocs, project: Path) -> None:

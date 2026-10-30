@@ -46,9 +46,16 @@ great-docs freeze docs/user_guide/benchmarks.qmd
 
 This command:
 
-1. Renders the specified page inside the build directory (always executing code)
-2. Copies the updated `docs/_freeze/` entries back to your configuration directory
-3. Tells you exactly what to commit
+1. Prepares the build directory with the steps of `great-docs build`, except the changelog,
+   so the page has the same source when frozen and built
+2. Renders the specified page inside the build directory (always executing code)
+3. Copies the updated `docs/_freeze/` entries back to your configuration directory
+4. Tells you exactly what to commit
+
+Quarto reuses a cached page only while its source is unchanged. Freezing a page from different
+sources would make the next build execute it again. Preparation follows the build's failure
+rules: warnings allow it to continue, while a failure that stops a build also stops freezing
+before rendering. The step log shows the failure.
 
 You can freeze multiple pages at once:
 

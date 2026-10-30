@@ -15003,99 +15003,6 @@ anchor-sections: true
 
         return sum(1 for _ in freeze_dst.rglob("*") if _.is_file())
 
-    def _prepare_for_freeze(self) -> None:
-        """Run the build preparation steps (1-14 + normalization) without rendering.
-
-        This ensures the build directory contains files in exactly the same state as a full
-        `build()` would produce, so that freeze cache hashes remain valid across subsequent full
-        builds.
-        """
-        from contextlib import redirect_stdout
-
-        run = Run(package_name=self._detect_package_name() or "", watch=False)
-        devnull = open(os.devnull, "w")
-
-        # Step 1: Prepare build directory (copies files, applies transformations)
-        with redirect_stdout(devnull):
-            self._prepare_build_directory(run)
-
-        try:
-            # Steps 2-13: Process user guide, sections, pages, tags, etc.
-            # These can modify .qmd files (add breadcrumbs, expand tags, etc.)
-            with self._running_user_code(), redirect_stdout(devnull):
-                try:
-                    if not run.api_discovery_done:
-                        self._refresh_api_reference_config()
-                except Exception:
-                    pass
-                try:
-                    if self._llms_txt_available():
-                        self._generate_llms_txt()
-                        self._generate_llms_full_txt()
-                except Exception:
-                    pass
-                try:
-                    self._generate_skill_md()
-                except Exception:
-                    pass
-                try:
-                    self._process_user_guide(run.has_api_reference)
-                except Exception:
-                    pass
-                try:
-                    self._process_sections()
-                except Exception:
-                    pass
-                try:
-                    self._process_custom_pages()
-                except Exception:
-                    pass
-                try:
-                    self._copy_assets()
-                except Exception:
-                    pass
-
-            # Step 14: Generate API reference
-            if run.has_api_reference:
-                try:
-                    from great_docs._apiref.api_reference import APIReference
-
-                    with self._running_user_code(), redirect_stdout(devnull):
-                        APIReference(str(self.build_dir / "_quarto.yml")).build()
-                except Exception:
-                    pass
-
-            # Normalize freeze shorthand (runs right before render in a full build)
-            self._normalize_freeze_shorthand()
-            self._write_page_metadata()
-
-            # Expand source-code: mock cells
-            from great_docs._mock_code import process_directory as _expand_mock
-
-            _expand_mock(self.build_dir)
-
-            # Update quarto config (ensures _quarto.yml has pre-render, freeze, etc.)
-            with redirect_stdout(devnull):
-                self._update_quarto_config(run)
-
-        finally:
-            devnull.close()
-
-    def _running_user_code(self) -> contextlib.chdir[Path]:
-        """
-        Enter the build directory while importing or running the project's code
-
-        The package, its command-line interface and MCP server, the API reference and d2
-        diagrams resolve relative paths from the working directory, which is the build
-        directory while they run. Quarto receives the build directory as its `cwd` instead.
-
-        Returns
-        -------
-        :
-            A context manager that restores the working directory on exit.
-        """
-        return contextlib.chdir(self.build_dir)
-
     def _print_layout_notice(self) -> None:
         """
         Show the migration route for the selected root-layout documentation
@@ -16076,6 +15983,7 @@ anchor-sections: true
             Step(
                 "Generate changelog",
                 lambda: self._step_changelog(),
+                remote_content=True,
             ),
             Step(
                 "Generate CLI reference",

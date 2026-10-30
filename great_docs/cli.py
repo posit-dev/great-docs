@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Callable
 import click
 
 from . import __version__
+from ._build import freeze as freeze_cache
 from ._build import quarto
 from ._build.steps import BuildError
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
@@ -1458,25 +1459,18 @@ def freeze(
         if build_freeze.exists():
             shutil.rmtree(build_freeze)
 
-    # Always re-prepare the build directory so file hashes match what a full
-    # build would produce (frontmatter normalization, tag expansion, etc.).
-    # This is fast (steps 1-14 only, no render) and ensures the freeze cache
-    # will be valid for subsequent full builds.
-    click.echo("Preparing build directory...")
+    # Quarto requires matching page sources to reuse cached results. Use the build's
+    # preparation steps to keep those sources consistent.
+    from ._build.pipeline import Run
+    from ._build_log import BuildLog
+
+    docs = GreatDocs(project_path=project_path, config_path=config_path)
+    log = BuildLog()
+    run = Run(package_name=docs._detect_package_name() or "", watch=False)
     try:
-        docs = GreatDocs(project_path=project_path, config_path=config_path)
-        docs._prepare_for_freeze()
-    except SystemExit:
-        pass  # Build prep may exit but that's OK
+        freeze_cache.prepare(docs._preparation_steps(run, log), log, docs.build_dir)
     except BuildError:
         # Exit without repeating the preparation failure report
-        sys.exit(1)
-    except Exception as e:
-        click.echo(f"Error during build prep: {e}", err=True)
-        sys.exit(1)
-
-    if not (build_dir / "_quarto.yml").exists():
-        click.echo("Error: Build directory is not ready. Run 'great-docs build' first.", err=True)
         sys.exit(1)
 
     # Render each page individually (forces execution even with freeze)
