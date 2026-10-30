@@ -76,8 +76,11 @@ Quarto configuration that each process reads. Quarto rereads the configuration f
 trimming it saves more time the more pages there are.
 
 The pages are split using the per-page times from the last build (see
-[Build Timings](13-building.qmd#build-timings)), so groups take about the same time each. A second
-parallel build is usually a little faster than the first for this reason.
+[Build Timings](13-building.qmd#build-timings)), so groups take about the same time each. Every
+group also pays for starting a Quarto process, which takes from about two seconds to five or more
+depending on the machine and the site, so a parallel build measures that too. The next parallel
+build makes fewer, larger groups when starting Quarto turns out to be slow. A second parallel build
+is usually a little faster than the first for these reasons.
 
 ## What You'll See
 
@@ -156,8 +159,14 @@ great-docs build --jobs auto
 diff -r /tmp/site-ordinary docs/_site
 ```
 
-Expect `search.json` and `sitemap.xml` to differ in their order only. Any other difference is worth
-reporting.
+Expect `search.json` and `sitemap.xml` to differ in their order only. Two other things differ
+between any two builds, parallel or not:
+
+- `build-timings.json`, which holds the times of the build that wrote it
+- the `data-listing-file-modified-sort` attributes of a blog's listing page, which record when the
+  blog posts were copied into the build directory
+
+Any other difference is worth reporting.
 
 ## Next Steps
 

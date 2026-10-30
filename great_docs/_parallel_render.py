@@ -18,7 +18,7 @@ A parallel render goes like this:
 
 1. The project's pre-render scripts run once, in the project.
 2. `quarto inspect` lists the inputs, which are planned into groups using the
-   page timings of the last build.
+   page timings of the last build, and the time Quarto took to start in it.
 3. Worker copies of the project (without pre- and post-render scripts) render
    the groups from a shared queue, largest first, through Quarto's freezer.
 4. The outputs, freeze caches and search indexes are merged into the
@@ -67,7 +67,10 @@ MIN_PAGES = 40
 """Sites with fewer pages render in one process"""
 
 TARGET_OVERHEAD = 2.0
-"""Seconds a Quarto process spends before and after its pages, with others running"""
+"""Seconds a Quarto process spends before and after its pages, with others running
+
+Used when the last build wasn't a parallel one, which measures this instead.
+"""
 
 OVERHEAD_PER_INPUT = 0.0015
 """Seconds more for each input in the project, which Quarto reads as it starts"""
@@ -353,22 +356,40 @@ def estimate_costs(
     return costs
 
 
-def read_timings(*paths: Path) -> dict[str, float]:
-    """Read the page timings of the last build from the first `build-timings.json` found"""
+def _last_build(paths: Iterable[Path]) -> dict[str, Any]:
+    """Read the first `build-timings.json` found that has page timings"""
     for path in paths:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        pages = data.get("pages") if isinstance(data, dict) else None
-        if not isinstance(pages, list):
-            continue
-        return {
-            str(p["page"]): float(p["seconds"])
-            for p in pages
-            if isinstance(p, dict) and "page" in p and isinstance(p.get("seconds"), (int, float))
-        }
+        if isinstance(data, dict) and isinstance(data.get("pages"), list):
+            return data
     return {}
+
+
+def read_timings(*paths: Path) -> dict[str, float]:
+    """Read the page timings of the last build from the first `build-timings.json` found"""
+    return {
+        str(p["page"]): float(p["seconds"])
+        for p in _last_build(paths).get("pages", [])
+        if isinstance(p, dict) and "page" in p and isinstance(p.get("seconds"), (int, float))
+    }
+
+
+def read_startup(*paths: Path) -> float | None:
+    """
+    Read how long Quarto took to start in the last build, if it was a parallel one
+
+    Starting a Quarto process takes from about two seconds to five or more,
+    depending on the machine and the project, so a measurement plans the
+    groups better than an estimate.
+    """
+    render = _last_build(paths).get("render")
+    seconds = render.get("startup_seconds") if isinstance(render, dict) else None
+    if isinstance(seconds, (int, float)) and not isinstance(seconds, bool) and seconds > 0:
+        return float(seconds)
+    return None
 
 
 # ── The project ──────────────────────────────────────────────────────────────
@@ -1086,6 +1107,8 @@ class RenderResult:
     targets: int = 0
     workers: int = 0
     pages: int = 0
+    startup: float | None = None
+    """Median seconds a Quarto process took to start on its first page, for the next build"""
 
 
 def render(
@@ -1096,6 +1119,7 @@ def render(
     on_start: Callable[[int, int, int], None] | None = None,
     on_page: Callable[[str], None] | None = None,
     min_pages: int = MIN_PAGES,
+    overhead: float | None = None,
 ) -> RenderResult:
     """
     Render a Quarto website with several processes
@@ -1118,6 +1142,10 @@ def render(
         of one page, once it is done). Called from several threads.
     min_pages
         Sites with fewer pages aren't split.
+    overhead
+        Seconds each Quarto process takes to start, as the last build
+        measured it (see `read_startup()`). Estimated from the number of
+        pages when not given.
 
     Returns
     -------
@@ -1175,7 +1203,8 @@ def render(
                 return RenderResult(fallback="the pre-render scripts changed the project")
 
     costs = estimate_costs(project.inputs, timings or {}, project.executable)
-    overhead = target_overhead(len(project.inputs))
+    if overhead is None:
+        overhead = target_overhead(len(project.inputs))
     targets = plan_targets(
         project.inputs, costs, jobs, project.listing_dirs, _name_checker(build_dir), overhead
     )
@@ -1227,6 +1256,8 @@ def _finish(
     owned: dict[int, list[str]] = {}
     page_timings: list[dict[str, Any]] = []
     warnings: list[str] = []
+    # A group of one page shows no progress, so when its page started isn't known
+    startups = [o.startup for results in runner.done.values() for t, o in results if not t.single]
     for slot, results in runner.done.items():
         for target, outcome in results:
             # Quarto must have rendered just what the target's prefix selected
@@ -1297,6 +1328,7 @@ def _finish(
         targets=len(runner.targets),
         workers=len(runner.dirs),
         pages=len(project.inputs),
+        startup=round(median(startups), 2) if startups else None,
     )
 
 

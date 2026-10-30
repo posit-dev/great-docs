@@ -14629,13 +14629,16 @@ anchor-sections: true
         self,
         page_timings: list[dict[str, object]] | None = None,
         timings_by_version: dict[str, list[dict[str, object]]] | None = None,
+        render: dict[str, object] | None = None,
     ) -> Path | None:
         """
         Write `_site/build-timings.json` with per-page render durations.
 
         For single-version builds, *page_timings* is a flat list. For multi-version builds,
-        *timings_by_version* is a `{tag: [timings]}` dict. Returns the path written, or `None` if
-        there was nothing to write.
+        *timings_by_version* is a `{tag: [timings]}` dict. A parallel single-version build also
+        passes *render*: its number of processes and groups, and how long Quarto took to start,
+        which the next parallel build plans with. Returns the path written, or `None` if there was
+        nothing to write.
         """
         from datetime import timezone
 
@@ -14688,6 +14691,8 @@ anchor-sections: true
             payload["pages"] = sorted(
                 _annotate(page_timings), key=lambda t: t["seconds"], reverse=True
             )
+            if render:
+                payload["render"] = render
         else:
             return None  # pragma: no cover
 
@@ -15152,16 +15157,18 @@ anchor-sections: true
         from great_docs._build_log import BuildLog, estimate_build_time
 
         # Settle the render process count up front so a bad value fails fast, and read the last
-        # build's page timings before anything clears them (they guide how pages are split)
+        # build's page timings and Quarto start-up time before anything clears them (they guide
+        # how pages are split)
         render_jobs = _parallel_render.resolve_jobs(jobs)
-        last_timings = (
-            _parallel_render.read_timings(
+        last_timings: dict[str, float] = {}
+        last_startup: float | None = None
+        if render_jobs > 1:
+            timing_files = (
                 self.layout.site_dir / "build-timings.json",
                 self.build_dir / "_site" / "build-timings.json",
             )
-            if render_jobs > 1
-            else {}
-        )
+            last_timings = _parallel_render.read_timings(*timing_files)
+            last_startup = _parallel_render.read_startup(*timing_files)
 
         class _DetailStream:
             """A file-like object that forwards each line to `log.detail()`."""
@@ -15943,6 +15950,8 @@ anchor-sections: true
                 log.footer(site_path=str(self.layout.site_dir))
         else:
             result = None
+            # How the parallel render went, saved for the next one to plan with
+            render_stats: dict[str, object] | None = None
             if render_jobs > 1:
                 # Experimental: split the pages among several Quarto processes
                 bar = log.progress("Rendering pages", 1)
@@ -15968,6 +15977,7 @@ anchor-sections: true
                     last_timings,
                     on_start=_on_render_start,
                     on_page=_on_render_page,
+                    overhead=last_startup,
                 )
                 bar.finish()
                 if result.fallback:
@@ -15976,6 +15986,9 @@ anchor-sections: true
                 else:
                     for w in result.warnings:
                         log.warn(w)
+                    render_stats = {"processes": result.workers, "groups": result.targets}
+                    if result.startup is not None:
+                        render_stats["startup_seconds"] = result.startup
 
             if result is None:
                 result = render_site("Rendering pages", quarto_env)
@@ -15983,6 +15996,7 @@ anchor-sections: true
             # Retry a transient failure in one process, including failures from parallel renders
             if result.returncode != 0 and quarto.is_transient_error(result.stderr):
                 log.warn("Quarto hit a transient filesystem error — retrying render...")
+                render_stats = None
                 result = render_site("Rendering pages (retry)", quarto_env)
 
             if result.returncode != 0:
@@ -16018,6 +16032,7 @@ anchor-sections: true
                 # ── Write build-timings.json ───────────────────────
                 timing_path = self._write_build_timing(  # pragma: no cover
                     page_timings=result.page_timings,  # pragma: no cover
+                    render=render_stats,  # pragma: no cover
                 )  # pragma: no cover
                 if timing_path:  # pragma: no cover
                     log.detail(f"Wrote {timing_path.name}")  # pragma: no cover
