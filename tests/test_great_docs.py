@@ -30,6 +30,7 @@ from yaml12 import format_yaml as _format_yaml
 from yaml12 import parse_yaml as _parse_yaml
 
 from great_docs import BuildError, Config, GreatDocs, create_default_config, load_config
+from great_docs._build import quarto
 from great_docs._content_naming import fix_numeric_prefix_links, strip_numeric_prefix
 from great_docs._website.quarto_yml import edit as edit_quarto_yml
 from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
@@ -1940,12 +1941,12 @@ reference:
             sys.path.remove(tmp_dir)
 
 
-def test_get_quarto_env_returns_current_python():
-    """Test that _get_quarto_env returns QUARTO_PYTHON with current interpreter."""
+def test_quarto_environment_returns_current_python():
+    """Use the current interpreter for `QUARTO_PYTHON` when no virtual environment exists"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert "QUARTO_PYTHON" in env
         # Should either be the current interpreter or a venv Python
@@ -1961,8 +1962,8 @@ def test_get_quarto_env_returns_current_python():
         )
 
 
-def test_get_quarto_env_detects_venv():
-    """Test that _get_quarto_env detects a virtual environment."""
+def test_quarto_environment_detects_venv():
+    """Use the Python executable from the project's `.venv`"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Create a fake .venv directory structure
@@ -1972,38 +1973,38 @@ def test_get_quarto_env_detects_venv():
         fake_python.write_text("#!/bin/bash\n# fake python")
 
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert "QUARTO_PYTHON" in env
         assert env["QUARTO_PYTHON"] == str(fake_python.resolve())
 
 
-def test_get_quarto_env_preserves_existing_env():
-    """Test that _get_quarto_env preserves existing environment variables."""
+def test_quarto_environment_preserves_existing_env():
+    """Preserve existing environment variables"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         # Should contain existing env vars like PATH
         assert "PATH" in env
         assert env["PATH"] == os.environ.get("PATH")
 
 
-def test_get_quarto_env_sets_pythonutf8():
+def test_quarto_environment_sets_pythonutf8():
     """Issue #200: Quarto subprocess env enables UTF-8 mode on Windows."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
         assert env.get("PYTHONUTF8") == "1"
 
 
-def test_get_quarto_env_preserves_existing_pythonutf8(monkeypatch):
+def test_quarto_environment_preserves_existing_pythonutf8(monkeypatch):
     """Issue #200: do not override an explicit PYTHONUTF8 value."""
     monkeypatch.setenv("PYTHONUTF8", "0")
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
         assert env["PYTHONUTF8"] == "0"
 
 
@@ -12745,50 +12746,50 @@ def test_generate_landing_page_content_with_user_guide():
         assert "user-guide/index.qmd" in result
 
 
-def test_get_quarto_env_sets_quarto_python():
-    """_get_quarto_env sets QUARTO_PYTHON in env dict."""
+def test_quarto_environment_sets_quarto_python():
+    """Set `QUARTO_PYTHON` to a non-empty executable path"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert "QUARTO_PYTHON" in env
         assert env["QUARTO_PYTHON"]  # non-empty
 
 
-def test_get_quarto_env_sets_pythonpath():
-    """_get_quarto_env sets PYTHONPATH including package root."""
+def test_quarto_environment_sets_pythonpath():
+    """Include the package root in `PYTHONPATH`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert "PYTHONPATH" in env
         assert tmp_dir in env["PYTHONPATH"]
 
 
-def test_get_quarto_env_includes_src_dir():
-    """_get_quarto_env adds src/ to PYTHONPATH if it exists."""
+def test_quarto_environment_includes_src_dir():
+    """Include `src/` in `PYTHONPATH` when the directory exists"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         src_dir = Path(tmp_dir) / "src"
         src_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert str(src_dir) in env["PYTHONPATH"]
 
 
-def test_get_quarto_env_includes_python_dir():
-    """_get_quarto_env adds python/ to PYTHONPATH if it exists."""
+def test_quarto_environment_includes_python_dir():
+    """Include `python/` in `PYTHONPATH` when the directory exists"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         python_dir = Path(tmp_dir) / "python"
         python_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert str(python_dir) in env["PYTHONPATH"]
 
 
-def test_get_quarto_env_venv_detection():
-    """_get_quarto_env detects .venv/bin/python if present."""
+def test_quarto_environment_venv_detection():
+    """Use `.venv/bin/python` when it exists"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         venv_bin = Path(tmp_dir) / ".venv" / "bin"
@@ -12796,18 +12797,18 @@ def test_get_quarto_env_venv_detection():
         venv_python = venv_bin / "python"
         venv_python.write_text("#!/bin/sh\n", encoding="utf-8")
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert env["QUARTO_PYTHON"] == str(venv_python.resolve())
 
 
-def test_get_quarto_env_preserves_existing_pythonpath(monkeypatch):
-    """_get_quarto_env prepends to existing PYTHONPATH."""
+def test_quarto_environment_preserves_existing_pythonpath(monkeypatch):
+    """Prepend the package root to an existing `PYTHONPATH`"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         monkeypatch.setenv("PYTHONPATH", "/existing/path")
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert "/existing/path" in env["PYTHONPATH"]
         assert tmp_dir in env["PYTHONPATH"]
@@ -14478,11 +14479,11 @@ def test_detect_module_name_pyproject_parse_error():
         assert result is None
 
 
-def test_get_quarto_env_no_extra_dirs():
-    """_get_quarto_env works without src/ or python/ directories."""
+def test_quarto_environment_no_extra_dirs():
+    """Include the package root in `PYTHONPATH` without `src/` or `python/` directories"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert "PYTHONPATH" in env
 
@@ -14492,15 +14493,15 @@ def test_get_quarto_env_no_extra_dirs():
         assert any(tmp_dir in p for p in parts)
 
 
-def test_get_quarto_env_venv_alternative_name():
-    """_get_quarto_env detects venv/ (alternative name) if present."""
+def test_quarto_environment_venv_alternative_name():
+    """Use `venv/bin/python` when it exists"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         venv_bin = Path(tmp_dir) / "venv" / "bin"
         venv_bin.mkdir(parents=True)
         venv_python = venv_bin / "python"
         venv_python.write_text("#!/bin/sh\n", encoding="utf-8")
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
 
         assert env["QUARTO_PYTHON"] == str(venv_python.resolve())
 
@@ -20839,11 +20840,11 @@ def test_strip_numeric_prefix_basic():
         assert strip_numeric_prefix("readme.qmd") == "readme.qmd"
 
 
-def test_get_quarto_env():
-    """Test _get_quarto_env returns dict with expected keys."""
+def test_quarto_environment():
+    """Return an environment containing `QUARTO_PYTHON`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        env = docs._get_quarto_env()
+        env = quarto.environment(docs._config)
         assert isinstance(env, dict)
         # Should set QUARTO_PYTHON
         assert "QUARTO_PYTHON" in env
@@ -33199,8 +33200,8 @@ class TestInsertBeforeReference:
             assert items[-1]["text"] == "Guide"
 
 
-class TestGetQuartoEnv:
-    """Tests for _get_quarto_env."""
+class TestQuartoEnvironment:
+    """Quarto's Python environment"""
 
     def test_sets_quarto_python(self):
         """Sets QUARTO_PYTHON in environment."""
@@ -33208,7 +33209,7 @@ class TestGetQuartoEnv:
             tmp = Path(tmp_dir)
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             docs = GreatDocs(project_path=tmp_dir)
-            env = docs._get_quarto_env()
+            env = quarto.environment(docs._config)
             assert "QUARTO_PYTHON" in env
             assert env["QUARTO_PYTHON"]
 
@@ -33218,7 +33219,7 @@ class TestGetQuartoEnv:
             tmp = Path(tmp_dir)
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             docs = GreatDocs(project_path=tmp_dir)
-            env = docs._get_quarto_env()
+            env = quarto.environment(docs._config)
             assert "PYTHONPATH" in env
             assert str(tmp) in env["PYTHONPATH"]
 
@@ -33229,7 +33230,7 @@ class TestGetQuartoEnv:
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             (tmp / "src").mkdir()
             docs = GreatDocs(project_path=tmp_dir)
-            env = docs._get_quarto_env()
+            env = quarto.environment(docs._config)
             assert "src" in env["PYTHONPATH"]
 
     def test_includes_python_dir(self):
@@ -33239,7 +33240,7 @@ class TestGetQuartoEnv:
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             (tmp / "python").mkdir()
             docs = GreatDocs(project_path=tmp_dir)
-            env = docs._get_quarto_env()
+            env = quarto.environment(docs._config)
             assert "python" in env["PYTHONPATH"]
 
 
@@ -34440,8 +34441,8 @@ class TestUpdateQuartoConfigStrNormalizationBatch10:
             assert "header.js" in header
 
 
-class TestGetQuartoEnvBatch10:
-    """Cover _get_quarto_env else branch when PYTHONPATH is empty."""
+class TestQuartoEnvironmentBatch10:
+    """Quarto's environment without an existing `PYTHONPATH`"""
 
     def test_no_existing_pythonpath(self):
         """When PYTHONPATH is absent, new paths are set directly."""
@@ -34452,7 +34453,7 @@ class TestGetQuartoEnvBatch10:
             docs = GreatDocs(project_path=tmp_dir)
             with patch.dict(os.environ, {}, clear=True):
                 os.environ.pop("PYTHONPATH", None)
-                env = docs._get_quarto_env()
+                env = quarto.environment(docs._config)
             assert "PYTHONPATH" in env
             assert os.pathsep not in env["PYTHONPATH"] or tmp_dir in env["PYTHONPATH"]
 
@@ -40284,32 +40285,6 @@ def test_bump_heading_levels_quarto_cell_option():
     result = GreatDocs._bump_heading_levels(content)
     assert "## Heading" in result
     assert "#| echo: false" in result  # not bumped to ##|
-
-
-# ---------------------------------------------------------------------------
-# _ensure_quarto_installed
-# ---------------------------------------------------------------------------
-
-
-def test_ensure_quarto_installed_raises_when_missing():
-    """_ensure_quarto_installed raises QuartoNotFoundError when quarto not on PATH."""
-    from great_docs.core import QuartoNotFoundError, _ensure_quarto_installed
-
-    with patch("shutil.which", return_value=None):
-        with pytest.raises(QuartoNotFoundError):
-            _ensure_quarto_installed()
-
-
-def test_ensure_quarto_installed_passes_when_present():
-    """_ensure_quarto_installed returns None when quarto is found."""
-    from great_docs.core import _ensure_quarto_installed
-
-    with (
-        patch("shutil.which", return_value="/usr/bin/quarto"),
-        patch("great_docs.core._quarto_version", return_value=(1, 10, 0)),
-    ):
-        result = _ensure_quarto_installed()
-    assert result is None
 
 
 # ---------------------------------------------------------------------------

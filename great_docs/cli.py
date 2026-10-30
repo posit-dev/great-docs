@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Callable
 import click
 
 from . import __version__
+from ._build import quarto
 from ._build.steps import BuildError
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
 from ._subprocess import TEXT_MODE_KWARGS
@@ -1429,6 +1430,12 @@ def freeze(
         for page in missing:
             click.echo(f"Error: Page not found: {page}", err=True)
         sys.exit(1)
+
+    # Check before `--clean` removes the cache that a failed render could not replace
+    try:
+        quarto.ensure_installed()
+    except (quarto.QuartoNotFoundError, quarto.QuartoVersionError) as error:
+        raise click.ClickException(str(error)) from error
 
     if clean:
         from ._utils import validate_layout_outputs, validate_tree_symlinks

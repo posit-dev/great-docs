@@ -742,18 +742,19 @@ class TestCheckQuartoAvailable:
         assert err is None
 
     def test_quarto_not_on_path(self):
-        with patch("great_docs._check_examples.shutil.which", return_value=None):
+        with patch("great_docs._build.quarto.shutil.which", return_value=None):
             err = _check_quarto_available()
         assert err is not None
-        assert "not installed" in err.lower() or "not on path" in err.lower()
+        assert "Quarto was not found" in err
 
-    def test_quarto_version_fails(self):
-        with patch("great_docs._check_examples.shutil.which", return_value="/usr/bin/quarto"):
-            with patch("great_docs._check_examples.subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(returncode=1, stderr="bad")
-                err = _check_quarto_available()
+    def test_quarto_too_old(self):
+        with (
+            patch("great_docs._build.quarto.shutil.which", return_value="/usr/bin/quarto"),
+            patch("great_docs._build.quarto.installed_version", return_value=(1, 8, 26)),
+        ):
+            err = _check_quarto_available()
         assert err is not None
-        assert "failed" in err.lower()
+        assert "requires Quarto 1.9.18 or later" in err
 
 
 # ===================================================================

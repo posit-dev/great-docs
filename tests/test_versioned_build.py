@@ -2116,51 +2116,12 @@ class TestMergeTree:
 
 
 # ---------------------------------------------------------------------------
-# _render_single_version (mocked subprocess)
-# ---------------------------------------------------------------------------
-
-
-class TestRenderSingleVersion:
-    def test_success(self, tmp_path: Path):
-        from unittest.mock import patch
-
-        from great_docs._versioned_build import _render_single_version
-
-        mock_result = type("R", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
-        with patch("subprocess.run", return_value=mock_result):
-            build_dir, rc, stdout, stderr = _render_single_version(str(tmp_path), None)
-        assert rc == 0
-        assert build_dir == str(tmp_path)
-
-    def test_timeout(self, tmp_path: Path):
-        import subprocess
-        from unittest.mock import patch
-
-        from great_docs._versioned_build import _render_single_version
-
-        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("quarto", 600)):
-            build_dir, rc, stdout, stderr = _render_single_version(str(tmp_path), None)
-        assert rc == -1
-        assert "timed out" in stderr
-
-    def test_exception(self, tmp_path: Path):
-        from unittest.mock import patch
-
-        from great_docs._versioned_build import _render_single_version
-
-        with patch("subprocess.run", side_effect=OSError("No quarto")):
-            build_dir, rc, stdout, stderr = _render_single_version(str(tmp_path), None)
-        assert rc == -1
-        assert "No quarto" in stderr
-
-
-# ---------------------------------------------------------------------------
-# render_versions_parallel (streaming mode)
+# Version renders with a progress callback
 # ---------------------------------------------------------------------------
 
 
 class TestRenderVersionsParallel:
-    def test_streaming_mode_with_callback(self, tmp_path: Path):
+    def test_with_callback(self, tmp_path: Path):
         from unittest.mock import MagicMock, patch
 
         from great_docs._versioned_build import render_versions_parallel
@@ -2170,7 +2131,7 @@ class TestRenderVersionsParallel:
 
         mock_result = (str(d1), 0, "", "")
         with patch(
-            "great_docs._versioned_build._render_single_version_streaming",
+            "great_docs._versioned_build._render_version",
             return_value=mock_result,
         ):
             callback = MagicMock()
@@ -3749,15 +3710,15 @@ class TestRunVersionedBuild:
 
 
 # ---------------------------------------------------------------------------
-# _render_single_version_streaming — subprocess mocking
+# Version renders with mocked subprocesses
 # ---------------------------------------------------------------------------
 
 
-class TestRenderSingleVersionStreaming:
+class TestRenderVersion:
     def test_successful_render_with_progress(self, tmp_path: Path):
         from unittest.mock import MagicMock, patch
 
-        from great_docs._versioned_build import _render_single_version_streaming
+        from great_docs._versioned_build import _render_version
 
         # Mock subprocess.Popen
         mock_proc = MagicMock()
@@ -3772,20 +3733,19 @@ class TestRenderSingleVersionStreaming:
         progress = MagicMock()
 
         with patch("subprocess.Popen", return_value=mock_proc):
-            result = _render_single_version_streaming(str(tmp_path), None, on_progress=progress)
+            result = _render_version(str(tmp_path), None, on_progress=progress)
 
         assert result[0] == str(tmp_path)
         assert result[1] == 0
-        assert result[2] == "output"
         assert progress.call_count == 3
 
     def test_popen_failure_returns_error(self, tmp_path: Path):
         from unittest.mock import patch
 
-        from great_docs._versioned_build import _render_single_version_streaming
+        from great_docs._versioned_build import _render_version
 
         with patch("subprocess.Popen", side_effect=OSError("not found")):
-            result = _render_single_version_streaming(str(tmp_path), None)
+            result = _render_version(str(tmp_path), None)
 
         assert result[0] == str(tmp_path)
         assert result[1] == -1
@@ -3794,7 +3754,7 @@ class TestRenderSingleVersionStreaming:
     def test_with_env_vars(self, tmp_path: Path):
         from unittest.mock import MagicMock, patch
 
-        from great_docs._versioned_build import _render_single_version_streaming
+        from great_docs._versioned_build import _render_version
 
         mock_proc = MagicMock()
         mock_proc.returncode = 0
@@ -3803,7 +3763,7 @@ class TestRenderSingleVersionStreaming:
         mock_proc.wait.return_value = 0
 
         with patch("subprocess.Popen", return_value=mock_proc) as mock_popen:
-            _render_single_version_streaming(str(tmp_path), {"QUARTO_PYTHON": "/usr/bin/python3"})
+            _render_version(str(tmp_path), {"QUARTO_PYTHON": "/usr/bin/python3"})
 
         # Check that env vars were passed
         call_kwargs = mock_popen.call_args[1]
@@ -3811,12 +3771,12 @@ class TestRenderSingleVersionStreaming:
 
 
 # ---------------------------------------------------------------------------
-# render_versions_parallel — streaming mode with multiple dirs
+# Version render results in input order
 # ---------------------------------------------------------------------------
 
 
-class TestRenderVersionsParallelStreaming:
-    def test_streaming_mode_ordered_results(self, tmp_path: Path):
+class TestRenderVersionsParallelOrder:
+    def test_ordered_results(self, tmp_path: Path):
         from unittest.mock import MagicMock, patch
 
         from great_docs._versioned_build import render_versions_parallel
@@ -3826,14 +3786,14 @@ class TestRenderVersionsParallelStreaming:
         d1.mkdir()
         d2.mkdir()
 
-        def mock_streaming(build_dir, env_vars, on_progress=None):
+        def mock_render(build_dir, env_vars, on_progress=None):
             if on_progress:
                 on_progress(1, 2)
             return (build_dir, 0, "", "")
 
         with patch(
-            "great_docs._versioned_build._render_single_version_streaming",
-            side_effect=mock_streaming,
+            "great_docs._versioned_build._render_version",
+            side_effect=mock_render,
         ):
             callback = MagicMock()
             results = render_versions_parallel([d1, d2], progress_callback=callback)
@@ -4041,46 +4001,6 @@ class TestSyncStatusNoUpcoming:
 
 
 # ---------------------------------------------------------------------------
-# render_versions_parallel — non-streaming multi-dir path
-# ---------------------------------------------------------------------------
-
-
-class TestRenderVersionsParallelNonStreaming:
-    def test_multi_dir_uses_process_pool(self, tmp_path: Path):
-        from concurrent.futures import Future
-        from unittest.mock import MagicMock, patch
-
-        from great_docs._versioned_build import render_versions_parallel
-
-        d1 = tmp_path / "v1"
-        d2 = tmp_path / "v2"
-        d1.mkdir()
-        d2.mkdir()
-
-        # Mock ProcessPoolExecutor to avoid pickling issues
-        mock_pool = MagicMock()
-        mock_pool.__enter__ = MagicMock(return_value=mock_pool)
-        mock_pool.__exit__ = MagicMock(return_value=False)
-
-        # Create futures that return results
-        f1 = Future()
-        f1.set_result((str(d1), 0, "out1", ""))
-        f2 = Future()
-        f2.set_result((str(d2), 0, "out2", ""))
-
-        mock_pool.submit.side_effect = [f1, f2]
-
-        with patch(
-            "great_docs._versioned_build.ProcessPoolExecutor",
-            return_value=mock_pool,
-        ):
-            results = render_versions_parallel([d1, d2])  # No progress_callback
-
-        assert len(results) == 2
-        assert all(r[1] == 0 for r in results)
-
-
-# ---------------------------------------------------------------------------
 # preprocess_version — git_ref strategy within full function
 # ---------------------------------------------------------------------------
 
@@ -4198,11 +4118,11 @@ class TestPruneQuartoSidebarNestedSectionGroup:
 
 
 # ---------------------------------------------------------------------------
-# render_versions_parallel — single dir non-streaming path
+# Version renders without a progress callback
 # ---------------------------------------------------------------------------
 
 
-class TestRenderVersionsParallelSingleNonStreaming:
+class TestRenderVersionsParallelWithoutCallback:
     def test_single_dir_no_callback(self, tmp_path: Path):
         from unittest.mock import patch
 
@@ -4211,14 +4131,11 @@ class TestRenderVersionsParallelSingleNonStreaming:
         d1 = tmp_path / "v1"
         d1.mkdir()
 
-        with patch(
-            "great_docs._versioned_build._render_single_version",
-            return_value=(str(d1), 0, "output", ""),
-        ):
+        result = (str(d1), 0, "", "", [{"page": "index.html", "seconds": 1.0}])
+        with patch("great_docs._versioned_build._render_version", return_value=result):
             results = render_versions_parallel([d1])  # No callback, single dir
 
-        assert len(results) == 1
-        assert results[0] == (str(d1), 0, "output", "", [])
+        assert results == [result]
 
 
 # ---------------------------------------------------------------------------

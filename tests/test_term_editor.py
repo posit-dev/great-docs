@@ -1218,6 +1218,13 @@ class TestServeEditor:
 
 
 class TestGeneratePreviewHtml:
+    @pytest.fixture(autouse=True)
+    def quarto_installed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Bypass the Quarto version check so it does not call the mocked `subprocess.run`
+        """
+        monkeypatch.setattr("great_docs._build.quarto.ensure_installed", lambda: None)
+
     def _make_editor_data(self) -> dict:
         return {
             "recording": {
@@ -1286,6 +1293,21 @@ class TestGeneratePreviewHtml:
             result = _generate_preview_html(editor_data, script_data)
 
         assert result == expected_html
+
+    def test_requires_supported_quarto(self, monkeypatch: pytest.MonkeyPatch):
+        from unittest.mock import patch
+
+        from great_docs._build.quarto import QuartoNotFoundError
+        from great_docs._term_player.editor import _generate_preview_html
+
+        def missing() -> None:
+            raise QuartoNotFoundError("Quarto was not found on your system.")
+
+        monkeypatch.setattr("great_docs._build.quarto.ensure_installed", missing)
+        with patch("subprocess.run") as run:
+            with pytest.raises(QuartoNotFoundError):
+                _generate_preview_html(self._make_editor_data(), self._make_script_data())
+        run.assert_not_called()
 
     def test_quarto_failure_raises(self):
         """If Quarto returns non-zero, RuntimeError is raised."""

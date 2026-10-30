@@ -14,6 +14,9 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
 
+from ._build import quarto
+from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
+from ._build.quarto import QuartoVersionError as QuartoVersionError
 from ._build.steps import BuildError
 from ._content_naming import fix_numeric_prefix_links, section_slug, strip_numeric_prefix
 from ._layout import Layout, LayoutError
@@ -97,74 +100,6 @@ _QUARTO_RENDER_GLOBS = [
     "*.rmarkdown",
     "*.ipynb",
 ]
-
-
-class QuartoNotFoundError(BuildError):
-    """A missing Quarto CLI"""
-
-
-class QuartoVersionError(BuildError):
-    """An installed Quarto CLI older than great-docs supports"""
-
-
-# The bundled extensions set the stage at which their filters run, which
-# Quarto's extension schema accepts from this release
-MIN_QUARTO_VERSION = (1, 9, 18)
-
-
-def _quarto_version() -> tuple[int, ...] | None:
-    """
-    Read the version of the Quarto CLI on the `PATH`
-
-    Returns
-    -------
-    :
-        The release numbers, or `None` when Quarto does not report a
-        recognisable version.
-    """
-    try:
-        proc = subprocess.run(
-            ["quarto", "--version"],
-            capture_output=True,
-            timeout=30,
-            check=True,
-            **TEXT_MODE_KWARGS,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    match = re.match(r"\s*(\d+(?:\.\d+)*)", proc.stdout)
-    return tuple(int(part) for part in match.group(1).split(".")) if match else None
-
-
-def _ensure_quarto_installed() -> None:
-    """
-    Check that a supported Quarto CLI is on the `PATH`
-
-    A Quarto whose version cannot be read passes the check.
-
-    Raises
-    ------
-    QuartoNotFoundError
-        If Quarto is not on the `PATH`.
-    QuartoVersionError
-        If Quarto is older than `MIN_QUARTO_VERSION`.
-    """
-    if shutil.which("quarto") is None:
-        raise QuartoNotFoundError(
-            "Quarto was not found on your system. Quarto is a system-level "
-            "dependency of great-docs and is not bundled with the Python package.\n\n"
-            "See the troubleshooting guide:\n"
-            "  https://posit-dev.github.io/great-docs/recipes/fix-common-build-errors.html\n\n"
-            "Or fetch the binary programmatically by using your OS package (brew, yum, winget)."
-        )
-    version = _quarto_version()
-    if version is not None and version < MIN_QUARTO_VERSION:
-        found = ".".join(map(str, version))
-        required = ".".join(map(str, MIN_QUARTO_VERSION))
-        raise QuartoVersionError(
-            f"great-docs requires Quarto {required} or later, but found Quarto {found}. "
-            "Upgrade Quarto from https://quarto.org/docs/get-started/"
-        )
 
 
 def _migrate_legacy_gitignore_entry(content: str) -> str:
@@ -1690,77 +1625,6 @@ class GreatDocs:
             if candidate.is_dir():
                 extra.append(candidate)
         return extra + sys.path
-
-    def _get_quarto_env(self) -> dict[str, str]:
-        """
-        Get environment variables for running Quarto commands.
-
-        Sets QUARTO_PYTHON to ensure Quarto uses the correct Python environment
-        where the package and its dependencies are installed. This is essential
-        for notebook execution and API introspection.
-
-        Also sets PYTHONPATH to include the package root directory, ensuring that
-        griffe can find the package even if it's not installed.
-
-        The method looks for Python in the following order:
-
-        1. Virtual environment in the project root (.venv/bin/python or .venv/Scripts/python.exe)
-        2. The currently running Python interpreter
-
-        Returns
-        -------
-        dict[str, str]
-            Environment variables dictionary with QUARTO_PYTHON and PYTHONPATH set.
-        """
-        env = os.environ.copy()
-        package_root = self.layout.package_root
-
-        # Look for a virtual environment in the project
-        venv_paths = [
-            package_root / ".venv" / "bin" / "python",  # Unix
-            package_root / ".venv" / "Scripts" / "python.exe",  # Windows
-            package_root / "venv" / "bin" / "python",  # Alternative name
-            package_root / "venv" / "Scripts" / "python.exe",  # Windows alternative
-        ]
-
-        python_path = None
-        for venv_python in venv_paths:
-            if venv_python.exists():
-                python_path = str(venv_python)
-                break
-
-        # Fallback to the currently running Python
-        if python_path is None:
-            python_path = sys.executable
-
-        env["QUARTO_PYTHON"] = python_path
-
-        # Add package root to PYTHONPATH so griffe can find the package
-        # even if it's not installed (e.g., during development)
-        pythonpath_dirs = [str(package_root)]
-
-        # Also add src/ directory if it exists (common src-layout)
-        src_dir = package_root / "src"
-        if src_dir.exists() and src_dir.is_dir():
-            pythonpath_dirs.append(str(src_dir))
-
-        # Also add python/ directory if it exists (common for Rust/PyO3 projects)
-        python_dir = package_root / "python"
-        if python_dir.exists() and python_dir.is_dir():
-            pythonpath_dirs.append(str(python_dir))
-
-        existing_pythonpath = env.get("PYTHONPATH", "")
-        new_pythonpath = os.pathsep.join(pythonpath_dirs)
-        if existing_pythonpath:
-            # Prepend our paths to existing PYTHONPATH
-            env["PYTHONPATH"] = f"{new_pythonpath}{os.pathsep}{existing_pythonpath}"
-        else:
-            env["PYTHONPATH"] = new_pythonpath
-
-        # Ensure Python subprocesses (e.g. pre-render scripts via Quarto) use UTF-8 on Windows.
-        env.setdefault("PYTHONUTF8", "1")
-
-        return env
 
     def _get_package_metadata(self) -> dict:
         """
@@ -15105,14 +14969,10 @@ anchor-sections: true
         with redirect_stdout(devnull):
             self._prepare_build_directory()
 
-        # Change to build directory for subsequent steps
-        original_dir = os.getcwd()
         try:
-            os.chdir(self.build_dir)
-
             # Steps 2-13: Process user guide, sections, pages, tags, etc.
             # These can modify .qmd files (add breadcrumbs, expand tags, etc.)
-            with redirect_stdout(devnull):
+            with self._running_user_code(), redirect_stdout(devnull):
                 try:
                     self._refresh_api_reference_config()
                 except Exception:
@@ -15149,7 +15009,7 @@ anchor-sections: true
                 try:
                     from great_docs._apiref.api_reference import APIReference
 
-                    with redirect_stdout(devnull):
+                    with self._running_user_code(), redirect_stdout(devnull):
                         APIReference(str(self.build_dir / "_quarto.yml")).build()
                 except Exception:
                     pass
@@ -15168,8 +15028,22 @@ anchor-sections: true
                 self._update_quarto_config()
 
         finally:
-            os.chdir(original_dir)
             devnull.close()
+
+    def _running_user_code(self) -> contextlib.chdir[Path]:
+        """
+        Enter the build directory while importing or running the project's code
+
+        The package, its command-line interface and MCP server, the API reference and d2
+        diagrams resolve relative paths from the working directory, which is the build
+        directory while they run. Quarto receives the build directory as its `cwd` instead.
+
+        Returns
+        -------
+        :
+            A context manager that restores the working directory on exit.
+        """
+        return contextlib.chdir(self.build_dir)
 
     def _print_layout_notice(self) -> None:
         """
@@ -15266,7 +15140,7 @@ anchor-sections: true
             )
 
         try:
-            _ensure_quarto_installed()
+            quarto.ensure_installed()
         except BuildError as e:
             print(f"Error: {e}", file=sys.stderr)
             raise
@@ -15288,8 +15162,6 @@ anchor-sections: true
             if render_jobs > 1
             else {}
         )
-
-        _ansi_re = re.compile(r"\033\[[0-9;]*m")
 
         class _DetailStream:
             """A file-like object that forwards each line to `log.detail()`."""
@@ -15451,101 +15323,36 @@ anchor-sections: true
         # Step counter
         step = 0
 
-        def run_streaming(cmd, env=None, progress_bar=None):
-            """Run a subprocess, stream output, optionally feeding a progress bar.
-
-            Page-level timing is recorded automatically: each `[i/N] page.qmd` progress line from
-            Quarto is timestamped so that per-page render durations can be computed after the
-            process exits.
+        def render_site(label: str, env: dict[str, str]) -> quarto.RenderResult:
             """
-            import time as _time_mod
+            Render the site with Quarto and show page progress
 
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                **TEXT_MODE_KWARGS,
-                env=env,
-                bufsize=1,
-            )
+            Show Quarto warnings when the bar reaches its last page; drop warnings reported later.
+            """
+            bar = log.progress(label, 1)
+            warnings: list[str] = []
+            finished = False
 
-            stderr_lines = []
-            quarto_warnings: list[str] = []
-            bar_finished = [False]  # mutable flag for closure
-            page_re = re.compile(r"\[\s*(\d+)/(\d+)\]\s+(.+)")
-            # Each entry: (page_path, timestamp)
-            _page_timestamps: list[tuple[str, float]] = []
-
-            def _finish_bar():
-                """Finish the progress bar and emit warnings."""
-                if not bar_finished[0] and progress_bar:
-                    bar_finished[0] = True
-                    progress_bar.finish()
-                    for w in quarto_warnings:
-                        log.warn(w)
-
-            def _handle_line(stripped):
-                """Route a single output line: progress / detail."""
-                if progress_bar:
-                    if not bar_finished[0]:
-                        m = page_re.search(stripped)
-                        if m:
-                            cur, tot = int(m.group(1)), int(m.group(2))
-                            page_path = _ansi_re.sub("", m.group(3)).strip()
-                            _page_timestamps.append((page_path, _time_mod.monotonic()))
-                            if tot != progress_bar.total:
-                                progress_bar.total = tot
-                            progress_bar.update(cur)
-                            # Auto-finish bar when rendering is complete
-                            if cur >= tot:
-                                _finish_bar()
-                            return
-                        # Capture Quarto warnings (strip ANSI codes first);
-                        # discard all other noise while the bar is active.
-                        plain = _ansi_re.sub("", stripped)
-                        if plain.startswith("WARN"):
-                            quarto_warnings.append(plain)
-                    # Suppress Quarto's output after the bar finishes.
+            def on_page(progress: quarto.Progress) -> None:
+                nonlocal finished
+                if finished:
                     return
-                log.detail(stripped)
+                if progress.total != bar.total:
+                    bar.total = progress.total
+                bar.update(progress.current)
+                if progress.current >= progress.total:
+                    finished = True
+                    bar.finish()
+                    for warning in warnings:
+                        log.warn(warning)
 
-            def read_stderr():
-                for line in process.stderr:
-                    stderr_lines.append(line)
-                    stripped = line.rstrip()
-                    if stripped:
-                        _handle_line(stripped)
+            def on_warning(warning: str) -> None:
+                if not finished:
+                    warnings.append(warning)
 
-            stderr_thread = threading.Thread(target=read_stderr, daemon=True)
-            stderr_thread.start()
-
-            for line in process.stdout:
-                stripped = line.rstrip()
-                if stripped:
-                    _handle_line(stripped)
-
-            process.wait()
-            stderr_thread.join(timeout=5)
-
-            # Compute per-page durations from consecutive timestamps
-            page_timings: list[dict[str, Any]] = []
-            for i, (page_path, ts) in enumerate(_page_timestamps):
-                if i + 1 < len(_page_timestamps):
-                    duration = _page_timestamps[i + 1][1] - ts
-                else:
-                    # Last page: measure until process exit
-                    duration = _time_mod.monotonic() - ts
-                page_timings.append({"page": page_path, "seconds": round(duration, 3)})
-
-            class Result:
-                pass
-
-            r = Result()
-            r.returncode = process.returncode
-            r.stderr = "".join(stderr_lines)
-            r.stdout = ""
-            r.page_timings = page_timings
-            return r
+            result = quarto.render(self.build_dir, env, on_page=on_page, on_warning=on_warning)
+            bar.finish()  # The final page may already have finished the bar
+            return result
 
         # ── Step 1: Prepare build directory ────────────────────────────
         step += 1
@@ -15564,14 +15371,10 @@ anchor-sections: true
             for script in pre_render_scripts:
                 log.detail(f"Pre-render script: {script}")
 
-        # Change to build directory
-        original_dir = os.getcwd()
-        try:
-            os.chdir(self.build_dir)
-
-            # ── Step 2: Configure API reference ────────────────────────
-            step += 1
-            log.step_start(step, "Configure API reference")
+        # ── Step 2: Configure API reference ────────────────────────
+        step += 1
+        log.step_start(step, "Configure API reference")
+        with self._running_user_code():
             if refresh and self._has_api_reference:
                 with _quiet_prints():
                     self._refresh_api_reference_config()
@@ -15581,9 +15384,10 @@ anchor-sections: true
             else:
                 log.step_skip(step, "no API reference")
 
-            # ── Step 3: Generate llms.txt / llms-full.txt ──────────────
-            step += 1
-            log.step_start(step, "Generate llms.txt / llms-full.txt")
+        # ── Step 3: Generate llms.txt / llms-full.txt ──────────────
+        step += 1
+        log.step_start(step, "Generate llms.txt / llms-full.txt")
+        with self._running_user_code():
             if self._llms_txt_available():
                 with _quiet_prints():
                     self._generate_llms_txt()
@@ -15592,9 +15396,10 @@ anchor-sections: true
             else:
                 log.step_skip(step, "no API reference")
 
-            # ── Step 4: Generate SKILL.md ──────────────────────────────
-            step += 1
-            log.step_start(step, "Generate SKILL.md")
+        # ── Step 4: Generate SKILL.md ──────────────────────────────
+        step += 1
+        log.step_start(step, "Generate SKILL.md")
+        with self._running_user_code():
             if self._config.skill_enabled:
                 with _quiet_prints():
                     self._generate_skill_md()
@@ -15615,31 +15420,32 @@ anchor-sections: true
             else:
                 log.step_skip(step, "disabled in config")
 
-            # ── Step 6: Generate changelog ─────────────────────────────
-            step += 1
-            log.step_start(step, "Generate changelog")
-            if self._config.changelog_enabled:
-                owner, repo, _base_url = self._get_github_repo_info()
-                if owner and repo:
-                    try:
-                        with _quiet_prints():
-                            result_file = self._generate_changelog_page()
-                        if result_file:
-                            self._add_changelog_to_navbar()
-                            log.step_done("Changelog from GitHub Releases")
-                        else:
-                            log.step_done("No releases found; skipped")
-                    except Exception as e:
-                        log.warn(f"Error generating changelog: {e}")
-                        log.step_done("Changelog generation had issues")
-                else:
-                    log.step_skip(step, "no GitHub repo info")
+        # ── Step 6: Generate changelog ─────────────────────────────
+        step += 1
+        log.step_start(step, "Generate changelog")
+        if self._config.changelog_enabled:
+            owner, repo, _base_url = self._get_github_repo_info()
+            if owner and repo:
+                try:
+                    with _quiet_prints():
+                        result_file = self._generate_changelog_page()
+                    if result_file:
+                        self._add_changelog_to_navbar()
+                        log.step_done("Changelog from GitHub Releases")
+                    else:
+                        log.step_done("No releases found; skipped")
+                except Exception as e:
+                    log.warn(f"Error generating changelog: {e}")
+                    log.step_done("Changelog generation had issues")
             else:
-                log.step_skip(step, "disabled in config")
+                log.step_skip(step, "no GitHub repo info")
+        else:
+            log.step_skip(step, "disabled in config")
 
-            # ── Step 7: Generate CLI reference ─────────────────────────
-            step += 1
-            log.step_start(step, "Generate CLI reference")
+        # ── Step 7: Generate CLI reference ─────────────────────────
+        step += 1
+        log.step_start(step, "Generate CLI reference")
+        with self._running_user_code():
             metadata = self._get_package_metadata()
             if metadata.get("cli_enabled", False) and not package_name:
                 log.step_skip(step, "no package detected")
@@ -15668,9 +15474,10 @@ anchor-sections: true
             else:
                 log.step_skip(step, "CLI not enabled")
 
-            # ── Step 7a: Generate Go CLI reference ─────────────────────
-            step += 1
-            log.step_start(step, "Generate Go CLI reference")
+        # ── Step 7a: Generate Go CLI reference ─────────────────────
+        step += 1
+        log.step_start(step, "Generate Go CLI reference")
+        with self._running_user_code():
             if self._config.go_cli_enabled:
                 try:
                     from great_docs._go_cli import detect_go_cli_project, introspect_cobra_cli
@@ -15702,9 +15509,10 @@ anchor-sections: true
             else:
                 log.step_skip(step, "Go CLI not enabled")
 
-            # ── Step 7b: Generate Rust CLI reference ──────────────────
-            step += 1
-            log.step_start(step, "Generate Rust CLI reference")
+        # ── Step 7b: Generate Rust CLI reference ──────────────────
+        step += 1
+        log.step_start(step, "Generate Rust CLI reference")
+        with self._running_user_code():
             if self._config.rust_cli_enabled:
                 try:
                     from great_docs._rust_cli import detect_rust_cli_project, introspect_rust_cli
@@ -15737,9 +15545,10 @@ anchor-sections: true
             else:
                 log.step_skip(step, "Rust CLI not enabled")
 
-            # ── Step 7c: Generate MCP server reference ─────────────────
-            step += 1
-            log.step_start(step, "Generate MCP server reference")
+        # ── Step 7c: Generate MCP server reference ─────────────────
+        step += 1
+        log.step_start(step, "Generate MCP server reference")
+        with self._running_user_code():
             if self._config.mcp_enabled:
                 try:
                     mcp_package = (
@@ -15784,9 +15593,10 @@ anchor-sections: true
             else:
                 log.step_skip(step, "MCP not enabled")
 
-            # ── Step 8: Process User Guide ─────────────────────────────
-            step += 1
-            log.step_start(step, "Process User Guide")
+        # ── Step 8: Process User Guide ─────────────────────────────
+        step += 1
+        log.step_start(step, "Process User Guide")
+        with self._running_user_code():
             try:
                 with _quiet_prints():
                     ug_result = self._process_user_guide()
@@ -15798,93 +15608,94 @@ anchor-sections: true
                 log.warn(f"Error processing User Guide: {e}")
                 log.step_done("User Guide had issues")
 
-            # ── Step 9: Process custom sections ────────────────────────
-            step += 1
-            log.step_start(step, "Process custom sections")
-            if self._config.sections:
-                try:
-                    with _quiet_prints():
-                        n_sections = self._process_sections()
-                    if n_sections:
-                        log.step_done(f"{n_sections} section(s) processed")
-                    else:
-                        log.step_done("No sections to process")
-                except Exception as e:
-                    log.warn(f"Error processing sections: {e}")
-                    log.step_done("Sections had issues")
-            else:
-                log.step_skip(step, "no sections configured")
-
-            # ── Step 10: Process custom pages ──────────────────────────
-            step += 1
-            log.step_start(step, "Process custom pages")
+        # ── Step 9: Process custom sections ────────────────────────
+        step += 1
+        log.step_start(step, "Process custom sections")
+        if self._config.sections:
             try:
                 with _quiet_prints():
-                    n_custom_pages = self._process_custom_pages()
-                if n_custom_pages:
-                    log.step_done(f"{n_custom_pages} custom page(s)")
+                    n_sections = self._process_sections()
+                if n_sections:
+                    log.step_done(f"{n_sections} section(s) processed")
                 else:
-                    log.step_skip(step, "no custom pages")
-            except Exception as e:  # pragma: no cover
-                log.warn(f"Error processing custom pages: {e}")
-                log.step_done("Custom pages had issues")
-
-            # ── Step 11: Process page tags ─────────────────────────────
-            step += 1
-            log.step_start(step, "Process page tags")
-            if self._config.tags_enabled:
-                try:
-                    with _quiet_prints():
-                        has_tags = self._process_tags()
-                    if has_tags:
-                        log.step_done("Tags processed")
-                    else:
-                        log.step_skip(step, "no tagged pages found")
-                except Exception as e:
-                    log.warn(f"Error processing tags: {e}")
-                    log.step_done("Tags had issues")
-            else:
-                log.step_skip(step, "tags not enabled")
-
-            # ── Step 12: Process page status badges ────────────────────
-            step += 1
-            log.step_start(step, "Process page status badges")
-            if self._config.page_status_enabled:
-                try:
-                    with _quiet_prints():
-                        has_statuses = self._process_page_statuses()
-                    if has_statuses:
-                        log.step_done("Status badges processed")
-                    else:
-                        log.step_skip(step, "no pages with status")
-                except Exception as e:
-                    log.warn(f"Error processing page statuses: {e}")
-                    log.step_done("Status badges had issues")
-            else:
-                log.step_skip(step, "page status not enabled")
-
-            # ── Step 13: Copy assets ───────────────────────────────────
-            step += 1
-            log.step_start(step, "Copy assets")
-            try:
-                with _quiet_prints():
-                    assets_copied = self._copy_assets()
-                    # Always update quarto config after user guide + assets steps
-                    # (registers user-guide/images/** and other dynamic resources)
-                    self._update_quarto_config()
-                if assets_copied:
-                    log.step_done("Assets copied")
-                else:
-                    log.step_skip(step, "no assets directory")
+                    log.step_done("No sections to process")
             except Exception as e:
-                log.warn(f"Error copying assets: {e}")
-                log.step_done("Assets had issues")
+                log.warn(f"Error processing sections: {e}")
+                log.step_done("Sections had issues")
+        else:
+            log.step_skip(step, "no sections configured")
 
-            # ── Step 14: Generate API reference ────────────────────────
-            step += 1
-            log.step_start(step, "Generate API reference")
+        # ── Step 10: Process custom pages ──────────────────────────
+        step += 1
+        log.step_start(step, "Process custom pages")
+        try:
+            with _quiet_prints():
+                n_custom_pages = self._process_custom_pages()
+            if n_custom_pages:
+                log.step_done(f"{n_custom_pages} custom page(s)")
+            else:
+                log.step_skip(step, "no custom pages")
+        except Exception as e:  # pragma: no cover
+            log.warn(f"Error processing custom pages: {e}")
+            log.step_done("Custom pages had issues")
+
+        # ── Step 11: Process page tags ─────────────────────────────
+        step += 1
+        log.step_start(step, "Process page tags")
+        if self._config.tags_enabled:
+            try:
+                with _quiet_prints():
+                    has_tags = self._process_tags()
+                if has_tags:
+                    log.step_done("Tags processed")
+                else:
+                    log.step_skip(step, "no tagged pages found")
+            except Exception as e:
+                log.warn(f"Error processing tags: {e}")
+                log.step_done("Tags had issues")
+        else:
+            log.step_skip(step, "tags not enabled")
+
+        # ── Step 12: Process page status badges ────────────────────
+        step += 1
+        log.step_start(step, "Process page status badges")
+        if self._config.page_status_enabled:
+            try:
+                with _quiet_prints():
+                    has_statuses = self._process_page_statuses()
+                if has_statuses:
+                    log.step_done("Status badges processed")
+                else:
+                    log.step_skip(step, "no pages with status")
+            except Exception as e:
+                log.warn(f"Error processing page statuses: {e}")
+                log.step_done("Status badges had issues")
+        else:
+            log.step_skip(step, "page status not enabled")
+
+        # ── Step 13: Copy assets ───────────────────────────────────
+        step += 1
+        log.step_start(step, "Copy assets")
+        try:
+            with _quiet_prints():
+                assets_copied = self._copy_assets()
+                # Always update quarto config after user guide + assets steps
+                # (registers user-guide/images/** and other dynamic resources)
+                self._update_quarto_config()
+            if assets_copied:
+                log.step_done("Assets copied")
+            else:
+                log.step_skip(step, "no assets directory")
+        except Exception as e:
+            log.warn(f"Error copying assets: {e}")
+            log.step_done("Assets had issues")
+
+        # ── Step 14: Generate API reference ────────────────────────
+        step += 1
+        log.step_start(step, "Generate API reference")
+        with self._running_user_code():
             if self._has_api_reference:
-                build_env = self._get_quarto_env()
+                build_env = quarto.environment(self._config)
                 extra_paths = build_env.get("PYTHONPATH", "").split(os.pathsep)
                 for p in extra_paths:
                     if p and p not in sys.path:
@@ -15932,123 +15743,127 @@ anchor-sections: true
                 ref = None
                 log.step_skip(step, "API reference disabled")
 
-            # ── Step 15: Build the interlinks index ────────────────────
-            step += 1
-            log.step_start(step, "Build interlinks index")
-            from great_docs._interlinks import AliasClaims, build_project_index
+        # ── Step 15: Build the interlinks index ────────────────────
+        step += 1
+        log.step_start(step, "Build interlinks index")
+        from great_docs._interlinks import AliasClaims, build_project_index
 
-            index, interlinks_notes = build_project_index(
-                self.build_dir,
-                self._config,
-                self._detect_package_name() or "",
-                AliasClaims.make(ref.items) if ref is not None else AliasClaims(),
+        index, interlinks_notes = build_project_index(
+            self.build_dir,
+            self._config,
+            self._detect_package_name() or "",
+            AliasClaims.make(ref.items) if ref is not None else AliasClaims(),
+        )
+        for note in interlinks_notes:
+            log.detail(note)
+        for alias, targets in sorted(index.dropped.items()):
+            log.detail(
+                f"'{alias}' is ambiguous ({', '.join(targets)}); references to it stay unlinked"
             )
-            for note in interlinks_notes:
-                log.detail(note)
-            for alias, targets in sorted(index.dropped.items()):
-                log.detail(
-                    f"'{alias}' is ambiguous ({', '.join(targets)}); references to it stay unlinked"
-                )
-            log.step_done(f"Indexed {len(index.names)} name(s)")
+        log.step_done(f"Indexed {len(index.names)} name(s)")
 
-            # ── Step 16: Prepare freeze cache ──────────────────────────
-            step += 1
-            log.step_start(step, "Prepare freeze cache")
+        # ── Step 16: Prepare freeze cache ──────────────────────────
+        step += 1
+        log.step_start(step, "Prepare freeze cache")
 
-            # Normalize page-level freeze shorthand before Quarto render
-            frozen_pages = self._normalize_freeze_shorthand()
-            self._write_page_metadata(watch)
-            has_freeze_cache = self.layout.freeze_dir.is_dir()
+        # Normalize page-level freeze shorthand before Quarto render
+        frozen_pages = self._normalize_freeze_shorthand()
+        self._write_page_metadata(watch)
+        has_freeze_cache = self.layout.freeze_dir.is_dir()
 
-            if frozen_pages or has_freeze_cache:
-                if frozen_pages:
-                    n = len(frozen_pages)
-                    log.step_done(f"Using {n} page(s) from the freeze cache")
-                    for p in frozen_pages:
-                        log.detail(f"  - {p}")
-                else:
-                    log.step_done("Freeze cache will be restored during render")
+        if frozen_pages or has_freeze_cache:
+            if frozen_pages:
+                n = len(frozen_pages)
+                log.step_done(f"Using {n} page(s) from the freeze cache")
+                for p in frozen_pages:
+                    log.detail(f"  - {p}")
             else:
-                log.step_skip(step, "no frozen pages")
+                log.step_done("Freeze cache will be restored during render")
+        else:
+            log.step_skip(step, "no frozen pages")
 
-            # Expand source-code: mock cells before Quarto sees them
-            from great_docs._mock_code import process_directory as _expand_mock_cells
+        # Expand source-code: mock cells before Quarto sees them
+        from great_docs._mock_code import process_directory as _expand_mock_cells
 
-            mock_modified = _expand_mock_cells(self.build_dir)
-            if mock_modified:
-                log.detail(
-                    f"Expanded {len(mock_modified)} mock-code cell(s): " + ", ".join(mock_modified)
-                )
+        mock_modified = _expand_mock_cells(self.build_dir)
+        if mock_modified:
+            log.detail(
+                f"Expanded {len(mock_modified)} mock-code cell(s): " + ", ".join(mock_modified)
+            )
 
-            # Pre-render d2 diagrams to light + dark SVGs before Quarto sees them.
-            # (Mermaid is rendered by Quarto client-side; d2 has no native support.)
-            from great_docs._d2 import process_directory as _render_d2
+        # Pre-render d2 diagrams to light + dark SVGs before Quarto sees them.
+        # (Mermaid is rendered by Quarto client-side; d2 has no native support.)
+        from great_docs._d2 import process_directory as _render_d2
 
-            d2_cache = self.layout.cache_dir / "d2"
+        d2_cache = self.layout.cache_dir / "d2"
+        with self._running_user_code():
             d2_modified = _render_d2(self.build_dir, cache_dir=d2_cache)
-            if d2_modified:
-                log.detail(
-                    f"Rendered d2 diagrams in {len(d2_modified)} page(s): " + ", ".join(d2_modified)
-                )
+        if d2_modified:
+            log.detail(
+                f"Rendered d2 diagrams in {len(d2_modified)} page(s): " + ", ".join(d2_modified)
+            )
 
-            # Get environment with QUARTO_PYTHON set
-            quarto_env = self._get_quarto_env()
+        # Get environment with QUARTO_PYTHON set
+        quarto_env = quarto.environment(self._config)
 
-            # ── Pre-render termshow recordings ──────────────────────
-            self._prerender_term_player(log)
+        # ── Pre-render termshow recordings ──────────────────────
+        self._prerender_term_player(log)
 
-            # Render each long reference sidebar once rather than on every page.
-            # A versioned build does this in each version's own directory.
-            if watch or not self._config.has_versions:
-                shared = shared_sidebar.prepare(self.build_dir)
-                if shared:
-                    log.detail("Sharing rendered sidebar(s): " + ", ".join(shared))
+        # Render each long reference sidebar once rather than on every page.
+        # A versioned build does this in each version's own directory.
+        if watch or not self._config.has_versions:
+            shared = shared_sidebar.prepare(self.build_dir)
+            if shared:
+                log.detail("Sharing rendered sidebar(s): " + ", ".join(shared))
 
-            # ── Step 16: Build site with Quarto ────────────────────────
-            step += 1
-            log.step_start(step, "Build site with Quarto")
-            if watch:
-                log.step_done("Starting watch mode...")
-                log.footer(watch_mode=True)
-                self._print_layout_notice()
-                quarto_env[shared_sidebar.PREVIEW_ENV] = "1"
-                subprocess.run(["quarto", "preview", "--no-browser"], env=quarto_env)
-                return
-            elif self._config.has_versions:
-                # ── Multi-version build pipeline ───────────────────────
-                from great_docs._versioned_build import run_versioned_build
-                from great_docs._versioning import parse_versions_config
+        # ── Step 16: Build site with Quarto ────────────────────────
+        step += 1
+        log.step_start(step, "Build site with Quarto")
+        if watch:
+            log.step_done("Starting watch mode...")
+            log.footer(watch_mode=True)
+            self._print_layout_notice()
+            quarto_env[shared_sidebar.PREVIEW_ENV] = "1"
+            subprocess.run(
+                ["quarto", "preview", "--no-browser"], cwd=self.build_dir, env=quarto_env
+            )
+            return
+        elif self._config.has_versions:
+            # ── Multi-version build pipeline ───────────────────────
+            from great_docs._versioned_build import run_versioned_build
+            from great_docs._versioning import parse_versions_config
 
-                versions_parsed = parse_versions_config(self._config.versions)
+            versions_parsed = parse_versions_config(self._config.versions)
 
-                # Determine which versions will be built
-                if latest_only:
-                    from great_docs._versioning import get_latest_version
+            # Determine which versions will be built
+            if latest_only:
+                from great_docs._versioning import get_latest_version
 
-                    lt = get_latest_version(versions_parsed)
-                    lt_tag = lt.tag if lt else versions_parsed[0].tag
-                    targets_parsed = [v for v in versions_parsed if v.tag == lt_tag]
-                elif version_tags:
-                    tag_set = set(version_tags)
-                    targets_parsed = [v for v in versions_parsed if v.tag in tag_set]
-                else:
-                    targets_parsed = list(versions_parsed)
+                lt = get_latest_version(versions_parsed)
+                lt_tag = lt.tag if lt else versions_parsed[0].tag
+                targets_parsed = [v for v in versions_parsed if v.tag == lt_tag]
+            elif version_tags:
+                tag_set = set(version_tags)
+                targets_parsed = [v for v in versions_parsed if v.tag in tag_set]
+            else:
+                targets_parsed = list(versions_parsed)
 
-                n_versions = len(targets_parsed)
-                label = "1 version" if n_versions == 1 else f"{n_versions} version(s)"
-                log.detail(f"Multi-version build: {label}")
+            n_versions = len(targets_parsed)
+            label = "1 version" if n_versions == 1 else f"{n_versions} version(s)"
+            log.detail(f"Multi-version build: {label}")
 
-                # Create multi-progress bar for the parallel renders
-                bar_labels = [f"v{v.label}" for v in targets_parsed]
-                mbar = log.multi_progress(bar_labels)
+            # Create multi-progress bar for the parallel renders
+            bar_labels = [f"v{v.label}" for v in targets_parsed]
+            mbar = log.multi_progress(bar_labels)
 
-                def _progress_cb(slot: int, current: int, total: int) -> None:
-                    mbar.set_total(slot, total)
-                    mbar.update(slot, current)
+            def _progress_cb(slot: int, current: int, total: int) -> None:
+                mbar.set_total(slot, total)
+                mbar.update(slot, current)
 
-                def _on_renders_done() -> None:
-                    mbar.finish()
+            def _on_renders_done() -> None:
+                mbar.finish()
 
+            with self._running_user_code():
                 vb_result = run_versioned_build(
                     source_dir=self.build_dir,
                     project_root=self.project_root,
@@ -16065,179 +15880,163 @@ anchor-sections: true
                     structured_data=self._structured_data(),
                 )
 
-                for warning in vb_result.get("warnings", []):
-                    log.warn(warning)
+            for warning in vb_result.get("warnings", []):
+                log.warn(warning)
 
-                if not vb_result["success"]:
-                    for err in vb_result["errors"]:
-                        log.error_detail(err)
-                    if not vb_result["versions_built"]:
-                        log.step_fail("All version builds failed")
+            if not vb_result["success"]:
+                for err in vb_result["errors"]:
+                    log.error_detail(err)
+                if not vb_result["versions_built"]:
+                    log.step_fail("All version builds failed")
 
-                        # Skip the SEO step
-                        step += 1
-                        log.step_start(step, "Generate SEO files")
-                        log.step_skip(step, "build failed")
-
-                        log.footer()
-                        raise BuildError("All version builds failed")
-                    else:
-                        n_ok = len(vb_result["versions_built"])
-                        n_err = len(vb_result["errors"])
-                        log.step_done(f"{n_ok} version(s) rendered ({n_err} failed)")
-                else:
-                    n_ok = len(vb_result["versions_built"])
-                    log.step_done(f"{n_ok} version(s) rendered")
-
-                # ── Step 20: Generate SEO files ────────────────────
-                step += 1
-                log.step_start(step, "Generate SEO files")
-                try:
-                    with _quiet_prints():
-                        self._generate_seo_files()
-                    log.step_done("sitemap.xml + robots.txt")
-                except Exception as e:
-                    log.warn(f"Error generating SEO files: {e}")
-                    log.step_done("SEO files had issues")
-
-                # ── Write build-timings.json ───────────────────────
-                timing_path = self._write_build_timing(
-                    timings_by_version=vb_result.get("timings_by_version"),
-                )
-                if timing_path:
-                    log.detail(f"Wrote {timing_path.name}")
-
-                # ── Persist freeze cache ──────────────────────────
-                n_frozen = self._persist_freeze_cache()
-                if n_frozen is not None:
-                    log.detail(f"Saved freeze cache ({n_frozen} files)")
-
-                # ── Auto-save API snapshot (Strategy C) ────────────
-                try:
-                    self._auto_save_snapshot()
-                except Exception as e:
-                    log.warn(f"Snapshot auto-save failed: {e}")
-
-                if self.layout.site_dir != self.build_dir / "_site":
-                    record_site_ownership(self.layout.site_dir)
-                site_path = self.layout.site_dir / "index.html"
-                if site_path.exists():
-                    log.footer(site_path=str(site_path))
-                else:
-                    log.footer(site_path=str(self.layout.site_dir))
-            else:
-                result = None
-                if render_jobs > 1:
-                    # Experimental: split the pages among several Quarto processes
-                    bar = log.progress("Rendering pages", 1)
-                    bar_lock = threading.Lock()
-                    pages_started = [0]
-
-                    def _on_render_start(pages: int, groups: int, workers: int) -> None:
-                        bar.total = max(pages, 1)
-                        log.detail(
-                            f"Rendering {pages} pages in {groups} groups "
-                            f"with {workers} Quarto processes"
-                        )
-
-                    def _on_render_page(_page: str) -> None:
-                        with bar_lock:
-                            pages_started[0] = min(pages_started[0] + 1, bar.total)
-                            bar.update(pages_started[0])
-
-                    result = _parallel_render.render(
-                        self.build_dir,
-                        quarto_env,
-                        render_jobs,
-                        last_timings,
-                        on_start=_on_render_start,
-                        on_page=_on_render_page,
-                    )
-                    bar.finish()
-                    if result.fallback:
-                        log.detail(f"Rendering in one process: {result.fallback}")
-                        result = None
-                    else:
-                        for w in result.warnings:
-                            log.warn(w)
-
-                if result is None:
-                    bar = log.progress("Rendering pages", 1)
-                    result = run_streaming(["quarto", "render"], env=quarto_env, progress_bar=bar)
-                    bar.finish()  # no-op if auto-finished at 100%
-
-                # Retry once on transient Quarto filesystem race conditions
-                # (e.g., "No such file or directory: rename ..." during output
-                # copying in large projects)
-                _TRANSIENT_PATTERNS = (
-                    "No such file or directory",
-                    "renameSync",
-                    "os error 2",
-                )
-                if result.returncode != 0 and any(p in result.stderr for p in _TRANSIENT_PATTERNS):
-                    log.warn("Quarto hit a transient filesystem error — retrying render...")
-                    # Reset progress state for retry
-                    bar = log.progress("Rendering pages (retry)", 1)
-                    result = run_streaming(["quarto", "render"], env=quarto_env, progress_bar=bar)
-                    bar.finish()
-
-                if result.returncode != 0:
-                    log.step_fail("Quarto render failed")
-                    log.error_detail(result.stderr)
-
-                    # ── Step 20 skipped on failure ─────────────────────
+                    # Skip the SEO step
                     step += 1
                     log.step_start(step, "Generate SEO files")
                     log.step_skip(step, "build failed")
 
                     log.footer()
-                    raise BuildError("Quarto render failed")
+                    raise BuildError("All version builds failed")
                 else:
-                    log.step_done("Site rendered")
+                    n_ok = len(vb_result["versions_built"])
+                    n_err = len(vb_result["errors"])
+                    log.step_done(f"{n_ok} version(s) rendered ({n_err} failed)")
+            else:
+                n_ok = len(vb_result["versions_built"])
+                log.step_done(f"{n_ok} version(s) rendered")
 
-                    # ── Step 20: Generate SEO files ────────────────────
-                    if self.layout.site_dir != self.build_dir / "_site":
-                        from ._versioned_build import assemble_site
+            # ── Step 20: Generate SEO files ────────────────────
+            step += 1
+            log.step_start(step, "Generate SEO files")
+            try:
+                with _quiet_prints():
+                    self._generate_seo_files()
+                log.step_done("sitemap.xml + robots.txt")
+            except Exception as e:
+                log.warn(f"Error generating SEO files: {e}")
+                log.step_done("SEO files had issues")
 
-                        assemble_site(
-                            self.build_dir, [], "", self.layout.site_dir, layout=self.layout
-                        )
+            # ── Write build-timings.json ───────────────────────
+            timing_path = self._write_build_timing(
+                timings_by_version=vb_result.get("timings_by_version"),
+            )
+            if timing_path:
+                log.detail(f"Wrote {timing_path.name}")
 
-                    step += 1  # pragma: no cover
-                    log.step_start(step, "Generate SEO files")  # pragma: no cover
-                    try:  # pragma: no cover
-                        with _quiet_prints():  # pragma: no cover
-                            self._generate_seo_files()  # pragma: no cover
-                        log.step_done("sitemap.xml + robots.txt")  # pragma: no cover
-                    except Exception as e:  # pragma: no cover
-                        log.warn(f"Error generating SEO files: {e}")  # pragma: no cover
-                        log.step_done("SEO files had issues")  # pragma: no cover
+            # ── Persist freeze cache ──────────────────────────
+            n_frozen = self._persist_freeze_cache()
+            if n_frozen is not None:
+                log.detail(f"Saved freeze cache ({n_frozen} files)")
 
-                    # ── Write build-timings.json ───────────────────────
-                    timing_path = self._write_build_timing(  # pragma: no cover
-                        page_timings=result.page_timings,  # pragma: no cover
-                    )  # pragma: no cover
-                    if timing_path:  # pragma: no cover
-                        log.detail(f"Wrote {timing_path.name}")  # pragma: no cover
+            # ── Auto-save API snapshot (Strategy C) ────────────
+            try:
+                with self._running_user_code():
+                    self._auto_save_snapshot()
+            except Exception as e:
+                log.warn(f"Snapshot auto-save failed: {e}")
 
-                    # ── Persist freeze cache ──────────────────────────
-                    n_frozen = self._persist_freeze_cache()  # pragma: no cover
-                    if n_frozen is not None:  # pragma: no cover
-                        log.detail(f"Saved freeze cache ({n_frozen} files)")  # pragma: no cover
+            if self.layout.site_dir != self.build_dir / "_site":
+                record_site_ownership(self.layout.site_dir)
+            site_path = self.layout.site_dir / "index.html"
+            if site_path.exists():
+                log.footer(site_path=str(site_path))
+            else:
+                log.footer(site_path=str(self.layout.site_dir))
+        else:
+            result = None
+            if render_jobs > 1:
+                # Experimental: split the pages among several Quarto processes
+                bar = log.progress("Rendering pages", 1)
+                bar_lock = threading.Lock()
+                pages_started = [0]
 
-                    if self.layout.site_dir != self.build_dir / "_site":
-                        record_site_ownership(self.layout.site_dir)
+                def _on_render_start(pages: int, groups: int, workers: int) -> None:
+                    bar.total = max(pages, 1)
+                    log.detail(
+                        f"Rendering {pages} pages in {groups} groups "
+                        f"with {workers} Quarto processes"
+                    )
 
-                    site_path = self.layout.site_dir / "index.html"  # pragma: no cover
-                    if site_path.exists():  # pragma: no cover
-                        log.footer(site_path=str(site_path))  # pragma: no cover
-                    else:  # pragma: no cover
-                        log.footer(  # pragma: no cover
-                            site_path=str(self.layout.site_dir)
-                        )
+                def _on_render_page(_page: str) -> None:
+                    with bar_lock:
+                        pages_started[0] = min(pages_started[0] + 1, bar.total)
+                        bar.update(pages_started[0])
 
-        finally:
-            os.chdir(original_dir)
+                result = _parallel_render.render(
+                    self.build_dir,
+                    quarto_env,
+                    render_jobs,
+                    last_timings,
+                    on_start=_on_render_start,
+                    on_page=_on_render_page,
+                )
+                bar.finish()
+                if result.fallback:
+                    log.detail(f"Rendering in one process: {result.fallback}")
+                    result = None
+                else:
+                    for w in result.warnings:
+                        log.warn(w)
+
+            if result is None:
+                result = render_site("Rendering pages", quarto_env)
+
+            # Retry a transient failure in one process, including failures from parallel renders
+            if result.returncode != 0 and quarto.is_transient_error(result.stderr):
+                log.warn("Quarto hit a transient filesystem error — retrying render...")
+                result = render_site("Rendering pages (retry)", quarto_env)
+
+            if result.returncode != 0:
+                log.step_fail("Quarto render failed")
+                log.error_detail(result.stderr)
+
+                # ── Step 20 skipped on failure ─────────────────────
+                step += 1
+                log.step_start(step, "Generate SEO files")
+                log.step_skip(step, "build failed")
+
+                log.footer()
+                raise BuildError("Quarto render failed")
+            else:
+                log.step_done("Site rendered")
+
+                # ── Step 20: Generate SEO files ────────────────────
+                if self.layout.site_dir != self.build_dir / "_site":
+                    from ._versioned_build import assemble_site
+
+                    assemble_site(self.build_dir, [], "", self.layout.site_dir, layout=self.layout)
+
+                step += 1  # pragma: no cover
+                log.step_start(step, "Generate SEO files")  # pragma: no cover
+                try:  # pragma: no cover
+                    with _quiet_prints():  # pragma: no cover
+                        self._generate_seo_files()  # pragma: no cover
+                    log.step_done("sitemap.xml + robots.txt")  # pragma: no cover
+                except Exception as e:  # pragma: no cover
+                    log.warn(f"Error generating SEO files: {e}")  # pragma: no cover
+                    log.step_done("SEO files had issues")  # pragma: no cover
+
+                # ── Write build-timings.json ───────────────────────
+                timing_path = self._write_build_timing(  # pragma: no cover
+                    page_timings=result.page_timings,  # pragma: no cover
+                )  # pragma: no cover
+                if timing_path:  # pragma: no cover
+                    log.detail(f"Wrote {timing_path.name}")  # pragma: no cover
+
+                # ── Persist freeze cache ──────────────────────────
+                n_frozen = self._persist_freeze_cache()  # pragma: no cover
+                if n_frozen is not None:  # pragma: no cover
+                    log.detail(f"Saved freeze cache ({n_frozen} files)")  # pragma: no cover
+
+                if self.layout.site_dir != self.build_dir / "_site":
+                    record_site_ownership(self.layout.site_dir)
+
+                site_path = self.layout.site_dir / "index.html"  # pragma: no cover
+                if site_path.exists():  # pragma: no cover
+                    log.footer(site_path=str(site_path))  # pragma: no cover
+                else:  # pragma: no cover
+                    log.footer(  # pragma: no cover
+                        site_path=str(self.layout.site_dir)
+                    )
 
         self._print_layout_notice()
 

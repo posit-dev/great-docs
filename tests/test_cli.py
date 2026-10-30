@@ -10,6 +10,7 @@ import pytest
 from click.testing import CliRunner
 
 from great_docs import BuildError
+from great_docs._build.quarto import QuartoVersionError
 from great_docs.cli import (
     _detect_current_package,
     _detect_optional_dependencies,
@@ -21,6 +22,16 @@ from great_docs.cli import (
     _print_timing_table,
     cli,
 )
+
+
+@pytest.fixture(autouse=True)
+def quarto_installed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Pass the Quarto check without a Quarto installation
+
+    Many tests replace `subprocess.run`, which the Quarto version check also uses.
+    """
+    monkeypatch.setattr("great_docs._build.quarto.ensure_installed", lambda: None)
 
 
 @pytest.mark.parametrize(
@@ -103,6 +114,27 @@ def test_freeze_clean_preserves_cache_when_page_is_missing(tmp_path: Path) -> No
     assert result.exit_code != 0
     assert "Page not found" in result.output
     assert saved.read_bytes() == b"cache\x00"
+
+
+def test_freeze_requires_supported_quarto(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "page.qmd").write_text("# Page\n")
+    cache = tmp_path / "_freeze"
+    cache.mkdir()
+    (cache / "page.json").write_text("{}")
+
+    def too_old() -> None:
+        raise QuartoVersionError("great-docs requires Quarto 1.9.18 or later")
+
+    monkeypatch.setattr("great_docs._build.quarto.ensure_installed", too_old)
+    with patch("great_docs.cli.GreatDocs") as docs:
+        result = CliRunner().invoke(
+            cli, ["freeze", "page.qmd", "--clean", "--project-path", str(tmp_path)]
+        )
+
+    assert result.exit_code == 1
+    assert "requires Quarto 1.9.18" in result.output
+    docs.assert_not_called()
+    assert (cache / "page.json").exists()
 
 
 def test_freeze_clean_rejects_parent_traversal_before_normalisation(tmp_path: Path) -> None:
@@ -199,7 +231,7 @@ def test_layout_notice_once_per_build_or_preview_session(
     ) -> subprocess.CompletedProcess:
         if command[:2] == ["quarto", "preview"]:
             for _ in range(3):
-                render(Path.cwd())
+                render(Path(str(kwargs["cwd"])))
             return subprocess.CompletedProcess(command, 0)
         return run(command, *args, **kwargs)
 
@@ -207,7 +239,7 @@ def test_layout_notice_once_per_build_or_preview_session(
         if command[:2] == ["quarto", "render"]:
             if mode == "render-error":
                 return MagicMock(stdout=iter([]), stderr=iter(["Render failed"]), returncode=1)
-            render(Path.cwd())
+            render(Path(str(kwargs["cwd"])))
             return MagicMock(stdout=iter([]), stderr=iter([]), returncode=0)
         return popen(command, *args, **kwargs)
 
@@ -218,7 +250,6 @@ def test_layout_notice_once_per_build_or_preview_session(
             render(build_dir)
         return [(str(build_dir), 0, "", "", []) for build_dir in build_dirs]
 
-    monkeypatch.setattr("great_docs.core._ensure_quarto_installed", lambda: None)
     monkeypatch.setattr(subprocess, "run", run_quarto)
     monkeypatch.setattr(subprocess, "Popen", start_quarto)
     monkeypatch.setattr("great_docs._versioned_build.render_versions_parallel", render_versions)

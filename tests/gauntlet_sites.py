@@ -353,6 +353,7 @@ def build_site(rendered_dir: Path, name: str) -> Path:
 
     from great_docs import GreatDocs
     from great_docs._apiref.api_reference import APIReference
+    from great_docs._build import quarto
 
     rendered_dir.mkdir(parents=True, exist_ok=True)
     staging = rendered_dir / f".building-{name}-{os.getpid()}"
@@ -377,7 +378,7 @@ def build_site(rendered_dir: Path, name: str) -> Path:
         result = subprocess.run(
             ["quarto", "render"],
             cwd=docs.build_dir,
-            env=docs._get_quarto_env(),
+            env=quarto.environment(docs._config),
             capture_output=True,
             text=True,
             check=False,
