@@ -15,6 +15,7 @@ import requests
 
 from great_docs import GreatDocs
 from great_docs._website import quarto_yml as quarto_yml_file
+from tests.support import make_run
 
 
 def _make_gd(tmp_path: Path) -> GreatDocs:
@@ -316,7 +317,7 @@ def _build_mcp_candidates(gd: GreatDocs, monkeypatch: pytest.MonkeyPatch) -> lis
         imported.append(name)
         return real_import(name, package)
 
-    def stop_build() -> None:
+    def stop_build(has_api_reference: bool) -> None:
         raise McpStepPassed
 
     monkeypatch.setattr("great_docs._build.quarto.ensure_installed", lambda: None)
@@ -2866,13 +2867,13 @@ class TestCreateApiSectionsFromConfig:
 
 
 # ---------------------------------------------------------------------------
-# _refresh_api_reference_config – early return when already configured
+# Discover package exports at most once per build
 # ---------------------------------------------------------------------------
 
 
-class TestRefreshApiReferenceConfig:
-    def test_skips_when_already_done(self, tmp_path, monkeypatch):
+class TestStepApiReferenceConfig:
+    def test_skips_discovery_when_already_done(self, tmp_path):
         gd = _make_gd(tmp_path)
-        gd._api_discovery_done = True
-        gd._refresh_api_reference_config()
-        assert not (gd.build_dir / "_quarto.yml").exists()
+        with patch.object(gd, "_refresh_api_reference_config") as refresh:
+            gd._step_api_reference_config(make_run(api_discovery_done=True), refresh=True)
+        refresh.assert_not_called()

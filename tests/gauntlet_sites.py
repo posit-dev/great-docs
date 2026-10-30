@@ -354,6 +354,7 @@ def build_site(rendered_dir: Path, name: str) -> Path:
     from great_docs import GreatDocs
     from great_docs._apiref.api_reference import APIReference
     from great_docs._build import quarto
+    from great_docs._build.pipeline import Run
 
     rendered_dir.mkdir(parents=True, exist_ok=True)
     staging = rendered_dir / f".building-{name}-{os.getpid()}"
@@ -363,7 +364,9 @@ def build_site(rendered_dir: Path, name: str) -> Path:
 
         docs = GreatDocs(str(pkg_dir))
         with contextlib.redirect_stdout(io.StringIO()):
-            docs._prepare_build_directory()
+            docs._prepare_build_directory(
+                Run(package_name=docs._detect_package_name() or "", watch=False)
+            )
 
         # API-reference paths resolve from the working directory. Run this
         # stage from the generated documentation project.

@@ -15,6 +15,7 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 from yaml12 import format_yaml, read_yaml
 
 from ._build import quarto
+from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
 from ._build.steps import (
@@ -279,13 +280,8 @@ class GreatDocs:
             cache_dir=self.layout.cache_dir,
         )
 
-        # Whether API reference was successfully configured (set during build)
-        self._has_api_reference = True
-
-        # Whether MCP pages were actually generated (None = not yet determined)
-        self._mcp_pages_generated: bool | None = None
-
-        # Per-build caches (reset on each build, shared across steps)
+        # Caches for the instance's lifetime; builds do not reset them
+        self._package_metadata_cache: dict | None = None
         self._griffe_pkg_cache: dict | None = None  # {normalized_name: griffe Package}
         self._cached_exports: list | None = None
         self._cached_package_name: str | None = None
@@ -410,7 +406,7 @@ class GreatDocs:
             if isinstance(section, dict) and isinstance(section.get("dir"), str)
         }
 
-    def _prepare_build_directory(self) -> None:
+    def _prepare_build_directory(self, run: Run) -> None:
         """
         Prepare the great-docs/ build directory with all necessary assets.
 
@@ -420,6 +416,11 @@ class GreatDocs:
 
         The great-docs/ directory is ephemeral and should not be committed to
         version control. It will be recreated on each build.
+
+        Parameters
+        ----------
+        run
+            The current build, which records whether the site has an API reference.
         """
         print(f"Preparing build directory: {self.build_dir.relative_to(self.project_root)}/")
 
@@ -686,7 +687,7 @@ class GreatDocs:
         # which handles stripping numeric prefixes for clean URLs
 
         # Create _quarto.yml configuration
-        self._update_quarto_config()
+        self._update_quarto_config(run)
 
         page_dates.copy_portraits(self._config, self.layout.source_dir, self.build_dir)
 
@@ -700,14 +701,14 @@ class GreatDocs:
 
         # Add API reference configuration
         # (auto-skips if no documentable exports are found)
-        self._add_api_reference_config()
-        if self._has_api_reference:
+        self._add_api_reference_config(run)
+        if run.has_api_reference:
             self._update_sidebar_from_sections()
 
         # Build the homepage after the API reference configuration. Its metadata
         # margin can then include links to `llms.txt` and `llms-full.txt` when the
         # build will generate them.
-        self._create_index_from_readme(force_rebuild=True)
+        self._create_index_from_readme(run.has_api_reference, force_rebuild=True)
 
     def _copy_assets(self) -> bool:
         """
@@ -1654,9 +1655,8 @@ class GreatDocs:
         :
             Project fields and configuration values, keyed by name.
         """
-        cache = getattr(self, "_package_metadata_cache", None)
-        if cache is not None:
-            return cache
+        if self._package_metadata_cache is not None:
+            return self._package_metadata_cache
 
         metadata = {}
         package_root = self.layout.package_root
@@ -6452,7 +6452,9 @@ class GreatDocs:
                 return True
         return False
 
-    def _update_config_with_user_guide(self, user_guide_info: dict) -> None:
+    def _update_config_with_user_guide(
+        self, user_guide_info: dict, blended_first_page: str | None = None
+    ) -> None:
         """
         Update _quarto.yml with user guide sidebar and navbar.
 
@@ -6460,6 +6462,9 @@ class GreatDocs:
         ----------
         user_guide_info
             User guide structure from _discover_user_guide.
+        blended_first_page
+            The promoted page's former path under `user-guide/`, or `None` when no page was
+            promoted.
         """
         if not quarto_yml.path(self.build_dir).exists():
             return
@@ -6474,9 +6479,10 @@ class GreatDocs:
 
         # In blended homepage mode, rewrite the first sidebar entry to point
         # to index.qmd (the promoted first UG page) instead of user-guide/...
-        blended_first = getattr(self, "_blended_first_page", None)
-        if self._config.homepage == "user_guide" and blended_first:
-            self._rewrite_sidebar_first_entry(sidebar_config, blended_first)  # pragma: no cover
+        if self._config.homepage == "user_guide" and blended_first_page:
+            self._rewrite_sidebar_first_entry(
+                sidebar_config, blended_first_page
+            )  # pragma: no cover
 
         if "sidebar" not in config["website"]:
             config["website"]["sidebar"] = []
@@ -6528,9 +6534,14 @@ class GreatDocs:
 
         quarto_yml.write(self.build_dir, config, self._config)
 
-    def _process_user_guide(self) -> bool:
+    def _process_user_guide(self, has_api_reference: bool) -> bool:
         """
         Process user guide content: discover, copy, and update configuration.
+
+        Parameters
+        ----------
+        has_api_reference
+            Whether the site has an API reference, which a fallback homepage links to.
 
         Returns
         -------
@@ -6547,9 +6558,9 @@ class GreatDocs:
                     "   ⚠️  homepage: user_guide is set but no user guide pages found; "
                     "falling back to index mode"
                 )
-                self._homepage_fallback_to_index = True
-                self._create_index_from_readme(force_rebuild=True)
-                self._homepage_fallback_to_index = False
+                self._create_index_from_readme(
+                    has_api_reference, force_rebuild=True, fallback_to_index=True
+                )
             return False
 
         print("\n📖 Processing User Guide...")
@@ -6565,11 +6576,14 @@ class GreatDocs:
         print(f"   Copied {len(copied_files)} file(s) to docs/user-guide/")
 
         # In "user_guide" homepage mode, promote the first UG page to index.qmd
+        blended_first_page = None
         if self._config.homepage == "user_guide":
-            self._create_blended_index(user_guide_info, copied_files)  # pragma: no cover
+            blended_first_page = self._create_blended_index(
+                user_guide_info, copied_files
+            )  # pragma: no cover
 
         # Update configuration
-        self._update_config_with_user_guide(user_guide_info)
+        self._update_config_with_user_guide(user_guide_info, blended_first_page)
 
         # Report sections
         if user_guide_info["sections"]:
@@ -6579,7 +6593,7 @@ class GreatDocs:
         print("✅ User Guide configured")
         return True
 
-    def _create_blended_index(self, user_guide_info: dict, copied_files: list[str]) -> None:
+    def _create_blended_index(self, user_guide_info: dict, copied_files: list[str]) -> str | None:
         """
         Create `index.qmd` from the first user-guide page (blended homepage mode).
 
@@ -6594,9 +6608,15 @@ class GreatDocs:
         copied_files
             List of copied file paths relative to the docs dir (e.g.
             `["user-guide/introduction.qmd", ...]`).
+
+        Returns
+        -------
+        :
+            The promoted page's former path under `user-guide/`, or `None` when no page was
+            promoted.
         """
         if not user_guide_info["files"]:
-            return
+            return None
 
         first_file = user_guide_info["files"][0]
         is_explicit = user_guide_info.get("explicit", False)
@@ -6618,7 +6638,7 @@ class GreatDocs:
 
         if not first_ug_path.exists():
             print(f"   ⚠️  First UG page '{first_ug_path}' not found for blended homepage")
-            return
+            return None
 
         # Read the first UG file content
         with open(first_ug_path, "r", encoding="utf-8") as f:
@@ -6687,10 +6707,8 @@ class GreatDocs:
         # Remove the duplicate from user-guide/
         first_ug_path.unlink()
 
-        # Track the first file's destination path for sidebar adjustment
-        self._blended_first_page = f"user-guide/{dest_rel}"
-
         print("   📄 Blended homepage: first UG page → index.qmd")
+        return f"user-guide/{dest_rel}"
 
     def _detect_git_ref(self) -> str:
         """
@@ -9298,7 +9316,7 @@ class GreatDocs:
             print("   Falling back to raw RST content")
             return rst_path.read_text(encoding="utf-8")
 
-    def _generate_landing_page_content(self, metadata: dict) -> str:
+    def _generate_landing_page_content(self, metadata: dict, has_api_reference: bool) -> str:
         """
         Generate landing page content from package metadata.
 
@@ -9311,6 +9329,8 @@ class GreatDocs:
         ----------
         metadata
             Dictionary of package metadata from `_get_package_metadata()`.
+        has_api_reference
+            Whether the site has an API reference to link to.
 
         Returns
         -------
@@ -9342,7 +9362,7 @@ class GreatDocs:
         nav_items = []
 
         # API Reference (if documentable exports exist)
-        if self._has_api_reference:
+        if has_api_reference:
             nav_items.append("- [API Reference](reference/index.qmd) — Full API documentation")
 
         # Check for User Guide (look at source directory since build hasn't run yet)
@@ -10133,7 +10153,9 @@ title: "Security Policy"
 
         return "\n".join(lines)
 
-    def _create_index_from_readme(self, force_rebuild: bool = False) -> None:
+    def _create_index_from_readme(
+        self, has_api_reference: bool, force_rebuild: bool = False, fallback_to_index: bool = False
+    ) -> None:
         """
         Create or update index.qmd from the best available source file.
 
@@ -10149,9 +10171,14 @@ title: "Security Policy"
 
         Parameters
         ----------
+        has_api_reference
+            Whether the site has an API reference, which a generated landing page links to.
         force_rebuild
             If `True`, always rebuild `index.qmd` even if it exists. Used by the build command to
             sync with source file changes.
+        fallback_to_index
+            If `True`, create `index.qmd` even with `homepage: user_guide`, because the project
+            has no user guide pages to promote.
         """
         package_root = self.layout.package_root
 
@@ -10442,10 +10469,7 @@ title: "Authors and Citation"
 
         # In "user_guide" homepage mode, the first UG page becomes index.qmd
         # instead — skip README-based index generation entirely.
-        # The _homepage_fallback_to_index flag overrides this when no UG pages exist.
-        if self._config.homepage == "user_guide" and not getattr(
-            self, "_homepage_fallback_to_index", False
-        ):
+        if self._config.homepage == "user_guide" and not fallback_to_index:
             return  # pragma: no cover
 
         if index_qmd.exists() and not force_rebuild:
@@ -10469,7 +10493,9 @@ title: "Authors and Citation"
         if source_file is None:
             print("No index source file found (index.qmd, index.md, README.md, or README.rst)")
             print("Generating landing page from package metadata...")
-            readme_content = self._generate_landing_page_content(self._get_package_metadata())
+            readme_content = self._generate_landing_page_content(
+                self._get_package_metadata(), has_api_reference
+            )
         else:
             source_name = source_file.name
             if force_rebuild:
@@ -10821,20 +10847,26 @@ anchor-sections: true
         print(f"Created {pkg_info_qmd}")
         return "package-info.qmd"
 
-    def _add_api_reference_config(self) -> None:
+    def _add_api_reference_config(self, run: Run) -> None:
         """
         Add API reference configuration to _quarto.yml if not present.
 
         Adds sensible defaults for API reference generation with automatic
         package detection.  If no documentable exports are discovered (and no
         explicit `reference` config exists in great-docs.yml), the method
-        skips API reference setup entirely and sets
-        `self._has_api_reference = False`.
+        skips API reference setup and records that this build has no API
+        reference.
+
+        Parameters
+        ----------
+        run
+            The current build, which records whether the site has an API reference and
+            whether the package's exports were discovered.
         """
         # Explicit opt-out via great-docs.yml
         if not self._config.reference_enabled:
             print("API reference disabled (reference: false), skipping")
-            self._has_api_reference = False
+            run.has_api_reference = False
             return
 
         # Python API reference only applies to projects with a Python component.
@@ -10842,7 +10874,7 @@ anchor-sections: true
         # to introspect — skip rather than prompting for a package name.
         if not self._config.is_python_project:
             print("API reference skipped (non-Python project)")
-            self._has_api_reference = False
+            run.has_api_reference = False
             return
 
         config = quarto_yml.read(self.build_dir)
@@ -10864,7 +10896,7 @@ anchor-sections: true
                 response = ""
             if not response:  # pragma: no cover
                 print("Skipping API reference configuration")
-                self._has_api_reference = False
+                run.has_api_reference = False
                 return
             package_name = response  # pragma: no cover
 
@@ -10894,12 +10926,12 @@ anchor-sections: true
         sections = self._create_api_sections_with_config(importable_name)
 
         # Mark that discovery was performed this build (so Step 2 can skip re-doing it)
-        self._api_discovery_done = True
+        run.api_discovery_done = True
 
         # If no documentable exports were found, skip API reference entirely
         if not sections:
             print("No documentable exports found — skipping API reference")
-            self._has_api_reference = False
+            run.has_api_reference = False
             return
 
         # Add API reference configuration with sensible defaults
@@ -11002,11 +11034,6 @@ anchor-sections: true
 
         Only the 'sections' key in API reference config is regenerated.
         """
-        # If _add_api_reference_config already ran discovery this build, skip redundant work
-        if getattr(self, "_api_discovery_done", False):
-            print("API reference already configured in this build, skipping re-discovery")
-            return
-
         if not quarto_yml.path(self.build_dir).exists():
             print("Error: _quarto.yml not found. Run 'great-docs init' first.")
             return
@@ -11221,7 +11248,7 @@ anchor-sections: true
 
         after_body.insert(script_index, script_include("wide-layout.js"))
 
-    def _update_quarto_config(self) -> None:
+    def _update_quarto_config(self, run: Run) -> None:
         """
         Merge Great Docs settings into the build directory's _quarto.yml
 
@@ -11229,6 +11256,12 @@ anchor-sections: true
         project type. The merge adds the render scripts, theme, resources, and site
         navigation while preserving the rest of the config, so running it again
         after later build steps refreshes the settings those steps affect.
+
+        Parameters
+        ----------
+        run
+            The build state, including the API and MCP reference outcomes that determine
+            the reference sections.
 
         Raises
         ------
@@ -12132,8 +12165,8 @@ anchor-sections: true
         # Use the runtime flag if MCP discovery has already run; otherwise fall
         # back to the config value (optimistic, will be patched later if needed)
         mcp_enabled = (
-            self._mcp_pages_generated
-            if self._mcp_pages_generated is not None
+            run.mcp_pages_generated
+            if run.mcp_pages_generated is not None
             else metadata.get("mcp_enabled", False)
         )
         if cli_enabled or go_cli_enabled or rust_cli_enabled or mcp_enabled:
@@ -12147,7 +12180,7 @@ anchor-sections: true
             # Build the sections list for the data attribute.
             # Only include sections that are actually present in this build.
             available_sections = []
-            if self._has_api_reference:
+            if run.has_api_reference:
                 available_sections.append("api")
             if cli_enabled or go_cli_enabled or rust_cli_enabled:
                 available_sections.append("cli")
@@ -12193,9 +12226,9 @@ anchor-sections: true
                     "</script>"
                 )
             }
-            # Always replace the ref-sections script so a later call to
-            # _update_quarto_config (at Step 13) can correct stale values
-            # written during prepare() when _has_api_reference was still True.
+            # Replace the reference switcher script on every pass. Later steps can
+            # change which references are present after build directory preparation
+            # writes the initial configuration.
             headers = config["format"]["html"]["include-in-header"]
             replaced = False
             for i, item in enumerate(headers):
@@ -14979,18 +15012,20 @@ anchor-sections: true
         """
         from contextlib import redirect_stdout
 
+        run = Run(package_name=self._detect_package_name() or "", watch=False)
         devnull = open(os.devnull, "w")
 
         # Step 1: Prepare build directory (copies files, applies transformations)
         with redirect_stdout(devnull):
-            self._prepare_build_directory()
+            self._prepare_build_directory(run)
 
         try:
             # Steps 2-13: Process user guide, sections, pages, tags, etc.
             # These can modify .qmd files (add breadcrumbs, expand tags, etc.)
             with self._running_user_code(), redirect_stdout(devnull):
                 try:
-                    self._refresh_api_reference_config()
+                    if not run.api_discovery_done:
+                        self._refresh_api_reference_config()
                 except Exception:
                     pass
                 try:
@@ -15004,7 +15039,7 @@ anchor-sections: true
                 except Exception:
                     pass
                 try:
-                    self._process_user_guide()
+                    self._process_user_guide(run.has_api_reference)
                 except Exception:
                     pass
                 try:
@@ -15021,7 +15056,7 @@ anchor-sections: true
                     pass
 
             # Step 14: Generate API reference
-            if self._has_api_reference:
+            if run.has_api_reference:
                 try:
                     from great_docs._apiref.api_reference import APIReference
 
@@ -15041,7 +15076,7 @@ anchor-sections: true
 
             # Update quarto config (ensures _quarto.yml has pre-render, freeze, etc.)
             with redirect_stdout(devnull):
-                self._update_quarto_config()
+                self._update_quarto_config(run)
 
         finally:
             devnull.close()
@@ -15073,16 +15108,21 @@ anchor-sections: true
 
             click.echo(notice)
 
-    def _step_prepare_build_directory(self) -> Outcome:
+    def _step_prepare_build_directory(self, run: Run) -> Outcome:
         """
         Create the build directory and its initial Quarto project
+
+        Parameters
+        ----------
+        run
+            The current build.
 
         Returns
         -------
         :
             The step's result line.
         """
-        self._prepare_build_directory()
+        self._prepare_build_directory(run)
         return "Ready"
 
     def _log_render_settings(self, log: "BuildLog") -> Outcome:
@@ -15106,12 +15146,16 @@ anchor-sections: true
             log.detail(f"Pre-render script: {script}")
         return None
 
-    def _step_api_reference_config(self, refresh: bool) -> Outcome:
+    def _step_api_reference_config(self, run: Run, refresh: bool) -> Outcome:
         """
         Update the API reference configuration from the package's exports
 
+        Skip the discovery when preparing the build directory already discovered the exports.
+
         Parameters
         ----------
+        run
+            The current build.
         refresh
             Whether to rediscover package exports.
 
@@ -15120,11 +15164,14 @@ anchor-sections: true
         :
             The result line or skip reason.
         """
-        if not self._has_api_reference:
+        if not run.has_api_reference:
             return Skipped("no API reference")
         if not refresh:
             return "Using existing config"
-        self._refresh_api_reference_config()
+        if run.api_discovery_done:
+            print("API reference already configured in this build, skipping re-discovery")
+        else:
+            self._refresh_api_reference_config()
         return "API reference refreshed"
 
     def _step_llms_txt(self) -> Outcome:
@@ -15204,14 +15251,14 @@ anchor-sections: true
         self._add_changelog_to_navbar()
         return "Changelog from GitHub Releases"
 
-    def _step_cli_reference(self, package_name: str) -> Outcome:
+    def _step_cli_reference(self, run: Run) -> Outcome:
         """
         Write reference pages for the package's Click command-line interface
 
         Parameters
         ----------
-        package_name
-            The detected package name, or `""` when none was found.
+        run
+            The current build.
 
         Returns
         -------
@@ -15220,11 +15267,11 @@ anchor-sections: true
         """
         if not self._get_package_metadata().get("cli_enabled", False):
             return Skipped("CLI not enabled")
-        if not package_name:
+        if not run.package_name:
             return Skipped("no package detected")
         # The importable module name can differ from the project name.
-        module = self._resolve_importable_name(package_name)
-        cli_info = self._discover_click_cli(module, display_name=package_name)
+        module = self._resolve_importable_name(run.package_name)
+        cli_info = self._discover_click_cli(module, display_name=run.package_name)
         if not cli_info:
             return Skipped("no Click CLI found")
         return self._add_cli_reference(cli_info, "CLI")
@@ -15296,7 +15343,7 @@ anchor-sections: true
         n_pages = self._count_cli_sidebar_items(cli_files)
         return f"{n_pages} {kind} reference page(s){suffix}"
 
-    def _step_mcp_reference(self, package_name: str) -> Outcome:
+    def _step_mcp_reference(self, run: Run) -> Outcome:
         """
         Write reference pages and a discovery manifest for the project's MCP server
 
@@ -15305,8 +15352,9 @@ anchor-sections: true
 
         Parameters
         ----------
-        package_name
-            The detected package name, or `""` when none was found.
+        run
+            The current build, which supplies the package name and records whether MCP pages
+            were generated.
 
         Returns
         -------
@@ -15317,13 +15365,13 @@ anchor-sections: true
             return Skipped("MCP not enabled")
         try:
             mcp_package = (
-                self._resolve_importable_name(package_name)
-                if package_name
+                self._resolve_importable_name(run.package_name)
+                if run.package_name
                 else self._detect_module_name()
             )
             mcp_info = self._discover_mcp_server(mcp_package)
             if not mcp_info:
-                self._mcp_pages_generated = False
+                run.mcp_pages_generated = False
                 self._remove_mcp_from_ref_sections()
                 return Skipped("no MCP server found")
             from ._mcp_docs import generate_mcp_reference_pages
@@ -15335,28 +15383,33 @@ anchor-sections: true
                 display_name=self._config.mcp_name,
             )
             if not mcp_files:
-                self._mcp_pages_generated = False
+                run.mcp_pages_generated = False
                 self._remove_mcp_from_ref_sections()
                 return "No MCP pages generated"
-            self._mcp_pages_generated = True
+            run.mcp_pages_generated = True
             self._update_sidebar_with_mcp(mcp_files)
             self._generate_mcp_manifest(mcp_info)
         except USER_CODE_ERRORS:
-            self._mcp_pages_generated = False
+            run.mcp_pages_generated = False
             self._remove_mcp_from_ref_sections()
             raise
         return f"{len(mcp_info.get('tools', []))} MCP tool page(s) + manifest"
 
-    def _step_user_guide(self) -> Outcome:
+    def _step_user_guide(self, run: Run) -> Outcome:
         """
         Copy the user guide into the build directory and add its sidebar
+
+        Parameters
+        ----------
+        run
+            The current build.
 
         Returns
         -------
         :
             The result line or skip reason.
         """
-        if not self._process_user_guide():
+        if not self._process_user_guide(run.has_api_reference):
             return Skipped("no user guide found")
         return "User Guide configured"
 
@@ -15420,12 +15473,17 @@ anchor-sections: true
             return Skipped("no pages with status")
         return "Status badges processed"
 
-    def _step_assets(self) -> Outcome:
+    def _step_assets(self, run: Run) -> Outcome:
         """
         Copy the project's assets and complete the Quarto configuration
 
         Earlier steps copy resources such as user-guide images. Register those resources in
         the Quarto configuration even when the project has no assets directory.
+
+        Parameters
+        ----------
+        run
+            The current build.
 
         Returns
         -------
@@ -15433,12 +15491,14 @@ anchor-sections: true
             The result line or skip reason.
         """
         assets_copied = self._copy_assets()
-        self._update_quarto_config()
+        self._update_quarto_config(run)
         if not assets_copied:
             return Skipped("no assets directory")
         return "Assets copied"
 
-    def _step_api_reference(self, log: "BuildLog") -> "tuple[Outcome, APIReference | None]":
+    def _step_api_reference(
+        self, run: Run, log: "BuildLog"
+    ) -> "tuple[Outcome, APIReference | None]":
         """
         Write the API reference pages and the inventory of documented objects
 
@@ -15446,6 +15506,8 @@ anchor-sections: true
 
         Parameters
         ----------
+        run
+            The current build.
         log
             The build log.
 
@@ -15459,7 +15521,7 @@ anchor-sections: true
         StepError
             If the API reference cannot be generated.
         """
-        if not self._has_api_reference:
+        if not run.has_api_reference:
             return Skipped("API reference disabled"), None
 
         from great_docs._apiref.api_reference import APIReference
@@ -15527,14 +15589,14 @@ anchor-sections: true
             )
         return f"Indexed {len(index.names)} name(s)"
 
-    def _step_freeze_cache(self, watch: bool) -> "tuple[Outcome, list[str]]":
+    def _step_freeze_cache(self, run: Run) -> "tuple[Outcome, list[str]]":
         """
         Expand the pages' freeze shorthand and write their metadata
 
         Parameters
         ----------
-        watch
-            Whether the site is served in watch mode.
+        run
+            The current build.
 
         Returns
         -------
@@ -15542,7 +15604,7 @@ anchor-sections: true
             The result line or skip reason, and the pages whose freeze shorthand was expanded.
         """
         frozen_pages = self._normalize_freeze_shorthand()
-        self._write_page_metadata(watch)
+        self._write_page_metadata(run.watch)
         if frozen_pages:
             return f"Using {len(frozen_pages)} page(s) from the freeze cache", frozen_pages
         if self.layout.freeze_dir.is_dir():
@@ -15591,7 +15653,7 @@ anchor-sections: true
             log.detail(f"Rendered d2 diagrams in {len(modified)} page(s): " + ", ".join(modified))
         return None
 
-    def _share_sidebars(self, log: "BuildLog", watch: bool) -> Outcome:
+    def _share_sidebars(self, run: Run, log: "BuildLog") -> Outcome:
         """
         Render each long reference sidebar once for reuse across pages
 
@@ -15599,17 +15661,17 @@ anchor-sections: true
 
         Parameters
         ----------
+        run
+            The current build.
         log
             The build log.
-        watch
-            Whether the site is served in watch mode.
 
         Returns
         -------
         :
             `None`; the result is a detail line of the previous step.
         """
-        if watch or not self._config.has_versions:
+        if run.watch or not self._config.has_versions:
             shared = shared_sidebar.prepare(self.build_dir)
             if shared:
                 log.detail("Sharing rendered sidebar(s): " + ", ".join(shared))
@@ -16163,18 +16225,21 @@ anchor-sections: true
             n_code_cells=n_code_cells,
         )
 
-        # Results shared between build steps
+        # Values that several steps read; a new build starts from a new `Run`
+        run = Run(package_name=package_name, watch=watch)
+
+        # Results that one step passes to the next
         ref: APIReference | None = None
         frozen_pages: list[str] = []
         render_timings: dict[str, Any] = {}
 
         def generate_api_reference() -> Outcome:
             nonlocal ref
-            outcome, ref = self._step_api_reference(log)
+            outcome, ref = self._step_api_reference(run, log)
             return outcome
 
         def prepare_freeze_cache() -> Outcome:
-            outcome, frozen_pages[:] = self._step_freeze_cache(watch)
+            outcome, frozen_pages[:] = self._step_freeze_cache(run)
             return outcome
 
         def list_frozen_pages() -> Outcome:
@@ -16197,7 +16262,7 @@ anchor-sections: true
         # Resolve methods when each step runs so tests can replace instance methods after
         # the table is created.
         steps = [
-            Step("Prepare build directory", lambda: self._step_prepare_build_directory()),
+            Step("Prepare build directory", lambda: self._step_prepare_build_directory(run)),
             Step(
                 "Show render settings",
                 lambda: self._log_render_settings(log),
@@ -16206,7 +16271,7 @@ anchor-sections: true
             ),
             Step(
                 "Configure API reference",
-                lambda: self._step_api_reference_config(refresh),
+                lambda: self._step_api_reference_config(run, refresh),
                 user_code=True,
             ),
             Step(
@@ -16228,7 +16293,7 @@ anchor-sections: true
             ),
             Step(
                 "Generate CLI reference",
-                lambda: self._step_cli_reference(package_name),
+                lambda: self._step_cli_reference(run),
                 warn=Warn(
                     USER_CODE_ERRORS, "Error generating CLI docs", "CLI generation had issues"
                 ),
@@ -16252,7 +16317,7 @@ anchor-sections: true
             ),
             Step(
                 "Generate MCP server reference",
-                lambda: self._step_mcp_reference(package_name),
+                lambda: self._step_mcp_reference(run),
                 warn=Warn(
                     USER_CODE_ERRORS, "Error generating MCP docs", "MCP generation had issues"
                 ),
@@ -16260,7 +16325,7 @@ anchor-sections: true
             ),
             Step(
                 "Process User Guide",
-                lambda: self._step_user_guide(),
+                lambda: self._step_user_guide(run),
                 fails_on=(ValueError,),
                 user_code=True,
             ),
@@ -16284,7 +16349,7 @@ anchor-sections: true
             ),
             Step(
                 "Copy assets",
-                lambda: self._step_assets(),
+                lambda: self._step_assets(run),
                 fails_on=(ValueError, FileNotFoundError),
             ),
             Step("Generate API reference", generate_api_reference, user_code=True),
@@ -16316,7 +16381,7 @@ anchor-sections: true
             ),
             Step(
                 "Share sidebars",
-                lambda: self._share_sidebars(log, watch),
+                lambda: self._share_sidebars(run, log),
                 quiet=False,
                 listed=False,
             ),

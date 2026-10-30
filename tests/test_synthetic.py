@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 from great_docs import GreatDocs
-from tests.support import write_config
+from tests.support import make_run, write_config
 
 # ── Setup: make test-packages/synthetic importable ───────────────────────────
 
@@ -754,7 +754,7 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     docs.install(force=True)
-    docs._prepare_build_directory()
+    docs._prepare_build_directory(make_run())
 
     detected_name = docs._detect_package_name()
     assert detected_name is not None
@@ -806,7 +806,8 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     docs.install(force=True)
-    docs._prepare_build_directory()
+    run = make_run()
+    docs._prepare_build_directory(run)
 
     # Generate CLI docs
     detected_name = docs._detect_package_name()
@@ -817,7 +818,7 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     docs._update_sidebar_with_cli(cli_files)
 
     # Process user guide
-    docs._process_user_guide()
+    docs._process_user_guide(run.has_api_reference)
 
     quarto_yml = docs.build_dir / "_quarto.yml"
     with open(quarto_yml, encoding="utf-8") as f:
@@ -943,8 +944,9 @@ def _setup_blended_homepage(pkg_dir: Path, spec: dict) -> GreatDocs:
         existing.update(spec["config"])
         docs._config = write_config(docs.layout.package_root, existing)
 
-    docs._prepare_build_directory()
-    docs._process_user_guide()
+    run = make_run()
+    docs._prepare_build_directory(run)
+    docs._process_user_guide(run.has_api_reference)
     return docs
 
 
@@ -962,7 +964,7 @@ def test_L3_bibliography_wired_into_quarto_config(pkg_name: str, tmp_path: Path)
 
     # The generated great-docs.yml already carries the bibliography key, so the
     # build directory prep alone should copy the file and wire the config.
-    docs._prepare_build_directory()
+    docs._prepare_build_directory(make_run())
 
     bib_file = expected["bibliography_file"]
 
@@ -998,7 +1000,7 @@ def test_L3_custom_css_wired_into_quarto_config(pkg_name: str, tmp_path: Path):
 
     # The generated great-docs.yml already carries the site.css key, so the
     # build directory prep alone should copy the file and wire the config.
-    docs._prepare_build_directory()
+    docs._prepare_build_directory(make_run())
 
     css_file = expected["custom_css_file"]
 
@@ -1150,7 +1152,7 @@ def test_L3_code_include_expansion(tmp_path: Path):
     pkg_dir, spec = _make_package("gdtest_code_include", tmp_path)
     docs = GreatDocs(project_path=str(pkg_dir))
     docs.install(force=True)
-    docs._prepare_build_directory()
+    docs._prepare_build_directory(make_run())
 
     ug_info = docs._discover_user_guide()
     assert ug_info is not None
