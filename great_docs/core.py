@@ -14,7 +14,7 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
 
-from ._build import quarto
+from ._build import freeze, quarto
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
@@ -36,12 +36,10 @@ from ._subprocess import TEXT_MODE_KWARGS
 from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
 from ._utils import (
     GITIGNORE_CONTENT,
-    is_great_docs_build_dir,
     recognised_build_dirs,
     record_site_ownership,
     validate_build_dir,
     validate_layout_outputs,
-    validate_tree_symlinks,
 )
 from ._website import (
     i18n,
@@ -14939,70 +14937,6 @@ anchor-sections: true
 
         print("✅ Great-docs uninstalled successfully!")
 
-    def _persist_freeze_cache(self) -> int | None:
-        """
-        Merge every build's freeze cache beside the selected configuration
-
-        The latest version and a non-versioned build store their cache in
-        their build directory. Historical versions store caches in sibling
-        build directories. Merge individual files so a
-        page from one version cannot replace different pages in the same
-        section. When versions cache the same path, the latest version wins.
-
-        Returns
-        -------
-        Number of cached files, or `None` when no freeze cache exists.
-        """
-        freeze_sources: list[Path] = []
-
-        # Merge historical caches first so the latest version wins collisions.
-        pattern = (
-            f"{self.layout.build_dir.name}-*"
-            if self.layout.source_dir == self.project_root
-            else "*"
-        )
-        for ver_dir in sorted(self.layout.build_dir.parent.glob(pattern)):
-            if ver_dir == self.layout.build_dir:
-                continue
-            if not ver_dir.is_dir() or ver_dir.is_symlink() or not is_great_docs_build_dir(ver_dir):
-                continue
-            candidate = ver_dir / "_freeze"
-            if candidate.is_dir():
-                freeze_sources.append(candidate)
-
-        # The latest version and a non-versioned build share this location.
-        single = self.build_dir / "_freeze"
-        if single.is_dir():
-            freeze_sources.append(single)
-
-        if not freeze_sources:
-            return None
-
-        freeze_dst = self.layout.freeze_dir
-        validate_tree_symlinks(freeze_dst)
-        for src in freeze_sources:
-            validate_tree_symlinks(src)
-        if freeze_dst.exists():  # pragma: no cover
-            shutil.rmtree(freeze_dst)  # pragma: no cover
-        freeze_dst.mkdir(parents=True)
-
-        # Copy files individually. Replacing a top-level cache directory would
-        # discard pages contributed by earlier sources.
-        for src in freeze_sources:
-            for item in src.rglob("*"):
-                if not item.is_file():
-                    continue
-                dest = freeze_dst / item.relative_to(src)
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(item, dest)
-
-        for js_file in freeze_dst.rglob("*.js"):
-            data = js_file.read_bytes()
-            if data and not data.endswith(b"\n"):
-                js_file.write_bytes(data + b"\n")
-
-        return sum(1 for _ in freeze_dst.rglob("*") if _.is_file())
-
     def _print_layout_notice(self) -> None:
         """
         Show the migration route for the selected root-layout documentation
@@ -15877,7 +15811,7 @@ anchor-sections: true
         :
             `None`; the result is a detail line of the previous step.
         """
-        n_frozen = self._persist_freeze_cache()
+        n_frozen = freeze.save(self.layout)
         if n_frozen is not None:
             log.detail(f"Saved freeze cache ({n_frozen} files)")
         return None

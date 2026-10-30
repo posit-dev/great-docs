@@ -39198,7 +39198,7 @@ class TestInspectRepoGitNeeds:
         assert GreatDocs._inspect_repo_git_needs(tmp_path) == "tags"
 
 
-class TestPersistFreezeCacheVersioned:
+class TestSaveFreezeCacheVersioned:
     def test_collects_freeze_from_sibling_version_dirs(self, tmp_path: Path):
         from great_docs._utils import QUARTO_YML_HEADER
 
@@ -39220,7 +39220,7 @@ class TestPersistFreezeCacheVersioned:
         (unmarked / "_freeze").mkdir(parents=True)
         (unmarked / "_freeze" / "stray.json").write_text("{}", encoding="utf-8")
 
-        count = docs._persist_freeze_cache()
+        count = freeze.save(docs.layout)
 
         assert count == 2
         assert (tmp_path / "_freeze" / "latest.json").is_file()
@@ -39254,7 +39254,7 @@ class TestPersistFreezeCacheVersioned:
         old_page_dir.mkdir(parents=True)
         (old_page_dir / "html.json").write_text('{"page": "a-old"}', encoding="utf-8")
 
-        docs._persist_freeze_cache()
+        freeze.save(docs.layout)
 
         for page in ("a", "b", "c"):
             assert (

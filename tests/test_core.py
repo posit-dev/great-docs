@@ -14,6 +14,8 @@ import pytest
 import requests
 
 from great_docs import GreatDocs
+from great_docs._build import freeze
+from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website import quarto_yml as quarto_yml_file
 from tests.support import make_run
 
@@ -2630,54 +2632,55 @@ class TestInjectVersionSelector:
 
 
 # ---------------------------------------------------------------------------
-# _persist_freeze_cache – merge and JS newline
+# Freeze cache merging and JavaScript newlines
 # ---------------------------------------------------------------------------
 
 
-class TestPersistFreezeCache:
+def _historical_cache(root: Path, name: str) -> Path:
+    """
+    Create an empty freeze cache in a recognised historical build directory
+
+    Parameters
+    ----------
+    root
+        The project root containing root-layout build directories.
+    name
+        The build directory's name.
+
+    Returns
+    -------
+    :
+        The build's freeze cache directory.
+    """
+    build = root / name
+    build.mkdir()
+    (build / "_quarto.yml").write_text(QUARTO_YML_HEADER, encoding="utf-8")
+    cache = build / "_freeze"
+    cache.mkdir()
+    return cache
+
+
+class TestSaveFreezeCache:
     def test_no_freeze_sources_returns_none(self, tmp_path):
         gd = _make_gd(tmp_path)
-        result = gd._persist_freeze_cache()
-        assert result is None
+        assert freeze.save(gd.layout) is None
 
-    def test_merges_freeze_caches(self, tmp_path, monkeypatch):
+    def test_merges_freeze_caches(self, tmp_path):
         gd = _make_gd(tmp_path)
         gd.build_dir.mkdir(parents=True, exist_ok=True)
+        (_historical_cache(tmp_path, "great-docs-v1") / "page1.json").write_text('{"v": 1}')
+        (_historical_cache(tmp_path, "great-docs-v2") / "page1.json").write_text('{"v": 2}')
 
-        monkeypatch.setattr(
-            "great_docs.core.is_great_docs_build_dir",
-            lambda d: d.name.startswith("great-docs-"),
-        )
-
-        v1_freeze = tmp_path / "great-docs-v1" / "_freeze" / "page1.json"
-        v1_freeze.parent.mkdir(parents=True)
-        v1_freeze.write_text('{"v": 1}', encoding="utf-8")
-
-        v2_freeze = tmp_path / "great-docs-v2" / "_freeze" / "page1.json"
-        v2_freeze.parent.mkdir(parents=True)
-        v2_freeze.write_text('{"v": 2}', encoding="utf-8")
-
-        result = gd._persist_freeze_cache()
-        assert result is not None
+        assert freeze.save(gd.layout) == 1
         merged = tmp_path / "_freeze" / "page1.json"
-        assert merged.exists()
         assert '"v": 2' in merged.read_text()
 
-    def test_js_newline_appended(self, tmp_path, monkeypatch):
+    def test_js_newline_appended(self, tmp_path):
         gd = _make_gd(tmp_path)
         gd.build_dir.mkdir(parents=True, exist_ok=True)
+        (_historical_cache(tmp_path, "great-docs-v1") / "chunk.js").write_bytes(b"var x = 1;")
 
-        monkeypatch.setattr(
-            "great_docs.core.is_great_docs_build_dir",
-            lambda d: d.name.startswith("great-docs-"),
-        )
-
-        freeze_dir = tmp_path / "great-docs-v1" / "_freeze"
-        js_file = freeze_dir / "chunk.js"
-        js_file.parent.mkdir(parents=True)
-        js_file.write_bytes(b"var x = 1;")
-
-        gd._persist_freeze_cache()
+        freeze.save(gd.layout)
         merged_js = tmp_path / "_freeze" / "chunk.js"
         assert merged_js.read_bytes().endswith(b"\n")
 
