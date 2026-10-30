@@ -319,7 +319,7 @@ def _build_mcp_candidates(gd: GreatDocs, monkeypatch: pytest.MonkeyPatch) -> lis
     def stop_build() -> None:
         raise McpStepPassed
 
-    monkeypatch.setattr("great_docs.core._ensure_quarto_installed", lambda: None)
+    monkeypatch.setattr("great_docs._build.quarto.ensure_installed", lambda: None)
     monkeypatch.setattr(importlib, "import_module", record_import)
     # The user guide is the first step after MCP discovery.
     monkeypatch.setattr(gd, "_process_user_guide", stop_build)

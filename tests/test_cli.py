@@ -199,7 +199,7 @@ def test_layout_notice_once_per_build_or_preview_session(
     ) -> subprocess.CompletedProcess:
         if command[:2] == ["quarto", "preview"]:
             for _ in range(3):
-                render(Path.cwd())
+                render(Path(str(kwargs["cwd"])))
             return subprocess.CompletedProcess(command, 0)
         return run(command, *args, **kwargs)
 
@@ -207,7 +207,7 @@ def test_layout_notice_once_per_build_or_preview_session(
         if command[:2] == ["quarto", "render"]:
             if mode == "render-error":
                 return MagicMock(stdout=iter([]), stderr=iter(["Render failed"]), returncode=1)
-            render(Path.cwd())
+            render(Path(str(kwargs["cwd"])))
             return MagicMock(stdout=iter([]), stderr=iter([]), returncode=0)
         return popen(command, *args, **kwargs)
 
@@ -218,7 +218,7 @@ def test_layout_notice_once_per_build_or_preview_session(
             render(build_dir)
         return [(str(build_dir), 0, "", "", []) for build_dir in build_dirs]
 
-    monkeypatch.setattr("great_docs.core._ensure_quarto_installed", lambda: None)
+    monkeypatch.setattr("great_docs._build.quarto.ensure_installed", lambda: None)
     monkeypatch.setattr(subprocess, "run", run_quarto)
     monkeypatch.setattr(subprocess, "Popen", start_quarto)
     monkeypatch.setattr("great_docs._versioned_build.render_versions_parallel", render_versions)

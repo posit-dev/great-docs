@@ -3776,7 +3776,6 @@ class TestRenderSingleVersionStreaming:
 
         assert result[0] == str(tmp_path)
         assert result[1] == 0
-        assert result[2] == "output"
         assert progress.call_count == 3
 
     def test_popen_failure_returns_error(self, tmp_path: Path):

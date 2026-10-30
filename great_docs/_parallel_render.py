@@ -53,6 +53,7 @@ from typing import Any
 
 from yaml12 import parse_yaml, write_yaml
 
+from ._build import quarto
 from ._subprocess import TEXT_MODE_KWARGS
 from ._utils import QUARTO_YML_HEADER
 
@@ -99,9 +100,7 @@ _KNOWN_PRE_RENDER = {"scripts/restore-freeze.py"}
 _NOT_FOR_QUARTO = ("api-reference",)
 _SIDEBAR_META = "_gd_render_sidebars.yml"
 
-_TRANSIENT_PATTERNS = ("No such file or directory", "renameSync", "os error 2")
 _GLOB_CHARS = frozenset("*?[]{}")
-_PROGRESS_RE = re.compile(r"\[\s*(\d+)/(\d+)\]\s+(.+)")
 _ANSI_RE = re.compile(r"\033\[[0-9;]*m")
 _URL_RE = re.compile(r"<url>.*?</url>", re.S)
 _LOC_RE = re.compile(r"<loc>([^<]*)</loc>")
@@ -737,9 +736,7 @@ class _Runner:
                 outcome = self._render(slot, directory, target)
                 if slot == 0:
                     self.warm.set()
-                if outcome.returncode != 0 and any(
-                    p in outcome.stderr for p in _TRANSIENT_PATTERNS
-                ):
+                if outcome.returncode != 0 and quarto.is_transient_error(outcome.stderr):
                     outcome = self._render(slot, directory, target)
                 if self.stop.is_set():
                     return
@@ -804,9 +801,9 @@ class _Runner:
             plain = _ANSI_RE.sub("", line).strip()
             if not plain:
                 return
-            match = _PROGRESS_RE.search(plain)
-            if match:
-                page = match.group(3).strip()
+            progress = quarto.parse_progress(plain)
+            if progress is not None:
+                page = progress.page
                 pages.append((page, time.monotonic()))
                 if slot == 0:
                     self.warm.set()
