@@ -1488,7 +1488,7 @@ def freeze(
             continue
 
         click.echo(f"  Rendering {page} → {target.relative_to(build_dir)} ...")
-        result = freeze_cache.render_page(build_dir, target)
+        result = freeze_cache.render_page(docs._config, build_dir, target)
 
         if result.returncode != 0:
             click.echo(f"  ✗ {page} — render failed", err=True)

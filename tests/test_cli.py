@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -244,6 +245,27 @@ def test_freeze_prepares_the_project_a_build_renders(
     frozen = _project_files(build_dir)
     assert sorted(frozen) == sorted(built)
     assert [path for path in built if frozen[path] != built[path]] == []
+
+
+def test_freeze_renders_pages_with_the_build_quarto_environment(tmp_path: Path):
+    # The caller's Python may lack dependencies or be unable to import the uninstalled
+    # project package. Freezing must use the build's Quarto environment.
+    (tmp_path / "great-docs.yml").write_text("display_name: Demo\n")
+    (tmp_path / "page.qmd").write_text("# Page\n")
+    (tmp_path / "great-docs").mkdir()
+    (tmp_path / "great-docs/page.qmd").write_text("# Page\n")
+    succeeded = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+    with (
+        patch("great_docs._build.freeze.prepare"),
+        patch("subprocess.run", return_value=succeeded) as run,
+    ):
+        result = CliRunner().invoke(cli, ["freeze", "page.qmd", "--project-path", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    (render,) = [call for call in run.call_args_list if call.args[0][:2] == ["quarto", "render"]]
+    env = render.kwargs.get("env") or {}
+    assert env.get("PYTHONPATH", "").split(os.pathsep)[0] == str(tmp_path.resolve())
+    assert "QUARTO_PYTHON" in env
 
 
 @pytest.mark.parametrize("directory", [".", "docs"])

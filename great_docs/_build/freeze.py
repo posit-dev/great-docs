@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from .._content_naming import strip_numeric_prefix
 from .._subprocess import TEXT_MODE_KWARGS
 from .._utils import recognised_build_dirs, validate_tree_symlinks
+from . import quarto
 from .steps import count_listed, run_steps
 
 if TYPE_CHECKING:
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
 
     from .._build_log import BuildLog
     from .._layout import Layout
+    from ..config import Config
     from .steps import Step
 
 __all__ = ["find_page", "merge", "prepare", "render_page", "save"]
@@ -84,12 +86,17 @@ def find_page(build_dir: Path, page: str) -> Path | None:
     return None
 
 
-def render_page(build_dir: Path, page: Path) -> subprocess.CompletedProcess[str]:
+def render_page(config: Config, build_dir: Path, page: Path) -> subprocess.CompletedProcess[str]:
     """
     Render one Quarto page and execute its code, even if it is frozen
 
+    Use the build's Quarto environment so the page runs with the same Python and can import
+    the project's package without installing it.
+
     Parameters
     ----------
+    config
+        The project's configuration.
     build_dir
         The Quarto project's directory.
     page
@@ -103,6 +110,7 @@ def render_page(build_dir: Path, page: Path) -> subprocess.CompletedProcess[str]
     return subprocess.run(
         ["quarto", "render", str(page.relative_to(build_dir))],
         cwd=build_dir,
+        env=quarto.environment(config),
         capture_output=True,
         check=False,
         **TEXT_MODE_KWARGS,
