@@ -9,12 +9,35 @@ from collections.abc import Callable, Generator, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TextIO, cast
 
+import griffe
+
 if TYPE_CHECKING:
     from pathlib import Path
 
     from great_docs._build_log import BuildLog
 
-__all__ = ["BuildError", "Skipped", "Step", "StepError", "Warn", "run_steps"]
+__all__ = [
+    "USER_CODE_ERRORS",
+    "BuildError",
+    "Skipped",
+    "Step",
+    "StepError",
+    "Warn",
+    "count_listed",
+    "run_steps",
+]
+
+# Steps that import or run project code can warn on missing or broken modules, missing
+# attributes, errors raised by that code, and failures to load the package with griffe.
+# These exception types stop the build outside steps that handle project code failures.
+USER_CODE_ERRORS: tuple[type[Exception], ...] = (
+    ImportError,
+    SyntaxError,
+    AttributeError,
+    RuntimeError,
+    OSError,
+    griffe.GriffeError,
+)
 
 
 class BuildError(RuntimeError):

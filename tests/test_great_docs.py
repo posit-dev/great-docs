@@ -21820,12 +21820,12 @@ def test_build_with_changelog(tmp_path):
     stubs.steps["_add_changelog_to_navbar"].assert_called_once()
 
 
-def test_build_changelog_error_handled(tmp_path, capsys):
+def test_build_changelog_error_stops_the_build(tmp_path):
     """
-    Check that changelog failures warn and skip the navbar entry
+    Check that a changelog failure stops the build
 
-    `build()` prints `Error generating changelog: API error` and still writes
-    page metadata.
+    The changelog step handles unreachable or malformed GitHub releases. Any other failure
+    is an error in great-docs and must stop the build.
     """
     docs = _buildable_docs(tmp_path, changelog_enabled=True)
 
@@ -21834,13 +21834,13 @@ def test_build_changelog_error_handled(tmp_path, capsys):
         _detect_package_name="mypkg",
         _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
     ) as stubs:
-        stubs.steps["_generate_changelog_page"].side_effect = RuntimeError("API error")
+        stubs.steps["_generate_changelog_page"].side_effect = OSError("disk full")
 
-        docs.build(watch=False, refresh=False)
+        with pytest.raises(OSError, match="disk full"):
+            docs.build(watch=False, refresh=False)
 
-    assert "Error generating changelog: API error" in capsys.readouterr().out
     stubs.steps["_add_changelog_to_navbar"].assert_not_called()
-    stubs.steps["_write_page_metadata"].assert_called_once()
+    stubs.steps["_write_page_metadata"].assert_not_called()
 
 
 def test_build_with_cli_documentation(tmp_path):
@@ -24502,55 +24502,48 @@ def test_check_links_generic_exception():
         assert len(result["broken"]) >= 1
 
 
-def test_build_section_error_handled(tmp_path, capsys):
+@pytest.mark.parametrize(
+    ("method", "title", "error"),
+    [
+        ("_process_user_guide", "Process User Guide", ValueError("path escapes")),
+        ("_process_sections", "Process custom sections", ValueError("path escapes")),
+        ("_process_custom_pages", "Process custom pages", ValueError("path escapes")),
+        ("_copy_assets", "Copy assets", ValueError("path escapes")),
+        ("_update_quarto_config", "Copy assets", FileNotFoundError("header.html")),
+    ],
+)
+def test_build_reports_project_errors_as_failures(tmp_path, capsys, method, title, error):
     """
-    Check that custom section failures warn and still write page metadata
-
-    `build()` prints `Error processing sections: section problem`.
+    Check that project errors are reported as step failures and converted to `BuildError`
     """
     docs = _buildable_docs(tmp_path, sections=[{"title": "Test"}])
 
     with stubbed_build(docs) as stubs:
-        stubs.steps["_process_sections"].side_effect = RuntimeError("section problem")
+        stubs.steps[method].side_effect = error
 
-        docs.build(watch=False, refresh=False)
+        with pytest.raises(BuildError, match=f"{title} failed") as raised:
+            docs.build(watch=False, refresh=False)
 
-    assert "Error processing sections: section problem" in capsys.readouterr().out
-    stubs.steps["_write_page_metadata"].assert_called_once()
+    assert raised.value.__cause__ is error
+    out = capsys.readouterr().out
+    assert "Build failed at Step" in out
+    assert f"   {error}" in out
+    stubs.steps["_write_page_metadata"].assert_not_called()
 
 
-def test_build_user_guide_error_handled(tmp_path, capsys):
+def test_build_lets_own_errors_through(tmp_path):
     """
-    Check that user guide failures warn and still write page metadata
-
-    `build()` prints `Error processing User Guide: UG error`.
-    """
-    docs = _buildable_docs(tmp_path)
-
-    with stubbed_build(docs) as stubs:
-        stubs.steps["_process_user_guide"].side_effect = RuntimeError("UG error")
-
-        docs.build(watch=False, refresh=False)
-
-    assert "Error processing User Guide: UG error" in capsys.readouterr().out
-    stubs.steps["_write_page_metadata"].assert_called_once()
-
-
-def test_build_copy_assets_error_handled(tmp_path, capsys):
-    """
-    Check that asset copy failures warn and still write page metadata
-
-    `build()` prints `Error copying assets: copy failed`.
+    Check that an unexpected error in great-docs propagates unchanged and stops the build
     """
     docs = _buildable_docs(tmp_path)
 
     with stubbed_build(docs) as stubs:
-        stubs.steps["_copy_assets"].side_effect = RuntimeError("copy failed")
+        stubs.steps["_process_user_guide"].side_effect = AttributeError("renamed method")
 
-        docs.build(watch=False, refresh=False)
+        with pytest.raises(AttributeError, match="renamed method"):
+            docs.build(watch=False, refresh=False)
 
-    assert "Error copying assets: copy failed" in capsys.readouterr().out
-    stubs.steps["_write_page_metadata"].assert_called_once()
+    stubs.steps["_write_page_metadata"].assert_not_called()
 
 
 def test_build_changelog_no_releases(tmp_path):

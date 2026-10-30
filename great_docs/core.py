@@ -18,6 +18,7 @@ from ._build import quarto
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
 from ._build.steps import (
+    USER_CODE_ERRORS,
     BuildError,
     Outcome,
     Skipped,
@@ -15340,7 +15341,7 @@ anchor-sections: true
             self._mcp_pages_generated = True
             self._update_sidebar_with_mcp(mcp_files)
             self._generate_mcp_manifest(mcp_info)
-        except Exception:
+        except USER_CODE_ERRORS:
             self._mcp_pages_generated = False
             self._remove_mcp_from_ref_sections()
             raise
@@ -15468,12 +15469,15 @@ anchor-sections: true
             if p and p not in sys.path:
                 sys.path.insert(0, p)  # pragma: no cover
 
+        from great_docs._apiref.resolve import ObjectNotFoundError
+
+        failures = (*USER_CODE_ERRORS, ObjectNotFoundError)
         quarto_yml_path = str(quarto_yml.path(self.build_dir))
         try:
             ref = APIReference(quarto_yml_path)
             ref.build()
             return "API reference generated", ref
-        except Exception as e:
+        except failures as e:
             if not self._config.dynamic:
                 message = f"API reference build failed: {e}"
                 raise StepError(message, detail=str(e)) from e
@@ -15487,7 +15491,7 @@ anchor-sections: true
         try:
             ref = APIReference(quarto_yml_path)
             ref.build()
-        except Exception as e:
+        except failures as e:
             raise StepError(f"API reference build failed: {e}") from e
         return "API reference generated (static analysis)", ref
 
@@ -15925,7 +15929,7 @@ anchor-sections: true
         """
         try:
             self._auto_save_snapshot()
-        except Exception as e:
+        except USER_CODE_ERRORS as e:
             log.warn(f"Snapshot auto-save failed: {e}")
         return None
 
@@ -16221,21 +16225,20 @@ anchor-sections: true
             Step(
                 "Generate changelog",
                 lambda: self._step_changelog(),
-                warn=Warn(
-                    (Exception,), "Error generating changelog", "Changelog generation had issues"
-                ),
             ),
             Step(
                 "Generate CLI reference",
                 lambda: self._step_cli_reference(package_name),
-                warn=Warn((Exception,), "Error generating CLI docs", "CLI generation had issues"),
+                warn=Warn(
+                    USER_CODE_ERRORS, "Error generating CLI docs", "CLI generation had issues"
+                ),
                 user_code=True,
             ),
             Step(
                 "Generate Go CLI reference",
                 lambda: self._step_go_cli_reference(),
                 warn=Warn(
-                    (Exception,), "Error generating Go CLI docs", "Go CLI generation had issues"
+                    (OSError,), "Error generating Go CLI docs", "Go CLI generation had issues"
                 ),
                 user_code=True,
             ),
@@ -16243,48 +16246,46 @@ anchor-sections: true
                 "Generate Rust CLI reference",
                 lambda: self._step_rust_cli_reference(),
                 warn=Warn(
-                    (Exception,), "Error generating Rust CLI docs", "Rust CLI generation had issues"
+                    (OSError,), "Error generating Rust CLI docs", "Rust CLI generation had issues"
                 ),
                 user_code=True,
             ),
             Step(
                 "Generate MCP server reference",
                 lambda: self._step_mcp_reference(package_name),
-                warn=Warn((Exception,), "Error generating MCP docs", "MCP generation had issues"),
+                warn=Warn(
+                    USER_CODE_ERRORS, "Error generating MCP docs", "MCP generation had issues"
+                ),
                 user_code=True,
             ),
             Step(
                 "Process User Guide",
                 lambda: self._step_user_guide(),
-                warn=Warn((Exception,), "Error processing User Guide", "User Guide had issues"),
+                fails_on=(ValueError,),
                 user_code=True,
             ),
             Step(
                 "Process custom sections",
                 lambda: self._step_sections(),
-                warn=Warn((Exception,), "Error processing sections", "Sections had issues"),
+                fails_on=(ValueError,),
             ),
             Step(
                 "Process custom pages",
                 lambda: self._step_custom_pages(),
-                warn=Warn((Exception,), "Error processing custom pages", "Custom pages had issues"),
+                fails_on=(ValueError,),
             ),
             Step(
                 "Process page tags",
                 lambda: self._step_tags(),
-                warn=Warn((Exception,), "Error processing tags", "Tags had issues"),
             ),
             Step(
                 "Process page status badges",
                 lambda: self._step_page_statuses(),
-                warn=Warn(
-                    (Exception,), "Error processing page statuses", "Status badges had issues"
-                ),
             ),
             Step(
                 "Copy assets",
                 lambda: self._step_assets(),
-                warn=Warn((Exception,), "Error copying assets", "Assets had issues"),
+                fails_on=(ValueError, FileNotFoundError),
             ),
             Step("Generate API reference", generate_api_reference, user_code=True),
             Step(
@@ -16340,7 +16341,7 @@ anchor-sections: true
             Step(
                 "Generate SEO files",
                 lambda: self._step_seo_files(),
-                warn=Warn((Exception,), "Error generating SEO files", "SEO files had issues"),
+                warn=Warn((OSError,), "Error generating SEO files", "SEO files had issues"),
             ),
             Step(
                 "Write build timings",
