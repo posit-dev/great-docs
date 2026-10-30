@@ -193,7 +193,7 @@ from great_docs.pandoc.inlines import (
     inlinecontent_to_str,
     shortcode,
 )
-from tests.support import mock_config, stubbed_build, write_config
+from tests.support import make_run, mock_config, stubbed_build, write_config
 
 
 def test_great_docs_init():
@@ -2116,7 +2116,7 @@ def test_citation_year_from_date_released():
         docs_dir.mkdir(parents=True, exist_ok=True)
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme()
+        docs._create_index_from_readme(has_api_reference=True)
 
         # Check that citation.qmd was created
         citation_qmd = docs_dir / "citation.qmd"
@@ -2160,7 +2160,7 @@ def test_citation_year_defaults_to_current():
         docs_dir.mkdir(parents=True, exist_ok=True)
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme()
+        docs._create_index_from_readme(has_api_reference=True)
 
         # Check that citation.qmd was created
         citation_qmd = docs_dir / "citation.qmd"
@@ -2207,7 +2207,7 @@ def test_citation_year_handles_invalid_date():
         docs_dir.mkdir(parents=True, exist_ok=True)
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme()
+        docs._create_index_from_readme(has_api_reference=True)
 
         # Check that citation.qmd was created
         citation_qmd = docs_dir / "citation.qmd"
@@ -3261,7 +3261,7 @@ def test_assets_added_to_quarto_config():
 
         # Update Quarto config
         write_initial_quarto_yml(docs.build_dir, docs._config)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         # Read the generated _quarto.yml
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -3301,7 +3301,7 @@ def test_dark_only_logo_does_not_crash_quarto_config():
         docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         write_initial_quarto_yml(docs.build_dir, docs._config)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "r") as f:
@@ -3327,7 +3327,7 @@ def test_assets_not_added_to_quarto_config_when_missing():
 
         # Update Quarto config without assets
         write_initial_quarto_yml(docs.build_dir, docs._config)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         # Read the generated _quarto.yml
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -3363,7 +3363,7 @@ def test_assets_added_to_config_after_copy():
         # Create great-docs directory and initial config (simulating _prepare_build_directory)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir, docs._config)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         # Read initial config - should NOT have assets/**
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -3377,7 +3377,7 @@ def test_assets_added_to_config_after_copy():
 
         assert assets_copied is True
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         # Read updated config - should NOW have assets/**
         with open(quarto_yml, "r") as f:
@@ -3403,7 +3403,7 @@ def test_assets_config_update_only_when_copied():
         # Create great-docs directory and initial config
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir, docs._config)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         # Try to copy assets when none exist: should return False
         assets_copied = docs._copy_assets()
@@ -3434,7 +3434,7 @@ def test_skill_render_exclusion_uses_enumerated_globs():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir, docs._config)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "r") as f:
@@ -3620,7 +3620,7 @@ def test_user_guide_asset_copy_skips_the_staged_quarto_project() -> None:
         (docs_dir / "_quarto/default/_quarto.yml").write_text(QUARTO_YML_HEADER + "project: {}\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._prepare_build_directory()
+        docs._prepare_build_directory(make_run())
         docs._copy_user_guide_to_docs(docs._discover_user_guide())
 
         assert (docs.build_dir / "user-guide/images/c.png").read_bytes() == b"chart"
@@ -4076,7 +4076,7 @@ def test_landing_page_generated_when_no_readme():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme()
+        docs._create_index_from_readme(has_api_reference=True)
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -4111,7 +4111,7 @@ def test_landing_page_includes_description_from_pyproject():
         docs = GreatDocs(project_path=tmp_dir)
         metadata = docs._get_package_metadata()
 
-        content = docs._generate_landing_page_content(metadata)
+        content = docs._generate_landing_page_content(metadata, has_api_reference=True)
 
         assert "## fancy-lib" in content
         assert "Fancy library for doing fancy things" in content
@@ -4181,7 +4181,7 @@ def test_landing_page_not_generated_when_readme_exists():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme()
+        docs._create_index_from_readme(has_api_reference=True)
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -4218,7 +4218,7 @@ def test_landing_page_has_sidebar_metadata():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme()
+        docs._create_index_from_readme(has_api_reference=True)
 
         index_qmd = docs.build_dir / "index.qmd"
         content = index_qmd.read_text()
@@ -4246,7 +4246,7 @@ def test_landing_page_with_no_metadata():
         docs = GreatDocs(project_path=tmp_dir)
         metadata = docs._get_package_metadata()
 
-        content = docs._generate_landing_page_content(metadata)
+        content = docs._generate_landing_page_content(metadata, has_api_reference=True)
 
         assert "## minimal_pkg" in content
         assert "pip install minimal_pkg" in content
@@ -4323,7 +4323,7 @@ def test_readme_rst_creates_index():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme()
+        docs._create_index_from_readme(has_api_reference=True)
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -4358,7 +4358,7 @@ def test_readme_rst_not_used_when_readme_md_exists():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme()
+        docs._create_index_from_readme(has_api_reference=True)
 
         index_qmd = docs.build_dir / "index.qmd"
         content = index_qmd.read_text()
@@ -4391,7 +4391,7 @@ def test_index_qmd_frontmatter_title_preserved():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
         content = (docs.build_dir / "index.qmd").read_text()
         fm = _homepage_frontmatter(content)
@@ -4416,7 +4416,7 @@ def test_index_qmd_frontmatter_title_empty_without_source_title():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
         content = (docs.build_dir / "index.qmd").read_text()
         fm = _homepage_frontmatter(content)
@@ -4443,7 +4443,7 @@ def test_index_qmd_frontmatter_title_yaml_safe():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
         content = (docs.build_dir / "index.qmd").read_text()
         fm = _homepage_frontmatter(content)
@@ -4463,7 +4463,7 @@ def _homepage_from(source_name: str, source: str, tmp_dir: str) -> dict:
 
     docs = GreatDocs(project_path=tmp_dir)
     docs.build_dir.mkdir(parents=True, exist_ok=True)
-    docs._create_index_from_readme(force_rebuild=True)
+    docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
     return _homepage_frontmatter((docs.build_dir / "index.qmd").read_text())
 
 
@@ -5970,7 +5970,7 @@ def test_navbar_no_home_new_build():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             config = read_yaml(f)
@@ -6006,7 +6006,7 @@ def test_navbar_home_removed_from_existing():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             config = read_yaml(f)
@@ -6054,7 +6054,7 @@ def test_navbar_release_from_github_release():
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
         navbar = read_yaml(quarto_yml)["website"]["navbar"]
 
@@ -6089,7 +6089,7 @@ def test_navbar_release_absent_without_releases():
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch.object(docs, "_fetch_github_releases", return_value=[]):
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
         assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
 
@@ -6123,7 +6123,7 @@ def test_navbar_release_absent_on_malformed_github_response():
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch("requests.get", return_value=response):
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
         assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
 
@@ -6148,7 +6148,7 @@ def test_navbar_release_absent_without_github_repo():
 
         docs = GreatDocs(project_path=tmp_dir)
         with patch.object(docs, "_fetch_github_releases") as fetch:
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
         fetch.assert_not_called()
         assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
@@ -7857,7 +7857,7 @@ class TestFaviconLinkInjection:
 
         # Run the config build
         write_initial_quarto_yml(docs.build_dir, docs._config)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         # Read the generated _quarto.yml
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -8084,7 +8084,7 @@ def test_config_markdown_pages_disabled():
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir, docs._config)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "r") as f:
@@ -8121,7 +8121,7 @@ def test_config_markdown_pages_widget_disabled():
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir, docs._config)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         quarto_yml = docs.build_dir / "_quarto.yml"
 
@@ -8151,7 +8151,7 @@ def test_config_markdown_pages_default_enabled():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir, docs._config)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "r") as f:
@@ -8187,7 +8187,7 @@ class TestPositBadgeInjection:
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir, docs._config)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml) as f:
@@ -8259,8 +8259,8 @@ class TestPositBadgeInjection:
             docs = GreatDocs(project_path=tmp_dir)
             docs.build_dir.mkdir(parents=True, exist_ok=True)
             write_initial_quarto_yml(docs.build_dir, docs._config)
-            docs._update_quarto_config()
-            docs._update_quarto_config()  # second run
+            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run())  # second run
 
             quarto_yml = docs.build_dir / "_quarto.yml"
 
@@ -8730,7 +8730,6 @@ def test_build_cli_reference_uses_module_name(tmp_path):
     # Write `cli.enabled` before `GreatDocs` reads the project metadata during creation.
     write_config(tmp_path, "module: actual_module\ncli:\n  enabled: true\n")
     docs = GreatDocs(project_path=str(tmp_path))
-    docs._has_api_reference = False
     docs.build_dir.mkdir(parents=True)
     (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
@@ -12324,7 +12323,7 @@ def test_process_user_guide_no_guide():
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._process_user_guide() is False
+        assert docs._process_user_guide(has_api_reference=True) is False
 
 
 def test_process_user_guide_with_pages():
@@ -12344,7 +12343,7 @@ def test_process_user_guide_with_pages():
         with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(config, f)
 
-        assert docs._process_user_guide() is True
+        assert docs._process_user_guide(has_api_reference=True) is True
         assert (docs.build_dir / "user-guide").exists()
 
 
@@ -12366,7 +12365,7 @@ def test_process_user_guide_with_sections():
         with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(config, f)
 
-        result = docs._process_user_guide()
+        result = docs._process_user_guide(has_api_reference=True)
 
         assert result is True
 
@@ -12702,7 +12701,7 @@ def test_generate_landing_page_content_basic():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         metadata = {"description": "A cool library", "name": "mylib"}
-        result = docs._generate_landing_page_content(metadata)
+        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
 
         assert "### Installation" in result
         assert "pip install" in result
@@ -12714,7 +12713,7 @@ def test_generate_landing_page_content_no_description():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         metadata = {}
-        result = docs._generate_landing_page_content(metadata)
+        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
 
         assert "### Installation" in result
         assert "pip install" in result
@@ -12724,9 +12723,8 @@ def test_generate_landing_page_content_with_api_reference():
     """_generate_landing_page_content includes API Reference link if available."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs._has_api_reference = True
         metadata = {"description": "Test"}
-        result = docs._generate_landing_page_content(metadata)
+        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
 
         assert "API Reference" in result
         assert "reference/index.qmd" in result
@@ -12741,7 +12739,7 @@ def test_generate_landing_page_content_with_user_guide():
         (ug_dir / "01-intro.qmd").write_text("# Intro", encoding="utf-8")
         docs = GreatDocs(project_path=tmp_dir)
         metadata = {"description": "Test"}
-        result = docs._generate_landing_page_content(metadata)
+        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
 
         assert "User Guide" in result
         assert "user-guide/index.qmd" in result
@@ -14013,7 +14011,7 @@ def test_create_index_from_readme_with_license():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
         license_qmd = gd_dir / "license.qmd"
 
         assert license_qmd.exists()
@@ -14040,7 +14038,7 @@ def test_create_index_from_readme_with_citation():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
         citation_qmd = gd_dir / "citation.qmd"
 
         assert citation_qmd.exists()
@@ -14060,7 +14058,7 @@ def test_create_index_from_readme_creates_index_qmd():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
         index_qmd = gd_dir / "index.qmd"
 
         assert index_qmd.exists()
@@ -14081,7 +14079,7 @@ def test_create_index_from_readme_generates_landing_page():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
         index_qmd = gd_dir / "index.qmd"
 
         assert index_qmd.exists()
@@ -14403,7 +14401,7 @@ def test_create_index_from_readme_citation_bibtex():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
         citation_qmd = gd_dir / "citation.qmd"
 
         assert citation_qmd.exists()
@@ -14436,7 +14434,7 @@ def test_create_index_from_readme_citation_two_authors():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
         citation_qmd = gd_dir / "citation.qmd"
         content = citation_qmd.read_text(encoding="utf-8")
 
@@ -14451,9 +14449,8 @@ def test_generate_landing_page_content_with_both_sections():
         ug_dir.mkdir()
         (ug_dir / "01-intro.qmd").write_text("# Intro", encoding="utf-8")
         docs = GreatDocs(project_path=tmp_dir)
-        docs._has_api_reference = True
         metadata = {"description": "Test lib"}
-        result = docs._generate_landing_page_content(metadata)
+        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
 
         assert "### Get Started" in result
         assert "API Reference" in result
@@ -15019,7 +15016,7 @@ def test_update_quarto_config_navbar_color_light_dark():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15054,7 +15051,7 @@ def test_update_quarto_config_navbar_color_light_only():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15094,7 +15091,7 @@ def test_update_quarto_config_navbar_color_does_not_leak_onto_root():
                 f,
             )
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15145,7 +15142,7 @@ def test_update_quarto_config_announcement_banner():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15192,7 +15189,7 @@ def test_update_quarto_config_content_style():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15233,7 +15230,7 @@ def test_update_quarto_config_navbar_style():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15272,7 +15269,7 @@ def test_update_quarto_config_dark_mode_toggle():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15311,7 +15308,7 @@ def test_update_quarto_config_cli_enabled_adds_ref_switcher():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15348,7 +15345,7 @@ def test_update_quarto_config_page_footer_with_authors():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15389,7 +15386,7 @@ def test_update_quarto_config_page_footer_with_funding():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15424,7 +15421,7 @@ def test_update_quarto_config_page_footer_funding_no_authors():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15459,7 +15456,7 @@ def test_update_quarto_config_posit_badge():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15491,7 +15488,7 @@ def test_update_quarto_config_sidebar_filter():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15525,7 +15522,7 @@ def test_update_quarto_config_sidebar_filter_custom_min_items():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15561,7 +15558,7 @@ def test_update_quarto_config_attribution():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15597,7 +15594,7 @@ def test_update_quarto_config_site_url():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15626,7 +15623,7 @@ def test_update_quarto_config_site_url_not_set():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -15666,7 +15663,7 @@ def test_create_index_from_readme_citation_parsing():
         readme.write_text("# My Package\n\nHello world.\n", encoding="utf-8")
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
         citation_qmd = docs.build_dir / "citation.qmd"
 
@@ -15707,7 +15704,7 @@ def test_create_index_from_readme_citation_single_author():
         readme.write_text("# Solo\n\nContent.\n", encoding="utf-8")
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
         citation_qmd = docs.build_dir / "citation.qmd"
 
@@ -15745,7 +15742,7 @@ def test_create_index_from_readme_citation_three_authors():
         readme.write_text("# Team\n\nContent.\n", encoding="utf-8")
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
         citation_qmd = docs.build_dir / "citation.qmd"
         content = citation_qmd.read_text()
@@ -15766,7 +15763,7 @@ def test_create_index_from_readme_no_citation():
         readme.write_text("# My Pkg\n\nSome content.\n", encoding="utf-8")
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
         citation_qmd = docs.build_dir / "citation.qmd"
 
@@ -15788,7 +15785,7 @@ def test_create_index_from_readme_heading_adjustment():
         )
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -15819,7 +15816,7 @@ def test_create_index_from_readme_rst_source():
         with patch.object(
             docs, "_convert_rst_to_markdown", return_value="# My Package\n\nSome RST content.\n"
         ):
-            docs._create_index_from_readme(force_rebuild=True)
+            docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -15839,7 +15836,7 @@ def test_create_index_from_readme_landing_page_fallback():
 
         # No README.md, no index.qmd, no README.rst
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -15864,7 +15861,7 @@ def test_create_index_from_readme_hero_section():
         readme.write_text("# mypkg\n\nHello world.\n", encoding="utf-8")
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -15893,7 +15890,7 @@ def test_create_index_from_readme_hero_strips_duplicate_h1():
         readme.write_text("# testpkg\n\n## Features\n\nSome features.\n", encoding="utf-8")
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
         index_qmd = docs.build_dir / "index.qmd"
         content = index_qmd.read_text()
@@ -15943,7 +15940,7 @@ def test_add_api_reference_config_non_python_project():
     """Test _add_api_reference_config skips for non-Python projects.
 
     A Go project has no importable Python package, so the step should skip
-    (setting _has_api_reference = False) rather than prompting for a package name.
+    (recording that the site has no API reference) rather than prompting for a package name.
     """
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -15962,9 +15959,10 @@ def test_add_api_reference_config_non_python_project():
 
         # Must not call input() — patch it to fail loudly if the skip is missed.
         with patch("builtins.input", side_effect=AssertionError("should not prompt")):
-            docs._add_api_reference_config()
+            run = make_run()
+            docs._add_api_reference_config(run)
 
-        assert docs._has_api_reference is False
+        assert run.has_api_reference is False
 
 
 def test_add_api_reference_config_carries_the_callable_signature_settings():
@@ -15992,7 +15990,8 @@ def test_add_api_reference_config_carries_the_callable_signature_settings():
 
         sections = [{"title": "All", "desc": "", "contents": ["Widget"]}]
         with patch.object(docs, "_create_api_sections_with_config", return_value=sections):
-            docs._add_api_reference_config()
+            run = make_run()
+            docs._add_api_reference_config(run)
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -16020,7 +16019,8 @@ def test_add_api_reference_config_defaults_the_callable_signature_settings():
 
         sections = [{"title": "All", "desc": "", "contents": ["Widget"]}]
         with patch.object(docs, "_create_api_sections_with_config", return_value=sections):
-            docs._add_api_reference_config()
+            run = make_run()
+            docs._add_api_reference_config(run)
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -16052,9 +16052,10 @@ def test_add_api_reference_config_with_sections():
 
         fake_sections = [{"title": "Core", "desc": "", "contents": ["Widget", "helper_fn"]}]
         with patch.object(docs, "_create_api_sections_with_config", return_value=fake_sections):
-            docs._add_api_reference_config()
+            run = make_run()
+            docs._add_api_reference_config(run)
 
-        assert docs._has_api_reference is True
+        assert run.has_api_reference is True
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -16116,7 +16117,7 @@ def test_prepare_build_directory_creates_structure():
         # Mock _add_api_reference_config to avoid needing actual package
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                docs._prepare_build_directory()
+                docs._prepare_build_directory(make_run())
 
         # Check directory structure
         assert docs.build_dir.exists()
@@ -16157,10 +16158,10 @@ def test_prepare_build_directory_can_retry_after_missing_header_include(tmp_path
     with patch.object(docs, "_add_api_reference_config"):
         with patch.object(docs, "_update_sidebar_from_sections"):
             with pytest.raises(FileNotFoundError, match="Header include file not found"):
-                docs._prepare_build_directory()
+                docs._prepare_build_directory(make_run())
 
             (tmp_path / "header.html").write_text('<meta name="retry">\n')
-            docs._prepare_build_directory()
+            docs._prepare_build_directory(make_run())
 
     assert (docs.build_dir / "_quarto.yml").exists()
     assert (docs.build_dir / "_includes" / "header.html").read_text() == ('<meta name="retry">\n')
@@ -16174,7 +16175,7 @@ def test_prepare_build_directory_writes_website_project(tmp_path):
 
     with patch.object(docs, "_add_api_reference_config"):
         with patch.object(docs, "_update_sidebar_from_sections"):
-            docs._prepare_build_directory()
+            docs._prepare_build_directory(make_run())
 
     config = read_yaml(docs.build_dir / "_quarto.yml")
     assert config["project"]["type"] == "website"
@@ -16202,7 +16203,7 @@ def test_prepare_build_directory_adds_llms_links_after_api_reference_setup():
             docs = GreatDocs(project_path=tmp_dir)
             sections = [{"title": "All", "desc": "", "contents": ["widget"]}]
             with patch.object(docs, "_create_api_sections_with_config", return_value=sections):
-                docs._prepare_build_directory()
+                docs._prepare_build_directory(make_run())
 
             index_content = (docs.build_dir / "index.qmd").read_text()
             assert "llms.txt" in index_content
@@ -16225,7 +16226,7 @@ def test_prepare_build_directory_copies_js_files():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                docs._prepare_build_directory()
+                docs._prepare_build_directory(make_run())
 
         # Core JS files should be present
         assert (docs.build_dir / "github-widget.js").exists()
@@ -16288,7 +16289,7 @@ def test_prepare_build_directory_copies_bibliography():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                docs._prepare_build_directory()
+                docs._prepare_build_directory(make_run())
 
         # .bib copied into build dir by basename
         assert (docs.build_dir / "references.bib").exists()
@@ -16323,7 +16324,7 @@ def test_prepare_build_directory_copies_multiple_bib_and_csl():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                docs._prepare_build_directory()
+                docs._prepare_build_directory(make_run())
 
         assert (docs.build_dir / "refs.bib").exists()
         assert (docs.build_dir / "software.bib").exists()
@@ -16352,7 +16353,7 @@ def test_prepare_build_directory_bibliography_missing_warns(capsys):
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                docs._prepare_build_directory()
+                docs._prepare_build_directory(make_run())
 
         out = capsys.readouterr().out
         assert "Bibliography file not found" in out
@@ -16384,7 +16385,7 @@ def test_bibliography_does_not_set_reference_section_title():
         docs = GreatDocs(project_path=tmp_dir)
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                docs._prepare_build_directory()
+                docs._prepare_build_directory(make_run())
 
         with open(docs.build_dir / "_quarto.yml", encoding="utf-8") as f:
             config = read_yaml(f)
@@ -16411,7 +16412,7 @@ def _prepared_quarto_config(lang: str) -> dict:
         docs = GreatDocs(project_path=tmp_dir)
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                docs._prepare_build_directory()
+                docs._prepare_build_directory(make_run())
 
         with open(docs.build_dir / "_quarto.yml", encoding="utf-8") as f:
             return read_yaml(f)
@@ -16460,7 +16461,7 @@ def test_prepare_build_directory_optional_js_copy_page():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                docs._prepare_build_directory()
+                docs._prepare_build_directory(make_run())
 
         assert (docs.build_dir / "copy-page.js").exists()
 
@@ -16485,7 +16486,7 @@ def test_prepare_build_directory_cleans_existing():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                docs._prepare_build_directory()
+                docs._prepare_build_directory(make_run())
 
         # Stale file should be gone
         assert not stale_file.exists()
@@ -16669,7 +16670,7 @@ def test_update_quarto_config_page_footer_three_authors():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -16704,7 +16705,7 @@ def test_update_quarto_config_page_footer_single_author():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -16743,7 +16744,7 @@ def test_update_quarto_config_page_footer_author_homepage():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -17630,7 +17631,7 @@ def test_generate_landing_page_content():
             "description": "A great package for doing things.",
         }
 
-        result = docs._generate_landing_page_content(metadata)
+        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
         assert "MyPackage" in result
         assert "great package" in result
 
@@ -17981,7 +17982,7 @@ def test_generate_landing_page_content_no_name():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         metadata = {"description": "A description."}
-        result = docs._generate_landing_page_content(metadata)
+        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
 
         assert "## Package" in result
         assert "A description." in result
@@ -17994,7 +17995,7 @@ def test_generate_landing_page_content_pip_install():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "great-pkg"\n', encoding="utf-8")
         metadata = {"description": "A package."}
-        result = docs._generate_landing_page_content(metadata)
+        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
 
         assert "pip install" in result
 
@@ -18306,7 +18307,7 @@ def test_process_user_guide_returns_false_no_guide():
     """Test _process_user_guide returns False when no user guide."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._process_user_guide()
+        result = docs._process_user_guide(has_api_reference=True)
         assert result is False
 
 
@@ -18567,14 +18568,6 @@ def test_detect_docstring_style_default():
         # With no griffe-loadable package, should return "numpy" default
         result = docs._detect_docstring_style("nonexistent_pkg_xyz")
         assert result in ("numpy", "google", "sphinx")
-
-
-def test_has_api_reference_property():
-    """Test _has_api_reference property."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        # Should be a boolean
-        assert isinstance(docs._has_api_reference, bool)
 
 
 def test_copy_assets_no_assets():
@@ -18858,7 +18851,7 @@ def test_create_index_from_readme_with_readme():
         build_dir = Path(tmp_dir) / "great-docs"
         build_dir.mkdir(parents=True, exist_ok=True)
 
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
         index_qmd = build_dir / "index.qmd"
         assert index_qmd.exists()
         content = index_qmd.read_text(encoding="utf-8")
@@ -18879,7 +18872,7 @@ def test_create_index_from_readme_no_source():
         build_dir = Path(tmp_dir) / "great-docs"
         build_dir.mkdir(parents=True, exist_ok=True)
 
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
         index_qmd = build_dir / "index.qmd"
         assert index_qmd.exists()
         content = index_qmd.read_text(encoding="utf-8")
@@ -18896,7 +18889,7 @@ def test_create_index_from_readme_skip_existing():
         build_dir.mkdir(parents=True, exist_ok=True)
         (build_dir / "index.qmd").write_text("existing content\n")
 
-        docs._create_index_from_readme(force_rebuild=False)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=False)
         content = (build_dir / "index.qmd").read_text(encoding="utf-8")
         assert content == "existing content\n"
 
@@ -18951,7 +18944,7 @@ def test_process_user_guide_returns_true():
             encoding="utf-8",
         )
 
-        result = docs._process_user_guide()
+        result = docs._process_user_guide(has_api_reference=True)
         assert result is True
 
 
@@ -19183,7 +19176,7 @@ def test_prepare_build_directory():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        docs._prepare_build_directory()
+        docs._prepare_build_directory(make_run())
 
         build_dir = Path(tmp_dir) / "great-docs"
         assert build_dir.exists()
@@ -19207,7 +19200,7 @@ def test_update_quarto_config_creates_structure():
             encoding="utf-8",
         )
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         result = _parse_yaml(quarto_yml.read_text(encoding="utf-8"))
         assert result["project"]["output-dir"] == "_site"
@@ -19226,8 +19219,8 @@ def _syntax_definitions_after_update(tmp_path: Path, html: str) -> list[str]:
         encoding="utf-8",
     )
 
-    docs._update_quarto_config()
-    docs._update_quarto_config()
+    docs._update_quarto_config(make_run())
+    docs._update_quarto_config(make_run())
 
     result = _parse_yaml(quarto_yml.read_text(encoding="utf-8"))
     return result["format"]["html"]["syntax-definitions"]
@@ -19770,7 +19763,7 @@ def test_process_user_guide_homepage_mode():
         build_dir.mkdir(parents=True, exist_ok=True)
 
         # No user guide directory — should fall back to index mode
-        result = docs._process_user_guide()
+        result = docs._process_user_guide(has_api_reference=True)
         assert result is False
 
         # Just confirm no crash
@@ -20063,7 +20056,7 @@ def test_create_index_from_readme_with_badges():
         build_dir = Path(tmp_dir) / "great-docs"
         build_dir.mkdir(parents=True)
 
-        docs._create_index_from_readme(force_rebuild=True)
+        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
         index_qmd = build_dir / "index.qmd"
         assert index_qmd.exists()
         content = index_qmd.read_text(encoding="utf-8")
@@ -20195,7 +20188,7 @@ def test_update_quarto_config_with_assets():
         assets_dir.mkdir()
         (assets_dir / "image.png").write_text("fake image")
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             config = read_yaml(f)
@@ -20235,7 +20228,7 @@ def test_prepare_build_directory_copies_assets():
 
         docs._config = write_config(Path(tmp_dir))
 
-        docs._prepare_build_directory()
+        docs._prepare_build_directory(make_run())
 
         build_dir = Path(tmp_dir) / "great-docs"
         assert build_dir.exists()
@@ -21643,7 +21636,6 @@ def test_inject_section_body_class_no_frontmatter():
 def _buildable_docs(
     tmp_path: Path,
     *,
-    api_reference: bool = False,
     quarto_yml: str = QUARTO_YML_HEADER,
     **settings: object,
 ) -> GreatDocs:
@@ -21654,8 +21646,6 @@ def _buildable_docs(
     ----------
     tmp_path
         The project directory.
-    api_reference
-        Whether the project has an API reference.
     quarto_yml
         The text of the build directory's `_quarto.yml`.
     **settings
@@ -21671,7 +21661,6 @@ def _buildable_docs(
     # `GreatDocs.build()` requires a configuration file, even with a configuration double.
     (tmp_path / "great-docs.yml").write_text("", encoding="utf-8")
     docs._config = mock_config(**settings)
-    docs._has_api_reference = api_reference
     docs.build_dir.mkdir(parents=True)
     (docs.build_dir / "_quarto.yml").write_text(quarto_yml, encoding="utf-8")
     return docs
@@ -21681,14 +21670,13 @@ def test_build_prepare_and_render_flow(tmp_path):
     """Test build() happy path: prepares, renders, runs quarto render."""
     docs = _buildable_docs(
         tmp_path,
-        api_reference=True,
         quarto_yml=QUARTO_YML_HEADER + "api-reference:\n  package: mypkg\n",
     )
     mock_builder = MagicMock()
     mock_builder_class = MagicMock(return_value=mock_builder)
 
     with (
-        stubbed_build(docs, _detect_package_name="mypkg"),
+        stubbed_build(docs, api_reference=True, _detect_package_name="mypkg"),
         patch("great_docs._apiref.api_reference.APIReference", mock_builder_class),
     ):
         docs.build(watch=False, refresh=True)
@@ -21714,11 +21702,30 @@ def test_build_no_api_reference(tmp_path):
     stubs.steps["_write_page_metadata"].assert_called_once()
 
 
+def test_build_after_a_build_without_api_reference_generates_one(tmp_path):
+    """
+    Verify API reference generation after a build without one on the same instance
+    """
+    docs = _buildable_docs(
+        tmp_path, quarto_yml=QUARTO_YML_HEADER + "api-reference:\n  package: mypkg\n"
+    )
+    with stubbed_build(docs):
+        docs.build(refresh=False)
+
+    mock_builder_class = MagicMock()
+    with (
+        stubbed_build(docs, api_reference=True, _detect_package_name="mypkg"),
+        patch("great_docs._apiref.api_reference.APIReference", mock_builder_class),
+    ):
+        docs.build(refresh=False)
+
+    mock_builder_class.return_value.build.assert_called_once()
+
+
 def test_build_dynamic_fallback_to_static(tmp_path):
     """Test build() falls back to static mode when dynamic mode fails."""
     docs = _buildable_docs(
         tmp_path,
-        api_reference=True,
         quarto_yml=QUARTO_YML_HEADER
         + format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
         dynamic=True,
@@ -21727,7 +21734,7 @@ def test_build_dynamic_fallback_to_static(tmp_path):
     mock_builder.build.side_effect = [RuntimeError("Dynamic mode failed"), None]
 
     with (
-        stubbed_build(docs, _detect_package_name="mypkg"),
+        stubbed_build(docs, api_reference=True, _detect_package_name="mypkg"),
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
@@ -21741,7 +21748,6 @@ def test_build_dynamic_fallback_preserves_the_quarto_yml_header(tmp_path):
     """The static-analysis retry rewrites api-reference.dynamic without losing the ownership header."""
     docs = _buildable_docs(
         tmp_path,
-        api_reference=True,
         quarto_yml=QUARTO_YML_HEADER
         + format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
         dynamic=True,
@@ -21750,7 +21756,7 @@ def test_build_dynamic_fallback_preserves_the_quarto_yml_header(tmp_path):
     mock_builder.build.side_effect = [RuntimeError("Dynamic mode failed"), None]
 
     with (
-        stubbed_build(docs, _detect_package_name="mypkg"),
+        stubbed_build(docs, api_reference=True, _detect_package_name="mypkg"),
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
@@ -21765,7 +21771,6 @@ def test_build_static_mode_failure_raises(tmp_path):
     """Raise `BuildError` when static API reference generation also fails"""
     docs = _buildable_docs(
         tmp_path,
-        api_reference=True,
         quarto_yml=QUARTO_YML_HEADER
         + format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
         dynamic=True,
@@ -21774,7 +21779,7 @@ def test_build_static_mode_failure_raises(tmp_path):
     mock_builder.build.side_effect = RuntimeError("Build always fails")
 
     with (
-        stubbed_build(docs, _detect_package_name="mypkg"),
+        stubbed_build(docs, api_reference=True, _detect_package_name="mypkg"),
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
@@ -21787,14 +21792,13 @@ def test_build_non_dynamic_failure_raises(tmp_path):
     """Raise `BuildError` when non-dynamic API reference generation fails"""
     docs = _buildable_docs(
         tmp_path,
-        api_reference=True,
         quarto_yml=QUARTO_YML_HEADER + format_yaml({"api-reference": {"package": "mypkg"}}),
     )
     mock_builder = MagicMock()
     mock_builder.build.side_effect = RuntimeError("Build failed")
 
     with (
-        stubbed_build(docs, _detect_package_name="mypkg"),
+        stubbed_build(docs, api_reference=True, _detect_package_name="mypkg"),
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
@@ -23829,9 +23833,10 @@ def test_add_api_reference_config_disabled():
         docs = GreatDocs(project_path=tmp_dir)
         docs._config = mock_config(reference_enabled=False)
 
-        docs._add_api_reference_config()
+        run = make_run()
+        docs._add_api_reference_config(run)
 
-        assert docs._has_api_reference is False
+        assert run.has_api_reference is False
 
 
 def test_add_api_reference_config_already_exists():
@@ -23848,7 +23853,8 @@ def test_add_api_reference_config_already_exists():
         )
 
         # Should not modify anything
-        docs._add_api_reference_config()
+        run = make_run()
+        docs._add_api_reference_config(run)
 
 
 def test_add_api_reference_config_no_package():
@@ -23865,9 +23871,10 @@ def test_add_api_reference_config_no_package():
             patch.object(docs, "_detect_package_name", return_value=None),
             patch("builtins.input", return_value=""),
         ):
-            docs._add_api_reference_config()
+            run = make_run()
+            docs._add_api_reference_config(run)
 
-        assert docs._has_api_reference is False
+        assert run.has_api_reference is False
 
 
 def test_add_api_reference_config_no_exports():
@@ -23886,9 +23893,10 @@ def test_add_api_reference_config_no_exports():
             patch.object(docs, "_is_compiled_extension", return_value=False),
             patch.object(docs, "_create_api_sections_with_config", return_value=None),
         ):
-            docs._add_api_reference_config()
+            run = make_run()
+            docs._add_api_reference_config(run)
 
-        assert docs._has_api_reference is False
+        assert run.has_api_reference is False
 
 
 def test_add_api_reference_config_success():
@@ -23918,9 +23926,10 @@ def test_add_api_reference_config_success():
             patch.object(docs, "_is_compiled_extension", return_value=False),
             patch.object(docs, "_create_api_sections_with_config", return_value=sections),
         ):
-            docs._add_api_reference_config()
+            run = make_run()
+            docs._add_api_reference_config(run)
 
-        assert docs._has_api_reference is True
+        assert run.has_api_reference is True
         written = read_yaml(docs.build_dir / "_quarto.yml")
         assert written["api-reference"]["sections"] == sections
 
@@ -23939,9 +23948,10 @@ def test_add_api_reference_config_eof_error():
             patch.object(docs, "_detect_package_name", return_value=None),
             patch("builtins.input", side_effect=EOFError),
         ):
-            docs._add_api_reference_config()
+            run = make_run()
+            docs._add_api_reference_config(run)
 
-        assert docs._has_api_reference is False
+        assert run.has_api_reference is False
 
 
 def test_refresh_api_reference_config_no_quarto_yml():
@@ -24611,7 +24621,7 @@ def _make_uqc_docs(tmp_dir, gd_yml_content="", pyproject_content=None, quarto_co
 def test_update_quarto_config_math_method_defaults_to_katex():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             config = read_yaml(f)
@@ -24625,7 +24635,7 @@ def test_update_quarto_config_forwards_math_method_override():
             tmp_dir,
             gd_yml_content="site:\n  html-math-method: mathjax\n",
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             config = read_yaml(f)
@@ -24645,7 +24655,7 @@ def test_update_quarto_config_resources_string():
                 "format": {"html": {}},
             },
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -24667,7 +24677,7 @@ def test_update_quarto_config_include_in_header_string():
                 "format": {"html": {"include-in-header": "header.html"}},
             },
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -24695,7 +24705,7 @@ def test_update_quarto_config_github_icon_fallback():
             "_get_github_repo_info",
             return_value=("owner", "repo", "https://github.com/owner/repo"),
         ):
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -24718,7 +24728,7 @@ def test_update_quarto_config_dark_logo():
         )
 
         with patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}):
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -24743,7 +24753,7 @@ def test_update_quarto_config_logo_name_collision():
         )
 
         with patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}):
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -24761,7 +24771,7 @@ def test_update_quarto_config_logo_not_found():
             gd_yml_content="logo:\n  light: nonexistent-logo.png\n",
         )
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
 
 def test_update_quarto_config_dark_logo_not_found():
@@ -24776,7 +24786,7 @@ def test_update_quarto_config_dark_logo_not_found():
         )
 
         with patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}):
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
 
 def test_update_quarto_config_favicon_file():
@@ -24792,7 +24802,7 @@ def test_update_quarto_config_favicon_file():
         )
 
         with patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}):
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -24812,7 +24822,7 @@ def test_update_quarto_config_favicon_not_found():
         )
 
         with patch.object(docs, "_generate_favicons", return_value={}):
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
 
 def test_update_quarto_config_favicon_resources_added():
@@ -24835,7 +24845,7 @@ def test_update_quarto_config_favicon_resources_added():
         }
 
         with patch.object(docs, "_generate_favicons", return_value=generated):
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -24877,7 +24887,7 @@ def test_update_quarto_config_favicon_absolute_urls_with_site_url():
         }
 
         with patch.object(docs, "_generate_favicons", return_value=generated):
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -24925,7 +24935,7 @@ def test_update_quarto_config_favicon_no_links_without_site_url():
         }
 
         with patch.object(docs, "_generate_favicons", return_value=generated):
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -24970,7 +24980,7 @@ def test_update_quarto_config_favicon_absolute_urls_from_pyproject():
         }
 
         with patch.object(docs, "_generate_favicons", return_value=generated):
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -25001,7 +25011,7 @@ def test_update_quarto_config_favicon_absolute_urls_from_pyproject():
             "_get_github_repo_info",
             return_value=("owner", "repo", "https://github.com/owner/repo"),
         ):
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -25022,7 +25032,7 @@ def test_update_quarto_config_footer_author_string():
                 '[[project.maintainers]]\nname = "Bob Jones"\n'
             ),
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -25043,7 +25053,7 @@ def test_update_quarto_config_footer_funding_no_url():
             ),
             gd_yml_content="funding:\n  name: ACME Foundation\n",
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -25061,7 +25071,7 @@ def test_update_quarto_config_funding_only_no_authors():
             pyproject_content='[project]\nname = "testpkg"\n',
             gd_yml_content="funding:\n  name: ACME Foundation\n  homepage: https://acme.org\n",
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -25079,7 +25089,7 @@ def test_update_quarto_config_attribution_v2():
             tmp_dir,
             gd_yml_content="attribution: true\n",
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -25103,7 +25113,7 @@ def test_update_quarto_config_announcement_banner_v2():
                 "  style: rounded\n"
             ),
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -25127,7 +25137,7 @@ def test_update_quarto_config_navbar_style_v2():
             tmp_dir,
             gd_yml_content="navbar_style: gradient-sunset\n",
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -25145,7 +25155,7 @@ def test_update_quarto_config_content_style_v2():
             tmp_dir,
             gd_yml_content="content_style:\n  preset: warm-glow\n  pages: all\n",
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -25169,7 +25179,7 @@ def test_update_quarto_config_logo_href():
         )
 
         with patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}):
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -31097,7 +31107,7 @@ def test_prepare_build_directory_config_js_branches():
         if scss_src.exists():
             shutil.copy2(scss_src, docs.build_dir / "great-docs.scss")
 
-        docs._prepare_build_directory()
+        docs._prepare_build_directory(make_run())
 
         # Verify the config-specific JS files were copied
         assert (docs.build_dir / "announcement-banner.js").exists()
@@ -32907,8 +32917,10 @@ class TestCreateBlendedIndex:
             docs._create_blended_index(user_guide_info, [])
             assert not (docs.build_dir / "index.qmd").exists()
 
-    def test_tracks_blended_first_page(self):
-        """Sets _blended_first_page attribute."""
+    def test_returns_blended_first_page(self):
+        """
+        Verify that homepage promotion returns the page's path under `user-guide/`
+        """
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = self._setup_blended(tmp_dir)
             source_dir = Path(tmp_dir) / "user_guide"
@@ -32919,8 +32931,8 @@ class TestCreateBlendedIndex:
                 "source_dir": source_dir,
                 "explicit": False,
             }
-            docs._create_blended_index(user_guide_info, ["user-guide/intro.qmd"])
-            assert docs._blended_first_page == "user-guide/intro.qmd"
+            first_page = docs._create_blended_index(user_guide_info, ["user-guide/intro.qmd"])
+            assert first_page == "user-guide/intro.qmd"
 
 
 class TestUpdateConfigWithUserGuide:
@@ -33403,7 +33415,7 @@ class TestUpdateQuartoConfigScripts:
             }
             with open(quarto_yml, "w") as f:
                 write_yaml(config, f)
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
             with open(quarto_yml) as f:
                 result = read_yaml(f)
             after_body = result["format"]["html"]["include-after-body"]
@@ -33424,7 +33436,7 @@ class TestUpdateQuartoConfigScripts:
             }
             with open(quarto_yml, "w") as f:
                 write_yaml(config, f)
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
             with open(quarto_yml) as f:
                 result = read_yaml(f)
             header = result["format"]["html"].get("include-in-header", [])
@@ -33446,7 +33458,7 @@ class TestUpdateQuartoConfigScripts:
             }
             with open(quarto_yml, "w") as f:
                 write_yaml(config, f)
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
             with open(quarto_yml) as f:
                 result = read_yaml(f)
             footer = result["website"].get("page-footer", {})
@@ -33468,7 +33480,7 @@ class TestUpdateQuartoConfigScripts:
             }
             with open(quarto_yml, "w") as f:
                 write_yaml(config, f)
-            docs._update_quarto_config()
+            docs._update_quarto_config(make_run())
             with open(quarto_yml) as f:
                 result = read_yaml(f)
             after_body = result["format"]["html"].get("include-after-body", [])
@@ -34439,7 +34451,7 @@ class TestUpdateQuartoConfigStrNormalizationBatch10:
         quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "w") as f:
             write_yaml(quarto_content, f)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
         with open(quarto_yml) as f:
             return read_yaml(f)
 
@@ -34796,7 +34808,7 @@ def test_create_blended_index_with_subdirectory_structure():
             "has_index": True,
         }
 
-        docs._create_blended_index(user_guide_info, ["user-guide/index.qmd"])
+        first_page = docs._create_blended_index(user_guide_info, ["user-guide/index.qmd"])
 
         # index.qmd should be created at site root
         index_qmd = docs.build_dir / "index.qmd"
@@ -34808,8 +34820,7 @@ def test_create_blended_index_with_subdirectory_structure():
         # The original should be removed from user-guide/
         assert not (ug_docs / "index.qmd").exists()
 
-        # _blended_first_page should be set correctly
-        assert docs._blended_first_page == "user-guide/index.qmd"
+        assert first_page == "user-guide/index.qmd"
 
 
 def test_create_blended_index_subdir_file_first():
@@ -34848,7 +34859,9 @@ def test_create_blended_index_subdir_file_first():
             "has_index": False,
         }
 
-        docs._create_blended_index(user_guide_info, ["user-guide/getting-started/intro.qmd"])
+        first_page = docs._create_blended_index(
+            user_guide_info, ["user-guide/getting-started/intro.qmd"]
+        )
 
         # index.qmd should be created at site root
         index_qmd = docs.build_dir / "index.qmd"
@@ -34860,8 +34873,8 @@ def test_create_blended_index_subdir_file_first():
         # The original should be removed
         assert not (sub_dest / "intro.qmd").exists()
 
-        # _blended_first_page should include the subdirectory
-        assert docs._blended_first_page == "user-guide/getting-started/intro.qmd"
+        # The returned path keeps the subdirectory
+        assert first_page == "user-guide/getting-started/intro.qmd"
 
 
 class TestCheckLinksURLCleanupBatch10:
@@ -35905,7 +35918,7 @@ def test_announcement_inline_markdown_backticks():
             tmp_dir,
             gd_yml_content=("announcement:\n  content: 'Install with: `pip install great-docs`'\n"),
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -35923,7 +35936,7 @@ def test_announcement_inline_markdown_bold():
             tmp_dir,
             gd_yml_content=("announcement:\n  content: '**Breaking change** in v2.0'\n"),
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -35940,7 +35953,7 @@ def test_announcement_inline_markdown_italic():
             tmp_dir,
             gd_yml_content=("announcement:\n  content: 'This is *important* news'\n"),
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -35959,7 +35972,7 @@ def test_announcement_inline_markdown_link():
                 "announcement:\n  content: 'See [release notes](https://example.com/changelog)'\n"
             ),
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -35981,7 +35994,7 @@ def test_announcement_inline_markdown_combined():
                 "  content: '**New!** Try `great-docs init` — see [docs](https://example.com)'\n"
             ),
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36000,7 +36013,7 @@ def test_announcement_plain_text_unaffected():
             tmp_dir,
             gd_yml_content=("announcement:\n  content: 'Just a plain announcement'\n"),
         )
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36014,7 +36027,7 @@ def test_update_quarto_config_disables_native_code_copy():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36027,7 +36040,7 @@ def test_update_quarto_config_includes_copy_code_js_in_resources():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36040,7 +36053,7 @@ def test_update_quarto_config_includes_copy_code_js_in_after_body():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36056,8 +36069,8 @@ def test_update_quarto_config_copy_code_not_duplicated():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36081,7 +36094,7 @@ def test_update_quarto_config_includes_tooltips_js_in_resources():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36094,7 +36107,7 @@ def test_update_quarto_config_includes_tooltips_js_in_after_body():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36110,8 +36123,8 @@ def test_update_quarto_config_tooltips_not_duplicated():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36134,7 +36147,7 @@ def test_update_quarto_config_includes_responsive_tables_js_in_resources():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36147,7 +36160,7 @@ def test_update_quarto_config_includes_responsive_tables_js_in_after_body():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36163,8 +36176,8 @@ def test_update_quarto_config_responsive_tables_not_duplicated():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36187,7 +36200,7 @@ def test_update_quarto_config_includes_video_embed_js_in_resources():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36200,7 +36213,7 @@ def test_update_quarto_config_includes_video_embed_js_in_after_body():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36216,8 +36229,8 @@ def test_update_quarto_config_video_embed_not_duplicated():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36241,7 +36254,7 @@ def test_update_quarto_config_video_embed_script_tag_format():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36266,7 +36279,7 @@ def test_prepare_build_directory_copies_video_embed_js():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                docs._prepare_build_directory()
+                docs._prepare_build_directory(make_run())
 
         assert (docs.build_dir / "video-embed.js").exists()
 
@@ -36388,7 +36401,7 @@ def test_video_embed_always_included():
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Minimal config — no special settings
         docs, quarto_yml = _make_uqc_docs(tmp_dir, gd_yml_content="")
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36405,7 +36418,7 @@ def test_update_quarto_config_mermaid_theme_default():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36420,7 +36433,7 @@ def test_update_quarto_config_includes_mermaid_renderer_js():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36436,8 +36449,8 @@ def test_update_quarto_config_mermaid_renderer_not_duplicated():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config()
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36665,7 +36678,7 @@ def test_back_to_top_enabled_by_default():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36687,7 +36700,7 @@ def test_back_to_top_disabled_via_config():
             gd_yml_content="back_to_top: false\n",
         )
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36706,7 +36719,7 @@ def test_back_to_top_script_tag_content():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36723,8 +36736,8 @@ def test_back_to_top_not_duplicated():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config()
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36747,7 +36760,7 @@ def test_back_to_top_with_string_include_after_body():
             },
         )
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36784,7 +36797,7 @@ def test_back_to_top_js_copied_to_project():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, _ = _make_uqc_docs(tmp_dir)
-        docs._prepare_build_directory()
+        docs._prepare_build_directory(make_run())
 
         js_file = docs.build_dir / "back-to-top.js"
         assert js_file.exists()
@@ -36798,7 +36811,7 @@ def test_back_to_top_js_not_copied_when_disabled():
             tmp_dir,
             gd_yml_content="back_to_top: false\n",
         )
-        docs._prepare_build_directory()
+        docs._prepare_build_directory(make_run())
 
         js_file = docs.build_dir / "back-to-top.js"
         assert not js_file.exists()
@@ -36822,7 +36835,7 @@ def test_wide_layout_enabled_by_default():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36846,8 +36859,8 @@ def test_wide_layout_meta_precedes_theme_init():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config()
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36868,9 +36881,9 @@ def test_repeated_config_pass_keeps_wide_layout_in_place():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
         first = read_yaml(quarto_yml)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
         second = read_yaml(quarto_yml)
 
         # Other scripts must follow the loader on the first pass to expose a move to the end
@@ -36893,7 +36906,7 @@ def test_theme_init_added_when_details_already_listed():
             },
         )
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36921,7 +36934,7 @@ def test_wide_layout_custom_settings():
             ),
         )
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -36941,8 +36954,8 @@ def test_wide_layout_disabled_via_config():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir, gd_yml_content="wide_layout: false\n")
 
-        docs._update_quarto_config()
-        docs._prepare_build_directory()
+        docs._update_quarto_config(make_run())
+        docs._prepare_build_directory(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -37002,7 +37015,7 @@ def test_wide_layout_js_copied_to_project():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, _ = _make_uqc_docs(tmp_dir)
-        docs._prepare_build_directory()
+        docs._prepare_build_directory(make_run())
 
         assert (docs.build_dir / "wide-layout.js").exists()
 
@@ -37108,7 +37121,7 @@ def test_on_this_page_enabled_by_default():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -37132,7 +37145,7 @@ def test_on_this_page_disabled_via_config():
             gd_yml_content="back_to_top: false\n",
         )
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -37153,7 +37166,7 @@ def test_on_this_page_script_tag_is_plain():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -37170,7 +37183,7 @@ def test_color_swatch_script_tag_is_plain():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -37193,8 +37206,8 @@ def test_update_quarto_config_includes_are_plain_tags_once():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir, gd_yml_content="marimo:\n  enabled: true\n")
 
-        docs._update_quarto_config()
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -37253,8 +37266,8 @@ def test_on_this_page_not_duplicated():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config()
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -37270,7 +37283,7 @@ def test_on_this_page_js_copied_to_project():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, _ = _make_uqc_docs(tmp_dir)
-        docs._prepare_build_directory()
+        docs._prepare_build_directory(make_run())
 
         js_file = docs.build_dir / "on-this-page.js"
 
@@ -37285,7 +37298,7 @@ def test_on_this_page_js_not_copied_when_disabled():
             tmp_dir,
             gd_yml_content="back_to_top: false\n",
         )
-        docs._prepare_build_directory()
+        docs._prepare_build_directory(make_run())
 
         js_file = docs.build_dir / "on-this-page.js"
 
@@ -37353,7 +37366,7 @@ def test_keyboard_nav_enabled_by_default():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -37375,7 +37388,7 @@ def test_keyboard_nav_disabled_via_config():
             gd_yml_content="keyboard_nav: false\n",
         )
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -37394,7 +37407,7 @@ def test_keyboard_nav_script_tag_content():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -37411,8 +37424,8 @@ def test_keyboard_nav_not_duplicated():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config()
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -37448,7 +37461,7 @@ def test_keyboard_nav_js_copied_to_project():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, _ = _make_uqc_docs(tmp_dir)
-        docs._prepare_build_directory()
+        docs._prepare_build_directory(make_run())
 
         js_file = docs.build_dir / "keyboard-nav.js"
         assert js_file.exists()
@@ -37462,7 +37475,7 @@ def test_keyboard_nav_js_not_copied_when_disabled():
             tmp_dir,
             gd_yml_content="keyboard_nav: false\n",
         )
-        docs._prepare_build_directory()
+        docs._prepare_build_directory(make_run())
 
         js_file = docs.build_dir / "keyboard-nav.js"
         assert not js_file.exists()
@@ -39104,7 +39117,7 @@ def test_announcement_position_in_meta_tag():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir, docs._config)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(docs.build_dir / "_quarto.yml", "r") as f:
             config = read_yaml(f)
@@ -39126,7 +39139,7 @@ def test_announcement_position_defaults_above_in_meta_tag():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir, docs._config)
-        docs._update_quarto_config()
+        docs._update_quarto_config(make_run())
 
         with open(docs.build_dir / "_quarto.yml", "r") as f:
             config = read_yaml(f)
@@ -39644,7 +39657,7 @@ def test_prepare_build_dir_pre_render_script_exists(tmp_path):
 
     with patch.object(docs, "_add_api_reference_config"):
         with patch.object(docs, "_update_sidebar_from_sections"):
-            docs._prepare_build_directory()
+            docs._prepare_build_directory(make_run())
 
     # Script should be copied to scripts/ in the build dir
     assert (docs.build_dir / "scripts" / "prerender.py").exists()
@@ -39663,7 +39676,7 @@ def test_prepare_build_dir_css_file_warning(tmp_path):
     with redirect_stdout(out):
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                docs._prepare_build_directory()
+                docs._prepare_build_directory(make_run())
 
     assert "CSS" in out.getvalue() or "css" in out.getvalue().lower()
 
@@ -39677,7 +39690,7 @@ def test_prepare_build_dir_css_file_exists(tmp_path):
 
     with patch.object(docs, "_add_api_reference_config"):
         with patch.object(docs, "_update_sidebar_from_sections"):
-            docs._prepare_build_directory()
+            docs._prepare_build_directory(make_run())
 
     # CSS file should be in the build dir
     assert (docs.build_dir / "custom.css").exists()
@@ -39692,7 +39705,7 @@ def test_prepare_build_dir_css_file_exists(tmp_path):
     out = io.StringIO()
     with redirect_stdout(out):
         try:
-            docs._prepare_build_directory()
+            docs._prepare_build_directory(make_run())
         except Exception:
             pass
     assert "Warning" in out.getvalue() or "warning" in out.getvalue().lower()
@@ -39709,7 +39722,7 @@ def test_prepare_build_dir_missing_bibliography_file(tmp_path):
     out = io.StringIO()
     with redirect_stdout(out):
         try:
-            docs._prepare_build_directory()
+            docs._prepare_build_directory(make_run())
         except Exception:
             pass
     assert "Warning" in out.getvalue() or "warning" in out.getvalue().lower()
@@ -39726,7 +39739,7 @@ def test_prepare_build_dir_missing_csl_file(tmp_path):
     out = io.StringIO()
     with redirect_stdout(out):
         try:
-            docs._prepare_build_directory()
+            docs._prepare_build_directory(make_run())
         except Exception:
             pass
     assert "Warning" in out.getvalue() or "warning" in out.getvalue().lower()
@@ -39743,7 +39756,7 @@ def test_prepare_build_dir_missing_css_file(tmp_path):
     out = io.StringIO()
     with redirect_stdout(out):
         try:
-            docs._prepare_build_directory()
+            docs._prepare_build_directory(make_run())
         except Exception:
             pass
     assert "Warning: CSS file not found: nonexistent.css" in out.getvalue()
@@ -39761,7 +39774,7 @@ def test_prepare_build_dir_marimo_not_installed(tmp_path):
     with redirect_stdout(out):
         with patch("importlib.util.find_spec", return_value=None):
             try:
-                docs._prepare_build_directory()
+                docs._prepare_build_directory(make_run())
             except Exception:
                 pass
     assert "Warning" in out.getvalue() or "warning" in out.getvalue().lower()
@@ -41073,7 +41086,7 @@ def _write_custom_pages(docs: GreatDocs, project: Path) -> None:
 
 def _write_index(docs: GreatDocs, project: Path) -> None:
     """Write the homepage and the community pages"""
-    docs._create_index_from_readme(force_rebuild=True)
+    docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
 
 @pytest.mark.parametrize(
@@ -41245,7 +41258,7 @@ def test_readme_homepage_without_margin_starts_with_front_matter_fence():
         docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         with patch.object(docs, "_build_metadata_margin", return_value=""):
-            docs._create_index_from_readme(force_rebuild=True)
+            docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
         content = (docs.build_dir / "index.qmd").read_text(encoding="utf-8")
 

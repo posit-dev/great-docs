@@ -2,8 +2,8 @@
 Shared configuration and build setup for `GreatDocs` tests
 
 `write_config` writes and loads `great-docs.yml`. `mock_config` provides a `Config` double
-with empty defaults. `stubbed_build` stubs Quarto and build steps while preserving the build's
-control flow.
+with empty defaults. `make_run` creates build state for testing build methods directly.
+`stubbed_build` stubs Quarto and build steps while preserving the build's control flow.
 """
 
 from __future__ import annotations
@@ -12,13 +12,14 @@ import types
 import typing
 from collections.abc import Callable, Generator, Iterable, Mapping
 from contextlib import ExitStack, contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, NonCallableMagicMock, patch
 
 from yaml12 import format_yaml
 
 from great_docs import Config, GreatDocs
+from great_docs._build.pipeline import Run
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -130,6 +131,25 @@ def mock_config(**values: object) -> NonCallableMagicMock:
     return config
 
 
+def make_run(**values: Any) -> Run:
+    """
+    Create initial build state with optional field overrides
+
+    By default, the build has no detected package name and watch mode is off.
+
+    Parameters
+    ----------
+    **values
+        Overrides for `Run` fields, by name.
+
+    Returns
+    -------
+    :
+        The build state with the supplied values.
+    """
+    return replace(Run(package_name="", watch=False), **values)
+
+
 @dataclass(frozen=True)
 class BuildStubs:
     """
@@ -150,7 +170,11 @@ class BuildStubs:
 
 @contextmanager
 def stubbed_build(
-    docs: GreatDocs, run: Iterable[str] = (), **returns: object
+    docs: GreatDocs,
+    run: Iterable[str] = (),
+    *,
+    api_reference: bool = False,
+    **returns: object,
 ) -> Generator[BuildStubs]:
     """
     Stub Quarto and the methods `GreatDocs.build()` calls on an instance
@@ -167,6 +191,9 @@ def stubbed_build(
     run
         Names of methods to run for real. Also include any build steps these methods need to
         call for real; other steps remain stubbed.
+    api_reference
+        Whether the stubbed preparation of the build directory leaves the site with an API
+        reference. By default it configures none, as for a project without one.
     **returns
         Return values for stubbed methods, by method name.
 
@@ -178,8 +205,8 @@ def stubbed_build(
     Raises
     ------
     ValueError
-        If `run` or `returns` names a method that `build()` does not call, or if both name the same
-        method.
+        If `run` or `returns` names a method that `build()` does not call, both name the same
+        method, or `api_reference` is true while build directory preparation runs for real.
     AttributeError
         If a method in the build-step list no longer exists on `GreatDocs`.
     """
@@ -190,6 +217,10 @@ def stubbed_build(
     both = sorted(real & set(returns))
     if both:
         raise ValueError(f"a method that runs cannot have a stubbed return value: {both}")
+    if api_reference and "_prepare_build_directory" in real:
+        raise ValueError(
+            "the real build directory preparation decides whether there is an API reference"
+        )
     missing = [name for name in _BUILD_METHODS if not hasattr(GreatDocs, name)]
     if missing:
         raise AttributeError(f"GreatDocs has no {missing}; update the method list in {__name__}")
@@ -214,7 +245,21 @@ def stubbed_build(
             steps[name] = stack.enter_context(
                 patch.object(docs, name, autospec=True, return_value=value)
             )
+        if not api_reference and "_prepare_build_directory" in steps:
+            steps["_prepare_build_directory"].side_effect = _configure_no_api_reference
         yield BuildStubs(steps=steps, render=render)
+
+
+def _configure_no_api_reference(run: Run) -> None:
+    """
+    Record a build directory prepared without an API reference
+
+    Parameters
+    ----------
+    run
+        The current build.
+    """
+    run.has_api_reference = False
 
 
 def _return_type(function: Callable[..., object]) -> object:

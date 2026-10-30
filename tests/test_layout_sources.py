@@ -6,10 +6,12 @@ import pytest
 from yaml12 import read_yaml, write_yaml
 
 from great_docs import GreatDocs
+from great_docs._build.pipeline import Run
 from great_docs._layout import Layout
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._versioned_build import assemble_site, run_versioned_build
 from great_docs._versioning import VersionEntry, build_version_map, parse_versions_config
+from tests.support import make_run
 
 
 @pytest.fixture(params=[".", "docs", "website"])
@@ -138,7 +140,7 @@ def test_latest_collision_preserves_source(
         gd.build_dir.mkdir()
         (gd.build_dir / "keep.txt").write_text("keep")
     with pytest.raises(ValueError):
-        gd._prepare_build_directory()
+        gd._prepare_build_directory(make_run())
     assert (original / "keep.txt").read_text() == "keep"
     assert (gd.build_dir / "keep.txt").read_text() == "keep"
 
@@ -158,7 +160,7 @@ def test_unowned_deployment_is_preserved(source_project: tuple[Path, Path]) -> N
 def test_nonversion_assembly_and_uninstall(source_project: tuple[Path, Path]) -> None:
     root, source = source_project
     gd = make_docs(root, source)
-    gd._prepare_build_directory()
+    gd._prepare_build_directory(make_run())
     local_site = gd.build_dir / "_site"
     local_site.mkdir()
     (local_site / "index.html").write_text("home")
@@ -182,14 +184,14 @@ def test_site_inventory_protects_added_content(
     if source == root:
         pytest.skip("Legacy deployment remains inside the generated project")
     gd = make_docs(root, source)
-    gd._prepare_build_directory()
+    gd._prepare_build_directory(make_run())
     (gd.build_dir / "_site").mkdir()
     (gd.build_dir / "_site/index.html").write_text("home")
     assemble_site(gd.build_dir, [], "", gd.layout.site_dir, layout=gd.layout)
     (gd.layout.site_dir / "added.txt").write_text("keep")
     with pytest.raises(ValueError, match="unrecognised"):
         if operation == "build":
-            gd._prepare_build_directory()
+            gd._prepare_build_directory(make_run())
         else:
             gd.uninstall()
     assert (gd.layout.site_dir / "added.txt").read_text() == "keep"
@@ -221,7 +223,7 @@ def test_freeze_custom_config_name(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     (source / "_freeze").mkdir()
     (source / "_freeze/result.json").write_text("cached")
     gd = GreatDocs(str(tmp_path), config_path=str(config))
-    gd._prepare_build_directory()
+    gd._prepare_build_directory(make_run())
     monkeypatch.chdir(gd.build_dir)
     runpy.run_path(str(gd.build_dir / "scripts/restore-freeze.py"))
     assert (gd.build_dir / "_freeze/result.json").read_text() == "cached"
@@ -264,7 +266,7 @@ def test_documentation_sources(source_project: tuple[Path, Path], explicit: bool
         source / "great-docs.yml",
     )
     gd = make_docs(root, source)
-    gd._prepare_build_directory()
+    gd._prepare_build_directory(make_run())
     gd._copy_assets()
     gd._copy_user_guide_to_docs(gd._discover_user_guide())
     gd._process_sections()
@@ -336,7 +338,7 @@ def test_duplicate_hook_names_fail_before_copy(source_project: tuple[Path, Path]
     )
     gd = make_docs(root, source)
     with pytest.raises(ValueError, match="hook|script"):
-        gd._prepare_build_directory()
+        gd._prepare_build_directory(make_run())
 
 
 def test_nested_sources_and_shared_assets(source_project: tuple[Path, Path]) -> None:
@@ -396,7 +398,7 @@ def test_notebooks_use_documentation_root(source_project: tuple[Path, Path]) -> 
         patch("importlib.util.find_spec", return_value=object()),
         patch.dict("sys.modules", {"great_docs._marimo": marimo}),
     ):
-        gd._prepare_build_directory()
+        gd._prepare_build_directory(make_run())
     assert (gd.build_dir / "notebooks/data.json").read_text() == "{}"
 
 
@@ -413,9 +415,9 @@ def test_api_reference_build_uses_selected_cwd(
     original_cwd = Path.cwd()
     prepare = gd._prepare_build_directory
 
-    def prepare_reference() -> None:
-        prepare()
-        gd._has_api_reference = True
+    def prepare_reference(run: Run) -> None:
+        prepare(run)
+        run.has_api_reference = True
 
     def check_cwd(ref: APIReference) -> None:
         assert Path.cwd() == gd.build_dir
@@ -527,7 +529,7 @@ def test_blended_homepage_references_use_final_destination(
         {"module": "sample", "homepage": "user_guide", "hero": False}, source / "great-docs.yml"
     )
     gd = make_docs(root, source)
-    gd._prepare_build_directory()
+    gd._prepare_build_directory(make_run())
     info = gd._discover_user_guide()
     copied = gd._copy_user_guide_to_docs(info)
     gd._create_blended_index(info, copied)
@@ -549,7 +551,7 @@ def test_custom_html_rebases_local_assets(source_project: tuple[Path, Path]) -> 
         f'---\nlayout: raw\n---\n<div>\n    <img\n      src="{prefix}assets/plot.svg">\n</div>'
     )
     gd = make_docs(root, source)
-    gd._prepare_build_directory()
+    gd._prepare_build_directory(make_run())
     gd._process_custom_pages()
     result = (gd.build_dir / "custom/about.html").read_text()
     path = result.split('src="', 1)[1].split('"', 1)[0]
