@@ -1408,9 +1408,8 @@ def test_site_quarto_excludes_css_and_legacy_keys(tmp_path: Path):
 
 def _quarto_config_for(tmp_path: Path, gd_yaml: str) -> dict:
     """Build _quarto.yml via GreatDocs._update_quarto_config and return it parsed."""
-    from yaml12 import read_yaml
-
     from great_docs import GreatDocs
+    from great_docs._website import quarto_yml
 
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "test"\nversion = "0.1.0"\n', encoding="utf-8"
@@ -1418,10 +1417,9 @@ def _quarto_config_for(tmp_path: Path, gd_yaml: str) -> dict:
     (tmp_path / "great-docs.yml").write_text(gd_yaml, encoding="utf-8")
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir(parents=True, exist_ok=True)
-    docs._write_initial_quarto_yml()
+    quarto_yml.write_initial(docs.build_dir, docs._config)
     docs._update_quarto_config()
-    with open(docs.build_dir / "_quarto.yml") as f:
-        return read_yaml(f)
+    return quarto_yml.read(docs.build_dir)
 
 
 def test_arbitrary_site_key_reaches_format_html(tmp_path: Path):

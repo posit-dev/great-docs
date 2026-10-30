@@ -14,6 +14,7 @@ import pytest
 import requests
 
 from great_docs import GreatDocs
+from great_docs._website import quarto_yml as quarto_yml_file
 
 
 def _make_gd(tmp_path: Path) -> GreatDocs:
@@ -437,18 +438,10 @@ class TestUpdateSidebarWithMcp:
             encoding="utf-8",
         )
 
-        written = {}
-
-        def fake_write(path, config):
-            written["config"] = config
-
-        monkeypatch.setattr(gd, "_write_quarto_yml", fake_write)
-
         mcp_files = ["reference/mcp/tools.qmd", "reference/mcp/resources.qmd"]
         gd._update_sidebar_with_mcp(mcp_files)
 
-        assert "config" in written
-        sidebar = written["config"]["website"]["sidebar"]
+        sidebar = quarto_yml_file.read(gd.build_dir)["website"]["sidebar"]
         mcp_section = next(s for s in sidebar if s.get("id") == "mcp-reference")
         assert "MCP Reference" in mcp_section["title"]
 
@@ -462,17 +455,10 @@ class TestUpdateSidebarWithMcp:
             encoding="utf-8",
         )
 
-        written = {}
-
-        def fake_write(path, config):
-            written["config"] = config
-
-        monkeypatch.setattr(gd, "_write_quarto_yml", fake_write)
-
         new_files = ["new-tools.qmd"]
         gd._update_sidebar_with_mcp(new_files)
 
-        sidebar = written["config"]["website"]["sidebar"]
+        sidebar = quarto_yml_file.read(gd.build_dir)["website"]["sidebar"]
         mcp_section = next(s for s in sidebar if s.get("id") == "mcp-reference")
         assert mcp_section["contents"] == new_files
 
@@ -483,17 +469,9 @@ class TestUpdateSidebarWithMcp:
         quarto_yml = gd.build_dir / "_quarto.yml"
         quarto_yml.write_text("project:\n  type: website\n", encoding="utf-8")
 
-        written = {}
-
-        def fake_write(path, config):
-            written["config"] = config
-
-        monkeypatch.setattr(gd, "_write_quarto_yml", fake_write)
-
         gd._update_sidebar_with_mcp(["tool.qmd"])
 
-        assert "website" in written["config"]
-        assert "sidebar" in written["config"]["website"]
+        assert "sidebar" in quarto_yml_file.read(gd.build_dir)["website"]
 
 
 class TestGenerateMcpManifest:
@@ -559,10 +537,9 @@ class TestRemoveMcpFromRefSections:
             "format:\n  html:\n    include-in-header:\n      - text: 'unrelated'\n",
             encoding="utf-8",
         )
-        written = []
-        monkeypatch.setattr(gd, "_write_quarto_yml", lambda p, c: written.append(c))
+        before = quarto_yml.read_text(encoding="utf-8")
         gd._remove_mcp_from_ref_sections()
-        assert written == []
+        assert quarto_yml.read_text(encoding="utf-8") == before
 
     def test_removes_mcp_from_multi_section_list(self, tmp_path, monkeypatch):
         """Sections 'api,cli,mcp' becomes 'api,cli', script kept."""
@@ -577,11 +554,9 @@ class TestRemoveMcpFromRefSections:
             f"    include-after-body:\n      - text: 'other.js'\n",
             encoding="utf-8",
         )
-        written = []
-        monkeypatch.setattr(gd, "_write_quarto_yml", lambda p, c: written.append(c))
         gd._remove_mcp_from_ref_sections()
-        assert len(written) == 1
-        header_items = written[0]["format"]["html"]["include-in-header"]
+        written = quarto_yml_file.read(gd.build_dir)
+        header_items = written["format"]["html"]["include-in-header"]
         assert "api,cli" in header_items[0]["text"]
         assert "mcp" not in header_items[0]["text"]
 
@@ -597,13 +572,11 @@ class TestRemoveMcpFromRefSections:
             f'    include-after-body:\n      - text: "{switcher_script}"\n',
             encoding="utf-8",
         )
-        written = []
-        monkeypatch.setattr(gd, "_write_quarto_yml", lambda p, c: written.append(c))
         gd._remove_mcp_from_ref_sections()
-        assert len(written) == 1
-        header_items = written[0]["format"]["html"]["include-in-header"]
+        written = quarto_yml_file.read(gd.build_dir)
+        header_items = written["format"]["html"]["include-in-header"]
         assert len(header_items) == 0
-        after_body = written[0]["format"]["html"]["include-after-body"]
+        after_body = written["format"]["html"]["include-after-body"]
         assert all("reference-switcher" not in e.get("text", "") for e in after_body)
 
 
@@ -2534,7 +2507,7 @@ class TestInjectVersionSelector:
         )
         _patch_cfg(monkeypatch, gd, "versions", [{"tag": "v1.0"}, {"tag": "v2.0"}])
         _patch_cfg(monkeypatch, gd, "version_warning_banner", True)
-        gd._inject_version_selector(quarto_yml)
+        gd._inject_version_selector()
         content = quarto_yml.read_text()
         assert "gd-version-map" in content
         assert "version-selector.js" in content
@@ -2558,7 +2531,7 @@ class TestInjectVersionSelector:
         )
         _patch_cfg(monkeypatch, gd, "versions", [])
         _patch_cfg(monkeypatch, gd, "version_warning_banner", True)
-        gd._inject_version_selector(quarto_yml)
+        gd._inject_version_selector()
         content = quarto_yml.read_text()
         assert "gd-version-map" in content
 
@@ -2581,7 +2554,7 @@ class TestInjectVersionSelector:
         )
         _patch_cfg(monkeypatch, gd, "versions", [])
         _patch_cfg(monkeypatch, gd, "version_warning_banner", True)
-        gd._inject_version_selector(quarto_yml)
+        gd._inject_version_selector()
         content = quarto_yml.read_text()
         assert "version-selector" in content
 
@@ -2604,7 +2577,7 @@ class TestInjectVersionSelector:
         )
         _patch_cfg(monkeypatch, gd, "versions", [])
         _patch_cfg(monkeypatch, gd, "version_warning_banner", False)
-        gd._inject_version_selector(quarto_yml)
+        gd._inject_version_selector()
         content = quarto_yml.read_text()
         assert "gd-version-warning-banner" in content
 
@@ -2627,7 +2600,7 @@ class TestInjectVersionSelector:
         )
         _patch_cfg(monkeypatch, gd, "versions", [])
         _patch_cfg(monkeypatch, gd, "version_warning_banner", True)
-        gd._inject_version_selector(quarto_yml)
+        gd._inject_version_selector()
         content = quarto_yml.read_text()
         assert "version-selector" in content
 
@@ -2650,7 +2623,7 @@ class TestInjectVersionSelector:
         )
         _patch_cfg(monkeypatch, gd, "versions", [])
         _patch_cfg(monkeypatch, gd, "version_warning_banner", True)
-        gd._inject_version_selector(quarto_yml)
+        gd._inject_version_selector()
 
 
 # ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import json
 import re
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from yaml12 import write_yaml
 
@@ -91,7 +92,7 @@ QUARTO_YML_HEADER = (
 )
 
 
-def write_quarto_yml(path: Path, config: dict) -> None:
+def write_quarto_yml(path: Path, config: dict[str, Any]) -> None:
     """
     Write a build directory's Quarto configuration as a generated file
 

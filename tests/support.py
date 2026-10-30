@@ -58,7 +58,6 @@ _BUILD_METHODS: tuple[str, ...] = (
     "_copy_assets",
     "_update_quarto_config",
     "_get_quarto_env",
-    "_write_quarto_yml",
     "_normalize_freeze_shorthand",
     "_write_page_metadata",
     "_prerender_term_player",

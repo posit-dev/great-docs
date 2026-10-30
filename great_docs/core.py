@@ -27,9 +27,16 @@ from ._utils import (
     validate_build_dir,
     validate_layout_outputs,
     validate_tree_symlinks,
-    write_quarto_yml,
 )
-from ._website import i18n, markdown_pages, page_dates, page_metadata, page_url, social_cards
+from ._website import (
+    i18n,
+    markdown_pages,
+    page_dates,
+    page_metadata,
+    page_url,
+    quarto_yml,
+    social_cards,
+)
 from ._website.navigation import github as nav_github
 from ._website.navigation import label as nav_label
 from ._website.navigation import release as nav_release
@@ -481,7 +488,7 @@ class GreatDocs:
 
         # Create the great-docs directory
         self.build_dir.mkdir(parents=True, exist_ok=True)
-        self._write_initial_quarto_yml()
+        quarto_yml.write_initial(self.build_dir, self._config)
 
         # Create necessary subdirectories
         scripts_dir = self.build_dir / "scripts"
@@ -2339,12 +2346,10 @@ class GreatDocs:
 
     def _add_changelog_to_navbar(self) -> None:
         """Add a *Changelog* link to the navbar (idempotent)."""
-        quarto_yml = self.build_dir / "_quarto.yml"
-        if not quarto_yml.exists():
+        if not quarto_yml.path(self.build_dir).exists():
             return
 
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f) or {}
+        config = quarto_yml.read(self.build_dir)
 
         navbar = config.get("website", {}).get("navbar")
         if not navbar or "left" not in navbar:
@@ -2359,7 +2364,7 @@ class GreatDocs:
         # Insert before the last item (usually Reference) or at end
         navbar["left"].append({"text": "Changelog", "href": "changelog.qmd"})
 
-        self._write_quarto_yml(quarto_yml, config)
+        quarto_yml.write(self.build_dir, config, self._config)
 
     # =========================================================================
     # Page Tags Methods
@@ -2770,12 +2775,10 @@ class GreatDocs:
         lang = self._config.lang
         tags_label = get_translation("site_tags", lang)
 
-        quarto_yml = self.build_dir / "_quarto.yml"
-        if not quarto_yml.exists():
+        if not quarto_yml.path(self.build_dir).exists():
             return
 
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f) or {}
+        config = quarto_yml.read(self.build_dir)
 
         navbar = config.get("website", {}).get("navbar")
         if not navbar or "left" not in navbar:
@@ -2791,7 +2794,7 @@ class GreatDocs:
         # Insert before Reference
         self._insert_before_reference(navbar["left"], link)
 
-        self._write_quarto_yml(quarto_yml, config)
+        quarto_yml.write(self.build_dir, config, self._config)
 
     def _process_tags(self) -> bool:
         """
@@ -2831,11 +2834,10 @@ class GreatDocs:
         if not tags_json_path.is_file():
             return
 
-        quarto_yml = self.build_dir / "_quarto.yml"
-        if not quarto_yml.is_file():
+        if not quarto_yml.path(self.build_dir).is_file():
             return
 
-        config = read_yaml(quarto_yml)
+        config = quarto_yml.read(self.build_dir)
 
         if "format" not in config or "html" not in config.get("format", {}):
             return  # pragma: no cover
@@ -2872,7 +2874,7 @@ class GreatDocs:
         else:
             entries.append(inline_entry)  # pragma: no cover
 
-        self._write_quarto_yml(quarto_yml, config)
+        quarto_yml.write(self.build_dir, config, self._config)
 
     @staticmethod
     def _get_tag_icon_html(tag_name: str, tag_icons: dict[str, str]) -> str:
@@ -3049,11 +3051,10 @@ class GreatDocs:
         if not status_json_path.is_file():
             return
 
-        quarto_yml = self.build_dir / "_quarto.yml"
-        if not quarto_yml.is_file():
+        if not quarto_yml.path(self.build_dir).is_file():
             return
 
-        config = read_yaml(quarto_yml)
+        config = quarto_yml.read(self.build_dir)
 
         if "format" not in config or "html" not in config.get("format", {}):
             return  # pragma: no cover
@@ -3088,7 +3089,7 @@ class GreatDocs:
         else:
             entries.append(inline_entry)
 
-        self._write_quarto_yml(quarto_yml, config)
+        quarto_yml.write(self.build_dir, config, self._config)
 
     def _process_page_statuses(self) -> bool:
         """
@@ -3689,8 +3690,7 @@ class GreatDocs:
             Optional list of group dicts for organizing flat pages into sidebar sections. Each dict
             has `section` (title) and `contents` (list of page filenames without numeric prefix).
         """
-        quarto_yml = self.build_dir / "_quarto.yml"
-        config = self._read_quarto_config(quarto_yml)
+        config = quarto_yml.read(self.build_dir, seed_website=True)
 
         sidebar_id = slug
         contents: list[dict | str] = []
@@ -3807,7 +3807,7 @@ class GreatDocs:
         sidebar.append(sidebar_config)
         config["website"]["sidebar"] = sidebar
 
-        self._write_quarto_yml(quarto_yml, config)
+        quarto_yml.write(self.build_dir, config, self._config)
 
     def _inject_section_body_class(
         self,
@@ -3857,8 +3857,7 @@ class GreatDocs:
             Name of an existing navbar item to insert after. If None,
             inserts before "Reference".
         """
-        quarto_yml = self.build_dir / "_quarto.yml"
-        config = self._read_quarto_config(quarto_yml)
+        config = quarto_yml.read(self.build_dir, seed_website=True)
 
         navbar = config.get("website", {}).get("navbar", {})
         if not navbar or "left" not in navbar:
@@ -3883,7 +3882,7 @@ class GreatDocs:
             # Default: insert before Reference
             self._insert_before_reference(navbar["left"], link)
 
-        self._write_quarto_yml(quarto_yml, config)
+        quarto_yml.write(self.build_dir, config, self._config)
 
     def _reorder_navbar(self, config: dict) -> None:
         """Reorder navbar items according to `navbar_order` in config."""
@@ -3921,20 +3920,6 @@ class GreatDocs:
                 return
         # If no Reference found then append
         navbar_items.append(link)
-
-    def _read_quarto_config(self, quarto_yml: Path) -> dict:
-        """Read and return the _quarto.yml config, ensuring website.sidebar exists."""
-        if quarto_yml.exists():
-            with open(quarto_yml, "r") as f:
-                config = read_yaml(f) or {}
-        else:
-            config = {}
-
-        config.setdefault("website", {})
-        config["website"].setdefault("sidebar", [])
-        config["website"].setdefault("navbar", {"left": []})
-
-        return config
 
     # =========================================================================
     # Custom Static Pages Methods
@@ -4007,32 +3992,29 @@ class GreatDocs:
         if not resources_to_add and not render_excludes:
             return
 
-        quarto_yml = self.build_dir / "_quarto.yml"
-        config = self._read_quarto_config(quarto_yml)
-        project = config.setdefault("project", {})
+        with quarto_yml.edit(self.build_dir, self._config, seed_website=True) as config:
+            project = config.setdefault("project", {})
 
-        resources = project.setdefault("resources", [])
-        if isinstance(resources, str):
-            resources = [resources]  # pragma: no cover
-            project["resources"] = resources  # pragma: no cover
+            resources = project.setdefault("resources", [])
+            if isinstance(resources, str):
+                resources = [resources]  # pragma: no cover
+                project["resources"] = resources  # pragma: no cover
 
-        for resource in resources_to_add:
-            if resource not in resources:
-                resources.append(resource)
+            for resource in resources_to_add:
+                if resource not in resources:
+                    resources.append(resource)
 
-        if render_excludes:
-            if "render" not in project:
-                project["render"] = list(_QUARTO_RENDER_GLOBS)
-            render = project["render"]
-            if isinstance(render, str):
-                render = [render]  # pragma: no cover
-                project["render"] = render  # pragma: no cover
-            for path in render_excludes:
-                exclude = f"!{path}"
-                if exclude not in render:
-                    render.append(exclude)
-
-        self._write_quarto_yml(quarto_yml, config)
+            if render_excludes:
+                if "render" not in project:
+                    project["render"] = list(_QUARTO_RENDER_GLOBS)
+                render = project["render"]
+                if isinstance(render, str):
+                    render = [render]  # pragma: no cover
+                    project["render"] = render  # pragma: no cover
+                for path in render_excludes:
+                    exclude = f"!{path}"
+                    if exclude not in render:
+                        render.append(exclude)
 
     def _process_custom_pages(self) -> int:
         """Process configured custom HTML pages."""
@@ -5184,12 +5166,10 @@ class GreatDocs:
         if not cli_files:
             return
 
-        quarto_yml = self.build_dir / "_quarto.yml"
-        if not quarto_yml.exists():
+        if not quarto_yml.path(self.build_dir).exists():
             return
 
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f) or {}
+        config = quarto_yml.read(self.build_dir)
 
         if "website" not in config:
             config["website"] = {}
@@ -5244,7 +5224,7 @@ class GreatDocs:
                     ] + contents
                 break
 
-        self._write_quarto_yml(quarto_yml, config)
+        quarto_yml.write(self.build_dir, config, self._config)
 
         # Ensure there's a "Reference" navbar entry so users can reach the CLI
         # reference pages.  If a Python API reference already added the entry,
@@ -5264,7 +5244,7 @@ class GreatDocs:
             left.append({"text": "Reference", "href": "reference/cli/index.qmd"})
             navbar["left"] = left
             config["website"]["navbar"] = navbar
-            self._write_quarto_yml(quarto_yml, config)
+            quarto_yml.write(self.build_dir, config, self._config)
 
         print(
             f"Updated sidebar with {self._count_cli_sidebar_items(cli_files)} CLI reference page(s)"
@@ -5328,38 +5308,34 @@ class GreatDocs:
         if not mcp_files:
             return
 
-        quarto_yml = self.build_dir / "_quarto.yml"
-        if not quarto_yml.exists():
+        if not quarto_yml.path(self.build_dir).exists():
             return
 
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f) or {}
+        with quarto_yml.edit(self.build_dir, self._config) as config:
+            if "website" not in config:
+                config["website"] = {}
 
-        if "website" not in config:
-            config["website"] = {}
+            # Ensure sidebar exists
+            if "sidebar" not in config["website"]:
+                config["website"]["sidebar"] = []
 
-        # Ensure sidebar exists
-        if "sidebar" not in config["website"]:
-            config["website"]["sidebar"] = []
+            sidebar = config["website"]["sidebar"]
+            mcp_section_exists = False
 
-        sidebar = config["website"]["sidebar"]
-        mcp_section_exists = False
+            for section in sidebar:
+                if isinstance(section, dict) and section.get("id") == "mcp-reference":
+                    mcp_section_exists = True
+                    section["contents"] = mcp_files
+                    break
 
-        for section in sidebar:
-            if isinstance(section, dict) and section.get("id") == "mcp-reference":
-                mcp_section_exists = True
-                section["contents"] = mcp_files
-                break
-
-        if not mcp_section_exists:
-            mcp_section = {
-                "id": "mcp-reference",
-                "title": "MCP Reference",
-                "contents": [{"text": "MCP Index", "href": "reference/mcp/index.qmd"}] + mcp_files,
-            }
-            sidebar.append(mcp_section)
-
-        self._write_quarto_yml(quarto_yml, config)
+            if not mcp_section_exists:
+                mcp_section = {
+                    "id": "mcp-reference",
+                    "title": "MCP Reference",
+                    "contents": [{"text": "MCP Index", "href": "reference/mcp/index.qmd"}]
+                    + mcp_files,
+                }
+                sidebar.append(mcp_section)
 
         # Count total tool pages
         n_pages = self._count_cli_sidebar_items(mcp_files)
@@ -5373,12 +5349,10 @@ class GreatDocs:
         or no MCP pages are generated. This prevents a dangling MCP navigation
         item that would lead to a 404 page.
         """
-        quarto_yml = self.build_dir / "_quarto.yml"
-        if not quarto_yml.exists():
+        if not quarto_yml.path(self.build_dir).exists():
             return
 
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f) or {}
+        config = quarto_yml.read(self.build_dir)
 
         html_config = config.get("format", {}).get("html", {})
         include_in_header = html_config.get("include-in-header", [])
@@ -5417,7 +5391,7 @@ class GreatDocs:
                 break
 
         if updated:
-            self._write_quarto_yml(quarto_yml, config)
+            quarto_yml.write(self.build_dir, config, self._config)
 
     def _generate_mcp_manifest(self, mcp_info: dict) -> None:
         """
@@ -6233,7 +6207,7 @@ class GreatDocs:
         # Versioned pages need descriptions from their resolved content.
         if self._config.has_versions and not watch:
             return
-        quarto_config = self._read_quarto_config(self.build_dir / "_quarto.yml")
+        quarto_config = quarto_yml.read(self.build_dir, seed_website=True)
         page_metadata.write_to_pages(
             self.build_dir,
             quarto_config,
@@ -6611,12 +6585,10 @@ class GreatDocs:
         user_guide_info
             User guide structure from _discover_user_guide.
         """
-        quarto_yml = self.build_dir / "_quarto.yml"
-        if not quarto_yml.exists():
+        if not quarto_yml.path(self.build_dir).exists():
             return
 
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f) or {}
+        config = quarto_yml.read(self.build_dir)
 
         if "website" not in config:
             config["website"] = {}
@@ -6678,7 +6650,7 @@ class GreatDocs:
                         },
                     )
 
-        self._write_quarto_yml(quarto_yml, config)
+        quarto_yml.write(self.build_dir, config, self._config)
 
     def _process_user_guide(self) -> bool:
         """
@@ -10995,10 +10967,7 @@ anchor-sections: true
             self._has_api_reference = False
             return
 
-        quarto_yml = self.build_dir / "_quarto.yml"
-
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f) or {}
+        config = quarto_yml.read(self.build_dir)
 
         # Check if API reference config already exists
         if "api-reference" in config:
@@ -11136,9 +11105,9 @@ anchor-sections: true
                 sidebars.append({"id": "reference", "contents": "reference/"})
 
         # Write back to file
-        self._write_quarto_yml(quarto_yml, config)
+        quarto_yml.write(self.build_dir, config, self._config)
 
-        print(f"Added API reference configuration to {quarto_yml}")
+        print(f"Added API reference configuration to {quarto_yml.path(self.build_dir)}")
 
     def _refresh_api_reference_config(self) -> None:
         """
@@ -11160,14 +11129,11 @@ anchor-sections: true
             print("API reference already configured in this build, skipping re-discovery")
             return
 
-        quarto_yml = self.build_dir / "_quarto.yml"
-
-        if not quarto_yml.exists():
+        if not quarto_yml.path(self.build_dir).exists():
             print("Error: _quarto.yml not found. Run 'great-docs init' first.")
             return
 
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f) or {}
+        config = quarto_yml.read(self.build_dir)
 
         if "api-reference" not in config:
             print("Error: No API reference configuration found. Run 'great-docs init' first.")
@@ -11214,12 +11180,12 @@ anchor-sections: true
             print(f"Updated API reference config with {len(sections)} section(s)")
 
             # Write back to file first, so sidebar update reads the new sections
-            self._write_quarto_yml(quarto_yml, config)
+            quarto_yml.write(self.build_dir, config, self._config)
 
             # Now update the sidebar to match the new sections
             self._update_sidebar_from_sections()
 
-            print(f"✅ Refreshed API reference configuration in {quarto_yml}")
+            print(f"✅ Refreshed API reference configuration in {quarto_yml.path(self.build_dir)}")
         else:
             # Check if user has explicit reference config that should be applied
             # even though auto-discovery failed
@@ -11232,7 +11198,7 @@ anchor-sections: true
                 user_sections = self._build_sections_from_reference_config(reference_config)
                 if user_sections:
                     config["api-reference"]["sections"] = user_sections
-                    self._write_quarto_yml(quarto_yml, config)
+                    quarto_yml.write(self.build_dir, config, self._config)
                     self._update_sidebar_from_sections()
                     print(f"✅ Applied {len(user_sections)} section(s) from great-docs.yml")
                 else:
@@ -11246,61 +11212,6 @@ anchor-sections: true
                 print(  # pragma: no cover
                     "Tip: Add a 'reference' section to great-docs.yml to manually specify your API structure."
                 )
-
-    def _write_quarto_yml(self, quarto_yml: Path, config: dict) -> None:
-        """
-        Write _quarto.yml with a header comment.
-
-        Parameters
-        ----------
-        quarto_yml
-            Path to the _quarto.yml file.
-        config
-            The configuration dictionary to write.
-        """
-        # Translate navbar labels for i18n
-        self._translate_navbar_labels(config)
-
-        write_quarto_yml(quarto_yml, config)
-
-    def _write_initial_quarto_yml(self) -> None:
-        """
-        Write the website config that every build starts from
-
-        The file's header marks the build directory as generated by Great Docs,
-        so a build that fails after this point can still be retried.
-        """
-        config = {"project": {"type": "website"}, "format": {"html": {"theme": "flatly"}}}
-        self._write_quarto_yml(self.build_dir / "_quarto.yml", config)
-
-    def _translate_navbar_labels(self, config: dict) -> None:
-        """
-        Translate known navbar text labels using the configured language.
-
-        Modifies the config dict in place. Only translates labels that were
-        auto-generated (matching the English defaults).
-        """
-        from ._translations import get_translation
-
-        lang = self._config.lang
-        if lang == "en":
-            return  # No translation needed
-
-        # Map of English label -> translation key
-        label_map = {
-            "User Guide": "user_guide",
-            "Recipes": "recipes",
-            "Reference": "reference",
-            "Changelog": "changelog",
-        }
-
-        navbar = config.get("website", {}).get("navbar", {})
-        for side in ("left", "right"):
-            items = navbar.get(side, [])
-            for item in items:
-                if isinstance(item, dict) and item.get("text") in label_map:
-                    key = label_map[item["text"]]
-                    item["text"] = get_translation(key, lang)
 
     def _inject_nav_icons(self, config: dict) -> None:
         """Inject navigation icon data and script into the Quarto config.
@@ -11446,10 +11357,7 @@ anchor-sections: true
         FileNotFoundError
             If the build directory has no `_quarto.yml`.
         """
-        quarto_yml = self.build_dir / "_quarto.yml"
-
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f)
+        config = quarto_yml.read(self.build_dir)
 
         config["project"]["output-dir"] = "_site"
 
@@ -13012,11 +12920,11 @@ anchor-sections: true
             config,
             self._config,
             self._get_canonical_base_url(),
-            quarto_yml.parent,
-            og_url=social_cards.applies(config, self._config, quarto_yml.parent),
+            self.build_dir,
+            og_url=social_cards.applies(config, self._config, self.build_dir),
         )
         social_cards.register(
-            config, self._config, self._resolve_social_card_image_url(), quarto_yml.parent
+            config, self._config, self._resolve_social_card_image_url(), self.build_dir
         )
         markdown_pages.register(config, self._config)
 
@@ -13024,75 +12932,73 @@ anchor-sections: true
         self._reorder_navbar(config)
 
         # Write back to file
-        self._write_quarto_yml(quarto_yml, config)
+        quarto_yml.write(self.build_dir, config, self._config)
 
         # Inject version selector widget if multi-version is enabled
         if self._config.has_versions:
-            self._inject_version_selector(quarto_yml)
+            self._inject_version_selector()
 
-        print(f"Updated {quarto_yml} with great-docs configuration")
+        print(f"Updated {quarto_yml.path(self.build_dir)} with great-docs configuration")
 
-    def _inject_version_selector(self, quarto_yml: Path) -> None:
+    def _inject_version_selector(self) -> None:
         """
-        Inject the version selector widget into the Quarto config.
+        Add the version selector widget to the Quarto configuration
 
-        Adds the version-selector.js script and a `<meta name="gd-version-map">` tag containing the
-        serialized `_version_map.json` data so the widget can resolve versions client-side.
+        Include `version-selector.js` and a `<meta name="gd-version-map">` tag with
+        the serialised `_version_map.json` data so the widget can resolve versions
+        in the browser.
         """
         import html as html_mod
 
         from great_docs._versioning import build_version_map, parse_versions_config
 
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f) or {}
+        with quarto_yml.edit(self.build_dir, self._config) as config:
+            versions = parse_versions_config(self._config.versions)
 
-        versions = parse_versions_config(self._config.versions)
+            # Page lists are populated later in the build.
+            version_map = build_version_map(versions, {v.tag: [] for v in versions})
 
-        # Build a minimal version map (pages populated later during build)
-        version_map = build_version_map(versions, {v.tag: [] for v in versions})
+            # Serialise the version map as a meta tag in the header.
+            version_map_json = html_mod.escape(json.dumps(version_map, separators=(",", ":")))
+            version_meta = f'<meta name="gd-version-map" content="{version_map_json}">'
 
-        # Serialize the version map as a meta tag in the header
-        version_map_json = html_mod.escape(json.dumps(version_map, separators=(",", ":")))
-        version_meta = f'<meta name="gd-version-map" content="{version_map_json}">'
+            header_list = config["format"]["html"].setdefault("include-in-header", [])
+            if isinstance(header_list, str):
+                header_list = [header_list]
+                config["format"]["html"]["include-in-header"] = header_list
+            # Replace version map metadata from the previous build.
+            header_list[:] = [h for h in header_list if "gd-version-map" not in str(h)]
+            header_list.append({"text": version_meta})
 
-        header_list = config["format"]["html"].setdefault("include-in-header", [])
-        if isinstance(header_list, str):
-            header_list = [header_list]
-            config["format"]["html"]["include-in-header"] = header_list
-        # Remove stale version map meta from previous build
-        header_list[:] = [h for h in header_list if "gd-version-map" not in str(h)]
-        header_list.append({"text": version_meta})
+            # Record when the version warning banner is disabled.
+            if not self._config.version_warning_banner:
+                banner_meta = '<meta name="gd-version-warning-banner" content="false">'
+                header_list[:] = [
+                    h for h in header_list if "gd-version-warning-banner" not in str(h)
+                ]
+                header_list.append({"text": banner_meta})
 
-        # Add warning banner meta if disabled
-        if not self._config.version_warning_banner:
-            banner_meta = '<meta name="gd-version-warning-banner" content="false">'
-            header_list[:] = [h for h in header_list if "gd-version-warning-banner" not in str(h)]
-            header_list.append({"text": banner_meta})
+            # Load `version-selector.js` before `navbar-widgets.js` so the widget
+            # element exists when the collector runs.
+            after_body = config["format"]["html"].setdefault("include-after-body", [])
+            if isinstance(after_body, str):
+                after_body = [after_body]
+                config["format"]["html"]["include-after-body"] = after_body
+            vs_script_entry = script_include("version-selector.js")
+            if not any("version-selector" in str(item) for item in after_body):
+                nw_idx = next(
+                    (i for i, item in enumerate(after_body) if "navbar-widgets" in str(item)),
+                    None,
+                )
+                if nw_idx is not None:
+                    after_body.insert(nw_idx, vs_script_entry)
+                else:
+                    after_body.append(vs_script_entry)
 
-        # Add the version selector script to after-body, BEFORE navbar-widgets.js
-        # so the widget element exists when the collector runs.
-        after_body = config["format"]["html"].setdefault("include-after-body", [])
-        if isinstance(after_body, str):
-            after_body = [after_body]
-            config["format"]["html"]["include-after-body"] = after_body
-        vs_script_entry = script_include("version-selector.js")
-        if not any("version-selector" in str(item) for item in after_body):
-            # Insert before navbar-widgets.js if present, otherwise append
-            nw_idx = next(
-                (i for i, item in enumerate(after_body) if "navbar-widgets" in str(item)),
-                None,
-            )
-            if nw_idx is not None:
-                after_body.insert(nw_idx, vs_script_entry)
-            else:
-                after_body.append(vs_script_entry)
-
-        # Ensure version-selector.js is in resources
-        resources_list = config["project"].setdefault("resources", [])
-        if "version-selector.js" not in resources_list:
-            resources_list.append("version-selector.js")
-
-        self._write_quarto_yml(quarto_yml, config)
+            # Include `version-selector.js` in the project resources.
+            resources_list = config["project"].setdefault("resources", [])
+            if "version-selector.js" not in resources_list:
+                resources_list.append("version-selector.js")
 
     def _auto_save_snapshot(self) -> None:
         """
@@ -13149,13 +13055,10 @@ anchor-sections: true
         Builds a structured sidebar with sections and their contents, and excludes the index page
         from showing the sidebar.
         """
-        quarto_yml = self.build_dir / "_quarto.yml"
-
-        if not quarto_yml.exists():
+        if not quarto_yml.path(self.build_dir).exists():
             return  # pragma: no cover
 
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f) or {}
+        config = quarto_yml.read(self.build_dir)
 
         from great_docs._apiref import APIReference, SpecObject
 
@@ -13200,7 +13103,7 @@ anchor-sections: true
         ]
 
         # Write back
-        self._write_quarto_yml(quarto_yml, config)
+        quarto_yml.write(self.build_dir, config, self._config)
 
     def _llms_txt_available(self) -> bool:
         """
@@ -13247,12 +13150,10 @@ anchor-sections: true
             block with a `package` and at least one section, or `None` when the
             build directory has no usable `_quarto.yml`.
         """
-        quarto_yml = self.build_dir / "_quarto.yml"
-        if not quarto_yml.exists():
+        if not quarto_yml.path(self.build_dir).exists():
             return None
         try:
-            with open(quarto_yml, "r") as f:
-                config = read_yaml(f) or {}
+            config = quarto_yml.read(self.build_dir)
         except (OSError, ValueError):
             return None
         if not isinstance(config, dict):
@@ -13620,12 +13521,10 @@ anchor-sections: true
                 self._generate_skills_page(dest, skill_dir=skills_path.parent)
                 return
 
-        quarto_yml = self.build_dir / "_quarto.yml"
-        if not quarto_yml.exists():
+        if not quarto_yml.path(self.build_dir).exists():
             return
 
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f) or {}
+        config = quarto_yml.read(self.build_dir)
 
         # Get API reference sections and package info
         api_ref_config = config.get("api-reference", {})
@@ -13937,11 +13836,9 @@ anchor-sections: true
                 github_owner_repo = gh_match.group(1)
 
         # Detect site URL
-        quarto_yml = self.build_dir / "_quarto.yml"
         site_url = ""
-        if quarto_yml.exists():
-            with open(quarto_yml, "r") as f:
-                qconfig = read_yaml(f) or {}
+        if quarto_yml.path(self.build_dir).exists():
+            qconfig = quarto_yml.read(self.build_dir)
             site_url = urls.get("Documentation", "") or qconfig.get("website", {}).get(
                 "site-url", ""
             )
@@ -14672,11 +14569,9 @@ anchor-sections: true
         :
             The site name, or an empty string if none is available.
         """
-        quarto_yml = self.build_dir / "_quarto.yml"
-        if quarto_yml.exists():
+        if quarto_yml.path(self.build_dir).exists():
             try:
-                with open(quarto_yml, "r") as f:
-                    config = read_yaml(f) or {}
+                config = quarto_yml.read(self.build_dir)
             except (OSError, ValueError):
                 config = {}
             website = config.get("website")
@@ -15691,10 +15586,8 @@ anchor-sections: true
                 _meta_urls = self._get_package_metadata().get("urls", {})
                 _has_site_url = bool(self._config.site_url or _meta_urls.get("Documentation", ""))
                 if not _has_site_url:
-                    _qy = self.build_dir / "_quarto.yml"
-                    if _qy.exists():
-                        with open(_qy, "r") as _f:
-                            _qc = read_yaml(_f) or {}
+                    if quarto_yml.path(self.build_dir).exists():
+                        _qc = quarto_yml.read(self.build_dir)
                         _has_site_url = bool(_qc.get("website", {}).get("site-url", ""))
                 if not _has_site_url:
                     log.warn(
@@ -15980,12 +15873,12 @@ anchor-sections: true
                     if p and p not in sys.path:
                         sys.path.insert(0, p)  # pragma: no cover
 
-                quarto_yml = self.build_dir / "_quarto.yml"
+                quarto_yml_path = quarto_yml.path(self.build_dir)
                 ref = None
                 try:
                     from great_docs._apiref.api_reference import APIReference
 
-                    ref = APIReference(str(quarto_yml))
+                    ref = APIReference(str(quarto_yml_path))
                     with _quiet_prints():
                         ref.build()
                     log.step_done("API reference generated")
@@ -16000,13 +15893,12 @@ anchor-sections: true
                             "retrying with static analysis..."
                         )
                         log.detail(str(e))
-                        with open(quarto_yml, "r") as f:
-                            qconfig = read_yaml(f) or {}
+                        qconfig = quarto_yml.read(self.build_dir)
                         if "api-reference" in qconfig:
                             qconfig["api-reference"]["dynamic"] = False
-                            self._write_quarto_yml(quarto_yml, qconfig)
+                            quarto_yml.write(self.build_dir, qconfig, self._config)
                         try:
-                            ref = APIReference(str(quarto_yml))
+                            ref = APIReference(str(quarto_yml_path))
                             with _quiet_prints():
                                 ref.build()
                             log.step_done("API reference generated (static analysis)")
