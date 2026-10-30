@@ -23,7 +23,8 @@ from great_docs import Config, GreatDocs
 if TYPE_CHECKING:
     from pathlib import Path
 
-# Keep these methods in the order `GreatDocs.build()` first calls them.
+# Keep these methods in the order `GreatDocs.build()` first calls them. Stub the methods
+# called by the step actions so the step table and its actions still run.
 # Update this list when a build step moves out of `GreatDocs`.
 _BUILD_METHODS: tuple[str, ...] = (
     "_validate_build_outputs",
@@ -60,13 +61,13 @@ _BUILD_METHODS: tuple[str, ...] = (
     "_normalize_freeze_shorthand",
     "_write_page_metadata",
     "_prerender_term_player",
-    "_print_layout_notice",
     "_default_description",
     "_structured_data",
     "_generate_seo_files",
     "_write_build_timing",
     "_persist_freeze_cache",
     "_auto_save_snapshot",
+    "_print_layout_notice",
 )
 
 # `great_docs.config` imports these names only while type checking, so its annotations resolve
