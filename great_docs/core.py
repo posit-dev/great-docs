@@ -16008,6 +16008,171 @@ anchor-sections: true
             record_site_ownership(self.layout.site_dir)
         return None
 
+    def _preparation_steps(self, run: Run, log: "BuildLog", refresh: bool = True) -> list[Step]:
+        """
+        Return the build's preparation steps in execution order
+
+        These steps write the Quarto project before rendering. Each step resolves its method
+        when it runs, so tests can replace instance methods after the list is created.
+
+        Parameters
+        ----------
+        run
+            The current build.
+        log
+            The build log that the steps write to.
+        refresh
+            Whether to rediscover the package's exports for the API reference.
+
+        Returns
+        -------
+        :
+            The steps in the order they run.
+        """
+        # Results shared between preparation steps
+        ref: APIReference | None = None
+        frozen_pages: list[str] = []
+
+        def generate_api_reference() -> Outcome:
+            nonlocal ref
+            outcome, ref = self._step_api_reference(run, log)
+            return outcome
+
+        def prepare_freeze_cache() -> Outcome:
+            outcome, frozen_pages[:] = self._step_freeze_cache(run)
+            return outcome
+
+        def list_frozen_pages() -> Outcome:
+            for page in frozen_pages:
+                log.detail(f"  - {page}")
+            return None
+
+        return [
+            Step("Prepare build directory", lambda: self._step_prepare_build_directory(run)),
+            Step(
+                "Show render settings",
+                lambda: self._log_render_settings(log),
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Configure API reference",
+                lambda: self._step_api_reference_config(run, refresh),
+                user_code=True,
+            ),
+            Step(
+                "Generate llms.txt / llms-full.txt",
+                lambda: self._step_llms_txt(),
+                user_code=True,
+            ),
+            Step("Generate SKILL.md", lambda: self._step_skill_md(), user_code=True),
+            Step(
+                "Check the site URL",
+                lambda: self._warn_without_site_url(log),
+                user_code=True,
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Generate changelog",
+                lambda: self._step_changelog(),
+            ),
+            Step(
+                "Generate CLI reference",
+                lambda: self._step_cli_reference(run),
+                warn=Warn(
+                    USER_CODE_ERRORS, "Error generating CLI docs", "CLI generation had issues"
+                ),
+                user_code=True,
+            ),
+            Step(
+                "Generate Go CLI reference",
+                lambda: self._step_go_cli_reference(),
+                warn=Warn(
+                    (OSError,), "Error generating Go CLI docs", "Go CLI generation had issues"
+                ),
+                user_code=True,
+            ),
+            Step(
+                "Generate Rust CLI reference",
+                lambda: self._step_rust_cli_reference(),
+                warn=Warn(
+                    (OSError,), "Error generating Rust CLI docs", "Rust CLI generation had issues"
+                ),
+                user_code=True,
+            ),
+            Step(
+                "Generate MCP server reference",
+                lambda: self._step_mcp_reference(run),
+                warn=Warn(
+                    USER_CODE_ERRORS, "Error generating MCP docs", "MCP generation had issues"
+                ),
+                user_code=True,
+            ),
+            Step(
+                "Process User Guide",
+                lambda: self._step_user_guide(run),
+                fails_on=(ValueError,),
+                user_code=True,
+            ),
+            Step(
+                "Process custom sections",
+                lambda: self._step_sections(),
+                fails_on=(ValueError,),
+            ),
+            Step(
+                "Process custom pages",
+                lambda: self._step_custom_pages(),
+                fails_on=(ValueError,),
+            ),
+            Step(
+                "Process page tags",
+                lambda: self._step_tags(),
+            ),
+            Step(
+                "Process page status badges",
+                lambda: self._step_page_statuses(),
+            ),
+            Step(
+                "Copy assets",
+                lambda: self._step_assets(run),
+                fails_on=(ValueError, FileNotFoundError),
+            ),
+            Step("Generate API reference", generate_api_reference, user_code=True),
+            Step(
+                "Build interlinks index",
+                lambda: self._step_interlinks(log, ref),
+                quiet=False,
+            ),
+            Step("Prepare freeze cache", prepare_freeze_cache, quiet=False),
+            Step("List frozen pages", list_frozen_pages, quiet=False, listed=False),
+            Step(
+                "Expand mock-code cells",
+                lambda: self._expand_mock_cells(log),
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Render d2 diagrams",
+                lambda: self._render_d2_diagrams(log),
+                user_code=True,
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Pre-render terminal recordings",
+                lambda: self._prerender_term_player(log),
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Share sidebars",
+                lambda: self._share_sidebars(run, log),
+                quiet=False,
+                listed=False,
+            ),
+        ]
+
     def build(
         self,
         watch: bool = False,
@@ -16227,25 +16392,15 @@ anchor-sections: true
 
         # Values that several steps read; a new build starts from a new `Run`
         run = Run(package_name=package_name, watch=watch)
+        log = BuildLog(
+            package_name=package_name,
+            package_version=package_version,
+            package_location=package_location,
+            estimated_seconds=est_seconds,
+        )
 
-        # Results that one step passes to the next
-        ref: APIReference | None = None
-        frozen_pages: list[str] = []
+        # Render timings shared with the timings step
         render_timings: dict[str, Any] = {}
-
-        def generate_api_reference() -> Outcome:
-            nonlocal ref
-            outcome, ref = self._step_api_reference(run, log)
-            return outcome
-
-        def prepare_freeze_cache() -> Outcome:
-            outcome, frozen_pages[:] = self._step_freeze_cache(run)
-            return outcome
-
-        def list_frozen_pages() -> Outcome:
-            for page in frozen_pages:
-                log.detail(f"  - {page}")
-            return None
 
         def render_site() -> Outcome:
             result, render_timings["render"] = self._step_render(
@@ -16259,133 +16414,7 @@ anchor-sections: true
             render_timings["timings_by_version"] = result.get("timings_by_version")
             return outcome
 
-        # Resolve methods when each step runs so tests can replace instance methods after
-        # the table is created.
-        steps = [
-            Step("Prepare build directory", lambda: self._step_prepare_build_directory(run)),
-            Step(
-                "Show render settings",
-                lambda: self._log_render_settings(log),
-                quiet=False,
-                listed=False,
-            ),
-            Step(
-                "Configure API reference",
-                lambda: self._step_api_reference_config(run, refresh),
-                user_code=True,
-            ),
-            Step(
-                "Generate llms.txt / llms-full.txt",
-                lambda: self._step_llms_txt(),
-                user_code=True,
-            ),
-            Step("Generate SKILL.md", lambda: self._step_skill_md(), user_code=True),
-            Step(
-                "Check the site URL",
-                lambda: self._warn_without_site_url(log),
-                user_code=True,
-                quiet=False,
-                listed=False,
-            ),
-            Step(
-                "Generate changelog",
-                lambda: self._step_changelog(),
-            ),
-            Step(
-                "Generate CLI reference",
-                lambda: self._step_cli_reference(run),
-                warn=Warn(
-                    USER_CODE_ERRORS, "Error generating CLI docs", "CLI generation had issues"
-                ),
-                user_code=True,
-            ),
-            Step(
-                "Generate Go CLI reference",
-                lambda: self._step_go_cli_reference(),
-                warn=Warn(
-                    (OSError,), "Error generating Go CLI docs", "Go CLI generation had issues"
-                ),
-                user_code=True,
-            ),
-            Step(
-                "Generate Rust CLI reference",
-                lambda: self._step_rust_cli_reference(),
-                warn=Warn(
-                    (OSError,), "Error generating Rust CLI docs", "Rust CLI generation had issues"
-                ),
-                user_code=True,
-            ),
-            Step(
-                "Generate MCP server reference",
-                lambda: self._step_mcp_reference(run),
-                warn=Warn(
-                    USER_CODE_ERRORS, "Error generating MCP docs", "MCP generation had issues"
-                ),
-                user_code=True,
-            ),
-            Step(
-                "Process User Guide",
-                lambda: self._step_user_guide(run),
-                fails_on=(ValueError,),
-                user_code=True,
-            ),
-            Step(
-                "Process custom sections",
-                lambda: self._step_sections(),
-                fails_on=(ValueError,),
-            ),
-            Step(
-                "Process custom pages",
-                lambda: self._step_custom_pages(),
-                fails_on=(ValueError,),
-            ),
-            Step(
-                "Process page tags",
-                lambda: self._step_tags(),
-            ),
-            Step(
-                "Process page status badges",
-                lambda: self._step_page_statuses(),
-            ),
-            Step(
-                "Copy assets",
-                lambda: self._step_assets(run),
-                fails_on=(ValueError, FileNotFoundError),
-            ),
-            Step("Generate API reference", generate_api_reference, user_code=True),
-            Step(
-                "Build interlinks index",
-                lambda: self._step_interlinks(log, ref),
-                quiet=False,
-            ),
-            Step("Prepare freeze cache", prepare_freeze_cache, quiet=False),
-            Step("List frozen pages", list_frozen_pages, quiet=False, listed=False),
-            Step(
-                "Expand mock-code cells",
-                lambda: self._expand_mock_cells(log),
-                quiet=False,
-                listed=False,
-            ),
-            Step(
-                "Render d2 diagrams",
-                lambda: self._render_d2_diagrams(log),
-                user_code=True,
-                quiet=False,
-                listed=False,
-            ),
-            Step(
-                "Pre-render terminal recordings",
-                lambda: self._prerender_term_player(log),
-                quiet=False,
-                listed=False,
-            ),
-            Step(
-                "Share sidebars",
-                lambda: self._share_sidebars(run, log),
-                quiet=False,
-                listed=False,
-            ),
-        ]
+        steps = self._preparation_steps(run, log, refresh)
         if watch:
             render = Step("Build site with Quarto", lambda: "Starting watch mode...")
         elif self._config.has_versions:
@@ -16440,13 +16469,7 @@ anchor-sections: true
             )
         )
 
-        log = BuildLog(
-            package_name=package_name,
-            package_version=package_version,
-            package_location=package_location,
-            total_steps=count_listed(steps),
-            estimated_seconds=est_seconds,
-        )
+        log.total_steps = count_listed(steps)
         log.header()
 
         if watch:
