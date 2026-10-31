@@ -7,6 +7,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
+from .._contribution import Contribution, NavbarLink
 from .._translations import get_translation
 from . import page_dates
 
@@ -31,7 +32,7 @@ def write_page(
     *,
     max_releases: int | None = None,
     report: Callable[[str], None],
-) -> Path | None:
+) -> Contribution | None:
     """
     Write the changelog page from the repository's published releases
 
@@ -59,8 +60,8 @@ def write_page(
     Returns
     -------
     :
-        The page's path, or `None` if the repository has no releases. No page is written
-        in that case.
+        A contribution containing the page's navbar link, or `None` if the repository has
+        no releases. No page is written in that case.
     """
     if max_releases is None:
         max_releases = config.changelog_max_releases
@@ -94,7 +95,7 @@ def write_page(
     page = build_dir / FILENAME
     _ = page.write_text("\n".join(lines), encoding="utf-8")
     report(f"Created {page}")
-    return page
+    return Contribution(navbar=(NavbarLink(text="Changelog", href=FILENAME),))
 
 
 def _release_lines(release: Mapping[str, Any], repo: GithubRepo) -> list[str]:

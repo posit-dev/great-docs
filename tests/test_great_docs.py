@@ -4230,70 +4230,6 @@ def test_convert_rst_to_markdown_real_pandoc():
         assert "Item 1" in result
 
 
-def test_add_changelog_to_navbar_manual_yaml():
-    """Test that a Changelog link is added to the navbar."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        (project_path / "great-docs.yml").write_text("")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        # Write a basic _quarto.yml
-        quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "website:\n"
-            "  navbar:\n"
-            "    left:\n"
-            "      - text: Home\n"
-            "        href: index.qmd\n"
-            "      - text: Reference\n"
-            "        href: reference/index.qmd\n"
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._add_changelog_to_navbar()
-
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f)
-
-        navbar_items = config["website"]["navbar"]["left"]
-        changelog_items = [
-            i for i in navbar_items if isinstance(i, dict) and i.get("text") == "Changelog"
-        ]
-
-        assert len(changelog_items) == 1
-        assert changelog_items[0]["href"] == "changelog.qmd"
-
-
-def test_add_changelog_to_navbar_idempotent_double_call():
-    """Test that adding changelog twice doesn't duplicate it."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        (project_path / "great-docs.yml").write_text("")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "website:\n  navbar:\n    left:\n      - text: Reference\n        href: reference/index.qmd\n"
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._add_changelog_to_navbar()
-        docs._add_changelog_to_navbar()
-
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f)
-
-        changelog_items = [
-            i
-            for i in config["website"]["navbar"]["left"]
-            if isinstance(i, dict) and i.get("text") == "Changelog"
-        ]
-
-        assert len(changelog_items) == 1
-
-
 def test_reorder_navbar_applies_configured_order():
     """Test that _reorder_navbar reorders items to match navbar_order config."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -9529,62 +9465,6 @@ def test_add_section_to_navbar_after_not_found():
 
         # Should insert before Reference as fallback
         assert texts == ["Guide", "Extra", "Reference"]
-
-
-def test_add_changelog_to_navbar():
-    """_add_changelog_to_navbar adds Changelog link."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        config = {"website": {"navbar": {"left": [{"text": "Guide", "href": "guide/"}]}}}
-
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
-
-        docs._add_changelog_to_navbar()
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        items = result["website"]["navbar"]["left"]
-
-        assert any(i.get("text") == "Changelog" for i in items)
-
-
-def test_add_changelog_to_navbar_idempotent_v2():
-    """_add_changelog_to_navbar doesn't add duplicate entries."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        config = {"website": {"navbar": {"left": [{"text": "Changelog", "href": "changelog.qmd"}]}}}
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
-
-        docs._add_changelog_to_navbar()
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        items = result["website"]["navbar"]["left"]
-        changelog_count = sum(
-            1 for i in items if isinstance(i, dict) and i.get("text") == "Changelog"
-        )
-
-        assert changelog_count == 1
-
-
-def test_add_changelog_to_navbar_no_file():
-    """_add_changelog_to_navbar returns early when _quarto.yml doesn't exist."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        # Should not raise
-        docs._add_changelog_to_navbar()
 
 
 def test_parse_user_guide_file_with_frontmatter_basic():
@@ -16598,22 +16478,6 @@ def test_get_github_repo_info_no_urls():
         assert base_url is None
 
 
-def test_add_changelog_to_navbar_creates_entry():
-    """Test _add_changelog_to_navbar adds Changelog link."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = Path(tmp_dir) / "great-docs" / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-        config = {"website": {"navbar": {"left": [{"text": "Home", "href": "index.qmd"}]}}}
-
-        quarto_yml.write_text(_format_yaml(config), encoding="utf-8")
-        docs._add_changelog_to_navbar()
-        content = _parse_yaml(quarto_yml.read_text(encoding="utf-8"))
-        texts = [i.get("text") for i in content["website"]["navbar"]["left"] if isinstance(i, dict)]
-
-        assert "Changelog" in texts
-
-
 def test_process_sections_empty_config():
     """Test _process_sections returns 0 when no sections configured."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -18469,17 +18333,6 @@ def test_process_user_guide_homepage_mode():
 
         # Just confirm no crash
 
-
-def test_add_changelog_to_navbar_no_navbar():
-    """Test _add_changelog_to_navbar does nothing if no navbar config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir(parents=True, exist_ok=True)
-        quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text("website:\n  title: Test\n", encoding="utf-8")
-
-        docs._add_changelog_to_navbar()
         # Should not crash, and should not add navbar
 
 
@@ -19424,14 +19277,6 @@ def test_detect_dynamic_mode_pyproject_dynamic():
         assert isinstance(result, bool)
 
 
-def test_add_changelog_to_navbar_no_quarto_yml():
-    """Test _add_changelog_to_navbar handles missing _quarto.yml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        # Should not crash when no _quarto.yml exists
-        docs._add_changelog_to_navbar()
-
-
 def test_detect_logo_package_name_variant():
     """Test _detect_logo finds package-name-specific logo files."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -19783,49 +19628,6 @@ def test_copy_user_guide_to_docs_explicit_mode():
         copied = docs._copy_user_guide_to_docs(ug_info)
         # In explicit mode, filename should be preserved (not stripped)
         assert "user-guide/01-guide.qmd" in copied
-
-
-def test_add_changelog_to_navbar_adds_entry():
-    """Test _add_changelog_to_navbar adds Changelog to navbar."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir()
-        quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "website:\n  navbar:\n    left:\n      - text: Home\n        href: index.qmd\n",
-            encoding="utf-8",
-        )
-        docs._add_changelog_to_navbar()
-
-        with open(quarto_yml) as f:
-            config = read_yaml(f)
-        items = config["website"]["navbar"]["left"]
-        assert any(it.get("text") == "Changelog" for it in items if isinstance(it, dict))
-
-
-def test_add_changelog_to_navbar_idempotent():
-    """Test _add_changelog_to_navbar doesn't add duplicate entry."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir()
-        quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "website:\n  navbar:\n    left:\n"
-            "      - text: Home\n        href: index.qmd\n"
-            "      - text: Changelog\n        href: changelog.qmd\n",
-            encoding="utf-8",
-        )
-        docs._add_changelog_to_navbar()
-
-        with open(quarto_yml) as f:
-            config = read_yaml(f)
-        items = config["website"]["navbar"]["left"]
-        changelog_count = sum(
-            1 for it in items if isinstance(it, dict) and it.get("text") == "Changelog"
-        )
-        assert changelog_count == 1
 
 
 def test_extract_click_command_basic():
@@ -20272,10 +20074,38 @@ GITHUB_RELEASE = {
     "prerelease": False,
 }
 
+# A site configuration whose navbar links only the API reference
+NAVBAR_QUARTO_YML = (
+    QUARTO_YML_HEADER
+    + "website:\n  navbar:\n    left:\n      - text: Reference\n        href: reference/index.qmd\n"
+)
+
+
+def _navbar_hrefs(docs: GreatDocs) -> list[str]:
+    """
+    Read the targets of the links on the left of the site's navbar
+
+    Parameters
+    ----------
+    docs
+        The project.
+
+    Returns
+    -------
+    :
+        Each link's `href`, in order.
+    """
+    return [item["href"] for item in read_quarto_yml(docs.build_dir)["website"]["navbar"]["left"]]
+
 
 def test_build_with_changelog(tmp_path):
     """Check that the build generates a changelog when enabled"""
-    docs = _buildable_docs(tmp_path, changelog_enabled=True, changelog_max_releases=50)
+    docs = _buildable_docs(
+        tmp_path,
+        quarto_yml=NAVBAR_QUARTO_YML,
+        changelog_enabled=True,
+        changelog_max_releases=50,
+    )
     docs._remote = StubRemote(releases=[GITHUB_RELEASE])
 
     with stubbed_build(
@@ -20283,11 +20113,11 @@ def test_build_with_changelog(tmp_path):
         _detect_package_name="mypkg",
         _get_package_metadata={"cli_enabled": False},
         _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
-    ) as stubs:
+    ):
         docs.build(watch=False, refresh=False)
 
     assert "## v1.0.0" in (docs.build_dir / "changelog.qmd").read_text(encoding="utf-8")
-    stubs.steps["_add_changelog_to_navbar"].assert_called_once()
+    assert _navbar_hrefs(docs) == ["reference/index.qmd", "changelog.qmd"]
 
 
 def test_build_changelog_error_stops_the_build(tmp_path):
@@ -20297,7 +20127,12 @@ def test_build_changelog_error_stops_the_build(tmp_path):
     The changelog step handles unreachable or malformed GitHub releases. Any other failure
     is an error in great-docs and must stop the build.
     """
-    docs = _buildable_docs(tmp_path, changelog_enabled=True, changelog_max_releases=50)
+    docs = _buildable_docs(
+        tmp_path,
+        quarto_yml=NAVBAR_QUARTO_YML,
+        changelog_enabled=True,
+        changelog_max_releases=50,
+    )
     docs._remote = StubRemote(releases=[GITHUB_RELEASE])
     # The page cannot be written over a directory
     (docs.build_dir / "changelog.qmd").mkdir()
@@ -20310,7 +20145,7 @@ def test_build_changelog_error_stops_the_build(tmp_path):
         with pytest.raises(IsADirectoryError):
             docs.build(watch=False, refresh=False)
 
-    stubs.steps["_add_changelog_to_navbar"].assert_not_called()
+    assert _navbar_hrefs(docs) == ["reference/index.qmd"]
     stubs.steps["_write_page_metadata"].assert_not_called()
 
 
@@ -22949,36 +22784,46 @@ def test_build_changelog_no_releases(tmp_path):
     """
     Check that a changelog without releases gets no navbar entry
     """
-    docs = _buildable_docs(tmp_path, changelog_enabled=True, changelog_max_releases=50)
+    docs = _buildable_docs(
+        tmp_path,
+        quarto_yml=NAVBAR_QUARTO_YML,
+        changelog_enabled=True,
+        changelog_max_releases=50,
+    )
     docs._remote = StubRemote()
 
     with stubbed_build(
         docs,
         _detect_package_name="mypkg",
         _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
-    ) as stubs:
+    ):
         docs.build(watch=False, refresh=False)
 
     assert "github_releases" in docs._remote.calls
     assert not (docs.build_dir / "changelog.qmd").exists()
-    stubs.steps["_add_changelog_to_navbar"].assert_not_called()
+    assert _navbar_hrefs(docs) == ["reference/index.qmd"]
 
 
 def test_build_changelog_no_repo(tmp_path):
     """
     Check that projects without a GitHub repository skip the changelog and its navbar entry
     """
-    docs = _buildable_docs(tmp_path, changelog_enabled=True, changelog_max_releases=50)
+    docs = _buildable_docs(
+        tmp_path,
+        quarto_yml=NAVBAR_QUARTO_YML,
+        changelog_enabled=True,
+        changelog_max_releases=50,
+    )
     docs._remote = StubRemote(releases=[GITHUB_RELEASE])
 
     with stubbed_build(
         docs, _detect_package_name="mypkg", _get_github_repo_info=(None, None, None)
-    ) as stubs:
+    ):
         docs.build(watch=False, refresh=False)
 
     assert "github_releases" not in docs._remote.calls
     assert not (docs.build_dir / "changelog.qmd").exists()
-    stubs.steps["_add_changelog_to_navbar"].assert_not_called()
+    assert _navbar_hrefs(docs) == ["reference/index.qmd"]
 
 
 def _make_uqc_docs(tmp_dir, gd_yml_content="", pyproject_content=None, quarto_content=None):
@@ -25635,6 +25480,31 @@ def test_cli_changelog_no_releases(tmp_path: Path):
     assert "No published releases found" in result.output
     assert not (build_dir / "changelog.qmd").exists()
     assert len(read_quarto_yml(build_dir)["website"]["navbar"]["left"]) == 1
+
+
+def test_cli_changelog_links_the_page_once_on_a_translated_site(tmp_path: Path):
+    (tmp_path / "great-docs.yml").write_text("site:\n  lang: fr\n")
+    build_dir = _changelog_project(tmp_path)
+    remote = StubRemote(releases=[GITHUB_RELEASE])
+
+    first = _invoke_changelog(tmp_path, remote)
+    second = _invoke_changelog(tmp_path, remote)
+
+    assert first.exit_code == 0, first.output
+    assert second.exit_code == 0, second.output
+    navbar = read_quarto_yml(build_dir)["website"]["navbar"]["left"]
+    assert navbar[1:] == [{"text": "Journal des modifications", "href": "changelog.qmd"}]
+
+
+def test_cli_changelog_leaves_an_unbuilt_site_without_configuration(tmp_path: Path):
+    build_dir = _changelog_project(tmp_path)
+    (build_dir / "_quarto.yml").unlink()
+
+    result = _invoke_changelog(tmp_path, StubRemote(releases=[GITHUB_RELEASE]))
+
+    assert result.exit_code == 0, result.output
+    assert (build_dir / "changelog.qmd").exists()
+    assert not (build_dir / "_quarto.yml").exists()
 
 
 def test_cli_changelog_no_github_repo():

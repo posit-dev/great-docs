@@ -3,6 +3,7 @@ from typing import Any
 
 import pytest
 
+from great_docs._contribution import Contribution, NavbarLink
 from great_docs._github import GithubRepo
 from great_docs._website import changelog
 from tests.support import StubRemote, write_config
@@ -42,6 +43,23 @@ def _release(
     }
 
 
+def _page(build_dir: Path) -> str:
+    """
+    Read the changelog page
+
+    Parameters
+    ----------
+    build_dir
+        The directory the page was written into.
+
+    Returns
+    -------
+    :
+        The page's text.
+    """
+    return (build_dir / "changelog.qmd").read_text(encoding="utf-8")
+
+
 def test_write_page_lists_each_release(tmp_path: Path):
     config = write_config(tmp_path)
     remote = StubRemote(
@@ -51,13 +69,12 @@ def test_write_page_lists_each_release(tmp_path: Path):
         ]
     )
     reported: list[str] = []
-    page = tmp_path / "changelog.qmd"
 
-    result = changelog.write_page(config, tmp_path, REPO, remote, report=reported.append)
+    contribution = changelog.write_page(config, tmp_path, REPO, remote, report=reported.append)
 
-    assert result == page
-    assert reported == [f"Created {page}"]
-    assert page.read_text(encoding="utf-8") == (
+    assert contribution == Contribution(navbar=(NavbarLink("Changelog", "changelog.qmd"),))
+    assert reported == [f"Created {tmp_path / 'changelog.qmd'}"]
+    assert _page(tmp_path) == (
         "---\n"
         'title: "Changelog"\n'
         "gd-auto-generated: true\n"
@@ -88,9 +105,11 @@ def test_write_page_without_releases_writes_nothing(tmp_path: Path):
     config = write_config(tmp_path)
     reported: list[str] = []
 
-    page = changelog.write_page(config, tmp_path, REPO, StubRemote(), report=reported.append)
+    contribution = changelog.write_page(
+        config, tmp_path, REPO, StubRemote(), report=reported.append
+    )
 
-    assert page is None
+    assert contribution is None
     assert reported == []
     assert not (tmp_path / "changelog.qmd").exists()
 
@@ -100,28 +119,21 @@ def test_write_page_translates_the_toc_title(tmp_path: Path, lang: str, expected
     config = write_config(tmp_path, {"site": {"lang": lang}})
     remote = StubRemote(releases=[_release("v1.0.0")])
 
-    page = changelog.write_page(config, tmp_path, REPO, remote, report=print)
+    _ = changelog.write_page(config, tmp_path, REPO, remote, report=print)
 
-    assert page is not None
-    assert f'toc-title: "{expected}"' in page.read_text(encoding="utf-8")
+    assert f'toc-title: "{expected}"' in _page(tmp_path)
 
 
-@pytest.mark.parametrize(
-    ("settings", "max_releases", "expected"),
-    [({"changelog": {"max_releases": 2}}, None, 2), ({"changelog": {"max_releases": 2}}, 1, 1)],
-)
-def test_write_page_limits_the_releases(
-    tmp_path: Path, settings: dict[str, Any], max_releases: int | None, expected: int
-):
-    config = write_config(tmp_path, settings)
+@pytest.mark.parametrize(("max_releases", "expected"), [(None, 2), (1, 1)])
+def test_write_page_limits_the_releases(tmp_path: Path, max_releases: int | None, expected: int):
+    config = write_config(tmp_path, {"changelog": {"max_releases": 2}})
     remote = StubRemote(releases=[_release(f"v1.{i}") for i in range(3)])
 
-    page = changelog.write_page(
+    _ = changelog.write_page(
         config, tmp_path, REPO, remote, max_releases=max_releases, report=print
     )
 
-    assert page is not None
-    assert page.read_text(encoding="utf-8").count("{.changelog-version}") == expected
+    assert _page(tmp_path).count("{.changelog-version}") == expected
 
 
 def test_write_page_nests_note_headings_under_the_release(tmp_path: Path):
@@ -129,10 +141,9 @@ def test_write_page_nests_note_headings_under_the_release(tmp_path: Path):
     body = "# Title\n\n## Features\n\n### Detail"
     remote = StubRemote(releases=[_release("v1.0.0", body)])
 
-    page = changelog.write_page(config, tmp_path, REPO, remote, report=print)
+    _ = changelog.write_page(config, tmp_path, REPO, remote, report=print)
 
-    assert page is not None
-    assert "# Title\n\n### Features\n\n#### Detail\n" in page.read_text(encoding="utf-8")
+    assert "# Title\n\n### Features\n\n#### Detail\n" in _page(tmp_path)
 
 
 @pytest.mark.parametrize(

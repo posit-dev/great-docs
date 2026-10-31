@@ -1697,32 +1697,6 @@ class GreatDocs:
         return None, None, None  # pragma: no cover
 
     # =========================================================================
-    # Changelog (GitHub Releases) Methods
-    # =========================================================================
-
-    def _add_changelog_to_navbar(self) -> None:
-        """Add a *Changelog* link to the navbar (idempotent)."""
-        if not quarto_yml.path(self.build_dir).exists():
-            return
-
-        config = quarto_yml.read(self.build_dir)
-
-        navbar = config.get("website", {}).get("navbar")
-        if not navbar or "left" not in navbar:
-            return
-
-        # Already present?
-        if any(
-            isinstance(item, dict) and item.get("text") == "Changelog" for item in navbar["left"]
-        ):
-            return
-
-        # Insert before the last item (usually Reference) or at end
-        navbar["left"].append({"text": "Changelog", "href": "changelog.qmd"})
-
-        quarto_yml.write(self.build_dir, config, self._config)
-
-    # =========================================================================
     # Page Tags Methods
     # =========================================================================
 
@@ -14101,12 +14075,13 @@ anchor-sections: true
         owner, repo, _base_url = self._get_github_repo_info()
         if not (owner and repo):
             return Skipped("no GitHub repo info")
-        page = changelog.write_page(
+        contribution = changelog.write_page(
             self._config, self.build_dir, GithubRepo(owner, repo), self._remote, report=print
         )
-        if page is None:
+        if contribution is None:
             return "No releases found; skipped"
-        self._add_changelog_to_navbar()
+        with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+            quarto_yml.apply(quarto_config, contribution)
         return "Changelog from GitHub Releases"
 
     def _step_cli_reference(self, run: Run) -> Outcome:

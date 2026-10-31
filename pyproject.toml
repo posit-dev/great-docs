@@ -183,6 +183,7 @@ include = [
     "great_docs/_build",
     "great_docs/_builtin",
     "great_docs/_content",
+    "great_docs/_contribution.py",
     "great_docs/_git.py",
     "great_docs/_github.py",
     "great_docs/_icons.py",

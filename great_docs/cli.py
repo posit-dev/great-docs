@@ -18,6 +18,7 @@ from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
 from ._website import changelog as changelog_page
+from ._website import quarto_yml
 from .config import ConfigError
 from .core import GreatDocs
 
@@ -2389,7 +2390,7 @@ def changelog(
             )
             sys.exit(1)
 
-        page = changelog_page.write_page(
+        contribution = changelog_page.write_page(
             docs._config,
             docs.build_dir,
             GithubRepo(owner, repo),
@@ -2397,11 +2398,14 @@ def changelog(
             max_releases=max_releases,
             report=click.echo,
         )
-        if page:
-            docs._add_changelog_to_navbar()
-            click.echo(f"✅ Changelog generated: {page}")
-        else:
+        if contribution is None:
             click.echo("No published releases found on GitHub.")
+        else:
+            # Link the page from a site that has been built
+            if quarto_yml.path(docs.build_dir).exists():
+                with quarto_yml.edit(docs.build_dir, docs._config) as quarto_config:
+                    quarto_yml.apply(quarto_config, contribution)
+            click.echo(f"✅ Changelog generated: {docs.build_dir / changelog_page.FILENAME}")
 
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
