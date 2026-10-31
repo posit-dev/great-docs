@@ -58,9 +58,9 @@ def page(
         Whether the page's directory publishes names without numeric ordering prefixes.
         When true, links to `.qmd` pages also drop those prefixes.
     breadcrumbs
-        How to hide breadcrumbs. `"set"` writes `bread-crumbs: false`, replacing any authored
-        value and adding front matter if absent. `"default"` adds the option only to
-        existing front matter that does not set it. `None` preserves the front matter.
+        How to hide breadcrumbs while preserving an authored `bread-crumbs` value.
+        `"set"` adds `bread-crumbs: false` and creates front matter if absent. `"default"`
+        adds it only to existing front matter. `None` preserves the front matter.
     published
         The final published path if a later step moves the page from `destination`.
         References are rewritten for this path; the page is still written to
@@ -78,12 +78,10 @@ def page(
     content = rebase_references(content, source, target, layout=layout, pages=pages)
     if strip_prefix:
         content = fix_numeric_prefix_links(content)
-    if breadcrumbs == "set":
+    block = locate_front_matter(content)
+    authored = block is not None and "bread-crumbs" in block.mapping
+    if not authored and (breadcrumbs == "set" or (breadcrumbs == "default" and block is not None)):
         content = set_front_matter_option(content, "bread-crumbs", False)
-    elif breadcrumbs == "default":
-        block = locate_front_matter(content)
-        if block is not None and "bread-crumbs" not in block.mapping:
-            content = set_front_matter_option(content, "bread-crumbs", False)
     front_matter, _ = split_front_matter(content)
     # The page that becomes the homepage shows no dates
     if published != pages.homepage:

@@ -4805,8 +4805,8 @@ class GreatDocs:
         """
         Copy user guide files from project root to docs directory.
 
-        Adds `bread-crumbs: false` to the frontmatter of each file to disable breadcrumb
-        navigation on user guide pages.
+        Add `bread-crumbs: false` only when a page does not set `bread-crumbs`. This hides
+        breadcrumb navigation on user guide pages while preserving authored settings.
 
         When using explicit ordering (`user_guide` is a list in config), filenames are
         preserved as-is. In auto-discovery mode, numeric prefixes are stripped for cleaner URLs.

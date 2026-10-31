@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 import pytest
 
@@ -207,3 +208,25 @@ def test_turning_off_breadcrumbs_keeps_the_front_matter_text(tmp_path: Path, lay
     assert destination.read_text() == (
         '---\n# Shown in the card\ntitle: "Demo: one"\nbread-crumbs: false\n---\n\nText\n'
     )
+
+
+@pytest.mark.parametrize("breadcrumbs", ["set", "default"])
+def test_a_page_that_sets_breadcrumbs_keeps_its_value(
+    tmp_path: Path, layout: Layout, breadcrumbs: Literal["set", "default"]
+):
+    source = tmp_path / "user_guide/intro.qmd"
+    source.parent.mkdir()
+    source.write_text("---\ntitle: Intro\nbread-crumbs: true\n---\n\nText\n")
+    destination = layout.build_dir / "user-guide/intro.qmd"
+
+    publish.page(
+        source,
+        destination,
+        layout=layout,
+        pages=page_map(tmp_path, layout),
+        add_dates=lambda content, _: content,
+        strip_prefix=True,
+        breadcrumbs=breadcrumbs,
+    )
+
+    assert destination.read_text() == "---\ntitle: Intro\nbread-crumbs: true\n---\n\nText\n"
