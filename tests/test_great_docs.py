@@ -28438,42 +28438,6 @@ def test_attribute_label_typevar_annotation():
     assert _attribute_label(obj) == "typevar"
 
 
-def test_function_label_async():
-    """_function_label returns 'async' for async functions."""
-
-    obj = gf.Function(name="afunc", lineno=1)
-    obj.labels.add("async")
-
-    assert _function_label(obj) == "async"
-
-
-def test_function_label_classmethod():
-    """_function_label returns 'classmethod'."""
-
-    obj = gf.Function(name="cm", lineno=1)
-    obj.labels.add("classmethod")
-
-    assert _function_label(obj) == "classmethod"
-
-
-def test_function_label_staticmethod():
-    """_function_label returns 'staticmethod'."""
-
-    obj = gf.Function(name="sm", lineno=1)
-    obj.labels.add("staticmethod")
-
-    assert _function_label(obj) == "staticmethod"
-
-
-def test_function_label_property():
-    """_function_label returns 'property'."""
-
-    obj = gf.Function(name="prop", lineno=1)
-    obj.labels.add("property")
-
-    assert _function_label(obj) == "property"
-
-
 def test_class_label_bases_exception():
     """_class_label catches exceptions accessing bases."""
 

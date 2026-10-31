@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .._type_checks import is_typevar
+from .._type_checks import function_kind, is_typevar
 
 if TYPE_CHECKING:
     import griffe as gf
@@ -120,19 +120,9 @@ def _attribute_label(obj: gf.Attribute) -> str:
 
 
 def _function_label(obj: gf.Function) -> str:
-    labels = obj.labels
-
     if obj.parent and obj.parent.is_class:
         return "method"
-    if "async" in labels:
-        return "async"
-    if "classmethod" in labels:
-        return "classmethod"
-    if "staticmethod" in labels:
-        return "staticmethod"
-    if "property" in labels:
-        return "property"
-    return "function"
+    return function_kind(obj)
 
 
 def _class_label(obj: gf.Class) -> str:
