@@ -10,7 +10,7 @@ from datetime import datetime
 from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
-from urllib.parse import quote, unquote, urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
 
@@ -29,20 +29,19 @@ from ._build.steps import (
     count_listed,
     run_steps,
 )
-from ._content import code_includes
+from ._content import code_includes, publish
 from ._content.naming import (
     fix_numeric_prefix_links,
     published_path,
-    section_slug,
     strip_numeric_prefix,
     title_from_name,
 )
+from ._content.pages import PageMap, output_destination, section_destination
 from ._content.sections import source_dirs as section_source_dirs
 from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import Layout
 from ._remote import HttpRemote, Remote
-from ._source_refs import source_reference_spans
 from ._subprocess import TEXT_MODE_KWARGS
 from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
 from ._utils import (
@@ -355,14 +354,14 @@ class GreatDocs:
         for bib_path in self._config.bibliography:
             src = self.layout.source_dir / bib_path
             if src.is_file():
-                self._copy_source_asset(src, self.build_dir / src.name)
+                publish.copy_asset(self.layout, src, self.build_dir / src.name)
             else:
                 print(f"Warning: Bibliography file not found: {bib_path}")
         csl_path = self._config.csl
         if csl_path:
             csl_src = self.layout.source_dir / csl_path
             if csl_src.is_file():
-                self._copy_source_asset(csl_src, self.build_dir / csl_src.name)
+                publish.copy_asset(self.layout, csl_src, self.build_dir / csl_src.name)
             else:
                 print(f"Warning: CSL file not found: {csl_path}")
 
@@ -371,7 +370,7 @@ class GreatDocs:
         for css_path in self._config.css:
             css_src = self.layout.source_dir / css_path
             if css_src.is_file():
-                self._copy_source_asset(css_src, self.build_dir / css_src.name)
+                publish.copy_asset(self.layout, css_src, self.build_dir / css_src.name)
             else:
                 print(f"Warning: CSS file not found: {css_path}")
 
@@ -630,157 +629,23 @@ class GreatDocs:
 
         return True
 
-    def _copy_source_asset(self, source: Path, destination: Path) -> Path:
+    def _page_map(self) -> PageMap:
         """
-        Copy a referenced file without escaping or overwriting the build tree
-        """
-        destination = destination.resolve()
-        if not destination.is_relative_to(self.build_dir.resolve()):
-            raise ValueError(f"Asset destination escapes the build directory: {destination}")
-        if destination.exists():
-            if not destination.is_file() or destination.read_bytes() != source.read_bytes():
-                raise ValueError(
-                    f"Asset destination conflicts with an existing file: {destination}"
-                )
-        else:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
-        return destination
+        Map authored pages to their published paths for this build
 
-    def _rebase_source_references(
-        self, content: str, source_file: Path, destination_file: Path
-    ) -> str:
-        """
-        Copy local linked assets and rewrite their generated references
-
-        Resolve inputs beside the source page. Preserve URLs, missing files,
-        anchors, and query strings. Keep shared files under the build tree.
-        """
-
-        def rebase(reference: str) -> str:
-            url = urlsplit(reference)
-            if url.scheme or url.netloc or not url.path or reference.startswith("/"):
-                return reference
-            source = (source_file.parent / unquote(url.path)).resolve()
-            if not source.is_file():
-                return reference
-            if source.suffix.lower() in {".qmd", ".md", ".rst", ".html", ".htm"}:
-                page = self._source_page_destination(source)
-                if page is None:
-                    return reference
-                path = Path(os.path.relpath(page, destination_file.parent)).as_posix()
-                return urlunsplit(("", "", quote(path, safe="/"), url.query, url.fragment))
-            candidate = (destination_file.parent / unquote(url.path)).resolve()
-            if not candidate.is_relative_to(self.build_dir.resolve()) or (
-                self.layout.source_dir != self.layout.package_root
-                and not source.is_relative_to(self.layout.source_dir)
-            ):
-                if source.is_relative_to(self.layout.package_root):
-                    relative = source.relative_to(self.layout.package_root)
-                else:
-                    import hashlib
-
-                    relative = (
-                        Path(hashlib.sha256(str(source).encode()).hexdigest()[:16]) / source.name
-                    )
-                candidate = self.build_dir / "_shared" / relative
-            copied = self._copy_source_asset(source, candidate)
-            path = Path(os.path.relpath(copied, destination_file.parent)).as_posix()
-            return urlunsplit(("", "", quote(path, safe="/"), url.query, url.fragment))
-
-        spans = source_reference_spans(
-            content, html=source_file.suffix.lower() in {".html", ".htm"}
-        )
-        for start, end in reversed(spans):
-            content = content[:start] + rebase(content[start:end]) + content[end:]
-        return self._rebase_page_bibliography(content, source_file, destination_file)
-
-    def _rebase_page_bibliography(
-        self, content: str, source_file: Path, destination_file: Path
-    ) -> str:
-        block = locate_front_matter(content)
-        if block is None:
-            return content
-        bibliography = block.mapping.get("bibliography")
-        if isinstance(bibliography, str):
-            entries = [bibliography]
-            is_list = False
-        elif isinstance(bibliography, list) and all(isinstance(item, str) for item in bibliography):
-            entries = bibliography
-            is_list = True
-        else:
-            return content
-
-        rebased: list[str] = []
-        changed = False
-        for reference in entries:
-            url = urlsplit(reference)
-            if url.scheme or url.netloc or not url.path or reference.startswith("/"):
-                rebased.append(reference)
-                continue
-            source = (source_file.parent / unquote(url.path)).resolve()
-            if not source.is_file():
-                rebased.append(reference)
-                continue
-            if source.is_relative_to(self.layout.package_root):
-                relative = source.relative_to(self.layout.package_root)
-            else:
-                import hashlib
-
-                relative = Path(hashlib.sha256(str(source).encode()).hexdigest()[:16]) / source.name
-            destination = self.build_dir / "_shared" / relative
-            copied = self._copy_source_asset(source, destination)
-            path = Path(os.path.relpath(copied, destination_file.parent)).as_posix()
-            rebased.append(urlunsplit(("", "", quote(path, safe="/"), url.query, url.fragment)))
-            changed = changed or path != reference
-
-        if not changed:
-            return content
-        frontmatter = {**block.mapping.data, "bibliography": rebased if is_list else rebased[0]}
-        return f"---\n{format_yaml(frontmatter)}\n---\n{content[block.end :]}"
-
-    def _source_page_destination(self, source: Path) -> Path | None:
-        """
-        Map a documentation source page to its generated destination
+        Returns
+        -------
+        :
+            The page map for the current sources and configuration.
         """
         landing, _ = self._find_index_source_file()
-        if landing is not None and source == landing.resolve():
-            return self.build_dir / "index.qmd"
-        roots: list[tuple[Path, Path, bool]] = []
         guide = self._find_user_guide_dir()
-        if guide is not None:
-            if self._config.homepage == "user_guide":
-                info = self._discover_user_guide()
-                if info and info["files"] and source == info["files"][0]["path"].resolve():
-                    return self.build_dir / "index.qmd"
-            roots.append(
-                (guide, self.build_dir / "user-guide", not self._config.user_guide_is_explicit)
-            )
-        for section in self._config.sections or []:
-            if not isinstance(section, dict):
-                continue
-            destination = self._section_build_dir(section)
-            if destination is not None:
-                roots.append(
-                    (
-                        self.layout.source_dir / section["dir"],
-                        destination,
-                        section.get("type") != "blog",
-                    )
-                )
-        for page in self._config.custom_pages:
-            roots.append(
-                (
-                    self.layout.source_dir / page["dir"],
-                    self._output_directory(page["output"]),
-                    False,
-                )
-            )
-        for directory, destination, strip_prefix in roots:
-            if source.is_relative_to(directory.resolve()):
-                relative = source.relative_to(directory.resolve())
-                return destination / published_path(relative, strip_prefix=strip_prefix)
-        return None
+        homepage = [] if landing is None else [landing]
+        if guide is not None and self._config.homepage == "user_guide":
+            info = self._discover_user_guide()
+            if info and info["files"]:
+                homepage.append(info["files"][0]["path"])
+        return PageMap.make(self._config, self.layout, guide, homepage)
 
     def install(self, force: bool = False) -> None:
         """
@@ -1700,52 +1565,6 @@ class GreatDocs:
     # Page Tags Methods
     # =========================================================================
 
-    def _section_build_dir(self, section_cfg: dict[str, object]) -> Path | None:
-        """
-        Resolve a section destination independently of its source location
-
-        Keep shared package-relative section paths when documentation sources
-        move into a subdirectory. Keep every destination inside the build tree.
-
-        Parameters
-        ----------
-        section_cfg
-            A single entry from the `sections` config.
-
-        Returns
-        -------
-        Path | None
-            The directory under `build_dir`, or `None` if the section
-            has no `dir`.
-        """
-        src_dir = section_cfg.get("dir")
-        if not src_dir or not isinstance(src_dir, str):
-            return None
-        source = Path(src_dir)
-        if source.is_absolute() or ".." in source.parts:
-            resolved = (self.layout.source_dir / source).resolve()
-            source = (
-                resolved.relative_to(self.layout.package_root)
-                if resolved.is_relative_to(self.layout.package_root)
-                else Path(source.name)
-            )
-        slug = section_slug(source.as_posix())
-        return self._output_directory(slug)
-
-    def _output_directory(self, output: str) -> Path:
-        """
-        Validate a configured destination within the selected build directory
-        """
-        path = Path(output)
-        destination = (self.build_dir / path).resolve()
-        if (
-            path.is_absolute()
-            or ".." in path.parts
-            or not destination.is_relative_to(self.build_dir.resolve())
-        ):
-            raise ValueError(f"Output path must remain inside the build directory: {output}")
-        return destination
-
     def _collect_page_tags(self) -> dict[str, list[dict[str, str]]]:
         """
         Scan all built .qmd files for tags in frontmatter.
@@ -1775,7 +1594,7 @@ class GreatDocs:
         # Also scan custom sections (skip if already covered above)
         for section_cfg in self._config.sections:
             title = section_cfg.get("title", "")
-            section_dir = self._section_build_dir(section_cfg)
+            section_dir = section_destination(self.layout, section_cfg)
             if (
                 section_dir is not None
                 and section_dir.is_dir()
@@ -2025,7 +1844,7 @@ class GreatDocs:
         seen_dirs: set[Path] = {d.resolve() for d in scan_dirs}
         # Include custom section directories
         for section_cfg in self._config.sections:
-            section_dir = self._section_build_dir(section_cfg)
+            section_dir = section_destination(self.layout, section_cfg)
             if section_dir is not None and section_dir.resolve() not in seen_dirs:
                 scan_dirs.append(section_dir)
                 seen_dirs.add(section_dir.resolve())
@@ -2291,7 +2110,7 @@ class GreatDocs:
                 scan_dirs.append(d)
                 seen_dirs.add(d.resolve())
         for section_cfg in self._config.sections:
-            section_dir = self._section_build_dir(section_cfg)
+            section_dir = section_destination(self.layout, section_cfg)
             if (
                 section_dir is not None
                 and section_dir.is_dir()
@@ -2506,10 +2325,8 @@ class GreatDocs:
                 print(f"   ⚠️  Section '{title}' directory '{src_dir}' has no .qmd/.md files")
                 continue
 
-            # Determine the slug for the build directory (lowercase, hyphenated).
-            # `_section_build_dir` mirrors this formula so tag/status scanning
-            # resolves the same destination directory.
-            dest_dir = self._section_build_dir(section_cfg)
+            # Tag and status scanning must use the same section destination
+            dest_dir = section_destination(self.layout, section_cfg)
             assert dest_dir is not None
             slug = dest_dir.relative_to(self.build_dir).as_posix()
             dest_dir.mkdir(parents=True, exist_ok=True)
@@ -2647,7 +2464,9 @@ class GreatDocs:
 
             # Expand {{< code-include >}} shortcodes before Quarto sees the file
             content = code_includes.expand(content, src_file.parent, self.layout)
-            content = self._rebase_source_references(content, src_file, dest_file)
+            content = publish.rebase_references(
+                content, src_file, dest_file, layout=self.layout, pages=self._page_map
+            )
 
             # Fix links to .qmd files with numeric prefixes
             content = fix_numeric_prefix_links(content)
@@ -2732,7 +2551,9 @@ class GreatDocs:
 
             # Expand {{< code-include >}} shortcodes before Quarto sees the file
             content = code_includes.expand(content, src_file.parent, self.layout)
-            content = self._rebase_source_references(content, src_file, dest_file)
+            content = publish.rebase_references(
+                content, src_file, dest_file, layout=self.layout, pages=self._page_map
+            )
 
             # Parse frontmatter for metadata (but don't modify it —
             # Quarto's listing needs the original frontmatter)
@@ -3247,7 +3068,7 @@ class GreatDocs:
         claimed = section_source_dirs(self._config, self.layout)
 
         for entry in self._config.custom_pages:
-            self._output_directory(entry["output"])
+            output_destination(self.layout, entry["output"])
             source_dir = self.layout.source_dir / entry["dir"]
             if not source_dir.exists() or not source_dir.is_dir():
                 if entry["dir"] != "custom" or self._config.exists():
@@ -3344,7 +3165,7 @@ class GreatDocs:
         for source in sources:
             source_dir = source["source_dir"]
             output_prefix = str(source["output"])
-            dest_dir = self._output_directory(output_prefix)
+            dest_dir = output_destination(self.layout, output_prefix)
             dest_dir.mkdir(parents=True, exist_ok=True)
 
             for src_path in sorted(source_dir.rglob("*")):
@@ -3362,7 +3183,9 @@ class GreatDocs:
                     continue
 
                 content = src_path.read_text(encoding="utf-8")
-                content = self._rebase_source_references(content, src_path, dest_path)
+                content = publish.rebase_references(
+                    content, src_path, dest_path, layout=self.layout, pages=self._page_map
+                )
                 frontmatter, body = split_front_matter(content)
                 body = body.lstrip("\n")
                 layout = (frontmatter.string("layout") or "passthrough").lower()
@@ -5068,8 +4891,10 @@ class GreatDocs:
 
             # Expand {{< code-include >}} shortcodes before Quarto sees the file
             content = code_includes.expand(content, src_path.parent, self.layout)
-            reference_destination = self._source_page_destination(src_path.resolve()) or dst_path
-            content = self._rebase_source_references(content, src_path, reference_destination)
+            reference_destination = self._page_map().destination(src_path.resolve()) or dst_path
+            content = publish.rebase_references(
+                content, src_path, reference_destination, layout=self.layout, pages=self._page_map
+            )
 
             # In auto-discovery mode, fix links to .qmd files with numeric prefixes
             if not is_explicit:
@@ -8769,8 +8594,12 @@ class GreatDocs:
                     logo_html = f'<img src="{light}" alt="{alt}" class="gd-hero-logo" style="max-height:{logo_height}" />'  # pragma: no cover
             elif isinstance(logo_config, str):
                 logo_html = f'<img src="{logo_config}" alt="Logo" class="gd-hero-logo" style="max-height:{logo_height}" />'
-            logo_html = self._rebase_source_references(
-                logo_html, self.layout.config_path, self.build_dir / "index.qmd"
+            logo_html = publish.rebase_references(
+                logo_html,
+                self.layout.config_path,
+                self.build_dir / "index.qmd",
+                layout=self.layout,
+                pages=self._page_map,
             )
 
         # ── Name ────────────────────────────────────────────────────
@@ -9668,7 +9497,9 @@ title: "Authors and Citation"
             }
 
             # Copy images referenced in the source file to the build directory
-            readme_content = self._rebase_source_references(readme_content, source_file, index_qmd)
+            readme_content = publish.rebase_references(
+                readme_content, source_file, index_qmd, layout=self.layout, pages=self._page_map
+            )
 
         # Build hero section (must run before heading adjustment so badge
         # extraction works on original markdown)
@@ -10482,7 +10313,7 @@ anchor-sections: true
                 src_dir = section_cfg.get("dir")
                 if not src_dir:
                     continue
-                section_build_dir = self._section_build_dir(section_cfg)
+                section_build_dir = section_destination(self.layout, section_cfg)
                 if section_build_dir is None:
                     continue
                 slug = section_build_dir.relative_to(self.build_dir).as_posix()
@@ -10626,7 +10457,7 @@ anchor-sections: true
                 if not source.is_file():
                     raise FileNotFoundError(f"Header include file not found: {source}")
                 destination = self.build_dir / "_includes" / source.name
-                self._copy_source_asset(source, destination)
+                publish.copy_asset(self.layout, source, destination)
                 entry = {**entry, "file": destination.relative_to(self.build_dir).as_posix()}
             if entry not in config["format"]["html"]["include-in-header"]:
                 config["format"]["html"]["include-in-header"].append(entry)
@@ -10803,7 +10634,7 @@ anchor-sections: true
                 if logo_config.get("dark") and logo_config["dark"] != logo_config["light"]:
                     if light_dest_name == Path(logo_config["dark"]).name:
                         light_dest_name = f"logo-light{light_src.suffix}"
-                self._copy_source_asset(light_src, self.build_dir / light_dest_name)
+                publish.copy_asset(self.layout, light_src, self.build_dir / light_dest_name)
                 navbar["logo"] = light_dest_name
             elif urlsplit(logo_config["light"]).scheme or logo_config["light"].startswith("//"):
                 navbar["logo"] = logo_config["light"]
@@ -10816,7 +10647,7 @@ anchor-sections: true
                 dark_src = self.layout.source_dir / dark_path
                 if dark_src.is_file():
                     dark_dest_name = dark_src.name
-                    self._copy_source_asset(dark_src, self.build_dir / dark_dest_name)
+                    publish.copy_asset(self.layout, dark_src, self.build_dir / dark_dest_name)
                     navbar["logo-dark"] = dark_dest_name
 
                     # Ensure the dark logo is included as a resource so Quarto
@@ -13540,7 +13371,7 @@ anchor-sections: true
 
         # Copy to build directory root (so it's served at site root)
         dest = self.build_dir / source.name  # pragma: no cover
-        self._copy_source_asset(source, dest)  # pragma: no cover
+        publish.copy_asset(self.layout, source, dest)  # pragma: no cover
 
         # Build absolute URL if canonical base is available
         base_url = self._get_canonical_base_url()  # pragma: no cover

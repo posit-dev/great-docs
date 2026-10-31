@@ -38224,68 +38224,6 @@ def test_bump_heading_levels_quarto_cell_option():
 
 
 # ---------------------------------------------------------------------------
-# Source references
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "markup",
-    [
-        "![Logo](images/logo.png)",
-        '<img src="images/logo.png">',
-        "[Download](images/logo.png)",
-    ],
-)
-def test_rebase_source_references_copies_local_files(tmp_path: Path, markup: str) -> None:
-    (tmp_path / "images").mkdir()
-    (tmp_path / "images/logo.png").write_bytes(b"image")
-    docs = GreatDocs(project_path=str(tmp_path))
-    result = docs._rebase_source_references(
-        markup, tmp_path / "README.md", docs.build_dir / "index.qmd"
-    )
-    assert result == markup
-    assert (docs.build_dir / "images/logo.png").read_bytes() == b"image"
-
-
-@pytest.mark.parametrize(
-    "reference",
-    [
-        "https://example.com/logo.png",
-        "//example.com/logo.png",
-        "data:image/png;base64,abc",
-        "#anchor",
-        "images/missing.png",
-    ],
-)
-def test_rebase_source_references_preserves_unavailable_files(
-    tmp_path: Path, reference: str
-) -> None:
-    docs = GreatDocs(project_path=str(tmp_path))
-    markup = f"![Logo]({reference})"
-    assert (
-        docs._rebase_source_references(markup, tmp_path / "README.md", docs.build_dir / "index.qmd")
-        == markup
-    )
-
-
-def test_rebase_page_bibliography_preserves_frontmatter_delimiters(tmp_path: Path) -> None:
-    """
-    Keep page metadata parseable after rebasing its bibliography
-    """
-    source = tmp_path / "user_guide/page.qmd"
-    source.parent.mkdir()
-    (tmp_path / "refs.bib").write_text("@book{example, title={Example}}\n")
-    docs = GreatDocs(project_path=str(tmp_path))
-    content = "---\ntitle: Page\nbibliography: ../refs.bib\n---\n\nText\n"
-
-    result = docs._rebase_page_bibliography(content, source, docs.build_dir / "user-guide/page.qmd")
-
-    assert result.startswith("---\ntitle: Page\n")
-    assert "../_shared/refs.bib" in result
-    assert "---\n\nText\n" in result
-
-
-# ---------------------------------------------------------------------------
 # _generate_favicons — SVG source with cairosvg=None
 # ---------------------------------------------------------------------------
 
@@ -38344,32 +38282,6 @@ def test_detect_module_name_returns_pkg_dir_name_fallback(tmp_path):
 
     # Should return the directory name, not None
     assert result is not None or result is None  # just check it doesn't crash
-
-
-# ---------------------------------------------------------------------------
-# _section_build_dir
-# ---------------------------------------------------------------------------
-
-
-def test_section_build_dir_no_dir_key(tmp_path):
-    """_section_build_dir returns None when section has no 'dir' key."""
-    docs = GreatDocs(project_path=str(tmp_path))
-    result = docs._section_build_dir({})
-    assert result is None
-
-
-def test_section_build_dir_non_string_dir(tmp_path):
-    """_section_build_dir returns None when 'dir' is not a string."""
-    docs = GreatDocs(project_path=str(tmp_path))
-    result = docs._section_build_dir({"dir": 42})
-    assert result is None
-
-
-def test_section_build_dir_valid(tmp_path):
-    """_section_build_dir returns correct path for valid dir."""
-    docs = GreatDocs(project_path=str(tmp_path))
-    result = docs._section_build_dir({"dir": "my_section"})
-    assert result == docs.build_dir / "my-section"
 
 
 # ---------------------------------------------------------------------------
@@ -39018,16 +38930,6 @@ def test_user_guide_file_with_a_list_block_derives_its_title(tmp_path: Path) -> 
 
     assert result is not None
     assert (result["title"], result["section"]) == ("Getting Started", None)
-
-
-def test_rebase_page_bibliography_ignores_a_list_block(tmp_path: Path) -> None:
-    """Verify that front matter that is not a mapping leaves the page unchanged"""
-    docs = GreatDocs(project_path=str(tmp_path))
-    content = "---\n- a\n---\n\nText\n"
-
-    result = docs._rebase_page_bibliography(content, tmp_path / "page.qmd", tmp_path / "out.qmd")
-
-    assert result == content
 
 
 def test_skills_page_ignores_a_non_string_description(tmp_path: Path) -> None:
