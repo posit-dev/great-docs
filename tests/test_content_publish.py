@@ -226,3 +226,53 @@ def test_a_page_that_sets_breadcrumbs_keeps_its_value(tmp_path: Path, layout: La
     )
 
     assert destination.read_text() == "---\ntitle: Intro\nbread-crumbs: true\n---\n\nText\n"
+
+
+def test_a_link_to_a_blog_post_keeps_the_post_name(tmp_path: Path, layout: Layout):
+    post = tmp_path / "blog/2024-01-welcome/index.qmd"
+    post.parent.mkdir(parents=True)
+    post.write_text("# Welcome\n")
+    source = tmp_path / "examples/intro.qmd"
+    source.parent.mkdir()
+    source.write_text("[Welcome](../blog/2024-01-welcome/index.qmd)\n")
+    config = write_config(
+        tmp_path,
+        {
+            "sections": [
+                {"title": "Blog", "dir": "blog", "type": "blog"},
+                {"title": "Examples", "dir": "examples"},
+            ]
+        },
+    )
+    destination = layout.build_dir / "examples/intro.qmd"
+
+    publish.page(
+        source,
+        destination,
+        layout=layout,
+        pages=PageMap.make(config, layout, None, []),
+        add_dates=lambda content, _: content,
+        strip_prefix=True,
+        breadcrumbs=False,
+    )
+
+    assert destination.read_text() == "[Welcome](../blog/2024-01-welcome/index.qmd)\n"
+
+
+def test_a_link_to_a_missing_page_loses_its_numeric_prefixes(tmp_path: Path, layout: Layout):
+    source = tmp_path / "examples/intro.qmd"
+    source.parent.mkdir()
+    source.write_text("[Gone](01-basics/02-missing.qmd#top)\n")
+    destination = layout.build_dir / "examples/intro.qmd"
+
+    publish.page(
+        source,
+        destination,
+        layout=layout,
+        pages=page_map(tmp_path, layout),
+        add_dates=lambda content, _: content,
+        strip_prefix=True,
+        breadcrumbs=False,
+    )
+
+    assert destination.read_text() == "[Gone](basics/missing.qmd#top)\n"

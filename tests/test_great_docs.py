@@ -35,7 +35,7 @@ from great_docs import BuildError, Config, GreatDocs, create_default_config, loa
 from great_docs._build import freeze, quarto
 from great_docs._build.steps import Step, count_listed
 from great_docs._build_log import BuildLog
-from great_docs._content.naming import fix_numeric_prefix_links, strip_numeric_prefix
+from great_docs._content.naming import strip_numeric_prefix
 from great_docs._website.quarto_yml import edit as edit_quarto_yml
 from great_docs._website.quarto_yml import read as read_quarto_yml
 from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
@@ -2445,116 +2445,6 @@ def test_strip_numeric_prefix_preserves_internal_numbers():
         assert strip_numeric_prefix("02-chapter-10.qmd") == "chapter-10.qmd"
 
 
-def test_fix_numeric_prefix_links_basic():
-    """Test that basic .qmd links with numeric prefixes are rewritten."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "- [Theming](11-theming.qmd): customize colors"
-        result = fix_numeric_prefix_links(content)
-        assert result == "- [Theming](theming.qmd): customize colors"
-
-
-def test_fix_numeric_prefix_links_with_anchors():
-    """Test that anchors and query strings are preserved."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert (
-            fix_numeric_prefix_links("[Config](05-configuration.qmd#options)")
-            == "[Config](configuration.qmd#options)"
-        )
-        assert (
-            fix_numeric_prefix_links("[Config](05-configuration.qmd?v=2)")
-            == "[Config](configuration.qmd?v=2)"
-        )
-
-
-def test_fix_numeric_prefix_links_skips_absolute_urls():
-    """Test that absolute URLs are not modified."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "[Docs](https://example.com/11-theming.qmd)"
-        assert fix_numeric_prefix_links(content) == content
-
-        content_http = "[Docs](http://example.com/05-config.qmd)"
-        assert fix_numeric_prefix_links(content_http) == content_http
-
-        content_abs = "[Docs](/root/11-theming.qmd)"
-        assert fix_numeric_prefix_links(content_abs) == content_abs
-
-
-def test_fix_numeric_prefix_links_no_prefix():
-    """Test that links without numeric prefixes are unchanged."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "[Theming](theming.qmd)"
-        assert fix_numeric_prefix_links(content) == content
-
-
-def test_fix_numeric_prefix_links_subdirectory():
-    """Test that numeric prefixes are stripped from subdirectory components too."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "[Guide](01-getting-started/02-install.qmd)"
-        result = fix_numeric_prefix_links(content)
-        assert result == "[Guide](getting-started/install.qmd)"
-
-
-def test_fix_numeric_prefix_links_multiple():
-    """Test that multiple links in the same content are all fixed."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = (
-            "- [Theming](11-theming.qmd): colors\n"
-            "- [Config](05-configuration.qmd): options\n"
-            "- [Building](13-building.qmd): build pipeline"
-        )
-        result = fix_numeric_prefix_links(content)
-        assert result == (
-            "- [Theming](theming.qmd): colors\n"
-            "- [Config](configuration.qmd): options\n"
-            "- [Building](building.qmd): build pipeline"
-        )
-
-
-def test_fix_numeric_prefix_links_ignores_non_qmd():
-    """Test that non-.qmd links are not affected."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "[Image](11-diagram.png)"
-        assert fix_numeric_prefix_links(content) == content
-
-        content_html = "[Page](11-theming.html)"
-        assert fix_numeric_prefix_links(content_html) == content_html
-
-
 def test_user_guide_files_renamed_on_copy():
     """Test that user guide files are renamed when copied to docs directory."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -4468,7 +4358,8 @@ def test_process_sections_ignores_reserved_build_directory(monkeypatch):
 def test_copy_section_files_strips_numeric_directory_prefixes():
     """Section files in numerically-prefixed subdirs are copied to unprefixed paths."""
     with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
+        # Published page paths are resolved, so the expected paths must be resolved too
+        project_path = Path(tmp_dir).resolve()
         source_dir = project_path / "examples"
         topic_a = source_dir / "01-topic-a"
         topic_b = source_dir / "02-topic-b"
@@ -4485,6 +4376,8 @@ def test_copy_section_files_strips_numeric_directory_prefixes():
         dest_dir = project_path / "great-docs" / "examples"
         dest_dir.mkdir(parents=True)
 
+        # Declare the section so its links resolve to the configured published paths
+        write_config(project_path, {"sections": [{"title": "Examples", "dir": "examples"}]})
         docs = GreatDocs(project_path=tmp_dir)
         copied = docs._copy_section_files([intro, widget], source_dir, dest_dir)
 

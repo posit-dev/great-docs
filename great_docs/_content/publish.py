@@ -56,7 +56,7 @@ def page(
         A callable that adds the source page's dates and authors to its text.
     strip_prefix
         Whether the page's directory publishes names without numeric ordering prefixes.
-        When true, links to `.qmd` pages also drop those prefixes.
+        When true, links to missing `.qmd` pages also drop those prefixes.
     breadcrumbs
         Whether to hide the page's breadcrumbs. A page that does not set `bread-crumbs`
         gains `bread-crumbs: false`, and front matter if it has none.
@@ -74,9 +74,9 @@ def page(
     target = destination if published is None else published
     content = source.read_text(encoding="utf-8")
     content = code_includes.expand(content, source.parent, layout)
-    content = rebase_references(content, source, target, layout=layout, pages=pages)
     if strip_prefix:
-        content = fix_numeric_prefix_links(content)
+        content = fix_numeric_prefix_links(content, source.parent)
+    content = rebase_references(content, source, target, layout=layout, pages=pages)
     if breadcrumbs and "bread-crumbs" not in split_front_matter(content)[0]:
         content = set_front_matter_option(content, "bread-crumbs", False)
     front_matter, _ = split_front_matter(content)

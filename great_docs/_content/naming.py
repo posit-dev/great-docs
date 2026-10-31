@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from urllib.parse import unquote
 
 
 def strip_numeric_prefix(filename: str) -> str:
@@ -69,25 +70,27 @@ def title_from_name(name: str) -> str:
     return name.replace("-", " ").replace("_", " ").title()
 
 
-def fix_numeric_prefix_links(content: str) -> str:
+def fix_numeric_prefix_links(content: str, directory: Path) -> str:
     """
-    Rewrite relative Markdown links to `.qmd` files, stripping numeric prefixes
+    Strip numeric prefixes from relative Markdown links to missing `.qmd` pages
 
-    When numeric prefixes are stripped from filenames during the copy step
-    (e.g. `11-theming.qmd` -> `theming.qmd`), cross-references between pages
-    that use the original prefixed names would otherwise break. Only relative
-    links to `.qmd` files are affected; absolute URLs and anchors are left
-    untouched.
+    A link whose target exists is left as written: it already names the target. This
+    preserves links to blog posts such as `2024-01-welcome/index.qmd`. A link to a missing
+    page, such as `11-theming.qmd`, loses the numeric prefix of every path component,
+    matching the published names of prefixed pages. Absolute URLs and paths are left
+    unchanged; anchors and queries are preserved.
 
     Parameters
     ----------
     content
         The Markdown source to rewrite.
+    directory
+        The directory used to resolve relative links.
 
     Returns
     -------
-    str
-        The content with numeric prefixes stripped from `.qmd` link targets.
+    :
+        The content with numeric prefixes stripped from links to missing `.qmd` pages.
     """
 
     def _rewrite(m: re.Match[str]) -> str:
@@ -99,6 +102,8 @@ def fix_numeric_prefix_links(content: str) -> str:
                 anchor = path[idx:]
                 path = path[:idx]
                 break
+        if (directory / unquote(path)).is_file():
+            return m.group(0)
         parts = path.split("/")
         clean_parts = [re.sub(r"^\d+[-_]", "", p) for p in parts]
         return "](" + "/".join(clean_parts) + anchor + ")"
