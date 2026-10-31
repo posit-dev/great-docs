@@ -134,7 +134,7 @@ SPEC = {
             "TimeoutError_",
         ],
         "num_exports": 5,
-        "section_titles": ["Classes"],
+        "section_titles": ["Exceptions"],
         "has_user_guide": False,
         "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],
     },

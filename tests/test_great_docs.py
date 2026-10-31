@@ -20201,16 +20201,17 @@ def test_categorize_api_objects_with_exception():
         pkg_dir = Path(tmp_dir) / "excpkg"
         pkg_dir.mkdir()
         (pkg_dir / "__init__.py").write_text(
-            'class MyError(Exception):\n    """Custom error."""\n    pass\n',
+            'class MyError(Exception):\n    """Custom error."""\n'
+            'class MyChildError(MyError):\n    """Child error."""\n',
             encoding="utf-8",
         )
 
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorize_api_objects("excpkg", ["MyError"])
+            result = docs._categorize_api_objects("excpkg", ["MyError", "MyChildError"])
 
-            assert "MyError" in result["exceptions"]
+            assert result["exceptions"] == ["MyError", "MyChildError"]
         finally:
             sys.path.remove(tmp_dir)
 
@@ -27487,6 +27488,29 @@ def test_class_kind_of_reexported_class():
     with gf.temporary_visited_package("pkg", files) as pkg:
         assert isinstance(pkg["C"], gf.Alias)
         assert class_kind(pkg["C"]) == "exception"
+
+
+def test_class_kind_of_package_exception_subclass():
+    """A class that inherits from an exception defined in the package is an exception"""
+
+    files = {
+        "__init__.py": "from ._errors import Err, MyErr\nfrom .other import Leaf\n",
+        "_errors.py": "class Err(ValueError): ...\nclass MyErr(Err): ...\n",
+        "other.py": "from . import _errors\nclass Leaf(_errors.MyErr): ...\n",
+    }
+    with gf.temporary_visited_package("pkg", files) as pkg:
+        assert class_kind(pkg["MyErr"]) == "exception"
+        assert class_kind(pkg["Leaf"]) == "exception"
+        assert get_label(pkg["Leaf"]) == "exception"
+
+
+def test_class_kind_of_inheritance_cycle():
+    """A class in an inheritance cycle is classified by its own bases"""
+
+    files = {"__init__.py": "from .a import A\n", "a.py": "from .b import B\nclass A(B): ...\n"}
+    files["b.py"] = "from .a import A\nclass B(A): ...\n"
+    with gf.temporary_visited_package("pkg", files) as pkg:
+        assert class_kind(pkg["A"]) == "class"
 
 
 @pytest.mark.parametrize(

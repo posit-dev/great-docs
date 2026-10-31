@@ -131,13 +131,41 @@ def _short_base_names(obj: gf.Class | gf.Alias) -> set[str]:
     return {str(base).rsplit(".", 1)[-1] for base in obj.bases}
 
 
+def _inherits_exception(obj: gf.Class | gf.Alias) -> bool:
+    """
+    Return whether `obj` derives from a built-in exception class
+
+    Follow the bases that resolve to classes griffe has loaded, so a subclass
+    of an exception defined in the package counts. The chain stops at a base
+    from a package griffe has not loaded, such as `json.JSONDecodeError`. If
+    griffe reports an inheritance cycle, only the class's own bases count.
+
+    Parameters
+    ----------
+    obj :
+        A class, or an alias to one.
+
+    Returns
+    -------
+    :
+        Whether `obj` or one of its loaded ancestors names a built-in
+        exception class as a base.
+    """
+    try:
+        ancestors = obj.mro()
+    except ValueError:  # griffe's report of an inheritance cycle
+        ancestors = []
+    return any(_short_base_names(cls) & _EXCEPTION_BASES for cls in (obj, *ancestors))
+
+
 def class_kind(obj: gf.Class | gf.Alias) -> ClassKind:
     """
     Classify a class by its labels and the names of its bases
 
     The first rule that matches decides: the `dataclass` label, an `enum`
-    base, a built-in exception base, `NamedTuple`, `TypedDict`, `Protocol` or
-    `runtime_checkable`, then an `ABC` or `ABCMeta` base.
+    base, a built-in exception class among its ancestors, `NamedTuple`,
+    `TypedDict`, `Protocol` or `runtime_checkable`, then an `ABC` or
+    `ABCMeta` base.
 
     Parameters
     ----------
@@ -155,7 +183,7 @@ def class_kind(obj: gf.Class | gf.Alias) -> ClassKind:
     bases = _short_base_names(obj)
     if bases & _ENUM_BASES:
         return "enum"
-    if bases & _EXCEPTION_BASES:
+    if _inherits_exception(obj):
         return "exception"
     if "NamedTuple" in bases:
         return "namedtuple"
