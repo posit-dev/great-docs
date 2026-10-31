@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Literal
 
 import pytest
 
@@ -158,7 +157,7 @@ def test_a_page_is_written_with_its_includes_and_rebased_links(tmp_path: Path, l
         pages=page_map(tmp_path, layout, guide),
         add_dates=stamp,
         strip_prefix=True,
-        breadcrumbs=None,
+        breadcrumbs=False,
     )
 
     assert front_matter.string("title") == "Start"
@@ -182,7 +181,7 @@ def test_a_page_moved_to_the_homepage_has_no_dates(tmp_path: Path, layout: Layou
         pages=pages,
         add_dates=stamp,
         strip_prefix=True,
-        breadcrumbs=None,
+        breadcrumbs=False,
         published=pages.homepage,
     )
 
@@ -202,7 +201,7 @@ def test_turning_off_breadcrumbs_keeps_the_front_matter_text(tmp_path: Path, lay
         pages=page_map(tmp_path, layout),
         add_dates=lambda content, _: content,
         strip_prefix=True,
-        breadcrumbs="default",
+        breadcrumbs=True,
     )
 
     assert destination.read_text() == (
@@ -210,10 +209,7 @@ def test_turning_off_breadcrumbs_keeps_the_front_matter_text(tmp_path: Path, lay
     )
 
 
-@pytest.mark.parametrize("breadcrumbs", ["set", "default"])
-def test_a_page_that_sets_breadcrumbs_keeps_its_value(
-    tmp_path: Path, layout: Layout, breadcrumbs: Literal["set", "default"]
-):
+def test_a_page_that_sets_breadcrumbs_keeps_its_value(tmp_path: Path, layout: Layout):
     source = tmp_path / "user_guide/intro.qmd"
     source.parent.mkdir()
     source.write_text("---\ntitle: Intro\nbread-crumbs: true\n---\n\nText\n")
@@ -226,7 +222,7 @@ def test_a_page_that_sets_breadcrumbs_keeps_its_value(
         pages=page_map(tmp_path, layout),
         add_dates=lambda content, _: content,
         strip_prefix=True,
-        breadcrumbs=breadcrumbs,
+        breadcrumbs=True,
     )
 
     assert destination.read_text() == "---\ntitle: Intro\nbread-crumbs: true\n---\n\nText\n"

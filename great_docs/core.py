@@ -2464,7 +2464,7 @@ class GreatDocs:
                 pages=pages,
                 add_dates=add_dates,
                 strip_prefix=True,
-                breadcrumbs="default",
+                breadcrumbs=True,
             )
             copied.append(
                 {
@@ -2527,7 +2527,7 @@ class GreatDocs:
                 pages=pages,
                 add_dates=add_dates,
                 strip_prefix=False,
-                breadcrumbs=None,
+                breadcrumbs=False,
             )
             copied.append(
                 {
@@ -4854,7 +4854,7 @@ class GreatDocs:
                 pages=pages,
                 add_dates=add_dates,
                 strip_prefix=not is_explicit,
-                breadcrumbs="set",
+                breadcrumbs=True,
                 published=pages.destination(src_path.resolve()) or dst_path,
             )
             copied_files.append(f"user-guide/{dest_rel_path}")

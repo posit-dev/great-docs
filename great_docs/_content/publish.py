@@ -6,7 +6,7 @@ import hashlib
 import os
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml
@@ -33,7 +33,7 @@ def page(
     pages: PageMap,
     add_dates: Callable[[str, Path], str],
     strip_prefix: bool,
-    breadcrumbs: Literal["default", "set"] | None,
+    breadcrumbs: bool,
     published: Path | None = None,
 ) -> YamlMapping:
     """
@@ -58,9 +58,8 @@ def page(
         Whether the page's directory publishes names without numeric ordering prefixes.
         When true, links to `.qmd` pages also drop those prefixes.
     breadcrumbs
-        How to hide breadcrumbs while preserving an authored `bread-crumbs` value.
-        `"set"` adds `bread-crumbs: false` and creates front matter if absent. `"default"`
-        adds it only to existing front matter. `None` preserves the front matter.
+        Whether to hide the page's breadcrumbs. A page that does not set `bread-crumbs`
+        gains `bread-crumbs: false`, and front matter if it has none.
     published
         The final published path if a later step moves the page from `destination`.
         References are rewritten for this path; the page is still written to
@@ -78,9 +77,7 @@ def page(
     content = rebase_references(content, source, target, layout=layout, pages=pages)
     if strip_prefix:
         content = fix_numeric_prefix_links(content)
-    block = locate_front_matter(content)
-    authored = block is not None and "bread-crumbs" in block.mapping
-    if not authored and (breadcrumbs == "set" or (breadcrumbs == "default" and block is not None)):
+    if breadcrumbs and "bread-crumbs" not in split_front_matter(content)[0]:
         content = set_front_matter_option(content, "bread-crumbs", False)
     front_matter, _ = split_front_matter(content)
     # The page that becomes the homepage shows no dates

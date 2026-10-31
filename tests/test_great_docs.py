@@ -8526,7 +8526,7 @@ def test_copy_section_files_adds_breadcrumbs():
 
 
 def test_copy_section_files_no_frontmatter_explicit_list():
-    """_copy_section_files handles files without frontmatter."""
+    """Add front matter that hides breadcrumbs when a section page has none"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         src = tmp / "sec"
@@ -8540,7 +8540,9 @@ def test_copy_section_files_no_frontmatter_explicit_list():
         result = docs._copy_section_files([src / "raw.qmd"], src, dest)
 
         assert result[0]["title"] == "Raw"
-        assert (dest / "raw.qmd").exists()
+        assert (dest / "raw.qmd").read_text() == (
+            "---\nbread-crumbs: false\n---\n\nJust regular content\n"
+        )
 
 
 def test_section_and_blog_fallback_titles_treat_underscores_as_spaces(tmp_path: Path):
