@@ -12,7 +12,7 @@ import pytest
 from click.testing import CliRunner
 
 from great_docs import BuildError, GreatDocs
-from great_docs._build import quarto
+from great_docs._build import from_repo, quarto, serve
 from great_docs._build.quarto import QuartoVersionError
 from great_docs.cli import (
     _detect_current_package,
@@ -476,8 +476,6 @@ def test_versions_reads_selected_config(tmp_path: Path) -> None:
 def test_remote_build_uses_checkout_layout(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, selection: str | None
 ) -> None:
-    from great_docs import GreatDocs
-
     repo = tmp_path / "repo"
     repo.mkdir()
     source = "website" if selection else "docs"
@@ -522,14 +520,13 @@ def test_remote_build_uses_checkout_layout(
 
     monkeypatch.setattr(subprocess, "run", run_build)
     monkeypatch.setattr("venv.create", lambda *args, **kwargs: None)
-    built = GreatDocs.build_from_repo(str(repo), config_path=selection, shallow=True)
+    built = from_repo.build(str(repo), config_path=selection, shallow=True, report=print)
     assert built == destination / source / "_site"
     assert (built / "index.html").read_text() == "remote documentation"
 
 
 @pytest.mark.parametrize("selection", ["../outside.yml", "/tmp/outside.yml"])
 def test_remote_config_cannot_escape_checkout(tmp_path: Path, selection: str) -> None:
-    from great_docs import GreatDocs
     from great_docs._layout import LayoutError
 
     repo = tmp_path / "repo"
@@ -554,7 +551,7 @@ def test_remote_config_cannot_escape_checkout(tmp_path: Path, selection: str) ->
         capture_output=True,
     )
     with pytest.raises(LayoutError, match="checkout"):
-        GreatDocs.build_from_repo(str(repo), config_path=selection, shallow=True)
+        from_repo.build(str(repo), config_path=selection, shallow=True, report=print)
 
 
 def test_config_generation_ignores_only_selected_output(tmp_path: Path) -> None:
@@ -672,8 +669,6 @@ def test_preview_serves_selected_deployment(
 def test_preview_override_ignores_ambiguous_project(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from great_docs import GreatDocs
-
     (tmp_path / "great-docs.yml").write_text("{}\n")
     (tmp_path / "docs").mkdir()
     (tmp_path / "docs/great-docs.yml").write_text("{}\n")
@@ -681,8 +676,8 @@ def test_preview_override_ignores_ambiguous_project(
     site.mkdir()
     (site / "index.html").write_text("published documentation")
     monkeypatch.setattr(
-        GreatDocs,
-        "preview_site",
+        serve,
+        "site",
         lambda path, **kwargs: print(Path(path).joinpath("index.html").read_text()),
     )
     result = CliRunner().invoke(

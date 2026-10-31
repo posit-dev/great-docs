@@ -10,6 +10,7 @@ import pytest
 from click.testing import CliRunner
 
 from great_docs import _pr_preview as pp
+from great_docs._build import serve
 from great_docs.cli import preview
 
 # ---------------------------------------------------------------------------
@@ -389,7 +390,7 @@ def test_preview_pr_requires_auth(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# preview_site deep-linking
+# Serving a deep link
 # ---------------------------------------------------------------------------
 
 
@@ -410,30 +411,26 @@ def _patch_server(monkeypatch):
     monkeypatch.setattr(http.server, "ThreadingHTTPServer", _FakeServer)
 
 
-def test_preview_site_deep_link_target(monkeypatch, tmp_path, capsys):
-    from great_docs.core import GreatDocs
-
+def test_serve_deep_link_target(monkeypatch, tmp_path, capsys):
     (tmp_path / "index.html").write_text("<html>home</html>")
     sub = tmp_path / "reference"
     sub.mkdir()
     (sub / "page.html").write_text("<html>page</html>")
 
     _patch_server(monkeypatch)
-    GreatDocs.preview_site(
-        tmp_path, port=45999, open_path="reference/page.html", open_browser=False
+    serve.site(
+        tmp_path, port=45999, open_path="reference/page.html", open_browser=False, report=print
     )
     out = capsys.readouterr().out
     assert "Opening: http://localhost:45999/reference/page.html" in out
 
 
-def test_preview_site_missing_page_warns(monkeypatch, tmp_path, capsys):
-    from great_docs.core import GreatDocs
-
+def test_serve_missing_page_warns(monkeypatch, tmp_path, capsys):
     (tmp_path / "index.html").write_text("<html>home</html>")
 
     _patch_server(monkeypatch)
-    GreatDocs.preview_site(
-        tmp_path, port=45998, open_path="does/not/exist.html", open_browser=False
+    serve.site(
+        tmp_path, port=45998, open_path="does/not/exist.html", open_browser=False, report=print
     )
     out = capsys.readouterr().out
     assert "not found" in out
@@ -1438,15 +1435,7 @@ def test_preview_pr_fork_warning(monkeypatch, capsys):
         lambda c, run_id, artifact, refresh: Path("/tmp/fake"),
     )
 
-    class FakeGD:
-        @staticmethod
-        def preview_site(root, port, open_path, open_browser):
-            pass
-
-    monkeypatch.setattr(pp, "GreatDocs", FakeGD, raising=False)
-    import great_docs.core
-
-    monkeypatch.setattr(great_docs.core, "GreatDocs", FakeGD)
+    monkeypatch.setattr(pp.serve, "site", lambda root, **kwargs: None)
 
     pp.preview_pr(None, pr=5, open_browser=False)
     out = capsys.readouterr().out
@@ -1476,15 +1465,7 @@ def test_preview_pr_non_success_warning(monkeypatch, capsys):
         lambda c, run_id, artifact, refresh: Path("/tmp/fake"),
     )
 
-    class FakeGD:
-        @staticmethod
-        def preview_site(root, port, open_path, open_browser):
-            pass
-
-    monkeypatch.setattr(pp, "GreatDocs", FakeGD, raising=False)
-    import great_docs.core
-
-    monkeypatch.setattr(great_docs.core, "GreatDocs", FakeGD)
+    monkeypatch.setattr(pp.serve, "site", lambda root, **kwargs: None)
 
     pp.preview_pr(None, run=42, open_browser=False)
     out = capsys.readouterr().out
@@ -1538,15 +1519,7 @@ def test_preview_pr_use_gh_success(monkeypatch, capsys):
         lambda c, run_id, artifact, refresh: Path("/tmp/fake"),
     )
 
-    class FakeGD:
-        @staticmethod
-        def preview_site(root, port, open_path, open_browser):
-            pass
-
-    monkeypatch.setattr(pp, "GreatDocs", FakeGD, raising=False)
-    import great_docs.core
-
-    monkeypatch.setattr(great_docs.core, "GreatDocs", FakeGD)
+    monkeypatch.setattr(pp.serve, "site", lambda root, **kwargs: None)
 
     pp.preview_pr(None, run=42, use_gh=True, open_browser=False)
     out = capsys.readouterr().out

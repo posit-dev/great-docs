@@ -68,7 +68,6 @@ _BUILD_METHODS: tuple[str, ...] = (
     "_default_description",
     "_structured_data",
     "_generate_seo_files",
-    "_write_build_timing",
     "_auto_save_snapshot",
     "_print_layout_notice",
 )

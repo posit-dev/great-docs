@@ -11,7 +11,8 @@ import click
 
 from . import __version__
 from ._build import freeze as freeze_cache
-from ._build import quarto
+from ._build import from_repo as repository
+from ._build import quarto, serve
 from ._build.steps import BuildError
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
 from .config import ConfigError
@@ -374,7 +375,7 @@ def build(
             version_tags = None
             if version_filter:
                 version_tags = [v.strip() for v in version_filter.split(",") if v.strip()]
-            built_site = GreatDocs.build_from_repo(
+            built_site = repository.build(
                 from_repo,
                 branch=branch,
                 output_dir=output_dir,
@@ -383,10 +384,10 @@ def build(
                 latest_only=latest_only,
                 shallow=shallow,
                 config_path=config_path,
+                report=click.echo,
             )
             if preview_after:
-                site_path = str(built_site)
-                GreatDocs.preview_site(site_path)
+                serve.site(built_site, report=click.echo)
         else:
             if branch:
                 click.echo("Warning: --branch is ignored without --from-repo", err=True)
@@ -412,6 +413,9 @@ def build(
         click.echo("\n👋 Stopped watching")
     except BuildError:
         # Exit without repeating the build's failure report
+        sys.exit(1)
+    except serve.ServeError as e:
+        click.echo(f"❌ {e}")
         sys.exit(1)
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
@@ -601,14 +605,21 @@ def preview(
                     "Warning: --project-path is ignored when --site-dir is used",
                     err=True,
                 )
-            GreatDocs.preview_site(
-                site_dir, port=port, open_path=open_path, open_browser=not no_open
+            serve.site(
+                site_dir,
+                port=port,
+                open_path=open_path,
+                open_browser=not no_open,
+                report=click.echo,
             )
         else:
             docs = GreatDocs(project_path=project_path, config_path=config_path)
             docs.preview(port=port)
     except KeyboardInterrupt:
         click.echo("\n👋 Server stopped")
+    except serve.ServeError as e:
+        click.echo(f"❌ {e}")
+        sys.exit(1)
     except SystemExit:
         raise
     except BuildError:

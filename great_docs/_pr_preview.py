@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
+from ._build import serve
 from ._github import GithubRepo, token_from_env
 
 GITHUB_API = "https://api.github.com"
@@ -747,6 +748,4 @@ def preview_pr(
 
     root = download_and_extract(client, run_id=info.run_id, artifact=chosen, refresh=refresh)
 
-    from .core import GreatDocs
-
-    GreatDocs.preview_site(root, port=port, open_path=path, open_browser=open_browser)
+    serve.site(root, port=port, open_path=path, open_browser=open_browser, report=print)

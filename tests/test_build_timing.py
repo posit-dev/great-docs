@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from great_docs import GreatDocs
-from great_docs._build import quarto
+from great_docs._build import quarto, timings
+from great_docs._layout import Layout
 
 # ---------------------------------------------------------------------------
 # Page progress in Quarto output
@@ -42,30 +42,30 @@ class TestParseProgress:
 
 
 # ---------------------------------------------------------------------------
-# _write_build_timing
+# build-timings.json
 # ---------------------------------------------------------------------------
 
 
 class TestWriteBuildTiming:
-    """Test the _write_build_timing method writes correct JSON."""
+    """`build-timings.json` written to the site"""
 
-    def _make_gd(self, tmp_path: Path) -> GreatDocs:
-        """Create a project with its resolved build and deployment paths"""
+    def _make_layout(self, tmp_path: Path) -> Layout:
+        """Write a project's configuration and resolve its layout"""
         (tmp_path / "great-docs.yml").write_text("name: test-pkg\n")
-        return GreatDocs(project_path=str(tmp_path))
+        return Layout.make(tmp_path)
 
     def test_single_version_flat(self, tmp_path: Path):
-        gd = self._make_gd(tmp_path)
-        site_dir = gd.layout.site_dir
+        layout = self._make_layout(tmp_path)
+        site_dir = layout.site_dir
         site_dir.mkdir(parents=True)
 
-        timings = [
+        pages = [
             {"page": "user-guide/overview.html", "seconds": 1.2},
             {"page": "user-guide/benchmarks.html", "seconds": 28.4},
             {"page": "reference/GT.html", "seconds": 2.1},
         ]
 
-        result = gd._write_build_timing(page_timings=timings)
+        result = timings.write(layout, page_timings=pages)
         assert result is not None
         assert result.name == "build-timings.json"
 
@@ -83,28 +83,28 @@ class TestWriteBuildTiming:
         """A parallel build records Quarto's start-up time, which the next one reads."""
         from great_docs import _parallel_render
 
-        gd = self._make_gd(tmp_path)
-        gd.layout.site_dir.mkdir(parents=True)
+        layout = self._make_layout(tmp_path)
+        layout.site_dir.mkdir(parents=True)
         stats = {"processes": 6, "groups": 37, "startup_seconds": 4.9}
 
-        result = gd._write_build_timing(
-            page_timings=[{"page": "index.qmd", "seconds": 1.0}], render=stats
+        result = timings.write(
+            layout, page_timings=[{"page": "index.qmd", "seconds": 1.0}], render=stats
         )
         assert result is not None
         assert json.loads(result.read_text())["render"] == stats
         assert _parallel_render.read_startup(result) == 4.9
 
     def test_ordinary_build_has_no_render_stats(self, tmp_path: Path):
-        gd = self._make_gd(tmp_path)
-        gd.layout.site_dir.mkdir(parents=True)
+        layout = self._make_layout(tmp_path)
+        layout.site_dir.mkdir(parents=True)
 
-        result = gd._write_build_timing(page_timings=[{"page": "index.qmd", "seconds": 1.0}])
+        result = timings.write(layout, page_timings=[{"page": "index.qmd", "seconds": 1.0}])
         assert result is not None
         assert "render" not in json.loads(result.read_text())
 
     def test_multi_version(self, tmp_path: Path):
-        gd = self._make_gd(tmp_path)
-        site_dir = gd.layout.site_dir
+        layout = self._make_layout(tmp_path)
+        site_dir = layout.site_dir
         site_dir.mkdir(parents=True)
 
         timings_by_version = {
@@ -118,7 +118,7 @@ class TestWriteBuildTiming:
             ],
         }
 
-        result = gd._write_build_timing(timings_by_version=timings_by_version)
+        result = timings.write(layout, timings_by_version=timings_by_version)
         assert result is not None
 
         data = json.loads(result.read_text())
@@ -138,32 +138,32 @@ class TestWriteBuildTiming:
         assert len(v09["pages"]) == 2
 
     def test_no_site_dir_returns_none(self, tmp_path: Path):
-        gd = self._make_gd(tmp_path)
+        layout = self._make_layout(tmp_path)
         # No _site/ directory
-        result = gd._write_build_timing(page_timings=[{"page": "x.html", "seconds": 1.0}])
+        result = timings.write(layout, page_timings=[{"page": "x.html", "seconds": 1.0}])
         assert result is None
 
     def test_no_timings_returns_none(self, tmp_path: Path):
-        gd = self._make_gd(tmp_path)
-        site_dir = gd.layout.site_dir
+        layout = self._make_layout(tmp_path)
+        site_dir = layout.site_dir
         site_dir.mkdir(parents=True)
-        result = gd._write_build_timing()
+        result = timings.write(layout)
         assert result is None
 
     def test_empty_timings_returns_none(self, tmp_path: Path):
-        gd = self._make_gd(tmp_path)
-        site_dir = gd.layout.site_dir
+        layout = self._make_layout(tmp_path)
+        site_dir = layout.site_dir
         site_dir.mkdir(parents=True)
-        result = gd._write_build_timing(page_timings=[])
+        result = timings.write(layout, page_timings=[])
         assert result is None
 
     def test_build_time_is_utc_iso(self, tmp_path: Path):
-        gd = self._make_gd(tmp_path)
-        site_dir = gd.layout.site_dir
+        layout = self._make_layout(tmp_path)
+        site_dir = layout.site_dir
         site_dir.mkdir(parents=True)
 
-        timings = [{"page": "index.html", "seconds": 0.5}]
-        result = gd._write_build_timing(page_timings=timings)
+        pages = [{"page": "index.html", "seconds": 0.5}]
+        result = timings.write(layout, page_timings=pages)
         data = json.loads(result.read_text())
 
         # Should be ISO 8601 UTC format
@@ -172,8 +172,8 @@ class TestWriteBuildTiming:
         assert "T" in bt
 
     def test_frozen_annotation_single_version(self, tmp_path: Path):
-        gd = self._make_gd(tmp_path)
-        site_dir = gd.layout.site_dir
+        layout = self._make_layout(tmp_path)
+        site_dir = layout.site_dir
         site_dir.mkdir(parents=True)
 
         # Create a _freeze/ entry for one page
@@ -181,12 +181,12 @@ class TestWriteBuildTiming:
         freeze_entry.mkdir(parents=True)
         (freeze_entry / "html.json").write_text("{}")
 
-        timings = [
+        pages = [
             {"page": "recipes/freeze-demo.qmd", "seconds": 0.3},
             {"page": "user-guide/overview.qmd", "seconds": 1.2},
         ]
 
-        result = gd._write_build_timing(page_timings=timings)
+        result = timings.write(layout, page_timings=pages)
         data = json.loads(result.read_text())
 
         pages_by_name = {p["page"]: p for p in data["pages"]}
@@ -194,8 +194,8 @@ class TestWriteBuildTiming:
         assert pages_by_name["user-guide/overview.qmd"]["frozen"] is False
 
     def test_frozen_annotation_multi_version(self, tmp_path: Path):
-        gd = self._make_gd(tmp_path)
-        site_dir = gd.layout.site_dir
+        layout = self._make_layout(tmp_path)
+        site_dir = layout.site_dir
         site_dir.mkdir(parents=True)
 
         # Create a _freeze/ entry
@@ -210,7 +210,7 @@ class TestWriteBuildTiming:
             ],
         }
 
-        result = gd._write_build_timing(timings_by_version=timings_by_version)
+        result = timings.write(layout, timings_by_version=timings_by_version)
         data = json.loads(result.read_text())
 
         pages = data["versions"]["0.10"]["pages"]
@@ -219,12 +219,12 @@ class TestWriteBuildTiming:
         assert pages_by_name["user-guide/overview.qmd"]["frozen"] is False
 
     def test_no_freeze_dir_all_false(self, tmp_path: Path):
-        gd = self._make_gd(tmp_path)
-        site_dir = gd.layout.site_dir
+        layout = self._make_layout(tmp_path)
+        site_dir = layout.site_dir
         site_dir.mkdir(parents=True)
 
-        timings = [{"page": "index.qmd", "seconds": 0.5}]
-        result = gd._write_build_timing(page_timings=timings)
+        pages = [{"page": "index.qmd", "seconds": 0.5}]
+        result = timings.write(layout, page_timings=pages)
         data = json.loads(result.read_text())
         assert data["pages"][0]["frozen"] is False
 
