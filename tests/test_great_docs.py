@@ -37,6 +37,7 @@ from great_docs._build.steps import Step, count_listed
 from great_docs._build_log import BuildLog
 from great_docs._content.naming import fix_numeric_prefix_links, strip_numeric_prefix
 from great_docs._website.quarto_yml import edit as edit_quarto_yml
+from great_docs._website.quarto_yml import read as read_quarto_yml
 from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
 from great_docs._website.scripts import script_include, stylesheet_include
 from great_docs._apiref import _globals, content, spec, write
@@ -11904,6 +11905,41 @@ def test_update_config_with_user_guide_adds_sidebar():
         ]
 
         assert "User Guide" in nav_texts
+
+
+@pytest.mark.parametrize(
+    ("relative", "explicit", "href"),
+    [
+        ("01-basics/02-setup.qmd", False, "user-guide/basics/setup.qmd"),
+        ("01-intro.qmd", True, "user-guide/01-intro.qmd"),
+    ],
+    ids=["nested-auto", "explicit"],
+)
+def test_user_guide_navbar_link_targets_the_copied_first_page(
+    tmp_path: Path, relative: str, explicit: bool, href: str
+):
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs.build_dir.mkdir(parents=True)
+    navbar = {"left": [{"text": "Reference", "href": "reference/"}]}
+    quarto_yml = docs.build_dir / "_quarto.yml"
+    quarto_yml.write_text(_format_yaml({"website": {"navbar": navbar}}), encoding="utf-8")
+    page = tmp_path / "user_guide" / relative
+    page.parent.mkdir(parents=True)
+    page.write_text("---\ntitle: Page\n---\n")
+    guide_info = {
+        "files": [{"path": page, "title": "Page", "section": None}],
+        "source_dir": tmp_path / "user_guide",
+        "sections": {},
+        "has_index": False,
+        "explicit": explicit,
+        "explicit_config": [{"section": "Start", "contents": [relative]}],
+    }
+
+    docs._update_config_with_user_guide(guide_info)
+
+    left = read_quarto_yml(docs.build_dir)["website"]["navbar"]["left"]
+    assert {"text": "User Guide", "href": href} in left
 
 
 def test_update_config_with_user_guide_no_quarto_yml():

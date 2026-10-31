@@ -6209,16 +6209,16 @@ class GreatDocs:
                             insert_idx = i
                             break
 
-                    # Determine the href for User Guide (with clean filename)
+                    # Determine the href for User Guide
                     if user_guide_info.get("has_index"):
                         user_guide_href = "user-guide/index.qmd"  # pragma: no cover
                     else:
-                        # Use the first file with clean filename
+                        # The navbar link must use the same path as the published guide page
                         first_file = user_guide_info["files"][0]
                         rel_path = first_file["path"].relative_to(user_guide_info["source_dir"])
-                        clean_filename = strip_numeric_prefix(rel_path.name)
-                        clean_rel_path = rel_path.parent / clean_filename
-                        user_guide_href = f"user-guide/{clean_rel_path}"
+                        is_explicit = user_guide_info.get("explicit", False)
+                        published = published_path(rel_path, strip_prefix=not is_explicit)
+                        user_guide_href = f"user-guide/{published}"
 
                     navbar["left"].insert(
                         insert_idx,
