@@ -92,6 +92,31 @@ class Layout:
             cache_dir=cache_dir,
         )
 
+    def is_reserved_directory(self, path: Path) -> bool:
+        """
+        Check whether content discovery should skip a directory
+
+        A directory is reserved when its name starts with `.`, it is a build, site, cache or
+        freeze directory, or it contains one of these directories. The build directory's
+        name and depth differ between layouts, so reservation depends on containment:
+        an unmigrated project builds into `great-docs/` beside the configuration; a migrated
+        project builds into `_quarto/default/` two levels below the content directory.
+
+        Parameters
+        ----------
+        path
+            A directory encountered while walking authored content.
+
+        Returns
+        -------
+        :
+            Whether content discovery should skip the directory.
+        """
+        if path.name.startswith("."):
+            return True
+        reserved = (self.build_dir, self.site_dir, self.cache_dir, self.freeze_dir)
+        return any(path == location or location.is_relative_to(path) for location in reserved)
+
     def build_dir_for(self, tag: str, latest_tag: str) -> Path:
         """
         Derive the Quarto project directory for a version tag

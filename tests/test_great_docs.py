@@ -35,8 +35,9 @@ from great_docs import BuildError, Config, GreatDocs, create_default_config, loa
 from great_docs._build import freeze, quarto
 from great_docs._build.steps import Step, count_listed
 from great_docs._build_log import BuildLog
-from great_docs._content_naming import fix_numeric_prefix_links, strip_numeric_prefix
+from great_docs._content.naming import fix_numeric_prefix_links, strip_numeric_prefix
 from great_docs._website.quarto_yml import edit as edit_quarto_yml
+from great_docs._website.quarto_yml import read as read_quarto_yml
 from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
 from great_docs._website.scripts import script_include, stylesheet_include
 from great_docs._apiref import _globals, content, spec, write
@@ -196,7 +197,7 @@ from great_docs.pandoc.inlines import (
     inlinecontent_to_str,
     shortcode,
 )
-from tests.support import make_run, mock_config, stubbed_build, write_config
+from tests.support import StubRemote, make_run, mock_config, stubbed_build, write_config
 
 
 def test_great_docs_init():
@@ -2678,276 +2679,7 @@ def test_user_guide_discovers_mixed_extensions_and_nested_files():
         assert (docs_ug / "section1" / "topic1" / "deep-notes.md").exists()
 
 
-def test_expand_code_includes_basic():
-    """Test that code-include shortcodes are expanded into fenced code blocks."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        # Create a code file to include
-        examples = project_path / "examples"
-        examples.mkdir()
-        (examples / "demo.py").write_text('print("hello")\nx = 42\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "Some text\n\n{{< include examples/demo.py >}}\n\nMore text"
-        result = docs._expand_code_includes(content, project_path)
-
-        assert '```python\nprint("hello")\nx = 42\n```' in result
-        assert "Some text" in result
-        assert "More text" in result
-
-
-def test_expand_code_includes_lang_override():
-    """Test that the lang keyword overrides auto-detected language."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "script.py").write_text("x = 1\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = '{{< include script.py lang="text" >}}'
-        result = docs._expand_code_includes(content, project_path)
-        assert result.startswith("```text\n")
-
-
-def test_expand_code_includes_lines():
-    """Test that the lines keyword selects a range of lines."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "code.py").write_text("line1\nline2\nline3\nline4\nline5\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = '{{< include code.py lines="2-4" >}}'
-        result = docs._expand_code_includes(content, project_path)
-        assert "line2\nline3\nline4" in result
-        assert "line1" not in result
-        assert "line5" not in result
-
-
-def test_expand_code_includes_single_line():
-    """Test selecting a single line."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "code.py").write_text("line1\nline2\nline3\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = '{{< include code.py lines="2" >}}'
-        result = docs._expand_code_includes(content, project_path)
-        assert "line2" in result
-        assert "line1" not in result
-        assert "line3" not in result
-
-
-def test_expand_code_includes_relative_to_source_dir():
-    """Test that paths resolve relative to the source file's directory first."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        user_guide = project_path / "user_guide"
-        user_guide.mkdir()
-        snippets = user_guide / "snippets"
-        snippets.mkdir()
-        (snippets / "example.py").write_text("local_code = True\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "{{< include snippets/example.py >}}"
-        result = docs._expand_code_includes(content, user_guide)
-        assert "local_code = True" in result
-
-
-def test_expand_code_includes_fallback_to_project_root():
-    """Test that paths fall back to project root if not found in source dir."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        # File at project root level
-        src = project_path / "src"
-        src.mkdir()
-        (src / "app.js").write_text('console.log("hello");\n')
-
-        # Source dir is user_guide (doesn't contain src/app.js)
-        user_guide = project_path / "user_guide"
-        user_guide.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "{{< include src/app.js >}}"
-        result = docs._expand_code_includes(content, user_guide)
-        assert "```javascript" in result
-        assert 'console.log("hello")' in result
-
-
-def test_expand_code_includes_missing_file():
-    """Test that a missing file produces an HTML comment error."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "{{< include does/not/exist.py >}}"
-        result = docs._expand_code_includes(content, project_path)
-        assert "<!-- include error:" in result
-        assert "file not found" in result
-
-
-def test_expand_code_includes_no_shortcodes():
-    """Test that content without code-include shortcodes passes through unchanged."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "# Hello\n\nSome regular content.\n\n{{< icon heart >}}\n"
-        result = docs._expand_code_includes(content, project_path)
-        assert result == content
-
-
-def test_expand_code_includes_passes_through_qmd():
-    """Test that {{< include file.qmd >}} without lang/lines is left for Quarto."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "_shared.qmd").write_text("# Shared content\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "Before\n\n{{< include _shared.qmd >}}\n\nAfter"
-        result = docs._expand_code_includes(content, project_path)
-        assert result == content
-
-
-def test_expand_code_includes_qmd_with_lang_is_expanded():
-    """Test that {{< include file.qmd lang="markdown" >}} is expanded as code."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "snippet.qmd").write_text("---\ntitle: Example\n---\n\nHello\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = '{{< include snippet.qmd lang="markdown" >}}'
-        result = docs._expand_code_includes(content, project_path)
-        assert "```markdown" in result
-        assert "title: Example" in result
-
-
-def test_expand_code_includes_qmd_with_lines_is_expanded():
-    """Test that {{< include file.qmd lines="1-3" >}} is expanded as code."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "snippet.qmd").write_text("line1\nline2\nline3\nline4\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = '{{< include snippet.qmd lines="2-3" >}}'
-        result = docs._expand_code_includes(content, project_path)
-        assert "line2" in result
-        assert "line1" not in result
-        assert "{{< include" not in result
-
-
-def test_expand_code_includes_multiple():
-    """Test multiple include shortcodes in one file."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "a.py").write_text("alpha\n")
-        (project_path / "b.yaml").write_text("key: value\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "First:\n\n{{< include a.py >}}\n\nSecond:\n\n{{< include b.yaml >}}\n"
-        result = docs._expand_code_includes(content, project_path)
-        assert "```python\nalpha\n```" in result
-        assert "```yaml\nkey: value\n```" in result
-
-
-def test_expand_code_includes_unknown_extension():
-    """Test that unknown file extensions produce an unfenced code block."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "data.xyz").write_text("some data\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "{{< include data.xyz >}}"
-        result = docs._expand_code_includes(content, project_path)
-        assert result == "```\nsome data\n```"
-
-
-def test_expand_code_includes_backticks_in_content():
-    """Test that included files containing triple backticks use a longer fence."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "example.txt").write_text("Some text\n```python\nx = 1\n```\nMore text\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "{{< include example.txt >}}"
-        result = docs._expand_code_includes(content, project_path)
-        # Should use a 4-backtick fence since the content has 3-backtick runs
-        assert result.startswith("````")
-        assert result.endswith("````")
-        assert "```python" in result
-
-
-def test_expand_code_includes_lang_and_lines_combined():
-    """Test combining lang and lines keyword arguments."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "code.py").write_text("# header\nimport os\nprint(os.getcwd())\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = '{{< include code.py lines="2-3" lang="text" >}}'
-        result = docs._expand_code_includes(content, project_path)
-        assert result.startswith("```text\n")
-        assert "import os" in result
-        assert "# header" not in result
-
-
-def test_expand_code_includes_in_user_guide_copy():
+def test_user_guide_copy_expands_code_includes():
     """Test that code-include shortcodes are expanded during user guide copy."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -2979,34 +2711,6 @@ def test_expand_code_includes_in_user_guide_copy():
         assert "```python" in built_content
         assert "x = 1" in built_content
         assert "{{< include" not in built_content
-
-
-def test_parse_code_include_args():
-    """Test argument parsing for code-include shortcodes."""
-    parse = GreatDocs._parse_code_include_args
-
-    # Basic path
-    path, lang, lines = parse("examples/demo.py")
-    assert path == "examples/demo.py"
-    assert lang == ""
-    assert lines == ""
-
-    # Path with lang
-    path, lang, lines = parse('examples/demo.py lang="python"')
-    assert path == "examples/demo.py"
-    assert lang == "python"
-    assert lines == ""
-
-    # Path with lines
-    path, lang, lines = parse('examples/demo.py lines="5-10"')
-    assert path == "examples/demo.py"
-    assert lines == "5-10"
-
-    # Path with both
-    path, lang, lines = parse('examples/demo.py lines="1-3" lang="text"')
-    assert path == "examples/demo.py"
-    assert lang == "text"
-    assert lines == "1-3"
 
 
 def test_is_asset_dir_no_qmd():
@@ -4526,66 +4230,6 @@ def test_convert_rst_to_markdown_real_pandoc():
         assert "Item 1" in result
 
 
-def test_fetch_github_releases_success():
-    """Test fetching releases from the GitHub API (mocked)."""
-
-    docs = GreatDocs()
-
-    fake_response = MagicMock()
-    fake_response.status_code = 200
-    fake_response.json.return_value = [
-        {
-            "tag_name": "v1.0.0",
-            "name": "Version 1.0",
-            "body": "First stable release.\n\n- Feature A\n- Feature B",
-            "published_at": "2026-01-15T00:00:00Z",
-            "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
-            "prerelease": False,
-            "draft": False,
-        },
-        {
-            "tag_name": "v0.9.0",
-            "name": "Beta",
-            "body": "Beta release.",
-            "published_at": "2025-12-01T00:00:00Z",
-            "html_url": "https://github.com/owner/repo/releases/tag/v0.9.0",
-            "prerelease": True,
-            "draft": False,
-        },
-        {
-            "tag_name": "v0.8.0-draft",
-            "name": "Draft",
-            "body": "Draft release.",
-            "published_at": "2025-11-01T00:00:00Z",
-            "html_url": "https://github.com/owner/repo/releases/tag/v0.8.0-draft",
-            "prerelease": False,
-            "draft": True,
-        },
-    ]
-
-    with patch("requests.get", return_value=fake_response) as mock_get:
-        releases = docs._fetch_github_releases("owner", "repo", max_releases=10)
-
-    mock_get.assert_called_once()
-
-    assert len(releases) == 2  # Draft skipped
-    assert releases[0]["tag_name"] == "v1.0.0"
-    assert releases[0]["name"] == "Version 1.0"
-    assert releases[0]["body"] == "First stable release.\n\n- Feature A\n- Feature B"
-    assert releases[1]["prerelease"] is True
-
-
-def test_fetch_github_releases_network_error():
-    """Test graceful handling of network errors."""
-
-    docs = GreatDocs()
-
-    with patch("requests.get", side_effect=requests.ConnectionError("offline")):
-        releases = docs._fetch_github_releases("owner", "repo")
-
-    assert releases == []
-
-
 def test_generate_changelog_page():
     """Test changelog.qmd page generation."""
 
@@ -4624,8 +4268,8 @@ def test_generate_changelog_page():
             },
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            result = docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=fake_releases)
+        result = docs._generate_changelog_page()
 
         assert result == "changelog.qmd"
 
@@ -4680,8 +4324,8 @@ def test_generate_changelog_page_toc_title_translated(lang, expected):
             },
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=fake_releases)
+        docs._generate_changelog_page()
 
         content = (build_dir / "changelog.qmd").read_text()
 
@@ -4719,8 +4363,8 @@ def test_generate_changelog_page_no_releases():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        with patch.object(docs, "_fetch_github_releases", return_value=[]):
-            result = docs._generate_changelog_page()
+        docs._remote = StubRemote()
+        result = docs._generate_changelog_page()
 
         assert result is None
 
@@ -4761,8 +4405,8 @@ def test_generate_changelog_page_heading_normalization():
             },
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            result = docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=fake_releases)
+        result = docs._generate_changelog_page()
 
         assert result == "changelog.qmd"
         content = (build_dir / "changelog.qmd").read_text()
@@ -4812,8 +4456,8 @@ def test_generate_changelog_page_h3_body_headings_bumped():
             },
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            result = docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=fake_releases)
+        result = docs._generate_changelog_page()
 
         content = (build_dir / "changelog.qmd").read_text()
 
@@ -4852,8 +4496,8 @@ def test_generate_changelog_page_h1_body_headings_not_bumped():
             },
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=fake_releases)
+        docs._generate_changelog_page()
 
         content = (build_dir / "changelog.qmd").read_text()
 
@@ -5038,62 +4682,6 @@ def test_changelog_config_custom():
         assert config.changelog_max_releases == 10
 
 
-def test_fetch_github_releases_pagination():
-    """Test that pagination works for many releases."""
-
-    docs = GreatDocs()
-
-    page1 = MagicMock()
-    page1.status_code = 200
-    page1.json.return_value = [
-        {
-            "tag_name": f"v{i}.0.0",
-            "name": f"Release {i}",
-            "body": f"Release {i} notes.",
-            "published_at": f"2026-01-{i:02d}T00:00:00Z",
-            "html_url": f"https://github.com/o/r/releases/tag/v{i}.0.0",
-            "prerelease": False,
-            "draft": False,
-        }
-        for i in range(1, 4)
-    ]
-
-    page2 = MagicMock()
-    page2.status_code = 200
-    page2.json.return_value = []  # empty = last page
-
-    with patch("requests.get", side_effect=[page1, page2]):
-        releases = docs._fetch_github_releases("o", "r", max_releases=10)
-
-    assert len(releases) == 3
-
-
-def test_fetch_github_releases_max_cap():
-    """Test that max_releases caps the returned list."""
-
-    docs = GreatDocs()
-
-    fake_response = MagicMock()
-    fake_response.status_code = 200
-    fake_response.json.return_value = [
-        {
-            "tag_name": f"v{i}",
-            "name": f"R{i}",
-            "body": "",
-            "published_at": "2026-01-01T00:00:00Z",
-            "html_url": f"https://github.com/o/r/releases/tag/v{i}",
-            "prerelease": False,
-            "draft": False,
-        }
-        for i in range(1, 20)
-    ]
-
-    with patch("requests.get", return_value=fake_response):
-        releases = docs._fetch_github_releases("o", "r", max_releases=5)
-
-    assert len(releases) == 5
-
-
 def test_linkify_bare_issue_number():
     """Test that bare #NNN references become links."""
     docs = GreatDocs()
@@ -5214,8 +4802,8 @@ def test_linkify_integrated_in_changelog():
             },
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=fake_releases)
+        docs._generate_changelog_page()
 
         content = (build_dir / "changelog.qmd").read_text()
 
@@ -6056,8 +5644,8 @@ def test_navbar_release_from_github_release():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            docs._update_quarto_config(make_run())
+        docs._remote = StubRemote(releases=fake_releases)
+        docs._update_quarto_config(make_run())
 
         navbar = read_yaml(quarto_yml)["website"]["navbar"]
 
@@ -6091,8 +5679,8 @@ def test_navbar_release_absent_without_releases():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        with patch.object(docs, "_fetch_github_releases", return_value=[]):
-            docs._update_quarto_config(make_run())
+        docs._remote = StubRemote()
+        docs._update_quarto_config(make_run())
 
         assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
 
@@ -6150,10 +5738,10 @@ def test_navbar_release_absent_without_github_repo():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        with patch.object(docs, "_fetch_github_releases") as fetch:
-            docs._update_quarto_config(make_run())
+        docs._remote = remote = StubRemote()
+        docs._update_quarto_config(make_run())
 
-        fetch.assert_not_called()
+        assert "github_releases" not in remote.calls
         assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
 
 
@@ -8936,39 +8524,6 @@ def test_get_cli_entry_point_name_no_pyproject_returns_none():
         assert docs._get_cli_entry_point_name("pkg") is None
 
 
-def test_add_frontmatter_option_new_key_toc():
-    """_add_frontmatter_option adds a new key to existing frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Hello\n---\n\n# Body\n"
-        result = docs._add_frontmatter_option(content, "toc", False)
-
-        assert "toc: false" in result
-        assert "title: Hello" in result
-
-
-def test_add_frontmatter_option_no_frontmatter_wraps_content():
-    """_add_frontmatter_option creates frontmatter when none exists."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "# No frontmatter here\n"
-        result = docs._add_frontmatter_option(content, "title", "Added")
-
-        assert result.startswith("---\n")
-        assert '"Added"' in result
-        assert "# No frontmatter here" in result
-
-
-def test_add_frontmatter_option_bool_true_toc():
-    """_add_frontmatter_option handles boolean True values."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Test\n---\nBody"
-        result = docs._add_frontmatter_option(content, "toc", True)
-
-        assert "toc: true" in result
-
-
 def test_find_index_source_file_readme_returns_tuple():
     """_find_index_source_file finds README.md."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -9669,6 +9224,19 @@ def test_copy_section_files_no_frontmatter_explicit_list():
 
         assert result[0]["title"] == "Raw"
         assert (dest / "raw.qmd").exists()
+
+
+def test_section_and_blog_fallback_titles_treat_underscores_as_spaces(tmp_path: Path):
+    src = tmp_path / "sec"
+    src.mkdir()
+    (src / "03-my_file.qmd").write_text("Body\n")
+    docs = GreatDocs(project_path=str(tmp_path))
+
+    section = docs._copy_section_files([src / "03-my_file.qmd"], src, tmp_path / "section")
+    blog = docs._copy_blog_files([src / "03-my_file.qmd"], src, tmp_path / "blog")
+
+    assert section[0]["title"] == "My File"
+    assert blog[0]["title"] == "03 My File"
 
 
 def test_process_custom_pages_passthrough_and_raw():
@@ -11370,37 +10938,6 @@ def test_insert_before_reference_no_reference_simple_items():
         assert texts == ["Guide", "New"]
 
 
-def test_add_frontmatter_option_new_key():
-    """_add_frontmatter_option adds new key to frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Page\n---\nBody\n"
-        result = docs._add_frontmatter_option(content, "bread-crumbs", False)
-
-        assert "bread-crumbs: false" in result
-
-
-def test_add_frontmatter_option_bool_true():
-    """_add_frontmatter_option formats boolean True correctly."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Page\n---\nBody\n"
-        result = docs._add_frontmatter_option(content, "toc", True)
-
-        assert "toc: true" in result
-
-
-def test_add_frontmatter_option_no_frontmatter_v2():
-    """_add_frontmatter_option handles content without frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "Just plain content\n"
-        result = docs._add_frontmatter_option(content, "key", "val")
-
-        # Should wrap in frontmatter
-        assert "---" in result
-
-
 def test_get_cli_entry_point_name_scripts():
     """_get_cli_entry_point_name returns first [project.scripts] name."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -12252,6 +11789,41 @@ def test_update_config_with_user_guide_adds_sidebar():
         ]
 
         assert "User Guide" in nav_texts
+
+
+@pytest.mark.parametrize(
+    ("relative", "explicit", "href"),
+    [
+        ("01-basics/02-setup.qmd", False, "user-guide/basics/setup.qmd"),
+        ("01-intro.qmd", True, "user-guide/01-intro.qmd"),
+    ],
+    ids=["nested-auto", "explicit"],
+)
+def test_user_guide_navbar_link_targets_the_copied_first_page(
+    tmp_path: Path, relative: str, explicit: bool, href: str
+):
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs.build_dir.mkdir(parents=True)
+    navbar = {"left": [{"text": "Reference", "href": "reference/"}]}
+    quarto_yml = docs.build_dir / "_quarto.yml"
+    quarto_yml.write_text(_format_yaml({"website": {"navbar": navbar}}), encoding="utf-8")
+    page = tmp_path / "user_guide" / relative
+    page.parent.mkdir(parents=True)
+    page.write_text("---\ntitle: Page\n---\n")
+    guide_info = {
+        "files": [{"path": page, "title": "Page", "section": None}],
+        "source_dir": tmp_path / "user_guide",
+        "sections": {},
+        "has_index": False,
+        "explicit": explicit,
+        "explicit_config": [{"section": "Start", "contents": [relative]}],
+    }
+
+    docs._update_config_with_user_guide(guide_info)
+
+    left = read_quarto_yml(docs.build_dir)["website"]["navbar"]["left"]
+    assert {"text": "User Guide", "href": href} in left
 
 
 def test_update_config_with_user_guide_no_quarto_yml():
@@ -13755,27 +13327,6 @@ def test_build_hero_section_badge_from_config():
 
         assert "gd-hero-badges" in result
         assert "https://ci.svg" in result
-
-
-def test_add_frontmatter_option_update_existing_key():
-    """_add_frontmatter_option updates an existing key."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = '---\ntitle: "Old"\ntoc: true\n---\n\nBody'
-        result = docs._add_frontmatter_option(content, "toc", False)
-
-        assert "toc: false" in result
-        assert "toc: true" not in result
-
-
-def test_add_frontmatter_option_integer_value():
-    """_add_frontmatter_option handles integer values."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Test\n---\n\nBody"
-        result = docs._add_frontmatter_option(content, "depth", 3)
-
-        assert "depth: 3" in result
 
 
 def test_build_sections_from_reference_config_basic_functions():
@@ -19329,8 +18880,8 @@ def test_generate_changelog_page_with_prerelease():
             }
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=mock_releases):
-            result = docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=mock_releases)
+        result = docs._generate_changelog_page()
 
         assert result == "changelog.qmd"
         changelog = (build_dir / "changelog.qmd").read_text(encoding="utf-8")
@@ -19363,8 +18914,8 @@ def test_generate_changelog_page_linkify_issues():
             }
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=mock_releases):
-            result = docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=mock_releases)
+        result = docs._generate_changelog_page()
 
         changelog = (build_dir / "changelog.qmd").read_text(encoding="utf-8")
         assert "[#42]" in changelog
@@ -19769,18 +19320,6 @@ def test_add_changelog_to_navbar_no_navbar():
 
         docs._add_changelog_to_navbar()
         # Should not crash, and should not add navbar
-
-
-def test_fetch_github_releases_request_error():
-    """Test _fetch_github_releases handles request exceptions."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        with patch("requests.get", side_effect=requests.RequestException("Network error")):
-            result = docs._fetch_github_releases("owner", "repo")
-
-        assert result == []
 
 
 def test_copy_section_files_with_frontmatter_breadcrumbs():
@@ -20858,76 +20397,6 @@ def test_copy_user_guide_to_docs_with_subdirs():
         assert len(copied) >= 1
 
 
-def test_fetch_github_releases_404():
-    """Test _fetch_github_releases handles 404 not found."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 404
-
-        with patch("requests.get", return_value=mock_resp):
-            releases = docs._fetch_github_releases("owner", "repo")
-            assert releases == []
-
-
-def test_fetch_github_releases_other_status():
-    """Test _fetch_github_releases handles non-200 status codes."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 500
-
-        with patch("requests.get", return_value=mock_resp):
-            releases = docs._fetch_github_releases("owner", "repo")
-            assert releases == []
-
-
-def test_fetch_github_releases_skips_drafts():
-    """Test _fetch_github_releases skips draft releases."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = [
-            {
-                "draft": True,
-                "tag_name": "v0.1.0",
-                "name": "Draft",
-                "body": "...",
-                "published_at": "2024-01-01",
-            },
-            {
-                "draft": False,
-                "tag_name": "v1.0.0",
-                "name": "Stable",
-                "body": "Release notes",
-                "published_at": "2024-06-01",
-            },
-        ]
-
-        with patch("requests.get", return_value=mock_resp):
-            releases = docs._fetch_github_releases("owner", "repo")
-            assert len(releases) == 1
-            assert releases[0]["tag_name"] == "v1.0.0"
-
-
-def test_fetch_github_releases_request_exception():
-    """Test _fetch_github_releases handles network errors."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        with patch("requests.get", side_effect=requests.RequestException("timeout")):
-            releases = docs._fetch_github_releases("owner", "repo")
-            assert releases == []
-
-
 def test_extract_directives_from_package_no_griffe():
     """Test _extract_directives_from_package handles missing griffe."""
 
@@ -21018,46 +20487,6 @@ def test_empty_categories():
         assert "class_method_names" in cats
         assert isinstance(cats["classes"], list)
         assert isinstance(cats["class_methods"], dict)
-
-
-def test_add_frontmatter_option_no_frontmatter():
-    """Test _add_frontmatter_option creates frontmatter when none exists."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "# Just a heading\n\nSome text."
-        result = docs._add_frontmatter_option(content, "toc", False)
-        assert result.startswith("---\n")
-        assert "toc: false" in result
-        assert "Just a heading" in result
-
-
-def test_add_frontmatter_option_update_existing():
-    """Test _add_frontmatter_option updates an existing key."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Hello\ntoc: true\n---\n\nBody."
-        result = docs._add_frontmatter_option(content, "toc", False)
-        assert "toc: false" in result
-        assert "toc: true" not in result
-
-
-def test_add_frontmatter_option_add_new_key():
-    """Test _add_frontmatter_option adds new key to existing frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Hello\n---\n\nBody."
-        result = docs._add_frontmatter_option(content, "bread-crumbs", False)
-        assert "bread-crumbs: false" in result
-        assert "title: Hello" in result
-
-
-def test_add_frontmatter_option_string_value():
-    """Test _add_frontmatter_option handles string values."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Test\n---\n\nBody."
-        result = docs._add_frontmatter_option(content, "format", "html")
-        assert 'format: "html"' in result
 
 
 def test_get_github_repo_info_from_config():
@@ -21450,16 +20879,16 @@ def test_generate_changelog_page_with_releases():
             },
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=mock_releases):
-            result = docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=mock_releases)
+        result = docs._generate_changelog_page()
 
-            assert result == "changelog.qmd"
+        assert result == "changelog.qmd"
 
-            content = (build_dir / "changelog.qmd").read_text()
+        content = (build_dir / "changelog.qmd").read_text()
 
-            assert "Version 1.0" in content
-            assert "pre-release" in content
-            assert "2024-06-01" in content
+        assert "Version 1.0" in content
+        assert "pre-release" in content
+        assert "2024-06-01" in content
 
 
 def test_get_package_exports_with_all():
@@ -23244,20 +22673,22 @@ def test_build_sections_from_reference_config_basic():
 
 def test_preview_builds_if_no_site():
     """Test preview() calls build when site doesn't exist."""
+    from great_docs._build.serve import ServeError
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        # No _site/index.html — preview should try to build then exit
+        # A missing `_site/index.html` triggers a build attempt, then a serving failure
         with (
             patch.object(docs, "build"),
-            pytest.raises(SystemExit),
+            pytest.raises(ServeError, match="No index.html found"),
         ):
             docs.preview()
 
 
 def test_preview_port_in_use():
     """Test preview() handles port-in-use error."""
+    from great_docs._build.serve import ServeError
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -23270,7 +22701,7 @@ def test_preview_port_in_use():
                 "http.server.ThreadingHTTPServer",
                 side_effect=OSError("Address in use"),
             ),
-            pytest.raises(SystemExit),
+            pytest.raises(ServeError, match="Port 9999 is already in use"),
         ):
             docs.preview(port=9999)
 
@@ -24356,10 +23787,8 @@ def test_create_blended_index_creates_index():
         }
 
         with (
-            patch.object(docs, "_add_frontmatter_option", side_effect=lambda c, k, v: c),
             patch.object(docs, "_build_metadata_margin", return_value=""),
             patch.object(docs, "_build_hero_section", return_value=("", None)),
-            patch("great_docs.core.strip_numeric_prefix", return_value="intro.qmd"),
         ):
             docs._create_blended_index(ug_info, [])
 
@@ -26575,7 +26004,9 @@ def test_cli_preview_success():
 
             result = runner.invoke(preview, ["--project-path", tmp_dir])
             assert result.exit_code == 0
-            mock_instance.preview.assert_called_once_with(port=3000)
+            mock_instance.preview.assert_called_once_with(
+                port=3000, open_path="", open_browser=True
+            )
 
 
 def test_cli_preview_custom_port():
@@ -26590,7 +26021,9 @@ def test_cli_preview_custom_port():
 
             result = runner.invoke(preview, ["--project-path", tmp_dir, "--port", "8080"])
             assert result.exit_code == 0
-            mock_instance.preview.assert_called_once_with(port=8080)
+            mock_instance.preview.assert_called_once_with(
+                port=8080, open_path="", open_browser=True
+            )
 
 
 def test_cli_preview_keyboard_interrupt():
@@ -31345,59 +30778,6 @@ def test_inject_section_body_class_adds_body_class():
         assert "gd-section-no-sidebar" in content
 
 
-def test_fetch_github_releases_with_token():
-    """_fetch_github_releases adds auth header when GITHUB_TOKEN is set."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = [
-            {
-                "tag_name": "v1.0",
-                "name": "v1.0",
-                "body": "Release",
-                "published_at": "2025-01-01",
-                "html_url": "http://example.com",
-                "prerelease": False,
-                "draft": False,
-            }
-        ]
-        import requests as _requests
-
-        with patch.dict(os.environ, {"GITHUB_TOKEN": "test-token-123"}):
-            with patch.object(_requests, "get", return_value=mock_resp) as mock_get:
-                releases = docs._fetch_github_releases("owner", "repo", max_releases=1)
-
-        # Verify token was used
-        call_kwargs = mock_get.call_args
-        headers = call_kwargs[1].get(
-            "headers", call_kwargs[0][1] if len(call_kwargs[0]) > 1 else {}
-        )
-        assert len(releases) == 1
-
-
-def test_fetch_github_releases_rate_limited():
-    """_fetch_github_releases handles 403 rate limit."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 403
-        import requests as _requests
-
-        with patch.object(_requests, "get", return_value=mock_resp):
-            releases = docs._fetch_github_releases("owner", "repo", max_releases=1)
-
-        assert releases == []
-
-
 def test_detect_dynamic_mode_empty_package_name():
     """_detect_dynamic_mode returns True for empty package name."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -32460,37 +31840,6 @@ class TestCopyUserGuideToDocs:
             docs = GreatDocs(project_path=tmp_dir)
             assert docs._copy_user_guide_to_docs({}) == []
             assert docs._copy_user_guide_to_docs(None) == []
-
-
-class TestAddFrontmatterOption:
-    """Tests for _add_frontmatter_option."""
-
-    def test_adds_to_existing_frontmatter(self):
-        """Adds key to existing YAML frontmatter."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            content = "---\ntitle: Hello\n---\nBody"
-            result = docs._add_frontmatter_option(content, "toc", False)
-            assert "toc: false" in result
-            assert "title: Hello" in result
-
-    def test_creates_frontmatter_when_missing(self):
-        """Creates frontmatter if content doesn't have it."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            content = "Just some body text"
-            result = docs._add_frontmatter_option(content, "toc", False)
-            assert result.startswith("---")
-            assert "toc: false" in result
-
-    def test_updates_existing_key(self):
-        """Updates an existing key rather than duplicating."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            content = "---\ntoc: true\n---\nBody"
-            result = docs._add_frontmatter_option(content, "toc", False)
-            assert "toc: false" in result
-            assert result.count("toc") == 1
 
 
 class TestBuildSectionsFromReferenceConfig:
@@ -37602,26 +36951,6 @@ def test_get_tag_icon_html_unknown_icon(mock_svg):
     assert GreatDocs._get_tag_icon_html("Python", {"Python": "bad-icon"}) == ""
 
 
-# ── _derive_page_title ─────────────────────────────────────────────────
-
-
-def test_derive_page_title_dashes():
-    """Dashes and underscores become spaces, title-cased."""
-    with tempfile.TemporaryDirectory() as tmp:
-        gd = GreatDocs(project_path=tmp)
-        title = gd._derive_page_title(Path("my-cool_page.qmd"))
-        assert title == "My Cool Page"
-
-
-def test_derive_page_title_numeric_prefix():
-    """Numeric prefix is stripped."""
-    with tempfile.TemporaryDirectory() as tmp:
-        gd = GreatDocs(project_path=tmp)
-        title = gd._derive_page_title(Path("01-introduction.qmd"))
-        # Should produce "Introduction" (prefix stripped)
-        assert "introduction" in title.lower()
-
-
 # ── _inject_tags_data_inline ─────────────────────────────────────────
 
 
@@ -38838,12 +38167,8 @@ def test_generate_package_info_page_basic():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        with patch.object(
-            GreatDocs,
-            "_fetch_pypi_dates",
-            return_value={"numpy": "2026-05-01", "pandas": "2026-06-15"},
-        ):
-            result = docs._generate_package_info_page()
+        docs._remote = StubRemote(release_dates={"numpy": "2026-05-01", "pandas": "2026-06-15"})
+        result = docs._generate_package_info_page()
 
         assert result == "package-info.qmd"
 
@@ -38889,8 +38214,8 @@ def test_generate_package_info_page_with_optional_deps():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        with patch.object(GreatDocs, "_fetch_pypi_dates", return_value={}):
-            result = docs._generate_package_info_page()
+        docs._remote = StubRemote()
+        result = docs._generate_package_info_page()
 
         assert result == "package-info.qmd"
 
@@ -38923,8 +38248,8 @@ def test_generate_package_info_page_with_markers():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        with patch.object(GreatDocs, "_fetch_pypi_dates", return_value={}):
-            docs._generate_package_info_page()
+        docs._remote = StubRemote()
+        docs._generate_package_info_page()
 
         content = (gd_dir / "package-info.qmd").read_text(encoding="utf-8")
         assert "Environment Marker" in content
@@ -39043,40 +38368,12 @@ def test_generate_package_info_page_pypi_date_fallback():
 
         docs = GreatDocs(project_path=tmp_dir)
         # Simulate network failure — empty dict returned
-        with patch.object(GreatDocs, "_fetch_pypi_dates", return_value={}):
-            docs._generate_package_info_page()
+        docs._remote = StubRemote()
+        docs._generate_package_info_page()
 
         content = (gd_dir / "package-info.qmd").read_text(encoding="utf-8")
         # Date column header present, value is dash
         assert "Last Published" in content
-
-
-def test_fetch_pypi_dates_success():
-    """_fetch_pypi_dates returns dates for successful API responses."""
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {
-        "info": {"version": "1.26.0"},
-        "releases": {"1.26.0": [{"upload_time_iso_8601": "2026-06-15T12:00:00Z"}]},
-    }
-    with patch("requests.get", return_value=mock_response):
-        result = GreatDocs._fetch_pypi_dates({"numpy"})
-
-    assert result == {"numpy": "2026-06-15"}
-
-
-def test_fetch_pypi_dates_failure():
-    """_fetch_pypi_dates returns empty dict on network failure."""
-    with patch("requests.get", side_effect=Exception("timeout")):
-        result = GreatDocs._fetch_pypi_dates({"nonexistent-pkg"})
-
-    assert result == {}
-
-
-def test_fetch_pypi_dates_empty():
-    """_fetch_pypi_dates returns empty dict for empty input."""
-    result = GreatDocs._fetch_pypi_dates(set())
-    assert result == {}
 
 
 def test_build_metadata_margin_no_package_info_link_when_missing():
@@ -39175,27 +38472,6 @@ def test_build_reference_yaml_empty():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         assert docs._build_reference_yaml({}) == "reference:"
-
-
-class TestInspectRepoGitNeeds:
-    def test_top_level_show_dates_requires_full_history(self, tmp_path: Path):
-        """Regression: top-level `show_dates: true` must trigger a full clone.
-
-        roborev #801 finding 5: only the legacy `site.show_dates` was checked,
-        so the new top-level key left remote builds shallow.
-        """
-        (tmp_path / "great-docs.yml").write_text("show_dates: true\n", encoding="utf-8")
-        assert GreatDocs._inspect_repo_git_needs(tmp_path) == "full"
-
-    def test_legacy_nested_show_dates_still_requires_full_history(self, tmp_path: Path):
-        """The legacy `site.show_dates` location keeps working."""
-        (tmp_path / "great-docs.yml").write_text("site:\n  show_dates: true\n", encoding="utf-8")
-        assert GreatDocs._inspect_repo_git_needs(tmp_path) == "full"
-
-    def test_no_show_dates_does_not_require_full_history(self, tmp_path: Path):
-        """No `show_dates` anywhere resolves to `tags` (no `source.branch` set)."""
-        (tmp_path / "great-docs.yml").write_text("package: test\n", encoding="utf-8")
-        assert GreatDocs._inspect_repo_git_needs(tmp_path) == "tags"
 
 
 class TestSaveFreezeCacheVersioned:
@@ -39984,116 +39260,6 @@ def test_build_tag_hierarchy_mixed(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _detect_install_extras
-# ---------------------------------------------------------------------------
-
-
-def test_detect_install_extras_no_pyproject(tmp_path):
-    """Returns empty string when no pyproject.toml."""
-    result = GreatDocs._detect_install_extras(tmp_path)
-    assert result == ""
-
-
-def test_detect_install_extras_no_optional_deps(tmp_path):
-    """Returns empty string when no optional-dependencies."""
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-    result = GreatDocs._detect_install_extras(tmp_path)
-    assert result == ""
-
-
-def test_detect_install_extras_dev_group(tmp_path):
-    """Returns 'dev' when dev optional-dependency group exists."""
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "mypkg"\n[project.optional-dependencies]\ndev = ["pytest"]\n'
-    )
-    result = GreatDocs._detect_install_extras(tmp_path)
-    assert "dev" in result
-
-
-def test_detect_install_extras_docs_group(tmp_path):
-    """Returns 'docs' when docs optional-dependency group exists."""
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "mypkg"\n[project.optional-dependencies]\ndocs = ["sphinx"]\n'
-    )
-    result = GreatDocs._detect_install_extras(tmp_path)
-    assert "docs" in result
-
-
-def test_detect_install_extras_multiple_groups(tmp_path):
-    """Returns comma-separated when multiple groups found."""
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "mypkg"\n[project.optional-dependencies]\ndev = ["pytest"]\ndocs = ["sphinx"]\n'
-    )
-    result = GreatDocs._detect_install_extras(tmp_path)
-    assert "dev" in result
-    assert "docs" in result
-
-
-def test_detect_install_extras_other_groups_ignored(tmp_path):
-    """Groups not in candidates list are ignored."""
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "mypkg"\n[project.optional-dependencies]\nintegration = ["httpx"]\ncpu = ["numpy"]\n'
-    )
-    result = GreatDocs._detect_install_extras(tmp_path)
-    assert result == ""
-
-
-def test_detect_install_extras_malformed_toml(tmp_path):
-    """Returns empty string on malformed TOML."""
-    (tmp_path / "pyproject.toml").write_text("not valid {{{{toml")
-    result = GreatDocs._detect_install_extras(tmp_path)
-    assert result == ""
-
-
-# ---------------------------------------------------------------------------
-# _inspect_repo_git_needs
-# ---------------------------------------------------------------------------
-
-
-def test_inspect_repo_git_needs_no_config(tmp_path):
-    """Returns 'none' when no great-docs.yml exists."""
-    result = GreatDocs._inspect_repo_git_needs(tmp_path)
-    assert result == "none"
-
-
-def test_inspect_repo_git_needs_versions_needs_full(tmp_path):
-    """Returns 'full' when versions configured."""
-    (tmp_path / "great-docs.yml").write_text(
-        'versions:\n  - tag: "v1.0"\n    label: "1.0"\n    latest: true\n'
-    )
-    result = GreatDocs._inspect_repo_git_needs(tmp_path)
-    assert result == "full"
-
-
-def test_inspect_repo_git_needs_show_dates_needs_full(tmp_path):
-    """Returns 'full' when show_dates is true."""
-    (tmp_path / "great-docs.yml").write_text("show_dates: true\n")
-    result = GreatDocs._inspect_repo_git_needs(tmp_path)
-    assert result == "full"
-
-
-def test_inspect_repo_git_needs_source_branch_explicit(tmp_path):
-    """Returns 'none' when explicit source branch configured."""
-    (tmp_path / "great-docs.yml").write_text("source:\n  branch: main\n")
-    result = GreatDocs._inspect_repo_git_needs(tmp_path)
-    assert result == "none"
-
-
-def test_inspect_repo_git_needs_default_returns_tags(tmp_path):
-    """Returns 'tags' by default when no special features configured."""
-    (tmp_path / "great-docs.yml").write_text("display_name: MyPkg\n")
-    result = GreatDocs._inspect_repo_git_needs(tmp_path)
-    assert result == "tags"
-
-
-def test_inspect_repo_git_needs_site_show_dates(tmp_path):
-    """Returns 'full' when site.show_dates is true."""
-    (tmp_path / "great-docs.yml").write_text("site:\n  show_dates: true\n")
-    result = GreatDocs._inspect_repo_git_needs(tmp_path)
-    assert result == "full"
-
-
-# ---------------------------------------------------------------------------
 # _split_tag_parts — static method
 # ---------------------------------------------------------------------------
 
@@ -40218,67 +39384,6 @@ def test_strip_numeric_prefix_underscore_separator():
 def test_strip_numeric_prefix_preserves_non_numeric():
     docs = GreatDocs()
     assert strip_numeric_prefix("advanced.qmd") == "advanced.qmd"
-
-
-# ---------------------------------------------------------------------------
-# _parse_code_include_args — static method
-# ---------------------------------------------------------------------------
-
-
-def test_parse_code_include_args_file_only():
-    fp, lang, lines = GreatDocs._parse_code_include_args("path/to/file.py")
-    assert fp == "path/to/file.py"
-    assert lang == ""
-    assert lines == ""
-
-
-def test_parse_code_include_args_with_lang():
-    fp, lang, lines = GreatDocs._parse_code_include_args('path/file.py lang="python"')
-    assert fp == "path/file.py"
-    assert lang == "python"
-
-
-def test_parse_code_include_args_with_lines():
-    fp, lang, lines = GreatDocs._parse_code_include_args('path/file.py lines="1-10"')
-    assert lines == "1-10"
-
-
-def test_parse_code_include_args_all_kwargs():
-    fp, lang, lines = GreatDocs._parse_code_include_args('"src/main.py" lang="python" lines="5-15"')
-    assert fp == "src/main.py"
-    assert lang == "python"
-    assert lines == "5-15"
-
-
-def test_parse_code_include_args_empty():
-    fp, lang, lines = GreatDocs._parse_code_include_args("")
-    assert fp == ""
-    assert lang == ""
-    assert lines == ""
-
-
-# ---------------------------------------------------------------------------
-# _select_lines — static method
-# ---------------------------------------------------------------------------
-
-
-def test_select_lines_single():
-    content = "a\nb\nc\n"
-    result = GreatDocs._select_lines(content, "2")
-    assert result == "b\n"
-
-
-def test_select_lines_range():
-    content = "a\nb\nc\nd\n"
-    result = GreatDocs._select_lines(content, "2-3")
-    assert "b" in result and "c" in result
-    assert "a" not in result and "d" not in result
-
-
-def test_select_lines_clamps_to_bounds():
-    content = "a\nb\n"
-    result = GreatDocs._select_lines(content, "1-100")
-    assert "a" in result and "b" in result
 
 
 # ---------------------------------------------------------------------------

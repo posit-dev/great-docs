@@ -3,17 +3,18 @@ from __future__ import annotations
 import subprocess
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
 
+from great_docs._build import from_repo, serve
 from great_docs.cli import cli
 from great_docs.core import GreatDocs
 
 
-def test_detect_install_extras_dev_and_docs():
-    """Finds dev and docs extras."""
+def test_install_extras_dev_and_docs():
+    """Find `dev` and `docs` extras and ignore other groups"""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text(
             "[project.optional-dependencies]\n"
@@ -21,53 +22,58 @@ def test_detect_install_extras_dev_and_docs():
             'docs = ["sphinx"]\n'
             'other = ["requests"]\n'
         )
-        result = GreatDocs._detect_install_extras(Path(tmp))
-        assert "dev" in result
-        assert "docs" in result
-        assert "other" not in result
+        assert from_repo.install_extras(Path(tmp)) == "dev,docs"
 
 
-def test_detect_install_extras_all():
+def test_install_extras_all():
     """Finds 'all' extra."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text(
             '[project.optional-dependencies]\nall = ["everything"]\n'
         )
-        result = GreatDocs._detect_install_extras(Path(tmp))
+        result = from_repo.install_extras(Path(tmp))
         assert result == "all"
 
 
-def test_detect_install_extras_no_pyproject():
+def test_install_extras_no_pyproject():
     """Returns empty string when no pyproject.toml."""
     with tempfile.TemporaryDirectory() as tmp:
-        assert GreatDocs._detect_install_extras(Path(tmp)) == ""
+        assert from_repo.install_extras(Path(tmp)) == ""
 
 
-def test_detect_install_extras_no_optional_deps():
+def test_install_extras_no_optional_deps():
     """Returns empty string when no optional-dependencies."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text('[project]\nname = "x"\n')
-        assert GreatDocs._detect_install_extras(Path(tmp)) == ""
+        assert from_repo.install_extras(Path(tmp)) == ""
 
 
-def test_detect_install_extras_malformed_toml():
+def test_install_extras_malformed_toml():
     """Returns empty string on malformed TOML."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text("bad {{toml")
-        assert GreatDocs._detect_install_extras(Path(tmp)) == ""
+        assert from_repo.install_extras(Path(tmp)) == ""
 
 
-def test_detect_install_extras_doc_variant():
+def test_install_extras_ignores_other_groups(tmp_path):
+    """Return an empty string when only other dependency groups are defined"""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project.optional-dependencies]\nintegration = ["httpx"]\ncpu = ["numpy"]\n'
+    )
+    assert from_repo.install_extras(tmp_path) == ""
+
+
+def test_install_extras_doc_variant():
     """Finds 'doc' (singular) extra."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text(
             '[project.optional-dependencies]\ndoc = ["sphinx"]\n'
         )
-        result = GreatDocs._detect_install_extras(Path(tmp))
+        result = from_repo.install_extras(Path(tmp))
         assert result == "doc"
 
 
-def test_build_from_repo_watch_rejected():
+def test_from_repo_rejects_watch():
     """--watch + --from-repo is rejected."""
     runner = CliRunner()
     result = runner.invoke(
@@ -83,7 +89,7 @@ def test_build_project_path_ignored_with_from_repo(tmp_path, monkeypatch):
     runner = CliRunner()
     monkeypatch.chdir(tmp_path)
     Path("dummy").mkdir()
-    with patch.object(GreatDocs, "build_from_repo") as mock_bfr:
+    with patch.object(from_repo, "build") as mock_bfr:
         result = runner.invoke(
             cli,
             [
@@ -120,25 +126,22 @@ def test_build_output_dir_ignored_without_from_repo(tmp_path, monkeypatch):
     assert "--output-dir is ignored" in result.output
 
 
-def test_build_from_repo_clone_failure():
+def test_clone_failure_raises():
     """Raises RuntimeError when git clone fails."""
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=128, stderr="fatal: repo not found")
 
         with pytest.raises(RuntimeError, match="git clone failed"):
-            GreatDocs.build_from_repo("https://github.com/nonexistent/repo.git")
+            from_repo.build("https://github.com/nonexistent/repo.git", report=print)
 
 
-def test_build_from_repo_clone_with_branch():
+def test_clone_passes_branch():
     """Passes --branch to git clone when specified."""
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=128, stderr="fatal: error")
 
         with pytest.raises(RuntimeError, match="git clone failed"):
-            GreatDocs.build_from_repo(
-                "https://github.com/x/y.git",
-                branch="v2.0",
-            )
+            from_repo.build("https://github.com/x/y.git", branch="v2.0", report=print)
 
         clone_call = mock_run.call_args_list[0]
         cmd = clone_call[0][0]
@@ -146,23 +149,23 @@ def test_build_from_repo_clone_with_branch():
         assert "v2.0" in cmd
 
 
-def test_build_from_repo_clone_without_branch():
+def test_clone_without_branch():
     """Does not pass --branch when not specified."""
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=128, stderr="fatal: error")
 
         with pytest.raises(RuntimeError, match="git clone failed"):
-            GreatDocs.build_from_repo("https://github.com/x/y.git")
+            from_repo.build("https://github.com/x/y.git", report=print)
 
         clone_call = mock_run.call_args_list[0]
         cmd = clone_call[0][0]
         assert "--branch" not in cmd
 
 
-def test_build_from_repo_cli_passes_flags():
-    """CLI flags are forwarded to build_from_repo correctly."""
+def test_from_repo_cli_passes_flags():
+    """Forward CLI flags to the repository build"""
     runner = CliRunner()
-    with patch.object(GreatDocs, "build_from_repo") as mock_bfr:
+    with patch.object(from_repo, "build") as mock_bfr:
         result = runner.invoke(
             cli,
             [
@@ -186,13 +189,14 @@ def test_build_from_repo_cli_passes_flags():
             latest_only=True,
             shallow=False,
             config_path=None,
+            report=ANY,
         )
 
 
-def test_build_from_repo_cli_version_tags():
+def test_from_repo_cli_version_tags():
     """--versions flag is forwarded as version_tags list."""
     runner = CliRunner()
-    with patch.object(GreatDocs, "build_from_repo") as mock_bfr:
+    with patch.object(from_repo, "build") as mock_bfr:
         result = runner.invoke(
             cli,
             [
@@ -212,13 +216,14 @@ def test_build_from_repo_cli_version_tags():
             latest_only=False,
             shallow=False,
             config_path=None,
+            report=ANY,
         )
 
 
-def test_build_from_repo_cli_error_shown():
-    """RuntimeError from build_from_repo is shown to user."""
+def test_from_repo_cli_error_shown():
+    """Report a failed repository build to the user"""
     runner = CliRunner()
-    with patch.object(GreatDocs, "build_from_repo", side_effect=RuntimeError("clone exploded")):
+    with patch.object(from_repo, "build", side_effect=RuntimeError("clone exploded")):
         result = runner.invoke(
             cli,
             ["build", "--from-repo", "https://github.com/x/y.git"],
@@ -227,58 +232,70 @@ def test_build_from_repo_cli_error_shown():
         assert "clone exploded" in result.output
 
 
-def test_inspect_needs_no_config():
+def test_history_needed_no_config():
     """Returns 'none' when great-docs.yml does not exist."""
     with tempfile.TemporaryDirectory() as tmp:
-        assert GreatDocs._inspect_repo_git_needs(Path(tmp)) == "none"
+        assert from_repo.history_needed(Path(tmp)) == "none"
 
 
-def test_inspect_needs_empty_config():
+def test_history_needed_empty_config():
     """Returns 'tags' for a minimal config (source links benefit from tags)."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "great-docs.yml").write_text("name: mypkg\n")
-        assert GreatDocs._inspect_repo_git_needs(Path(tmp)) == "tags"
+        assert from_repo.history_needed(Path(tmp)) == "tags"
 
 
-def test_inspect_needs_versions():
+def test_history_needed_versions():
     """Returns 'full' when versions are configured."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "great-docs.yml").write_text("name: mypkg\nversions:\n  - '0.3'\n  - '0.2'\n")
-        assert GreatDocs._inspect_repo_git_needs(Path(tmp)) == "full"
+        assert from_repo.history_needed(Path(tmp)) == "full"
 
 
-def test_inspect_needs_show_dates():
-    """Returns 'full' when show_dates is enabled."""
+def test_history_needed_show_dates(tmp_path):
+    """Return `"full"` when top-level `show_dates` is enabled"""
+    (tmp_path / "great-docs.yml").write_text("show_dates: true\n")
+    assert from_repo.history_needed(tmp_path) == "full"
+
+
+def test_history_needed_legacy_show_dates():
+    """Return `"full"` when legacy `site.show_dates` is enabled"""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "great-docs.yml").write_text("name: mypkg\nsite:\n  show_dates: true\n")
-        assert GreatDocs._inspect_repo_git_needs(Path(tmp)) == "full"
+        assert from_repo.history_needed(Path(tmp)) == "full"
 
 
-def test_inspect_needs_explicit_branch():
+def test_history_needed_explicit_branch():
     """Returns 'none' when source.branch is explicitly set (no tag detection needed)."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "great-docs.yml").write_text("name: mypkg\nsource:\n  branch: main\n")
-        assert GreatDocs._inspect_repo_git_needs(Path(tmp)) == "none"
+        assert from_repo.history_needed(Path(tmp)) == "none"
 
 
-def test_inspect_needs_malformed_yaml():
+def test_history_needed_source_without_branch(tmp_path):
+    """Return `"tags"` when source settings specify no branch"""
+    (tmp_path / "great-docs.yml").write_text("source:\n  repository: https://github.com/org/repo\n")
+    assert from_repo.history_needed(tmp_path) == "tags"
+
+
+def test_history_needed_malformed_yaml():
     """Returns 'none' on unparseable YAML."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "great-docs.yml").write_text("bad: {{yaml: [")
-        assert GreatDocs._inspect_repo_git_needs(Path(tmp)) == "none"
+        assert from_repo.history_needed(Path(tmp)) == "none"
 
 
-def test_inspect_needs_show_dates_false():
+def test_history_needed_show_dates_false():
     """Returns 'tags' when show_dates is explicitly false."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "great-docs.yml").write_text("name: mypkg\nsite:\n  show_dates: false\n")
-        assert GreatDocs._inspect_repo_git_needs(Path(tmp)) == "tags"
+        assert from_repo.history_needed(Path(tmp)) == "tags"
 
 
 def test_build_shallow_cli_flag():
-    """--shallow is forwarded to build_from_repo."""
+    """Forward `--shallow` to the repository build"""
     runner = CliRunner()
-    with patch.object(GreatDocs, "build_from_repo") as mock_bfr:
+    with patch.object(from_repo, "build") as mock_bfr:
         result = runner.invoke(
             cli,
             [
@@ -297,6 +314,7 @@ def test_build_shallow_cli_flag():
             latest_only=False,
             shallow=True,
             config_path=None,
+            report=ANY,
         )
 
 
@@ -314,12 +332,12 @@ def test_build_shallow_ignored_without_from_repo(tmp_path, monkeypatch):
 # ── --preview flag tests ──────────────────────────────────────────────────────
 
 
-def test_build_preview_calls_preview_site():
-    """--preview after --from-repo calls preview_site with the output dir."""
+def test_build_preview_serves_site():
+    """Serve the output directory with `--preview` after `--from-repo`"""
     runner = CliRunner()
     with (
-        patch.object(GreatDocs, "build_from_repo") as mock_bfr,
-        patch.object(GreatDocs, "preview_site") as mock_preview,
+        patch.object(from_repo, "build") as mock_bfr,
+        patch.object(serve, "site") as mock_preview,
     ):
         mock_bfr.return_value = Path("/tmp/out")
         result = runner.invoke(
@@ -335,15 +353,15 @@ def test_build_preview_calls_preview_site():
         )
         assert result.exit_code == 0
         mock_bfr.assert_called_once()
-        mock_preview.assert_called_once_with("/tmp/out")
+        mock_preview.assert_called_once_with(Path("/tmp/out"), report=ANY)
 
 
 def test_build_preview_default_output_dir():
     """--preview without --output-dir uses the default site path."""
     runner = CliRunner()
     with (
-        patch.object(GreatDocs, "build_from_repo") as mock_bfr,
-        patch.object(GreatDocs, "preview_site") as mock_preview,
+        patch.object(from_repo, "build") as mock_bfr,
+        patch.object(serve, "site") as mock_preview,
     ):
         mock_bfr.return_value = Path.cwd() / "docs/_site"
         result = runner.invoke(
@@ -353,7 +371,7 @@ def test_build_preview_default_output_dir():
         assert result.exit_code == 0
         mock_preview.assert_called_once()
         site_arg = mock_preview.call_args[0][0]
-        assert site_arg == str(mock_bfr.return_value)
+        assert site_arg == mock_bfr.return_value
 
 
 def test_build_preview_ignored_without_from_repo(tmp_path, monkeypatch):
@@ -370,19 +388,21 @@ def test_build_preview_ignored_without_from_repo(tmp_path, monkeypatch):
 # ── preview --site-dir tests ─────────────────────────────────────────────────
 
 
-def test_preview_site_dir(tmp_path, monkeypatch):
-    """preview --site-dir calls preview_site with the given path."""
+def test_preview_with_site_dir(tmp_path, monkeypatch):
+    """Serve the given path with `preview --site-dir`"""
     runner = CliRunner()
     monkeypatch.chdir(tmp_path)
     Path("mysite").mkdir()
     (Path("mysite") / "index.html").write_text("<html></html>")
     site_path = str(Path("mysite").resolve())
-    with patch.object(GreatDocs, "preview_site") as mock_preview:
+    with patch.object(serve, "site") as mock_preview:
         result = runner.invoke(cli, ["preview", "--site-dir", site_path])
-        mock_preview.assert_called_once_with(site_path, port=3000, open_path="", open_browser=True)
+        mock_preview.assert_called_once_with(
+            site_path, port=3000, open_path="", open_browser=True, report=ANY
+        )
 
 
-def test_preview_site_dir_project_path_warning(tmp_path, monkeypatch):
+def test_preview_with_site_dir_warns_about_project_path(tmp_path, monkeypatch):
     """preview --site-dir with --project-path emits a warning."""
     runner = CliRunner()
     monkeypatch.chdir(tmp_path)
@@ -391,7 +411,7 @@ def test_preview_site_dir_project_path_warning(tmp_path, monkeypatch):
     Path("proj").mkdir()
     site_path = str(Path("mysite").resolve())
     proj_path = str(Path("proj").resolve())
-    with patch.object(GreatDocs, "preview_site"):
+    with patch.object(serve, "site"):
         result = runner.invoke(
             cli,
             ["preview", "--site-dir", site_path, "--project-path", proj_path],
@@ -399,8 +419,30 @@ def test_preview_site_dir_project_path_warning(tmp_path, monkeypatch):
         assert "--project-path is ignored" in result.output
 
 
-def test_preview_site_missing_index():
-    """preview_site exits when index.html is missing."""
+def test_serve_missing_index_raises():
+    """Raise `ServeError` for a directory without `index.html`"""
     with tempfile.TemporaryDirectory() as tmp:
-        with pytest.raises(SystemExit):
-            GreatDocs.preview_site(tmp)
+        with pytest.raises(serve.ServeError, match="No index.html found"):
+            serve.site(tmp, report=print)
+
+
+def test_preview_with_site_dir_without_index_exits(tmp_path):
+    """Report a missing `index.html` and exit with status 1 for `preview --site-dir`"""
+    result = CliRunner().invoke(cli, ["preview", "--site-dir", str(tmp_path)])
+    assert result.exit_code == 1
+    assert f"❌ No index.html found in {tmp_path}" in result.output
+
+
+def test_preview_with_site_dir_on_busy_port_exits(tmp_path, monkeypatch):
+    """Report an unavailable port and exit with status 1 for `preview --site-dir`"""
+    import http.server
+
+    (tmp_path / "index.html").write_text("<html></html>")
+
+    def busy(address, handler):
+        raise OSError("Address already in use")
+
+    monkeypatch.setattr(http.server, "ThreadingHTTPServer", busy)
+    result = CliRunner().invoke(cli, ["preview", "--site-dir", str(tmp_path), "--port", "4321"])
+    assert result.exit_code == 1
+    assert "❌ Port 4321 is already in use. Try a different port." in result.output

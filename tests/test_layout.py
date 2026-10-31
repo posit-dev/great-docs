@@ -311,3 +311,32 @@ def test_layout_make_does_not_create_directories(tmp_path: Path) -> None:
     Layout.make(tmp_path, config, create=True)
 
     assert os.listdir(tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    ("config_relative", "directory", "reserved"),
+    [
+        ("great-docs.yml", ".github", True),
+        ("great-docs.yml", "great-docs", True),
+        ("great-docs.yml", "great-docs/_site", True),
+        ("great-docs.yml", ".great-docs-cache", True),
+        ("great-docs.yml", "_freeze", True),
+        ("great-docs.yml", "user_guide", False),
+        ("docs/great-docs.yml", "docs/_quarto", True),
+        ("docs/great-docs.yml", "docs", True),
+        ("docs/great-docs.yml", "docs/user_guide", False),
+        ("docs/great-docs.yml", "docs/_quarto-notes", False),
+    ],
+)
+def test_reserved_directories_are_hidden_or_hold_output(
+    tmp_path: Path, config_relative: str, directory: str, reserved: bool
+):
+    """
+    Check that containment of an output location, not a name, reserves a directory
+
+    A migrated project's content directory holds `_quarto/default/`, so it counts as
+    reserved; the walks that consult the layout start below it.
+    """
+    layout = Layout.make(tmp_path, _write_config(tmp_path / config_relative))
+
+    assert layout.is_reserved_directory(tmp_path / directory) is reserved

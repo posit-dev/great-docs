@@ -11,13 +11,12 @@ from unittest.mock import MagicMock, patch
 
 import click
 import pytest
-import requests
 
 from great_docs import GreatDocs
 from great_docs._build import freeze
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website import quarto_yml as quarto_yml_file
-from tests.support import make_run
+from tests.support import StubRemote, make_run
 
 
 def _make_gd(tmp_path: Path) -> GreatDocs:
@@ -29,52 +28,6 @@ def _make_gd(tmp_path: Path) -> GreatDocs:
 def _patch_cfg(monkeypatch, gd, name, value):
     """Patch a Config property on the class so the instance returns *value*."""
     monkeypatch.setattr(type(gd._config), name, property(lambda self: value))
-
-
-class TestFetchGithubRepoStats:
-    """Cover _fetch_github_repo_stats auth header and response paths."""
-
-    def test_success_with_token(self, tmp_path, monkeypatch):
-        """Token is used and success data returned."""
-        gd = _make_gd(tmp_path)
-        monkeypatch.setenv("GITHUB_TOKEN", "ghp_test123")
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {"stargazers_count": 42, "forks_count": 7}
-
-        monkeypatch.setattr(requests, "get", lambda *a, **kw: mock_resp)
-
-        result = gd._fetch_github_repo_stats("posit-dev", "great-docs")
-        assert result == {"stars": 42, "forks": 7}
-
-    def test_request_exception_returns_empty(self, tmp_path, monkeypatch):
-        """RequestException is swallowed, returns {}."""
-        gd = _make_gd(tmp_path)
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-
-        def raise_exc(*a, **kw):
-            raise requests.RequestException("network error")
-
-        monkeypatch.setattr(requests, "get", raise_exc)
-
-        result = gd._fetch_github_repo_stats("owner", "repo")
-        assert result == {}
-
-    def test_non_200_returns_empty(self, tmp_path, monkeypatch):
-        """Non-200 status code returns empty dict."""
-        gd = _make_gd(tmp_path)
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 404
-
-        monkeypatch.setattr(requests, "get", lambda *a, **kw: mock_resp)
-
-        result = gd._fetch_github_repo_stats("owner", "repo")
-        assert result == {}
 
 
 class TestFindClickCliObj:
@@ -1817,17 +1770,6 @@ class TestGetTagIconHtml:
 
 
 # ---------------------------------------------------------------------------
-# Page title derivation
-# ---------------------------------------------------------------------------
-
-
-class TestDerivePageTitle:
-    def test_converts_hyphens_and_underscores(self, tmp_path):
-        gd = _make_gd(tmp_path)
-        assert gd._derive_page_title(Path("user-guide_intro.qmd")) == "User Guide Intro"
-
-
-# ---------------------------------------------------------------------------
 # Strip frontmatter
 # ---------------------------------------------------------------------------
 
@@ -1847,76 +1789,6 @@ class TestStripFrontmatter:
         gd = _make_gd(tmp_path)
         content = "---\ntitle: Hello\nNo closing"
         assert gd._strip_frontmatter(content) == content
-
-
-# ---------------------------------------------------------------------------
-# Detect install extras
-# ---------------------------------------------------------------------------
-
-
-class TestDetectInstallExtras:
-    def test_finds_dev_and_docs(self, tmp_path):
-        pyproject = tmp_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project.optional-dependencies]\ndev = ["pytest"]\ndocs = ["sphinx"]\n',
-            encoding="utf-8",
-        )
-        result = GreatDocs._detect_install_extras(tmp_path)
-        assert "dev" in result
-        assert "docs" in result
-
-    def test_no_pyproject_returns_empty(self, tmp_path):
-        assert GreatDocs._detect_install_extras(tmp_path) == ""
-
-    def test_no_optional_deps_returns_empty(self, tmp_path):
-        pyproject = tmp_path / "pyproject.toml"
-        pyproject.write_text("[project]\nname = 'pkg'\n", encoding="utf-8")
-        assert GreatDocs._detect_install_extras(tmp_path) == ""
-
-    def test_invalid_toml_returns_empty(self, tmp_path):
-        pyproject = tmp_path / "pyproject.toml"
-        pyproject.write_text("{{{{invalid", encoding="utf-8")
-        assert GreatDocs._detect_install_extras(tmp_path) == ""
-
-
-# ---------------------------------------------------------------------------
-# Inspect repo git needs
-# ---------------------------------------------------------------------------
-
-
-class TestInspectRepoGitNeeds:
-    def test_no_config_returns_none(self, tmp_path):
-        assert GreatDocs._inspect_repo_git_needs(tmp_path) == "none"
-
-    def test_versions_returns_full(self, tmp_path):
-        cfg = tmp_path / "great-docs.yml"
-        cfg.write_text("versions:\n  - v1.0\n  - v2.0\n", encoding="utf-8")
-        assert GreatDocs._inspect_repo_git_needs(tmp_path) == "full"
-
-    def test_show_dates_returns_full(self, tmp_path):
-        cfg = tmp_path / "great-docs.yml"
-        cfg.write_text("show_dates: true\n", encoding="utf-8")
-        assert GreatDocs._inspect_repo_git_needs(tmp_path) == "full"
-
-    def test_show_dates_in_site_returns_full(self, tmp_path):
-        cfg = tmp_path / "great-docs.yml"
-        cfg.write_text("site:\n  show_dates: true\n", encoding="utf-8")
-        assert GreatDocs._inspect_repo_git_needs(tmp_path) == "full"
-
-    def test_source_without_branch_returns_tags(self, tmp_path):
-        cfg = tmp_path / "great-docs.yml"
-        cfg.write_text("source:\n  repository: https://github.com/org/repo\n", encoding="utf-8")
-        assert GreatDocs._inspect_repo_git_needs(tmp_path) == "tags"
-
-    def test_source_with_branch_returns_none(self, tmp_path):
-        cfg = tmp_path / "great-docs.yml"
-        cfg.write_text("source:\n  branch: main\n", encoding="utf-8")
-        assert GreatDocs._inspect_repo_git_needs(tmp_path) == "none"
-
-    def test_invalid_yaml_returns_none(self, tmp_path):
-        cfg = tmp_path / "great-docs.yml"
-        cfg.write_text("{{invalid yaml", encoding="utf-8")
-        assert GreatDocs._inspect_repo_git_needs(tmp_path) == "none"
 
 
 # ---------------------------------------------------------------------------
@@ -2194,7 +2066,7 @@ class TestGeneratePackageInfoPage:
                 "requires_python": ">=3.9",
             },
         )
-        monkeypatch.setattr(gd, "_fetch_pypi_dates", lambda names: {})
+        gd._remote = StubRemote()
         result = gd._generate_package_info_page()
         assert result == "package-info.qmd"
         content = (gd.build_dir / "package-info.qmd").read_text()
@@ -2216,7 +2088,7 @@ class TestGeneratePackageInfoPage:
                 "requires_python": "",
             },
         )
-        monkeypatch.setattr(gd, "_fetch_pypi_dates", lambda names: {})
+        gd._remote = StubRemote()
         result = gd._generate_package_info_page()
         assert result == "package-info.qmd"
         content = (gd.build_dir / "package-info.qmd").read_text()

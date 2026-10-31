@@ -4,15 +4,16 @@ Shared configuration and build setup for `GreatDocs` tests
 `write_config` writes and loads `great-docs.yml`. `mock_config` provides a `Config` double
 with empty defaults. `make_run` creates build state for testing build methods directly.
 `stubbed_build` stubs Quarto and build steps while preserving the build's control flow.
+`StubRemote` supplies GitHub and PyPI data without network requests.
 """
 
 from __future__ import annotations
 
 import types
 import typing
-from collections.abc import Callable, Generator, Iterable, Mapping
+from collections.abc import Callable, Collection, Generator, Iterable, Mapping
 from contextlib import ExitStack, contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, NonCallableMagicMock, patch
 
@@ -23,6 +24,8 @@ from great_docs._build.pipeline import Run
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from great_docs._github import GithubRepo
 
 # Keep these methods in the order `GreatDocs.build()` first calls them. Stub the methods
 # called by the step actions so the step table and its actions still run.
@@ -65,7 +68,6 @@ _BUILD_METHODS: tuple[str, ...] = (
     "_default_description",
     "_structured_data",
     "_generate_seo_files",
-    "_write_build_timing",
     "_auto_save_snapshot",
     "_print_layout_notice",
 )
@@ -313,3 +315,81 @@ def _empty(annotation: object) -> object:
     if value is None or value:
         raise TypeError(f"{annotation!r} has no empty value")
     return value
+
+
+@dataclass
+class StubRemote:
+    """
+    Preset GitHub and PyPI data for a `GreatDocs` instance
+
+    Assign an instance to `docs._remote` to prevent network requests in a test.
+
+    Attributes
+    ----------
+    stats
+        The same star and fork counts for every repository.
+    releases
+        The same releases for every repository, newest first.
+    release_dates
+        PyPI release dates by package name.
+    calls
+        The name of each method called, in order.
+    """
+
+    stats: dict[str, int] = field(default_factory=dict)
+    releases: list[dict[str, Any]] = field(default_factory=list)
+    release_dates: dict[str, str] = field(default_factory=dict)
+    calls: list[str] = field(default_factory=list)
+
+    def github_stats(self, repo: GithubRepo) -> dict[str, int]:
+        """
+        Return `stats` for any repository
+
+        Parameters
+        ----------
+        repo
+            The repository.
+
+        Returns
+        -------
+        :
+            `stats`.
+        """
+        self.calls.append("github_stats")
+        return self.stats
+
+    def github_releases(self, repo: GithubRepo, max_releases: int) -> list[dict[str, Any]]:
+        """
+        Return the first `max_releases` entries of `releases`
+
+        Parameters
+        ----------
+        repo
+            The repository.
+        max_releases
+            The maximum number of releases to return.
+
+        Returns
+        -------
+        :
+            The newest releases.
+        """
+        self.calls.append("github_releases")
+        return self.releases[:max_releases]
+
+    def pypi_release_dates(self, package_names: Collection[str]) -> dict[str, str]:
+        """
+        Return known release dates for the named packages
+
+        Parameters
+        ----------
+        package_names
+            The PyPI names of the packages.
+
+        Returns
+        -------
+        :
+            The entries in `release_dates` for the named packages.
+        """
+        self.calls.append("pypi_release_dates")
+        return {name: date for name, date in self.release_dates.items() if name in package_names}

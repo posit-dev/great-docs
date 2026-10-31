@@ -1,8 +1,9 @@
-"""Derive published names from source names the same way for every caller"""
+"""Shared rules for published names, paths and fallback titles"""
 
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 
 def strip_numeric_prefix(filename: str) -> str:
@@ -26,6 +27,48 @@ def strip_numeric_prefix(filename: str) -> str:
     return re.sub(r"^\d+-|^\d+_", "", filename)
 
 
+def published_path(relative: Path, *, strip_prefix: bool) -> Path:
+    """
+    Map a source path to the path it is published under
+
+    Parameters
+    ----------
+    relative
+        A page or directory path relative to its content root, such as a section or the
+        user guide.
+    strip_prefix
+        Whether to strip numeric ordering prefixes from every path component. When enabled,
+        `01-basics/02-setup.qmd` publishes as `basics/setup.qmd`.
+
+    Returns
+    -------
+    :
+        The published path, relative to the published root of the content.
+    """
+    if not strip_prefix:
+        return relative
+    return Path(*(strip_numeric_prefix(part) for part in relative.parts))
+
+
+def title_from_name(name: str) -> str:
+    """
+    Derive a page or directory title from its name
+
+    Parameters
+    ----------
+    name
+        A file stem or a directory name. A numeric ordering prefix is kept, so strip it first
+        when the title should not show it.
+
+    Returns
+    -------
+    :
+        The name with `-` and `_` replaced by spaces, in title case: `my-cool_page` becomes
+        `My Cool Page`.
+    """
+    return name.replace("-", " ").replace("_", " ").title()
+
+
 def fix_numeric_prefix_links(content: str) -> str:
     """
     Rewrite relative Markdown links to `.qmd` files, stripping numeric prefixes
@@ -47,7 +90,7 @@ def fix_numeric_prefix_links(content: str) -> str:
         The content with numeric prefixes stripped from `.qmd` link targets.
     """
 
-    def _rewrite(m: re.Match) -> str:
+    def _rewrite(m: re.Match[str]) -> str:
         path = m.group(1)
         anchor = ""
         for sep in ("#", "?"):

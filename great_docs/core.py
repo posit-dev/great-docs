@@ -14,7 +14,7 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
 
-from ._build import freeze, quarto
+from ._build import freeze, quarto, serve, timings
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
@@ -29,8 +29,17 @@ from ._build.steps import (
     count_listed,
     run_steps,
 )
-from ._content_naming import fix_numeric_prefix_links, section_slug, strip_numeric_prefix
-from ._layout import Layout, LayoutError
+from ._content import code_includes
+from ._content.naming import (
+    fix_numeric_prefix_links,
+    published_path,
+    section_slug,
+    strip_numeric_prefix,
+    title_from_name,
+)
+from ._github import GithubRepo
+from ._layout import Layout
+from ._remote import HttpRemote, Remote
 from ._source_refs import source_reference_spans
 from ._subprocess import TEXT_MODE_KWARGS
 from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
@@ -59,7 +68,7 @@ from ._website.seo import description as seo_description
 from ._website.seo import noindex
 from ._website.seo import title as seo_title
 from ._website.seo.structured_data import StructuredData
-from ._yaml import YamlMapping, locate_front_matter, split_front_matter
+from ._yaml import YamlMapping, locate_front_matter, set_front_matter_option, split_front_matter
 from .config import Config, create_default_config
 
 if TYPE_CHECKING:
@@ -277,6 +286,9 @@ class GreatDocs:
             config_path=self.layout.config_path,
             cache_dir=self.layout.cache_dir,
         )
+
+        # GitHub and PyPI requests; release warnings print in the build log's format
+        self._remote: Remote = HttpRemote(report=lambda message: print(f"   ⚠️  {message}"))
 
         # Caches for the instance's lifetime; builds do not reset them
         self._package_metadata_cache: dict | None = None
@@ -890,9 +902,7 @@ class GreatDocs:
         for directory, destination, strip_prefix in roots:
             if source.is_relative_to(directory.resolve()):
                 relative = source.relative_to(directory.resolve())
-                if strip_prefix:
-                    relative = Path(*(strip_numeric_prefix(part) for part in relative.parts))
-                return destination / relative
+                return destination / published_path(relative, strip_prefix=strip_prefix)
         return None
 
     def install(self, force: bool = False) -> None:
@@ -1922,148 +1932,15 @@ class GreatDocs:
         if not repo_url or "github.com" not in repo_url:
             return None, None, None
 
-        # Parse the GitHub URL to extract owner and repo. Handles https, ssh, and
-        # `.git`-suffixed forms; see great_docs._pr_preview.parse_github_url.
-        from ._pr_preview import parse_github_url
-
-        parsed = parse_github_url(repo_url)
-        if parsed:
-            owner, repo = parsed
-            base_url = f"https://github.com/{owner}/{repo}"
-            return owner, repo, base_url
+        repo = GithubRepo.parse(repo_url)
+        if repo:
+            return repo.owner, repo.name, repo.url
 
         return None, None, None  # pragma: no cover
-
-    def _fetch_github_repo_stats(self, owner: str, repo: str) -> dict[str, int]:
-        """
-        Fetch repository star and fork counts from the GitHub API at build time.
-
-        Uses GITHUB_TOKEN / GH_TOKEN if available for higher rate limits.
-
-        Returns
-        -------
-        dict[str, int]
-            A dict with 'stars' and 'forks' keys, or empty dict on failure.
-        """
-        import requests
-
-        headers = {
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-        }
-
-        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-
-        url = f"https://api.github.com/repos/{owner}/{repo}"
-
-        try:
-            resp = requests.get(url, headers=headers, timeout=15)
-            if resp.status_code == 200:
-                data = resp.json()
-                return {
-                    "stars": data.get("stargazers_count", 0),
-                    "forks": data.get("forks_count", 0),
-                }
-        except requests.RequestException:
-            pass
-
-        return {}
 
     # =========================================================================
     # Changelog (GitHub Releases) Methods
     # =========================================================================
-
-    def _fetch_github_releases(
-        self,
-        owner: str,
-        repo: str,
-        max_releases: int = 50,
-    ) -> list[dict]:
-        """
-        Fetch releases from the GitHub API.
-
-        Parameters
-        ----------
-        owner
-            GitHub repository owner.
-        repo
-            GitHub repository name.
-        max_releases
-            Maximum number of releases to return.
-
-        Returns
-        -------
-        list[dict]
-            List of release dicts with keys: tag_name, name, body, published_at,
-            html_url, prerelease, draft.
-        """
-        import requests
-
-        releases: list[dict] = []
-        per_page = min(max_releases, 100)
-        page = 1
-
-        headers = {"Accept": "application/vnd.github+json"}
-
-        # Honour GITHUB_TOKEN / GH_TOKEN for higher rate limits
-        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-
-        while len(releases) < max_releases:
-            url = (
-                f"https://api.github.com/repos/{owner}/{repo}/releases"
-                f"?per_page={per_page}&page={page}"
-            )
-
-            try:
-                resp = requests.get(url, headers=headers, timeout=30)
-            except requests.RequestException as exc:
-                print(f"   ⚠️  Failed to fetch GitHub releases: {exc}")
-                break
-
-            if resp.status_code == 403:
-                # Rate-limited
-                print("   ⚠️  GitHub API rate limit reached; changelog may be incomplete")
-                break
-            if resp.status_code == 404:
-                print(f"   ⚠️  GitHub repository {owner}/{repo} not found")
-                break
-            if resp.status_code != 200:
-                print(f"   ⚠️  GitHub API returned status {resp.status_code}")
-                break
-
-            try:
-                data = resp.json()
-            except requests.exceptions.JSONDecodeError:
-                print("   ⚠️  GitHub API returned a malformed release list")
-                break
-            if not data:
-                break  # No more pages  # pragma: no cover
-
-            for release in data:
-                if release.get("draft"):  # pragma: no cover
-                    continue  # Skip drafts
-                releases.append(
-                    {
-                        "tag_name": release.get("tag_name", ""),
-                        "name": release.get("name", ""),
-                        "body": release.get("body", ""),
-                        "published_at": release.get("published_at", ""),
-                        "html_url": release.get("html_url", ""),
-                        "prerelease": release.get("prerelease", False),
-                    }
-                )
-                if len(releases) >= max_releases:
-                    break
-
-            if len(data) < per_page:
-                break  # Last page
-            page += 1
-
-        return releases
 
     @staticmethod
     def _linkify_github_references(text: str, owner: str, repo: str) -> str:
@@ -2150,7 +2027,7 @@ class GreatDocs:
             return None
 
         max_releases = self._config.changelog_max_releases
-        releases = self._fetch_github_releases(owner, repo, max_releases)
+        releases = self._remote.github_releases(GithubRepo(owner, repo), max_releases)
         if not releases:
             return None
 
@@ -2344,7 +2221,7 @@ class GreatDocs:
 
                 page_title = fm.string("title")
                 if page_title is None:
-                    page_title = self._derive_page_title(qmd_file)
+                    page_title = title_from_name(qmd_file.stem)
                 page_href = str(qmd_file.relative_to(self.build_dir))
 
                 for tag in raw_tags:
@@ -3040,7 +2917,7 @@ class GreatDocs:
                 if f.suffix in (".qmd", ".md")
                 and f.name != "README.md"
                 and not any(
-                    self._is_reserved_output_directory(parent)
+                    self.layout.is_reserved_directory(parent)
                     for parent in f.parents
                     if parent != source_path and parent.is_relative_to(source_path)
                 )
@@ -3062,7 +2939,7 @@ class GreatDocs:
             for item in source_path.iterdir():
                 if (
                     item.is_dir()
-                    and not self._is_reserved_output_directory(item)
+                    and not self.layout.is_reserved_directory(item)
                     and self._is_asset_dir(item)
                 ):
                     dst_dir = dest_dir / item.name
@@ -3081,8 +2958,8 @@ class GreatDocs:
                     # Inject blog-index layout options into the user's index
                     blog_index = dest_dir / "index.qmd"
                     idx_content = blog_index.read_text(encoding="utf-8")
-                    idx_content = self._add_frontmatter_option(idx_content, "toc", False)
-                    idx_content = self._add_frontmatter_option(
+                    idx_content = set_front_matter_option(idx_content, "toc", False)
+                    idx_content = set_front_matter_option(
                         idx_content, "body-classes", "gd-blog-index"
                     )
                     blog_index.write_text(idx_content, encoding="utf-8")
@@ -3179,22 +3056,10 @@ class GreatDocs:
         copied: list[dict] = []
 
         for src_file in files:
-            rel = src_file.relative_to(source_dir)
-
-            # Strip numeric prefix from filename (e.g., 01-intro.qmd -> intro.qmd)
-            clean_name = strip_numeric_prefix(rel.name)
-
-            # Strip numeric prefixes from subdirectory parts too (e.g.,
-            # 02-topic-b/page.qmd -> topic-b/page.qmd), mirroring the user-guide
-            # copy. This keeps on-disk paths in sync with the link rewriting done
-            # by _fix_numeric_prefix_links, which strips prefixes from every path
-            # component.
-            clean_parent = (
-                Path(*[strip_numeric_prefix(p) for p in rel.parent.parts])
-                if rel.parent.parts
-                else rel.parent
-            )
-            dest_file = dest_dir / clean_parent / clean_name
+            # Copied paths and rewritten links must strip the same numeric prefixes
+            # from every path component
+            published = published_path(src_file.relative_to(source_dir), strip_prefix=True)
+            dest_file = dest_dir / published
 
             # Ensure subdirectories exist
             dest_file.parent.mkdir(parents=True, exist_ok=True)
@@ -3202,14 +3067,14 @@ class GreatDocs:
             content = src_file.read_text(encoding="utf-8")
 
             # Expand {{< code-include >}} shortcodes before Quarto sees the file
-            content = self._expand_code_includes(content, src_file.parent)
+            content = code_includes.expand(content, src_file.parent, self.layout)
             content = self._rebase_source_references(content, src_file, dest_file)
 
             # Fix links to .qmd files with numeric prefixes
             content = fix_numeric_prefix_links(content)
 
             # Parse frontmatter for metadata
-            title = clean_name.replace(".qmd", "").replace(".md", "").replace("-", " ").title()
+            title = title_from_name(published.stem)
             description = ""
             image = ""
 
@@ -3229,9 +3094,7 @@ class GreatDocs:
 
             copied.append(
                 {
-                    "filename": str(clean_parent / clean_name)
-                    if clean_parent != Path(".")
-                    else clean_name,
+                    "filename": str(published),
                     "title": title,
                     "description": description,
                     "image": image,
@@ -3289,12 +3152,12 @@ class GreatDocs:
             content = src_file.read_text(encoding="utf-8")
 
             # Expand {{< code-include >}} shortcodes before Quarto sees the file
-            content = self._expand_code_includes(content, src_file.parent)
+            content = code_includes.expand(content, src_file.parent, self.layout)
             content = self._rebase_source_references(content, src_file, dest_file)
 
             # Parse frontmatter for metadata (but don't modify it —
             # Quarto's listing needs the original frontmatter)
-            title = rel.stem.replace("-", " ").title()
+            title = title_from_name(rel.stem)
             description = ""
 
             fm, _ = split_front_matter(content)
@@ -3648,8 +3511,7 @@ class GreatDocs:
             for subdir in subdir_groups_dict:
                 clean_subdir = strip_numeric_prefix(subdir)  # pragma: no cover
                 section_title = dir_titles.get(  # pragma: no cover
-                    clean_subdir,
-                    clean_subdir.replace("-", " ").replace("_", " ").title(),
+                    clean_subdir, title_from_name(clean_subdir)
                 )  # pragma: no cover
                 section_contents = []  # pragma: no cover
                 for page in subdir_groups_dict[subdir]:  # pragma: no cover
@@ -3825,11 +3687,6 @@ class GreatDocs:
 
         return sources
 
-    def _derive_page_title(self, path: Path) -> str:
-        """Derive a human-readable title from a source filename."""
-        name = path.stem.replace("-", " ").replace("_", " ")
-        return name.title()
-
     def _get_custom_page_navbar_config(
         self,
         frontmatter: YamlMapping,
@@ -3930,7 +3787,7 @@ class GreatDocs:
                 frontmatter, body = split_front_matter(content)
                 body = body.lstrip("\n")
                 layout = (frontmatter.string("layout") or "passthrough").lower()
-                page_title = frontmatter.string("title") or self._derive_page_title(src_path)
+                page_title = frontmatter.string("title") or title_from_name(src_path.stem)
 
                 if layout not in {"passthrough", "raw"}:
                     print(  # pragma: no cover
@@ -5490,7 +5347,7 @@ class GreatDocs:
         for item in dir_contents:
             if item.is_file() and item.suffix in valid_extensions:
                 guide_files.append(item)
-            elif item.is_dir() and not self._is_reserved_output_directory(item):
+            elif item.is_dir() and not self.layout.is_reserved_directory(item):
                 # Recursively check subdirectories for guide files at any depth
                 for ext in valid_extensions:
                     for subitem in item.rglob(f"*{ext}"):
@@ -5569,12 +5426,8 @@ class GreatDocs:
         # Get title from frontmatter or derive from filename
         title = frontmatter.string("title")
         if not title:
-            # Derive title from filename: "01-getting-started.qmd" -> "Getting Started"
-            name = qmd_path.stem
-            # Remove leading number prefix like "01-" or "00_"
-            name = re.sub(r"^\d+[-_]", "", name)
-            # Convert to title case
-            title = name.replace("-", " ").replace("_", " ").title()
+            # The title drops the ordering prefix even where the published name keeps it
+            title = title_from_name(strip_numeric_prefix(qmd_path.stem))
 
         # Get section from frontmatter (use 'guide-section' to avoid conflict with Quarto's 'section')
         section = frontmatter.string("guide-section")
@@ -5624,14 +5477,8 @@ class GreatDocs:
             except ValueError:  # pragma: no cover
                 rel_path = Path(src_path.name)  # pragma: no cover
 
-            if is_explicit:
-                # Explicit mode: preserve filenames as-is
-                dest_rel_path = rel_path
-            else:
-                # Auto-discovery mode: strip numeric prefixes from both
-                # directory names and filenames for cleaner URLs
-                clean_parts = [strip_numeric_prefix(part) for part in rel_path.parts]
-                dest_rel_path = Path(*clean_parts) if clean_parts else rel_path
+            # An explicit guide keeps the file names the configuration lists
+            dest_rel_path = published_path(rel_path, strip_prefix=not is_explicit)
 
             dst_path = target_dir / dest_rel_path
             dst_path.parent.mkdir(parents=True, exist_ok=True)
@@ -5641,7 +5488,7 @@ class GreatDocs:
                 content = f.read()
 
             # Expand {{< code-include >}} shortcodes before Quarto sees the file
-            content = self._expand_code_includes(content, src_path.parent)
+            content = code_includes.expand(content, src_path.parent, self.layout)
             reference_destination = self._source_page_destination(src_path.resolve()) or dst_path
             content = self._rebase_source_references(content, src_path, reference_destination)
 
@@ -5650,7 +5497,7 @@ class GreatDocs:
                 content = fix_numeric_prefix_links(content)
 
             # Add bread-crumbs: false to frontmatter
-            content = self._add_frontmatter_option(content, "bread-crumbs", False)
+            content = set_front_matter_option(content, "bread-crumbs", False)
             # The page promoted to the homepage shows no dates
             if reference_destination != self.build_dir / "index.qmd":
                 content = page_dates.add_to_page(
@@ -5667,7 +5514,7 @@ class GreatDocs:
         for item in source_dir.iterdir():
             if (
                 item.is_dir()
-                and not self._is_reserved_output_directory(item)
+                and not self.layout.is_reserved_directory(item)
                 and self._is_asset_dir(item)
             ):
                 dst_dir = target_dir / item.name
@@ -5683,39 +5530,6 @@ class GreatDocs:
         )
 
         return copied_files
-
-    def _is_reserved_output_directory(self, path: Path) -> bool:
-        """
-        Whether a directory is, or contains, this project's own generated output
-
-        Membership is decided by containment rather than by name, because the build
-        directory's name and depth differ between layouts. An unmigrated project builds
-        into `great-docs/` beside the configuration, while a migrated one builds into
-        `_quarto/default/` two levels below the content directory. Comparing a content
-        directory's children against the build directory by name or identity therefore
-        misses the migrated case, where the child is only an ancestor of the build
-        directory.
-
-        Parameters
-        ----------
-        path
-            A directory encountered while walking user content.
-
-        Returns
-        -------
-        bool
-            `True` when the directory is hidden, is one of the generated output
-            locations, or is an ancestor of one.
-        """
-        if path.name.startswith("."):
-            return True
-        reserved = (
-            self.layout.build_dir,
-            self.layout.site_dir,
-            self.layout.cache_dir,
-            self.layout.freeze_dir,
-        )
-        return any(path == location or location.is_relative_to(path) for location in reserved)
 
     @staticmethod
     def _is_asset_dir(directory: Path) -> bool:
@@ -5777,11 +5591,7 @@ class GreatDocs:
         for rel_dir in sorted(directories):
             if any(part.startswith(("_", ".")) for part in rel_dir.parts):
                 continue
-            dest_rel = (
-                Path(*(strip_numeric_prefix(part) for part in rel_dir.parts))
-                if strip_prefix
-                else rel_dir
-            )
+            dest_rel = published_path(rel_dir, strip_prefix=strip_prefix)
             for name in ("_metadata.yml", "_metadata.yaml"):
                 src_file = source_dir / rel_dir / name
                 if not src_file.is_file():
@@ -5795,243 +5605,6 @@ class GreatDocs:
                     continue
                 dst_file.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src_file, dst_file)
-
-    def _add_frontmatter_option(self, content: str, key: str, value) -> str:
-        """
-        Add or update an option in the YAML frontmatter of a .qmd file.
-
-        Parameters
-        ----------
-        content
-            The file content.
-        key
-            The frontmatter key to add/update.
-        value
-            The value to set.
-
-        Returns
-        -------
-        str
-            The modified content with the frontmatter option added.
-        """
-        # Convert value to YAML string representation
-        if isinstance(value, bool):
-            yaml_value = "true" if value else "false"
-        elif isinstance(value, str):
-            yaml_value = f'"{value}"'
-        else:
-            yaml_value = str(value)
-
-        if content.startswith("---"):
-            parts = content.split("---", 2)
-            if len(parts) >= 3:
-                frontmatter = parts[1]
-                rest = parts[2]
-
-                # Check if the key already exists
-                key_pattern = rf"^{re.escape(key)}:\s*.*$"
-                if re.search(key_pattern, frontmatter, re.MULTILINE):
-                    # Update existing key
-                    frontmatter = re.sub(
-                        key_pattern, f"{key}: {yaml_value}", frontmatter, flags=re.MULTILINE
-                    )
-                else:
-                    # Add new key at the end of frontmatter
-                    frontmatter = frontmatter.rstrip() + f"\n{key}: {yaml_value}\n"
-
-                return f"---{frontmatter}---{rest}"
-
-        # No frontmatter, create one
-        return f"---\n{key}: {yaml_value}\n---\n\n{content}"
-
-    # include double but ignore triple curly braces
-    _CODE_INCLUDE_RE = re.compile(
-        r"(?<!\{)\{\{<\s*include\s+(.*?)\s*>\}\}(?!\})",
-    )
-
-    _CONTENT_EXTENSIONS = {".qmd", ".md"}
-
-    _EXT_TO_LANG: dict[str, str] = {
-        ".py": "python",
-        ".r": "r",
-        ".js": "javascript",
-        ".ts": "typescript",
-        ".jsx": "jsx",
-        ".tsx": "tsx",
-        ".rb": "ruby",
-        ".rs": "rust",
-        ".go": "go",
-        ".java": "java",
-        ".cpp": "cpp",
-        ".cc": "cpp",
-        ".cxx": "cpp",
-        ".c": "c",
-        ".h": "c",
-        ".hpp": "cpp",
-        ".cs": "csharp",
-        ".css": "css",
-        ".scss": "scss",
-        ".html": "html",
-        ".sql": "sql",
-        ".sh": "bash",
-        ".bash": "bash",
-        ".zsh": "bash",
-        ".yaml": "yaml",
-        ".yml": "yaml",
-        ".json": "json",
-        ".toml": "toml",
-        ".xml": "xml",
-        ".lua": "lua",
-        ".swift": "swift",
-        ".kt": "kotlin",
-        ".scala": "scala",
-        ".jl": "julia",
-        ".m": "matlab",
-        ".pl": "perl",
-        ".php": "php",
-    }
-
-    def _expand_code_includes(self, content: str, source_dir: Path) -> str:
-        """
-        Replace `{{< include path >}}` shortcodes with fenced code blocks.
-
-        Only intercepts includes that target code files (non-`.qmd`/`.md`)
-        or that use the `lang` or `lines` keywords.  Plain
-        `{{< include _shared.qmd >}}` shortcodes are left untouched so
-        Quarto can handle them natively.
-
-        Supports optional keyword arguments:
-
-        - `lang="python"` — override the auto-detected language
-        - `lines="5-10"` — include only the specified line range (1-based, inclusive)
-
-        File paths are resolved first relative to *source_dir* (the directory
-        containing the source `.qmd` file), then relative to the project root.
-
-        Parameters
-        ----------
-        content
-            The `.qmd` file content.
-        source_dir
-            Directory of the source file (for relative path resolution).
-
-        Returns
-        -------
-        str
-            Content with code-file `include` shortcodes replaced by fenced
-            code blocks.
-        """
-
-        def _replace(m: re.Match) -> str:
-            raw_args = m.group(1)
-
-            file_path_str, lang, lines_spec = self._parse_code_include_args(raw_args)
-
-            if not file_path_str:  # pragma: no cover
-                return m.group(0)  # pragma: no cover
-
-            ext = Path(file_path_str).suffix.lower()
-            is_content_file = ext in self._CONTENT_EXTENSIONS
-
-            if is_content_file and not lang and not lines_spec:
-                return m.group(0)
-
-            resolved = self._resolve_code_include_path(file_path_str, source_dir)
-            if resolved is None:
-                return f"<!-- include error: file not found: {file_path_str} -->"
-
-            try:
-                file_content = resolved.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError) as e:  # pragma: no cover
-                return f"<!-- include error: {e} -->"  # pragma: no cover
-
-            if lines_spec:
-                file_content = self._select_lines(file_content, lines_spec)
-
-            if not lang:
-                lang = self._EXT_TO_LANG.get(resolved.suffix.lower(), "")
-
-            longest_run = 0
-            current_run = 0
-            for ch in file_content:
-                if ch == "`":
-                    current_run += 1
-                    longest_run = max(longest_run, current_run)
-                else:
-                    current_run = 0
-            fence = "`" * max(3, longest_run + 1)
-            return f"{fence}{lang}\n{file_content.rstrip()}\n{fence}"
-
-        return self._CODE_INCLUDE_RE.sub(_replace, content)
-
-    @staticmethod
-    def _parse_code_include_args(raw: str) -> tuple[str, str, str]:
-        """
-        Parse `include` shortcode arguments.
-
-        Returns `(file_path, lang, lines)` where *lang* and *lines* may be empty strings if not
-        specified.
-        """
-        lang = ""
-        lines = ""
-        file_path = ""
-
-        # Extract keyword arguments
-        kw_re = re.compile(r'(\w+)\s*=\s*"([^"]*)"')
-        for kw_match in kw_re.finditer(raw):
-            key, value = kw_match.group(1), kw_match.group(2)
-            if key == "lang":
-                lang = value
-            elif key == "lines":
-                lines = value
-
-        # The file path is whatever remains after stripping keyword args
-        remaining = kw_re.sub("", raw).strip()
-        # Remove surrounding quotes if present
-        if remaining and remaining[0] in ('"', "'") and remaining[-1] == remaining[0]:
-            remaining = remaining[1:-1]
-        file_path = remaining
-
-        return file_path, lang, lines
-
-    def _resolve_code_include_path(self, file_path_str: str, source_dir: Path) -> Path | None:
-        """
-        Resolve a code-include path against the page, source, and project roots
-
-        The lookup checks the page directory, documentation source directory, and
-        project root in that order.
-        """
-        candidates = [
-            source_dir / file_path_str,
-            self.layout.source_dir / file_path_str,
-            self.layout.package_root / file_path_str,
-        ]
-        for candidate in candidates:
-            resolved = candidate.resolve()
-            if resolved.is_file():
-                return resolved
-        return None
-
-    @staticmethod
-    def _select_lines(content: str, lines_spec: str) -> str:
-        """
-        Select a range of lines from *content*.
-
-        *lines_spec* is `"start-end"` (1-based, inclusive) or `"N"` for a single line.
-        """
-        all_lines = content.splitlines(keepends=True)
-
-        if "-" in lines_spec:
-            parts = lines_spec.split("-", 1)
-            start = int(parts[0]) - 1
-            end = int(parts[1])
-        else:
-            start = int(lines_spec) - 1
-            end = start + 1
-
-        start = max(0, start)
-        end = min(len(all_lines), end)
-        return "".join(all_lines[start:end])
 
     # Regex for detecting a top-level `freeze:` key in YAML frontmatter
     _FREEZE_FM_RE = re.compile(r"^freeze:\s+(.+)$", re.MULTILINE)
@@ -6270,9 +5843,7 @@ class GreatDocs:
         # Helper to get clean href (strips numeric prefixes for cleaner URLs)
         def get_clean_href(file_info: dict) -> str:
             rel_path = file_info["path"].relative_to(source_dir)
-            clean_parts = [strip_numeric_prefix(part) for part in rel_path.parts]
-            clean_rel_path = Path(*clean_parts) if clean_parts else rel_path
-            return f"user-guide/{clean_rel_path}"
+            return f"user-guide/{published_path(rel_path, strip_prefix=True)}"
 
         # If we have sections, organize by section
         if sections:
@@ -6381,8 +5952,7 @@ class GreatDocs:
                         _, _, subdir, dir_files = item
                         # Use the index.qmd title as the section title if present,
                         # otherwise derive from the directory name
-                        clean_subdir = strip_numeric_prefix(subdir)
-                        section_title = clean_subdir.replace("-", " ").replace("_", " ").title()
+                        section_title = title_from_name(strip_numeric_prefix(subdir))
                         section_contents = []
                         for file_info in dir_files:
                             if file_info["path"].name == "index.qmd":
@@ -6511,16 +6081,16 @@ class GreatDocs:
                             insert_idx = i
                             break
 
-                    # Determine the href for User Guide (with clean filename)
+                    # Determine the href for User Guide
                     if user_guide_info.get("has_index"):
                         user_guide_href = "user-guide/index.qmd"  # pragma: no cover
                     else:
-                        # Use the first file with clean filename
+                        # The navbar link must use the same path as the published guide page
                         first_file = user_guide_info["files"][0]
                         rel_path = first_file["path"].relative_to(user_guide_info["source_dir"])
-                        clean_filename = strip_numeric_prefix(rel_path.name)
-                        clean_rel_path = rel_path.parent / clean_filename
-                        user_guide_href = f"user-guide/{clean_rel_path}"
+                        is_explicit = user_guide_info.get("explicit", False)
+                        published = published_path(rel_path, strip_prefix=not is_explicit)
+                        user_guide_href = f"user-guide/{published}"
 
                     navbar["left"].insert(
                         insert_idx,
@@ -6626,12 +6196,7 @@ class GreatDocs:
         except ValueError:  # pragma: no cover
             rel_path = Path(first_file["path"].name)  # pragma: no cover
 
-        if is_explicit:
-            dest_rel = rel_path
-        else:
-            clean_parts = [strip_numeric_prefix(part) for part in rel_path.parts]
-            dest_rel = Path(*clean_parts) if clean_parts else rel_path
-
+        dest_rel = published_path(rel_path, strip_prefix=not is_explicit)
         first_ug_path = self.build_dir / "user-guide" / dest_rel
 
         if not first_ug_path.exists():
@@ -6645,7 +6210,7 @@ class GreatDocs:
         # Inject toc: false into frontmatter (bread-crumbs: false is already set
         # by _copy_user_guide_to_docs). Keep the original frontmatter title so
         # Quarto renders a proper title-block header matching other UG pages.
-        content = self._add_frontmatter_option(content, "toc", False)
+        content = set_front_matter_option(content, "toc", False)
 
         # Build the metadata margin sidebar
         margin_content = self._build_metadata_margin()
@@ -10618,65 +10183,6 @@ body-classes: "gd-homepage"
 
         print(f"Created {index_qmd}")
 
-    @staticmethod
-    def _fetch_pypi_dates(package_names: set[str]) -> dict[str, str]:
-        """
-        Fetch the latest release date for each package from PyPI.
-
-        Uses the PyPI JSON API (`https://pypi.org/pypi/{name}/json`) to look up the most recent
-        upload timestamp. Requests are made with a short timeout and failures are silently skipped
-        (the date simply shows "—").
-
-        Parameters
-        ----------
-        package_names
-            Set of PyPI package names to look up.
-
-        Returns
-        -------
-        dict[str, str]
-            Mapping of package name to a formatted date string (`YYYY-MM-DD`).
-        """
-        import concurrent.futures
-
-        import requests
-
-        dates: dict[str, str] = {}
-        if not package_names:
-            return dates
-
-        def _fetch_one(name: str) -> tuple[str, str]:
-            try:
-                resp = requests.get(
-                    f"https://pypi.org/pypi/{name}/json",
-                    timeout=5,
-                    headers={"Accept": "application/json"},
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    # The "info" dict has the latest version; look up its upload time
-                    latest_version = data.get("info", {}).get("version", "")
-                    releases = data.get("releases", {})
-                    if latest_version and latest_version in releases:
-                        files = releases[latest_version]
-                        if files:
-                            upload_time = files[0].get("upload_time_iso_8601", "")
-                            if upload_time:
-                                return name, upload_time[:10]  # YYYY-MM-DD
-            except Exception:
-                pass
-            return name, ""
-
-        # Fetch in parallel with a bounded thread pool
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-            futures = {pool.submit(_fetch_one, n): n for n in package_names}
-            for future in concurrent.futures.as_completed(futures):
-                pkg_name, date_str = future.result()
-                if date_str:
-                    dates[pkg_name] = date_str
-
-        return dates
-
     def _generate_package_info_page(self) -> str | None:
         """
         Generate package-info.qmd with dependency details.
@@ -10729,7 +10235,7 @@ body-classes: "gd-homepage"
         all_dep_names = {d["name"] for d in runtime_deps}
         for deps in opt_deps_full.values():
             all_dep_names |= {d["name"] for d in deps}
-        pypi_dates = self._fetch_pypi_dates(all_dep_names)
+        pypi_dates = self._remote.pypi_release_dates(all_dep_names)
 
         # Column widths (%)
         _COL_WIDTHS_4 = (35, 30, 25, 10)  # Package / Version / Last Published / PyPI
@@ -11674,7 +11180,7 @@ anchor-sections: true
         github_item = None
         if repo_url:
             stats = (
-                self._fetch_github_repo_stats(owner, repo)
+                self._remote.github_stats(GithubRepo(owner, repo))
                 if owner and repo and github_style == "widget"
                 else None
             )
@@ -12791,7 +12297,7 @@ anchor-sections: true
         # Show the latest GitHub release beside the navbar title
         release = None
         if owner and repo:
-            latest = self._fetch_github_releases(owner, repo, max_releases=1)
+            latest = self._remote.github_releases(GithubRepo(owner, repo), max_releases=1)
             release = nav_release.Release.make(latest[0]) if latest else None
         nav_release.add_to_navbar(config, release, self._config.lang)
 
@@ -14667,81 +14173,6 @@ anchor-sections: true
         self._generate_sitemap_xml()
         self._generate_robots_txt()
 
-    def _write_build_timing(
-        self,
-        page_timings: list[dict[str, object]] | None = None,
-        timings_by_version: dict[str, list[dict[str, object]]] | None = None,
-        render: dict[str, object] | None = None,
-    ) -> Path | None:
-        """
-        Write `_site/build-timings.json` with per-page render durations.
-
-        For single-version builds, *page_timings* is a flat list. For multi-version builds,
-        *timings_by_version* is a `{tag: [timings]}` dict. A parallel single-version build also
-        passes *render*: its number of processes and groups, and how long Quarto took to start,
-        which the next parallel build plans with. Returns the path written, or `None` if there was
-        nothing to write.
-        """
-        from datetime import timezone
-
-        site_dir = self.layout.site_dir
-        if not site_dir.exists():
-            return None  # pragma: no cover
-
-        # Discover which pages had freeze cache entries.
-        # Check both the project root (where users persist _freeze/) and the
-        # build/project path (where it's restored during rendering).
-        frozen_stems: set[str] = set()
-        for freeze_dir in (self.layout.freeze_dir, self.build_dir / "_freeze"):
-            if freeze_dir.is_dir():
-                for html_json in freeze_dir.rglob("execute-results/html.json"):
-                    # _freeze/user-guide/benchmarks/execute-results/html.json
-                    # → relative stem is "user-guide/benchmarks"
-                    rel = html_json.relative_to(freeze_dir)
-                    # Drop the last two parts (execute-results/html.json)
-                    stem = str(rel.parent.parent)
-                    frozen_stems.add(stem)
-
-        def _annotate(pages: list[dict[str, object]]) -> list[dict[str, object]]:
-            """Add 'frozen' boolean to each page entry."""
-            for p in pages:
-                page_str = str(p["page"])
-                # Strip .qmd/.html extension to get the stem
-                stem = page_str.rsplit(".", 1)[0] if "." in page_str else page_str
-                p["frozen"] = stem in frozen_stems
-            return pages
-
-        payload: dict[str, object] = {
-            "build_time": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        }
-
-        if timings_by_version:
-            versions_payload: dict[str, object] = {}
-            total_seconds = 0.0
-            for tag, timings in timings_by_version.items():
-                ver_total = round(sum(t["seconds"] for t in timings), 3)
-                total_seconds += ver_total
-                versions_payload[tag] = {
-                    "seconds": ver_total,
-                    "pages": sorted(_annotate(timings), key=lambda t: t["seconds"], reverse=True),
-                }
-            payload["total_seconds"] = round(total_seconds, 3)
-            payload["versions"] = versions_payload
-        elif page_timings:
-            total_seconds = round(sum(t["seconds"] for t in page_timings), 3)
-            payload["total_seconds"] = total_seconds
-            payload["pages"] = sorted(
-                _annotate(page_timings), key=lambda t: t["seconds"], reverse=True
-            )
-            if render:
-                payload["render"] = render
-        else:
-            return None  # pragma: no cover
-
-        out_path = site_dir / "build-timings.json"
-        out_path.write_text(json.dumps(payload, indent=2) + "\n")
-        return out_path
-
     def _get_cli_help_text_for_llms(self) -> str:
         """
         Get CLI help text formatted for llms-full.txt.
@@ -15790,8 +15221,11 @@ anchor-sections: true
         :
             `None`; the result is a detail line of the previous step.
         """
-        path = self._write_build_timing(
-            page_timings=page_timings, timings_by_version=timings_by_version, render=render
+        path = timings.write(
+            self.layout,
+            page_timings=page_timings,
+            timings_by_version=timings_by_version,
+            render=render,
         )
         if path:
             log.detail(f"Wrote {path.name}")
@@ -16332,433 +15766,7 @@ anchor-sections: true
         log.footer(site_path=str(site_path if site_path.exists() else self.layout.site_dir))
         self._print_layout_notice()
 
-    @classmethod
-    def build_from_repo(
-        cls,
-        repo_url: str,
-        *,
-        branch: str | None = None,
-        output_dir: str | None = None,
-        config_path: str | None = None,
-        refresh: bool = True,
-        version_tags: list[str] | None = None,
-        latest_only: bool = False,
-        shallow: bool = False,
-    ) -> Path:
-        """
-        Clone a remote repository and build its documentation site
-
-        This is a convenience method for building documentation from a separate repository. It
-        handles cloning, creating a temporary virtual environment, installing the package, building
-        the docs, and copying the output.
-
-        After the initial shallow clone, the target's `great-docs.yml` is inspected so the git
-        history depth can be adapted automatically:
-
-        * `versions:` is non-empty -> full unshallow + fetch tags (versioned builds check out
-        multiple tags).
-        * `site.show_dates: true` -> full unshallow (page-creation dates need `git log` history).
-        * Otherwise, only `git fetch --tags` (enough for source-link tag detection).
-
-        Pass `shallow=True` to skip all post-clone fetching (fastest, but git-history features will
-        be degraded).
-
-        Parameters
-        ----------
-        repo_url
-            Git URL of the repository to clone (HTTPS or SSH).
-        branch
-            Branch, tag, or commit to check out. If `None`, uses the repository's default branch.
-        output_dir
-            Directory to copy the built site into. If omitted, use the checkout's
-            deployment path relative to the current working directory.
-        config_path
-            Configuration path relative to the checkout. Paths outside the checkout
-            are rejected.
-        refresh
-            If `True` (default), re-discover package exports before building.
-        version_tags
-            If provided, only build these specific version tags.
-        latest_only
-            If `True`, build only the latest version.
-        shallow
-            If `True`, force a shallow clone (`--depth=1`) with no additional history fetching.
-            Fastest option, but versioned docs, page metadata dates, and tag-based source links will
-            not work.
-
-        Returns
-        -------
-        Path
-            Absolute path to the directory containing the built site.
-
-        Examples
-        --------
-        Build docs from a remote repository:
-
-        ```python
-        from great_docs import GreatDocs
-
-        site_dir = GreatDocs.build_from_repo(
-            "https://github.com/posit-dev/great-tables.git",
-            branch="main",
-            output_dir="./my-site",
-        )
-        ```
-        """
-        import tempfile
-        import venv
-
-        if config_path is not None and Path(config_path).is_absolute():
-            raise LayoutError("Remote configuration must be a relative path inside the checkout")
-
-        tmpdir = tempfile.mkdtemp(prefix="great-docs-remote-")
-        clone_dir = Path(tmpdir) / "repo"
-        venv_dir = Path(tmpdir) / "venv"
-
-        try:
-            # ── 1. Clone the repository (shallow first) ────────────────
-            print(f"📦 Cloning {repo_url}...")
-            clone_cmd = ["git", "clone", "--depth=1"]
-            if branch:
-                clone_cmd += ["--branch", branch]
-            clone_cmd += [repo_url, str(clone_dir)]
-            result = subprocess.run(clone_cmd, capture_output=True, **TEXT_MODE_KWARGS)
-            if result.returncode != 0:
-                raise RuntimeError(
-                    f"git clone failed (exit {result.returncode}):\n{result.stderr.strip()}"
-                )
-
-            selected_config = (clone_dir / config_path).resolve() if config_path else None
-            if selected_config is not None and not selected_config.is_relative_to(
-                clone_dir.resolve()
-            ):
-                raise LayoutError("Remote configuration must remain inside the checkout")
-            layout = Layout.make(clone_dir, selected_config)
-            output_path = (
-                Path(output_dir).resolve()
-                if output_dir
-                else Path.cwd() / layout.site_dir.relative_to(clone_dir.resolve())
-            )
-
-            # ── 1b. Inspect great-docs.yml and deepen history if needed ─
-            if not shallow:
-                needs = cls._inspect_repo_git_needs(clone_dir, config_path=layout.config_path)
-                if needs == "full":
-                    print("   Fetching full history (versioned docs / page dates)...")
-                    subprocess.run(
-                        ["git", "fetch", "--unshallow"],
-                        cwd=str(clone_dir),
-                        capture_output=True,
-                        **TEXT_MODE_KWARGS,
-                    )
-                    subprocess.run(
-                        ["git", "fetch", "--tags"],
-                        cwd=str(clone_dir),
-                        capture_output=True,
-                        **TEXT_MODE_KWARGS,
-                    )
-                elif needs == "tags":
-                    print("   Fetching tags for source link detection...")
-                    subprocess.run(
-                        ["git", "fetch", "--tags"],
-                        cwd=str(clone_dir),
-                        capture_output=True,
-                        **TEXT_MODE_KWARGS,
-                    )
-            print("   Cloned to temporary directory")
-
-            # ── 2. Create temporary virtual environment ────────────────
-            print("🐍 Creating temporary virtual environment...")
-            venv.create(str(venv_dir), with_pip=True, clear=True)
-
-            if sys.platform == "win32":
-                venv_python = venv_dir / "Scripts" / "python.exe"
-                venv_pip = venv_dir / "Scripts" / "pip.exe"
-            else:
-                venv_python = venv_dir / "bin" / "python"
-                venv_pip = venv_dir / "bin" / "pip"
-
-            # ── 3. Install great-docs into the temp venv ───────────────
-            print("📥 Installing great-docs into temporary environment...")
-            result = subprocess.run(
-                [str(venv_pip), "install", "great-docs"],
-                capture_output=True,
-                **TEXT_MODE_KWARGS,
-            )
-            if result.returncode != 0:
-                # Fall back to installing from the current source tree if
-                # the PyPI package is not available (e.g. during development)
-                src_root = Path(__file__).resolve().parent.parent
-                result = subprocess.run(
-                    [str(venv_pip), "install", str(src_root)],
-                    capture_output=True,
-                    **TEXT_MODE_KWARGS,
-                )
-                if result.returncode != 0:
-                    raise RuntimeError(f"Failed to install great-docs:\n{result.stderr.strip()}")
-
-            # ── 4. Install the target package ──────────────────────────
-            print("📥 Installing target package...")
-            # Try installing with optional dev/docs extras first
-            install_cmd = [str(venv_pip), "install", "-e"]
-            extras = cls._detect_install_extras(clone_dir)
-            if extras:
-                install_cmd.append(f"{clone_dir}[{extras}]")
-            else:
-                install_cmd.append(str(clone_dir))
-            result = subprocess.run(install_cmd, capture_output=True, **TEXT_MODE_KWARGS)
-            if result.returncode != 0:
-                # Retry without extras
-                result = subprocess.run(
-                    [str(venv_pip), "install", "-e", str(clone_dir)],
-                    capture_output=True,
-                    **TEXT_MODE_KWARGS,
-                )
-                if result.returncode != 0:
-                    raise RuntimeError(
-                        f"Failed to install target package:\n{result.stderr.strip()}"
-                    )
-
-            # ── 5. Build docs using the temp venv's great-docs ─────────
-            print("🔨 Building documentation...")
-            if sys.platform == "win32":
-                gd_cli = venv_dir / "Scripts" / "great-docs.exe"
-            else:
-                gd_cli = venv_dir / "bin" / "great-docs"
-
-            build_cmd = [str(gd_cli), "build", "--project-path", str(clone_dir)]
-            if config_path is not None:
-                build_cmd.extend(["--config", str(layout.config_path)])
-            if not refresh:
-                build_cmd.append("--no-refresh")
-            if version_tags:
-                build_cmd.extend(["--versions", ",".join(version_tags)])
-            if latest_only:
-                build_cmd.append("--latest-only")
-
-            # Pass through GITHUB_TOKEN / GH_TOKEN and PATH
-            build_env = os.environ.copy()
-            build_env["VIRTUAL_ENV"] = str(venv_dir)
-            build_env["PATH"] = (
-                str(venv_dir / ("Scripts" if sys.platform == "win32" else "bin"))
-                + os.pathsep
-                + build_env.get("PATH", "")
-            )
-
-            result = subprocess.run(
-                build_cmd,
-                env=build_env,
-                cwd=str(clone_dir),
-            )
-            if result.returncode != 0:
-                raise RuntimeError(f"great-docs build failed (exit {result.returncode})")
-
-            # ── 6. Copy built site to output directory ─────────────────
-            site_dir = layout.site_dir
-            if not site_dir.exists():
-                raise RuntimeError(f"Build completed but _site/ directory not found at {site_dir}")
-
-            print(f"📂 Copying built site to {output_path}...")
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            if output_path.exists():
-                shutil.rmtree(output_path)
-            shutil.copytree(site_dir, output_path)
-
-            print(f"✅ Site built successfully: {output_path}")
-            return output_path
-
-        finally:
-            # ── 7. Clean up temporary directory ────────────────────────
-            try:
-                shutil.rmtree(tmpdir)
-            except Exception:
-                pass  # Best-effort cleanup
-
-    @staticmethod
-    def preview_site(
-        site_dir: str | Path,
-        port: int = 3000,
-        *,
-        open_path: str = "",
-        open_browser: bool = True,
-    ) -> None:
-        """Preview a pre-built documentation site from any directory.
-
-        Starts a local HTTP server and opens the site in the default browser. This is useful for
-        previewing output from `build_from_repo()` or any other pre-built site directory.
-
-        Parameters
-        ----------
-        site_dir
-            Path to the directory containing the built site (must have `index.html`).
-        port
-            The port number for the local HTTP server (default `3000`).
-        open_path
-            Optional site-relative page to open in the browser (e.g.
-            `reference/mcp/gd_config.html`). Defaults to the site root. If the page does not
-            exist under `site_dir`, a warning is printed and the root is opened instead.
-        open_browser
-            Whether to launch the default browser. When `False`, the URL is printed but no
-            browser is opened.
-        """
-        import functools
-        import http.server
-        import threading
-        import webbrowser
-
-        site_path = Path(site_dir)
-        index_html = site_path / "index.html"
-
-        if not index_html.exists():
-            print(f"❌ No index.html found in {site_path}")
-            sys.exit(1)
-
-        # Normalize the requested deep-link page and confirm it exists on disk before we
-        # advertise/open it; fall back to the root otherwise.
-        rel_path = (open_path or "").strip().lstrip("/")
-        if rel_path:
-            target = site_path / rel_path
-            if not target.is_file():
-                print(f"⚠️  Page '{rel_path}' not found in the site; opening the home page instead.")
-                rel_path = ""
-
-        handler = functools.partial(
-            http.server.SimpleHTTPRequestHandler,
-            directory=str(site_path),
-        )
-        # Reap half-open sockets (e.g. Safari's idle speculative connections) so a
-        # stalled connection cannot tie up a worker thread indefinitely.
-        http.server.SimpleHTTPRequestHandler.timeout = 10
-        http.server.ThreadingHTTPServer.allow_reuse_address = True
-
-        try:
-            # Use a threading server so one idle/speculative connection (notably from
-            # Safari) cannot block the whole preview. See issue #219.
-            httpd = http.server.ThreadingHTTPServer(("", port), handler)
-        except OSError:
-            print(f"❌ Port {port} is already in use. Try a different port.")
-            sys.exit(1)
-
-        base_url = f"http://localhost:{port}/"
-        url = base_url + rel_path
-        print(f"\n🌐 Serving site at {base_url}")
-        print(f"   Site directory: {site_path}")
-        if rel_path:
-            print(f"   Opening: {url}")
-        print("   Press Ctrl+C to stop\n")
-
-        if open_browser:
-            threading.Timer(0.3, webbrowser.open, args=(url,)).start()
-
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            httpd.server_close()
-
-    @staticmethod
-    def _detect_install_extras(project_dir: Path) -> str:
-        """Detect optional dependency groups suitable for a docs build.
-
-        Scans `pyproject.toml` for extras like `dev`, `docs`, `test` and returns a comma-separated
-        string (e.g. `"dev,docs"`).
-
-        Parameters
-        ----------
-        project_dir
-            Path to the cloned project root.
-
-        Returns
-        -------
-        str
-            Comma-separated extras string, or empty string if none found.
-        """
-        pyproject = project_dir / "pyproject.toml"
-        if not pyproject.exists():
-            return ""
-
-        try:
-            import tomllib
-        except ImportError:  # pragma: no cover
-            try:
-                import tomli as tomllib  # type: ignore[no-redef]
-            except ImportError:
-                return ""
-
-        try:
-            with open(pyproject, "rb") as f:
-                data = tomllib.load(f)
-        except Exception:
-            return ""
-
-        opt_deps = data.get("project", {}).get("optional-dependencies", {})
-        # Prioritize groups likely to contain docs/dev deps
-        candidates = ["dev", "docs", "doc", "all"]
-        found = [c for c in candidates if c in opt_deps]
-        return ",".join(found)
-
-    @staticmethod
-    def _inspect_repo_git_needs(clone_dir: Path, *, config_path: Path | None = None) -> str:
-        """
-        Inspect the selected configuration to determine Git history requirements
-
-        Returns one of three strings indicating how much git history is
-        required for the features declared in the config:
-
-        * `"full"`: full history needed (versioned docs or page dates).
-        * `"tags"`: only tags needed (source-link tag detection).
-        * `"none"`: shallow clone is sufficient.
-
-        Parameters
-        ----------
-        clone_dir
-            Path to the cloned repository root.
-        config_path
-            Selected configuration file within the checkout.
-
-        Returns
-        -------
-        str
-            One of `"full"`, `"tags"`, or `"none"`.
-        """
-        config_path = Layout.make(clone_dir, config_path).config_path
-        if not config_path.exists():
-            return "none"
-
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                cfg = read_yaml(f) or {}
-        except Exception:
-            return "none"
-
-        # Versioned docs require checking out multiple tags → full history
-        versions = cfg.get("versions", [])
-        if versions:
-            return "full"
-
-        # Page metadata dates need git log for first-commit detection.
-        # `show_dates` lives at the top level; `site.show_dates` is kept as a
-        # legacy fallback since this raw-YAML inspection never goes through
-        # `Config`, which normalizes legacy keys at load.
-        show_dates = cfg.get("show_dates")
-        if show_dates is None:
-            site = cfg.get("site")
-            if isinstance(site, dict):
-                show_dates = site.get("show_dates")
-        if show_dates:
-            return "full"
-
-        # Source links benefit from tags for _detect_git_ref()
-        source = cfg.get("source", {})
-        if isinstance(source, dict):
-            # If a branch is explicitly set, tags aren't needed for detection
-            if source.get("branch"):
-                return "none"
-
-        return "tags"
-
-    def preview(self, port: int = 3000) -> None:
+    def preview(self, port: int = 3000, *, open_path: str = "", open_browser: bool = True) -> None:
         """
         Preview the documentation site locally.
 
@@ -16775,6 +15783,17 @@ anchor-sections: true
         ----------
         port
             The port number for the local HTTP server (default `3000`).
+        open_path
+            A page to open instead of the home page, relative to the site, such as
+            `reference/index.html`. If the page is missing, the home page opens instead.
+        open_browser
+            Whether to open the page in the default browser.
+
+        Raises
+        ------
+        OSError
+            If the site has no `index.html` after the build, or the server cannot listen on
+            `port`.
 
         Examples
         --------
@@ -16787,58 +15806,15 @@ anchor-sections: true
         docs.preview()
         ```
         """
-        import functools
-        import http.server
-        import threading
-        import webbrowser
-
         print("Previewing documentation...")
 
-        # Check if site has been built
         site_path = self.layout.site_dir
-        index_html = site_path / "index.html"
-
-        if not index_html.exists():
+        if not (site_path / "index.html").exists():
             print("Site not found, building first...")
             self.build()
         else:
             self._print_layout_notice()
-
-        if not index_html.exists():
-            print("❌ Could not find built site")
-            sys.exit(1)
-
-        handler = functools.partial(
-            http.server.SimpleHTTPRequestHandler,
-            directory=str(site_path),
-        )
-        # Reap half-open sockets (e.g. Safari's idle speculative connections) so a
-        # stalled connection cannot tie up a worker thread indefinitely.
-        http.server.SimpleHTTPRequestHandler.timeout = 10
-        # Allow quick restart after Ctrl-C
-        http.server.ThreadingHTTPServer.allow_reuse_address = True
-
-        try:
-            # Use a threading server so one idle/speculative connection (notably from
-            # Safari) cannot block the whole preview. See issue #219.
-            httpd = http.server.ThreadingHTTPServer(("", port), handler)
-        except OSError:
-            print(f"❌ Port {port} is already in use. Try a different port.")
-            sys.exit(1)
-
-        url = f"http://localhost:{port}/"
-        print(f"\n🌐 Serving site at {url}")
-        print("   Press Ctrl+C to stop\n")
-
-        # Open browser after a short delay so the server is ready
-        threading.Timer(0.3, webbrowser.open, args=(url,)).start()
-
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            httpd.server_close()
+        serve.site(site_path, port, open_path=open_path, open_browser=open_browser, report=print)
 
     def check_links(
         self,
