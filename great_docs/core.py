@@ -4223,6 +4223,40 @@ class GreatDocs:
 
         return None
 
+    @staticmethod
+    def _strip_rich_click_markup(text: str, cmd) -> str:
+        """Strip rich-click markup when the command renders ``--help`` with it.
+
+        Rich-click interprets ``[b]...[/]`` and similar tags when its effective
+        ``text_markup`` mode is ``"rich"``. Structured fields written into the
+        generated page must be plain text; the full ``--help`` block is already
+        rendered by Click and is left alone. Commands from plain Click, Typer,
+        or rich-click's ``markdown``/``ansi`` modes keep their text unchanged.
+        """
+        if not text:
+            return text
+
+        try:
+            from rich.text import Text
+            from rich_click import RichCommand
+        except ImportError:
+            return text
+
+        if not isinstance(cmd, RichCommand):
+            return text
+
+        try:
+            formatter = cmd.context_class(cmd, info_name="").make_formatter()
+            if formatter.config.text_markup != "rich":
+                return text
+        except Exception:  # pragma: no cover - optional dependency internals
+            return text
+
+        try:
+            return Text.from_markup(text).plain
+        except Exception:  # pragma: no cover - malformed markup is left as-is
+            return text
+
     def _extract_click_command(self, cmd, name: str, parent_path: str = "") -> dict:
         """
         Extract information from a Click command or group.
@@ -4257,25 +4291,29 @@ class GreatDocs:
             if kind == "option":
                 opt_info = self._extract_click_option(param)
                 if opt_info:
+                    opt_info["help"] = self._strip_rich_click_markup(opt_info["help"], cmd)
                     options.append(opt_info)
             elif kind == "argument":
                 arg_info = self._extract_click_argument(param)
                 if arg_info:
                     arguments.append(arg_info)
 
+        command_help = self._strip_rich_click_markup(cmd.help or "", cmd)
+
         # Parse description and examples from the help text
-        description, examples = self._parse_click_help_parts(cmd.help or "")
+        description, examples = self._parse_click_help_parts(command_help)
 
         # Extract the short help (Click may auto-derive it, but sometimes it's
         # empty for subcommands).  Fall back to the first line/sentence of help.
         short_help = getattr(cmd, "short_help", "") or ""
-        if not short_help and cmd.help:
+        if not short_help and command_help:
             short_help = cmd.get_short_help_str(limit=150)
+        short_help = self._strip_rich_click_markup(short_help, cmd)
 
         info = {
             "name": name,
             "full_path": full_path,
-            "help": cmd.help or "",
+            "help": command_help,
             "short_help": short_help,
             "help_text": help_text,  # The actual --help output
             "deprecated": getattr(cmd, "deprecated", False),

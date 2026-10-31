@@ -73,6 +73,7 @@ dev = [
     "build>=0.7",
     "twine>=3.4",
     "typer>=0.12.0",
+    "rich-click>=1.9.8",
     "great-docs[docs]",
 ]
 docs = [
