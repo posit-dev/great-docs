@@ -23,6 +23,16 @@ __all__ = ["FILENAME", "linkify_references", "write_page"]
 
 FILENAME = "changelog.qmd"
 
+# A closing fence must use the same character as the opening fence and be at least as long.
+# An unclosed fenced block continues to the end of the notes. Inline code spans use equal
+# backtick runs and stay within one paragraph.
+_CODE = re.compile(
+    r"^[ ]{0,3}(?P<backticks>`{3,})[^`\n]*$.*?(?:^[ ]{0,3}(?P=backticks)`*[ \t]*$|\Z)"
+    r"|^[ ]{0,3}(?P<tildes>~{3,}).*?$.*?(?:^[ ]{0,3}(?P=tildes)~*[ \t]*$|\Z)"
+    r"|(?<!`)(?P<ticks>`+)(?!`)(?:(?!\n[ \t]*\n).)+?(?<!`)(?P=ticks)(?!`)",
+    re.MULTILINE | re.DOTALL,
+)
+
 
 def write_page(
     config: Config,
@@ -139,14 +149,40 @@ def linkify_references(text: str, repo: GithubRepo) -> str:
     """
     Turn GitHub shorthand references in release notes into Markdown links
 
-    Link bare `#123`, `gh issue #123` and `gh pr #123` to the repository's issue, `@username`
-    to the user's profile, and bare compare URLs to themselves. Remove the backslash escapes
-    that GitHub adds before `@`, `#`, quotes and backslashes.
+    Leave inline code spans and fenced code blocks as written. In the surrounding text,
+    link bare `#123`, `gh issue #123` and `gh pr #123` to issues in the repository,
+    `@username` to the user's profile, and bare compare URLs to themselves. Remove the
+    backslash escapes that GitHub adds before `@`, `#`, quotes and backslashes in that text.
 
     Parameters
     ----------
     text
         The Markdown text of a release's notes.
+    repo
+        The repository the issue numbers refer to.
+
+    Returns
+    -------
+    :
+        The text with references outside code written as Markdown links.
+    """
+    pieces: list[str] = []
+    start = 0
+    for code in _CODE.finditer(text):
+        pieces.extend([_linkify_prose(text[start : code.start()], repo), code.group()])
+        start = code.end()
+    pieces.append(_linkify_prose(text[start:], repo))
+    return "".join(pieces)
+
+
+def _linkify_prose(text: str, repo: GithubRepo) -> str:
+    """
+    Turn GitHub shorthand references in text outside code into Markdown links
+
+    Parameters
+    ----------
+    text
+        Markdown text without code spans or fenced code blocks.
     repo
         The repository the issue numbers refer to.
 

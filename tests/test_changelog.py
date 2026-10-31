@@ -195,3 +195,35 @@ def test_write_page_nests_note_headings_under_the_release(tmp_path: Path):
 )
 def test_linkify_references(text: str, expected: str):
     assert changelog.linkify_references(text, REPO) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        pytest.param(
+            "Use `@dataclass` for #3.",
+            "Use `@dataclass` for [#3](https://github.com/owner/repo/issues/3).",
+            id="code-span",
+        ),
+        pytest.param("Run ``a ` #3`` here", "Run ``a ` #3`` here", id="double-backtick-span"),
+        pytest.param(r"Type `\@x` or `\#3`", r"Type `\@x` or `\#3`", id="escapes-in-code-span"),
+        pytest.param(
+            "```py\n# see #12\n@dataclass\n```\nThanks @bob",
+            "```py\n# see #12\n@dataclass\n```\nThanks [@bob](https://github.com/bob)",
+            id="backtick-fence",
+        ),
+        pytest.param(
+            "~~~\n#12 ```\n~~~~\n#3",
+            "~~~\n#12 ```\n~~~~\n[#3](https://github.com/owner/repo/issues/3)",
+            id="tilde-fence",
+        ),
+        pytest.param("Notes\n\n```\n@x #12", "Notes\n\n```\n@x #12", id="unclosed-fence"),
+        pytest.param(
+            "A lone ` here.\n\nThanks @bob for `x`.",
+            "A lone ` here.\n\nThanks [@bob](https://github.com/bob) for `x`.",
+            id="span-within-a-paragraph",
+        ),
+    ],
+)
+def test_linkify_references_leaves_code_unchanged(text: str, expected: str):
+    assert changelog.linkify_references(text, REPO) == expected
