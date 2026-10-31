@@ -83,8 +83,7 @@ def page(
     elif breadcrumbs == "default":
         block = locate_front_matter(content)
         if block is not None and "bread-crumbs" not in block.mapping:
-            front_matter = {**block.mapping.data, "bread-crumbs": False}
-            content = f"---\n{format_yaml(front_matter)}\n---\n{content[block.end :]}"
+            content = set_front_matter_option(content, "bread-crumbs", False)
     front_matter, _ = split_front_matter(content)
     # The page that becomes the homepage shows no dates
     if published != pages.homepage:

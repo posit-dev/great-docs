@@ -186,3 +186,24 @@ def test_a_page_moved_to_the_homepage_has_no_dates(tmp_path: Path, layout: Layou
     )
 
     assert destination.read_text() == "# Intro\n"
+
+
+def test_turning_off_breadcrumbs_keeps_the_front_matter_text(tmp_path: Path, layout: Layout):
+    source = tmp_path / "examples/demo.qmd"
+    source.parent.mkdir()
+    source.write_text('---\n# Shown in the card\ntitle: "Demo: one"\n---\n\nText\n')
+    destination = layout.build_dir / "examples/demo.qmd"
+
+    publish.page(
+        source,
+        destination,
+        layout=layout,
+        pages=page_map(tmp_path, layout),
+        add_dates=lambda content, _: content,
+        strip_prefix=True,
+        breadcrumbs="default",
+    )
+
+    assert destination.read_text() == (
+        '---\n# Shown in the card\ntitle: "Demo: one"\nbread-crumbs: false\n---\n\nText\n'
+    )
