@@ -3202,7 +3202,7 @@ class GreatDocs:
             content = fix_numeric_prefix_links(content)
 
             # Parse frontmatter for metadata
-            title = published.name.replace(".qmd", "").replace(".md", "").replace("-", " ").title()
+            title = title_from_name(published.stem)
             description = ""
             image = ""
 
@@ -3285,7 +3285,7 @@ class GreatDocs:
 
             # Parse frontmatter for metadata (but don't modify it —
             # Quarto's listing needs the original frontmatter)
-            title = rel.stem.replace("-", " ").title()
+            title = title_from_name(rel.stem)
             description = ""
 
             fm, _ = split_front_matter(content)

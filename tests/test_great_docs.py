@@ -9341,6 +9341,19 @@ def test_copy_section_files_no_frontmatter_explicit_list():
         assert (dest / "raw.qmd").exists()
 
 
+def test_section_and_blog_fallback_titles_treat_underscores_as_spaces(tmp_path: Path):
+    src = tmp_path / "sec"
+    src.mkdir()
+    (src / "03-my_file.qmd").write_text("Body\n")
+    docs = GreatDocs(project_path=str(tmp_path))
+
+    section = docs._copy_section_files([src / "03-my_file.qmd"], src, tmp_path / "section")
+    blog = docs._copy_blog_files([src / "03-my_file.qmd"], src, tmp_path / "blog")
+
+    assert section[0]["title"] == "My File"
+    assert blog[0]["title"] == "03 My File"
+
+
 def test_process_custom_pages_passthrough_and_raw():
     """Custom HTML pages support passthrough wrapping and raw copy-through."""
     with tempfile.TemporaryDirectory() as tmp_dir:
