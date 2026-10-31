@@ -209,11 +209,22 @@ def test_pypi_release_dates():
     assert dates == {"numpy": "2026-06-15"}
 
 
-def test_pypi_release_dates_omit_failed_requests():
-    with patch("requests.get", side_effect=Exception("timeout")):
+@pytest.mark.parametrize(
+    "outcome",
+    [requests.ConnectionError("timeout"), response(404), malformed()],
+    ids=["request error", "status 404", "malformed"],
+)
+def test_pypi_release_dates_omit_failed_requests(outcome):
+    with patch("requests.get", side_effect=[outcome]):
         dates = HttpRemote(report=print).pypi_release_dates({"nonexistent-pkg"})
 
     assert dates == {}
+
+
+def test_pypi_release_dates_raise_on_an_unexpected_response():
+    with patch("requests.get", return_value=response(200, ["not", "a", "mapping"])):
+        with pytest.raises(AttributeError):
+            HttpRemote(report=print).pypi_release_dates({"numpy"})
 
 
 def test_pypi_release_dates_of_no_packages():

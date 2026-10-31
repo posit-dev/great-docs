@@ -223,7 +223,8 @@ class HttpRemote:
         -------
         :
             The `YYYY-MM-DD` upload date of each package's latest version, keyed by name. A
-            package whose request fails has no entry.
+            package whose request fails has no entry. Invalid JSON is a request failure;
+            errors caused by an unexpected JSON structure propagate to the caller.
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -251,7 +252,7 @@ class HttpRemote:
                             upload_time = files[0].get("upload_time_iso_8601", "")
                             if upload_time:
                                 return name, upload_time[:10]
-            except Exception:
+            except requests.RequestException:
                 pass
             return name, ""
 
