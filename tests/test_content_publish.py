@@ -53,7 +53,7 @@ def test_a_referenced_file_is_copied_beside_the_page(tmp_path: Path, layout: Lay
         tmp_path / "README.md",
         layout.build_dir / "index.qmd",
         layout=layout,
-        pages=lambda: page_map(tmp_path, layout),
+        pages=page_map(tmp_path, layout),
     )
 
     assert result == markup
@@ -80,7 +80,7 @@ def test_urls_anchors_and_missing_files_are_left_alone(
         tmp_path / "README.md",
         layout.build_dir / "index.qmd",
         layout=layout,
-        pages=lambda: page_map(tmp_path, layout),
+        pages=page_map(tmp_path, layout),
     )
 
     assert result == markup
@@ -97,7 +97,7 @@ def test_a_link_to_a_page_points_at_its_published_path(tmp_path: Path, layout: L
         guide / "01-start.qmd",
         layout.build_dir / "user-guide/start.qmd",
         layout=layout,
-        pages=lambda: page_map(tmp_path, layout, guide),
+        pages=page_map(tmp_path, layout, guide),
     )
 
     assert result == "[Next](next.qmd#more)"
@@ -114,7 +114,7 @@ def test_a_bibliography_is_shared_and_keeps_the_front_matter_valid(tmp_path: Pat
         source,
         layout.build_dir / "user-guide/page.qmd",
         layout=layout,
-        pages=lambda: page_map(tmp_path, layout),
+        pages=page_map(tmp_path, layout),
     )
 
     assert result == "---\ntitle: Page\nbibliography: ../_shared/refs.bib\n---\n\nText\n"
@@ -129,7 +129,7 @@ def test_front_matter_that_is_not_a_mapping_is_left_alone(tmp_path: Path, layout
         tmp_path / "page.qmd",
         layout.build_dir / "page.qmd",
         layout=layout,
-        pages=lambda: page_map(tmp_path, layout),
+        pages=page_map(tmp_path, layout),
     )
 
     assert result == content

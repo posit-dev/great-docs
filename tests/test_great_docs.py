@@ -8472,6 +8472,21 @@ def test_generate_section_index_only_images():
         assert "<hr>" not in content
 
 
+def test_copying_a_section_finds_the_user_guide_once(tmp_path, capsys):
+    """Report a missing user guide once per copy regardless of the number of links"""
+    write_config(tmp_path, "user_guide: missing_guide\n")
+    source_dir = tmp_path / "examples"
+    source_dir.mkdir()
+    pages = [source_dir / f"page{index}.qmd" for index in range(3)]
+    for page in pages:
+        page.write_text("[One](page0.qmd) [Two](page1.qmd) [Three](page2.qmd)\n")
+    docs = GreatDocs(project_path=str(tmp_path))
+
+    docs._copy_section_files(pages, source_dir, docs.build_dir / "examples")
+
+    assert capsys.readouterr().out.count("'missing_guide'") == 1
+
+
 def test_copy_section_files_strips_prefix():
     """_copy_section_files strips numeric prefixes from filenames."""
     with tempfile.TemporaryDirectory() as tmp_dir:

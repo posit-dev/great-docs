@@ -2450,6 +2450,7 @@ class GreatDocs:
             List of dicts with `filename`, `title`, `description`, `image` keys.
         """
         copied: list[dict] = []
+        pages = self._page_map()
 
         for src_file in files:
             # Copied paths and rewritten links must strip the same numeric prefixes
@@ -2465,7 +2466,7 @@ class GreatDocs:
             # Expand {{< code-include >}} shortcodes before Quarto sees the file
             content = code_includes.expand(content, src_file.parent, self.layout)
             content = publish.rebase_references(
-                content, src_file, dest_file, layout=self.layout, pages=self._page_map
+                content, src_file, dest_file, layout=self.layout, pages=pages
             )
 
             # Fix links to .qmd files with numeric prefixes
@@ -2537,6 +2538,7 @@ class GreatDocs:
         # Track directories that contain content files so we can copy
         # their co-located assets afterward
         content_dirs: set[Path] = set()
+        pages = self._page_map()
 
         for src_file in files:
             rel = src_file.relative_to(source_dir)
@@ -2552,7 +2554,7 @@ class GreatDocs:
             # Expand {{< code-include >}} shortcodes before Quarto sees the file
             content = code_includes.expand(content, src_file.parent, self.layout)
             content = publish.rebase_references(
-                content, src_file, dest_file, layout=self.layout, pages=self._page_map
+                content, src_file, dest_file, layout=self.layout, pages=pages
             )
 
             # Parse frontmatter for metadata (but don't modify it —
@@ -3161,6 +3163,7 @@ class GreatDocs:
             self._resolve_social_card_image_url() if self._config.social_cards_enabled else None
         )
         structured_data = self._structured_data()
+        pages = self._page_map()
 
         for source in sources:
             source_dir = source["source_dir"]
@@ -3184,7 +3187,7 @@ class GreatDocs:
 
                 content = src_path.read_text(encoding="utf-8")
                 content = publish.rebase_references(
-                    content, src_path, dest_path, layout=self.layout, pages=self._page_map
+                    content, src_path, dest_path, layout=self.layout, pages=pages
                 )
                 frontmatter, body = split_front_matter(content)
                 body = body.lstrip("\n")
@@ -4869,6 +4872,7 @@ class GreatDocs:
 
         is_explicit = user_guide_info.get("explicit", False)
         copied_files = []
+        pages = self._page_map()
 
         for file_info in user_guide_info["files"]:
             src_path = file_info["path"]
@@ -4891,9 +4895,9 @@ class GreatDocs:
 
             # Expand {{< code-include >}} shortcodes before Quarto sees the file
             content = code_includes.expand(content, src_path.parent, self.layout)
-            reference_destination = self._page_map().destination(src_path.resolve()) or dst_path
+            reference_destination = pages.destination(src_path.resolve()) or dst_path
             content = publish.rebase_references(
-                content, src_path, reference_destination, layout=self.layout, pages=self._page_map
+                content, src_path, reference_destination, layout=self.layout, pages=pages
             )
 
             # In auto-discovery mode, fix links to .qmd files with numeric prefixes
@@ -8599,7 +8603,7 @@ class GreatDocs:
                 self.layout.config_path,
                 self.build_dir / "index.qmd",
                 layout=self.layout,
-                pages=self._page_map,
+                pages=self._page_map(),
             )
 
         # ── Name ────────────────────────────────────────────────────
@@ -9498,7 +9502,7 @@ title: "Authors and Citation"
 
             # Copy images referenced in the source file to the build directory
             readme_content = publish.rebase_references(
-                readme_content, source_file, index_qmd, layout=self.layout, pages=self._page_map
+                readme_content, source_file, index_qmd, layout=self.layout, pages=self._page_map()
             )
 
         # Build hero section (must run before heading adjustment so badge

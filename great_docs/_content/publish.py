@@ -15,8 +15,6 @@ from .._source_refs import source_reference_spans
 from .._yaml import locate_front_matter
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from .._layout import Layout
     from .pages import PageMap
 
@@ -64,7 +62,7 @@ def rebase_references(
     destination: Path,
     *,
     layout: Layout,
-    pages: Callable[[], PageMap],
+    pages: PageMap,
 ) -> str:
     """
     Rewrite a page's local references relative to its published path
@@ -87,7 +85,7 @@ def rebase_references(
     layout
         The project's directories.
     pages
-        A callable that builds the published page map once for each reference to a page.
+        The published path of each authored page.
 
     Returns
     -------
@@ -109,7 +107,7 @@ def rebase_references(
         if not target.is_file():
             return reference
         if target.suffix.lower() in _PAGE_SUFFIXES:
-            page = pages().destination(target)
+            page = pages.destination(target)
             if page is None:
                 return reference
             return _relative_url(page, destination, url.query, url.fragment)

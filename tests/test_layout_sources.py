@@ -33,7 +33,7 @@ def make_docs(root: Path, source: Path) -> GreatDocs:
 
 def rebase(gd: GreatDocs, content: str, source: Path, destination: Path) -> str:
     return publish.rebase_references(
-        content, source, destination, layout=gd.layout, pages=gd._page_map
+        content, source, destination, layout=gd.layout, pages=gd._page_map()
     )
 
 
