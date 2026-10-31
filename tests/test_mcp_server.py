@@ -10,6 +10,7 @@ import pytest
 from pydantic import AnyUrl
 
 import great_docs.mcp as mcp_module
+from great_docs._layout import Layout
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs.mcp import (
     _build_output_dirs,
@@ -519,10 +520,32 @@ class TestHandleBuild:
 
         mock_docs = MagicMock()
         mock_docs.build = MagicMock()
+        mock_docs.layout = Layout.make(tmp_path)
+        mock_docs._config = mock_config()
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             asyncio.run(_handle_build({"clean": True}))
 
         assert not old_dir.exists()
+
+    def test_clean_keeps_a_foreign_build_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "great-docs").mkdir()
+        (tmp_path / "great-docs" / "notes.md").write_text("mine\n")
+        old_dir = tmp_path / "great-docs-0.1"
+        old_dir.mkdir()
+        (old_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER + "project:\n  type: website\n")
+
+        mock_docs = MagicMock()
+        mock_docs.layout = Layout.make(tmp_path)
+        mock_docs._config = mock_config()
+        with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
+            with pytest.raises(ValueError, match="not a Great Docs-generated"):
+                asyncio.run(_handle_build({"clean": True}))
+
+        assert old_dir.is_dir()
+        mock_docs.build.assert_not_called()
 
     def test_explicit_project_path(self, tmp_path: Path):
         mock_docs = MagicMock()

@@ -14,7 +14,11 @@ from ._build import freeze as freeze_cache
 from ._build import from_repo as repository
 from ._build import quarto, serve
 from ._build.steps import BuildError
+from ._github import GithubRepo
+from ._install import update_gitignore
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
+from ._website import changelog as changelog_page
+from ._website import quarto_yml
 from .config import ConfigError
 from .core import GreatDocs
 
@@ -674,9 +678,7 @@ def config(project_path: str | None, force: bool, config_path: str | None = None
         config_content = create_default_config()
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text(config_content, encoding="utf-8")
-        GreatDocs(
-            project_path=str(layout.package_root), config_path=str(config_path)
-        )._update_project_gitignore(force=True)
+        update_gitignore(layout, report=click.echo)
         click.echo(f"✓ Created {config_path}")
         click.echo("\nEdit this file to customize your documentation settings.")
         click.echo("See https://posit-dev.github.io/great-docs/user-guide/configuration.html")
@@ -2378,10 +2380,6 @@ def changelog(
     try:
         docs = GreatDocs(project_path=project_path, config_path=config_path)
 
-        # Override max_releases in config if provided
-        if max_releases is not None:
-            docs._config._config.setdefault("changelog", {})["max_releases"] = max_releases
-
         owner, repo, _base_url = docs._get_github_repo_info()
         if not owner or not repo:
             click.echo(
@@ -2392,12 +2390,22 @@ def changelog(
             )
             sys.exit(1)
 
-        result = docs._generate_changelog_page()
-        if result:
-            docs._add_changelog_to_navbar()
-            click.echo(f"✅ Changelog generated: {docs.build_dir / result}")
-        else:
+        contribution = changelog_page.write_page(
+            docs._config,
+            docs.build_dir,
+            GithubRepo(owner, repo),
+            docs._remote,
+            max_releases=max_releases,
+            report=click.echo,
+        )
+        if contribution is None:
             click.echo("No published releases found on GitHub.")
+        else:
+            # Link the page from a site that has been built
+            if quarto_yml.path(docs.build_dir).exists():
+                with quarto_yml.edit(docs.build_dir, docs._config) as quarto_config:
+                    quarto_yml.apply(quarto_config, contribution)
+            click.echo(f"✅ Changelog generated: {docs.build_dir / changelog_page.FILENAME}")
 
     except Exception as e:
         click.echo(f"Error: {e}", err=True)

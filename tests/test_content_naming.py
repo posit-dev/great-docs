@@ -19,10 +19,42 @@ def test_strip_numeric_prefix_no_prefix():
     assert strip_numeric_prefix("introduction.qmd") == "introduction.qmd"
 
 
-def test_fix_numeric_prefix_links_basic():
-    assert (
-        fix_numeric_prefix_links("[Config](05-configuration.qmd)") == "[Config](configuration.qmd)"
-    )
+@pytest.mark.parametrize(
+    ("link", "fixed"),
+    [
+        ("[Theming](11-theming.qmd): colours", "[Theming](theming.qmd): colours"),
+        ("[Config](05-configuration.qmd#options)", "[Config](configuration.qmd#options)"),
+        ("[Config](05-configuration.qmd?v=2)", "[Config](configuration.qmd?v=2)"),
+        ("[Guide](01-getting-started/02-install.qmd)", "[Guide](getting-started/install.qmd)"),
+        ("[A](11-a.qmd) and [B](05_b.qmd)", "[A](a.qmd) and [B](b.qmd)"),
+    ],
+)
+def test_links_to_missing_pages_lose_numeric_prefixes(tmp_path: Path, link: str, fixed: str):
+    assert fix_numeric_prefix_links(link, tmp_path) == fixed
+
+
+@pytest.mark.parametrize(
+    "link",
+    [
+        "[Docs](https://example.com/11-theming.qmd)",
+        "[Docs](http://example.com/05-config.qmd)",
+        "[Docs](/root/11-theming.qmd)",
+        "[Theming](theming.qmd)",
+        "[Image](11-diagram.png)",
+        "[Page](11-theming.html)",
+    ],
+)
+def test_urls_and_links_to_other_files_are_left_alone(tmp_path: Path, link: str):
+    assert fix_numeric_prefix_links(link, tmp_path) == link
+
+
+def test_a_link_to_an_existing_page_keeps_its_prefixes(tmp_path: Path):
+    post = tmp_path / "blog/2024-01-welcome/index.qmd"
+    post.parent.mkdir(parents=True)
+    post.write_text("# Welcome\n")
+    link = "[Welcome](blog/2024-01-welcome/index.qmd#intro)"
+
+    assert fix_numeric_prefix_links(link, tmp_path) == link
 
 
 def test_section_slug_replaces_underscores_and_spaces():

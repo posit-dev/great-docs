@@ -1,8 +1,11 @@
+import copy
 from pathlib import Path
+from typing import Any
 
 import pytest
 from yaml12 import parse_yaml
 
+from great_docs._contribution import Contribution, NavbarLink
 from great_docs._utils import QUARTO_YML_HEADER, validate_build_dir
 from great_docs._website import quarto_yml
 from tests.support import write_config
@@ -99,3 +102,50 @@ def test_edit_leaves_file_unchanged_when_block_raises(tmp_path: Path):
         raise KeyError("stop")
 
     assert (tmp_path / "_quarto.yml").read_text(encoding="utf-8") == before
+
+
+CHANGELOG = Contribution(navbar=(NavbarLink("Changelog", "changelog.qmd"),))
+
+
+def test_apply_appends_navbar_links_in_order():
+    reference = {"text": "Reference", "href": "reference/index.qmd"}
+    quarto_config = {"website": {"navbar": {"left": [reference]}}}
+    links = (NavbarLink("Changelog", "changelog.qmd"), NavbarLink("Blog", "blog/index.qmd"))
+
+    quarto_yml.apply(quarto_config, Contribution(navbar=links))
+
+    assert quarto_config["website"]["navbar"]["left"] == [
+        reference,
+        {"text": "Changelog", "href": "changelog.qmd"},
+        {"text": "Blog", "href": "blog/index.qmd"},
+    ]
+
+
+@pytest.mark.parametrize("text", ["Changelog", "Journal des modifications"])
+def test_apply_skips_a_link_whose_href_is_in_the_navbar(text: str):
+    left = [{"text": text, "href": "changelog.qmd"}]
+
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, CHANGELOG)
+
+    assert left == [{"text": text, "href": "changelog.qmd"}]
+
+
+def test_apply_adds_a_link_whose_text_is_in_the_navbar_with_another_href():
+    news = {"text": "Changelog", "href": "https://example.com/news"}
+    left = [news]
+
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, CHANGELOG)
+
+    assert left == [news, {"text": "Changelog", "href": "changelog.qmd"}]
+
+
+@pytest.mark.parametrize(
+    "quarto_config",
+    [{}, {"website": {}}, {"website": {"navbar": {}}}, {"website": {"navbar": {"right": []}}}],
+)
+def test_apply_without_a_left_navbar_changes_nothing(quarto_config: dict[str, Any]):
+    before = copy.deepcopy(quarto_config)
+
+    quarto_yml.apply(quarto_config, CHANGELOG)
+
+    assert quarto_config == before

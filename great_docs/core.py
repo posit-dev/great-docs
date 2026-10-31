@@ -7,14 +7,15 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from functools import partial
 from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
-from urllib.parse import quote, unquote, urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
 
-from ._build import freeze, quarto, serve, timings
+from ._build import freeze, outputs, quarto, serve, timings
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
@@ -29,28 +30,26 @@ from ._build.steps import (
     count_listed,
     run_steps,
 )
-from ._content import code_includes
+from ._content import publish
 from ._content.naming import (
-    fix_numeric_prefix_links,
     published_path,
-    section_slug,
     strip_numeric_prefix,
     title_from_name,
 )
+from ._content.pages import PageMap, output_destination, section_destination
+from ._content.sections import source_dirs as section_source_dirs
 from ._github import GithubRepo
+from ._install import update_gitignore
 from ._layout import Layout
 from ._remote import HttpRemote, Remote
-from ._source_refs import source_reference_spans
 from ._subprocess import TEXT_MODE_KWARGS
 from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
 from ._utils import (
     GITIGNORE_CONTENT,
-    recognised_build_dirs,
     record_site_ownership,
-    validate_build_dir,
-    validate_layout_outputs,
 )
 from ._website import (
+    changelog,
     i18n,
     markdown_pages,
     page_dates,
@@ -119,58 +118,6 @@ _QUARTO_RENDER_GLOBS = [
     "*.rmarkdown",
     "*.ipynb",
 ]
-
-
-def _migrate_legacy_gitignore_entry(content: str) -> str:
-    """
-    Anchor a standalone legacy `great-docs/` ignore entry
-
-    Earlier releases omitted the leading `/`, so Git matched a directory of
-    that name anywhere in the project. Replace only a complete `great-docs/`
-    line, without changing related patterns or negations.
-
-    Parameters
-    ----------
-    content
-        Contents of a project `.gitignore` file.
-
-    Returns
-    -------
-    Updated contents, or the original contents when no legacy entry exists.
-    """
-    lines = content.splitlines(keepends=True)
-    migrated = False
-    new_lines = []
-    for line in lines:
-        body = line.rstrip("\r\n")
-        line_ending = line[len(body) :]
-        if body.rstrip() == "great-docs/":
-            new_lines.append("/great-docs/" + line_ending)
-            migrated = True
-        else:
-            new_lines.append(line)
-    return "".join(new_lines) if migrated else content
-
-
-def _gitignore_has_entry(content: str, entry: str) -> bool:
-    """
-    Check whether `entry` appears as a complete line in `content`
-
-    Whole-line matching prevents an entry such as `/great-docs/` from also
-    matching a negated path such as `!skills/great-docs/`.
-
-    Parameters
-    ----------
-    content
-        Contents of a project `.gitignore` file.
-    entry
-        Gitignore pattern to look for as a standalone line.
-
-    Returns
-    -------
-    Whether any line equals `entry` after stripping surrounding whitespace.
-    """
-    return entry in (line.strip() for line in content.splitlines())
 
 
 def _is_status_script_entry(entry: object) -> bool:
@@ -345,77 +292,6 @@ class GreatDocs:
             )
         return self._griffe_pkg_cache[normalized]
 
-    def _validate_build_outputs(self) -> None:
-        """Reject version and ownership conflicts before changing project files"""
-        validate_layout_outputs(self.layout)
-        validate_build_dir(self.build_dir)
-        if self._config.versions:
-            from ._versioned_build import _check_build_dir_collisions
-            from ._versioning import get_latest_version, parse_versions_config
-
-            versions = parse_versions_config(self._config.versions)
-            latest = get_latest_version(versions)
-            latest_tag = latest.tag if latest else versions[0].tag
-            _check_build_dir_collisions(self.layout.build_dir, versions, latest_tag, self.layout)
-            for entry in versions:
-                validate_build_dir(self.layout.build_dir_for(entry.tag, latest_tag))
-        self._validate_section_claims()
-
-    def _validate_section_claims(self) -> None:
-        """
-        Reject an explicit user guide or custom pages directory that is also a section
-
-        Raises
-        ------
-        ValueError
-            If `user_guide` or `custom_pages` names a directory that a `sections` entry
-            publishes.
-        """
-        claimed = self._section_source_dirs()
-        if not claimed:
-            return
-
-        package_root = self.layout.source_dir
-        explicit: list[tuple[str, Path]] = []
-        if self._config.user_guide_dir is not None:
-            explicit.append(("user_guide", package_root / self._config.user_guide_dir))
-        elif self._config.user_guide_is_explicit:
-            # A list-form guide still reads its files from the conventional directory.
-            for name in ("user_guide", "user-guide"):
-                candidate = package_root / name
-                if candidate.is_dir():
-                    explicit.append(("user_guide", candidate))
-                    break
-        if self._config["custom_pages"] is not None:
-            explicit.extend(
-                ("custom_pages", package_root / entry["dir"]) for entry in self._config.custom_pages
-            )
-
-        for key, directory in explicit:
-            if directory.resolve() in claimed:
-                raise ValueError(
-                    f"Directory '{directory.relative_to(package_root)}' is claimed by both "
-                    f"`{key}` and `sections`; remove it from one of them"
-                )
-
-    def _section_source_dirs(self) -> set[Path]:
-        """
-        Collect the source directories that `sections` entries publish
-
-        Returns
-        -------
-        set[Path]
-            The resolved directory of every section entry with a `dir`.
-        """
-        sections = self._config.sections
-        if not isinstance(sections, list):
-            return set()
-        return {
-            (self.layout.source_dir / section["dir"]).resolve()
-            for section in sections
-            if isinstance(section, dict) and isinstance(section.get("dir"), str)
-        }
-
     def _prepare_build_directory(self, run: Run) -> None:
         """
         Prepare the great-docs/ build directory with all necessary assets.
@@ -434,7 +310,7 @@ class GreatDocs:
         """
         print(f"Preparing build directory: {self.build_dir.relative_to(self.project_root)}/")
 
-        self._validate_build_outputs()
+        outputs.validate(self._config, self.layout)
 
         hook_names = [Path(path).name for path in self._config.pre_render]
         if len(hook_names) != len(set(hook_names)) or "restore-freeze.py" in hook_names:
@@ -478,14 +354,14 @@ class GreatDocs:
         for bib_path in self._config.bibliography:
             src = self.layout.source_dir / bib_path
             if src.is_file():
-                self._copy_source_asset(src, self.build_dir / src.name)
+                publish.copy_asset(self.layout, src, self.build_dir / src.name)
             else:
                 print(f"Warning: Bibliography file not found: {bib_path}")
         csl_path = self._config.csl
         if csl_path:
             csl_src = self.layout.source_dir / csl_path
             if csl_src.is_file():
-                self._copy_source_asset(csl_src, self.build_dir / csl_src.name)
+                publish.copy_asset(self.layout, csl_src, self.build_dir / csl_src.name)
             else:
                 print(f"Warning: CSL file not found: {csl_path}")
 
@@ -494,7 +370,7 @@ class GreatDocs:
         for css_path in self._config.css:
             css_src = self.layout.source_dir / css_path
             if css_src.is_file():
-                self._copy_source_asset(css_src, self.build_dir / css_src.name)
+                publish.copy_asset(self.layout, css_src, self.build_dir / css_src.name)
             else:
                 print(f"Warning: CSS file not found: {css_path}")
 
@@ -753,157 +629,23 @@ class GreatDocs:
 
         return True
 
-    def _copy_source_asset(self, source: Path, destination: Path) -> Path:
+    def _page_map(self) -> PageMap:
         """
-        Copy a referenced file without escaping or overwriting the build tree
-        """
-        destination = destination.resolve()
-        if not destination.is_relative_to(self.build_dir.resolve()):
-            raise ValueError(f"Asset destination escapes the build directory: {destination}")
-        if destination.exists():
-            if not destination.is_file() or destination.read_bytes() != source.read_bytes():
-                raise ValueError(
-                    f"Asset destination conflicts with an existing file: {destination}"
-                )
-        else:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
-        return destination
+        Map authored pages to their published paths for this build
 
-    def _rebase_source_references(
-        self, content: str, source_file: Path, destination_file: Path
-    ) -> str:
-        """
-        Copy local linked assets and rewrite their generated references
-
-        Resolve inputs beside the source page. Preserve URLs, missing files,
-        anchors, and query strings. Keep shared files under the build tree.
-        """
-
-        def rebase(reference: str) -> str:
-            url = urlsplit(reference)
-            if url.scheme or url.netloc or not url.path or reference.startswith("/"):
-                return reference
-            source = (source_file.parent / unquote(url.path)).resolve()
-            if not source.is_file():
-                return reference
-            if source.suffix.lower() in {".qmd", ".md", ".rst", ".html", ".htm"}:
-                page = self._source_page_destination(source)
-                if page is None:
-                    return reference
-                path = Path(os.path.relpath(page, destination_file.parent)).as_posix()
-                return urlunsplit(("", "", quote(path, safe="/"), url.query, url.fragment))
-            candidate = (destination_file.parent / unquote(url.path)).resolve()
-            if not candidate.is_relative_to(self.build_dir.resolve()) or (
-                self.layout.source_dir != self.layout.package_root
-                and not source.is_relative_to(self.layout.source_dir)
-            ):
-                if source.is_relative_to(self.layout.package_root):
-                    relative = source.relative_to(self.layout.package_root)
-                else:
-                    import hashlib
-
-                    relative = (
-                        Path(hashlib.sha256(str(source).encode()).hexdigest()[:16]) / source.name
-                    )
-                candidate = self.build_dir / "_shared" / relative
-            copied = self._copy_source_asset(source, candidate)
-            path = Path(os.path.relpath(copied, destination_file.parent)).as_posix()
-            return urlunsplit(("", "", quote(path, safe="/"), url.query, url.fragment))
-
-        spans = source_reference_spans(
-            content, html=source_file.suffix.lower() in {".html", ".htm"}
-        )
-        for start, end in reversed(spans):
-            content = content[:start] + rebase(content[start:end]) + content[end:]
-        return self._rebase_page_bibliography(content, source_file, destination_file)
-
-    def _rebase_page_bibliography(
-        self, content: str, source_file: Path, destination_file: Path
-    ) -> str:
-        block = locate_front_matter(content)
-        if block is None:
-            return content
-        bibliography = block.mapping.get("bibliography")
-        if isinstance(bibliography, str):
-            entries = [bibliography]
-            is_list = False
-        elif isinstance(bibliography, list) and all(isinstance(item, str) for item in bibliography):
-            entries = bibliography
-            is_list = True
-        else:
-            return content
-
-        rebased: list[str] = []
-        changed = False
-        for reference in entries:
-            url = urlsplit(reference)
-            if url.scheme or url.netloc or not url.path or reference.startswith("/"):
-                rebased.append(reference)
-                continue
-            source = (source_file.parent / unquote(url.path)).resolve()
-            if not source.is_file():
-                rebased.append(reference)
-                continue
-            if source.is_relative_to(self.layout.package_root):
-                relative = source.relative_to(self.layout.package_root)
-            else:
-                import hashlib
-
-                relative = Path(hashlib.sha256(str(source).encode()).hexdigest()[:16]) / source.name
-            destination = self.build_dir / "_shared" / relative
-            copied = self._copy_source_asset(source, destination)
-            path = Path(os.path.relpath(copied, destination_file.parent)).as_posix()
-            rebased.append(urlunsplit(("", "", quote(path, safe="/"), url.query, url.fragment)))
-            changed = changed or path != reference
-
-        if not changed:
-            return content
-        frontmatter = {**block.mapping.data, "bibliography": rebased if is_list else rebased[0]}
-        return f"---\n{format_yaml(frontmatter)}\n---\n{content[block.end :]}"
-
-    def _source_page_destination(self, source: Path) -> Path | None:
-        """
-        Map a documentation source page to its generated destination
+        Returns
+        -------
+        :
+            The page map for the current sources and configuration.
         """
         landing, _ = self._find_index_source_file()
-        if landing is not None and source == landing.resolve():
-            return self.build_dir / "index.qmd"
-        roots: list[tuple[Path, Path, bool]] = []
         guide = self._find_user_guide_dir()
-        if guide is not None:
-            if self._config.homepage == "user_guide":
-                info = self._discover_user_guide()
-                if info and info["files"] and source == info["files"][0]["path"].resolve():
-                    return self.build_dir / "index.qmd"
-            roots.append(
-                (guide, self.build_dir / "user-guide", not self._config.user_guide_is_explicit)
-            )
-        for section in self._config.sections or []:
-            if not isinstance(section, dict):
-                continue
-            destination = self._section_build_dir(section)
-            if destination is not None:
-                roots.append(
-                    (
-                        self.layout.source_dir / section["dir"],
-                        destination,
-                        section.get("type") != "blog",
-                    )
-                )
-        for page in self._config.custom_pages:
-            roots.append(
-                (
-                    self.layout.source_dir / page["dir"],
-                    self._output_directory(page["output"]),
-                    False,
-                )
-            )
-        for directory, destination, strip_prefix in roots:
-            if source.is_relative_to(directory.resolve()):
-                relative = source.relative_to(directory.resolve())
-                return destination / published_path(relative, strip_prefix=strip_prefix)
-        return None
+        homepage = [] if landing is None else [landing]
+        if guide is not None and self._config.homepage == "user_guide":
+            info = self._discover_user_guide()
+            if info and info["files"]:
+                homepage.append(info["files"][0]["path"])
+        return PageMap.make(self._config, self.layout, guide, homepage)
 
     def install(self, force: bool = False) -> None:
         """
@@ -958,7 +700,7 @@ class GreatDocs:
         )
 
         # Update project root .gitignore to exclude great-docs/
-        self._update_project_gitignore(force=force)
+        update_gitignore(self.layout, report=print, ask=None if force else input)
 
         print("\n✅ Great Docs initialization complete!")
         print("\nNext steps:")
@@ -969,125 +711,6 @@ class GreatDocs:
         print("\nOther helpful commands:")
         print("  great-docs scan           # Preview API organization")
         print("  great-docs build --watch  # Watch for changes and rebuild")
-
-    def _update_project_gitignore(self, force: bool = False) -> None:
-        """
-        Update project root .gitignore to exclude the great-docs/ build directory.
-
-        Prompts the user for permission before modifying .gitignore, unless force=True.
-        This ensures the ephemeral build directory is not committed to version control.
-
-        Parameters
-        ----------
-        force
-            If True, skip the prompt and automatically update .gitignore.
-        """
-        gitignore_path = self.project_root / ".gitignore"
-
-        if self.layout.source_dir != self.project_root:
-            source = self.layout.source_dir.relative_to(self.project_root).as_posix()
-            entries = [
-                f"/{source}/_quarto/",
-                f"/{source}/_site/",
-                f"/{source}/.cache/",
-                "/.great-docs-build/",
-                "/.great-docs/",
-            ]
-            content = gitignore_path.read_text(encoding="utf-8") if gitignore_path.exists() else ""
-            missing = [entry for entry in entries if not _gitignore_has_entry(content, entry)]
-            if missing and (
-                force
-                or input("Ignore Great Docs build output? [Y/n]: ").strip().lower()
-                in {"", "y", "yes"}
-            ):
-                gitignore_path.write_text(
-                    content.rstrip()
-                    + "\n\n# Great Docs build output\n"
-                    + "\n".join(missing)
-                    + "\n",
-                    encoding="utf-8",
-                )
-            return
-
-        # Entry to add
-        entry = "# Great Docs build directory (ephemeral, do not commit)\n/great-docs/\n"
-
-        # Versioning build artifacts (added when versions are configured)
-        versioning_entries = [
-            "/great-docs-*/",
-            ".great-docs-build/",
-            ".great-docs-cache/",
-            ".great-docs/",
-        ]
-
-        # Inspect without writing. Migration requires the same consent as any
-        # other `.gitignore` edit.
-        has_main = False
-        missing_versioning = list(versioning_entries)
-        needs_migration = False
-        if gitignore_path.exists():
-            with open(gitignore_path, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            migrated_content = _migrate_legacy_gitignore_entry(content)
-            needs_migration = migrated_content != content
-            check_content = migrated_content if needs_migration else content
-
-            has_main = _gitignore_has_entry(check_content, "/great-docs/")
-            missing_versioning = [
-                e for e in versioning_entries if not _gitignore_has_entry(check_content, e)
-            ]
-
-            if has_main and not missing_versioning and not needs_migration:
-                # All entries present, nothing to do
-                return
-
-        migration_only = needs_migration and has_main and not missing_versioning
-
-        def apply_changes() -> None:
-            if gitignore_path.exists():
-                if needs_migration:
-                    with open(gitignore_path, "w", encoding="utf-8") as f:
-                        f.write(migrated_content)
-                # Append to existing .gitignore
-                with open(gitignore_path, "a", encoding="utf-8") as f:
-                    if not has_main:
-                        f.write("\n" + entry)
-                    if missing_versioning:
-                        f.write("\n# Great Docs versioned-build artifacts\n")
-                        for ve in missing_versioning:
-                            f.write(ve + "\n")
-                if migration_only:
-                    print("✅ Anchored the great-docs/ entry to the project root as /great-docs/")
-                else:
-                    print("✅ Updated .gitignore to ignore Great Docs build output")
-            else:
-                # Create new .gitignore
-                with open(gitignore_path, "w", encoding="utf-8") as f:
-                    f.write(entry)
-                    f.write("\n# Great Docs versioned-build artifacts\n")
-                    for ve in versioning_entries:
-                        f.write(ve + "\n")
-                print("✅ Created .gitignore to ignore Great Docs build output")
-
-        # If force=True, skip the prompt
-        if force:
-            apply_changes()
-            return
-
-        # Ask for permission in interactive mode
-        if migration_only:
-            print("\nThe great-docs/ entry in .gitignore matches directories at any depth.")
-            prompt = "Anchor it to the project root as /great-docs/? [Y/n]: "
-        else:
-            print("\nThe great-docs/ build directory is temporary and should not be committed.")
-            prompt = "Add '/great-docs/' to .gitignore? [Y/n]: "
-        response = input(prompt).strip().lower()  # pragma: no cover
-
-        if response in ("", "y", "yes"):  # pragma: no cover
-            apply_changes()
-        else:
-            print("⚠️  Skipped .gitignore update. Remember to ignore /great-docs/.")
 
     def _detect_package_name(self) -> str | None:
         """
@@ -1939,233 +1562,8 @@ class GreatDocs:
         return None, None, None  # pragma: no cover
 
     # =========================================================================
-    # Changelog (GitHub Releases) Methods
-    # =========================================================================
-
-    @staticmethod
-    def _linkify_github_references(text: str, owner: str, repo: str) -> str:
-        """
-        Turn GitHub shorthand references into Markdown links.
-
-        Converts bare `#123`, `gh issue #123`, `gh pr #123`, and
-        `@username` references into clickable Markdown links that point to
-        the correct GitHub URL.
-
-        Parameters
-        ----------
-        text
-            The Markdown body text from a GitHub Release.
-        owner
-            GitHub repository owner.
-        repo
-            GitHub repository name.
-
-        Returns
-        -------
-        str
-            Text with shorthand references replaced by Markdown links.
-        """
-        base = f"https://github.com/{owner}/{repo}"
-
-        # 0.  Remove GitHub's backslash escapes (the API often returns
-        #     \@, \#, \', \" which break Markdown rendering and block
-        #     the regex patterns below).
-        text = re.sub(r"\\([\\@#'\"])", r"\1", text)
-
-        # 1.  "gh issue #NNN" / "gh pr #NNN"  (case-insensitive)
-        text = re.sub(
-            r"(?i)\bgh\s+(?:issue|pr)\s+#(\d+)",
-            rf"[#\1]({base}/issues/\1)",
-            text,
-        )
-
-        # 2.  Bare "#NNN" not already inside a Markdown link.
-        #     Skip when preceded by '[' (link text from step 1) or
-        #     when inside a URL (preceded by '/').
-        text = re.sub(
-            r"(?<!\[)(?<!/)#(\d+)\b",
-            rf"[#\1]({base}/issues/\1)",
-            text,
-        )
-
-        # 3.  "@username": valid GitHub usernames: alphanumeric + hyphens,
-        #     1-39 chars, not starting/ending with hyphen.
-        #     Negative look-behind avoids matching email addresses.
-        text = re.sub(
-            r"(?<![\w.])@([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?)",
-            r"[@\1](https://github.com/\1)",
-            text,
-        )
-
-        # 4. Bare GitHub compare URLs (e.g., "Full Changelog: https://...")
-        #    are not always auto-linked by downstream Markdown renderers.
-        #    Wrap them explicitly as Markdown links when not already linked.
-        compare_url_pattern = re.escape(base) + r"/compare/[^\s)]+"
-        text = re.sub(
-            rf"(?<!\[)(?<!\(){compare_url_pattern}",
-            lambda m: f"[{m.group(0)}]({m.group(0)})",
-            text,
-        )
-
-        return text
-
-    def _generate_changelog_page(self) -> str | None:
-        """
-        Generate a changelog.qmd page from GitHub Releases.
-
-        Fetches releases via the GitHub API and renders them as a dated
-        Markdown changelog. Returns the filename written (`"changelog.qmd"`)
-        or `None` if the page could not be generated.
-
-        Returns
-        -------
-        str | None
-            `"changelog.qmd"` on success, `None` otherwise.
-        """
-        owner, repo, _base_url = self._get_github_repo_info()
-        if not owner or not repo:
-            return None
-
-        max_releases = self._config.changelog_max_releases
-        releases = self._remote.github_releases(GithubRepo(owner, repo), max_releases)
-        if not releases:
-            return None
-
-        from ._translations import get_translation
-
-        toc_title = get_translation("releases", self._config.lang)
-
-        # Build .qmd content. The TOC lists only the release headings: the
-        # heading shift is pinned so releases always render at level 1, which
-        # keeps `toc-depth: 1` from also picking up the subsections of each
-        # release body (or from listing nothing at all).
-        lines: list[str] = [
-            "---",
-            'title: "Changelog"',
-            f"{page_dates.AUTO_GENERATED}: true",
-            "body-classes: gd-changelog-page",
-            "toc: true",
-            "toc-depth: 1",
-            f'toc-title: "{toc_title}"',
-            "shift-heading-level-by: -1",
-            "---",
-            "",
-            "This changelog is generated automatically from ",
-            f"[GitHub Releases](https://github.com/{owner}/{repo}/releases).",
-            "",
-        ]
-
-        for rel in releases:
-            # --- heading ------------------------------------------------
-            tag = rel["tag_name"]
-            name = rel["name"] or tag
-            published = rel["published_at"][:10] if rel["published_at"] else ""
-            gh_url = rel["html_url"]
-
-            heading = f"## {name}  {{.changelog-version}}"  # noqa: F541
-
-            lines.append(heading)
-            lines.append("")
-
-            # Date + link line
-            meta_parts: list[str] = []
-            if published:
-                meta_parts.append(f"*{published}*")
-            if rel["prerelease"]:
-                meta_parts.append("*(pre-release)*")
-            meta_parts.append(f"[GitHub]({gh_url})")
-            lines.append(" · ".join(meta_parts))
-            lines.append("")
-
-            # --- body ---------------------------------------------------
-            body = (rel.get("body") or "").strip()
-            if body:
-                body = self._linkify_github_references(body, owner, repo)
-
-                # Ensure body headings nest under the version ## heading.
-                # Bump ##..###### → ###..#######  (i.e., add one # to every heading)
-                body = re.sub(r"^(#{2,6})\s", lambda m: m.group(1) + "# ", body, flags=re.MULTILINE)
-
-                lines.append(body)
-                lines.append("")
-
-        changelog_path = self.build_dir / "changelog.qmd"
-        changelog_path.write_text("\n".join(lines), encoding="utf-8")
-        print(f"Created {changelog_path}")
-
-        return "changelog.qmd"
-
-    def _add_changelog_to_navbar(self) -> None:
-        """Add a *Changelog* link to the navbar (idempotent)."""
-        if not quarto_yml.path(self.build_dir).exists():
-            return
-
-        config = quarto_yml.read(self.build_dir)
-
-        navbar = config.get("website", {}).get("navbar")
-        if not navbar or "left" not in navbar:
-            return
-
-        # Already present?
-        if any(
-            isinstance(item, dict) and item.get("text") == "Changelog" for item in navbar["left"]
-        ):
-            return
-
-        # Insert before the last item (usually Reference) or at end
-        navbar["left"].append({"text": "Changelog", "href": "changelog.qmd"})
-
-        quarto_yml.write(self.build_dir, config, self._config)
-
-    # =========================================================================
     # Page Tags Methods
     # =========================================================================
-
-    def _section_build_dir(self, section_cfg: dict[str, object]) -> Path | None:
-        """
-        Resolve a section destination independently of its source location
-
-        Keep shared package-relative section paths when documentation sources
-        move into a subdirectory. Keep every destination inside the build tree.
-
-        Parameters
-        ----------
-        section_cfg
-            A single entry from the `sections` config.
-
-        Returns
-        -------
-        Path | None
-            The directory under `build_dir`, or `None` if the section
-            has no `dir`.
-        """
-        src_dir = section_cfg.get("dir")
-        if not src_dir or not isinstance(src_dir, str):
-            return None
-        source = Path(src_dir)
-        if source.is_absolute() or ".." in source.parts:
-            resolved = (self.layout.source_dir / source).resolve()
-            source = (
-                resolved.relative_to(self.layout.package_root)
-                if resolved.is_relative_to(self.layout.package_root)
-                else Path(source.name)
-            )
-        slug = section_slug(source.as_posix())
-        return self._output_directory(slug)
-
-    def _output_directory(self, output: str) -> Path:
-        """
-        Validate a configured destination within the selected build directory
-        """
-        path = Path(output)
-        destination = (self.build_dir / path).resolve()
-        if (
-            path.is_absolute()
-            or ".." in path.parts
-            or not destination.is_relative_to(self.build_dir.resolve())
-        ):
-            raise ValueError(f"Output path must remain inside the build directory: {output}")
-        return destination
 
     def _collect_page_tags(self) -> dict[str, list[dict[str, str]]]:
         """
@@ -2196,7 +1594,7 @@ class GreatDocs:
         # Also scan custom sections (skip if already covered above)
         for section_cfg in self._config.sections:
             title = section_cfg.get("title", "")
-            section_dir = self._section_build_dir(section_cfg)
+            section_dir = section_destination(self.layout, section_cfg)
             if (
                 section_dir is not None
                 and section_dir.is_dir()
@@ -2446,7 +1844,7 @@ class GreatDocs:
         seen_dirs: set[Path] = {d.resolve() for d in scan_dirs}
         # Include custom section directories
         for section_cfg in self._config.sections:
-            section_dir = self._section_build_dir(section_cfg)
+            section_dir = section_destination(self.layout, section_cfg)
             if section_dir is not None and section_dir.resolve() not in seen_dirs:
                 scan_dirs.append(section_dir)
                 seen_dirs.add(section_dir.resolve())
@@ -2712,7 +2110,7 @@ class GreatDocs:
                 scan_dirs.append(d)
                 seen_dirs.add(d.resolve())
         for section_cfg in self._config.sections:
-            section_dir = self._section_build_dir(section_cfg)
+            section_dir = section_destination(self.layout, section_cfg)
             if (
                 section_dir is not None
                 and section_dir.is_dir()
@@ -2927,10 +2325,8 @@ class GreatDocs:
                 print(f"   ⚠️  Section '{title}' directory '{src_dir}' has no .qmd/.md files")
                 continue
 
-            # Determine the slug for the build directory (lowercase, hyphenated).
-            # `_section_build_dir` mirrors this formula so tag/status scanning
-            # resolves the same destination directory.
-            dest_dir = self._section_build_dir(section_cfg)
+            # Tag and status scanning must use the same section destination
+            dest_dir = section_destination(self.layout, section_cfg)
             assert dest_dir is not None
             slug = dest_dir.relative_to(self.build_dir).as_posix()
             dest_dir.mkdir(parents=True, exist_ok=True)
@@ -3054,50 +2450,28 @@ class GreatDocs:
             List of dicts with `filename`, `title`, `description`, `image` keys.
         """
         copied: list[dict] = []
+        pages = self._page_map()
+        add_dates = partial(page_dates.add_to_page, config=self._config, authors=self._page_authors)
 
         for src_file in files:
             # Copied paths and rewritten links must strip the same numeric prefixes
             # from every path component
             published = published_path(src_file.relative_to(source_dir), strip_prefix=True)
-            dest_file = dest_dir / published
-
-            # Ensure subdirectories exist
-            dest_file.parent.mkdir(parents=True, exist_ok=True)
-
-            content = src_file.read_text(encoding="utf-8")
-
-            # Expand {{< code-include >}} shortcodes before Quarto sees the file
-            content = code_includes.expand(content, src_file.parent, self.layout)
-            content = self._rebase_source_references(content, src_file, dest_file)
-
-            # Fix links to .qmd files with numeric prefixes
-            content = fix_numeric_prefix_links(content)
-
-            # Parse frontmatter for metadata
-            title = title_from_name(published.stem)
-            description = ""
-            image = ""
-
-            if (block := locate_front_matter(content)) is not None:
-                fm = block.mapping
-                title = fm.string("title") or title
-                description = fm.string("description") or ""
-                image = fm.string("image") or ""
-                if "bread-crumbs" not in fm:
-                    updated = {**fm.data, "bread-crumbs": False}
-                    content = f"---\n{format_yaml(updated)}\n---\n{content[block.end :]}"
-
-            dest_file.write_text(
-                page_dates.add_to_page(content, src_file, self._config, self._page_authors),
-                encoding="utf-8",
+            front_matter = publish.page(
+                src_file,
+                dest_dir / published,
+                layout=self.layout,
+                pages=pages,
+                add_dates=add_dates,
+                strip_prefix=True,
+                breadcrumbs=True,
             )
-
             copied.append(
                 {
                     "filename": str(published),
-                    "title": title,
-                    "description": description,
-                    "image": image,
+                    "title": front_matter.string("title") or title_from_name(published.stem),
+                    "description": front_matter.string("description") or "",
+                    "image": front_matter.string("image") or "",
                 }
             )
 
@@ -3139,41 +2513,27 @@ class GreatDocs:
         # Track directories that contain content files so we can copy
         # their co-located assets afterward
         content_dirs: set[Path] = set()
+        pages = self._page_map()
+        add_dates = partial(page_dates.add_to_page, config=self._config, authors=self._page_authors)
 
         for src_file in files:
             rel = src_file.relative_to(source_dir)
-            dest_file = dest_dir / rel
-
-            # Ensure subdirectories exist
-            dest_file.parent.mkdir(parents=True, exist_ok=True)
-
             content_dirs.add(src_file.parent)
-
-            content = src_file.read_text(encoding="utf-8")
-
-            # Expand {{< code-include >}} shortcodes before Quarto sees the file
-            content = code_includes.expand(content, src_file.parent, self.layout)
-            content = self._rebase_source_references(content, src_file, dest_file)
-
-            # Parse frontmatter for metadata (but don't modify it —
-            # Quarto's listing needs the original frontmatter)
-            title = title_from_name(rel.stem)
-            description = ""
-
-            fm, _ = split_front_matter(content)
-            title = fm.string("title") or title
-            description = fm.string("description") or ""
-
-            dest_file.write_text(
-                page_dates.add_to_page(content, src_file, self._config, self._page_authors),
-                encoding="utf-8",
+            # Preserve the post's front matter for Quarto's listing
+            front_matter = publish.page(
+                src_file,
+                dest_dir / rel,
+                layout=self.layout,
+                pages=pages,
+                add_dates=add_dates,
+                strip_prefix=False,
+                breadcrumbs=False,
             )
-
             copied.append(
                 {
                     "filename": str(rel),
-                    "title": title,
-                    "description": description,
+                    "title": front_matter.string("title") or title_from_name(rel.stem),
+                    "description": front_matter.string("description") or "",
                 }
             )
 
@@ -3665,10 +3025,10 @@ class GreatDocs:
         """Return configured custom page source directories that exist."""
         sources: list[dict[str, Path | str]] = []
         is_default = self._config["custom_pages"] is None
-        claimed = self._section_source_dirs()
+        claimed = section_source_dirs(self._config, self.layout)
 
         for entry in self._config.custom_pages:
-            self._output_directory(entry["output"])
+            output_destination(self.layout, entry["output"])
             source_dir = self.layout.source_dir / entry["dir"]
             if not source_dir.exists() or not source_dir.is_dir():
                 if entry["dir"] != "custom" or self._config.exists():
@@ -3761,11 +3121,12 @@ class GreatDocs:
             self._resolve_social_card_image_url() if self._config.social_cards_enabled else None
         )
         structured_data = self._structured_data()
+        pages = self._page_map()
 
         for source in sources:
             source_dir = source["source_dir"]
             output_prefix = str(source["output"])
-            dest_dir = self._output_directory(output_prefix)
+            dest_dir = output_destination(self.layout, output_prefix)
             dest_dir.mkdir(parents=True, exist_ok=True)
 
             for src_path in sorted(source_dir.rglob("*")):
@@ -3783,7 +3144,9 @@ class GreatDocs:
                     continue
 
                 content = src_path.read_text(encoding="utf-8")
-                content = self._rebase_source_references(content, src_path, dest_path)
+                content = publish.rebase_references(
+                    content, src_path, dest_path, layout=self.layout, pages=pages
+                )
                 frontmatter, body = split_front_matter(content)
                 body = body.lstrip("\n")
                 layout = (frontmatter.string("layout") or "passthrough").lower()
@@ -5196,7 +4559,7 @@ class GreatDocs:
             return user_guide_dir
 
         # Fall back to conventional directory names, leaving a section's directory to it
-        claimed = self._section_source_dirs()
+        claimed = section_source_dirs(self._config, self.layout)
         for name in ("user_guide", "user-guide"):
             user_guide_dir = package_root / name
             if user_guide_dir.is_dir() and user_guide_dir.resolve() not in claimed:
@@ -5442,8 +4805,8 @@ class GreatDocs:
         """
         Copy user guide files from project root to docs directory.
 
-        Adds `bread-crumbs: false` to the frontmatter of each file to disable breadcrumb
-        navigation on user guide pages.
+        Add `bread-crumbs: false` only when a page does not set `bread-crumbs`. This hides
+        breadcrumb navigation on user guide pages while preserving authored settings.
 
         When using explicit ordering (`user_guide` is a list in config), filenames are
         preserved as-is. In auto-discovery mode, numeric prefixes are stripped for cleaner URLs.
@@ -5467,6 +4830,8 @@ class GreatDocs:
 
         is_explicit = user_guide_info.get("explicit", False)
         copied_files = []
+        pages = self._page_map()
+        add_dates = partial(page_dates.add_to_page, config=self._config, authors=self._page_authors)
 
         for file_info in user_guide_info["files"]:
             src_path = file_info["path"]
@@ -5481,33 +4846,17 @@ class GreatDocs:
             dest_rel_path = published_path(rel_path, strip_prefix=not is_explicit)
 
             dst_path = target_dir / dest_rel_path
-            dst_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Read the source file and modify frontmatter
-            with open(src_path, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            # Expand {{< code-include >}} shortcodes before Quarto sees the file
-            content = code_includes.expand(content, src_path.parent, self.layout)
-            reference_destination = self._source_page_destination(src_path.resolve()) or dst_path
-            content = self._rebase_source_references(content, src_path, reference_destination)
-
-            # In auto-discovery mode, fix links to .qmd files with numeric prefixes
-            if not is_explicit:
-                content = fix_numeric_prefix_links(content)
-
-            # Add bread-crumbs: false to frontmatter
-            content = set_front_matter_option(content, "bread-crumbs", False)
-            # The page promoted to the homepage shows no dates
-            if reference_destination != self.build_dir / "index.qmd":
-                content = page_dates.add_to_page(
-                    content, src_path, self._config, self._page_authors
-                )
-
-            # Write to destination
-            with open(dst_path, "w", encoding="utf-8") as f:
-                f.write(content)
-
+            # The first guide page moves to the homepage later when `homepage: user_guide`
+            _ = publish.page(
+                src_path,
+                dst_path,
+                layout=self.layout,
+                pages=pages,
+                add_dates=add_dates,
+                strip_prefix=not is_explicit,
+                breadcrumbs=True,
+                published=pages.destination(src_path.resolve()) or dst_path,
+            )
             copied_files.append(f"user-guide/{dest_rel_path}")
 
         # Also copy any asset directories (images, data, code snippets, etc.)
@@ -9190,8 +8539,12 @@ class GreatDocs:
                     logo_html = f'<img src="{light}" alt="{alt}" class="gd-hero-logo" style="max-height:{logo_height}" />'  # pragma: no cover
             elif isinstance(logo_config, str):
                 logo_html = f'<img src="{logo_config}" alt="Logo" class="gd-hero-logo" style="max-height:{logo_height}" />'
-            logo_html = self._rebase_source_references(
-                logo_html, self.layout.config_path, self.build_dir / "index.qmd"
+            logo_html = publish.rebase_references(
+                logo_html,
+                self.layout.config_path,
+                self.build_dir / "index.qmd",
+                layout=self.layout,
+                pages=self._page_map(),
             )
 
         # ── Name ────────────────────────────────────────────────────
@@ -10089,7 +9442,9 @@ title: "Authors and Citation"
             }
 
             # Copy images referenced in the source file to the build directory
-            readme_content = self._rebase_source_references(readme_content, source_file, index_qmd)
+            readme_content = publish.rebase_references(
+                readme_content, source_file, index_qmd, layout=self.layout, pages=self._page_map()
+            )
 
         # Build hero section (must run before heading adjustment so badge
         # extraction works on original markdown)
@@ -10903,7 +10258,7 @@ anchor-sections: true
                 src_dir = section_cfg.get("dir")
                 if not src_dir:
                     continue
-                section_build_dir = self._section_build_dir(section_cfg)
+                section_build_dir = section_destination(self.layout, section_cfg)
                 if section_build_dir is None:
                     continue
                 slug = section_build_dir.relative_to(self.build_dir).as_posix()
@@ -11047,7 +10402,7 @@ anchor-sections: true
                 if not source.is_file():
                     raise FileNotFoundError(f"Header include file not found: {source}")
                 destination = self.build_dir / "_includes" / source.name
-                self._copy_source_asset(source, destination)
+                publish.copy_asset(self.layout, source, destination)
                 entry = {**entry, "file": destination.relative_to(self.build_dir).as_posix()}
             if entry not in config["format"]["html"]["include-in-header"]:
                 config["format"]["html"]["include-in-header"].append(entry)
@@ -11224,7 +10579,7 @@ anchor-sections: true
                 if logo_config.get("dark") and logo_config["dark"] != logo_config["light"]:
                     if light_dest_name == Path(logo_config["dark"]).name:
                         light_dest_name = f"logo-light{light_src.suffix}"
-                self._copy_source_asset(light_src, self.build_dir / light_dest_name)
+                publish.copy_asset(self.layout, light_src, self.build_dir / light_dest_name)
                 navbar["logo"] = light_dest_name
             elif urlsplit(logo_config["light"]).scheme or logo_config["light"].startswith("//"):
                 navbar["logo"] = logo_config["light"]
@@ -11237,7 +10592,7 @@ anchor-sections: true
                 dark_src = self.layout.source_dir / dark_path
                 if dark_src.is_file():
                     dark_dest_name = dark_src.name
-                    self._copy_source_asset(dark_src, self.build_dir / dark_dest_name)
+                    publish.copy_asset(self.layout, dark_src, self.build_dir / dark_dest_name)
                     navbar["logo-dark"] = dark_dest_name
 
                     # Ensure the dark logo is included as a resource so Quarto
@@ -13961,7 +13316,7 @@ anchor-sections: true
 
         # Copy to build directory root (so it's served at site root)
         dest = self.build_dir / source.name  # pragma: no cover
-        self._copy_source_asset(source, dest)  # pragma: no cover
+        publish.copy_asset(self.layout, source, dest)  # pragma: no cover
 
         # Build absolute URL if canonical base is available
         base_url = self._get_canonical_base_url()  # pragma: no cover
@@ -14343,29 +13698,7 @@ anchor-sections: true
         ```
         """
         print("Uninstalling great-docs from your project...")
-
-        validate_layout_outputs(self.layout)
-        builds = [self.layout.build_dir, *recognised_build_dirs(self.layout)]
-        for build_dir in builds:
-            validate_build_dir(build_dir)
-
-        # Remove the great-docs.yml configuration file
-        config_path = self.layout.config_path
-        if config_path.exists():
-            config_path.unlink()
-            print(f"Removed {config_path.relative_to(self.project_root)}")
-
-        for build_dir in builds:
-            if build_dir.exists():
-                shutil.rmtree(build_dir)
-                print(f"Removed {build_dir.relative_to(self.project_root)}/ directory")
-        if self.layout.source_dir != self.project_root:
-            if self.layout.site_dir.exists():
-                shutil.rmtree(self.layout.site_dir)
-            container = self.layout.build_dir.parent
-            if container.exists() and not any(container.iterdir()):
-                container.rmdir()
-
+        outputs.remove(self.layout, report=print)
         print("✅ Great-docs uninstalled successfully!")
 
     def _print_layout_notice(self) -> None:
@@ -14518,9 +13851,13 @@ anchor-sections: true
         owner, repo, _base_url = self._get_github_repo_info()
         if not (owner and repo):
             return Skipped("no GitHub repo info")
-        if not self._generate_changelog_page():
+        contribution = changelog.write_page(
+            self._config, self.build_dir, GithubRepo(owner, repo), self._remote, report=print
+        )
+        if contribution is None:
             return "No releases found; skipped"
-        self._add_changelog_to_navbar()
+        with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+            quarto_yml.apply(quarto_config, contribution)
         return "Changelog from GitHub Releases"
 
     def _step_cli_reference(self, run: Run) -> Outcome:
@@ -15523,7 +14860,7 @@ anchor-sections: true
         ```
         """
         # Require an explicit config file; init must have been run first
-        self._validate_build_outputs()
+        outputs.validate(self._config, self.layout)
         config_path = self.layout.config_path
         if not config_path.exists():
             raise FileNotFoundError(

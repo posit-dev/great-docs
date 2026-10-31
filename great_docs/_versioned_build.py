@@ -89,7 +89,7 @@ def _version_build_dir(
     return source_dir.parent / f"{source_dir.name}-{_safe_tag_dirname(entry.tag)}"
 
 
-def _check_build_dir_collisions(
+def check_build_dir_collisions(
     source_dir: Path,
     targets: list[VersionEntry],
     latest_tag: str,
@@ -1846,7 +1846,7 @@ def assemble_site(
     layout
         Resolved project paths. Required for separate deployment output.
     """
-    _check_build_dir_collisions(source_dir, versions, latest_tag, layout)
+    check_build_dir_collisions(source_dir, versions, latest_tag, layout)
     if layout is not None:
         validate_layout_outputs(layout)
     validate_tree_symlinks(source_dir / "_site")
@@ -2048,7 +2048,7 @@ def run_versioned_build(  # pragma: no cover
     versions = parse_versions_config(versions_config)
     latest = get_latest_version(versions)
     latest_tag = latest.tag if latest else versions[0].tag
-    _check_build_dir_collisions(source_dir, versions, latest_tag, layout)
+    check_build_dir_collisions(source_dir, versions, latest_tag, layout)
     if layout is not None:
         validate_layout_outputs(layout)
 

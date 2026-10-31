@@ -24,7 +24,7 @@ import griffe
 import griffe as gf
 import pytest
 import requests
-from click.testing import CliRunner
+from click.testing import CliRunner, Result
 from griffe import AliasResolutionError, DocstringSectionKind, ExprName
 from PIL import Image as PILImage
 from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
@@ -35,7 +35,7 @@ from great_docs import BuildError, Config, GreatDocs, create_default_config, loa
 from great_docs._build import freeze, quarto
 from great_docs._build.steps import Step, count_listed
 from great_docs._build_log import BuildLog
-from great_docs._content.naming import fix_numeric_prefix_links, strip_numeric_prefix
+from great_docs._content.naming import strip_numeric_prefix
 from great_docs._website.quarto_yml import edit as edit_quarto_yml
 from great_docs._website.quarto_yml import read as read_quarto_yml
 from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
@@ -2445,116 +2445,6 @@ def test_strip_numeric_prefix_preserves_internal_numbers():
         assert strip_numeric_prefix("02-chapter-10.qmd") == "chapter-10.qmd"
 
 
-def test_fix_numeric_prefix_links_basic():
-    """Test that basic .qmd links with numeric prefixes are rewritten."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "- [Theming](11-theming.qmd): customize colors"
-        result = fix_numeric_prefix_links(content)
-        assert result == "- [Theming](theming.qmd): customize colors"
-
-
-def test_fix_numeric_prefix_links_with_anchors():
-    """Test that anchors and query strings are preserved."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert (
-            fix_numeric_prefix_links("[Config](05-configuration.qmd#options)")
-            == "[Config](configuration.qmd#options)"
-        )
-        assert (
-            fix_numeric_prefix_links("[Config](05-configuration.qmd?v=2)")
-            == "[Config](configuration.qmd?v=2)"
-        )
-
-
-def test_fix_numeric_prefix_links_skips_absolute_urls():
-    """Test that absolute URLs are not modified."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "[Docs](https://example.com/11-theming.qmd)"
-        assert fix_numeric_prefix_links(content) == content
-
-        content_http = "[Docs](http://example.com/05-config.qmd)"
-        assert fix_numeric_prefix_links(content_http) == content_http
-
-        content_abs = "[Docs](/root/11-theming.qmd)"
-        assert fix_numeric_prefix_links(content_abs) == content_abs
-
-
-def test_fix_numeric_prefix_links_no_prefix():
-    """Test that links without numeric prefixes are unchanged."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "[Theming](theming.qmd)"
-        assert fix_numeric_prefix_links(content) == content
-
-
-def test_fix_numeric_prefix_links_subdirectory():
-    """Test that numeric prefixes are stripped from subdirectory components too."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "[Guide](01-getting-started/02-install.qmd)"
-        result = fix_numeric_prefix_links(content)
-        assert result == "[Guide](getting-started/install.qmd)"
-
-
-def test_fix_numeric_prefix_links_multiple():
-    """Test that multiple links in the same content are all fixed."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = (
-            "- [Theming](11-theming.qmd): colors\n"
-            "- [Config](05-configuration.qmd): options\n"
-            "- [Building](13-building.qmd): build pipeline"
-        )
-        result = fix_numeric_prefix_links(content)
-        assert result == (
-            "- [Theming](theming.qmd): colors\n"
-            "- [Config](configuration.qmd): options\n"
-            "- [Building](building.qmd): build pipeline"
-        )
-
-
-def test_fix_numeric_prefix_links_ignores_non_qmd():
-    """Test that non-.qmd links are not affected."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "[Image](11-diagram.png)"
-        assert fix_numeric_prefix_links(content) == content
-
-        content_html = "[Page](11-theming.html)"
-        assert fix_numeric_prefix_links(content_html) == content_html
-
-
 def test_user_guide_files_renamed_on_copy():
     """Test that user guide files are renamed when copied to docs directory."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -4230,345 +4120,6 @@ def test_convert_rst_to_markdown_real_pandoc():
         assert "Item 1" in result
 
 
-def test_generate_changelog_page():
-    """Test changelog.qmd page generation."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        # Create minimal project structure
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
-        )
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        fake_releases = [
-            {
-                "tag_name": "v2.0.0",
-                "name": "Version 2.0",
-                "body": "Major update.\n\n### Breaking changes\n\n- Removed X\n",
-                "published_at": "2026-02-10T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v2.0.0",
-                "prerelease": False,
-            },
-            {
-                "tag_name": "v1.0.0",
-                "name": "Version 1.0",
-                "body": "Initial release.",
-                "published_at": "2025-12-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
-                "prerelease": False,
-            },
-        ]
-
-        docs._remote = StubRemote(releases=fake_releases)
-        result = docs._generate_changelog_page()
-
-        assert result == "changelog.qmd"
-
-        changelog_qmd = build_dir / "changelog.qmd"
-
-        assert changelog_qmd.exists()
-
-        content = changelog_qmd.read_text()
-
-        assert 'title: "Changelog"' in content
-        assert "## Version 2.0" in content
-        assert "## Version 1.0" in content
-        assert "*2026-02-10*" in content
-        # Body headings are bumped one level to nest under the version ## heading
-        assert "#### Breaking changes" in content
-        assert "Initial release." in content
-        assert "https://github.com/owner/repo/releases" in content
-
-        # The TOC is a flat list of releases under a "Releases" title
-        assert "body-classes: gd-changelog-page" in content
-        assert "toc-depth: 1" in content
-        assert 'toc-title: "Releases"' in content
-        assert "shift-heading-level-by: -1" in content
-
-
-@pytest.mark.parametrize(("lang", "expected"), [("fr", "Versions"), ("ja", "リリース")])
-def test_generate_changelog_page_toc_title_translated(lang, expected):
-    """Test that the changelog TOC title follows the site language."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
-        )
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text(f"site:\n  lang: {lang}\n")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        fake_releases = [
-            {
-                "tag_name": "v1.0.0",
-                "name": "v1.0.0",
-                "body": "Initial release.",
-                "published_at": "2026-01-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
-                "prerelease": False,
-            },
-        ]
-
-        docs._remote = StubRemote(releases=fake_releases)
-        docs._generate_changelog_page()
-
-        content = (build_dir / "changelog.qmd").read_text()
-
-        assert f'toc-title: "{expected}"' in content
-
-
-def test_generate_changelog_page_no_github():
-    """Test that changelog is skipped when no GitHub repo is configured."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test-pkg"\nversion = "0.1.0"\n')
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._generate_changelog_page()
-
-        assert result is None
-
-
-def test_generate_changelog_page_no_releases():
-    """Test that changelog is skipped when there are no releases."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
-        )
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-        (project_path / "great-docs").mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        docs._remote = StubRemote()
-        result = docs._generate_changelog_page()
-
-        assert result is None
-
-
-def test_generate_changelog_page_heading_normalization():
-    """Test that release body headings are bumped one level to nest under version ##."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
-        )
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Simulate release notes that use ## headings (like Pointblank)
-        fake_releases = [
-            {
-                "tag_name": "v1.0.0",
-                "name": "v1.0.0",
-                "body": (
-                    "## Features\n\n"
-                    "- Added X\n\n"
-                    "## Bug Fixes\n\n"
-                    "- Fixed Y\n\n"
-                    "### Sub-section\n\n"
-                    "- Detail Z\n"
-                ),
-                "published_at": "2026-01-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
-                "prerelease": False,
-            },
-        ]
-
-        docs._remote = StubRemote(releases=fake_releases)
-        result = docs._generate_changelog_page()
-
-        assert result == "changelog.qmd"
-        content = (build_dir / "changelog.qmd").read_text()
-
-        # Version heading stays at ##
-        assert "## v1.0.0" in content
-
-        # Body ## headings should be bumped to ###
-        assert "### Features" in content
-        assert "### Bug Fixes" in content
-
-        # Body ### headings should be bumped to ####
-        assert "#### Sub-section" in content
-
-        # Original ## headings should NOT remain in body (check line-level)
-        lines = content.split("\n")
-        assert not any(line.startswith("## Features") for line in lines)
-        assert not any(line.startswith("## Bug Fixes") for line in lines)
-
-
-def test_generate_changelog_page_h3_body_headings_bumped():
-    """Test that ### body headings are also bumped (to ####)."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
-        )
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Simulate release notes that already use ### headings (like Great Docs itself)
-        fake_releases = [
-            {
-                "tag_name": "v0.5.0",
-                "name": "v0.5.0",
-                "body": ("### New Features\n\n- Feature A\n\n### Fixes\n\n- Fix B\n"),
-                "published_at": "2026-03-15T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v0.5.0",
-                "prerelease": False,
-            },
-        ]
-
-        docs._remote = StubRemote(releases=fake_releases)
-        result = docs._generate_changelog_page()
-
-        content = (build_dir / "changelog.qmd").read_text()
-
-        # ### in body → ####
-        assert "#### New Features" in content
-        assert "#### Fixes" in content
-        lines = content.split("\n")
-        assert not any(line.startswith("### New Features") for line in lines)
-
-
-def test_generate_changelog_page_h1_body_headings_not_bumped():
-    """Test that # (h1) body headings are left alone (unusual but possible)."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
-        )
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        fake_releases = [
-            {
-                "tag_name": "v0.1.0",
-                "name": "v0.1.0",
-                "body": "# Release Title\n\nSome text.\n",
-                "published_at": "2025-06-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v0.1.0",
-                "prerelease": False,
-            },
-        ]
-
-        docs._remote = StubRemote(releases=fake_releases)
-        docs._generate_changelog_page()
-
-        content = (build_dir / "changelog.qmd").read_text()
-
-        # Single # heading should be left untouched
-        assert "# Release Title" in content
-
-
-def test_add_changelog_to_navbar_manual_yaml():
-    """Test that a Changelog link is added to the navbar."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        (project_path / "great-docs.yml").write_text("")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        # Write a basic _quarto.yml
-        quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "website:\n"
-            "  navbar:\n"
-            "    left:\n"
-            "      - text: Home\n"
-            "        href: index.qmd\n"
-            "      - text: Reference\n"
-            "        href: reference/index.qmd\n"
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._add_changelog_to_navbar()
-
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f)
-
-        navbar_items = config["website"]["navbar"]["left"]
-        changelog_items = [
-            i for i in navbar_items if isinstance(i, dict) and i.get("text") == "Changelog"
-        ]
-
-        assert len(changelog_items) == 1
-        assert changelog_items[0]["href"] == "changelog.qmd"
-
-
-def test_add_changelog_to_navbar_idempotent_double_call():
-    """Test that adding changelog twice doesn't duplicate it."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        (project_path / "great-docs.yml").write_text("")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "website:\n  navbar:\n    left:\n      - text: Reference\n        href: reference/index.qmd\n"
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._add_changelog_to_navbar()
-        docs._add_changelog_to_navbar()
-
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f)
-
-        changelog_items = [
-            i
-            for i in config["website"]["navbar"]["left"]
-            if isinstance(i, dict) and i.get("text") == "Changelog"
-        ]
-
-        assert len(changelog_items) == 1
-
-
 def test_reorder_navbar_applies_configured_order():
     """Test that _reorder_navbar reorders items to match navbar_order config."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -4680,136 +4231,6 @@ def test_changelog_config_custom():
 
         assert config.changelog_enabled is False
         assert config.changelog_max_releases == 10
-
-
-def test_linkify_bare_issue_number():
-    """Test that bare #NNN references become links."""
-    docs = GreatDocs()
-    text = "Fixed a bug (#42) and another issue #100."
-    result = docs._linkify_github_references(text, "owner", "repo")
-
-    assert "[#42](https://github.com/owner/repo/issues/42)" in result
-    assert "[#100](https://github.com/owner/repo/issues/100)" in result
-
-
-def test_linkify_gh_issue_and_pr():
-    """Test 'gh issue #NNN' and 'gh pr #NNN' patterns."""
-    docs = GreatDocs()
-    text = "Reported by @amureki (gh issue #662, gh pr #679)"
-    result = docs._linkify_github_references(text, "owner", "repo")
-
-    assert "[#662](https://github.com/owner/repo/issues/662)" in result
-    assert "[#679](https://github.com/owner/repo/issues/679)" in result
-
-    # The "gh issue" / "gh pr" prefix should be consumed
-    assert "gh issue" not in result
-    assert "gh pr" not in result
-
-
-def test_linkify_at_mention():
-    """Test @username becomes a link to GitHub profile."""
-    docs = GreatDocs()
-    text = "Reported and fixed by @amureki and @some-user."
-    result = docs._linkify_github_references(text, "o", "r")
-
-    assert "[@amureki](https://github.com/amureki)" in result
-    assert "[@some-user](https://github.com/some-user)" in result
-
-
-def test_linkify_no_double_linking():
-    """Test that already-linked references are not double-wrapped."""
-    docs = GreatDocs()
-
-    # After one pass, #42 becomes [#42](…/42); a second pass must not re-wrap
-    text = "[#42](https://github.com/owner/repo/issues/42)"
-    result = docs._linkify_github_references(text, "owner", "repo")
-
-    # Should still have exactly one link, not nested
-    assert result.count("[#42]") == 1
-
-
-def test_linkify_email_not_matched():
-    """Test that email addresses are not treated as @mentions."""
-    docs = GreatDocs()
-    text = "Contact user@example.com for help."
-    result = docs._linkify_github_references(text, "o", "r")
-
-    assert "[@example" not in result
-    assert "user@example.com" in result
-
-
-def test_linkify_case_insensitive_gh_prefix():
-    """Test that GH Issue / GH PR are matched case-insensitively."""
-    docs = GreatDocs()
-    text = "See GH Issue #10 and GH PR #20."
-    result = docs._linkify_github_references(text, "o", "r")
-
-    assert "[#10](https://github.com/o/r/issues/10)" in result
-    assert "[#20](https://github.com/o/r/issues/20)" in result
-
-
-def test_linkify_backslash_escaped_refs():
-    """Test that GitHub API backslash escapes (\\@, \\#) are handled."""
-    docs = GreatDocs()
-    # Raw body from GitHub API often contains \@ and \# escapes
-    text = r"Reported by \@hawkEye-01 (gh issue \#1167). Fixed by \@Mifrill (gh pr \#1168)"
-    result = docs._linkify_github_references(text, "dateutil", "dateutil")
-
-    assert "[@hawkEye-01](https://github.com/hawkEye-01)" in result
-    assert "[#1167](https://github.com/dateutil/dateutil/issues/1167)" in result
-    assert "[#1168](https://github.com/dateutil/dateutil/issues/1168)" in result
-
-    # No leftover backslashes before @ or #
-    assert "\\@" not in result
-    assert "\\#" not in result
-
-
-def test_linkify_backslash_escaped_quotes():
-    """Test that escaped quotes and apostrophes are cleaned up."""
-    docs = GreatDocs()
-    text = r"Fixed a bug where it doesn\'t work with \"special\" input."
-    result = docs._linkify_github_references(text, "o", "r")
-
-    assert "doesn't" in result
-    assert '"special"' in result
-    assert "\\" not in result
-
-
-def test_linkify_integrated_in_changelog():
-    """Test that linkification happens when generating changelog.qmd."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\nversion = "1.0"\n\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
-        )
-        (project_path / "great-docs.yml").write_text("")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        fake_releases = [
-            {
-                "tag_name": "v1.0.0",
-                "name": "Version 1.0",
-                "body": "Fixed #55 by @contributor (gh pr #60).",
-                "published_at": "2025-06-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
-                "prerelease": False,
-            },
-        ]
-
-        docs._remote = StubRemote(releases=fake_releases)
-        docs._generate_changelog_page()
-
-        content = (build_dir / "changelog.qmd").read_text()
-
-        assert "[#55](https://github.com/owner/repo/issues/55)" in content
-        assert "[#60](https://github.com/owner/repo/issues/60)" in content
-        assert "[@contributor](https://github.com/contributor)" in content
 
 
 def test_process_sections_empty_config_with_files():
@@ -4937,7 +4358,8 @@ def test_process_sections_ignores_reserved_build_directory(monkeypatch):
 def test_copy_section_files_strips_numeric_directory_prefixes():
     """Section files in numerically-prefixed subdirs are copied to unprefixed paths."""
     with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
+        # Published page paths are resolved, so the expected paths must be resolved too
+        project_path = Path(tmp_dir).resolve()
         source_dir = project_path / "examples"
         topic_a = source_dir / "01-topic-a"
         topic_b = source_dir / "02-topic-b"
@@ -4954,6 +4376,8 @@ def test_copy_section_files_strips_numeric_directory_prefixes():
         dest_dir = project_path / "great-docs" / "examples"
         dest_dir.mkdir(parents=True)
 
+        # Declare the section so its links resolve to the configured published paths
+        write_config(project_path, {"sections": [{"title": "Examples", "dir": "examples"}]})
         docs = GreatDocs(project_path=tmp_dir)
         copied = docs._copy_section_files([intro, widget], source_dir, dest_dir)
 
@@ -7864,235 +7288,6 @@ class TestPositBadgeInjection:
             assert badge_count == 1
 
 
-def test_update_gitignore_force_appends_to_existing():
-    """_update_project_gitignore with force appends to existing .gitignore."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gitignore = Path(tmp_dir) / ".gitignore"
-        gitignore.write_text("__pycache__/\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=True)
-
-        content = gitignore.read_text()
-
-        assert "__pycache__/" in content
-        assert "great-docs/" in content
-        assert "/great-docs-*/" in content
-        assert ".great-docs-build/" in content
-        assert ".great-docs-cache/" in content
-        assert ".great-docs/" in content
-
-
-def test_update_gitignore_skip_when_already_present():
-    """_update_project_gitignore does not duplicate entries already present."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gitignore = Path(tmp_dir) / ".gitignore"
-        gitignore.write_text(
-            "/great-docs/\n/great-docs-*/\n.great-docs-build/\n.great-docs-cache/\n.great-docs/\n"
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=True)
-
-        # Should not duplicate any entry
-        content = gitignore.read_text()
-        lines = content.splitlines()
-
-        assert lines.count("/great-docs/") == 1
-        assert lines.count("/great-docs-*/") == 1
-        assert lines.count(".great-docs-build/") == 1
-        assert lines.count(".great-docs-cache/") == 1
-        assert lines.count(".great-docs/") == 1
-
-
-def test_update_gitignore_main_entry_is_anchored():
-    """
-    Keep the main build pattern at the project root
-
-    Without the leading `/`, Git would also ignore a project's nested
-    `great-docs/` directory.
-    """
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=True)
-
-        content = (Path(tmp_dir) / ".gitignore").read_text()
-
-        assert "/great-docs/" in content
-        assert "\ngreat-docs/" not in content
-
-
-def test_update_gitignore_migrates_legacy_unanchored_entry():
-    """
-    Replace the legacy unanchored main build pattern
-
-    Projects initialised by earlier releases retain a standalone
-    `great-docs/` line until the next approved update.
-    """
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gitignore = Path(tmp_dir) / ".gitignore"
-        gitignore.write_text("*.pyc\ngreat-docs/\n.great-docs/\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=True)
-
-        lines = gitignore.read_text().splitlines()
-
-        assert lines.count("/great-docs/") == 1
-        assert lines.count("great-docs/") == 0
-
-
-def test_update_gitignore_migration_preserves_similar_lines():
-    """
-    Change only the complete legacy main-build line
-
-    Cache patterns, historical build patterns, and negations contain similar
-    text but have separate meanings.
-    """
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gitignore = Path(tmp_dir) / ".gitignore"
-        original = (
-            "great-docs/\n/great-docs-*/\n.great-docs-build/\n"
-            ".great-docs-cache/\n.great-docs/\n!skills/great-docs/\n"
-        )
-        gitignore.write_text(original)
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=True)
-
-        content = gitignore.read_text()
-
-        assert "/great-docs-*/" in content
-        assert ".great-docs-build/" in content
-        assert ".great-docs-cache/" in content
-        assert ".great-docs/" in content
-        assert "!skills/great-docs/" in content
-
-
-def test_update_gitignore_migration_is_idempotent():
-    """Leave an anchored entry unchanged on repeated updates"""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gitignore = Path(tmp_dir) / ".gitignore"
-        gitignore.write_text("great-docs/\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=True)
-        first_pass = gitignore.read_text()
-
-        docs._update_project_gitignore(force=True)
-        second_pass = gitignore.read_text()
-
-        assert first_pass == second_pass
-        assert first_pass.splitlines().count("/great-docs/") == 1
-
-
-def test_update_gitignore_does_not_mistake_negation_for_main_entry():
-    """
-    Do not treat a negated nested path as the main build rule
-
-    A substring check would find `/great-docs/` within
-    `!skills/great-docs/` and fail to add the actual build rule.
-    """
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gitignore = Path(tmp_dir) / ".gitignore"
-        gitignore.write_text("!skills/great-docs/\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=True)
-
-        content = gitignore.read_text()
-
-        assert "!skills/great-docs/" in content
-        assert content.splitlines().count("/great-docs/") == 1
-
-
-def test_update_gitignore_no_duplicate_when_anchored_entry_present():
-    """Leave a complete anchored ignore block unchanged"""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gitignore = Path(tmp_dir) / ".gitignore"
-        gitignore.write_text(
-            "/great-docs/\n/great-docs-*/\n.great-docs-build/\n.great-docs-cache/\n.great-docs/\n"
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=True)
-
-        content = gitignore.read_text()
-
-        assert content.splitlines().count("/great-docs/") == 1
-
-
-def test_update_gitignore_migration_requires_consent(monkeypatch):
-    """
-    Require consent before migrating the legacy line
-
-    Without `force=True`, migration follows the same prompt contract as a new
-    entry. Declining must preserve the file.
-    """
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gitignore = Path(tmp_dir) / ".gitignore"
-        original = "great-docs/\n"
-        gitignore.write_text(original)
-
-        monkeypatch.setattr("builtins.input", lambda _: "n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=False)
-
-        assert gitignore.read_text() == original
-
-
-def test_update_gitignore_versioning_pattern_is_anchored():
-    """
-    Keep the historical build pattern at the project root
-
-    Without the leading `/`, Git would also ignore a project directory such
-    as `docs/great-docs-examples/`.
-    """
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=True)
-
-        content = (Path(tmp_dir) / ".gitignore").read_text()
-
-        assert "/great-docs-*/" in content
-        assert "\ngreat-docs-*/" not in content
-
-
-def test_update_gitignore_versioning_pattern_does_not_match_nested_dir():
-    """
-    Leave nested directories outside the historical build pattern
-
-    Use Git to verify the generated rule instead of duplicating its ignore
-    semantics in the test.
-    """
-    git = shutil.which("git")
-    if git is None:
-        pytest.skip("git is not available")
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        subprocess.run([git, "init", "-q"], cwd=tmp, check=True)
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=True)
-
-        nested = tmp / "docs" / "great-docs-examples"
-        nested.mkdir(parents=True)
-        (nested / "y.md").write_text("content\n")
-
-        result = subprocess.run(
-            [git, "check-ignore", str(nested / "y.md")],
-            cwd=tmp,
-            capture_output=True,
-            text=True,
-        )
-
-        # Git reports an unignored path with no output and a nonzero status.
-        assert result.returncode != 0
-        assert result.stdout.strip() == ""
-
-
 def test_detect_package_name_from_setup_cfg_preexisting():
     """_detect_package_name reads name from setup.cfg when no pyproject.toml."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -9170,6 +8365,21 @@ def test_generate_section_index_only_images():
         assert "<hr>" not in content
 
 
+def test_copying_a_section_finds_the_user_guide_once(tmp_path, capsys):
+    """Report a missing user guide once per copy regardless of the number of links"""
+    write_config(tmp_path, "user_guide: missing_guide\n")
+    source_dir = tmp_path / "examples"
+    source_dir.mkdir()
+    pages = [source_dir / f"page{index}.qmd" for index in range(3)]
+    for page in pages:
+        page.write_text("[One](page0.qmd) [Two](page1.qmd) [Three](page2.qmd)\n")
+    docs = GreatDocs(project_path=str(tmp_path))
+
+    docs._copy_section_files(pages, source_dir, docs.build_dir / "examples")
+
+    assert capsys.readouterr().out.count("'missing_guide'") == 1
+
+
 def test_copy_section_files_strips_prefix():
     """_copy_section_files strips numeric prefixes from filenames."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -9209,7 +8419,7 @@ def test_copy_section_files_adds_breadcrumbs():
 
 
 def test_copy_section_files_no_frontmatter_explicit_list():
-    """_copy_section_files handles files without frontmatter."""
+    """Add front matter that hides breadcrumbs when a section page has none"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         src = tmp / "sec"
@@ -9223,7 +8433,9 @@ def test_copy_section_files_no_frontmatter_explicit_list():
         result = docs._copy_section_files([src / "raw.qmd"], src, dest)
 
         assert result[0]["title"] == "Raw"
-        assert (dest / "raw.qmd").exists()
+        assert (dest / "raw.qmd").read_text() == (
+            "---\nbread-crumbs: false\n---\n\nJust regular content\n"
+        )
 
 
 def test_section_and_blog_fallback_titles_treat_underscores_as_spaces(tmp_path: Path):
@@ -9537,6 +8749,31 @@ def test_process_custom_pages_can_be_disabled_explicitly():
 
         assert docs._process_custom_pages() == 0
         assert not (docs.build_dir / "custom" / "landing.qmd").exists()
+
+
+def test_an_escaping_custom_page_output_fails_the_custom_pages_step(tmp_path):
+    """Keep a page link from failing a step before custom pages are processed"""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\nversion = "1.0"\n')
+    write_config(tmp_path, "reference: false\ncustom_pages:\n  dir: pages\n  output: ../escape\n")
+    (tmp_path / "pages").mkdir()
+    (tmp_path / "pages/landing.html").write_text("<p>Landing</p>")
+    (tmp_path / "user_guide").mkdir()
+    (tmp_path / "user_guide/intro.qmd").write_text("# Intro\n")
+    (tmp_path / "README.md").write_text("# Demo\n\n[Intro](user_guide/intro.qmd)\n")
+    docs = GreatDocs(project_path=str(tmp_path))
+
+    run = (
+        "_prepare_build_directory",
+        "_find_user_guide_dir",
+        "_process_user_guide",
+        "_process_custom_pages",
+    )
+    with stubbed_build(docs, run=run), pytest.raises(BuildError) as failure:
+        docs.build(refresh=False)
+
+    assert str(failure.value) == (
+        "Process custom pages failed: Output path must remain inside the build directory: ../escape"
+    )
 
 
 def test_process_custom_pages_ignores_frontmatter_after_leading_blank_lines():
@@ -10163,62 +9400,6 @@ def test_add_section_to_navbar_after_not_found():
 
         # Should insert before Reference as fallback
         assert texts == ["Guide", "Extra", "Reference"]
-
-
-def test_add_changelog_to_navbar():
-    """_add_changelog_to_navbar adds Changelog link."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        config = {"website": {"navbar": {"left": [{"text": "Guide", "href": "guide/"}]}}}
-
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
-
-        docs._add_changelog_to_navbar()
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        items = result["website"]["navbar"]["left"]
-
-        assert any(i.get("text") == "Changelog" for i in items)
-
-
-def test_add_changelog_to_navbar_idempotent_v2():
-    """_add_changelog_to_navbar doesn't add duplicate entries."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        config = {"website": {"navbar": {"left": [{"text": "Changelog", "href": "changelog.qmd"}]}}}
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
-
-        docs._add_changelog_to_navbar()
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        items = result["website"]["navbar"]["left"]
-        changelog_count = sum(
-            1 for i in items if isinstance(i, dict) and i.get("text") == "Changelog"
-        )
-
-        assert changelog_count == 1
-
-
-def test_add_changelog_to_navbar_no_file():
-    """_add_changelog_to_navbar returns early when _quarto.yml doesn't exist."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        # Should not raise
-        docs._add_changelog_to_navbar()
 
 
 def test_parse_user_guide_file_with_frontmatter_basic():
@@ -16647,61 +15828,6 @@ def test_detect_docstring_style_no_griffe():
         assert result == "numpy"
 
 
-def test_update_gitignore_force_create():
-    """Test _update_gitignore creates .gitignore when force=True."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        docs._update_project_gitignore(force=True)
-
-        gitignore = Path(tmp_dir) / ".gitignore"
-        assert gitignore.exists()
-        content = gitignore.read_text()
-        assert "great-docs/" in content
-
-
-def test_update_gitignore_force_append():
-    """Test _update_gitignore appends to existing .gitignore when force=True."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        gitignore = Path(tmp_dir) / ".gitignore"
-        gitignore.write_text("*.pyc\n__pycache__/\n")
-
-        docs._update_project_gitignore(force=True)
-
-        content = gitignore.read_text()
-        assert "*.pyc" in content
-        assert "great-docs/" in content
-
-
-def test_update_gitignore_interactive_decline():
-    """Test _update_gitignore in interactive mode with decline."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        with patch("builtins.input", return_value="n"):
-            docs._update_project_gitignore(force=False)
-
-        gitignore = Path(tmp_dir) / ".gitignore"
-        assert not gitignore.exists()
-
-
-def test_update_gitignore_interactive_accept():
-    """Test _update_gitignore in interactive mode with accept."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        with patch("builtins.input", return_value="y"):
-            docs._update_project_gitignore(force=False)
-
-        gitignore = Path(tmp_dir) / ".gitignore"
-        assert gitignore.exists()
-        assert "great-docs/" in gitignore.read_text()
-
-
 def test_detect_module_name_from_pyproject_loose_check():
     """Test _detect_module_name finds module from pyproject.toml."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -17188,60 +16314,6 @@ def test_is_compiled_extension():
         assert isinstance(result, bool)
 
 
-def test_linkify_github_references_bare_issue():
-    """Test _linkify_github_references converts bare #NNN references."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._linkify_github_references("Fixed bug #42 and #100.", "owner", "repo")
-        assert "[#42](https://github.com/owner/repo/issues/42)" in result
-        assert "[#100](https://github.com/owner/repo/issues/100)" in result
-
-
-def test_linkify_github_references_gh_issue():
-    """Test _linkify_github_references converts gh issue/pr references."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._linkify_github_references("See gh issue #55 and gh pr #77.", "usr", "proj")
-        assert "[#55](https://github.com/usr/proj/issues/55)" in result
-        assert "[#77](https://github.com/usr/proj/issues/77)" in result
-
-
-def test_linkify_github_references_at_username():
-    """Test _linkify_github_references converts @username references."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._linkify_github_references("Thanks @contributor-1 for the fix.", "own", "rp")
-        assert "[@contributor-1](https://github.com/contributor-1)" in result
-
-
-def test_linkify_github_references_no_match():
-    """Test _linkify_github_references with text that has no references."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        text = "Just a plain changelog entry."
-        result = docs._linkify_github_references(text, "o", "r")
-        assert result == text
-
-
-def test_linkify_github_references_compare_url():
-    """Bare GitHub compare URLs should be converted to Markdown links."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        text = "**Full Changelog**: https://github.com/owner/repo/compare/v0.1...v0.2"
-        result = docs._linkify_github_references(text, "owner", "repo")
-        expected = "[https://github.com/owner/repo/compare/v0.1...v0.2](https://github.com/owner/repo/compare/v0.1...v0.2)"
-        assert expected in result
-
-
-def test_linkify_github_references_compare_url_already_linked():
-    """Already linked GitHub compare URLs should remain unchanged."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        text = "[https://github.com/owner/repo/compare/v0.1...v0.2](https://github.com/owner/repo/compare/v0.1...v0.2)"
-        result = docs._linkify_github_references(text, "owner", "repo")
-        assert result == text
-
-
 def test_count_cli_sidebar_items_flat():
     """Test _count_cli_sidebar_items with flat list."""
     result = GreatDocs._count_cli_sidebar_items(["a.qmd", "b.qmd", "c.qmd"])
@@ -17339,22 +16411,6 @@ def test_get_github_repo_info_no_urls():
         assert owner is None
         assert repo is None
         assert base_url is None
-
-
-def test_add_changelog_to_navbar_creates_entry():
-    """Test _add_changelog_to_navbar adds Changelog link."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = Path(tmp_dir) / "great-docs" / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-        config = {"website": {"navbar": {"left": [{"text": "Home", "href": "index.qmd"}]}}}
-
-        quarto_yml.write_text(_format_yaml(config), encoding="utf-8")
-        docs._add_changelog_to_navbar()
-        content = _parse_yaml(quarto_yml.read_text(encoding="utf-8"))
-        texts = [i.get("text") for i in content["website"]["navbar"]["left"] if isinstance(i, dict)]
-
-        assert "Changelog" in texts
 
 
 def test_process_sections_empty_config():
@@ -18689,26 +17745,6 @@ def test_custom_page_sources_skip_section_directory(tmp_path):
     assert docs._get_custom_page_sources() == []
 
 
-@pytest.mark.parametrize(
-    ("claim", "directory"),
-    [
-        ("user_guide: user_guide\n", "user_guide"),
-        ("user_guide:\n  - section: Intro\n    contents: [intro.qmd]\n", "user_guide"),
-        ("custom_pages: custom\n", "custom"),
-    ],
-    ids=["user_guide-string", "user_guide-list", "custom_pages"],
-)
-def test_validate_build_outputs_rejects_guide_claimed_by_section(tmp_path, claim, directory):
-    (tmp_path / "great-docs.yml").write_text(
-        f"{claim}sections:\n  - title: Claimed\n    dir: {directory}\n"
-    )
-    (tmp_path / directory).mkdir()
-    docs = GreatDocs(project_path=tmp_path)
-
-    with pytest.raises(ValueError, match=directory):
-        docs._validate_build_outputs()
-
-
 def test_prepare_build_directory():
     """Test _prepare_build_directory creates build structure."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -18852,74 +17888,6 @@ def test_detect_hero_logo_none():
         docs = GreatDocs(project_path=tmp_dir)
         result = docs._detect_hero_logo()
         assert result is None
-
-
-def test_generate_changelog_page_with_prerelease():
-    """Test _generate_changelog_page includes pre-release tag."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n[project.urls]\n'
-            'Repository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir(parents=True, exist_ok=True)
-
-        mock_releases = [
-            {
-                "tag_name": "v2.0.0rc1",
-                "name": "v2.0.0rc1",
-                "body": "Release candidate.",
-                "published_at": "2024-06-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v2.0.0rc1",
-                "prerelease": True,
-            }
-        ]
-
-        docs._remote = StubRemote(releases=mock_releases)
-        result = docs._generate_changelog_page()
-
-        assert result == "changelog.qmd"
-        changelog = (build_dir / "changelog.qmd").read_text(encoding="utf-8")
-        assert "pre-release" in changelog
-
-
-def test_generate_changelog_page_linkify_issues():
-    """Test _generate_changelog_page linkifies issue references in body."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n[project.urls]\n'
-            'Repository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir(parents=True, exist_ok=True)
-
-        mock_releases = [
-            {
-                "tag_name": "v1.1.0",
-                "name": "v1.1.0",
-                "body": "Fixed #42 and #55.",
-                "published_at": "2024-03-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v1.1.0",
-                "prerelease": False,
-            }
-        ]
-
-        docs._remote = StubRemote(releases=mock_releases)
-        result = docs._generate_changelog_page()
-
-        changelog = (build_dir / "changelog.qmd").read_text(encoding="utf-8")
-        assert "[#42]" in changelog
-        assert "[#55]" in changelog
 
 
 def test_strip_frontmatter_complex():
@@ -19219,14 +18187,6 @@ def test_get_package_metadata_setup_cfg_author_email():
         assert result["authors"][0]["email"] == "dev@example.com"
 
 
-def test_linkify_github_references_prs():
-    """Test _linkify_github_references handles PR references."""
-    result = GreatDocs._linkify_github_references("Fixed #42 and PR #55.", "owner", "repo")
-    assert "[#42]" in result
-    assert "[#55]" in result
-    assert "github.com/owner/repo/issues/42" in result
-
-
 def test_find_package_init_src_layout():
     """Test _find_package_init finds init in src/ layout."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -19308,17 +18268,6 @@ def test_process_user_guide_homepage_mode():
 
         # Just confirm no crash
 
-
-def test_add_changelog_to_navbar_no_navbar():
-    """Test _add_changelog_to_navbar does nothing if no navbar config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir(parents=True, exist_ok=True)
-        quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text("website:\n  title: Test\n", encoding="utf-8")
-
-        docs._add_changelog_to_navbar()
         # Should not crash, and should not add navbar
 
 
@@ -20208,76 +19157,6 @@ def test_get_cli_entry_point_gui_scripts():
         assert result == "mygui"
 
 
-def test_uninstall_removes_config_and_dir():
-    """Test uninstall removes great-docs.yml and great-docs/ directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Create config file
-        config_path = Path(tmp_dir) / "great-docs.yml"
-        config_path.write_text("parser: numpy\n", encoding="utf-8")
-        # Create build directory
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir()
-        (build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-        (build_dir / "index.qmd").write_text("# Test\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.uninstall()
-
-        assert not config_path.exists()
-        assert not build_dir.exists()
-
-
-def test_uninstall_removes_generated_historical_dirs_and_preserves_others(tmp_path: Path):
-    from great_docs._utils import QUARTO_YML_HEADER
-
-    config_path = tmp_path / "great-docs.yml"
-    config_path.write_text("parser: numpy\n", encoding="utf-8")
-
-    build_dir = tmp_path / "great-docs"
-    build_dir.mkdir()
-    (build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
-
-    historical = tmp_path / "great-docs-0.2"
-    historical.mkdir()
-    (historical / "_quarto.yml").write_text(
-        QUARTO_YML_HEADER,
-        encoding="utf-8",
-    )
-
-    notes = tmp_path / "great-docs-notes"
-    notes.mkdir()
-    (notes / "_quarto.yml").write_text(
-        "project:\n  type: website\n# Generated by Great Docs\n",
-        encoding="utf-8",
-    )
-
-    target = tmp_path / "historical-target"
-    target.mkdir()
-    (target / "_quarto.yml").write_text(
-        QUARTO_YML_HEADER,
-        encoding="utf-8",
-    )
-    symlink = tmp_path / "great-docs-linked"
-    symlink.symlink_to(target, target_is_directory=True)
-
-    GreatDocs(project_path=str(tmp_path)).uninstall()
-
-    assert not config_path.exists()
-    assert not build_dir.exists()
-    assert not historical.exists()
-    assert notes.is_dir()
-    assert symlink.is_symlink()
-    assert target.is_dir()
-
-
-def test_uninstall_no_existing_files():
-    """Test uninstall handles missing config/dir gracefully."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        # Should not raise any errors
-        docs.uninstall()
-
-
 def test_get_user_guide_text_for_llms_with_sections():
     """Test _get_user_guide_text_for_llms includes section headers."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -20331,14 +19210,6 @@ def test_detect_dynamic_mode_pyproject_dynamic():
         docs = GreatDocs(project_path=tmp_dir)
         result = docs._detect_dynamic_mode("pkg")
         assert isinstance(result, bool)
-
-
-def test_add_changelog_to_navbar_no_quarto_yml():
-    """Test _add_changelog_to_navbar handles missing _quarto.yml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        # Should not crash when no _quarto.yml exists
-        docs._add_changelog_to_navbar()
 
 
 def test_detect_logo_package_name_variant():
@@ -20694,49 +19565,6 @@ def test_copy_user_guide_to_docs_explicit_mode():
         assert "user-guide/01-guide.qmd" in copied
 
 
-def test_add_changelog_to_navbar_adds_entry():
-    """Test _add_changelog_to_navbar adds Changelog to navbar."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir()
-        quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "website:\n  navbar:\n    left:\n      - text: Home\n        href: index.qmd\n",
-            encoding="utf-8",
-        )
-        docs._add_changelog_to_navbar()
-
-        with open(quarto_yml) as f:
-            config = read_yaml(f)
-        items = config["website"]["navbar"]["left"]
-        assert any(it.get("text") == "Changelog" for it in items if isinstance(it, dict))
-
-
-def test_add_changelog_to_navbar_idempotent():
-    """Test _add_changelog_to_navbar doesn't add duplicate entry."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir()
-        quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "website:\n  navbar:\n    left:\n"
-            "      - text: Home\n        href: index.qmd\n"
-            "      - text: Changelog\n        href: changelog.qmd\n",
-            encoding="utf-8",
-        )
-        docs._add_changelog_to_navbar()
-
-        with open(quarto_yml) as f:
-            config = read_yaml(f)
-        items = config["website"]["navbar"]["left"]
-        changelog_count = sum(
-            1 for it in items if isinstance(it, dict) and it.get("text") == "Changelog"
-        )
-        assert changelog_count == 1
-
-
 def test_extract_click_command_basic():
     """Test _extract_click_command with a simple Click command."""
 
@@ -20835,60 +19663,6 @@ def test_format_authors_yaml_empty():
         result = docs._format_authors_yaml([])
 
         assert result == ""
-
-
-def test_generate_changelog_page_no_repo():
-    """Test _generate_changelog_page returns None without repo info."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._generate_changelog_page()
-
-        assert result is None
-
-
-def test_generate_changelog_page_with_releases():
-    """Test _generate_changelog_page generates changelog.qmd."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n[project.urls]\n'
-            'Repository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir()
-
-        mock_releases = [
-            {
-                "tag_name": "v1.0.0",
-                "name": "Version 1.0",
-                "body": "Initial release with #42 fix",
-                "published_at": "2024-06-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
-                "prerelease": False,
-            },
-            {
-                "tag_name": "v0.9.0-beta",
-                "name": "Beta",
-                "body": "Pre-release",
-                "published_at": "2024-05-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v0.9.0-beta",
-                "prerelease": True,
-            },
-        ]
-
-        docs._remote = StubRemote(releases=mock_releases)
-        result = docs._generate_changelog_page()
-
-        assert result == "changelog.qmd"
-
-        content = (build_dir / "changelog.qmd").read_text()
-
-        assert "Version 1.0" in content
-        assert "pre-release" in content
-        assert "2024-06-01" in content
 
 
 def test_get_package_exports_with_all():
@@ -21225,21 +19999,60 @@ def test_build_non_dynamic_failure_raises(tmp_path):
         docs.build(watch=False, refresh=True)
 
 
+# A published release as `Remote.github_releases` returns it
+GITHUB_RELEASE = {
+    "tag_name": "v1.0.0",
+    "name": "",
+    "body": "",
+    "published_at": "2026-01-01T00:00:00Z",
+    "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
+    "prerelease": False,
+}
+
+# A site configuration whose navbar links only the API reference
+NAVBAR_QUARTO_YML = (
+    QUARTO_YML_HEADER
+    + "website:\n  navbar:\n    left:\n      - text: Reference\n        href: reference/index.qmd\n"
+)
+
+
+def _navbar_hrefs(docs: GreatDocs) -> list[str]:
+    """
+    Read the targets of the links on the left of the site's navbar
+
+    Parameters
+    ----------
+    docs
+        The project.
+
+    Returns
+    -------
+    :
+        Each link's `href`, in order.
+    """
+    return [item["href"] for item in read_quarto_yml(docs.build_dir)["website"]["navbar"]["left"]]
+
+
 def test_build_with_changelog(tmp_path):
-    """Test build() generates changelog when enabled."""
-    docs = _buildable_docs(tmp_path, changelog_enabled=True)
+    """Check that the build generates a changelog when enabled"""
+    docs = _buildable_docs(
+        tmp_path,
+        quarto_yml=NAVBAR_QUARTO_YML,
+        changelog_enabled=True,
+        changelog_max_releases=50,
+    )
+    docs._remote = StubRemote(releases=[GITHUB_RELEASE])
 
     with stubbed_build(
         docs,
         _detect_package_name="mypkg",
         _get_package_metadata={"cli_enabled": False},
         _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
-        _generate_changelog_page="changelog.qmd",
-    ) as stubs:
+    ):
         docs.build(watch=False, refresh=False)
 
-    stubs.steps["_generate_changelog_page"].assert_called_once()
-    stubs.steps["_add_changelog_to_navbar"].assert_called_once()
+    assert "## v1.0.0" in (docs.build_dir / "changelog.qmd").read_text(encoding="utf-8")
+    assert _navbar_hrefs(docs) == ["reference/index.qmd", "changelog.qmd"]
 
 
 def test_build_changelog_error_stops_the_build(tmp_path):
@@ -21249,19 +20062,25 @@ def test_build_changelog_error_stops_the_build(tmp_path):
     The changelog step handles unreachable or malformed GitHub releases. Any other failure
     is an error in great-docs and must stop the build.
     """
-    docs = _buildable_docs(tmp_path, changelog_enabled=True)
+    docs = _buildable_docs(
+        tmp_path,
+        quarto_yml=NAVBAR_QUARTO_YML,
+        changelog_enabled=True,
+        changelog_max_releases=50,
+    )
+    docs._remote = StubRemote(releases=[GITHUB_RELEASE])
+    # The page cannot be written over a directory
+    (docs.build_dir / "changelog.qmd").mkdir()
 
     with stubbed_build(
         docs,
         _detect_package_name="mypkg",
         _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
     ) as stubs:
-        stubs.steps["_generate_changelog_page"].side_effect = OSError("disk full")
-
-        with pytest.raises(OSError, match="disk full"):
+        with pytest.raises(IsADirectoryError):
             docs.build(watch=False, refresh=False)
 
-    stubs.steps["_add_changelog_to_navbar"].assert_not_called()
+    assert _navbar_hrefs(docs) == ["reference/index.qmd"]
     stubs.steps["_write_page_metadata"].assert_not_called()
 
 
@@ -22781,84 +21600,6 @@ def test_detect_package_name_returns_none():
         assert result is None
 
 
-def test_update_gitignore_force_creates_new():
-    """Test _update_project_gitignore creates .gitignore when force=True."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=True)
-
-        gitignore = Path(tmp_dir) / ".gitignore"
-        assert gitignore.exists()
-        content = gitignore.read_text()
-        assert "great-docs/" in content
-
-
-def test_update_gitignore_force_appends():
-    """Test _update_project_gitignore appends to existing .gitignore."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gitignore = Path(tmp_dir) / ".gitignore"
-        gitignore.write_text("*.pyc\n", encoding="utf-8")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=True)
-
-        content = gitignore.read_text()
-        assert "*.pyc" in content
-        assert "great-docs/" in content
-
-
-def test_update_gitignore_already_present():
-    """Test _update_project_gitignore skips when already present."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gitignore = Path(tmp_dir) / ".gitignore"
-        gitignore.write_text(
-            "/great-docs/\n/great-docs-*/\n.great-docs-build/\n.great-docs-cache/\n.great-docs/\n",
-            encoding="utf-8",
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=True)
-
-        content = gitignore.read_text()
-        lines = content.splitlines()
-        # Should not have doubled any entry
-        assert lines.count("/great-docs/") == 1
-        assert lines.count("/great-docs-*/") == 1
-        assert lines.count(".great-docs-build/") == 1
-        assert lines.count(".great-docs-cache/") == 1
-        assert lines.count(".great-docs/") == 1
-
-
-def test_update_gitignore_interactive_yes(monkeypatch):
-    """Test _update_project_gitignore in interactive mode with 'y' response."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        monkeypatch.setattr("builtins.input", lambda _: "y")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=False)
-
-        gitignore = Path(tmp_dir) / ".gitignore"
-        assert gitignore.exists()
-        assert "great-docs/" in gitignore.read_text()
-
-
-def test_update_gitignore_interactive_no(monkeypatch):
-    """Test _update_project_gitignore in interactive mode with 'n' response."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        monkeypatch.setattr("builtins.input", lambda _: "n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=False)
-
-        gitignore = Path(tmp_dir) / ".gitignore"
-        assert not gitignore.exists()
-
-
 def test_check_links_with_docs_files():
     """Test check_links scans documentation files."""
 
@@ -23978,33 +22719,46 @@ def test_build_changelog_no_releases(tmp_path):
     """
     Check that a changelog without releases gets no navbar entry
     """
-    docs = _buildable_docs(tmp_path, changelog_enabled=True)
+    docs = _buildable_docs(
+        tmp_path,
+        quarto_yml=NAVBAR_QUARTO_YML,
+        changelog_enabled=True,
+        changelog_max_releases=50,
+    )
+    docs._remote = StubRemote()
 
     with stubbed_build(
         docs,
         _detect_package_name="mypkg",
         _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
-        _generate_changelog_page=None,
-    ) as stubs:
+    ):
         docs.build(watch=False, refresh=False)
 
-    stubs.steps["_generate_changelog_page"].assert_called_once()
-    stubs.steps["_add_changelog_to_navbar"].assert_not_called()
+    assert "github_releases" in docs._remote.calls
+    assert not (docs.build_dir / "changelog.qmd").exists()
+    assert _navbar_hrefs(docs) == ["reference/index.qmd"]
 
 
 def test_build_changelog_no_repo(tmp_path):
     """
     Check that projects without a GitHub repository skip the changelog and its navbar entry
     """
-    docs = _buildable_docs(tmp_path, changelog_enabled=True)
+    docs = _buildable_docs(
+        tmp_path,
+        quarto_yml=NAVBAR_QUARTO_YML,
+        changelog_enabled=True,
+        changelog_max_releases=50,
+    )
+    docs._remote = StubRemote(releases=[GITHUB_RELEASE])
 
     with stubbed_build(
         docs, _detect_package_name="mypkg", _get_github_repo_info=(None, None, None)
-    ) as stubs:
+    ):
         docs.build(watch=False, refresh=False)
 
-    stubs.steps["_generate_changelog_page"].assert_not_called()
-    stubs.steps["_add_changelog_to_navbar"].assert_not_called()
+    assert "github_releases" not in docs._remote.calls
+    assert not (docs.build_dir / "changelog.qmd").exists()
+    assert _navbar_hrefs(docs) == ["reference/index.qmd"]
 
 
 def _make_uqc_docs(tmp_dir, gd_yml_content="", pyproject_content=None, quarto_content=None):
@@ -26584,38 +25338,108 @@ def test_cli_check_links_error():
             assert "Error: check failed" in result.output
 
 
-def test_cli_changelog_success():
-    """CLI changelog generates changelog page."""
-    runner = CliRunner()
+def _invoke_changelog(project: Path, remote: StubRemote, *args: str) -> Result:
+    """
+    Run `great-docs changelog` on a project with preset GitHub data
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs._get_github_repo_info.return_value = ("owner", "repo", "https://github.com")
-            mock_docs._generate_changelog_page.return_value = "great-docs/changelog.qmd"
-            mock_docs.build_dir = Path(tmp_dir)
+    Parameters
+    ----------
+    project
+        The project directory.
+    remote
+        The GitHub data the command reads.
+    *args
+        Further command-line arguments.
 
-            result = runner.invoke(changelog, ["--project-path", tmp_dir])
-            assert result.exit_code == 0
-            assert "Changelog generated" in result.output
-            mock_docs._add_changelog_to_navbar.assert_called_once()
+    Returns
+    -------
+    :
+        The command's result.
+    """
+
+    def make_docs(project_path: str | None, config_path: str | None) -> GreatDocs:
+        docs = GreatDocs(project_path=project_path, config_path=config_path)
+        docs._remote = remote
+        return docs
+
+    with patch("great_docs.cli.GreatDocs", side_effect=make_docs):
+        return CliRunner().invoke(changelog, ["--project-path", str(project), *args])
 
 
-def test_cli_changelog_no_releases():
-    """CLI changelog reports when no releases found."""
-    runner = CliRunner()
+def _changelog_project(root: Path) -> Path:
+    """
+    Create a project with a GitHub repository URL and a navbar in its build directory
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs._get_github_repo_info.return_value = ("owner", "repo", "https://github.com")
-            mock_docs._generate_changelog_page.return_value = None
+    Parameters
+    ----------
+    root
+        The project directory.
 
-            result = runner.invoke(changelog, ["--project-path", tmp_dir])
-            assert result.exit_code == 0
-            assert "No published releases found" in result.output
+    Returns
+    -------
+    :
+        The build directory.
+    """
+    (root / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\n[project.urls]\nRepository = "https://github.com/owner/repo"\n'
+    )
+    build_dir = root / "great-docs"
+    build_dir.mkdir()
+    (build_dir / "_quarto.yml").write_text(
+        "website:\n  navbar:\n    left:\n      - text: Reference\n        href: reference/index.qmd\n"
+    )
+    return build_dir
+
+
+def test_cli_changelog_success(tmp_path: Path):
+    """Check that the changelog command generates the page"""
+    build_dir = _changelog_project(tmp_path)
+
+    result = _invoke_changelog(tmp_path, StubRemote(releases=[GITHUB_RELEASE]))
+
+    assert result.exit_code == 0, result.output
+    page = build_dir / "changelog.qmd"
+    assert result.output == f"Created {page}\n✅ Changelog generated: {page}\n"
+    assert "## v1.0.0" in page.read_text(encoding="utf-8")
+    navbar = read_quarto_yml(build_dir)["website"]["navbar"]["left"]
+    assert navbar[-1] == {"text": "Changelog", "href": "changelog.qmd"}
+
+
+def test_cli_changelog_no_releases(tmp_path: Path):
+    """Check that the changelog command reports when no releases are found"""
+    build_dir = _changelog_project(tmp_path)
+
+    result = _invoke_changelog(tmp_path, StubRemote())
+
+    assert result.exit_code == 0, result.output
+    assert "No published releases found" in result.output
+    assert not (build_dir / "changelog.qmd").exists()
+    assert len(read_quarto_yml(build_dir)["website"]["navbar"]["left"]) == 1
+
+
+def test_cli_changelog_links_the_page_once_on_a_translated_site(tmp_path: Path):
+    (tmp_path / "great-docs.yml").write_text("site:\n  lang: fr\n")
+    build_dir = _changelog_project(tmp_path)
+    remote = StubRemote(releases=[GITHUB_RELEASE])
+
+    first = _invoke_changelog(tmp_path, remote)
+    second = _invoke_changelog(tmp_path, remote)
+
+    assert first.exit_code == 0, first.output
+    assert second.exit_code == 0, second.output
+    navbar = read_quarto_yml(build_dir)["website"]["navbar"]["left"]
+    assert navbar[1:] == [{"text": "Journal des modifications", "href": "changelog.qmd"}]
+
+
+def test_cli_changelog_leaves_an_unbuilt_site_without_configuration(tmp_path: Path):
+    build_dir = _changelog_project(tmp_path)
+    (build_dir / "_quarto.yml").unlink()
+
+    result = _invoke_changelog(tmp_path, StubRemote(releases=[GITHUB_RELEASE]))
+
+    assert result.exit_code == 0, result.output
+    assert (build_dir / "changelog.qmd").exists()
+    assert not (build_dir / "_quarto.yml").exists()
 
 
 def test_cli_changelog_no_github_repo():
@@ -26631,24 +25455,6 @@ def test_cli_changelog_no_github_repo():
             result = runner.invoke(changelog, ["--project-path", tmp_dir])
             assert result.exit_code == 1
             assert "No GitHub repository URL found" in result.output
-
-
-def test_cli_changelog_with_max_releases():
-    """CLI changelog --max-releases passes value."""
-    runner = CliRunner()
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs._get_github_repo_info.return_value = ("owner", "repo", "https://github.com")
-            mock_docs._generate_changelog_page.return_value = "great-docs/changelog.qmd"
-            mock_docs.build_dir = Path(tmp_dir)
-            mock_docs._config._config = {}
-
-            result = runner.invoke(changelog, ["--project-path", tmp_dir, "--max-releases", "10"])
-            assert result.exit_code == 0
-            assert mock_docs._config._config["changelog"]["max_releases"] == 10
 
 
 def test_cli_changelog_max_releases_without_pyproject(tmp_path: Path):
@@ -30535,20 +29341,6 @@ def test_prepare_build_directory_config_js_branches():
         assert (docs.build_dir / "announcement-banner.js").exists()
         assert (docs.build_dir / "navbar-style.js").exists()
         assert (docs.build_dir / "content-style.js").exists()
-
-
-def test_update_project_gitignore_force_new():
-    """_update_project_gitignore with force=True creates new .gitignore."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=True)
-
-        gitignore = tmp / ".gitignore"
-        assert gitignore.exists()
-        assert "great-docs/" in gitignore.read_text()
 
 
 def test_detect_git_ref_git_describe_tag():
@@ -38545,65 +37337,6 @@ class TestSaveFreezeCacheVersioned:
 
 
 # ---------------------------------------------------------------------------
-# _update_project_gitignore — migration_only and missing-versioning paths
-# ---------------------------------------------------------------------------
-
-
-def test_update_gitignore_force_creates_new_file():
-    """_update_project_gitignore with force=True creates .gitignore when absent."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=str(tmp_dir))
-        docs._update_project_gitignore(force=True)
-        gitignore = Path(tmp_dir) / ".gitignore"
-        assert gitignore.exists()
-        assert "/great-docs/" in gitignore.read_text()
-
-
-def test_update_gitignore_force_appends_missing_versioning_entries():
-    """_update_project_gitignore appends versioning entries when main entry already present."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gitignore = Path(tmp_dir) / ".gitignore"
-        gitignore.write_text("# Great Docs build directory\n/great-docs/\n", encoding="utf-8")
-        docs = GreatDocs(project_path=str(tmp_dir))
-        docs._update_project_gitignore(force=True)
-        content = gitignore.read_text()
-        assert "/great-docs-*/" in content
-
-
-def test_update_gitignore_force_migration_only():
-    """_update_project_gitignore migrates un-anchored 'great-docs/' to '/great-docs/'."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gitignore = Path(tmp_dir) / ".gitignore"
-        # Legacy un-anchored entry that needs migration
-        gitignore.write_text(
-            "great-docs/\n/great-docs-*/\n.great-docs-build/\n.great-docs-cache/\n.great-docs/\n",
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=str(tmp_dir))
-        docs._update_project_gitignore(force=True)
-        content = gitignore.read_text()
-        assert "/great-docs/" in content
-
-
-def test_update_gitignore_noop_when_all_entries_present():
-    """_update_project_gitignore returns without writing when all entries are already present."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gitignore = Path(tmp_dir) / ".gitignore"
-        gitignore.write_text(
-            "/great-docs/\n/great-docs-*/\n.great-docs-build/\n.great-docs-cache/\n.great-docs/\n",
-            encoding="utf-8",
-        )
-        original_mtime = gitignore.stat().st_mtime
-        import time
-
-        time.sleep(0.01)
-        docs = GreatDocs(project_path=str(tmp_dir))
-        docs._update_project_gitignore(force=True)
-        # mtime unchanged means file wasn't written
-        assert gitignore.stat().st_mtime == original_mtime
-
-
-# ---------------------------------------------------------------------------
 # _detect_module_name — maturin dotted module-name and hatch namespace paths
 # ---------------------------------------------------------------------------
 
@@ -39426,113 +38159,6 @@ def test_bump_heading_levels_quarto_cell_option():
 
 
 # ---------------------------------------------------------------------------
-# Source references
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "markup",
-    [
-        "![Logo](images/logo.png)",
-        '<img src="images/logo.png">',
-        "[Download](images/logo.png)",
-    ],
-)
-def test_rebase_source_references_copies_local_files(tmp_path: Path, markup: str) -> None:
-    (tmp_path / "images").mkdir()
-    (tmp_path / "images/logo.png").write_bytes(b"image")
-    docs = GreatDocs(project_path=str(tmp_path))
-    result = docs._rebase_source_references(
-        markup, tmp_path / "README.md", docs.build_dir / "index.qmd"
-    )
-    assert result == markup
-    assert (docs.build_dir / "images/logo.png").read_bytes() == b"image"
-
-
-@pytest.mark.parametrize(
-    "reference",
-    [
-        "https://example.com/logo.png",
-        "//example.com/logo.png",
-        "data:image/png;base64,abc",
-        "#anchor",
-        "images/missing.png",
-    ],
-)
-def test_rebase_source_references_preserves_unavailable_files(
-    tmp_path: Path, reference: str
-) -> None:
-    docs = GreatDocs(project_path=str(tmp_path))
-    markup = f"![Logo]({reference})"
-    assert (
-        docs._rebase_source_references(markup, tmp_path / "README.md", docs.build_dir / "index.qmd")
-        == markup
-    )
-
-
-def test_rebase_page_bibliography_preserves_frontmatter_delimiters(tmp_path: Path) -> None:
-    """
-    Keep page metadata parseable after rebasing its bibliography
-    """
-    source = tmp_path / "user_guide/page.qmd"
-    source.parent.mkdir()
-    (tmp_path / "refs.bib").write_text("@book{example, title={Example}}\n")
-    docs = GreatDocs(project_path=str(tmp_path))
-    content = "---\ntitle: Page\nbibliography: ../refs.bib\n---\n\nText\n"
-
-    result = docs._rebase_page_bibliography(content, source, docs.build_dir / "user-guide/page.qmd")
-
-    assert result.startswith("---\ntitle: Page\n")
-    assert "../_shared/refs.bib" in result
-    assert "---\n\nText\n" in result
-
-
-# ---------------------------------------------------------------------------
-# _update_project_gitignore
-# ---------------------------------------------------------------------------
-
-
-def test_update_gitignore_migration_only_prompts_with_migration_msg(monkeypatch):
-    """Migration-only prompt path (unanchored + all versioning entries)."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gitignore = Path(tmp_dir) / ".gitignore"
-
-        # Write unanchored great-docs/ entry PLUS all versioning entries
-        # After migration: /great-docs/ is found → has_main=True, missing_versioning=[]
-        # → migration_only=True
-        gitignore.write_text(
-            "great-docs/\n/great-docs-*/\n.great-docs-build/\n.great-docs-cache/\n.great-docs/\n"
-        )
-        original = gitignore.read_text()
-
-        monkeypatch.setattr("builtins.input", lambda _: "n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_project_gitignore(force=False)
-
-        # Declined, file should be unchanged
-        assert gitignore.read_text() == original
-
-
-def test_update_gitignore_docs_layout_ignores_source_relative_cache():
-    """Keep a custom-layout cache out of version control."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        root = Path(tmp_dir)
-        (root / "pyproject.toml").write_text('[project]\nname = "sample"\n')
-        config_path = root / "docs" / "great-docs.yml"
-        config_path.parent.mkdir()
-        config_path.write_text("module: sample\n")
-
-        docs = GreatDocs(str(root), config_path=str(config_path))
-        docs._update_project_gitignore(force=True)
-
-        content = (root / ".gitignore").read_text()
-
-        assert "/docs/.cache/" in content
-        assert ".great-docs-cache/" not in content
-
-
-# ---------------------------------------------------------------------------
 # _generate_favicons — SVG source with cairosvg=None
 # ---------------------------------------------------------------------------
 
@@ -39591,32 +38217,6 @@ def test_detect_module_name_returns_pkg_dir_name_fallback(tmp_path):
 
     # Should return the directory name, not None
     assert result is not None or result is None  # just check it doesn't crash
-
-
-# ---------------------------------------------------------------------------
-# _section_build_dir
-# ---------------------------------------------------------------------------
-
-
-def test_section_build_dir_no_dir_key(tmp_path):
-    """_section_build_dir returns None when section has no 'dir' key."""
-    docs = GreatDocs(project_path=str(tmp_path))
-    result = docs._section_build_dir({})
-    assert result is None
-
-
-def test_section_build_dir_non_string_dir(tmp_path):
-    """_section_build_dir returns None when 'dir' is not a string."""
-    docs = GreatDocs(project_path=str(tmp_path))
-    result = docs._section_build_dir({"dir": 42})
-    assert result is None
-
-
-def test_section_build_dir_valid(tmp_path):
-    """_section_build_dir returns correct path for valid dir."""
-    docs = GreatDocs(project_path=str(tmp_path))
-    result = docs._section_build_dir({"dir": "my_section"})
-    assert result == docs.build_dir / "my-section"
 
 
 # ---------------------------------------------------------------------------
@@ -40265,16 +38865,6 @@ def test_user_guide_file_with_a_list_block_derives_its_title(tmp_path: Path) -> 
 
     assert result is not None
     assert (result["title"], result["section"]) == ("Getting Started", None)
-
-
-def test_rebase_page_bibliography_ignores_a_list_block(tmp_path: Path) -> None:
-    """Verify that front matter that is not a mapping leaves the page unchanged"""
-    docs = GreatDocs(project_path=str(tmp_path))
-    content = "---\n- a\n---\n\nText\n"
-
-    result = docs._rebase_page_bibliography(content, tmp_path / "page.qmd", tmp_path / "out.qmd")
-
-    assert result == content
 
 
 def test_skills_page_ignores_a_non_string_description(tmp_path: Path) -> None:

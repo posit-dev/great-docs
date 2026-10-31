@@ -31,7 +31,6 @@ if TYPE_CHECKING:
 # called by the step actions so the step table and its actions still run.
 # Update this list when a build step moves out of `GreatDocs`.
 _BUILD_METHODS: tuple[str, ...] = (
-    "_validate_build_outputs",
     "_detect_package_name",
     "_griffe_search_paths",
     "_find_user_guide_dir",
@@ -43,8 +42,6 @@ _BUILD_METHODS: tuple[str, ...] = (
     "_generate_skill_md",
     "_get_package_metadata",
     "_get_github_repo_info",
-    "_generate_changelog_page",
-    "_add_changelog_to_navbar",
     "_resolve_importable_name",
     "_discover_click_cli",
     "_generate_cli_reference_pages",

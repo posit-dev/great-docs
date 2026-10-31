@@ -226,19 +226,6 @@ class TestCollectPageTags:
         assert result["Demo"][0]["href"] == "docs/examples/example1.qmd"
         assert result["Demo"][0]["section"] == "Examples"
 
-    def test_section_build_dir_uses_dir_not_title(self, tmp_path: Path):
-        """`_section_build_dir` derives the path from `dir`, with the title ignored."""
-        gd = _bootstrap_project(tmp_path)
-        assert gd._section_build_dir({"title": "Examples", "dir": "docs/examples"}) == (
-            gd.build_dir / "docs" / "examples"
-        )
-        # Underscores and spaces are normalized to hyphens and lowercased
-        assert gd._section_build_dir({"title": "Foo", "dir": "My_Cool Dir"}) == (
-            gd.build_dir / "my-cool-dir"
-        )
-        # No `dir` → None
-        assert gd._section_build_dir({"title": "Examples"}) is None
-
 
 # ── Tag Hierarchy Tests ──────────────────────────────────────────────────────
 

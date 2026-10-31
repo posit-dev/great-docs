@@ -8,6 +8,8 @@ from yaml12 import read_yaml, write_yaml
 from great_docs import GreatDocs
 from great_docs._build import freeze
 from great_docs._build.pipeline import Run
+from great_docs._content import publish
+from great_docs._content.pages import output_destination, section_destination
 from great_docs._layout import Layout
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._versioned_build import assemble_site, run_versioned_build
@@ -27,6 +29,12 @@ def source_project(tmp_path: Path, request: pytest.FixtureRequest) -> tuple[Path
 
 def make_docs(root: Path, source: Path) -> GreatDocs:
     return GreatDocs(str(root), config_path=str(source / "great-docs.yml"))
+
+
+def rebase(gd: GreatDocs, content: str, source: Path, destination: Path) -> str:
+    return publish.rebase_references(
+        content, source, destination, layout=gd.layout, pages=gd._page_map()
+    )
 
 
 def test_git_ref_does_not_rename_build(tmp_path: Path) -> None:
@@ -321,7 +329,7 @@ def test_landing_precedence_and_shared_references(source_project: tuple[Path, Pa
         assert gd._find_index_source_file()[0] == source / "index.md"
     page = gd._find_index_source_file()[0]
     assert page is not None
-    content = gd._rebase_source_references(page.read_text(), page, gd.build_dir / "index.qmd")
+    content = rebase(gd, page.read_text(), page, gd.build_dir / "index.qmd")
     assert "../assets" not in content
     assert "logo.svg" in content
     assert list(gd.build_dir.rglob("*.svg"))
@@ -367,9 +375,7 @@ def test_asset_collision_is_rejected(source_project: tuple[Path, Path]) -> None:
     gd.build_dir.mkdir(parents=True)
     (gd.build_dir / "image.png").write_text("generated")
     with pytest.raises(ValueError, match="conflict"):
-        gd._rebase_source_references(
-            "![Image](image.png)", source / "README.md", gd.build_dir / "index.qmd"
-        )
+        rebase(gd, "![Image](image.png)", source / "README.md", gd.build_dir / "index.qmd")
     assert (gd.build_dir / "image.png").read_text() == "generated"
 
 
@@ -379,12 +385,12 @@ def test_shared_section_keeps_slug_and_custom_output_is_contained(
     root, source = source_project
     gd = make_docs(root, source)
     configured = "recipes" if root == source else "../recipes"
-    assert gd._section_build_dir({"dir": configured}) == gd.build_dir / "recipes"
+    assert section_destination(gd.layout, {"dir": configured}) == gd.build_dir / "recipes"
     nested = "guides/recipes" if root == source else "../guides/recipes"
-    assert gd._section_build_dir({"dir": nested}) == gd.build_dir / "guides/recipes"
+    assert section_destination(gd.layout, {"dir": nested}) == gd.build_dir / "guides/recipes"
     for output in ("../escape", str(root / "escape")):
         with pytest.raises(ValueError, match="inside"):
-            gd._output_directory(output)
+            output_destination(gd.layout, output)
 
 
 def test_notebooks_use_documentation_root(source_project: tuple[Path, Path]) -> None:
@@ -440,7 +446,7 @@ def test_landing_links_follow_generated_page_paths(source_project: tuple[Path, P
     gd = make_docs(root, source)
     content = "[Start](user_guide/01-start.qmd#intro)"
     assert (
-        gd._rebase_source_references(content, source / "index.md", gd.build_dir / "index.qmd")
+        rebase(gd, content, source / "index.md", gd.build_dir / "index.qmd")
         == "[Start](user-guide/start.qmd#intro)"
     )
 
@@ -450,10 +456,7 @@ def test_rebasing_preserves_code_examples(source_project: tuple[Path, Path]) -> 
     (source / "logo.svg").write_text("logo")
     gd = make_docs(root, source)
     content = '```markdown\n![Logo](logo.svg)\n```\n`![Logo](logo.svg)`\n    <img src="logo.svg">\n<pre>![Logo](logo.svg)</pre>\n'
-    assert (
-        gd._rebase_source_references(content, source / "index.md", gd.build_dir / "index.qmd")
-        == content
-    )
+    assert rebase(gd, content, source / "index.md", gd.build_dir / "index.qmd") == content
     assert not gd.build_dir.exists()
 
 
@@ -478,7 +481,7 @@ def test_static_reference_forms_copy_package_readme_assets(
     (root / "assets/other.svg").write_text("other")
     (root / "README.md").write_text(markup)
     gd = make_docs(root, source)
-    result = gd._rebase_source_references(markup, root / "README.md", gd.build_dir / "index.qmd")
+    result = rebase(gd, markup, root / "README.md", gd.build_dir / "index.qmd")
     expected_path = "assets/plot.svg" if source == root else "_shared/assets/plot.svg"
     assert result == markup.replace("assets/plot.svg", expected_path)
     assert (gd.build_dir / expected_path).read_text() == "plot"
@@ -495,7 +498,7 @@ def test_asset_references_preserve_url_escaping(
     gd = make_docs(root, source)
     reference = quote(filename) + "?raw=1#panel"
     markup = f"![Plot]({reference})"
-    result = gd._rebase_source_references(markup, source / "README.md", gd.build_dir / "index.qmd")
+    result = rebase(gd, markup, source / "README.md", gd.build_dir / "index.qmd")
     assert result == markup
     assert (gd.build_dir / filename).is_file()
 
@@ -505,7 +508,8 @@ def test_page_references_preserve_url_escaping(source_project: tuple[Path, Path]
     (source / "user_guide").mkdir()
     (source / "user_guide/01-start #?.qmd").write_text("# Start")
     gd = make_docs(root, source)
-    result = gd._rebase_source_references(
+    result = rebase(
+        gd,
         "[Start](user_guide/01-start%20%23%3F.qmd#intro)",
         source / "index.md",
         gd.build_dir / "index.qmd",

@@ -1,5 +1,5 @@
 """
-Read and write a build directory's `_quarto.yml`
+Read and write a build directory's `_quarto.yml`, and apply a build step's `Contribution` to it
 
 Every write starts with the generated-file header and translates the navbar
 labels that Great Docs generates in English.
@@ -18,6 +18,7 @@ from .._translations import get_translation
 from .._utils import write_quarto_yml
 
 if TYPE_CHECKING:
+    from .._contribution import Contribution
     from ..config import Config
 
 FILENAME = "_quarto.yml"
@@ -167,6 +168,37 @@ def edit(
     quarto_config = read(build_dir, seed_website=seed_website)
     yield quarto_config
     write(build_dir, quarto_config, config)
+
+
+def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
+    """
+    Add a build step's navigation to the Quarto configuration
+
+    Append each link to `website.navbar.left` unless an item there has the same `href`.
+    Applying the same contribution twice adds each link only once. Leave a configuration
+    without `website.navbar.left` unchanged.
+
+    Parameters
+    ----------
+    quarto_config
+        The configuration, changed in place.
+    contribution
+        The navigation to add.
+
+    Returns
+    -------
+    :
+    """
+    navbar = quarto_config.get("website", {}).get("navbar")
+    if not navbar or "left" not in navbar:
+        return
+    items = cast("list[Any]", navbar["left"])
+    # Writing the configuration translates labels, so match links by `href`.
+    hrefs = {cast("dict[str, Any]", item).get("href") for item in items if isinstance(item, dict)}
+    for link in contribution.navbar:
+        if link.href not in hrefs:
+            items.append({"text": link.text, "href": link.href})
+            hrefs.add(link.href)
 
 
 def _translate_navbar_labels(quarto_config: dict[str, Any], lang: str) -> None:
