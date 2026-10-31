@@ -167,7 +167,7 @@ ClassKind = Literal[
     "dataclass", "enum", "exception", "namedtuple", "typeddict", "protocol", "abc", "class"
 ]
 FunctionKind = Literal["async", "classmethod", "staticmethod", "property", "function"]
-AttributeKind = Literal["type_alias", "typevar", "constant"]
+AttributeKind = Literal["typealias", "typevar", "property", "constant"]
 
 
 def _short_base_names(obj: gf.Class | gf.Alias) -> set[str]:
@@ -258,12 +258,13 @@ def function_kind(obj: gf.Function | gf.Alias) -> FunctionKind:
 
 def attribute_kind(obj: gf.Attribute | gf.TypeAlias | gf.Alias) -> AttributeKind:
     """
-    Classify a module-level attribute or type alias
+    Classify an attribute or type alias
 
     A PEP 695 `type` statement, or an attribute annotated `TypeAlias` or
     `typing.TypeAlias`, is a type alias. An attribute declares a type variable
     when its annotation names `TypeVar`, `ParamSpec` or `TypeVarTuple`, or
-    when its value calls one of them.
+    when its value calls one of them. An attribute with the `property` label
+    is a property.
 
     Parameters
     ----------
@@ -277,14 +278,16 @@ def attribute_kind(obj: gf.Attribute | gf.TypeAlias | gf.Alias) -> AttributeKind
     """
     # An alias to a type alias is not a `gf.TypeAlias` instance; its kind is.
     if isinstance(obj, gf.TypeAlias) or obj.kind is gf.Kind.TYPE_ALIAS:
-        return "type_alias"
+        return "typealias"
     annotation = obj.annotation
     annotation_path = annotation.canonical_path if isinstance(annotation, gf.Expr) else annotation
     if annotation_path in {"TypeAlias", "typing.TypeAlias"}:
-        return "type_alias"
+        return "typealias"
     annotation_text = str(annotation) if annotation else ""
     if any(kind in annotation_text for kind in _TYPE_VARIABLE_KINDS) or is_typevar(obj):
         return "typevar"
+    if "property" in obj.labels:
+        return "property"
     return "constant"
 
 

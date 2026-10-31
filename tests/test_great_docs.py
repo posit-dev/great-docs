@@ -71,7 +71,6 @@ from great_docs._apiref._render import (
     get_render_type,
 )
 from great_docs._apiref._render._label import (
-    _attribute_label,
     _function_label,
     get_label,
 )
@@ -27519,8 +27518,8 @@ def test_function_kind_property():
         ("from typing import ParamSpec\nX: ParamSpec = ParamSpec('X')\n", "typevar"),
         ("from typing import TypeVar\nX = TypeVar('X')\n", "typevar"),
         ("import typing\nX = typing.TypeVarTuple('X')\n", "typevar"),
-        ("from typing import TypeAlias\nX: TypeAlias = int\n", "type_alias"),
-        ("import typing\nX: typing.TypeAlias = int\n", "type_alias"),
+        ("from typing import TypeAlias\nX: TypeAlias = int\n", "typealias"),
+        ("import typing\nX: typing.TypeAlias = int\n", "typealias"),
         ("X: int = 1\n", "constant"),
         ("X = 1\n", "constant"),
     ],
@@ -27541,8 +27540,16 @@ def test_attribute_kind_type_alias():
 
     files = {"__init__.py": "from ._impl import X\n", "_impl.py": "type X = int\n"}
     with gf.temporary_visited_package("pkg", files) as pkg:
-        assert attribute_kind(pkg["_impl.X"]) == "type_alias"
-        assert attribute_kind(pkg["X"]) == "type_alias"
+        assert attribute_kind(pkg["_impl.X"]) == "typealias"
+        assert attribute_kind(pkg["X"]) == "typealias"
+
+
+def test_attribute_kind_property():
+    """A property, which griffe models as a labelled attribute, is a property"""
+
+    source = "class C:\n    @property\n    def x(self) -> int: ...\n"
+    with gf.temporary_visited_package("pkg", {"__init__.py": source}) as pkg:
+        assert attribute_kind(pkg["C.x"]) == "property"
 
 
 def test_is_typealias_with_exprname():
@@ -27911,28 +27918,6 @@ def test_get_label_typealias_legacy_spelling():
     code = "from typing import TypeAlias\nContract: TypeAlias = int | str\n"
     with gf.temporary_visited_package("pkg", {"__init__.py": code}) as pkg:
         assert get_label(pkg["Contract"]) == "typealias"
-
-
-def test_attribute_label_typevar():
-    """_attribute_label returns 'typevar' for TypeVar annotation."""
-
-    obj = gf.Attribute(name="T", lineno=1, annotation="TypeVar('T')")
-    assert _attribute_label(obj) == "typevar"
-
-
-def test_attribute_label_paramspec():
-    """_attribute_label returns 'typevar' for ParamSpec annotation."""
-
-    obj = gf.Attribute(name="P", lineno=1, annotation="ParamSpec('P')")
-    assert _attribute_label(obj) == "typevar"
-
-
-def test_attribute_label_property():
-    """_attribute_label returns 'property' for a property attribute."""
-
-    obj = gf.Attribute(name="val", lineno=1)
-    obj.labels.add("property")
-    assert _attribute_label(obj) == "property"
 
 
 def test_function_label_method():
@@ -28445,15 +28430,6 @@ def test_get_label_typealias_kind():
         obj = pkg["MyType"]
         assert obj.kind is gf.Kind.TYPE_ALIAS
         assert get_label(obj) == "typealias"
-
-
-def test_attribute_label_typevar_annotation():
-    """_attribute_label returns 'typevar' for TypeVar annotation."""
-
-    obj = gf.Attribute(name="T", lineno=1)
-    obj.annotation = gf.ExprName("TypeVar")
-
-    assert _attribute_label(obj) == "typevar"
 
 
 def test_extend_base_class_with_super():

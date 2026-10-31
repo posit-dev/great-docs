@@ -807,7 +807,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"MyAlias": obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr("great_docs.core.attribute_kind", lambda o: "type_alias")
+        monkeypatch.setattr("great_docs.core.attribute_kind", lambda o: "typealias")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["MyAlias"]}])
         assert "MyAlias" in result["type_aliases"]
 

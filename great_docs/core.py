@@ -6873,7 +6873,7 @@ class GreatDocs:
                         categories["functions"].append(name)
                 elif obj.kind.value in ("attribute", "type alias"):
                     sub = attribute_kind(obj)
-                    if sub == "type_alias":
+                    if sub == "typealias":
                         categories["type_aliases"].append(name)  # pragma: no cover
                     elif sub == "typevar":
                         categories["type_aliases"].append(name)  # pragma: no cover
@@ -7016,7 +7016,7 @@ class GreatDocs:
 
                             elif member_kind in ("attribute", "type alias"):
                                 sub = attribute_kind(member)
-                                if sub == "type_alias":
+                                if sub == "typealias":
                                     categories["type_aliases"].append(qualified)  # pragma: no cover
                                 elif sub == "typevar":
                                     categories["type_aliases"].append(qualified)  # pragma: no cover
@@ -7470,7 +7470,7 @@ class GreatDocs:
                     categories["functions"].append(name)
             elif kind in ("attribute", "type alias"):
                 sub = attribute_kind(obj)
-                if sub == "type_alias":
+                if sub == "typealias":
                     categories["type_aliases"].append(name)
                 elif sub == "typevar":
                     categories["type_aliases"].append(name)
