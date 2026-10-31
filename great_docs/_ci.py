@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 
-from ._github import GithubRepo
+from ._github import GithubRepo, token_from_env
 from ._pr_preview import GITHUB_API, PreviewError, _parse_owner_repo
 
 _TIMEOUT = 15
@@ -114,14 +114,14 @@ def resolve_ci_repo(repo_override: str | None) -> tuple[str, str]:
 
 
 def _github_token() -> str:
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    if not token or not token.strip():
+    token = token_from_env()
+    if not token:
         raise PreviewError(
             "No GITHUB_TOKEN/GH_TOKEN in the environment. In GitHub Actions, pass "
             "`env: GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}` and grant "
             "`permissions: pull-requests: write`."
         )
-    return token.strip()
+    return token
 
 
 # ---------------------------------------------------------------------------

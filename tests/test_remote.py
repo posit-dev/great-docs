@@ -97,8 +97,17 @@ def test_github_stats_unknown(outcome):
 
 
 @pytest.mark.parametrize("method", ["stats", "releases"])
-def test_github_requests_send_token(monkeypatch, method):
-    monkeypatch.setenv("GITHUB_TOKEN", "ghp_test123")
+@pytest.mark.parametrize(
+    ("token", "authorization"),
+    [
+        ("ghp_test123", "Bearer ghp_test123"),
+        (" ghp_test123\n", "Bearer ghp_test123"),
+        ("   ", None),
+    ],
+    ids=["token", "padded token", "blank token"],
+)
+def test_github_requests_send_token(monkeypatch, method, token, authorization):
+    monkeypatch.setenv("GITHUB_TOKEN", token)
     remote = HttpRemote(report=print)
     with patch("requests.get", return_value=response(200, {})) as get:
         if method == "stats":
@@ -106,7 +115,7 @@ def test_github_requests_send_token(monkeypatch, method):
         else:
             remote.github_releases(REPO, 1)
 
-    assert get.call_args.kwargs["headers"]["Authorization"] == "Bearer ghp_test123"
+    assert get.call_args.kwargs["headers"].get("Authorization") == authorization
 
 
 def test_github_releases_skip_drafts():

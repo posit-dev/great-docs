@@ -67,6 +67,8 @@ def token_from_env() -> str | None:
     Returns
     -------
     :
-        `GITHUB_TOKEN`, else `GH_TOKEN`, or `None` when neither is set.
+        `GITHUB_TOKEN`, else `GH_TOKEN`, without surrounding whitespace; `None` when neither
+        is set or the chosen one is blank.
     """
-    return os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
+    return token.strip() or None

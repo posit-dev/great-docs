@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
-from ._github import GithubRepo
+from ._github import GithubRepo, token_from_env
 
 GITHUB_API = "https://api.github.com"
 DEFAULT_WORKFLOW_NAME = "CI Docs"
@@ -172,9 +172,9 @@ def resolve_token(
             return token, f"{env_file}"
 
     # 2. Real environment variables.
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    if token and token.strip():
-        return token.strip(), "GITHUB_TOKEN"
+    token = token_from_env()
+    if token:
+        return token, "GITHUB_TOKEN"
 
     # 3. Auto-detected .env files (project root, then cwd upward).
     candidates: list[Path] = []

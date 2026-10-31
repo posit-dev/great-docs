@@ -1,12 +1,12 @@
 """
-Tests for GitHub repository URL parsing
+Tests for GitHub repository URL parsing and environment tokens
 """
 
 from __future__ import annotations
 
 import pytest
 
-from great_docs._github import GithubRepo
+from great_docs._github import GithubRepo, token_from_env
 
 
 @pytest.mark.parametrize(
@@ -31,3 +31,23 @@ def test_parse(url, expected):
 
 def test_url():
     assert GithubRepo("posit-dev", "great-docs").url == "https://github.com/posit-dev/great-docs"
+
+
+@pytest.mark.parametrize(
+    ("github_token", "gh_token", "expected"),
+    [
+        ("ghp_a", "ghp_b", "ghp_a"),
+        (None, "ghp_b", "ghp_b"),
+        ("  ghp_a\n", None, "ghp_a"),
+        ("   ", None, None),
+        (None, None, None),
+    ],
+)
+def test_token_from_env(monkeypatch, github_token, gh_token, expected):
+    for name, value in [("GITHUB_TOKEN", github_token), ("GH_TOKEN", gh_token)]:
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+
+    assert token_from_env() == expected
