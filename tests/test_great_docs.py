@@ -26004,7 +26004,9 @@ def test_cli_preview_success():
 
             result = runner.invoke(preview, ["--project-path", tmp_dir])
             assert result.exit_code == 0
-            mock_instance.preview.assert_called_once_with(port=3000)
+            mock_instance.preview.assert_called_once_with(
+                port=3000, open_path="", open_browser=True
+            )
 
 
 def test_cli_preview_custom_port():
@@ -26019,7 +26021,9 @@ def test_cli_preview_custom_port():
 
             result = runner.invoke(preview, ["--project-path", tmp_dir, "--port", "8080"])
             assert result.exit_code == 0
-            mock_instance.preview.assert_called_once_with(port=8080)
+            mock_instance.preview.assert_called_once_with(
+                port=8080, open_path="", open_browser=True
+            )
 
 
 def test_cli_preview_keyboard_interrupt():

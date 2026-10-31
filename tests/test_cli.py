@@ -666,6 +666,35 @@ def test_preview_serves_selected_deployment(
     assert served == ["preview documentation"]
 
 
+def test_preview_opens_requested_page_without_browser(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import http.server
+
+    (tmp_path / "great-docs.yml").write_text("{}\n")
+    site = GreatDocs(project_path=str(tmp_path)).layout.site_dir
+    (site / "reference").mkdir(parents=True)
+    (site / "index.html").write_text("home")
+    (site / "reference/page.html").write_text("page")
+    monkeypatch.setattr(http.server, "ThreadingHTTPServer", MagicMock())
+    timer = MagicMock()
+    monkeypatch.setattr("threading.Timer", timer)
+    result = CliRunner().invoke(
+        cli,
+        [
+            "preview",
+            "--project-path",
+            str(tmp_path),
+            "--path",
+            "reference/page.html",
+            "--no-open",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Opening: http://localhost:3000/reference/page.html" in result.output
+    timer.assert_not_called()
+
+
 def test_preview_reports_busy_port(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import http.server
 

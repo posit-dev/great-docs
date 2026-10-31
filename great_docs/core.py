@@ -15766,7 +15766,7 @@ anchor-sections: true
         log.footer(site_path=str(site_path if site_path.exists() else self.layout.site_dir))
         self._print_layout_notice()
 
-    def preview(self, port: int = 3000) -> None:
+    def preview(self, port: int = 3000, *, open_path: str = "", open_browser: bool = True) -> None:
         """
         Preview the documentation site locally.
 
@@ -15783,6 +15783,11 @@ anchor-sections: true
         ----------
         port
             The port number for the local HTTP server (default `3000`).
+        open_path
+            A page to open instead of the home page, relative to the site, such as
+            `reference/index.html`. If the page is missing, the home page opens instead.
+        open_browser
+            Whether to open the page in the default browser.
 
         Raises
         ------
@@ -15809,7 +15814,7 @@ anchor-sections: true
             self.build()
         else:
             self._print_layout_notice()
-        serve.site(site_path, port, report=print)
+        serve.site(site_path, port, open_path=open_path, open_browser=open_browser, report=print)
 
     def check_links(
         self,

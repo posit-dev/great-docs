@@ -614,7 +614,7 @@ def preview(
             )
         else:
             docs = GreatDocs(project_path=project_path, config_path=config_path)
-            docs.preview(port=port)
+            docs.preview(port=port, open_path=open_path, open_browser=not no_open)
     except KeyboardInterrupt:
         click.echo("\n👋 Server stopped")
     except serve.ServeError as e:
