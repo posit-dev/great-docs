@@ -72,7 +72,6 @@ from great_docs._apiref._render import (
 )
 from great_docs._apiref._render._label import (
     _attribute_label,
-    _class_label,
     _function_label,
     get_label,
 )
@@ -27917,14 +27916,6 @@ def test_function_label_method():
     assert _function_label(obj) == "method"
 
 
-def test_class_label_dataclass():
-    """_class_label returns 'dataclass' for a dataclass."""
-
-    obj = gf.Class(name="MyDC", lineno=1)
-    obj.labels.add("dataclass")
-    assert _class_label(obj) == "dataclass"
-
-
 def test_create_inventory_basic():
     """create_inventory returns an Inventory carrying the project and version."""
     obj = MagicMock()
@@ -28436,71 +28427,6 @@ def test_attribute_label_typevar_annotation():
     obj.annotation = gf.ExprName("TypeVar")
 
     assert _attribute_label(obj) == "typevar"
-
-
-def test_class_label_bases_exception():
-    """_class_label catches exceptions accessing bases."""
-
-    obj = MagicMock()
-    obj.labels = set()
-    type(obj).bases = PropertyMock(side_effect=Exception("broken"))
-    result = _class_label(obj)
-
-    assert result == "class"
-
-
-def test_class_label_enum():
-    """_class_label returns 'enum' for Enum bases."""
-
-    obj = gf.Class(name="MyEnum", lineno=1)
-    obj.bases = [gf.ExprName("IntEnum")]
-
-    assert _class_label(obj) == "enum"
-
-
-def test_class_label_exception():
-    """_class_label returns 'exception' for Exception bases."""
-
-    obj = gf.Class(name="MyErr", lineno=1)
-    obj.bases = [gf.ExprName("ValueError")]
-
-    assert _class_label(obj) == "exception"
-
-
-def test_class_label_namedtuple():
-    """_class_label returns 'namedtuple' for NamedTuple bases."""
-
-    obj = gf.Class(name="NT", lineno=1)
-    obj.bases = [gf.ExprName("NamedTuple")]
-
-    assert _class_label(obj) == "namedtuple"
-
-
-def test_class_label_typeddict():
-    """_class_label returns 'typeddict' for TypedDict bases."""
-
-    obj = gf.Class(name="TD", lineno=1)
-    obj.bases = [gf.ExprName("TypedDict")]
-
-    assert _class_label(obj) == "typeddict"
-
-
-def test_class_label_protocol():
-    """_class_label returns 'protocol' for Protocol bases."""
-
-    obj = gf.Class(name="Proto", lineno=1)
-    obj.bases = [gf.ExprName("Protocol")]
-
-    assert _class_label(obj) == "protocol"
-
-
-def test_class_label_abc():
-    """_class_label returns 'abc' for ABC bases."""
-
-    obj = gf.Class(name="Base", lineno=1)
-    obj.bases = [gf.ExprName("ABC")]
-
-    assert _class_label(obj) == "abc"
 
 
 def test_extend_base_class_with_super():

@@ -284,34 +284,24 @@ def attribute_kind(obj: gf.Attribute | gf.TypeAlias | gf.Alias) -> AttributeKind
 
 def is_typeddict(obj: gf.Object | gf.Alias) -> bool:
     """
-    Whether `obj` is a class declaring a `TypedDict`
+    Whether `obj` is a class that `class_kind` classifies as a `TypedDict`
 
-    A `@dataclass`-decorated class is classified as a dataclass ahead of any
-    base check in `class_kind`; matching that precedence here keeps a
-    dataclass that also derives from `TypedDict` showing its constructor
-    brackets.
+    A `@dataclass`-decorated class that also derives from `TypedDict` is a
+    dataclass, so it keeps its constructor brackets.
     """
     cls = _as_class(obj)
-    return (
-        cls is not None and "dataclass" not in cls.labels and "TypedDict" in _short_base_names(cls)
-    )
+    return cls is not None and class_kind(cls) == "typeddict"
 
 
 def is_enum(obj: gf.Object | gf.Alias) -> bool:
     """
-    Whether `obj` is a class deriving from one of the `enum` base classes
+    Whether `obj` is a class that `class_kind` classifies as an enum
 
-    A `@dataclass`-decorated class is classified as a dataclass ahead of any
-    base check in `class_kind`; matching that precedence here keeps a
-    dataclass that also derives from an `enum` base showing its constructor
-    brackets.
+    A `@dataclass`-decorated class that also derives from an `enum` base is a
+    dataclass, so it keeps its constructor brackets.
     """
     cls = _as_class(obj)
-    return (
-        cls is not None
-        and "dataclass" not in cls.labels
-        and bool(_short_base_names(cls) & _ENUM_BASES)
-    )
+    return cls is not None and class_kind(cls) == "enum"
 
 
 _TYPE_VARIABLE_KINDS = frozenset({"TypeVar", "ParamSpec", "TypeVarTuple"})
