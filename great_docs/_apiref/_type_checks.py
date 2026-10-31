@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import griffe as gf
 
@@ -91,16 +91,198 @@ def is_protocol(obj: gf.Object | gf.Alias) -> bool:
 
 _ENUM_BASES = frozenset({"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum", "EnumCheck"})
 
+_EXCEPTION_BASES = frozenset(
+    {
+        "Exception",
+        "BaseException",
+        # Built-in error types
+        "ArithmeticError",
+        "AssertionError",
+        "AttributeError",
+        "BlockingIOError",
+        "BrokenPipeError",
+        "BufferError",
+        "BytesWarning",
+        "ChildProcessError",
+        "ConnectionAbortedError",
+        "ConnectionError",
+        "ConnectionRefusedError",
+        "ConnectionResetError",
+        "DeprecationWarning",
+        "EOFError",
+        "EnvironmentError",
+        "FileExistsError",
+        "FileNotFoundError",
+        "FloatingPointError",
+        "FutureWarning",
+        "GeneratorExit",
+        "IOError",
+        "ImportError",
+        "ImportWarning",
+        "IndentationError",
+        "IndexError",
+        "InterruptedError",
+        "IsADirectoryError",
+        "KeyError",
+        "KeyboardInterrupt",
+        "LookupError",
+        "MemoryError",
+        "ModuleNotFoundError",
+        "NameError",
+        "NotADirectoryError",
+        "NotImplementedError",
+        "OSError",
+        "OverflowError",
+        "PendingDeprecationWarning",
+        "PermissionError",
+        "ProcessLookupError",
+        "RecursionError",
+        "ReferenceError",
+        "ResourceWarning",
+        "RuntimeError",
+        "RuntimeWarning",
+        "StopAsyncIteration",
+        "StopIteration",
+        "SyntaxError",
+        "SyntaxWarning",
+        "SystemError",
+        "SystemExit",
+        "TabError",
+        "TimeoutError",
+        "TypeError",
+        "UnboundLocalError",
+        "UnicodeDecodeError",
+        "UnicodeEncodeError",
+        "UnicodeError",
+        "UnicodeTranslationError",
+        "UnicodeWarning",
+        "UserWarning",
+        "ValueError",
+        "Warning",
+        "ZeroDivisionError",
+    }
+)
 
-def _short_base_names(obj: gf.Class) -> set[str]:
+ClassKind = Literal[
+    "dataclass", "enum", "exception", "namedtuple", "typeddict", "protocol", "abc", "class"
+]
+FunctionKind = Literal["async", "classmethod", "staticmethod", "property", "function"]
+AttributeKind = Literal["type_alias", "typevar", "constant"]
+
+
+def _short_base_names(obj: gf.Class | gf.Alias) -> set[str]:
     """
-    The unqualified names of `obj`'s bases
+    Return the unqualified names of the bases of `obj`
 
-    Reduces both bare (`Enum`) and qualified (`enum.Enum`) spellings to the
-    same short name, matching the string-based comparison
-    `great_docs/core.py` uses to classify the same kinds.
+    Reduce both bare (`Enum`) and qualified (`enum.Enum`) spellings to the
+    same short name.
+
+    Parameters
+    ----------
+    obj :
+        A class, or an alias to one.
+
+    Returns
+    -------
+    :
+        The short base names.
     """
     return {str(base).rsplit(".", 1)[-1] for base in obj.bases}
+
+
+def class_kind(obj: gf.Class | gf.Alias) -> ClassKind:
+    """
+    Classify a class by its labels, decorators and the names of its bases
+
+    The first rule that matches decides: the `dataclass` label, an `enum`
+    base, a built-in exception base, `NamedTuple`, `TypedDict`, `Protocol` or
+    `runtime_checkable`, an `ABC` or `ABCMeta` base, and a class decorator
+    whose text contains `abstractmethod`.
+
+    Parameters
+    ----------
+    obj :
+        A class, or an alias whose target is a class.
+
+    Returns
+    -------
+    :
+        The kind of class, or `"class"` when no rule matches.
+    """
+    if "dataclass" in obj.labels:
+        return "dataclass"
+
+    bases = _short_base_names(obj)
+    if bases & _ENUM_BASES:
+        return "enum"
+    if bases & _EXCEPTION_BASES:
+        return "exception"
+    if "NamedTuple" in bases:
+        return "namedtuple"
+    if "TypedDict" in bases:
+        return "typeddict"
+    if "Protocol" in bases or "runtime_checkable" in bases:
+        return "protocol"
+    if bases & {"ABC", "ABCMeta"}:
+        return "abc"
+    if any("abstractmethod" in str(decorator.value) for decorator in obj.decorators):
+        return "abc"
+    return "class"
+
+
+def function_kind(obj: gf.Function | gf.Alias) -> FunctionKind:
+    """
+    Classify a function by its griffe labels
+
+    The first label that matches decides: `async`, `classmethod`,
+    `staticmethod`, then `property`.
+
+    Parameters
+    ----------
+    obj :
+        A function, or an alias whose target is a function.
+
+    Returns
+    -------
+    :
+        The kind of function, or `"function"` when no label matches.
+    """
+    labels = obj.labels
+    if "async" in labels:
+        return "async"
+    if "classmethod" in labels:
+        return "classmethod"
+    if "staticmethod" in labels:
+        return "staticmethod"
+    if "property" in labels:
+        return "property"
+    return "function"
+
+
+def attribute_kind(obj: gf.Attribute | gf.TypeAlias | gf.Alias) -> AttributeKind:
+    """
+    Classify a module-level attribute or type alias
+
+    A PEP 695 `type` statement is a type alias. An annotation that names
+    `TypeVar`, `ParamSpec` or `TypeVarTuple` declares a type variable.
+
+    Parameters
+    ----------
+    obj :
+        An attribute or type alias, or an alias whose target is one.
+
+    Returns
+    -------
+    :
+        The kind of attribute, or `"constant"` when no rule matches.
+    """
+    # An alias to a type alias is not a `gf.TypeAlias` instance; its kind is.
+    if isinstance(obj, gf.TypeAlias) or obj.kind is gf.Kind.TYPE_ALIAS:
+        return "type_alias"
+    annotation = str(obj.annotation) if obj.annotation else ""
+    if "TypeVar" in annotation or "ParamSpec" in annotation or "TypeVarTuple" in annotation:
+        return "typevar"
+    return "constant"
 
 
 def is_typeddict(obj: gf.Object | gf.Alias) -> bool:
@@ -108,8 +290,8 @@ def is_typeddict(obj: gf.Object | gf.Alias) -> bool:
     Whether `obj` is a class declaring a `TypedDict`
 
     A `@dataclass`-decorated class is classified as a dataclass ahead of any
-    base check in `great_docs/core.py`; matching that precedence here keeps
-    a dataclass that also derives from `TypedDict` showing its constructor
+    base check in `class_kind`; matching that precedence here keeps a
+    dataclass that also derives from `TypedDict` showing its constructor
     brackets.
     """
     cls = _as_class(obj)
@@ -123,9 +305,9 @@ def is_enum(obj: gf.Object | gf.Alias) -> bool:
     Whether `obj` is a class deriving from one of the `enum` base classes
 
     A `@dataclass`-decorated class is classified as a dataclass ahead of any
-    base check in `great_docs/core.py`; matching that precedence here keeps
-    a dataclass that also derives from an `enum` base showing its
-    constructor brackets.
+    base check in `class_kind`; matching that precedence here keeps a
+    dataclass that also derives from an `enum` base showing its constructor
+    brackets.
     """
     cls = _as_class(obj)
     return (

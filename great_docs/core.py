@@ -14,6 +14,7 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
 
+from ._apiref._type_checks import attribute_kind, class_kind, function_kind
 from ._build import freeze, outputs, quarto, serve, timings
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
@@ -6646,86 +6647,8 @@ class GreatDocs:
         self._cached_exports = exports
         return exports
 
-    # ── Exception base classes (used for sub-classification) ─────────────
-    _EXCEPTION_BASES = frozenset(
-        {
-            "Exception",
-            "BaseException",
-            # Built-in error types
-            "ArithmeticError",
-            "AssertionError",
-            "AttributeError",
-            "BlockingIOError",
-            "BrokenPipeError",
-            "BufferError",
-            "BytesWarning",
-            "ChildProcessError",
-            "ConnectionAbortedError",
-            "ConnectionError",
-            "ConnectionRefusedError",
-            "ConnectionResetError",
-            "DeprecationWarning",
-            "EOFError",
-            "EnvironmentError",
-            "FileExistsError",
-            "FileNotFoundError",
-            "FloatingPointError",
-            "FutureWarning",
-            "GeneratorExit",
-            "IOError",
-            "ImportError",
-            "ImportWarning",
-            "IndentationError",
-            "IndexError",
-            "InterruptedError",
-            "IsADirectoryError",
-            "KeyError",
-            "KeyboardInterrupt",
-            "LookupError",
-            "MemoryError",
-            "ModuleNotFoundError",
-            "NameError",
-            "NotADirectoryError",
-            "NotImplementedError",
-            "OSError",
-            "OverflowError",
-            "PendingDeprecationWarning",
-            "PermissionError",
-            "ProcessLookupError",
-            "RecursionError",
-            "ReferenceError",
-            "ResourceWarning",
-            "RuntimeError",
-            "RuntimeWarning",
-            "StopAsyncIteration",
-            "StopIteration",
-            "SyntaxError",
-            "SyntaxWarning",
-            "SystemError",
-            "SystemExit",
-            "TabError",
-            "TimeoutError",
-            "TypeError",
-            "UnboundLocalError",
-            "UnicodeDecodeError",
-            "UnicodeEncodeError",
-            "UnicodeError",
-            "UnicodeTranslationError",
-            "UnicodeWarning",
-            "UserWarning",
-            "ValueError",
-            "Warning",
-            "ZeroDivisionError",
-        }
-    )
-
-    # ── Enum base classes ────────────────────────────────────────────────
-    _ENUM_BASES = frozenset(
-        {"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum", "EnumCheck"}
-    )
-
     # ── Sub-classification label -> category key ─────────────────────────
-    # Maps `_sub_classify_class` results to keys of `_empty_categories`.
+    # Maps `class_kind` results to keys of `_empty_categories`.
     _CLASS_SUB_MAP = {
         "dataclass": "dataclasses",
         "enum": "enums",
@@ -6736,145 +6659,6 @@ class GreatDocs:
         "abc": "abstract_classes",
         "class": "classes",
     }
-
-    @staticmethod
-    def _sub_classify_class(obj) -> str:
-        """
-        Determine the sub-type of a griffe `class` object.
-
-        Returns one of: `dataclass`, `enum`, `exception`,
-        `namedtuple`, `typeddict`, `protocol`, `abc`,
-        or `class` (the generic fallback).
-
-        Parameters
-        ----------
-        obj
-            A griffe `Class` object (or `Alias` that resolves to one).
-
-        Returns
-        -------
-        str
-            The sub-classification label.
-        """
-        # --- labels (fast path) ---
-        try:
-            labels = obj.labels
-        except Exception:  # pragma: no cover
-            labels = set()  # pragma: no cover
-
-        if "dataclass" in labels:
-            return "dataclass"
-
-        # --- bases (may be short names like "Enum" or dotted) ---
-        try:
-            bases = [str(b) for b in obj.bases]
-        except Exception:  # pragma: no cover
-            bases = []  # pragma: no cover
-
-        # Normalize base names: "enum.IntEnum" → "IntEnum"
-        short_bases = {b.rsplit(".", 1)[-1] for b in bases}
-
-        if short_bases & GreatDocs._ENUM_BASES:
-            return "enum"
-        if short_bases & GreatDocs._EXCEPTION_BASES:
-            return "exception"
-        if "NamedTuple" in short_bases:
-            return "namedtuple"
-        if "TypedDict" in short_bases:
-            return "typeddict"
-        if "Protocol" in short_bases or "runtime_checkable" in short_bases:
-            return "protocol"
-        if short_bases & {"ABC", "ABCMeta"}:
-            return "abc"
-
-        # --- decorators (secondary check for ABC) ---
-        try:
-            decorators = [str(d.value) for d in obj.decorators]
-        except Exception:  # pragma: no cover
-            decorators = []  # pragma: no cover
-
-        if any("abstractmethod" in d for d in decorators):
-            return "abc"
-
-        return "class"
-
-    @staticmethod
-    def _sub_classify_function(obj) -> str:
-        """
-        Determine the sub-type of a griffe `function` object.
-
-        Returns one of: `async`, `classmethod`, `staticmethod`,
-        `property`, or `function` (the generic fallback).
-
-        Parameters
-        ----------
-        obj
-            A griffe `Function` object (or `Alias` that resolves to one).
-
-        Returns
-        -------
-        str
-            The sub-classification label.
-        """
-        try:
-            labels = obj.labels
-        except Exception:
-            labels = set()
-
-        if "async" in labels:
-            return "async"
-        if "classmethod" in labels:
-            return "classmethod"
-        if "staticmethod" in labels:
-            return "staticmethod"
-        if "property" in labels:
-            return "property"
-
-        return "function"
-
-    @staticmethod
-    def _sub_classify_attribute(obj) -> str:
-        """
-        Determine the sub-type of a griffe `attribute` object.
-
-        Returns one of: `type_alias`, `typevar`, or `constant`.
-
-        Parameters
-        ----------
-        obj
-            A griffe `Attribute` object (or `Alias` that resolves to one).
-
-        Returns
-        -------
-        str
-            The sub-classification label.
-        """
-        try:
-            labels = obj.labels
-        except Exception:  # pragma: no cover
-            labels = set()  # pragma: no cover
-
-        # griffe gives PEP 695 type aliases a dedicated "type alias" kind.
-        # Reading `.kind` can raise for an unresolved alias, hence the guard.
-        try:
-            if obj.kind.value == "type alias":
-                return "type_alias"
-        except Exception:
-            pass
-
-        # Check annotation for TypeVar / ParamSpec / TypeVarTuple
-        try:
-            annotation = str(obj.annotation) if obj.annotation else ""
-        except Exception:  # pragma: no cover
-            annotation = ""  # pragma: no cover
-
-        if "TypeVar" in annotation or "ParamSpec" in annotation or "TypeVarTuple" in annotation:
-            return "typevar"
-
-        # Heuristic: assignment like `MyAlias = list[int]` with no annotation
-        # is often a type alias, but we can't reliably distinguish from a
-        # constant without more context. Default to constant.
-        return "constant"
 
     @staticmethod
     def _empty_categories() -> dict:
@@ -6999,7 +6783,7 @@ class GreatDocs:
                 # resolution which may raise CyclicAliasError or AliasResolutionError
                 if obj.kind.value == "class":
                     # Sub-classify the class
-                    sub = self._sub_classify_class(obj)
+                    sub = class_kind(obj)
                     cat_key = self._CLASS_SUB_MAP.get(sub, "classes")
                     categories[cat_key].append(name)
                     # Get documentable methods (exclude private methods but include
@@ -7082,13 +6866,13 @@ class GreatDocs:
                     categories["class_method_names"][name] = method_names
                 elif obj.kind.value == "function":
                     # Sub-classify the function
-                    sub = self._sub_classify_function(obj)
+                    sub = function_kind(obj)
                     if sub == "async":
                         categories["async_functions"].append(name)
                     else:
                         categories["functions"].append(name)
                 elif obj.kind.value in ("attribute", "type alias"):
-                    sub = self._sub_classify_attribute(obj)
+                    sub = attribute_kind(obj)
                     if sub == "type_alias":
                         categories["type_aliases"].append(name)  # pragma: no cover
                     elif sub == "typevar":
@@ -7150,7 +6934,7 @@ class GreatDocs:
                                         continue  # pragma: no cover
 
                             if member_kind == "class":
-                                sub = self._sub_classify_class(member)
+                                sub = class_kind(member)
                                 cat_key = self._CLASS_SUB_MAP.get(sub, "classes")
                                 categories[cat_key].append(qualified)
                                 module_had_members = True
@@ -7221,7 +7005,7 @@ class GreatDocs:
                                 )
 
                             elif member_kind == "function":
-                                sub = self._sub_classify_function(member)
+                                sub = function_kind(member)
                                 if sub == "async":
                                     categories["async_functions"].append(
                                         qualified
@@ -7231,7 +7015,7 @@ class GreatDocs:
                                 module_had_members = True
 
                             elif member_kind in ("attribute", "type alias"):
-                                sub = self._sub_classify_attribute(member)
+                                sub = attribute_kind(member)
                                 if sub == "type_alias":
                                     categories["type_aliases"].append(qualified)  # pragma: no cover
                                 elif sub == "typevar":
@@ -7633,7 +7417,7 @@ class GreatDocs:
                 continue
 
             if kind == "class":
-                sub = self._sub_classify_class(obj)
+                sub = class_kind(obj)
                 cat_key = self._CLASS_SUB_MAP.get(sub, "classes")
                 categories[cat_key].append(name)
 
@@ -7679,13 +7463,13 @@ class GreatDocs:
                     categories["class_method_names"][name] = method_names_list
 
             elif kind == "function":
-                sub = self._sub_classify_function(obj)
+                sub = function_kind(obj)
                 if sub == "async":
                     categories["async_functions"].append(name)
                 else:
                     categories["functions"].append(name)
             elif kind in ("attribute", "type alias"):
-                sub = self._sub_classify_attribute(obj)
+                sub = attribute_kind(obj)
                 if sub == "type_alias":
                     categories["type_aliases"].append(name)
                 elif sub == "typevar":
@@ -7709,7 +7493,7 @@ class GreatDocs:
                             continue
                         qualified = f"{name}.{member_name}"
                         if member_kind == "class":
-                            sub = self._sub_classify_class(member)
+                            sub = class_kind(member)
                             cat_key_mod = self._CLASS_SUB_MAP.get(sub, "classes")
                             categories[cat_key_mod].append(qualified)
                         elif member_kind == "function":

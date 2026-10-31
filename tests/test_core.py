@@ -753,7 +753,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"my_func": obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_function", lambda o: "function")
+        monkeypatch.setattr("great_docs.core.function_kind", lambda o: "function")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["my_func"]}])
         assert "my_func" in result["functions"]
 
@@ -766,7 +766,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"afunc": obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_function", lambda o: "async")
+        monkeypatch.setattr("great_docs.core.function_kind", lambda o: "async")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["afunc"]}])
         assert "afunc" in result["async_functions"]
 
@@ -780,7 +780,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"MyDC": obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_class", lambda o: "dataclass")
+        monkeypatch.setattr("great_docs.core.class_kind", lambda o: "dataclass")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["MyDC"]}])
         assert "MyDC" in result["dataclasses"]
 
@@ -794,7 +794,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"MY_CONST": obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_attribute", lambda o: "constant")
+        monkeypatch.setattr("great_docs.core.attribute_kind", lambda o: "constant")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["MY_CONST"]}])
         assert "MY_CONST" in result["constants"]
 
@@ -807,7 +807,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"MyAlias": obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_attribute", lambda o: "type_alias")
+        monkeypatch.setattr("great_docs.core.attribute_kind", lambda o: "type_alias")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["MyAlias"]}])
         assert "MyAlias" in result["type_aliases"]
 
@@ -889,7 +889,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"MyClass": cls_obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_class", lambda o: "class")
+        monkeypatch.setattr("great_docs.core.class_kind", lambda o: "class")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["MyClass"]}])
         assert result["class_methods"]["MyClass"] == 2
         assert "do_stuff" in result["class_method_names"]["MyClass"]
@@ -914,7 +914,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"MyClass": cls_obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_class", lambda o: "class")
+        monkeypatch.setattr("great_docs.core.class_kind", lambda o: "class")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["MyClass"]}])
         assert result["class_methods"]["MyClass"] == 0
 
@@ -932,7 +932,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"MyClass": cls_obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_class", lambda o: "class")
+        monkeypatch.setattr("great_docs.core.class_kind", lambda o: "class")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["MyClass"]}])
         assert result["class_methods"]["MyClass"] == 0
 
@@ -965,7 +965,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"AClass": anchor_cls, "mymod": mod_obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_class", lambda o: "class")
+        monkeypatch.setattr("great_docs.core.class_kind", lambda o: "class")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["AClass", "mymod"]}])
         assert "mymod.SubClass" in result["classes"]
         assert "mymod.sub_func" in result["functions"]
@@ -995,8 +995,7 @@ class TestCategorizeReferencedObjects:
         pkg.members = {"mymod": mod_obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr(
-            gd,
-            "_sub_classify_class",
+            "great_docs.core.class_kind",
             lambda o: "dataclass" if o is mod_obj.members["BDataclass"] else "class",
         )
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["mymod"]}])
@@ -1056,7 +1055,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"named_func": obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_function", lambda o: "function")
+        monkeypatch.setattr("great_docs.core.function_kind", lambda o: "function")
         result = gd._categorize_referenced_objects(
             "mypkg", [{"contents": [{"name": "named_func"}]}]
         )
@@ -1077,7 +1076,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"MyClass": cls_obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_class", lambda o: "class")
+        monkeypatch.setattr("great_docs.core.class_kind", lambda o: "class")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["MyClass"]}])
         assert result["class_methods"]["MyClass"] == 1
         assert "name" in result["class_method_names"]["MyClass"]
@@ -1099,7 +1098,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"MyClass": cls_obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_class", lambda o: "class")
+        monkeypatch.setattr("great_docs.core.class_kind", lambda o: "class")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["MyClass"]}])
         assert result["class_methods"]["MyClass"] == 1
         assert "run" in result["class_method_names"]["MyClass"]
@@ -1122,7 +1121,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"MyClass": cls_obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_class", lambda o: "class")
+        monkeypatch.setattr("great_docs.core.class_kind", lambda o: "class")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["MyClass"]}])
         assert result["class_methods"]["MyClass"] == 0
 
@@ -1143,7 +1142,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"MyClass": cls_obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_class", lambda o: "class")
+        monkeypatch.setattr("great_docs.core.class_kind", lambda o: "class")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["MyClass"]}])
         assert result["class_methods"]["MyClass"] == 0
 
@@ -1158,7 +1157,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"T": obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_attribute", lambda o: "typevar")
+        monkeypatch.setattr("great_docs.core.attribute_kind", lambda o: "typevar")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["T"]}])
         assert "T" in result["type_aliases"]
 
@@ -1180,7 +1179,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"AClass": anchor, "mymod": mod_obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_class", lambda o: "class")
+        monkeypatch.setattr("great_docs.core.class_kind", lambda o: "class")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["AClass", "mymod"]}])
         assert "mymod.broken" not in result.get("functions", [])
 
@@ -1203,7 +1202,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"AClass": anchor, "mymod": mod_obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_class", lambda o: "class")
+        monkeypatch.setattr("great_docs.core.class_kind", lambda o: "class")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["AClass", "mymod"]}])
         assert "mymod" not in result.get("classes", [])
 
@@ -1221,7 +1220,7 @@ class TestCategorizeReferencedObjects:
         pkg = MagicMock()
         pkg.members = {"AClass": anchor, "weird": obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        monkeypatch.setattr(gd, "_sub_classify_class", lambda o: "class")
+        monkeypatch.setattr("great_docs.core.class_kind", lambda o: "class")
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["AClass", "weird"]}])
 
         assert "weird" in result["other"]
@@ -1341,160 +1340,6 @@ class TestBumpHeadingLevels:
         assert "## Top" in result
         assert "# inside" in result
         assert "### Below" in result
-
-
-# ---------------------------------------------------------------------------
-# Sub-classify class / function / attribute
-# ---------------------------------------------------------------------------
-
-
-class TestSubClassifyClass:
-    def test_dataclass(self):
-        obj = MagicMock()
-        obj.labels = {"dataclass"}
-        assert GreatDocs._sub_classify_class(obj) == "dataclass"
-
-    def test_enum_via_bases(self):
-        obj = MagicMock()
-        obj.labels = set()
-        base = MagicMock()
-        base.__str__ = lambda s: "enum.IntEnum"
-        obj.bases = [base]
-        obj.decorators = []
-        assert GreatDocs._sub_classify_class(obj) == "enum"
-
-    def test_exception_via_bases(self):
-        obj = MagicMock()
-        obj.labels = set()
-        base = MagicMock()
-        base.__str__ = lambda s: "ValueError"
-        obj.bases = [base]
-        obj.decorators = []
-        assert GreatDocs._sub_classify_class(obj) == "exception"
-
-    def test_namedtuple(self):
-        obj = MagicMock()
-        obj.labels = set()
-        base = MagicMock()
-        base.__str__ = lambda s: "NamedTuple"
-        obj.bases = [base]
-        obj.decorators = []
-        assert GreatDocs._sub_classify_class(obj) == "namedtuple"
-
-    def test_typeddict(self):
-        obj = MagicMock()
-        obj.labels = set()
-        base = MagicMock()
-        base.__str__ = lambda s: "TypedDict"
-        obj.bases = [base]
-        obj.decorators = []
-        assert GreatDocs._sub_classify_class(obj) == "typeddict"
-
-    def test_protocol(self):
-        obj = MagicMock()
-        obj.labels = set()
-        base = MagicMock()
-        base.__str__ = lambda s: "Protocol"
-        obj.bases = [base]
-        obj.decorators = []
-        assert GreatDocs._sub_classify_class(obj) == "protocol"
-
-    def test_abc_via_bases(self):
-        obj = MagicMock()
-        obj.labels = set()
-        base = MagicMock()
-        base.__str__ = lambda s: "ABC"
-        obj.bases = [base]
-        obj.decorators = []
-        assert GreatDocs._sub_classify_class(obj) == "abc"
-
-    def test_abc_via_decorator(self):
-        obj = MagicMock()
-        obj.labels = set()
-        base = MagicMock()
-        base.__str__ = lambda s: "object"
-        obj.bases = [base]
-        dec = MagicMock()
-        dec.value = "abstractmethod"
-        obj.decorators = [dec]
-        assert GreatDocs._sub_classify_class(obj) == "abc"
-
-    def test_plain_class_fallback(self):
-        obj = MagicMock()
-        obj.labels = set()
-        base = MagicMock()
-        base.__str__ = lambda s: "object"
-        obj.bases = [base]
-        obj.decorators = []
-        assert GreatDocs._sub_classify_class(obj) == "class"
-
-
-class TestSubClassifyFunction:
-    def test_async(self):
-        obj = MagicMock()
-        obj.labels = {"async"}
-        assert GreatDocs._sub_classify_function(obj) == "async"
-
-    def test_classmethod(self):
-        obj = MagicMock()
-        obj.labels = {"classmethod"}
-        assert GreatDocs._sub_classify_function(obj) == "classmethod"
-
-    def test_staticmethod(self):
-        obj = MagicMock()
-        obj.labels = {"staticmethod"}
-        assert GreatDocs._sub_classify_function(obj) == "staticmethod"
-
-    def test_property(self):
-        obj = MagicMock()
-        obj.labels = {"property"}
-        assert GreatDocs._sub_classify_function(obj) == "property"
-
-    def test_plain_function(self):
-        obj = MagicMock()
-        obj.labels = set()
-        assert GreatDocs._sub_classify_function(obj) == "function"
-
-    def test_labels_raises_falls_back(self):
-        obj = MagicMock()
-        type(obj).labels = property(lambda s: (_ for _ in ()).throw(Exception()))
-        assert GreatDocs._sub_classify_function(obj) == "function"
-
-
-class TestSubClassifyAttribute:
-    def test_type_alias_via_kind(self):
-        obj = MagicMock()
-        obj.labels = set()
-        obj.kind.value = "type alias"
-        assert GreatDocs._sub_classify_attribute(obj) == "type_alias"
-
-    def test_typevar_via_annotation(self):
-        obj = MagicMock()
-        obj.labels = set()
-        obj.kind.value = "attribute"
-        obj.annotation = "TypeVar('T')"
-        assert GreatDocs._sub_classify_attribute(obj) == "typevar"
-
-    def test_paramspec_via_annotation(self):
-        obj = MagicMock()
-        obj.labels = set()
-        obj.kind.value = "attribute"
-        obj.annotation = "ParamSpec('P')"
-        assert GreatDocs._sub_classify_attribute(obj) == "typevar"
-
-    def test_constant_fallback(self):
-        obj = MagicMock()
-        obj.labels = set()
-        obj.kind.value = "attribute"
-        obj.annotation = None
-        assert GreatDocs._sub_classify_attribute(obj) == "constant"
-
-    def test_kind_raises_falls_through(self):
-        obj = MagicMock()
-        obj.labels = set()
-        type(obj).kind = property(lambda s: (_ for _ in ()).throw(Exception()))
-        obj.annotation = None
-        assert GreatDocs._sub_classify_attribute(obj) == "constant"
 
 
 # ---------------------------------------------------------------------------
