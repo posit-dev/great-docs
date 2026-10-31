@@ -33,6 +33,7 @@ from mcp.types import (
 )
 from pydantic import AnyUrl
 
+from ._build import outputs
 from ._build.steps import BuildError
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, LayoutError
 from ._utils import is_in_great_docs_build_dir, recognised_build_dirs
@@ -446,7 +447,7 @@ async def _handle_build(arguments: dict) -> list[TextContent]:
     if clean:
         import shutil
 
-        docs._validate_build_outputs()
+        outputs.validate(docs._config, docs.layout)
         for ver_dir in _sibling_build_dirs(_get_project_root(project_path), _get_layout(arguments)):
             shutil.rmtree(ver_dir)
 

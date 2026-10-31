@@ -1228,52 +1228,6 @@ class TestCategorizeReferencedObjects:
 
 
 # ---------------------------------------------------------------------------
-# Module-level utility functions
-# ---------------------------------------------------------------------------
-
-
-class TestMigrateLegacyGitignore:
-    def test_migrates_bare_entry(self):
-        from great_docs.core import _migrate_legacy_gitignore_entry
-
-        content = "node_modules/\ngreat-docs/\n.env\n"
-        result = _migrate_legacy_gitignore_entry(content)
-        assert "/great-docs/\n" in result
-        assert "\ngreat-docs/\n" not in result
-
-    def test_preserves_already_anchored(self):
-        from great_docs.core import _migrate_legacy_gitignore_entry
-
-        content = "/great-docs/\n"
-        result = _migrate_legacy_gitignore_entry(content)
-        assert result == content
-
-    def test_no_entry_returns_unchanged(self):
-        from great_docs.core import _migrate_legacy_gitignore_entry
-
-        content = "*.pyc\n__pycache__/\n"
-        result = _migrate_legacy_gitignore_entry(content)
-        assert result is content
-
-
-class TestGitignoreHasEntry:
-    def test_exact_match(self):
-        from great_docs.core import _gitignore_has_entry
-
-        assert _gitignore_has_entry("/great-docs/\n.env\n", "/great-docs/")
-
-    def test_no_match(self):
-        from great_docs.core import _gitignore_has_entry
-
-        assert not _gitignore_has_entry("*.pyc\n", "/great-docs/")
-
-    def test_negated_entry_not_matched(self):
-        from great_docs.core import _gitignore_has_entry
-
-        assert not _gitignore_has_entry("!/great-docs/skills/\n", "/great-docs/")
-
-
-# ---------------------------------------------------------------------------
 # Linkify GitHub references
 # ---------------------------------------------------------------------------
 

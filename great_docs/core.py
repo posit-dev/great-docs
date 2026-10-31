@@ -14,7 +14,7 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
 
-from ._build import freeze, quarto, serve, timings
+from ._build import freeze, outputs, quarto, serve, timings
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
@@ -37,7 +37,9 @@ from ._content.naming import (
     strip_numeric_prefix,
     title_from_name,
 )
+from ._content.sections import source_dirs as section_source_dirs
 from ._github import GithubRepo
+from ._install import update_gitignore
 from ._layout import Layout
 from ._remote import HttpRemote, Remote
 from ._source_refs import source_reference_spans
@@ -45,10 +47,7 @@ from ._subprocess import TEXT_MODE_KWARGS
 from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
 from ._utils import (
     GITIGNORE_CONTENT,
-    recognised_build_dirs,
     record_site_ownership,
-    validate_build_dir,
-    validate_layout_outputs,
 )
 from ._website import (
     i18n,
@@ -119,58 +118,6 @@ _QUARTO_RENDER_GLOBS = [
     "*.rmarkdown",
     "*.ipynb",
 ]
-
-
-def _migrate_legacy_gitignore_entry(content: str) -> str:
-    """
-    Anchor a standalone legacy `great-docs/` ignore entry
-
-    Earlier releases omitted the leading `/`, so Git matched a directory of
-    that name anywhere in the project. Replace only a complete `great-docs/`
-    line, without changing related patterns or negations.
-
-    Parameters
-    ----------
-    content
-        Contents of a project `.gitignore` file.
-
-    Returns
-    -------
-    Updated contents, or the original contents when no legacy entry exists.
-    """
-    lines = content.splitlines(keepends=True)
-    migrated = False
-    new_lines = []
-    for line in lines:
-        body = line.rstrip("\r\n")
-        line_ending = line[len(body) :]
-        if body.rstrip() == "great-docs/":
-            new_lines.append("/great-docs/" + line_ending)
-            migrated = True
-        else:
-            new_lines.append(line)
-    return "".join(new_lines) if migrated else content
-
-
-def _gitignore_has_entry(content: str, entry: str) -> bool:
-    """
-    Check whether `entry` appears as a complete line in `content`
-
-    Whole-line matching prevents an entry such as `/great-docs/` from also
-    matching a negated path such as `!skills/great-docs/`.
-
-    Parameters
-    ----------
-    content
-        Contents of a project `.gitignore` file.
-    entry
-        Gitignore pattern to look for as a standalone line.
-
-    Returns
-    -------
-    Whether any line equals `entry` after stripping surrounding whitespace.
-    """
-    return entry in (line.strip() for line in content.splitlines())
 
 
 def _is_status_script_entry(entry: object) -> bool:
@@ -345,77 +292,6 @@ class GreatDocs:
             )
         return self._griffe_pkg_cache[normalized]
 
-    def _validate_build_outputs(self) -> None:
-        """Reject version and ownership conflicts before changing project files"""
-        validate_layout_outputs(self.layout)
-        validate_build_dir(self.build_dir)
-        if self._config.versions:
-            from ._versioned_build import _check_build_dir_collisions
-            from ._versioning import get_latest_version, parse_versions_config
-
-            versions = parse_versions_config(self._config.versions)
-            latest = get_latest_version(versions)
-            latest_tag = latest.tag if latest else versions[0].tag
-            _check_build_dir_collisions(self.layout.build_dir, versions, latest_tag, self.layout)
-            for entry in versions:
-                validate_build_dir(self.layout.build_dir_for(entry.tag, latest_tag))
-        self._validate_section_claims()
-
-    def _validate_section_claims(self) -> None:
-        """
-        Reject an explicit user guide or custom pages directory that is also a section
-
-        Raises
-        ------
-        ValueError
-            If `user_guide` or `custom_pages` names a directory that a `sections` entry
-            publishes.
-        """
-        claimed = self._section_source_dirs()
-        if not claimed:
-            return
-
-        package_root = self.layout.source_dir
-        explicit: list[tuple[str, Path]] = []
-        if self._config.user_guide_dir is not None:
-            explicit.append(("user_guide", package_root / self._config.user_guide_dir))
-        elif self._config.user_guide_is_explicit:
-            # A list-form guide still reads its files from the conventional directory.
-            for name in ("user_guide", "user-guide"):
-                candidate = package_root / name
-                if candidate.is_dir():
-                    explicit.append(("user_guide", candidate))
-                    break
-        if self._config["custom_pages"] is not None:
-            explicit.extend(
-                ("custom_pages", package_root / entry["dir"]) for entry in self._config.custom_pages
-            )
-
-        for key, directory in explicit:
-            if directory.resolve() in claimed:
-                raise ValueError(
-                    f"Directory '{directory.relative_to(package_root)}' is claimed by both "
-                    f"`{key}` and `sections`; remove it from one of them"
-                )
-
-    def _section_source_dirs(self) -> set[Path]:
-        """
-        Collect the source directories that `sections` entries publish
-
-        Returns
-        -------
-        set[Path]
-            The resolved directory of every section entry with a `dir`.
-        """
-        sections = self._config.sections
-        if not isinstance(sections, list):
-            return set()
-        return {
-            (self.layout.source_dir / section["dir"]).resolve()
-            for section in sections
-            if isinstance(section, dict) and isinstance(section.get("dir"), str)
-        }
-
     def _prepare_build_directory(self, run: Run) -> None:
         """
         Prepare the great-docs/ build directory with all necessary assets.
@@ -434,7 +310,7 @@ class GreatDocs:
         """
         print(f"Preparing build directory: {self.build_dir.relative_to(self.project_root)}/")
 
-        self._validate_build_outputs()
+        outputs.validate(self._config, self.layout)
 
         hook_names = [Path(path).name for path in self._config.pre_render]
         if len(hook_names) != len(set(hook_names)) or "restore-freeze.py" in hook_names:
@@ -958,7 +834,7 @@ class GreatDocs:
         )
 
         # Update project root .gitignore to exclude great-docs/
-        self._update_project_gitignore(force=force)
+        update_gitignore(self.layout, report=print, ask=None if force else input)
 
         print("\n✅ Great Docs initialization complete!")
         print("\nNext steps:")
@@ -969,125 +845,6 @@ class GreatDocs:
         print("\nOther helpful commands:")
         print("  great-docs scan           # Preview API organization")
         print("  great-docs build --watch  # Watch for changes and rebuild")
-
-    def _update_project_gitignore(self, force: bool = False) -> None:
-        """
-        Update project root .gitignore to exclude the great-docs/ build directory.
-
-        Prompts the user for permission before modifying .gitignore, unless force=True.
-        This ensures the ephemeral build directory is not committed to version control.
-
-        Parameters
-        ----------
-        force
-            If True, skip the prompt and automatically update .gitignore.
-        """
-        gitignore_path = self.project_root / ".gitignore"
-
-        if self.layout.source_dir != self.project_root:
-            source = self.layout.source_dir.relative_to(self.project_root).as_posix()
-            entries = [
-                f"/{source}/_quarto/",
-                f"/{source}/_site/",
-                f"/{source}/.cache/",
-                "/.great-docs-build/",
-                "/.great-docs/",
-            ]
-            content = gitignore_path.read_text(encoding="utf-8") if gitignore_path.exists() else ""
-            missing = [entry for entry in entries if not _gitignore_has_entry(content, entry)]
-            if missing and (
-                force
-                or input("Ignore Great Docs build output? [Y/n]: ").strip().lower()
-                in {"", "y", "yes"}
-            ):
-                gitignore_path.write_text(
-                    content.rstrip()
-                    + "\n\n# Great Docs build output\n"
-                    + "\n".join(missing)
-                    + "\n",
-                    encoding="utf-8",
-                )
-            return
-
-        # Entry to add
-        entry = "# Great Docs build directory (ephemeral, do not commit)\n/great-docs/\n"
-
-        # Versioning build artifacts (added when versions are configured)
-        versioning_entries = [
-            "/great-docs-*/",
-            ".great-docs-build/",
-            ".great-docs-cache/",
-            ".great-docs/",
-        ]
-
-        # Inspect without writing. Migration requires the same consent as any
-        # other `.gitignore` edit.
-        has_main = False
-        missing_versioning = list(versioning_entries)
-        needs_migration = False
-        if gitignore_path.exists():
-            with open(gitignore_path, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            migrated_content = _migrate_legacy_gitignore_entry(content)
-            needs_migration = migrated_content != content
-            check_content = migrated_content if needs_migration else content
-
-            has_main = _gitignore_has_entry(check_content, "/great-docs/")
-            missing_versioning = [
-                e for e in versioning_entries if not _gitignore_has_entry(check_content, e)
-            ]
-
-            if has_main and not missing_versioning and not needs_migration:
-                # All entries present, nothing to do
-                return
-
-        migration_only = needs_migration and has_main and not missing_versioning
-
-        def apply_changes() -> None:
-            if gitignore_path.exists():
-                if needs_migration:
-                    with open(gitignore_path, "w", encoding="utf-8") as f:
-                        f.write(migrated_content)
-                # Append to existing .gitignore
-                with open(gitignore_path, "a", encoding="utf-8") as f:
-                    if not has_main:
-                        f.write("\n" + entry)
-                    if missing_versioning:
-                        f.write("\n# Great Docs versioned-build artifacts\n")
-                        for ve in missing_versioning:
-                            f.write(ve + "\n")
-                if migration_only:
-                    print("✅ Anchored the great-docs/ entry to the project root as /great-docs/")
-                else:
-                    print("✅ Updated .gitignore to ignore Great Docs build output")
-            else:
-                # Create new .gitignore
-                with open(gitignore_path, "w", encoding="utf-8") as f:
-                    f.write(entry)
-                    f.write("\n# Great Docs versioned-build artifacts\n")
-                    for ve in versioning_entries:
-                        f.write(ve + "\n")
-                print("✅ Created .gitignore to ignore Great Docs build output")
-
-        # If force=True, skip the prompt
-        if force:
-            apply_changes()
-            return
-
-        # Ask for permission in interactive mode
-        if migration_only:
-            print("\nThe great-docs/ entry in .gitignore matches directories at any depth.")
-            prompt = "Anchor it to the project root as /great-docs/? [Y/n]: "
-        else:
-            print("\nThe great-docs/ build directory is temporary and should not be committed.")
-            prompt = "Add '/great-docs/' to .gitignore? [Y/n]: "
-        response = input(prompt).strip().lower()  # pragma: no cover
-
-        if response in ("", "y", "yes"):  # pragma: no cover
-            apply_changes()
-        else:
-            print("⚠️  Skipped .gitignore update. Remember to ignore /great-docs/.")
 
     def _detect_package_name(self) -> str | None:
         """
@@ -3665,7 +3422,7 @@ class GreatDocs:
         """Return configured custom page source directories that exist."""
         sources: list[dict[str, Path | str]] = []
         is_default = self._config["custom_pages"] is None
-        claimed = self._section_source_dirs()
+        claimed = section_source_dirs(self._config, self.layout)
 
         for entry in self._config.custom_pages:
             self._output_directory(entry["output"])
@@ -5196,7 +4953,7 @@ class GreatDocs:
             return user_guide_dir
 
         # Fall back to conventional directory names, leaving a section's directory to it
-        claimed = self._section_source_dirs()
+        claimed = section_source_dirs(self._config, self.layout)
         for name in ("user_guide", "user-guide"):
             user_guide_dir = package_root / name
             if user_guide_dir.is_dir() and user_guide_dir.resolve() not in claimed:
@@ -14343,29 +14100,7 @@ anchor-sections: true
         ```
         """
         print("Uninstalling great-docs from your project...")
-
-        validate_layout_outputs(self.layout)
-        builds = [self.layout.build_dir, *recognised_build_dirs(self.layout)]
-        for build_dir in builds:
-            validate_build_dir(build_dir)
-
-        # Remove the great-docs.yml configuration file
-        config_path = self.layout.config_path
-        if config_path.exists():
-            config_path.unlink()
-            print(f"Removed {config_path.relative_to(self.project_root)}")
-
-        for build_dir in builds:
-            if build_dir.exists():
-                shutil.rmtree(build_dir)
-                print(f"Removed {build_dir.relative_to(self.project_root)}/ directory")
-        if self.layout.source_dir != self.project_root:
-            if self.layout.site_dir.exists():
-                shutil.rmtree(self.layout.site_dir)
-            container = self.layout.build_dir.parent
-            if container.exists() and not any(container.iterdir()):
-                container.rmdir()
-
+        outputs.remove(self.layout, report=print)
         print("✅ Great-docs uninstalled successfully!")
 
     def _print_layout_notice(self) -> None:
@@ -15523,7 +15258,7 @@ anchor-sections: true
         ```
         """
         # Require an explicit config file; init must have been run first
-        self._validate_build_outputs()
+        outputs.validate(self._config, self.layout)
         config_path = self.layout.config_path
         if not config_path.exists():
             raise FileNotFoundError(

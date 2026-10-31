@@ -11,7 +11,6 @@ from yaml12 import parse_yaml
 from great_docs._api_diff import ApiSnapshot, ParameterInfo, SymbolInfo
 from great_docs._utils import QUARTO_YML_HEADER, is_great_docs_build_dir
 from great_docs._versioned_build import (
-    _check_build_dir_collisions,
     _clean_stale_version_dirs,
     _compute_excluded_section_dirs,
     _in_excluded_section,
@@ -33,6 +32,7 @@ from great_docs._versioned_build import (
     _write_page_metadata,
     _write_snapshot_inventory,
     assemble_site,
+    check_build_dir_collisions,
     create_version_aliases,
     expand_version_badges,
     expand_version_callouts,
@@ -110,13 +110,13 @@ class TestCheckBuildDirCollisions:
     def test_passes_for_distinct_tags(self, tmp_path: Path):
         source_dir = tmp_path / "great-docs"
         targets = parse_versions_config(["0.3", "0.2"])
-        _check_build_dir_collisions(source_dir, targets, "0.3")
+        check_build_dir_collisions(source_dir, targets, "0.3")
 
     def test_raises_when_tags_sanitise_to_one_name(self, tmp_path: Path):
         source_dir = tmp_path / "great-docs"
         targets = parse_versions_config(["2.0", "release/1.0", "release-1.0"])
         with pytest.raises(ValueError, match="both map to build directory"):
-            _check_build_dir_collisions(source_dir, targets, "2.0")
+            check_build_dir_collisions(source_dir, targets, "2.0")
 
 
 class TestCleanStaleVersionDirs:

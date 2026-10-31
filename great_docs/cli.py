@@ -14,6 +14,7 @@ from ._build import freeze as freeze_cache
 from ._build import from_repo as repository
 from ._build import quarto, serve
 from ._build.steps import BuildError
+from ._install import update_gitignore
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
 from .config import ConfigError
 from .core import GreatDocs
@@ -674,9 +675,7 @@ def config(project_path: str | None, force: bool, config_path: str | None = None
         config_content = create_default_config()
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text(config_content, encoding="utf-8")
-        GreatDocs(
-            project_path=str(layout.package_root), config_path=str(config_path)
-        )._update_project_gitignore(force=True)
+        update_gitignore(layout, report=click.echo)
         click.echo(f"✓ Created {config_path}")
         click.echo("\nEdit this file to customize your documentation settings.")
         click.echo("See https://posit-dev.github.io/great-docs/user-guide/configuration.html")

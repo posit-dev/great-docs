@@ -186,6 +186,7 @@ include = [
     "great_docs/_git.py",
     "great_docs/_github.py",
     "great_docs/_icons.py",
+    "great_docs/_install.py",
     "great_docs/_interlinks",
     "great_docs/_layout.py",
     "great_docs/_layout_migration",
