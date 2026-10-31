@@ -21999,8 +21999,7 @@ def test_categorize_api_objects_type_alias():
             result = docs._categorize_api_objects("tapkg", ["T", "MY_CONST"])
 
             assert "MY_CONST" in result["constants"]
-            # T should be type_alias or constant depending on griffe
-            assert "T" in result["type_aliases"] or "T" in result["constants"]
+            assert "T" in result["type_aliases"]
         finally:
             sys.path.remove(tmp_dir)
             sys.modules.pop("tapkg", None)
@@ -27514,12 +27513,14 @@ def test_function_kind_property():
     [
         ("from typing import TypeVar\nX: TypeVar = TypeVar('X')\n", "typevar"),
         ("from typing import ParamSpec\nX: ParamSpec = ParamSpec('X')\n", "typevar"),
+        ("from typing import TypeVar\nX = TypeVar('X')\n", "typevar"),
+        ("import typing\nX = typing.TypeVarTuple('X')\n", "typevar"),
         ("X: int = 1\n", "constant"),
         ("X = 1\n", "constant"),
     ],
 )
 def test_attribute_kind(source, kind):
-    """The annotation decides whether an attribute declares a type variable"""
+    """The annotation or the value decides whether an attribute declares a type variable"""
 
     with gf.temporary_visited_package("pkg", {"__init__.py": source}) as pkg:
         assert attribute_kind(pkg["X"]) == kind

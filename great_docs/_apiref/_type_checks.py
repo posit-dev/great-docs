@@ -260,8 +260,9 @@ def attribute_kind(obj: gf.Attribute | gf.TypeAlias | gf.Alias) -> AttributeKind
     """
     Classify a module-level attribute or type alias
 
-    A PEP 695 `type` statement is a type alias. An annotation that names
-    `TypeVar`, `ParamSpec` or `TypeVarTuple` declares a type variable.
+    A PEP 695 `type` statement is a type alias. An attribute declares a type
+    variable when its annotation names `TypeVar`, `ParamSpec` or
+    `TypeVarTuple`, or when its value calls one of them.
 
     Parameters
     ----------
@@ -277,7 +278,7 @@ def attribute_kind(obj: gf.Attribute | gf.TypeAlias | gf.Alias) -> AttributeKind
     if isinstance(obj, gf.TypeAlias) or obj.kind is gf.Kind.TYPE_ALIAS:
         return "type_alias"
     annotation = str(obj.annotation) if obj.annotation else ""
-    if "TypeVar" in annotation or "ParamSpec" in annotation or "TypeVarTuple" in annotation:
+    if any(kind in annotation for kind in _TYPE_VARIABLE_KINDS) or is_typevar(obj):
         return "typevar"
     return "constant"
 
