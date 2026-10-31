@@ -197,7 +197,7 @@ from great_docs.pandoc.inlines import (
     inlinecontent_to_str,
     shortcode,
 )
-from tests.support import make_run, mock_config, stubbed_build, write_config
+from tests.support import StubRemote, make_run, mock_config, stubbed_build, write_config
 
 
 def test_great_docs_init():
@@ -4230,66 +4230,6 @@ def test_convert_rst_to_markdown_real_pandoc():
         assert "Item 1" in result
 
 
-def test_fetch_github_releases_success():
-    """Test fetching releases from the GitHub API (mocked)."""
-
-    docs = GreatDocs()
-
-    fake_response = MagicMock()
-    fake_response.status_code = 200
-    fake_response.json.return_value = [
-        {
-            "tag_name": "v1.0.0",
-            "name": "Version 1.0",
-            "body": "First stable release.\n\n- Feature A\n- Feature B",
-            "published_at": "2026-01-15T00:00:00Z",
-            "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
-            "prerelease": False,
-            "draft": False,
-        },
-        {
-            "tag_name": "v0.9.0",
-            "name": "Beta",
-            "body": "Beta release.",
-            "published_at": "2025-12-01T00:00:00Z",
-            "html_url": "https://github.com/owner/repo/releases/tag/v0.9.0",
-            "prerelease": True,
-            "draft": False,
-        },
-        {
-            "tag_name": "v0.8.0-draft",
-            "name": "Draft",
-            "body": "Draft release.",
-            "published_at": "2025-11-01T00:00:00Z",
-            "html_url": "https://github.com/owner/repo/releases/tag/v0.8.0-draft",
-            "prerelease": False,
-            "draft": True,
-        },
-    ]
-
-    with patch("requests.get", return_value=fake_response) as mock_get:
-        releases = docs._fetch_github_releases("owner", "repo", max_releases=10)
-
-    mock_get.assert_called_once()
-
-    assert len(releases) == 2  # Draft skipped
-    assert releases[0]["tag_name"] == "v1.0.0"
-    assert releases[0]["name"] == "Version 1.0"
-    assert releases[0]["body"] == "First stable release.\n\n- Feature A\n- Feature B"
-    assert releases[1]["prerelease"] is True
-
-
-def test_fetch_github_releases_network_error():
-    """Test graceful handling of network errors."""
-
-    docs = GreatDocs()
-
-    with patch("requests.get", side_effect=requests.ConnectionError("offline")):
-        releases = docs._fetch_github_releases("owner", "repo")
-
-    assert releases == []
-
-
 def test_generate_changelog_page():
     """Test changelog.qmd page generation."""
 
@@ -4328,8 +4268,8 @@ def test_generate_changelog_page():
             },
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            result = docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=fake_releases)
+        result = docs._generate_changelog_page()
 
         assert result == "changelog.qmd"
 
@@ -4384,8 +4324,8 @@ def test_generate_changelog_page_toc_title_translated(lang, expected):
             },
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=fake_releases)
+        docs._generate_changelog_page()
 
         content = (build_dir / "changelog.qmd").read_text()
 
@@ -4423,8 +4363,8 @@ def test_generate_changelog_page_no_releases():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        with patch.object(docs, "_fetch_github_releases", return_value=[]):
-            result = docs._generate_changelog_page()
+        docs._remote = StubRemote()
+        result = docs._generate_changelog_page()
 
         assert result is None
 
@@ -4465,8 +4405,8 @@ def test_generate_changelog_page_heading_normalization():
             },
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            result = docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=fake_releases)
+        result = docs._generate_changelog_page()
 
         assert result == "changelog.qmd"
         content = (build_dir / "changelog.qmd").read_text()
@@ -4516,8 +4456,8 @@ def test_generate_changelog_page_h3_body_headings_bumped():
             },
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            result = docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=fake_releases)
+        result = docs._generate_changelog_page()
 
         content = (build_dir / "changelog.qmd").read_text()
 
@@ -4556,8 +4496,8 @@ def test_generate_changelog_page_h1_body_headings_not_bumped():
             },
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=fake_releases)
+        docs._generate_changelog_page()
 
         content = (build_dir / "changelog.qmd").read_text()
 
@@ -4742,62 +4682,6 @@ def test_changelog_config_custom():
         assert config.changelog_max_releases == 10
 
 
-def test_fetch_github_releases_pagination():
-    """Test that pagination works for many releases."""
-
-    docs = GreatDocs()
-
-    page1 = MagicMock()
-    page1.status_code = 200
-    page1.json.return_value = [
-        {
-            "tag_name": f"v{i}.0.0",
-            "name": f"Release {i}",
-            "body": f"Release {i} notes.",
-            "published_at": f"2026-01-{i:02d}T00:00:00Z",
-            "html_url": f"https://github.com/o/r/releases/tag/v{i}.0.0",
-            "prerelease": False,
-            "draft": False,
-        }
-        for i in range(1, 4)
-    ]
-
-    page2 = MagicMock()
-    page2.status_code = 200
-    page2.json.return_value = []  # empty = last page
-
-    with patch("requests.get", side_effect=[page1, page2]):
-        releases = docs._fetch_github_releases("o", "r", max_releases=10)
-
-    assert len(releases) == 3
-
-
-def test_fetch_github_releases_max_cap():
-    """Test that max_releases caps the returned list."""
-
-    docs = GreatDocs()
-
-    fake_response = MagicMock()
-    fake_response.status_code = 200
-    fake_response.json.return_value = [
-        {
-            "tag_name": f"v{i}",
-            "name": f"R{i}",
-            "body": "",
-            "published_at": "2026-01-01T00:00:00Z",
-            "html_url": f"https://github.com/o/r/releases/tag/v{i}",
-            "prerelease": False,
-            "draft": False,
-        }
-        for i in range(1, 20)
-    ]
-
-    with patch("requests.get", return_value=fake_response):
-        releases = docs._fetch_github_releases("o", "r", max_releases=5)
-
-    assert len(releases) == 5
-
-
 def test_linkify_bare_issue_number():
     """Test that bare #NNN references become links."""
     docs = GreatDocs()
@@ -4918,8 +4802,8 @@ def test_linkify_integrated_in_changelog():
             },
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=fake_releases)
+        docs._generate_changelog_page()
 
         content = (build_dir / "changelog.qmd").read_text()
 
@@ -5760,8 +5644,8 @@ def test_navbar_release_from_github_release():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            docs._update_quarto_config(make_run())
+        docs._remote = StubRemote(releases=fake_releases)
+        docs._update_quarto_config(make_run())
 
         navbar = read_yaml(quarto_yml)["website"]["navbar"]
 
@@ -5795,8 +5679,8 @@ def test_navbar_release_absent_without_releases():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        with patch.object(docs, "_fetch_github_releases", return_value=[]):
-            docs._update_quarto_config(make_run())
+        docs._remote = StubRemote()
+        docs._update_quarto_config(make_run())
 
         assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
 
@@ -5854,10 +5738,10 @@ def test_navbar_release_absent_without_github_repo():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        with patch.object(docs, "_fetch_github_releases") as fetch:
-            docs._update_quarto_config(make_run())
+        docs._remote = remote = StubRemote()
+        docs._update_quarto_config(make_run())
 
-        fetch.assert_not_called()
+        assert "github_releases" not in remote.calls
         assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
 
 
@@ -18996,8 +18880,8 @@ def test_generate_changelog_page_with_prerelease():
             }
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=mock_releases):
-            result = docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=mock_releases)
+        result = docs._generate_changelog_page()
 
         assert result == "changelog.qmd"
         changelog = (build_dir / "changelog.qmd").read_text(encoding="utf-8")
@@ -19030,8 +18914,8 @@ def test_generate_changelog_page_linkify_issues():
             }
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=mock_releases):
-            result = docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=mock_releases)
+        result = docs._generate_changelog_page()
 
         changelog = (build_dir / "changelog.qmd").read_text(encoding="utf-8")
         assert "[#42]" in changelog
@@ -19436,18 +19320,6 @@ def test_add_changelog_to_navbar_no_navbar():
 
         docs._add_changelog_to_navbar()
         # Should not crash, and should not add navbar
-
-
-def test_fetch_github_releases_request_error():
-    """Test _fetch_github_releases handles request exceptions."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        with patch("requests.get", side_effect=requests.RequestException("Network error")):
-            result = docs._fetch_github_releases("owner", "repo")
-
-        assert result == []
 
 
 def test_copy_section_files_with_frontmatter_breadcrumbs():
@@ -20525,76 +20397,6 @@ def test_copy_user_guide_to_docs_with_subdirs():
         assert len(copied) >= 1
 
 
-def test_fetch_github_releases_404():
-    """Test _fetch_github_releases handles 404 not found."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 404
-
-        with patch("requests.get", return_value=mock_resp):
-            releases = docs._fetch_github_releases("owner", "repo")
-            assert releases == []
-
-
-def test_fetch_github_releases_other_status():
-    """Test _fetch_github_releases handles non-200 status codes."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 500
-
-        with patch("requests.get", return_value=mock_resp):
-            releases = docs._fetch_github_releases("owner", "repo")
-            assert releases == []
-
-
-def test_fetch_github_releases_skips_drafts():
-    """Test _fetch_github_releases skips draft releases."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = [
-            {
-                "draft": True,
-                "tag_name": "v0.1.0",
-                "name": "Draft",
-                "body": "...",
-                "published_at": "2024-01-01",
-            },
-            {
-                "draft": False,
-                "tag_name": "v1.0.0",
-                "name": "Stable",
-                "body": "Release notes",
-                "published_at": "2024-06-01",
-            },
-        ]
-
-        with patch("requests.get", return_value=mock_resp):
-            releases = docs._fetch_github_releases("owner", "repo")
-            assert len(releases) == 1
-            assert releases[0]["tag_name"] == "v1.0.0"
-
-
-def test_fetch_github_releases_request_exception():
-    """Test _fetch_github_releases handles network errors."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        with patch("requests.get", side_effect=requests.RequestException("timeout")):
-            releases = docs._fetch_github_releases("owner", "repo")
-            assert releases == []
-
-
 def test_extract_directives_from_package_no_griffe():
     """Test _extract_directives_from_package handles missing griffe."""
 
@@ -21077,16 +20879,16 @@ def test_generate_changelog_page_with_releases():
             },
         ]
 
-        with patch.object(docs, "_fetch_github_releases", return_value=mock_releases):
-            result = docs._generate_changelog_page()
+        docs._remote = StubRemote(releases=mock_releases)
+        result = docs._generate_changelog_page()
 
-            assert result == "changelog.qmd"
+        assert result == "changelog.qmd"
 
-            content = (build_dir / "changelog.qmd").read_text()
+        content = (build_dir / "changelog.qmd").read_text()
 
-            assert "Version 1.0" in content
-            assert "pre-release" in content
-            assert "2024-06-01" in content
+        assert "Version 1.0" in content
+        assert "pre-release" in content
+        assert "2024-06-01" in content
 
 
 def test_get_package_exports_with_all():
@@ -30970,59 +30772,6 @@ def test_inject_section_body_class_adds_body_class():
         assert "gd-section-no-sidebar" in content
 
 
-def test_fetch_github_releases_with_token():
-    """_fetch_github_releases adds auth header when GITHUB_TOKEN is set."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = [
-            {
-                "tag_name": "v1.0",
-                "name": "v1.0",
-                "body": "Release",
-                "published_at": "2025-01-01",
-                "html_url": "http://example.com",
-                "prerelease": False,
-                "draft": False,
-            }
-        ]
-        import requests as _requests
-
-        with patch.dict(os.environ, {"GITHUB_TOKEN": "test-token-123"}):
-            with patch.object(_requests, "get", return_value=mock_resp) as mock_get:
-                releases = docs._fetch_github_releases("owner", "repo", max_releases=1)
-
-        # Verify token was used
-        call_kwargs = mock_get.call_args
-        headers = call_kwargs[1].get(
-            "headers", call_kwargs[0][1] if len(call_kwargs[0]) > 1 else {}
-        )
-        assert len(releases) == 1
-
-
-def test_fetch_github_releases_rate_limited():
-    """_fetch_github_releases handles 403 rate limit."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 403
-        import requests as _requests
-
-        with patch.object(_requests, "get", return_value=mock_resp):
-            releases = docs._fetch_github_releases("owner", "repo", max_releases=1)
-
-        assert releases == []
-
-
 def test_detect_dynamic_mode_empty_package_name():
     """_detect_dynamic_mode returns True for empty package name."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -38412,12 +38161,8 @@ def test_generate_package_info_page_basic():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        with patch.object(
-            GreatDocs,
-            "_fetch_pypi_dates",
-            return_value={"numpy": "2026-05-01", "pandas": "2026-06-15"},
-        ):
-            result = docs._generate_package_info_page()
+        docs._remote = StubRemote(release_dates={"numpy": "2026-05-01", "pandas": "2026-06-15"})
+        result = docs._generate_package_info_page()
 
         assert result == "package-info.qmd"
 
@@ -38463,8 +38208,8 @@ def test_generate_package_info_page_with_optional_deps():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        with patch.object(GreatDocs, "_fetch_pypi_dates", return_value={}):
-            result = docs._generate_package_info_page()
+        docs._remote = StubRemote()
+        result = docs._generate_package_info_page()
 
         assert result == "package-info.qmd"
 
@@ -38497,8 +38242,8 @@ def test_generate_package_info_page_with_markers():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        with patch.object(GreatDocs, "_fetch_pypi_dates", return_value={}):
-            docs._generate_package_info_page()
+        docs._remote = StubRemote()
+        docs._generate_package_info_page()
 
         content = (gd_dir / "package-info.qmd").read_text(encoding="utf-8")
         assert "Environment Marker" in content
@@ -38617,40 +38362,12 @@ def test_generate_package_info_page_pypi_date_fallback():
 
         docs = GreatDocs(project_path=tmp_dir)
         # Simulate network failure — empty dict returned
-        with patch.object(GreatDocs, "_fetch_pypi_dates", return_value={}):
-            docs._generate_package_info_page()
+        docs._remote = StubRemote()
+        docs._generate_package_info_page()
 
         content = (gd_dir / "package-info.qmd").read_text(encoding="utf-8")
         # Date column header present, value is dash
         assert "Last Published" in content
-
-
-def test_fetch_pypi_dates_success():
-    """_fetch_pypi_dates returns dates for successful API responses."""
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {
-        "info": {"version": "1.26.0"},
-        "releases": {"1.26.0": [{"upload_time_iso_8601": "2026-06-15T12:00:00Z"}]},
-    }
-    with patch("requests.get", return_value=mock_response):
-        result = GreatDocs._fetch_pypi_dates({"numpy"})
-
-    assert result == {"numpy": "2026-06-15"}
-
-
-def test_fetch_pypi_dates_failure():
-    """_fetch_pypi_dates returns empty dict on network failure."""
-    with patch("requests.get", side_effect=Exception("timeout")):
-        result = GreatDocs._fetch_pypi_dates({"nonexistent-pkg"})
-
-    assert result == {}
-
-
-def test_fetch_pypi_dates_empty():
-    """_fetch_pypi_dates returns empty dict for empty input."""
-    result = GreatDocs._fetch_pypi_dates(set())
-    assert result == {}
 
 
 def test_build_metadata_margin_no_package_info_link_when_missing():

@@ -37,7 +37,9 @@ from ._content.naming import (
     strip_numeric_prefix,
     title_from_name,
 )
+from ._github import GithubRepo
 from ._layout import Layout, LayoutError
+from ._remote import HttpRemote, Remote
 from ._source_refs import source_reference_spans
 from ._subprocess import TEXT_MODE_KWARGS
 from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
@@ -284,6 +286,9 @@ class GreatDocs:
             config_path=self.layout.config_path,
             cache_dir=self.layout.cache_dir,
         )
+
+        # GitHub and PyPI requests; release warnings print in the build log's format
+        self._remote: Remote = HttpRemote(report=lambda message: print(f"   ⚠️  {message}"))
 
         # Caches for the instance's lifetime; builds do not reset them
         self._package_metadata_cache: dict | None = None
@@ -1927,148 +1932,15 @@ class GreatDocs:
         if not repo_url or "github.com" not in repo_url:
             return None, None, None
 
-        # Parse the GitHub URL to extract owner and repo. Handles https, ssh, and
-        # `.git`-suffixed forms; see great_docs._pr_preview.parse_github_url.
-        from ._pr_preview import parse_github_url
-
-        parsed = parse_github_url(repo_url)
-        if parsed:
-            owner, repo = parsed
-            base_url = f"https://github.com/{owner}/{repo}"
-            return owner, repo, base_url
+        repo = GithubRepo.parse(repo_url)
+        if repo:
+            return repo.owner, repo.name, repo.url
 
         return None, None, None  # pragma: no cover
-
-    def _fetch_github_repo_stats(self, owner: str, repo: str) -> dict[str, int]:
-        """
-        Fetch repository star and fork counts from the GitHub API at build time.
-
-        Uses GITHUB_TOKEN / GH_TOKEN if available for higher rate limits.
-
-        Returns
-        -------
-        dict[str, int]
-            A dict with 'stars' and 'forks' keys, or empty dict on failure.
-        """
-        import requests
-
-        headers = {
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-        }
-
-        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-
-        url = f"https://api.github.com/repos/{owner}/{repo}"
-
-        try:
-            resp = requests.get(url, headers=headers, timeout=15)
-            if resp.status_code == 200:
-                data = resp.json()
-                return {
-                    "stars": data.get("stargazers_count", 0),
-                    "forks": data.get("forks_count", 0),
-                }
-        except requests.RequestException:
-            pass
-
-        return {}
 
     # =========================================================================
     # Changelog (GitHub Releases) Methods
     # =========================================================================
-
-    def _fetch_github_releases(
-        self,
-        owner: str,
-        repo: str,
-        max_releases: int = 50,
-    ) -> list[dict]:
-        """
-        Fetch releases from the GitHub API.
-
-        Parameters
-        ----------
-        owner
-            GitHub repository owner.
-        repo
-            GitHub repository name.
-        max_releases
-            Maximum number of releases to return.
-
-        Returns
-        -------
-        list[dict]
-            List of release dicts with keys: tag_name, name, body, published_at,
-            html_url, prerelease, draft.
-        """
-        import requests
-
-        releases: list[dict] = []
-        per_page = min(max_releases, 100)
-        page = 1
-
-        headers = {"Accept": "application/vnd.github+json"}
-
-        # Honour GITHUB_TOKEN / GH_TOKEN for higher rate limits
-        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-
-        while len(releases) < max_releases:
-            url = (
-                f"https://api.github.com/repos/{owner}/{repo}/releases"
-                f"?per_page={per_page}&page={page}"
-            )
-
-            try:
-                resp = requests.get(url, headers=headers, timeout=30)
-            except requests.RequestException as exc:
-                print(f"   ⚠️  Failed to fetch GitHub releases: {exc}")
-                break
-
-            if resp.status_code == 403:
-                # Rate-limited
-                print("   ⚠️  GitHub API rate limit reached; changelog may be incomplete")
-                break
-            if resp.status_code == 404:
-                print(f"   ⚠️  GitHub repository {owner}/{repo} not found")
-                break
-            if resp.status_code != 200:
-                print(f"   ⚠️  GitHub API returned status {resp.status_code}")
-                break
-
-            try:
-                data = resp.json()
-            except requests.exceptions.JSONDecodeError:
-                print("   ⚠️  GitHub API returned a malformed release list")
-                break
-            if not data:
-                break  # No more pages  # pragma: no cover
-
-            for release in data:
-                if release.get("draft"):  # pragma: no cover
-                    continue  # Skip drafts
-                releases.append(
-                    {
-                        "tag_name": release.get("tag_name", ""),
-                        "name": release.get("name", ""),
-                        "body": release.get("body", ""),
-                        "published_at": release.get("published_at", ""),
-                        "html_url": release.get("html_url", ""),
-                        "prerelease": release.get("prerelease", False),
-                    }
-                )
-                if len(releases) >= max_releases:
-                    break
-
-            if len(data) < per_page:
-                break  # Last page
-            page += 1
-
-        return releases
 
     @staticmethod
     def _linkify_github_references(text: str, owner: str, repo: str) -> str:
@@ -2155,7 +2027,7 @@ class GreatDocs:
             return None
 
         max_releases = self._config.changelog_max_releases
-        releases = self._fetch_github_releases(owner, repo, max_releases)
+        releases = self._remote.github_releases(GithubRepo(owner, repo), max_releases)
         if not releases:
             return None
 
@@ -10311,65 +10183,6 @@ body-classes: "gd-homepage"
 
         print(f"Created {index_qmd}")
 
-    @staticmethod
-    def _fetch_pypi_dates(package_names: set[str]) -> dict[str, str]:
-        """
-        Fetch the latest release date for each package from PyPI.
-
-        Uses the PyPI JSON API (`https://pypi.org/pypi/{name}/json`) to look up the most recent
-        upload timestamp. Requests are made with a short timeout and failures are silently skipped
-        (the date simply shows "—").
-
-        Parameters
-        ----------
-        package_names
-            Set of PyPI package names to look up.
-
-        Returns
-        -------
-        dict[str, str]
-            Mapping of package name to a formatted date string (`YYYY-MM-DD`).
-        """
-        import concurrent.futures
-
-        import requests
-
-        dates: dict[str, str] = {}
-        if not package_names:
-            return dates
-
-        def _fetch_one(name: str) -> tuple[str, str]:
-            try:
-                resp = requests.get(
-                    f"https://pypi.org/pypi/{name}/json",
-                    timeout=5,
-                    headers={"Accept": "application/json"},
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    # The "info" dict has the latest version; look up its upload time
-                    latest_version = data.get("info", {}).get("version", "")
-                    releases = data.get("releases", {})
-                    if latest_version and latest_version in releases:
-                        files = releases[latest_version]
-                        if files:
-                            upload_time = files[0].get("upload_time_iso_8601", "")
-                            if upload_time:
-                                return name, upload_time[:10]  # YYYY-MM-DD
-            except Exception:
-                pass
-            return name, ""
-
-        # Fetch in parallel with a bounded thread pool
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-            futures = {pool.submit(_fetch_one, n): n for n in package_names}
-            for future in concurrent.futures.as_completed(futures):
-                pkg_name, date_str = future.result()
-                if date_str:
-                    dates[pkg_name] = date_str
-
-        return dates
-
     def _generate_package_info_page(self) -> str | None:
         """
         Generate package-info.qmd with dependency details.
@@ -10422,7 +10235,7 @@ body-classes: "gd-homepage"
         all_dep_names = {d["name"] for d in runtime_deps}
         for deps in opt_deps_full.values():
             all_dep_names |= {d["name"] for d in deps}
-        pypi_dates = self._fetch_pypi_dates(all_dep_names)
+        pypi_dates = self._remote.pypi_release_dates(all_dep_names)
 
         # Column widths (%)
         _COL_WIDTHS_4 = (35, 30, 25, 10)  # Package / Version / Last Published / PyPI
@@ -11367,7 +11180,7 @@ anchor-sections: true
         github_item = None
         if repo_url:
             stats = (
-                self._fetch_github_repo_stats(owner, repo)
+                self._remote.github_stats(GithubRepo(owner, repo))
                 if owner and repo and github_style == "widget"
                 else None
             )
@@ -12484,7 +12297,7 @@ anchor-sections: true
         # Show the latest GitHub release beside the navbar title
         release = None
         if owner and repo:
-            latest = self._fetch_github_releases(owner, repo, max_releases=1)
+            latest = self._remote.github_releases(GithubRepo(owner, repo), max_releases=1)
             release = nav_release.Release.make(latest[0]) if latest else None
         nav_release.add_to_navbar(config, release, self._config.lang)
 

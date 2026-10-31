@@ -11,13 +11,12 @@ from unittest.mock import MagicMock, patch
 
 import click
 import pytest
-import requests
 
 from great_docs import GreatDocs
 from great_docs._build import freeze
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website import quarto_yml as quarto_yml_file
-from tests.support import make_run
+from tests.support import StubRemote, make_run
 
 
 def _make_gd(tmp_path: Path) -> GreatDocs:
@@ -29,52 +28,6 @@ def _make_gd(tmp_path: Path) -> GreatDocs:
 def _patch_cfg(monkeypatch, gd, name, value):
     """Patch a Config property on the class so the instance returns *value*."""
     monkeypatch.setattr(type(gd._config), name, property(lambda self: value))
-
-
-class TestFetchGithubRepoStats:
-    """Cover _fetch_github_repo_stats auth header and response paths."""
-
-    def test_success_with_token(self, tmp_path, monkeypatch):
-        """Token is used and success data returned."""
-        gd = _make_gd(tmp_path)
-        monkeypatch.setenv("GITHUB_TOKEN", "ghp_test123")
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {"stargazers_count": 42, "forks_count": 7}
-
-        monkeypatch.setattr(requests, "get", lambda *a, **kw: mock_resp)
-
-        result = gd._fetch_github_repo_stats("posit-dev", "great-docs")
-        assert result == {"stars": 42, "forks": 7}
-
-    def test_request_exception_returns_empty(self, tmp_path, monkeypatch):
-        """RequestException is swallowed, returns {}."""
-        gd = _make_gd(tmp_path)
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-
-        def raise_exc(*a, **kw):
-            raise requests.RequestException("network error")
-
-        monkeypatch.setattr(requests, "get", raise_exc)
-
-        result = gd._fetch_github_repo_stats("owner", "repo")
-        assert result == {}
-
-    def test_non_200_returns_empty(self, tmp_path, monkeypatch):
-        """Non-200 status code returns empty dict."""
-        gd = _make_gd(tmp_path)
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 404
-
-        monkeypatch.setattr(requests, "get", lambda *a, **kw: mock_resp)
-
-        result = gd._fetch_github_repo_stats("owner", "repo")
-        assert result == {}
 
 
 class TestFindClickCliObj:
@@ -2183,7 +2136,7 @@ class TestGeneratePackageInfoPage:
                 "requires_python": ">=3.9",
             },
         )
-        monkeypatch.setattr(gd, "_fetch_pypi_dates", lambda names: {})
+        gd._remote = StubRemote()
         result = gd._generate_package_info_page()
         assert result == "package-info.qmd"
         content = (gd.build_dir / "package-info.qmd").read_text()
@@ -2205,7 +2158,7 @@ class TestGeneratePackageInfoPage:
                 "requires_python": "",
             },
         )
-        monkeypatch.setattr(gd, "_fetch_pypi_dates", lambda names: {})
+        gd._remote = StubRemote()
         result = gd._generate_package_info_page()
         assert result == "package-info.qmd"
         content = (gd.build_dir / "package-info.qmd").read_text()

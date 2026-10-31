@@ -75,13 +75,15 @@ def latest_only() -> str:
 '''
 
 # Run the real `great-docs build` in a subprocess, including module imports,
-# Quarto rendering, and site generation. Stub release lookup because these
-# acceptance builds run offline.
+# Quarto rendering, and site generation. These acceptance builds run offline, so
+# they make no GitHub or PyPI requests.
 BUILD = """
 import sys
 from great_docs import GreatDocs
-GreatDocs._fetch_github_releases = lambda self, *args, **kwargs: []
-GreatDocs(project_path=sys.argv[1], config_path=sys.argv[2]).build()
+from great_docs._remote import OfflineRemote
+docs = GreatDocs(project_path=sys.argv[1], config_path=sys.argv[2])
+docs._remote = OfflineRemote()
+docs.build()
 """
 
 

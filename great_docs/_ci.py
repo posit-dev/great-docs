@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import os
 
-from ._pr_preview import GITHUB_API, PreviewError, _parse_owner_repo, parse_github_url
+from ._github import GithubRepo
+from ._pr_preview import GITHUB_API, PreviewError, _parse_owner_repo
 
 _TIMEOUT = 15
 
@@ -93,7 +94,8 @@ def resolve_ci_repo(repo_override: str | None) -> tuple[str, str]:
     config.
     """
     if repo_override:
-        parsed = parse_github_url(repo_override) or _parse_owner_repo(repo_override)
+        github = GithubRepo.parse(repo_override)
+        parsed = (github.owner, github.name) if github else _parse_owner_repo(repo_override)
         if parsed:
             return parsed
         raise PreviewError(

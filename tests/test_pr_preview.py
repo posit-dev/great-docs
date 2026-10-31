@@ -17,22 +17,6 @@ from great_docs.cli import preview
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "url,expected",
-    [
-        ("https://github.com/posit-dev/great-docs", ("posit-dev", "great-docs")),
-        ("https://github.com/posit-dev/great-docs.git", ("posit-dev", "great-docs")),
-        ("git@github.com:posit-dev/great-docs.git", ("posit-dev", "great-docs")),
-        ("https://github.com/o/r/", ("o", "r")),
-        ("https://gitlab.com/a/b", None),
-        ("", None),
-        (None, None),
-    ],
-)
-def test_parse_github_url(url, expected):
-    assert pp.parse_github_url(url) == expected
-
-
 def test_parse_owner_repo():
     assert pp._parse_owner_repo("posit-dev/great-docs") == ("posit-dev", "great-docs")
     assert pp._parse_owner_repo("posit-dev/great-docs.git") == ("posit-dev", "great-docs")
@@ -514,25 +498,6 @@ def test_cli_clear_cache(monkeypatch, tmp_path):
     assert result.exit_code == 0
     assert "Cleared PR-preview cache" in result.output
     assert not pp._cache_root().exists()
-
-
-# ---------------------------------------------------------------------------
-# parse_github_url edge cases
-# ---------------------------------------------------------------------------
-
-
-def test_parse_github_url_no_regex_match():
-    # Line 60: URL contains "github.com" but regex can't parse owner/repo
-    assert pp.parse_github_url("https://github.com/") is None
-
-
-def test_parse_github_url_empty_owner_or_repo():
-    # Line 67: regex matches but owner or repo is empty after stripping
-    # This is hard to trigger with real regex but we can test via a URL that
-    # after .git stripping and rstrip("/") leaves empty repo
-    # Actually the regex won't match empty groups, but let's verify the
-    # function returns None for "github.com" alone (tested via line 60 path)
-    assert pp.parse_github_url("http://github.com") is None
 
 
 # ---------------------------------------------------------------------------
@@ -1790,15 +1755,6 @@ def test_stream_to_file_resume_mode(monkeypatch, tmp_path):
 
     # start=2 causes initial bar.update(2), then chunk update(2)
     assert updates == [2, 2]
-
-
-# ---------------------------------------------------------------------------
-# Coverage: parse_github_url – repo becomes empty after .git stripping
-# ---------------------------------------------------------------------------
-
-
-def test_parse_github_url_repo_becomes_empty_after_git_strip():
-    assert pp.parse_github_url("https://github.com/owner/.git") is None
 
 
 # ---------------------------------------------------------------------------
