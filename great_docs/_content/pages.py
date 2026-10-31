@@ -131,12 +131,8 @@ class PageMap:
         -------
         :
             The page map, with roots ordered as user guide, sections, then custom pages. A
-            page in more than one root publishes under the first matching root.
-
-        Raises
-        ------
-        ValueError
-            If a custom page directory's `output` lies outside the build directory.
+            page in more than one root publishes under the first matching root. A custom page
+            directory whose `output` lies outside the build directory has no root.
         """
         roots: list[PageRoot] = []
         if guide is not None:
@@ -161,13 +157,12 @@ class PageMap:
                     )
                 )
         for page in config.custom_pages:
-            roots.append(
-                PageRoot(
-                    (layout.source_dir / page["dir"]).resolve(),
-                    output_destination(layout, page["output"]),
-                    False,
-                )
-            )
+            try:
+                destination = output_destination(layout, page["output"])
+            except ValueError:
+                # Publishing the custom pages reports the escaping output as the build's failure
+                continue
+            roots.append(PageRoot((layout.source_dir / page["dir"]).resolve(), destination, False))
         return cls(
             layout.build_dir / "index.qmd",
             frozenset(source.resolve() for source in homepage),

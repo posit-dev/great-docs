@@ -113,3 +113,12 @@ def test_a_page_outside_every_root_has_no_destination(tmp_path: Path, layout: La
     pages = PageMap.make(write_config(tmp_path), layout, None, [])
 
     assert pages.destination(page.resolve()) is None
+
+
+def test_custom_pages_with_an_escaping_output_have_no_destination(tmp_path: Path, layout: Layout):
+    page = write_page(tmp_path / "pages/landing.html")
+    config = write_config(tmp_path, {"custom_pages": {"dir": "pages", "output": "../escape"}})
+
+    pages = PageMap.make(config, layout, None, [])
+
+    assert pages.destination(page.resolve()) is None

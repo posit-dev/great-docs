@@ -8841,6 +8841,31 @@ def test_process_custom_pages_can_be_disabled_explicitly():
         assert not (docs.build_dir / "custom" / "landing.qmd").exists()
 
 
+def test_an_escaping_custom_page_output_fails_the_custom_pages_step(tmp_path):
+    """Keep a page link from failing a step before custom pages are processed"""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\nversion = "1.0"\n')
+    write_config(tmp_path, "reference: false\ncustom_pages:\n  dir: pages\n  output: ../escape\n")
+    (tmp_path / "pages").mkdir()
+    (tmp_path / "pages/landing.html").write_text("<p>Landing</p>")
+    (tmp_path / "user_guide").mkdir()
+    (tmp_path / "user_guide/intro.qmd").write_text("# Intro\n")
+    (tmp_path / "README.md").write_text("# Demo\n\n[Intro](user_guide/intro.qmd)\n")
+    docs = GreatDocs(project_path=str(tmp_path))
+
+    run = (
+        "_prepare_build_directory",
+        "_find_user_guide_dir",
+        "_process_user_guide",
+        "_process_custom_pages",
+    )
+    with stubbed_build(docs, run=run), pytest.raises(BuildError) as failure:
+        docs.build(refresh=False)
+
+    assert str(failure.value) == (
+        "Process custom pages failed: Output path must remain inside the build directory: ../escape"
+    )
+
+
 def test_process_custom_pages_ignores_frontmatter_after_leading_blank_lines():
     """Verify that leading blank lines prevent front matter parsing"""
     with tempfile.TemporaryDirectory() as tmp_dir:
