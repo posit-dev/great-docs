@@ -6491,6 +6491,26 @@ def test_fetch_members_include_empty_skips_docstring_filter():
     assert "undocumented" in result
 
 
+def test_fetch_members_keeps_undocumented_members_of_an_enum():
+    """An enum lists its undocumented members; a dataclass with an enum base does not"""
+    from great_docs._apiref.api_reference import Settings
+
+    source = (
+        "import enum\n"
+        "from dataclasses import dataclass\n"
+        "class Color(enum.Enum):\n"
+        "    RED = 1\n"
+        "@dataclass\n"
+        "class Point(enum.Enum):\n"
+        "    X = 1\n"
+    )
+    with gf.temporary_visited_package("pkg", {"__init__.py": source}) as pkg:
+        resolver = Resolver(Settings(parser="numpy"))
+        el = SpecObject(name="Color").with_defaults(SpecOptions())
+        assert resolver._fetch_members(el, pkg["Color"]) == ["RED"]
+        assert resolver._fetch_members(el, pkg["Point"]) == []
+
+
 def test_autogenerate_sections_returns_sections(capsys):
     """Verify that a valid module produces default API sections"""
     import griffe as gf

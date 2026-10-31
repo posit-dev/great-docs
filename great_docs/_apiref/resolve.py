@@ -13,6 +13,7 @@ from yaml12 import format_yaml
 from great_docs.hooks._docstring_parsed import emit_docstring_parsed
 from great_docs.hooks._object_resolved import emit_object_resolved
 
+from ._type_checks import is_enum
 from ._walkable import MISSING, MissingType, Walkable
 from .content import Doc, Link, MemberPage, Page, Section, Text
 from .introspect import resolve_alias
@@ -45,8 +46,6 @@ _BUILTIN_NOISE_DUNDERS = frozenset(
         "__parameters__",
     }
 )
-
-_ENUM_BASES = frozenset({"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum", "EnumCheck"})
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -393,12 +392,7 @@ class Resolver:
         # Phase 2 — content filters: require resolved targets.
         # Enum members are always shown — their names and values are
         # inherently meaningful even without a per-member docstring.
-        is_enum_cls = (
-            obj.is_class
-            and isinstance(obj, (gf.Class, gf.Alias))
-            and {str(b).rsplit(".", 1)[-1] for b in obj.bases} & _ENUM_BASES
-        )
-        if not el.include_empty and not is_enum_cls:
+        if not el.include_empty and not is_enum(obj):
             candidates = {k: v for k, v in candidates.items() if v.docstring is not None}
 
         if not el.include_attributes:
