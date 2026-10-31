@@ -27446,7 +27446,7 @@ def test_shortcode_str():
         ("from typing import TypedDict\nclass C(TypedDict): ...\n", "typeddict"),
         ("import typing\nclass C(typing.Protocol): ...\n", "protocol"),
         ("from abc import ABC\nclass C(ABC): ...\n", "abc"),
-        ("from abc import abstractmethod\n@abstractmethod\nclass C: ...\n", "abc"),
+        ("from abc import abstractmethod\n@abstractmethod\nclass C: ...\n", "class"),
         ("class C(object): ...\n", "class"),
     ],
 )

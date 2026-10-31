@@ -192,12 +192,11 @@ def _short_base_names(obj: gf.Class | gf.Alias) -> set[str]:
 
 def class_kind(obj: gf.Class | gf.Alias) -> ClassKind:
     """
-    Classify a class by its labels, decorators and the names of its bases
+    Classify a class by its labels and the names of its bases
 
     The first rule that matches decides: the `dataclass` label, an `enum`
     base, a built-in exception base, `NamedTuple`, `TypedDict`, `Protocol` or
-    `runtime_checkable`, an `ABC` or `ABCMeta` base, and a class decorator
-    whose text contains `abstractmethod`.
+    `runtime_checkable`, then an `ABC` or `ABCMeta` base.
 
     Parameters
     ----------
@@ -224,8 +223,6 @@ def class_kind(obj: gf.Class | gf.Alias) -> ClassKind:
     if "Protocol" in bases or "runtime_checkable" in bases:
         return "protocol"
     if bases & {"ABC", "ABCMeta"}:
-        return "abc"
-    if any("abstractmethod" in str(decorator.value) for decorator in obj.decorators):
         return "abc"
     return "class"
 
