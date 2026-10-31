@@ -21989,17 +21989,21 @@ def test_categorize_api_objects_type_alias():
         pkg_dir = Path(tmp_dir) / "tapkg"
         pkg_dir.mkdir()
         (pkg_dir / "__init__.py").write_text(
-            'from typing import TypeVar\nT = TypeVar("T")\nMY_CONST = "hello"\n',
+            "from typing import TypeAlias, TypeVar\n"
+            'T = TypeVar("T")\n'
+            "A: TypeAlias = int\n"
+            'MY_CONST = "hello"\n',
             encoding="utf-8",
         )
 
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorize_api_objects("tapkg", ["T", "MY_CONST"])
+            result = docs._categorize_api_objects("tapkg", ["T", "A", "MY_CONST"])
 
             assert "MY_CONST" in result["constants"]
             assert "T" in result["type_aliases"]
+            assert "A" in result["type_aliases"]
         finally:
             sys.path.remove(tmp_dir)
             sys.modules.pop("tapkg", None)
@@ -27515,12 +27519,14 @@ def test_function_kind_property():
         ("from typing import ParamSpec\nX: ParamSpec = ParamSpec('X')\n", "typevar"),
         ("from typing import TypeVar\nX = TypeVar('X')\n", "typevar"),
         ("import typing\nX = typing.TypeVarTuple('X')\n", "typevar"),
+        ("from typing import TypeAlias\nX: TypeAlias = int\n", "type_alias"),
+        ("import typing\nX: typing.TypeAlias = int\n", "type_alias"),
         ("X: int = 1\n", "constant"),
         ("X = 1\n", "constant"),
     ],
 )
 def test_attribute_kind(source, kind):
-    """The annotation or the value decides whether an attribute declares a type variable"""
+    """The annotation, then the value, decides the kind of an attribute"""
 
     with gf.temporary_visited_package("pkg", {"__init__.py": source}) as pkg:
         assert attribute_kind(pkg["X"]) == kind

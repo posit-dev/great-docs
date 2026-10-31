@@ -200,11 +200,8 @@ SPEC = {
             "summarize",
         ],
         "num_exports": 12,
-        # Measured, not predicted. Note the legacy `Signature` lands in
-        # Constants while the eight PEP 695 aliases land in Type Aliases:
-        # the scan path categorises by griffe kind, and the pre-695 spelling
-        # is still an attribute.
-        "section_titles": ["Classes", "Functions", "Constants", "Type Aliases"],
+        # The legacy `Signature: TypeAlias = ...` lands in Type Aliases with the PEP 695 aliases.
+        "section_titles": ["Classes", "Functions", "Type Aliases"],
         "has_user_guide": False,
         "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],
     },
