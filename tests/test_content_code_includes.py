@@ -140,3 +140,14 @@ def test_page_include_with_lang_or_lines_becomes_code(tmp_path: Path, layout: La
 
     assert "{{< include" not in result
     assert "title: Example" in result
+
+
+@pytest.mark.parametrize("lines", ["a-b", "-5", "3-", "two"])
+def test_malformed_lines_becomes_a_comment_naming_the_include(
+    tmp_path: Path, layout: Layout, lines: str
+):
+    (tmp_path / "code.py").write_text("line1\nline2\n")
+
+    result = code_includes.expand(f'{{{{< include code.py lines="{lines}" >}}}}', tmp_path, layout)
+
+    assert result == f'<!-- include error: lines="{lines}" is not N or N-M: code.py -->'

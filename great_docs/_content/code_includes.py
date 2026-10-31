@@ -86,8 +86,9 @@ def expand(content: str, page_dir: Path, layout: Layout) -> str:
     Returns
     -------
     :
-        The page with code includes replaced by fenced blocks. An include that cannot be
-        read becomes an HTML comment that states the error.
+        The page with code includes replaced by fenced blocks. An include whose file is
+        missing or unreadable, or whose `lines` value is malformed, becomes an HTML comment
+        that states the error.
     """
 
     def _replace(m: re.Match[str]) -> str:
@@ -112,7 +113,12 @@ def expand(content: str, page_dir: Path, layout: Layout) -> str:
             return f"<!-- include error: {e} -->"
 
         if lines_spec:
-            file_content = _select_lines(file_content, lines_spec)
+            selected = _select_lines(file_content, lines_spec)
+            if selected is None:
+                return (
+                    f'<!-- include error: lines="{lines_spec}" is not N or N-M: {file_path_str} -->'
+                )
+            file_content = selected
 
         if not lang:
             lang = _LANGUAGES.get(resolved.suffix.lower(), "")
@@ -193,7 +199,7 @@ def _resolve(file_path_str: str, page_dir: Path, layout: Layout) -> Path | None:
     return None
 
 
-def _select_lines(content: str, lines_spec: str) -> str:
+def _select_lines(content: str, lines_spec: str) -> str | None:
     """
     Select a range of lines
 
@@ -208,17 +214,21 @@ def _select_lines(content: str, lines_spec: str) -> str:
     Returns
     -------
     :
-        The selected lines with their line endings.
+        The selected lines with their line endings, or `None` when `lines_spec` is neither
+        an integer nor a pair of integers joined by `-`.
     """
     all_lines = content.splitlines(keepends=True)
 
-    if "-" in lines_spec:
-        parts = lines_spec.split("-", 1)
-        start = int(parts[0]) - 1
-        end = int(parts[1])
-    else:
-        start = int(lines_spec) - 1
-        end = start + 1
+    try:
+        if "-" in lines_spec:
+            first, last = lines_spec.split("-", 1)
+            start = int(first) - 1
+            end = int(last)
+        else:
+            start = int(lines_spec) - 1
+            end = start + 1
+    except ValueError:
+        return None
 
     start = max(0, start)
     end = min(len(all_lines), end)
