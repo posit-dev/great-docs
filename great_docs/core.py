@@ -7,6 +7,7 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from functools import partial
 from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -29,9 +30,8 @@ from ._build.steps import (
     count_listed,
     run_steps,
 )
-from ._content import code_includes, publish
+from ._content import publish
 from ._content.naming import (
-    fix_numeric_prefix_links,
     published_path,
     strip_numeric_prefix,
     title_from_name,
@@ -2451,52 +2451,27 @@ class GreatDocs:
         """
         copied: list[dict] = []
         pages = self._page_map()
+        add_dates = partial(page_dates.add_to_page, config=self._config, authors=self._page_authors)
 
         for src_file in files:
             # Copied paths and rewritten links must strip the same numeric prefixes
             # from every path component
             published = published_path(src_file.relative_to(source_dir), strip_prefix=True)
-            dest_file = dest_dir / published
-
-            # Ensure subdirectories exist
-            dest_file.parent.mkdir(parents=True, exist_ok=True)
-
-            content = src_file.read_text(encoding="utf-8")
-
-            # Expand {{< code-include >}} shortcodes before Quarto sees the file
-            content = code_includes.expand(content, src_file.parent, self.layout)
-            content = publish.rebase_references(
-                content, src_file, dest_file, layout=self.layout, pages=pages
+            front_matter = publish.page(
+                src_file,
+                dest_dir / published,
+                layout=self.layout,
+                pages=pages,
+                add_dates=add_dates,
+                strip_prefix=True,
+                breadcrumbs="default",
             )
-
-            # Fix links to .qmd files with numeric prefixes
-            content = fix_numeric_prefix_links(content)
-
-            # Parse frontmatter for metadata
-            title = title_from_name(published.stem)
-            description = ""
-            image = ""
-
-            if (block := locate_front_matter(content)) is not None:
-                fm = block.mapping
-                title = fm.string("title") or title
-                description = fm.string("description") or ""
-                image = fm.string("image") or ""
-                if "bread-crumbs" not in fm:
-                    updated = {**fm.data, "bread-crumbs": False}
-                    content = f"---\n{format_yaml(updated)}\n---\n{content[block.end :]}"
-
-            dest_file.write_text(
-                page_dates.add_to_page(content, src_file, self._config, self._page_authors),
-                encoding="utf-8",
-            )
-
             copied.append(
                 {
                     "filename": str(published),
-                    "title": title,
-                    "description": description,
-                    "image": image,
+                    "title": front_matter.string("title") or title_from_name(published.stem),
+                    "description": front_matter.string("description") or "",
+                    "image": front_matter.string("image") or "",
                 }
             )
 
@@ -2539,43 +2514,26 @@ class GreatDocs:
         # their co-located assets afterward
         content_dirs: set[Path] = set()
         pages = self._page_map()
+        add_dates = partial(page_dates.add_to_page, config=self._config, authors=self._page_authors)
 
         for src_file in files:
             rel = src_file.relative_to(source_dir)
-            dest_file = dest_dir / rel
-
-            # Ensure subdirectories exist
-            dest_file.parent.mkdir(parents=True, exist_ok=True)
-
             content_dirs.add(src_file.parent)
-
-            content = src_file.read_text(encoding="utf-8")
-
-            # Expand {{< code-include >}} shortcodes before Quarto sees the file
-            content = code_includes.expand(content, src_file.parent, self.layout)
-            content = publish.rebase_references(
-                content, src_file, dest_file, layout=self.layout, pages=pages
+            # Preserve the post's front matter for Quarto's listing
+            front_matter = publish.page(
+                src_file,
+                dest_dir / rel,
+                layout=self.layout,
+                pages=pages,
+                add_dates=add_dates,
+                strip_prefix=False,
+                breadcrumbs=None,
             )
-
-            # Parse frontmatter for metadata (but don't modify it —
-            # Quarto's listing needs the original frontmatter)
-            title = title_from_name(rel.stem)
-            description = ""
-
-            fm, _ = split_front_matter(content)
-            title = fm.string("title") or title
-            description = fm.string("description") or ""
-
-            dest_file.write_text(
-                page_dates.add_to_page(content, src_file, self._config, self._page_authors),
-                encoding="utf-8",
-            )
-
             copied.append(
                 {
                     "filename": str(rel),
-                    "title": title,
-                    "description": description,
+                    "title": front_matter.string("title") or title_from_name(rel.stem),
+                    "description": front_matter.string("description") or "",
                 }
             )
 
@@ -4873,6 +4831,7 @@ class GreatDocs:
         is_explicit = user_guide_info.get("explicit", False)
         copied_files = []
         pages = self._page_map()
+        add_dates = partial(page_dates.add_to_page, config=self._config, authors=self._page_authors)
 
         for file_info in user_guide_info["files"]:
             src_path = file_info["path"]
@@ -4887,35 +4846,17 @@ class GreatDocs:
             dest_rel_path = published_path(rel_path, strip_prefix=not is_explicit)
 
             dst_path = target_dir / dest_rel_path
-            dst_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Read the source file and modify frontmatter
-            with open(src_path, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            # Expand {{< code-include >}} shortcodes before Quarto sees the file
-            content = code_includes.expand(content, src_path.parent, self.layout)
-            reference_destination = pages.destination(src_path.resolve()) or dst_path
-            content = publish.rebase_references(
-                content, src_path, reference_destination, layout=self.layout, pages=pages
+            # The first guide page moves to the homepage later when `homepage: user_guide`
+            _ = publish.page(
+                src_path,
+                dst_path,
+                layout=self.layout,
+                pages=pages,
+                add_dates=add_dates,
+                strip_prefix=not is_explicit,
+                breadcrumbs="set",
+                published=pages.destination(src_path.resolve()) or dst_path,
             )
-
-            # In auto-discovery mode, fix links to .qmd files with numeric prefixes
-            if not is_explicit:
-                content = fix_numeric_prefix_links(content)
-
-            # Add bread-crumbs: false to frontmatter
-            content = set_front_matter_option(content, "bread-crumbs", False)
-            # The page promoted to the homepage shows no dates
-            if reference_destination != self.build_dir / "index.qmd":
-                content = page_dates.add_to_page(
-                    content, src_path, self._config, self._page_authors
-                )
-
-            # Write to destination
-            with open(dst_path, "w", encoding="utf-8") as f:
-                f.write(content)
-
             copied_files.append(f"user-guide/{dest_rel_path}")
 
         # Also copy any asset directories (images, data, code snippets, etc.)

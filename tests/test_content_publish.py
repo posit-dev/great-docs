@@ -133,3 +133,56 @@ def test_front_matter_that_is_not_a_mapping_is_left_alone(tmp_path: Path, layout
     )
 
     assert result == content
+
+
+def stamp(content: str, source: Path) -> str:
+    return f"{content}<!-- dates of {source.name} -->\n"
+
+
+def test_a_page_is_written_with_its_includes_and_rebased_links(tmp_path: Path, layout: Layout):
+    guide = tmp_path / "user_guide"
+    guide.mkdir()
+    (guide / "snippet.py").write_text("x = 1\n")
+    (guide / "02-next.qmd").write_text("# Next")
+    source = guide / "01-start.qmd"
+    source.write_text(
+        "---\ntitle: Start\n---\n\n{{< include snippet.py >}}\n\n[Next](02-next.qmd)\n"
+    )
+    destination = layout.build_dir / "user-guide/start.qmd"
+
+    front_matter = publish.page(
+        source,
+        destination,
+        layout=layout,
+        pages=page_map(tmp_path, layout, guide),
+        add_dates=stamp,
+        strip_prefix=True,
+        breadcrumbs=None,
+    )
+
+    assert front_matter.string("title") == "Start"
+    assert destination.read_text() == (
+        "---\ntitle: Start\n---\n\n```python\nx = 1\n```\n\n[Next](next.qmd)\n"
+        "<!-- dates of 01-start.qmd -->\n"
+    )
+
+
+def test_a_page_moved_to_the_homepage_has_no_dates(tmp_path: Path, layout: Layout):
+    source = tmp_path / "user_guide/intro.qmd"
+    source.parent.mkdir()
+    source.write_text("# Intro\n")
+    pages = page_map(tmp_path, layout)
+    destination = layout.build_dir / "user-guide/intro.qmd"
+
+    publish.page(
+        source,
+        destination,
+        layout=layout,
+        pages=pages,
+        add_dates=stamp,
+        strip_prefix=True,
+        breadcrumbs=None,
+        published=pages.homepage,
+    )
+
+    assert destination.read_text() == "# Intro\n"

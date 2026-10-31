@@ -6,19 +6,91 @@ import hashlib
 import os
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml
 
 from .._source_refs import source_reference_spans
-from .._yaml import locate_front_matter
+from .._yaml import YamlMapping, locate_front_matter, set_front_matter_option, split_front_matter
+from . import code_includes
+from .naming import fix_numeric_prefix_links
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from .._layout import Layout
     from .pages import PageMap
 
 _PAGE_SUFFIXES = {".qmd", ".md", ".rst", ".html", ".htm"}
+
+
+def page(
+    source: Path,
+    destination: Path,
+    *,
+    layout: Layout,
+    pages: PageMap,
+    add_dates: Callable[[str, Path], str],
+    strip_prefix: bool,
+    breadcrumbs: Literal["default", "set"] | None,
+    published: Path | None = None,
+) -> YamlMapping:
+    """
+    Write an authored Markdown page to the build directory
+
+    The page's code includes are expanded and its references are rewritten for its
+    published path. Dates are added unless a later step moves the page to the homepage.
+
+    Parameters
+    ----------
+    source
+        The page's source file.
+    destination
+        The path where the page is written.
+    layout
+        The project's directories.
+    pages
+        The published path of each authored page.
+    add_dates
+        A callable that adds the source page's dates and authors to its text.
+    strip_prefix
+        Whether the page's directory publishes names without numeric ordering prefixes.
+        When true, links to `.qmd` pages also drop those prefixes.
+    breadcrumbs
+        How to hide breadcrumbs. `"set"` writes `bread-crumbs: false`, replacing any authored
+        value and adding front matter if absent. `"default"` adds the option only to
+        existing front matter that does not set it. `None` preserves the front matter.
+    published
+        The final published path if a later step moves the page from `destination`.
+        References are rewritten for this path; the page is still written to
+        `destination`. Dates are omitted when this path is the homepage.
+
+    Returns
+    -------
+    :
+        The page's front matter, without its dates.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    target = destination if published is None else published
+    content = source.read_text(encoding="utf-8")
+    content = code_includes.expand(content, source.parent, layout)
+    content = rebase_references(content, source, target, layout=layout, pages=pages)
+    if strip_prefix:
+        content = fix_numeric_prefix_links(content)
+    if breadcrumbs == "set":
+        content = set_front_matter_option(content, "bread-crumbs", False)
+    elif breadcrumbs == "default":
+        block = locate_front_matter(content)
+        if block is not None and "bread-crumbs" not in block.mapping:
+            front_matter = {**block.mapping.data, "bread-crumbs": False}
+            content = f"---\n{format_yaml(front_matter)}\n---\n{content[block.end :]}"
+    front_matter, _ = split_front_matter(content)
+    # The page that becomes the homepage shows no dates
+    if published != pages.homepage:
+        content = add_dates(content, source)
+    _ = destination.write_text(content, encoding="utf-8")
+    return front_matter
 
 
 def copy_asset(layout: Layout, source: Path, destination: Path) -> Path:
