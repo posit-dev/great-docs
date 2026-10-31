@@ -666,6 +666,25 @@ def test_preview_serves_selected_deployment(
     assert served == ["preview documentation"]
 
 
+def test_preview_reports_busy_port(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import http.server
+
+    (tmp_path / "great-docs.yml").write_text("{}\n")
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs.layout.site_dir.mkdir(parents=True)
+    (docs.layout.site_dir / "index.html").write_text("preview documentation")
+
+    def busy(address: object, handler: object) -> None:
+        raise OSError("Address already in use")
+
+    monkeypatch.setattr(http.server, "ThreadingHTTPServer", busy)
+    with pytest.raises(serve.ServeError, match="Port 4321 is already in use"):
+        docs.preview(port=4321)
+    result = CliRunner().invoke(cli, ["preview", "--project-path", str(tmp_path), "--port", "4321"])
+    assert result.exit_code == 1
+    assert "❌ Port 4321 is already in use. Try a different port." in result.output
+
+
 def test_preview_override_ignores_ambiguous_project(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

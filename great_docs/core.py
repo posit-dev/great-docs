@@ -14,7 +14,7 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
 
-from ._build import freeze, quarto, timings
+from ._build import freeze, quarto, serve, timings
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
@@ -15784,6 +15784,12 @@ anchor-sections: true
         port
             The port number for the local HTTP server (default `3000`).
 
+        Raises
+        ------
+        OSError
+            If the site has no `index.html` after the build, or the server cannot listen on
+            `port`.
+
         Examples
         --------
         Preview the documentation:
@@ -15795,58 +15801,15 @@ anchor-sections: true
         docs.preview()
         ```
         """
-        import functools
-        import http.server
-        import threading
-        import webbrowser
-
         print("Previewing documentation...")
 
-        # Check if site has been built
         site_path = self.layout.site_dir
-        index_html = site_path / "index.html"
-
-        if not index_html.exists():
+        if not (site_path / "index.html").exists():
             print("Site not found, building first...")
             self.build()
         else:
             self._print_layout_notice()
-
-        if not index_html.exists():
-            print("❌ Could not find built site")
-            sys.exit(1)
-
-        handler = functools.partial(
-            http.server.SimpleHTTPRequestHandler,
-            directory=str(site_path),
-        )
-        # Reap half-open sockets (e.g. Safari's idle speculative connections) so a
-        # stalled connection cannot tie up a worker thread indefinitely.
-        http.server.SimpleHTTPRequestHandler.timeout = 10
-        # Allow quick restart after Ctrl-C
-        http.server.ThreadingHTTPServer.allow_reuse_address = True
-
-        try:
-            # Use a threading server so one idle/speculative connection (notably from
-            # Safari) cannot block the whole preview. See issue #219.
-            httpd = http.server.ThreadingHTTPServer(("", port), handler)
-        except OSError:
-            print(f"❌ Port {port} is already in use. Try a different port.")
-            sys.exit(1)
-
-        url = f"http://localhost:{port}/"
-        print(f"\n🌐 Serving site at {url}")
-        print("   Press Ctrl+C to stop\n")
-
-        # Open browser after a short delay so the server is ready
-        threading.Timer(0.3, webbrowser.open, args=(url,)).start()
-
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            httpd.server_close()
+        serve.site(site_path, port, report=print)
 
     def check_links(
         self,

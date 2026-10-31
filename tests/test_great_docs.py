@@ -22673,20 +22673,22 @@ def test_build_sections_from_reference_config_basic():
 
 def test_preview_builds_if_no_site():
     """Test preview() calls build when site doesn't exist."""
+    from great_docs._build.serve import ServeError
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        # No _site/index.html — preview should try to build then exit
+        # A missing `_site/index.html` triggers a build attempt, then a serving failure
         with (
             patch.object(docs, "build"),
-            pytest.raises(SystemExit),
+            pytest.raises(ServeError, match="No index.html found"),
         ):
             docs.preview()
 
 
 def test_preview_port_in_use():
     """Test preview() handles port-in-use error."""
+    from great_docs._build.serve import ServeError
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22699,7 +22701,7 @@ def test_preview_port_in_use():
                 "http.server.ThreadingHTTPServer",
                 side_effect=OSError("Address in use"),
             ),
-            pytest.raises(SystemExit),
+            pytest.raises(ServeError, match="Port 9999 is already in use"),
         ):
             docs.preview(port=9999)
 
