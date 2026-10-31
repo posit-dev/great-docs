@@ -29,7 +29,14 @@ from ._build.steps import (
     count_listed,
     run_steps,
 )
-from ._content_naming import fix_numeric_prefix_links, section_slug, strip_numeric_prefix
+from ._content import code_includes
+from ._content.naming import (
+    fix_numeric_prefix_links,
+    published_path,
+    section_slug,
+    strip_numeric_prefix,
+    title_from_name,
+)
 from ._layout import Layout, LayoutError
 from ._source_refs import source_reference_spans
 from ._subprocess import TEXT_MODE_KWARGS
@@ -59,7 +66,7 @@ from ._website.seo import description as seo_description
 from ._website.seo import noindex
 from ._website.seo import title as seo_title
 from ._website.seo.structured_data import StructuredData
-from ._yaml import YamlMapping, locate_front_matter, split_front_matter
+from ._yaml import YamlMapping, locate_front_matter, set_front_matter_option, split_front_matter
 from .config import Config, create_default_config
 
 if TYPE_CHECKING:
@@ -890,9 +897,7 @@ class GreatDocs:
         for directory, destination, strip_prefix in roots:
             if source.is_relative_to(directory.resolve()):
                 relative = source.relative_to(directory.resolve())
-                if strip_prefix:
-                    relative = Path(*(strip_numeric_prefix(part) for part in relative.parts))
-                return destination / relative
+                return destination / published_path(relative, strip_prefix=strip_prefix)
         return None
 
     def install(self, force: bool = False) -> None:
@@ -2344,7 +2349,7 @@ class GreatDocs:
 
                 page_title = fm.string("title")
                 if page_title is None:
-                    page_title = self._derive_page_title(qmd_file)
+                    page_title = title_from_name(qmd_file.stem)
                 page_href = str(qmd_file.relative_to(self.build_dir))
 
                 for tag in raw_tags:
@@ -3040,7 +3045,7 @@ class GreatDocs:
                 if f.suffix in (".qmd", ".md")
                 and f.name != "README.md"
                 and not any(
-                    self._is_reserved_output_directory(parent)
+                    self.layout.is_reserved_directory(parent)
                     for parent in f.parents
                     if parent != source_path and parent.is_relative_to(source_path)
                 )
@@ -3062,7 +3067,7 @@ class GreatDocs:
             for item in source_path.iterdir():
                 if (
                     item.is_dir()
-                    and not self._is_reserved_output_directory(item)
+                    and not self.layout.is_reserved_directory(item)
                     and self._is_asset_dir(item)
                 ):
                     dst_dir = dest_dir / item.name
@@ -3081,8 +3086,8 @@ class GreatDocs:
                     # Inject blog-index layout options into the user's index
                     blog_index = dest_dir / "index.qmd"
                     idx_content = blog_index.read_text(encoding="utf-8")
-                    idx_content = self._add_frontmatter_option(idx_content, "toc", False)
-                    idx_content = self._add_frontmatter_option(
+                    idx_content = set_front_matter_option(idx_content, "toc", False)
+                    idx_content = set_front_matter_option(
                         idx_content, "body-classes", "gd-blog-index"
                     )
                     blog_index.write_text(idx_content, encoding="utf-8")
@@ -3179,22 +3184,10 @@ class GreatDocs:
         copied: list[dict] = []
 
         for src_file in files:
-            rel = src_file.relative_to(source_dir)
-
-            # Strip numeric prefix from filename (e.g., 01-intro.qmd -> intro.qmd)
-            clean_name = strip_numeric_prefix(rel.name)
-
-            # Strip numeric prefixes from subdirectory parts too (e.g.,
-            # 02-topic-b/page.qmd -> topic-b/page.qmd), mirroring the user-guide
-            # copy. This keeps on-disk paths in sync with the link rewriting done
-            # by _fix_numeric_prefix_links, which strips prefixes from every path
-            # component.
-            clean_parent = (
-                Path(*[strip_numeric_prefix(p) for p in rel.parent.parts])
-                if rel.parent.parts
-                else rel.parent
-            )
-            dest_file = dest_dir / clean_parent / clean_name
+            # Copied paths and rewritten links must strip the same numeric prefixes
+            # from every path component
+            published = published_path(src_file.relative_to(source_dir), strip_prefix=True)
+            dest_file = dest_dir / published
 
             # Ensure subdirectories exist
             dest_file.parent.mkdir(parents=True, exist_ok=True)
@@ -3202,14 +3195,14 @@ class GreatDocs:
             content = src_file.read_text(encoding="utf-8")
 
             # Expand {{< code-include >}} shortcodes before Quarto sees the file
-            content = self._expand_code_includes(content, src_file.parent)
+            content = code_includes.expand(content, src_file.parent, self.layout)
             content = self._rebase_source_references(content, src_file, dest_file)
 
             # Fix links to .qmd files with numeric prefixes
             content = fix_numeric_prefix_links(content)
 
             # Parse frontmatter for metadata
-            title = clean_name.replace(".qmd", "").replace(".md", "").replace("-", " ").title()
+            title = published.name.replace(".qmd", "").replace(".md", "").replace("-", " ").title()
             description = ""
             image = ""
 
@@ -3229,9 +3222,7 @@ class GreatDocs:
 
             copied.append(
                 {
-                    "filename": str(clean_parent / clean_name)
-                    if clean_parent != Path(".")
-                    else clean_name,
+                    "filename": str(published),
                     "title": title,
                     "description": description,
                     "image": image,
@@ -3289,7 +3280,7 @@ class GreatDocs:
             content = src_file.read_text(encoding="utf-8")
 
             # Expand {{< code-include >}} shortcodes before Quarto sees the file
-            content = self._expand_code_includes(content, src_file.parent)
+            content = code_includes.expand(content, src_file.parent, self.layout)
             content = self._rebase_source_references(content, src_file, dest_file)
 
             # Parse frontmatter for metadata (but don't modify it —
@@ -3648,8 +3639,7 @@ class GreatDocs:
             for subdir in subdir_groups_dict:
                 clean_subdir = strip_numeric_prefix(subdir)  # pragma: no cover
                 section_title = dir_titles.get(  # pragma: no cover
-                    clean_subdir,
-                    clean_subdir.replace("-", " ").replace("_", " ").title(),
+                    clean_subdir, title_from_name(clean_subdir)
                 )  # pragma: no cover
                 section_contents = []  # pragma: no cover
                 for page in subdir_groups_dict[subdir]:  # pragma: no cover
@@ -3825,11 +3815,6 @@ class GreatDocs:
 
         return sources
 
-    def _derive_page_title(self, path: Path) -> str:
-        """Derive a human-readable title from a source filename."""
-        name = path.stem.replace("-", " ").replace("_", " ")
-        return name.title()
-
     def _get_custom_page_navbar_config(
         self,
         frontmatter: YamlMapping,
@@ -3930,7 +3915,7 @@ class GreatDocs:
                 frontmatter, body = split_front_matter(content)
                 body = body.lstrip("\n")
                 layout = (frontmatter.string("layout") or "passthrough").lower()
-                page_title = frontmatter.string("title") or self._derive_page_title(src_path)
+                page_title = frontmatter.string("title") or title_from_name(src_path.stem)
 
                 if layout not in {"passthrough", "raw"}:
                     print(  # pragma: no cover
@@ -5490,7 +5475,7 @@ class GreatDocs:
         for item in dir_contents:
             if item.is_file() and item.suffix in valid_extensions:
                 guide_files.append(item)
-            elif item.is_dir() and not self._is_reserved_output_directory(item):
+            elif item.is_dir() and not self.layout.is_reserved_directory(item):
                 # Recursively check subdirectories for guide files at any depth
                 for ext in valid_extensions:
                     for subitem in item.rglob(f"*{ext}"):
@@ -5569,12 +5554,8 @@ class GreatDocs:
         # Get title from frontmatter or derive from filename
         title = frontmatter.string("title")
         if not title:
-            # Derive title from filename: "01-getting-started.qmd" -> "Getting Started"
-            name = qmd_path.stem
-            # Remove leading number prefix like "01-" or "00_"
-            name = re.sub(r"^\d+[-_]", "", name)
-            # Convert to title case
-            title = name.replace("-", " ").replace("_", " ").title()
+            # The title drops the ordering prefix even where the published name keeps it
+            title = title_from_name(strip_numeric_prefix(qmd_path.stem))
 
         # Get section from frontmatter (use 'guide-section' to avoid conflict with Quarto's 'section')
         section = frontmatter.string("guide-section")
@@ -5624,14 +5605,8 @@ class GreatDocs:
             except ValueError:  # pragma: no cover
                 rel_path = Path(src_path.name)  # pragma: no cover
 
-            if is_explicit:
-                # Explicit mode: preserve filenames as-is
-                dest_rel_path = rel_path
-            else:
-                # Auto-discovery mode: strip numeric prefixes from both
-                # directory names and filenames for cleaner URLs
-                clean_parts = [strip_numeric_prefix(part) for part in rel_path.parts]
-                dest_rel_path = Path(*clean_parts) if clean_parts else rel_path
+            # An explicit guide keeps the file names the configuration lists
+            dest_rel_path = published_path(rel_path, strip_prefix=not is_explicit)
 
             dst_path = target_dir / dest_rel_path
             dst_path.parent.mkdir(parents=True, exist_ok=True)
@@ -5641,7 +5616,7 @@ class GreatDocs:
                 content = f.read()
 
             # Expand {{< code-include >}} shortcodes before Quarto sees the file
-            content = self._expand_code_includes(content, src_path.parent)
+            content = code_includes.expand(content, src_path.parent, self.layout)
             reference_destination = self._source_page_destination(src_path.resolve()) or dst_path
             content = self._rebase_source_references(content, src_path, reference_destination)
 
@@ -5650,7 +5625,7 @@ class GreatDocs:
                 content = fix_numeric_prefix_links(content)
 
             # Add bread-crumbs: false to frontmatter
-            content = self._add_frontmatter_option(content, "bread-crumbs", False)
+            content = set_front_matter_option(content, "bread-crumbs", False)
             # The page promoted to the homepage shows no dates
             if reference_destination != self.build_dir / "index.qmd":
                 content = page_dates.add_to_page(
@@ -5667,7 +5642,7 @@ class GreatDocs:
         for item in source_dir.iterdir():
             if (
                 item.is_dir()
-                and not self._is_reserved_output_directory(item)
+                and not self.layout.is_reserved_directory(item)
                 and self._is_asset_dir(item)
             ):
                 dst_dir = target_dir / item.name
@@ -5683,39 +5658,6 @@ class GreatDocs:
         )
 
         return copied_files
-
-    def _is_reserved_output_directory(self, path: Path) -> bool:
-        """
-        Whether a directory is, or contains, this project's own generated output
-
-        Membership is decided by containment rather than by name, because the build
-        directory's name and depth differ between layouts. An unmigrated project builds
-        into `great-docs/` beside the configuration, while a migrated one builds into
-        `_quarto/default/` two levels below the content directory. Comparing a content
-        directory's children against the build directory by name or identity therefore
-        misses the migrated case, where the child is only an ancestor of the build
-        directory.
-
-        Parameters
-        ----------
-        path
-            A directory encountered while walking user content.
-
-        Returns
-        -------
-        bool
-            `True` when the directory is hidden, is one of the generated output
-            locations, or is an ancestor of one.
-        """
-        if path.name.startswith("."):
-            return True
-        reserved = (
-            self.layout.build_dir,
-            self.layout.site_dir,
-            self.layout.cache_dir,
-            self.layout.freeze_dir,
-        )
-        return any(path == location or location.is_relative_to(path) for location in reserved)
 
     @staticmethod
     def _is_asset_dir(directory: Path) -> bool:
@@ -5777,11 +5719,7 @@ class GreatDocs:
         for rel_dir in sorted(directories):
             if any(part.startswith(("_", ".")) for part in rel_dir.parts):
                 continue
-            dest_rel = (
-                Path(*(strip_numeric_prefix(part) for part in rel_dir.parts))
-                if strip_prefix
-                else rel_dir
-            )
+            dest_rel = published_path(rel_dir, strip_prefix=strip_prefix)
             for name in ("_metadata.yml", "_metadata.yaml"):
                 src_file = source_dir / rel_dir / name
                 if not src_file.is_file():
@@ -5795,243 +5733,6 @@ class GreatDocs:
                     continue
                 dst_file.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src_file, dst_file)
-
-    def _add_frontmatter_option(self, content: str, key: str, value) -> str:
-        """
-        Add or update an option in the YAML frontmatter of a .qmd file.
-
-        Parameters
-        ----------
-        content
-            The file content.
-        key
-            The frontmatter key to add/update.
-        value
-            The value to set.
-
-        Returns
-        -------
-        str
-            The modified content with the frontmatter option added.
-        """
-        # Convert value to YAML string representation
-        if isinstance(value, bool):
-            yaml_value = "true" if value else "false"
-        elif isinstance(value, str):
-            yaml_value = f'"{value}"'
-        else:
-            yaml_value = str(value)
-
-        if content.startswith("---"):
-            parts = content.split("---", 2)
-            if len(parts) >= 3:
-                frontmatter = parts[1]
-                rest = parts[2]
-
-                # Check if the key already exists
-                key_pattern = rf"^{re.escape(key)}:\s*.*$"
-                if re.search(key_pattern, frontmatter, re.MULTILINE):
-                    # Update existing key
-                    frontmatter = re.sub(
-                        key_pattern, f"{key}: {yaml_value}", frontmatter, flags=re.MULTILINE
-                    )
-                else:
-                    # Add new key at the end of frontmatter
-                    frontmatter = frontmatter.rstrip() + f"\n{key}: {yaml_value}\n"
-
-                return f"---{frontmatter}---{rest}"
-
-        # No frontmatter, create one
-        return f"---\n{key}: {yaml_value}\n---\n\n{content}"
-
-    # include double but ignore triple curly braces
-    _CODE_INCLUDE_RE = re.compile(
-        r"(?<!\{)\{\{<\s*include\s+(.*?)\s*>\}\}(?!\})",
-    )
-
-    _CONTENT_EXTENSIONS = {".qmd", ".md"}
-
-    _EXT_TO_LANG: dict[str, str] = {
-        ".py": "python",
-        ".r": "r",
-        ".js": "javascript",
-        ".ts": "typescript",
-        ".jsx": "jsx",
-        ".tsx": "tsx",
-        ".rb": "ruby",
-        ".rs": "rust",
-        ".go": "go",
-        ".java": "java",
-        ".cpp": "cpp",
-        ".cc": "cpp",
-        ".cxx": "cpp",
-        ".c": "c",
-        ".h": "c",
-        ".hpp": "cpp",
-        ".cs": "csharp",
-        ".css": "css",
-        ".scss": "scss",
-        ".html": "html",
-        ".sql": "sql",
-        ".sh": "bash",
-        ".bash": "bash",
-        ".zsh": "bash",
-        ".yaml": "yaml",
-        ".yml": "yaml",
-        ".json": "json",
-        ".toml": "toml",
-        ".xml": "xml",
-        ".lua": "lua",
-        ".swift": "swift",
-        ".kt": "kotlin",
-        ".scala": "scala",
-        ".jl": "julia",
-        ".m": "matlab",
-        ".pl": "perl",
-        ".php": "php",
-    }
-
-    def _expand_code_includes(self, content: str, source_dir: Path) -> str:
-        """
-        Replace `{{< include path >}}` shortcodes with fenced code blocks.
-
-        Only intercepts includes that target code files (non-`.qmd`/`.md`)
-        or that use the `lang` or `lines` keywords.  Plain
-        `{{< include _shared.qmd >}}` shortcodes are left untouched so
-        Quarto can handle them natively.
-
-        Supports optional keyword arguments:
-
-        - `lang="python"` — override the auto-detected language
-        - `lines="5-10"` — include only the specified line range (1-based, inclusive)
-
-        File paths are resolved first relative to *source_dir* (the directory
-        containing the source `.qmd` file), then relative to the project root.
-
-        Parameters
-        ----------
-        content
-            The `.qmd` file content.
-        source_dir
-            Directory of the source file (for relative path resolution).
-
-        Returns
-        -------
-        str
-            Content with code-file `include` shortcodes replaced by fenced
-            code blocks.
-        """
-
-        def _replace(m: re.Match) -> str:
-            raw_args = m.group(1)
-
-            file_path_str, lang, lines_spec = self._parse_code_include_args(raw_args)
-
-            if not file_path_str:  # pragma: no cover
-                return m.group(0)  # pragma: no cover
-
-            ext = Path(file_path_str).suffix.lower()
-            is_content_file = ext in self._CONTENT_EXTENSIONS
-
-            if is_content_file and not lang and not lines_spec:
-                return m.group(0)
-
-            resolved = self._resolve_code_include_path(file_path_str, source_dir)
-            if resolved is None:
-                return f"<!-- include error: file not found: {file_path_str} -->"
-
-            try:
-                file_content = resolved.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError) as e:  # pragma: no cover
-                return f"<!-- include error: {e} -->"  # pragma: no cover
-
-            if lines_spec:
-                file_content = self._select_lines(file_content, lines_spec)
-
-            if not lang:
-                lang = self._EXT_TO_LANG.get(resolved.suffix.lower(), "")
-
-            longest_run = 0
-            current_run = 0
-            for ch in file_content:
-                if ch == "`":
-                    current_run += 1
-                    longest_run = max(longest_run, current_run)
-                else:
-                    current_run = 0
-            fence = "`" * max(3, longest_run + 1)
-            return f"{fence}{lang}\n{file_content.rstrip()}\n{fence}"
-
-        return self._CODE_INCLUDE_RE.sub(_replace, content)
-
-    @staticmethod
-    def _parse_code_include_args(raw: str) -> tuple[str, str, str]:
-        """
-        Parse `include` shortcode arguments.
-
-        Returns `(file_path, lang, lines)` where *lang* and *lines* may be empty strings if not
-        specified.
-        """
-        lang = ""
-        lines = ""
-        file_path = ""
-
-        # Extract keyword arguments
-        kw_re = re.compile(r'(\w+)\s*=\s*"([^"]*)"')
-        for kw_match in kw_re.finditer(raw):
-            key, value = kw_match.group(1), kw_match.group(2)
-            if key == "lang":
-                lang = value
-            elif key == "lines":
-                lines = value
-
-        # The file path is whatever remains after stripping keyword args
-        remaining = kw_re.sub("", raw).strip()
-        # Remove surrounding quotes if present
-        if remaining and remaining[0] in ('"', "'") and remaining[-1] == remaining[0]:
-            remaining = remaining[1:-1]
-        file_path = remaining
-
-        return file_path, lang, lines
-
-    def _resolve_code_include_path(self, file_path_str: str, source_dir: Path) -> Path | None:
-        """
-        Resolve a code-include path against the page, source, and project roots
-
-        The lookup checks the page directory, documentation source directory, and
-        project root in that order.
-        """
-        candidates = [
-            source_dir / file_path_str,
-            self.layout.source_dir / file_path_str,
-            self.layout.package_root / file_path_str,
-        ]
-        for candidate in candidates:
-            resolved = candidate.resolve()
-            if resolved.is_file():
-                return resolved
-        return None
-
-    @staticmethod
-    def _select_lines(content: str, lines_spec: str) -> str:
-        """
-        Select a range of lines from *content*.
-
-        *lines_spec* is `"start-end"` (1-based, inclusive) or `"N"` for a single line.
-        """
-        all_lines = content.splitlines(keepends=True)
-
-        if "-" in lines_spec:
-            parts = lines_spec.split("-", 1)
-            start = int(parts[0]) - 1
-            end = int(parts[1])
-        else:
-            start = int(lines_spec) - 1
-            end = start + 1
-
-        start = max(0, start)
-        end = min(len(all_lines), end)
-        return "".join(all_lines[start:end])
 
     # Regex for detecting a top-level `freeze:` key in YAML frontmatter
     _FREEZE_FM_RE = re.compile(r"^freeze:\s+(.+)$", re.MULTILINE)
@@ -6270,9 +5971,7 @@ class GreatDocs:
         # Helper to get clean href (strips numeric prefixes for cleaner URLs)
         def get_clean_href(file_info: dict) -> str:
             rel_path = file_info["path"].relative_to(source_dir)
-            clean_parts = [strip_numeric_prefix(part) for part in rel_path.parts]
-            clean_rel_path = Path(*clean_parts) if clean_parts else rel_path
-            return f"user-guide/{clean_rel_path}"
+            return f"user-guide/{published_path(rel_path, strip_prefix=True)}"
 
         # If we have sections, organize by section
         if sections:
@@ -6381,8 +6080,7 @@ class GreatDocs:
                         _, _, subdir, dir_files = item
                         # Use the index.qmd title as the section title if present,
                         # otherwise derive from the directory name
-                        clean_subdir = strip_numeric_prefix(subdir)
-                        section_title = clean_subdir.replace("-", " ").replace("_", " ").title()
+                        section_title = title_from_name(strip_numeric_prefix(subdir))
                         section_contents = []
                         for file_info in dir_files:
                             if file_info["path"].name == "index.qmd":
@@ -6626,12 +6324,7 @@ class GreatDocs:
         except ValueError:  # pragma: no cover
             rel_path = Path(first_file["path"].name)  # pragma: no cover
 
-        if is_explicit:
-            dest_rel = rel_path
-        else:
-            clean_parts = [strip_numeric_prefix(part) for part in rel_path.parts]
-            dest_rel = Path(*clean_parts) if clean_parts else rel_path
-
+        dest_rel = published_path(rel_path, strip_prefix=not is_explicit)
         first_ug_path = self.build_dir / "user-guide" / dest_rel
 
         if not first_ug_path.exists():
@@ -6645,7 +6338,7 @@ class GreatDocs:
         # Inject toc: false into frontmatter (bread-crumbs: false is already set
         # by _copy_user_guide_to_docs). Keep the original frontmatter title so
         # Quarto renders a proper title-block header matching other UG pages.
-        content = self._add_frontmatter_option(content, "toc", False)
+        content = set_front_matter_option(content, "toc", False)
 
         # Build the metadata margin sidebar
         margin_content = self._build_metadata_margin()

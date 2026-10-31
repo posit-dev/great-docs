@@ -182,6 +182,7 @@ include = [
     "great_docs/_apiref",
     "great_docs/_build",
     "great_docs/_builtin",
+    "great_docs/_content",
     "great_docs/_git.py",
     "great_docs/_icons.py",
     "great_docs/_interlinks",

@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from great_docs import GreatDocs
+from great_docs._content import code_includes
 from tests.support import make_run, write_config
 
 # ── Setup: make test-packages/synthetic importable ───────────────────────────
@@ -1182,7 +1183,7 @@ def test_L3_code_include_expansion(tmp_path: Path):
     )
     # Ensure triple curly brace escaping work properly for code includes.
     original = r"{{{< include src/mypackage/examples/usage.py >}}}"
-    replaced = docs._expand_code_includes(original, tmp_path)
+    replaced = code_includes.expand(original, tmp_path, docs.layout)
     assert replaced == original
 
 

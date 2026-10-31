@@ -238,3 +238,50 @@ def split_front_matter(content: str) -> tuple[YamlMapping, str]:
     if block is None:
         return YamlMapping(), content
     return block.mapping, content[block.end :]
+
+
+def set_front_matter_option(content: str, key: str, value: bool | int | str) -> str:
+    """
+    Set a top-level option in a page's front matter
+
+    The page's other lines keep their text, so comments and formatting survive.
+
+    Parameters
+    ----------
+    content
+        The page source.
+    key
+        The option to set.
+    value
+        The value. A string is written in double quotes.
+
+    Returns
+    -------
+    :
+        The page with `key` set to `value`. An existing `key` line is replaced, a new one is
+        appended to the block, and a page without front matter gains a block.
+    """
+    if isinstance(value, bool):
+        yaml_value = "true" if value else "false"
+    elif isinstance(value, str):
+        yaml_value = f'"{value}"'
+    else:
+        yaml_value = str(value)
+
+    if content.startswith("---"):
+        parts = content.split("---", 2)
+        if len(parts) >= 3:
+            frontmatter = parts[1]
+            rest = parts[2]
+
+            key_pattern = rf"^{re.escape(key)}:\s*.*$"
+            if re.search(key_pattern, frontmatter, re.MULTILINE):
+                frontmatter = re.sub(
+                    key_pattern, f"{key}: {yaml_value}", frontmatter, flags=re.MULTILINE
+                )
+            else:
+                frontmatter = frontmatter.rstrip() + f"\n{key}: {yaml_value}\n"
+
+            return f"---{frontmatter}---{rest}"
+
+    return f"---\n{key}: {yaml_value}\n---\n\n{content}"

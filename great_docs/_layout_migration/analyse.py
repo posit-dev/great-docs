@@ -11,7 +11,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from great_docs._content_naming import section_slug
+from great_docs._content.naming import section_slug
 from great_docs._layout import CONVENTIONAL_DOC_DIRS, Layout
 from great_docs._utils import is_great_docs_build_dir, recognised_build_dirs
 from great_docs._yaml import YamlMapping, YamlValue

@@ -6,7 +6,12 @@ from __future__ import annotations
 
 import pytest
 
-from great_docs._yaml import YamlMapping, locate_front_matter, split_front_matter
+from great_docs._yaml import (
+    YamlMapping,
+    locate_front_matter,
+    set_front_matter_option,
+    split_front_matter,
+)
 
 MAPPING = YamlMapping(
     {
@@ -123,3 +128,18 @@ def test_locates_the_end_of_the_closing_line():
 def test_locates_nothing_without_a_closed_block():
     assert locate_front_matter("---\ntitle: T\n") is None
     assert locate_front_matter("Body\n") is None
+
+
+@pytest.mark.parametrize(
+    ("content", "key", "value", "expected"),
+    [
+        ("---\ntitle: T\n---\n\nBody\n", "toc", False, "---\ntitle: T\ntoc: false\n---\n\nBody\n"),
+        ("---\ntoc: true\nx: 1\n---\nBody", "toc", False, "---\ntoc: false\nx: 1\n---\nBody"),
+        ("# Body\n", "toc", True, "---\ntoc: true\n---\n\n# Body\n"),
+        ("---\ntitle: T\n---\n", "depth", 3, "---\ntitle: T\ndepth: 3\n---\n"),
+        ("---\ntitle: T\n---\n", "format", "html", '---\ntitle: T\nformat: "html"\n---\n'),
+    ],
+    ids=["appends", "replaces", "creates-block", "integer", "string"],
+)
+def test_sets_a_front_matter_option(content: str, key: str, value: bool | int | str, expected: str):
+    assert set_front_matter_option(content, key, value) == expected

@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .._content_naming import strip_numeric_prefix
+from .._content.naming import strip_numeric_prefix
 from .._subprocess import TEXT_MODE_KWARGS
 from .._utils import recognised_build_dirs, validate_tree_symlinks
 from . import quarto

@@ -1817,17 +1817,6 @@ class TestGetTagIconHtml:
 
 
 # ---------------------------------------------------------------------------
-# Page title derivation
-# ---------------------------------------------------------------------------
-
-
-class TestDerivePageTitle:
-    def test_converts_hyphens_and_underscores(self, tmp_path):
-        gd = _make_gd(tmp_path)
-        assert gd._derive_page_title(Path("user-guide_intro.qmd")) == "User Guide Intro"
-
-
-# ---------------------------------------------------------------------------
 # Strip frontmatter
 # ---------------------------------------------------------------------------
 

@@ -17,7 +17,7 @@ from yaml import BaseLoader, YAMLError
 from yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
 from yaml12 import read_yaml
 
-from great_docs._content_naming import strip_numeric_prefix
+from great_docs._content.naming import strip_numeric_prefix
 from great_docs._source_refs import fenced_code_spans, inline_code_spans, source_reference_spans
 from great_docs._yaml import YamlScalar, YamlValue
 

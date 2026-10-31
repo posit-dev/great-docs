@@ -35,7 +35,7 @@ from great_docs import BuildError, Config, GreatDocs, create_default_config, loa
 from great_docs._build import freeze, quarto
 from great_docs._build.steps import Step, count_listed
 from great_docs._build_log import BuildLog
-from great_docs._content_naming import fix_numeric_prefix_links, strip_numeric_prefix
+from great_docs._content.naming import fix_numeric_prefix_links, strip_numeric_prefix
 from great_docs._website.quarto_yml import edit as edit_quarto_yml
 from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
 from great_docs._website.scripts import script_include, stylesheet_include
@@ -2678,276 +2678,7 @@ def test_user_guide_discovers_mixed_extensions_and_nested_files():
         assert (docs_ug / "section1" / "topic1" / "deep-notes.md").exists()
 
 
-def test_expand_code_includes_basic():
-    """Test that code-include shortcodes are expanded into fenced code blocks."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        # Create a code file to include
-        examples = project_path / "examples"
-        examples.mkdir()
-        (examples / "demo.py").write_text('print("hello")\nx = 42\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "Some text\n\n{{< include examples/demo.py >}}\n\nMore text"
-        result = docs._expand_code_includes(content, project_path)
-
-        assert '```python\nprint("hello")\nx = 42\n```' in result
-        assert "Some text" in result
-        assert "More text" in result
-
-
-def test_expand_code_includes_lang_override():
-    """Test that the lang keyword overrides auto-detected language."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "script.py").write_text("x = 1\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = '{{< include script.py lang="text" >}}'
-        result = docs._expand_code_includes(content, project_path)
-        assert result.startswith("```text\n")
-
-
-def test_expand_code_includes_lines():
-    """Test that the lines keyword selects a range of lines."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "code.py").write_text("line1\nline2\nline3\nline4\nline5\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = '{{< include code.py lines="2-4" >}}'
-        result = docs._expand_code_includes(content, project_path)
-        assert "line2\nline3\nline4" in result
-        assert "line1" not in result
-        assert "line5" not in result
-
-
-def test_expand_code_includes_single_line():
-    """Test selecting a single line."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "code.py").write_text("line1\nline2\nline3\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = '{{< include code.py lines="2" >}}'
-        result = docs._expand_code_includes(content, project_path)
-        assert "line2" in result
-        assert "line1" not in result
-        assert "line3" not in result
-
-
-def test_expand_code_includes_relative_to_source_dir():
-    """Test that paths resolve relative to the source file's directory first."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        user_guide = project_path / "user_guide"
-        user_guide.mkdir()
-        snippets = user_guide / "snippets"
-        snippets.mkdir()
-        (snippets / "example.py").write_text("local_code = True\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "{{< include snippets/example.py >}}"
-        result = docs._expand_code_includes(content, user_guide)
-        assert "local_code = True" in result
-
-
-def test_expand_code_includes_fallback_to_project_root():
-    """Test that paths fall back to project root if not found in source dir."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        # File at project root level
-        src = project_path / "src"
-        src.mkdir()
-        (src / "app.js").write_text('console.log("hello");\n')
-
-        # Source dir is user_guide (doesn't contain src/app.js)
-        user_guide = project_path / "user_guide"
-        user_guide.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "{{< include src/app.js >}}"
-        result = docs._expand_code_includes(content, user_guide)
-        assert "```javascript" in result
-        assert 'console.log("hello")' in result
-
-
-def test_expand_code_includes_missing_file():
-    """Test that a missing file produces an HTML comment error."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "{{< include does/not/exist.py >}}"
-        result = docs._expand_code_includes(content, project_path)
-        assert "<!-- include error:" in result
-        assert "file not found" in result
-
-
-def test_expand_code_includes_no_shortcodes():
-    """Test that content without code-include shortcodes passes through unchanged."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "# Hello\n\nSome regular content.\n\n{{< icon heart >}}\n"
-        result = docs._expand_code_includes(content, project_path)
-        assert result == content
-
-
-def test_expand_code_includes_passes_through_qmd():
-    """Test that {{< include file.qmd >}} without lang/lines is left for Quarto."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "_shared.qmd").write_text("# Shared content\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "Before\n\n{{< include _shared.qmd >}}\n\nAfter"
-        result = docs._expand_code_includes(content, project_path)
-        assert result == content
-
-
-def test_expand_code_includes_qmd_with_lang_is_expanded():
-    """Test that {{< include file.qmd lang="markdown" >}} is expanded as code."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "snippet.qmd").write_text("---\ntitle: Example\n---\n\nHello\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = '{{< include snippet.qmd lang="markdown" >}}'
-        result = docs._expand_code_includes(content, project_path)
-        assert "```markdown" in result
-        assert "title: Example" in result
-
-
-def test_expand_code_includes_qmd_with_lines_is_expanded():
-    """Test that {{< include file.qmd lines="1-3" >}} is expanded as code."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "snippet.qmd").write_text("line1\nline2\nline3\nline4\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = '{{< include snippet.qmd lines="2-3" >}}'
-        result = docs._expand_code_includes(content, project_path)
-        assert "line2" in result
-        assert "line1" not in result
-        assert "{{< include" not in result
-
-
-def test_expand_code_includes_multiple():
-    """Test multiple include shortcodes in one file."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "a.py").write_text("alpha\n")
-        (project_path / "b.yaml").write_text("key: value\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "First:\n\n{{< include a.py >}}\n\nSecond:\n\n{{< include b.yaml >}}\n"
-        result = docs._expand_code_includes(content, project_path)
-        assert "```python\nalpha\n```" in result
-        assert "```yaml\nkey: value\n```" in result
-
-
-def test_expand_code_includes_unknown_extension():
-    """Test that unknown file extensions produce an unfenced code block."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "data.xyz").write_text("some data\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "{{< include data.xyz >}}"
-        result = docs._expand_code_includes(content, project_path)
-        assert result == "```\nsome data\n```"
-
-
-def test_expand_code_includes_backticks_in_content():
-    """Test that included files containing triple backticks use a longer fence."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "example.txt").write_text("Some text\n```python\nx = 1\n```\nMore text\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "{{< include example.txt >}}"
-        result = docs._expand_code_includes(content, project_path)
-        # Should use a 4-backtick fence since the content has 3-backtick runs
-        assert result.startswith("````")
-        assert result.endswith("````")
-        assert "```python" in result
-
-
-def test_expand_code_includes_lang_and_lines_combined():
-    """Test combining lang and lines keyword arguments."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        (project_path / "code.py").write_text("# header\nimport os\nprint(os.getcwd())\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = '{{< include code.py lines="2-3" lang="text" >}}'
-        result = docs._expand_code_includes(content, project_path)
-        assert result.startswith("```text\n")
-        assert "import os" in result
-        assert "# header" not in result
-
-
-def test_expand_code_includes_in_user_guide_copy():
+def test_user_guide_copy_expands_code_includes():
     """Test that code-include shortcodes are expanded during user guide copy."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -2979,34 +2710,6 @@ def test_expand_code_includes_in_user_guide_copy():
         assert "```python" in built_content
         assert "x = 1" in built_content
         assert "{{< include" not in built_content
-
-
-def test_parse_code_include_args():
-    """Test argument parsing for code-include shortcodes."""
-    parse = GreatDocs._parse_code_include_args
-
-    # Basic path
-    path, lang, lines = parse("examples/demo.py")
-    assert path == "examples/demo.py"
-    assert lang == ""
-    assert lines == ""
-
-    # Path with lang
-    path, lang, lines = parse('examples/demo.py lang="python"')
-    assert path == "examples/demo.py"
-    assert lang == "python"
-    assert lines == ""
-
-    # Path with lines
-    path, lang, lines = parse('examples/demo.py lines="5-10"')
-    assert path == "examples/demo.py"
-    assert lines == "5-10"
-
-    # Path with both
-    path, lang, lines = parse('examples/demo.py lines="1-3" lang="text"')
-    assert path == "examples/demo.py"
-    assert lang == "text"
-    assert lines == "1-3"
 
 
 def test_is_asset_dir_no_qmd():
@@ -8936,39 +8639,6 @@ def test_get_cli_entry_point_name_no_pyproject_returns_none():
         assert docs._get_cli_entry_point_name("pkg") is None
 
 
-def test_add_frontmatter_option_new_key_toc():
-    """_add_frontmatter_option adds a new key to existing frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Hello\n---\n\n# Body\n"
-        result = docs._add_frontmatter_option(content, "toc", False)
-
-        assert "toc: false" in result
-        assert "title: Hello" in result
-
-
-def test_add_frontmatter_option_no_frontmatter_wraps_content():
-    """_add_frontmatter_option creates frontmatter when none exists."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "# No frontmatter here\n"
-        result = docs._add_frontmatter_option(content, "title", "Added")
-
-        assert result.startswith("---\n")
-        assert '"Added"' in result
-        assert "# No frontmatter here" in result
-
-
-def test_add_frontmatter_option_bool_true_toc():
-    """_add_frontmatter_option handles boolean True values."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Test\n---\nBody"
-        result = docs._add_frontmatter_option(content, "toc", True)
-
-        assert "toc: true" in result
-
-
 def test_find_index_source_file_readme_returns_tuple():
     """_find_index_source_file finds README.md."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -11370,37 +11040,6 @@ def test_insert_before_reference_no_reference_simple_items():
         assert texts == ["Guide", "New"]
 
 
-def test_add_frontmatter_option_new_key():
-    """_add_frontmatter_option adds new key to frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Page\n---\nBody\n"
-        result = docs._add_frontmatter_option(content, "bread-crumbs", False)
-
-        assert "bread-crumbs: false" in result
-
-
-def test_add_frontmatter_option_bool_true():
-    """_add_frontmatter_option formats boolean True correctly."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Page\n---\nBody\n"
-        result = docs._add_frontmatter_option(content, "toc", True)
-
-        assert "toc: true" in result
-
-
-def test_add_frontmatter_option_no_frontmatter_v2():
-    """_add_frontmatter_option handles content without frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "Just plain content\n"
-        result = docs._add_frontmatter_option(content, "key", "val")
-
-        # Should wrap in frontmatter
-        assert "---" in result
-
-
 def test_get_cli_entry_point_name_scripts():
     """_get_cli_entry_point_name returns first [project.scripts] name."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -13755,27 +13394,6 @@ def test_build_hero_section_badge_from_config():
 
         assert "gd-hero-badges" in result
         assert "https://ci.svg" in result
-
-
-def test_add_frontmatter_option_update_existing_key():
-    """_add_frontmatter_option updates an existing key."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = '---\ntitle: "Old"\ntoc: true\n---\n\nBody'
-        result = docs._add_frontmatter_option(content, "toc", False)
-
-        assert "toc: false" in result
-        assert "toc: true" not in result
-
-
-def test_add_frontmatter_option_integer_value():
-    """_add_frontmatter_option handles integer values."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Test\n---\n\nBody"
-        result = docs._add_frontmatter_option(content, "depth", 3)
-
-        assert "depth: 3" in result
 
 
 def test_build_sections_from_reference_config_basic_functions():
@@ -21020,46 +20638,6 @@ def test_empty_categories():
         assert isinstance(cats["class_methods"], dict)
 
 
-def test_add_frontmatter_option_no_frontmatter():
-    """Test _add_frontmatter_option creates frontmatter when none exists."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "# Just a heading\n\nSome text."
-        result = docs._add_frontmatter_option(content, "toc", False)
-        assert result.startswith("---\n")
-        assert "toc: false" in result
-        assert "Just a heading" in result
-
-
-def test_add_frontmatter_option_update_existing():
-    """Test _add_frontmatter_option updates an existing key."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Hello\ntoc: true\n---\n\nBody."
-        result = docs._add_frontmatter_option(content, "toc", False)
-        assert "toc: false" in result
-        assert "toc: true" not in result
-
-
-def test_add_frontmatter_option_add_new_key():
-    """Test _add_frontmatter_option adds new key to existing frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Hello\n---\n\nBody."
-        result = docs._add_frontmatter_option(content, "bread-crumbs", False)
-        assert "bread-crumbs: false" in result
-        assert "title: Hello" in result
-
-
-def test_add_frontmatter_option_string_value():
-    """Test _add_frontmatter_option handles string values."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Test\n---\n\nBody."
-        result = docs._add_frontmatter_option(content, "format", "html")
-        assert 'format: "html"' in result
-
-
 def test_get_github_repo_info_from_config():
     """Test _get_github_repo_info reads from great-docs.yml repo setting."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -24356,10 +23934,8 @@ def test_create_blended_index_creates_index():
         }
 
         with (
-            patch.object(docs, "_add_frontmatter_option", side_effect=lambda c, k, v: c),
             patch.object(docs, "_build_metadata_margin", return_value=""),
             patch.object(docs, "_build_hero_section", return_value=("", None)),
-            patch("great_docs.core.strip_numeric_prefix", return_value="intro.qmd"),
         ):
             docs._create_blended_index(ug_info, [])
 
@@ -32462,37 +32038,6 @@ class TestCopyUserGuideToDocs:
             assert docs._copy_user_guide_to_docs(None) == []
 
 
-class TestAddFrontmatterOption:
-    """Tests for _add_frontmatter_option."""
-
-    def test_adds_to_existing_frontmatter(self):
-        """Adds key to existing YAML frontmatter."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            content = "---\ntitle: Hello\n---\nBody"
-            result = docs._add_frontmatter_option(content, "toc", False)
-            assert "toc: false" in result
-            assert "title: Hello" in result
-
-    def test_creates_frontmatter_when_missing(self):
-        """Creates frontmatter if content doesn't have it."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            content = "Just some body text"
-            result = docs._add_frontmatter_option(content, "toc", False)
-            assert result.startswith("---")
-            assert "toc: false" in result
-
-    def test_updates_existing_key(self):
-        """Updates an existing key rather than duplicating."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            content = "---\ntoc: true\n---\nBody"
-            result = docs._add_frontmatter_option(content, "toc", False)
-            assert "toc: false" in result
-            assert result.count("toc") == 1
-
-
 class TestBuildSectionsFromReferenceConfig:
     """Tests for _build_sections_from_reference_config."""
 
@@ -37602,26 +37147,6 @@ def test_get_tag_icon_html_unknown_icon(mock_svg):
     assert GreatDocs._get_tag_icon_html("Python", {"Python": "bad-icon"}) == ""
 
 
-# ── _derive_page_title ─────────────────────────────────────────────────
-
-
-def test_derive_page_title_dashes():
-    """Dashes and underscores become spaces, title-cased."""
-    with tempfile.TemporaryDirectory() as tmp:
-        gd = GreatDocs(project_path=tmp)
-        title = gd._derive_page_title(Path("my-cool_page.qmd"))
-        assert title == "My Cool Page"
-
-
-def test_derive_page_title_numeric_prefix():
-    """Numeric prefix is stripped."""
-    with tempfile.TemporaryDirectory() as tmp:
-        gd = GreatDocs(project_path=tmp)
-        title = gd._derive_page_title(Path("01-introduction.qmd"))
-        # Should produce "Introduction" (prefix stripped)
-        assert "introduction" in title.lower()
-
-
 # ── _inject_tags_data_inline ─────────────────────────────────────────
 
 
@@ -40218,67 +39743,6 @@ def test_strip_numeric_prefix_underscore_separator():
 def test_strip_numeric_prefix_preserves_non_numeric():
     docs = GreatDocs()
     assert strip_numeric_prefix("advanced.qmd") == "advanced.qmd"
-
-
-# ---------------------------------------------------------------------------
-# _parse_code_include_args — static method
-# ---------------------------------------------------------------------------
-
-
-def test_parse_code_include_args_file_only():
-    fp, lang, lines = GreatDocs._parse_code_include_args("path/to/file.py")
-    assert fp == "path/to/file.py"
-    assert lang == ""
-    assert lines == ""
-
-
-def test_parse_code_include_args_with_lang():
-    fp, lang, lines = GreatDocs._parse_code_include_args('path/file.py lang="python"')
-    assert fp == "path/file.py"
-    assert lang == "python"
-
-
-def test_parse_code_include_args_with_lines():
-    fp, lang, lines = GreatDocs._parse_code_include_args('path/file.py lines="1-10"')
-    assert lines == "1-10"
-
-
-def test_parse_code_include_args_all_kwargs():
-    fp, lang, lines = GreatDocs._parse_code_include_args('"src/main.py" lang="python" lines="5-15"')
-    assert fp == "src/main.py"
-    assert lang == "python"
-    assert lines == "5-15"
-
-
-def test_parse_code_include_args_empty():
-    fp, lang, lines = GreatDocs._parse_code_include_args("")
-    assert fp == ""
-    assert lang == ""
-    assert lines == ""
-
-
-# ---------------------------------------------------------------------------
-# _select_lines — static method
-# ---------------------------------------------------------------------------
-
-
-def test_select_lines_single():
-    content = "a\nb\nc\n"
-    result = GreatDocs._select_lines(content, "2")
-    assert result == "b\n"
-
-
-def test_select_lines_range():
-    content = "a\nb\nc\nd\n"
-    result = GreatDocs._select_lines(content, "2-3")
-    assert "b" in result and "c" in result
-    assert "a" not in result and "d" not in result
-
-
-def test_select_lines_clamps_to_bounds():
-    content = "a\nb\n"
-    result = GreatDocs._select_lines(content, "1-100")
-    assert "a" in result and "b" in result
 
 
 # ---------------------------------------------------------------------------
