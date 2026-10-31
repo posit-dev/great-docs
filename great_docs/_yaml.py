@@ -203,19 +203,41 @@ def locate_front_matter(content: str) -> FrontMatterBlock | None:
         The front matter, or `None` when the page does not open with a closed
         block.
     """
+    span = _front_matter_span(content)
+    if span is None:
+        return None
+    start, closing = span
+    try:
+        parsed = parse_yaml(content[start:closing])
+    except ValueError:
+        parsed = None
+    mapping = YamlMapping(parsed) if isinstance(parsed, dict) else YamlMapping()
+    line_end = content.find("\n", closing + 3)
+    return FrontMatterBlock(mapping, len(content) if line_end == -1 else line_end + 1)
+
+
+def _front_matter_span(content: str) -> tuple[int, int] | None:
+    """
+    Locate the YAML text in a page's opening front matter
+
+    Parameters
+    ----------
+    content
+        The page source.
+
+    Returns
+    -------
+    :
+        The start and end offsets of the YAML text, excluding the opening and closing
+        delimiter lines, or `None` when the page does not open with a closed block.
+    """
     opening = FRONT_MATTER_OPENING.match(content)
     if opening is None:
         return None
     closing = content.find("\n---", opening.end() - 1)
     if closing == -1:
         return None
-    try:
-        parsed = parse_yaml(content[opening.end() : closing + 1])
-    except ValueError:
-        parsed = None
-    mapping = YamlMapping(parsed) if isinstance(parsed, dict) else YamlMapping()
-    line_end = content.find("\n", closing + 4)
-    return FrontMatterBlock(mapping, len(content) if line_end == -1 else line_end + 1)
+    return opening.end(), closing + 1
 
 
 def split_front_matter(content: str) -> tuple[YamlMapping, str]:
@@ -267,21 +289,19 @@ def set_front_matter_option(content: str, key: str, value: bool | int | str) -> 
         yaml_value = f'"{value}"'
     else:
         yaml_value = str(value)
+    line = f"{key}: {yaml_value}"
 
-    if content.startswith("---"):
-        parts = content.split("---", 2)
-        if len(parts) >= 3:
-            frontmatter = parts[1]
-            rest = parts[2]
+    span = _front_matter_span(content)
+    if span is None:
+        return f"---\n{line}\n---\n\n{content}"
 
-            key_pattern = rf"^{re.escape(key)}:\s*.*$"
-            if re.search(key_pattern, frontmatter, re.MULTILINE):
-                frontmatter = re.sub(
-                    key_pattern, f"{key}: {yaml_value}", frontmatter, flags=re.MULTILINE
-                )
-            else:
-                frontmatter = frontmatter.rstrip() + f"\n{key}: {yaml_value}\n"
-
-            return f"---{frontmatter}---{rest}"
-
-    return f"---\n{key}: {yaml_value}\n---\n\n{content}"
+    start, closing = span
+    front_matter = content[start:closing]
+    key_pattern = re.compile(rf"^{re.escape(key)}:\s*.*$", re.MULTILINE)
+    if key_pattern.search(front_matter):
+        front_matter = key_pattern.sub(lambda _: line, front_matter)
+    elif front_matter.strip():
+        front_matter = f"{front_matter.rstrip()}\n{line}\n"
+    else:
+        front_matter = f"{line}\n"
+    return content[:start] + front_matter + content[closing:]

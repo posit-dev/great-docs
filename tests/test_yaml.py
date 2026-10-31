@@ -143,3 +143,11 @@ def test_locates_nothing_without_a_closed_block():
 )
 def test_sets_a_front_matter_option(content: str, key: str, value: bool | int | str, expected: str):
     assert set_front_matter_option(content, key, value) == expected
+
+
+def test_setting_an_option_keeps_dashes_inside_a_value():
+    content = "---\ntitle: A---B\n---\nBody\n"
+
+    result = set_front_matter_option(content, "toc", False)
+
+    assert result == "---\ntitle: A---B\ntoc: false\n---\nBody\n"
