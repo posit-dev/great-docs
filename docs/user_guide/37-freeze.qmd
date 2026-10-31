@@ -112,13 +112,19 @@ great-docs freeze docs/user_guide/benchmarks.qmd
 
 This:
 
-1. prepares the build directory (ensuring file transformations match a full build)
+1. prepares the build directory with the same steps and step log as `great-docs build`,
+   except for changelog generation
 2. renders the specified page(s), always executing code regardless of cache state
 3. copies updated `docs/_freeze/` entries back to the configuration directory
 4. prints a ready-to-use `git add` + `git commit` command
 
 ```{.default filename="Example output"}
-Preparing build directory...
+━━ Step  1/17 ─ Prepare build directory ━━━━━━━━━━━━━━━━━
+   ✔ Ready  0.1s
+      Freeze mode: auto
+...
+━━ Step 17/17 ─ Prepare freeze cache ━━━━━━━━━━━━━━━━━━━━
+   ✔ Freeze cache will be restored during render  <0.1s
 
   Rendering docs/user_guide/benchmarks.qmd → user-guide/benchmarks.qmd ...
   ✓ docs/user_guide/benchmarks.qmd

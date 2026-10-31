@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
 
-from great_docs import BuildError
+from great_docs import BuildError, GreatDocs
+from great_docs._build import quarto
 from great_docs._build.quarto import QuartoVersionError
 from great_docs.cli import (
     _detect_current_package,
@@ -150,7 +153,7 @@ def test_freeze_clean_rejects_parent_traversal_before_normalisation(tmp_path: Pa
     (source / "link").symlink_to(external / "inner", target_is_directory=True)
     override = source / "link/../cache"
 
-    with patch("great_docs.cli.GreatDocs._prepare_for_freeze"):
+    with patch("great_docs._build.freeze.prepare"):
         result = CliRunner().invoke(
             cli,
             [
@@ -176,10 +179,93 @@ def test_freeze_clean_accepts_ordinary_relative_cache(
     cache = tmp_path / "cached-results"
     cache.mkdir()
     (cache / "result.json").write_bytes(b"cache\x00")
-    with patch("great_docs.cli.GreatDocs._prepare_for_freeze") as prepare:
+    with patch("great_docs._build.freeze.prepare") as prepare:
         CliRunner().invoke(cli, ["freeze", "page.qmd", "--clean", "--freeze-dir", "cached-results"])
     prepare.assert_called_once()
     assert not cache.exists()
+
+
+def _project_files(build_dir: Path) -> dict[str, bytes]:
+    """
+    Read generated Quarto project files, excluding rendered output and Quarto metadata
+
+    Parameters
+    ----------
+    build_dir
+        The build directory.
+
+    Returns
+    -------
+    :
+        Each file's contents by its path relative to `build_dir`.
+    """
+    return {
+        path.relative_to(build_dir).as_posix(): path.read_bytes()
+        for path in sorted(build_dir.rglob("*"))
+        if path.is_file() and path.relative_to(build_dir).parts[0] not in ("_site", ".quarto")
+    }
+
+
+def test_freeze_prepares_the_project_a_build_renders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # Quarto compares cached pages with their sources. Different preparation would
+    # make the next build execute a frozen page again.
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\nversion = "0.1.0"\n')
+    (tmp_path / "great-docs.yml").write_text("display_name: Demo\n")
+    (tmp_path / "demo").mkdir()
+    (tmp_path / "demo/__init__.py").write_text(
+        '__all__ = ["greet"]\n\n\ndef greet(name: str) -> str:\n    """Greet `name`"""\n'
+        '    return f"Hello, {name}"\n'
+    )
+    (tmp_path / "user_guide").mkdir()
+    (tmp_path / "user_guide/01-intro.qmd").write_text(
+        "---\ntitle: Intro\n---\n\nCall `greet()`.\n\n```{python}\n1 + 1\n```\n"
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    rendered = quarto.RenderResult(returncode=0, stderr="", page_timings=[])
+    monkeypatch.setattr("great_docs._build.quarto.render", lambda *_, **__: rendered)
+    GreatDocs(project_path=str(tmp_path)).build()
+    build_dir = tmp_path / "great-docs"
+    built = _project_files(build_dir)
+
+    run = subprocess.run
+
+    def render_nothing(args: list[str], *rest: Any, **options: Any) -> Any:
+        if args[:2] == ["quarto", "render"]:
+            return subprocess.CompletedProcess(args, 0, "", "")
+        return run(args, *rest, **options)
+
+    with patch("subprocess.run", render_nothing):
+        result = CliRunner().invoke(
+            cli, ["freeze", "user_guide/01-intro.qmd", "--project-path", str(tmp_path)]
+        )
+
+    assert result.exit_code == 0, result.output
+    frozen = _project_files(build_dir)
+    assert sorted(frozen) == sorted(built)
+    assert [path for path in built if frozen[path] != built[path]] == []
+
+
+def test_freeze_renders_pages_with_the_build_quarto_environment(tmp_path: Path):
+    # The caller's Python may lack dependencies or be unable to import the uninstalled
+    # project package. Freezing must use the build's Quarto environment.
+    (tmp_path / "great-docs.yml").write_text("display_name: Demo\n")
+    (tmp_path / "page.qmd").write_text("# Page\n")
+    (tmp_path / "great-docs").mkdir()
+    (tmp_path / "great-docs/page.qmd").write_text("# Page\n")
+    succeeded = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+    with (
+        patch("great_docs._build.freeze.prepare"),
+        patch("subprocess.run", return_value=succeeded) as run,
+    ):
+        result = CliRunner().invoke(cli, ["freeze", "page.qmd", "--project-path", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    (render,) = [call for call in run.call_args_list if call.args[0][:2] == ["quarto", "render"]]
+    env = render.kwargs.get("env") or {}
+    assert env.get("PYTHONPATH", "").split(os.pathsep)[0] == str(tmp_path.resolve())
+    assert "QUARTO_PYTHON" in env
 
 
 @pytest.mark.parametrize("directory", [".", "docs"])
@@ -2517,10 +2603,8 @@ class TestFreezeCommand:
         qmd = tmp_path / "page.qmd"
         qmd.write_text("---\ntitle: Test\n---\n")
 
-        with patch("great_docs.cli.GreatDocs") as mock_gd:
-            mock_gd.return_value._prepare_for_freeze.return_value = None
-            # Make build_dir/_quarto.yml NOT exist so we get the "not ready" error
-            result = runner.invoke(
+        with patch("great_docs.cli.GreatDocs"):
+            runner.invoke(
                 cli,
                 ["freeze", "--clean", "page.qmd", "--project-path", str(tmp_path)],
             )
@@ -2532,14 +2616,13 @@ class TestFreezeCommand:
         runner = CliRunner()
         qmd = tmp_path / "page.qmd"
         qmd.write_text("---\ntitle: Test\n---\n")
-        with patch("great_docs.cli.GreatDocs") as mock_gd:
-            mock_gd.return_value._prepare_for_freeze.return_value = None
+        with patch("great_docs.cli.GreatDocs"):
             result = runner.invoke(
                 cli,
                 ["freeze", "--clean", "page.qmd", "--project-path", str(tmp_path)],
             )
 
-        # Should not crash (exit with non-zero is OK due to missing _quarto.yml)
+        # A missing page in the build directory may cause a non-zero exit, but no crash
         assert result.exception is None or isinstance(result.exception, SystemExit)
 
 
@@ -2907,74 +2990,19 @@ class TestFreezeCommandRenderLoop:
 
     @patch("great_docs.cli.GreatDocs")
     @patch("subprocess.run")
-    def test_prepare_for_freeze_system_exit_continues(
-        self, mock_run, mock_gd_cls, tmp_path, monkeypatch
-    ):
-        """SystemExit from _prepare_for_freeze is silently ignored."""
-        monkeypatch.chdir(tmp_path)
-        self._make_project(tmp_path)
-        mock_docs = MagicMock()
-        mock_docs._prepare_for_freeze.side_effect = SystemExit(0)
-        mock_gd_cls.return_value = mock_docs
-        mock_run.return_value = MagicMock(returncode=0, stderr="")
-        runner = CliRunner()
-        result = runner.invoke(
-            cli,
-            ["freeze", "mypage.qmd", "--project-path", str(tmp_path)],
-        )
-
-        # Should NOT exit 1 just because prepare raised SystemExit
-        assert result.exit_code in (0, 1)
-
-    @patch("great_docs.cli.GreatDocs")
-    @patch("subprocess.run")
-    def test_prepare_for_freeze_build_error_exits(
-        self, mock_run, mock_gd_cls, tmp_path, monkeypatch
-    ):
+    def test_preparation_failure_stops_freezing(self, mock_run, mock_gd_cls, tmp_path, monkeypatch):
         """Stop freezing after preparation fails, without rendering or reporting again"""
         monkeypatch.chdir(tmp_path)
         self._make_project(tmp_path)
-        mock_docs = MagicMock()
-        mock_docs._prepare_for_freeze.side_effect = BuildError("reference item(s) not found")
-        mock_gd_cls.return_value = mock_docs
-        result = CliRunner().invoke(cli, ["freeze", "mypage.qmd", "--project-path", str(tmp_path)])
+        failure = BuildError("reference item(s) not found")
+        with patch("great_docs._build.freeze.prepare", side_effect=failure):
+            result = CliRunner().invoke(
+                cli, ["freeze", "mypage.qmd", "--project-path", str(tmp_path)]
+            )
 
         assert result.exit_code == 1
         assert "not found" not in result.output
         mock_run.assert_not_called()
-
-    @patch("great_docs.cli.GreatDocs")
-    def test_prepare_for_freeze_exception_exits(self, mock_gd_cls, tmp_path, monkeypatch):
-        """Exception from _prepare_for_freeze prints error and exits 1."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-        (tmp_path / "mypage.qmd").write_text("---\ntitle: Test\n---\nHello")
-        # Don't create the build dir so the flow never reaches the FileExistsError
-        mock_docs = MagicMock()
-        mock_docs._prepare_for_freeze.side_effect = RuntimeError("build prep failed")
-        mock_gd_cls.return_value = mock_docs
-        runner = CliRunner()
-        result = runner.invoke(
-            cli,
-            ["freeze", "mypage.qmd", "--project-path", str(tmp_path)],
-        )
-
-        assert result.exit_code == 1
-        assert "build prep failed" in result.output
-
-        """Page not found in build dir is reported and exits non-zero."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-        build_dir = tmp_path / "great-docs"
-        build_dir.mkdir()
-        (build_dir / "_quarto.yml").write_text("project:\n  type: website\n")
-        mock_gd_cls.return_value = MagicMock()
-        runner = CliRunner()
-        result = runner.invoke(
-            cli,
-            ["freeze", "missing_page.qmd", "--project-path", str(tmp_path)],
-        )
-        assert "not found" in result.output or result.exit_code == 1
 
     @patch("great_docs.cli.GreatDocs")
     @patch("subprocess.run")
@@ -3860,7 +3888,6 @@ class TestFreezeFileSearchFallback:
             patch("great_docs.cli.GreatDocs") as mock_gd,
             patch("subprocess.run") as mock_run,
         ):
-            mock_gd.return_value._prepare_for_freeze.return_value = None
             mock_run.return_value = MagicMock(returncode=0, stderr="")
             result = runner.invoke(
                 cli,
@@ -3880,7 +3907,6 @@ class TestFreezeFileSearchFallback:
             patch("great_docs.cli.GreatDocs") as mock_gd,
             patch("subprocess.run") as mock_run,
         ):
-            mock_gd.return_value._prepare_for_freeze.return_value = None
             mock_run.return_value = MagicMock(returncode=0, stderr="")
             result = runner.invoke(
                 cli,
@@ -3900,7 +3926,6 @@ class TestFreezeFileSearchFallback:
             patch("great_docs.cli.GreatDocs") as mock_gd,
             patch("subprocess.run") as mock_run,
         ):
-            mock_gd.return_value._prepare_for_freeze.return_value = None
             mock_run.return_value = MagicMock(returncode=0, stderr="")
             result = runner.invoke(
                 cli,
@@ -3917,7 +3942,6 @@ class TestFreezeFileSearchFallback:
 
         runner = CliRunner()
         with patch("great_docs.cli.GreatDocs") as mock_gd:
-            mock_gd.return_value._prepare_for_freeze.return_value = None
             result = runner.invoke(
                 cli,
                 ["freeze", "missing.qmd", "--project-path", str(tmp_path)],
@@ -3927,8 +3951,40 @@ class TestFreezeFileSearchFallback:
 
 
 class TestFreezePersistCache:
-    def test_persist_existing_dir_replaced(self, tmp_path):
-        """When freeze dir has sub-dir that already exists in persist, it's replaced."""
+    def test_persist_keeps_other_pages_in_the_section(self, tmp_path):
+        """
+        Preserve cached results for other pages in the same section
+
+        Quarto stores a section's pages in one cache directory. Replacing that directory
+        would discard the other pages' results.
+        """
+        (tmp_path / "page.qmd").write_text("---\ntitle: Test\n---\n")
+        build_dir = tmp_path / "great-docs"
+        (build_dir / "guide").mkdir(parents=True)
+        (build_dir / "guide/page.qmd").write_text("---\ntitle: Test\n---\n")
+        rendered = build_dir / "_freeze/guide/page/execute-results/html.json"
+        rendered.parent.mkdir(parents=True)
+        rendered.write_text('{"page": "new"}')
+        other = tmp_path / "_freeze/guide/other/execute-results/html.json"
+        other.parent.mkdir(parents=True)
+        other.write_text('{"page": "other"}')
+
+        with (
+            patch("great_docs.cli.GreatDocs"),
+            patch("subprocess.run", return_value=MagicMock(returncode=0, stderr="")),
+        ):
+            result = CliRunner().invoke(
+                cli, ["freeze", "page.qmd", "--project-path", str(tmp_path)]
+            )
+
+        assert result.exit_code == 0, result.output
+        persisted = tmp_path / "_freeze/guide"
+        assert (persisted / "page/execute-results/html.json").read_text() == '{"page": "new"}'
+        assert (persisted / "other/execute-results/html.json").read_text() == '{"page": "other"}'
+        assert "Updated 1 cached file(s)" in result.output
+
+    def test_persist_replaces_the_rendered_page_results(self, tmp_path):
+        """Replace a rendered page's persisted results with its new results"""
         qmd = tmp_path / "page.qmd"
         qmd.write_text("---\ntitle: Test\n---\n")
 
@@ -3956,7 +4012,6 @@ class TestFreezePersistCache:
             patch("great_docs.cli.GreatDocs") as mock_gd,
             patch("subprocess.run") as mock_run,
         ):
-            mock_gd.return_value._prepare_for_freeze.return_value = None
             mock_run.return_value = MagicMock(returncode=0, stderr="")
             result = runner.invoke(
                 cli,
@@ -3987,7 +4042,6 @@ class TestFreezePersistCache:
             patch("great_docs.cli.GreatDocs") as mock_gd,
             patch("subprocess.run") as mock_run,
         ):
-            mock_gd.return_value._prepare_for_freeze.return_value = None
             mock_run.return_value = MagicMock(returncode=0, stderr="")
             result = runner.invoke(
                 cli,

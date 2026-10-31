@@ -14,7 +14,7 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
 
-from ._build import quarto
+from ._build import freeze, quarto
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
@@ -36,12 +36,10 @@ from ._subprocess import TEXT_MODE_KWARGS
 from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
 from ._utils import (
     GITIGNORE_CONTENT,
-    is_great_docs_build_dir,
     recognised_build_dirs,
     record_site_ownership,
     validate_build_dir,
     validate_layout_outputs,
-    validate_tree_symlinks,
 )
 from ._website import (
     i18n,
@@ -14939,163 +14937,6 @@ anchor-sections: true
 
         print("✅ Great-docs uninstalled successfully!")
 
-    def _persist_freeze_cache(self) -> int | None:
-        """
-        Merge every build's freeze cache beside the selected configuration
-
-        The latest version and a non-versioned build store their cache in
-        their build directory. Historical versions store caches in sibling
-        build directories. Merge individual files so a
-        page from one version cannot replace different pages in the same
-        section. When versions cache the same path, the latest version wins.
-
-        Returns
-        -------
-        Number of cached files, or `None` when no freeze cache exists.
-        """
-        freeze_sources: list[Path] = []
-
-        # Merge historical caches first so the latest version wins collisions.
-        pattern = (
-            f"{self.layout.build_dir.name}-*"
-            if self.layout.source_dir == self.project_root
-            else "*"
-        )
-        for ver_dir in sorted(self.layout.build_dir.parent.glob(pattern)):
-            if ver_dir == self.layout.build_dir:
-                continue
-            if not ver_dir.is_dir() or ver_dir.is_symlink() or not is_great_docs_build_dir(ver_dir):
-                continue
-            candidate = ver_dir / "_freeze"
-            if candidate.is_dir():
-                freeze_sources.append(candidate)
-
-        # The latest version and a non-versioned build share this location.
-        single = self.build_dir / "_freeze"
-        if single.is_dir():
-            freeze_sources.append(single)
-
-        if not freeze_sources:
-            return None
-
-        freeze_dst = self.layout.freeze_dir
-        validate_tree_symlinks(freeze_dst)
-        for src in freeze_sources:
-            validate_tree_symlinks(src)
-        if freeze_dst.exists():  # pragma: no cover
-            shutil.rmtree(freeze_dst)  # pragma: no cover
-        freeze_dst.mkdir(parents=True)
-
-        # Copy files individually. Replacing a top-level cache directory would
-        # discard pages contributed by earlier sources.
-        for src in freeze_sources:
-            for item in src.rglob("*"):
-                if not item.is_file():
-                    continue
-                dest = freeze_dst / item.relative_to(src)
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(item, dest)
-
-        for js_file in freeze_dst.rglob("*.js"):
-            data = js_file.read_bytes()
-            if data and not data.endswith(b"\n"):
-                js_file.write_bytes(data + b"\n")
-
-        return sum(1 for _ in freeze_dst.rglob("*") if _.is_file())
-
-    def _prepare_for_freeze(self) -> None:
-        """Run the build preparation steps (1-14 + normalization) without rendering.
-
-        This ensures the build directory contains files in exactly the same state as a full
-        `build()` would produce, so that freeze cache hashes remain valid across subsequent full
-        builds.
-        """
-        from contextlib import redirect_stdout
-
-        run = Run(package_name=self._detect_package_name() or "", watch=False)
-        devnull = open(os.devnull, "w")
-
-        # Step 1: Prepare build directory (copies files, applies transformations)
-        with redirect_stdout(devnull):
-            self._prepare_build_directory(run)
-
-        try:
-            # Steps 2-13: Process user guide, sections, pages, tags, etc.
-            # These can modify .qmd files (add breadcrumbs, expand tags, etc.)
-            with self._running_user_code(), redirect_stdout(devnull):
-                try:
-                    if not run.api_discovery_done:
-                        self._refresh_api_reference_config()
-                except Exception:
-                    pass
-                try:
-                    if self._llms_txt_available():
-                        self._generate_llms_txt()
-                        self._generate_llms_full_txt()
-                except Exception:
-                    pass
-                try:
-                    self._generate_skill_md()
-                except Exception:
-                    pass
-                try:
-                    self._process_user_guide(run.has_api_reference)
-                except Exception:
-                    pass
-                try:
-                    self._process_sections()
-                except Exception:
-                    pass
-                try:
-                    self._process_custom_pages()
-                except Exception:
-                    pass
-                try:
-                    self._copy_assets()
-                except Exception:
-                    pass
-
-            # Step 14: Generate API reference
-            if run.has_api_reference:
-                try:
-                    from great_docs._apiref.api_reference import APIReference
-
-                    with self._running_user_code(), redirect_stdout(devnull):
-                        APIReference(str(self.build_dir / "_quarto.yml")).build()
-                except Exception:
-                    pass
-
-            # Normalize freeze shorthand (runs right before render in a full build)
-            self._normalize_freeze_shorthand()
-            self._write_page_metadata()
-
-            # Expand source-code: mock cells
-            from great_docs._mock_code import process_directory as _expand_mock
-
-            _expand_mock(self.build_dir)
-
-            # Update quarto config (ensures _quarto.yml has pre-render, freeze, etc.)
-            with redirect_stdout(devnull):
-                self._update_quarto_config(run)
-
-        finally:
-            devnull.close()
-
-    def _running_user_code(self) -> contextlib.chdir[Path]:
-        """
-        Enter the build directory while importing or running the project's code
-
-        The package, its command-line interface and MCP server, the API reference and d2
-        diagrams resolve relative paths from the working directory, which is the build
-        directory while they run. Quarto receives the build directory as its `cwd` instead.
-
-        Returns
-        -------
-        :
-            A context manager that restores the working directory on exit.
-        """
-        return contextlib.chdir(self.build_dir)
-
     def _print_layout_notice(self) -> None:
         """
         Show the migration route for the selected root-layout documentation
@@ -15970,7 +15811,7 @@ anchor-sections: true
         :
             `None`; the result is a detail line of the previous step.
         """
-        n_frozen = self._persist_freeze_cache()
+        n_frozen = freeze.save(self.layout)
         if n_frozen is not None:
             log.detail(f"Saved freeze cache ({n_frozen} files)")
         return None
@@ -16007,6 +15848,172 @@ anchor-sections: true
         if self.layout.site_dir != self.build_dir / "_site":
             record_site_ownership(self.layout.site_dir)
         return None
+
+    def _preparation_steps(self, run: Run, log: "BuildLog", refresh: bool = True) -> list[Step]:
+        """
+        Return the build's preparation steps in execution order
+
+        These steps write the Quarto project before rendering. Each step resolves its method
+        when it runs, so tests can replace instance methods after the list is created.
+
+        Parameters
+        ----------
+        run
+            The current build.
+        log
+            The build log that the steps write to.
+        refresh
+            Whether to rediscover the package's exports for the API reference.
+
+        Returns
+        -------
+        :
+            The steps in the order they run.
+        """
+        # Results shared between preparation steps
+        ref: APIReference | None = None
+        frozen_pages: list[str] = []
+
+        def generate_api_reference() -> Outcome:
+            nonlocal ref
+            outcome, ref = self._step_api_reference(run, log)
+            return outcome
+
+        def prepare_freeze_cache() -> Outcome:
+            outcome, frozen_pages[:] = self._step_freeze_cache(run)
+            return outcome
+
+        def list_frozen_pages() -> Outcome:
+            for page in frozen_pages:
+                log.detail(f"  - {page}")
+            return None
+
+        return [
+            Step("Prepare build directory", lambda: self._step_prepare_build_directory(run)),
+            Step(
+                "Show render settings",
+                lambda: self._log_render_settings(log),
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Configure API reference",
+                lambda: self._step_api_reference_config(run, refresh),
+                user_code=True,
+            ),
+            Step(
+                "Generate llms.txt / llms-full.txt",
+                lambda: self._step_llms_txt(),
+                user_code=True,
+            ),
+            Step("Generate SKILL.md", lambda: self._step_skill_md(), user_code=True),
+            Step(
+                "Check the site URL",
+                lambda: self._warn_without_site_url(log),
+                user_code=True,
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Generate changelog",
+                lambda: self._step_changelog(),
+                remote_content=True,
+            ),
+            Step(
+                "Generate CLI reference",
+                lambda: self._step_cli_reference(run),
+                warn=Warn(
+                    USER_CODE_ERRORS, "Error generating CLI docs", "CLI generation had issues"
+                ),
+                user_code=True,
+            ),
+            Step(
+                "Generate Go CLI reference",
+                lambda: self._step_go_cli_reference(),
+                warn=Warn(
+                    (OSError,), "Error generating Go CLI docs", "Go CLI generation had issues"
+                ),
+                user_code=True,
+            ),
+            Step(
+                "Generate Rust CLI reference",
+                lambda: self._step_rust_cli_reference(),
+                warn=Warn(
+                    (OSError,), "Error generating Rust CLI docs", "Rust CLI generation had issues"
+                ),
+                user_code=True,
+            ),
+            Step(
+                "Generate MCP server reference",
+                lambda: self._step_mcp_reference(run),
+                warn=Warn(
+                    USER_CODE_ERRORS, "Error generating MCP docs", "MCP generation had issues"
+                ),
+                user_code=True,
+            ),
+            Step(
+                "Process User Guide",
+                lambda: self._step_user_guide(run),
+                fails_on=(ValueError,),
+                user_code=True,
+            ),
+            Step(
+                "Process custom sections",
+                lambda: self._step_sections(),
+                fails_on=(ValueError,),
+            ),
+            Step(
+                "Process custom pages",
+                lambda: self._step_custom_pages(),
+                fails_on=(ValueError,),
+            ),
+            Step(
+                "Process page tags",
+                lambda: self._step_tags(),
+            ),
+            Step(
+                "Process page status badges",
+                lambda: self._step_page_statuses(),
+            ),
+            Step(
+                "Copy assets",
+                lambda: self._step_assets(run),
+                fails_on=(ValueError, FileNotFoundError),
+            ),
+            Step("Generate API reference", generate_api_reference, user_code=True),
+            Step(
+                "Build interlinks index",
+                lambda: self._step_interlinks(log, ref),
+                quiet=False,
+            ),
+            Step("Prepare freeze cache", prepare_freeze_cache, quiet=False),
+            Step("List frozen pages", list_frozen_pages, quiet=False, listed=False),
+            Step(
+                "Expand mock-code cells",
+                lambda: self._expand_mock_cells(log),
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Render d2 diagrams",
+                lambda: self._render_d2_diagrams(log),
+                user_code=True,
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Pre-render terminal recordings",
+                lambda: self._prerender_term_player(log),
+                quiet=False,
+                listed=False,
+            ),
+            Step(
+                "Share sidebars",
+                lambda: self._share_sidebars(run, log),
+                quiet=False,
+                listed=False,
+            ),
+        ]
 
     def build(
         self,
@@ -16227,25 +16234,15 @@ anchor-sections: true
 
         # Values that several steps read; a new build starts from a new `Run`
         run = Run(package_name=package_name, watch=watch)
+        log = BuildLog(
+            package_name=package_name,
+            package_version=package_version,
+            package_location=package_location,
+            estimated_seconds=est_seconds,
+        )
 
-        # Results that one step passes to the next
-        ref: APIReference | None = None
-        frozen_pages: list[str] = []
+        # Render timings shared with the timings step
         render_timings: dict[str, Any] = {}
-
-        def generate_api_reference() -> Outcome:
-            nonlocal ref
-            outcome, ref = self._step_api_reference(run, log)
-            return outcome
-
-        def prepare_freeze_cache() -> Outcome:
-            outcome, frozen_pages[:] = self._step_freeze_cache(run)
-            return outcome
-
-        def list_frozen_pages() -> Outcome:
-            for page in frozen_pages:
-                log.detail(f"  - {page}")
-            return None
 
         def render_site() -> Outcome:
             result, render_timings["render"] = self._step_render(
@@ -16259,133 +16256,7 @@ anchor-sections: true
             render_timings["timings_by_version"] = result.get("timings_by_version")
             return outcome
 
-        # Resolve methods when each step runs so tests can replace instance methods after
-        # the table is created.
-        steps = [
-            Step("Prepare build directory", lambda: self._step_prepare_build_directory(run)),
-            Step(
-                "Show render settings",
-                lambda: self._log_render_settings(log),
-                quiet=False,
-                listed=False,
-            ),
-            Step(
-                "Configure API reference",
-                lambda: self._step_api_reference_config(run, refresh),
-                user_code=True,
-            ),
-            Step(
-                "Generate llms.txt / llms-full.txt",
-                lambda: self._step_llms_txt(),
-                user_code=True,
-            ),
-            Step("Generate SKILL.md", lambda: self._step_skill_md(), user_code=True),
-            Step(
-                "Check the site URL",
-                lambda: self._warn_without_site_url(log),
-                user_code=True,
-                quiet=False,
-                listed=False,
-            ),
-            Step(
-                "Generate changelog",
-                lambda: self._step_changelog(),
-            ),
-            Step(
-                "Generate CLI reference",
-                lambda: self._step_cli_reference(run),
-                warn=Warn(
-                    USER_CODE_ERRORS, "Error generating CLI docs", "CLI generation had issues"
-                ),
-                user_code=True,
-            ),
-            Step(
-                "Generate Go CLI reference",
-                lambda: self._step_go_cli_reference(),
-                warn=Warn(
-                    (OSError,), "Error generating Go CLI docs", "Go CLI generation had issues"
-                ),
-                user_code=True,
-            ),
-            Step(
-                "Generate Rust CLI reference",
-                lambda: self._step_rust_cli_reference(),
-                warn=Warn(
-                    (OSError,), "Error generating Rust CLI docs", "Rust CLI generation had issues"
-                ),
-                user_code=True,
-            ),
-            Step(
-                "Generate MCP server reference",
-                lambda: self._step_mcp_reference(run),
-                warn=Warn(
-                    USER_CODE_ERRORS, "Error generating MCP docs", "MCP generation had issues"
-                ),
-                user_code=True,
-            ),
-            Step(
-                "Process User Guide",
-                lambda: self._step_user_guide(run),
-                fails_on=(ValueError,),
-                user_code=True,
-            ),
-            Step(
-                "Process custom sections",
-                lambda: self._step_sections(),
-                fails_on=(ValueError,),
-            ),
-            Step(
-                "Process custom pages",
-                lambda: self._step_custom_pages(),
-                fails_on=(ValueError,),
-            ),
-            Step(
-                "Process page tags",
-                lambda: self._step_tags(),
-            ),
-            Step(
-                "Process page status badges",
-                lambda: self._step_page_statuses(),
-            ),
-            Step(
-                "Copy assets",
-                lambda: self._step_assets(run),
-                fails_on=(ValueError, FileNotFoundError),
-            ),
-            Step("Generate API reference", generate_api_reference, user_code=True),
-            Step(
-                "Build interlinks index",
-                lambda: self._step_interlinks(log, ref),
-                quiet=False,
-            ),
-            Step("Prepare freeze cache", prepare_freeze_cache, quiet=False),
-            Step("List frozen pages", list_frozen_pages, quiet=False, listed=False),
-            Step(
-                "Expand mock-code cells",
-                lambda: self._expand_mock_cells(log),
-                quiet=False,
-                listed=False,
-            ),
-            Step(
-                "Render d2 diagrams",
-                lambda: self._render_d2_diagrams(log),
-                user_code=True,
-                quiet=False,
-                listed=False,
-            ),
-            Step(
-                "Pre-render terminal recordings",
-                lambda: self._prerender_term_player(log),
-                quiet=False,
-                listed=False,
-            ),
-            Step(
-                "Share sidebars",
-                lambda: self._share_sidebars(run, log),
-                quiet=False,
-                listed=False,
-            ),
-        ]
+        steps = self._preparation_steps(run, log, refresh)
         if watch:
             render = Step("Build site with Quarto", lambda: "Starting watch mode...")
         elif self._config.has_versions:
@@ -16440,13 +16311,7 @@ anchor-sections: true
             )
         )
 
-        log = BuildLog(
-            package_name=package_name,
-            package_version=package_version,
-            package_location=package_location,
-            total_steps=count_listed(steps),
-            estimated_seconds=est_seconds,
-        )
+        log.total_steps = count_listed(steps)
         log.header()
 
         if watch:

@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING, Any, Callable
 import click
 
 from . import __version__
+from ._build import freeze as freeze_cache
 from ._build import quarto
 from ._build.steps import BuildError
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
-from ._subprocess import TEXT_MODE_KWARGS
 from .config import ConfigError
 from .core import GreatDocs
 
@@ -1409,7 +1409,6 @@ def freeze(
       great-docs freeze --info
     """
     import shutil
-    import subprocess
 
     project_root = Path(project_path) if project_path else Path.cwd()
     layout = Layout.make(project_root, Path(config_path) if config_path else None)
@@ -1458,25 +1457,18 @@ def freeze(
         if build_freeze.exists():
             shutil.rmtree(build_freeze)
 
-    # Always re-prepare the build directory so file hashes match what a full
-    # build would produce (frontmatter normalization, tag expansion, etc.).
-    # This is fast (steps 1-14 only, no render) and ensures the freeze cache
-    # will be valid for subsequent full builds.
-    click.echo("Preparing build directory...")
+    # Quarto requires matching page sources to reuse cached results. Use the build's
+    # preparation steps to keep those sources consistent.
+    from ._build.pipeline import Run
+    from ._build_log import BuildLog
+
+    docs = GreatDocs(project_path=project_path, config_path=config_path)
+    log = BuildLog()
+    run = Run(package_name=docs._detect_package_name() or "", watch=False)
     try:
-        docs = GreatDocs(project_path=project_path, config_path=config_path)
-        docs._prepare_for_freeze()
-    except SystemExit:
-        pass  # Build prep may exit but that's OK
+        freeze_cache.prepare(docs._preparation_steps(run, log), log, docs.build_dir)
     except BuildError:
         # Exit without repeating the preparation failure report
-        sys.exit(1)
-    except Exception as e:
-        click.echo(f"Error during build prep: {e}", err=True)
-        sys.exit(1)
-
-    if not (build_dir / "_quarto.yml").exists():
-        click.echo("Error: Build directory is not ready. Run 'great-docs build' first.", err=True)
         sys.exit(1)
 
     # Render each page individually (forces execution even with freeze)
@@ -1485,32 +1477,8 @@ def freeze(
     failed: list[str] = []
 
     for page in pages:
-        # Find the page's location in the build directory
-        # Match authored pages to their generated user-guide paths.
-        # Numeric prefixes are stripped (e.g., 24-freeze-demo.qmd -> freeze-demo.qmd)
-        page_path = Path(page)
-        qmd_name = page_path.name
-
-        # Search for the file in the build directory
-        candidates = list(build_dir.rglob(qmd_name))
-        if not candidates:
-            # Try replacing underscores with hyphens (user_guide -> user-guide)
-            alt_path = str(page_path).replace("_", "-")
-            candidates = list(build_dir.rglob(Path(alt_path).name))
-        if not candidates:
-            # Try stripping numeric prefix (e.g., 24-freeze-demo.qmd -> freeze-demo.qmd)
-            import re as _re
-
-            stripped_name = _re.sub(r"^\d+[-_]", "", qmd_name)
-            if stripped_name != qmd_name:
-                candidates = list(build_dir.rglob(stripped_name))
-        if not candidates:
-            # Try both: underscores to hyphens AND stripped prefix
-            stripped_alt = _re.sub(r"^\d+[-_]", "", Path(alt_path).name)
-            if stripped_alt != Path(alt_path).name:
-                candidates = list(build_dir.rglob(stripped_alt))
-
-        if not candidates:
+        target = freeze_cache.find_page(build_dir, page)
+        if target is None:
             click.echo(f"  ✗ {page} — not found in build directory", err=True)
             click.echo(
                 "    Hint: Run 'great-docs build' first to set up the build directory.",
@@ -1519,17 +1487,8 @@ def freeze(
             failed.append(page)
             continue
 
-        # Use the first match
-        target = candidates[0]
-        rel_target = target.relative_to(build_dir)
-
-        click.echo(f"  Rendering {page} → {rel_target} ...")
-        result = subprocess.run(
-            ["quarto", "render", str(rel_target)],
-            cwd=build_dir,
-            capture_output=True,
-            **TEXT_MODE_KWARGS,
-        )
+        click.echo(f"  Rendering {page} → {target.relative_to(build_dir)} ...")
+        result = freeze_cache.render_page(docs._config, build_dir, target)
 
         if result.returncode != 0:
             click.echo(f"  ✗ {page} — render failed", err=True)
@@ -1548,20 +1507,7 @@ def freeze(
     if build_freeze.is_dir() and rendered:
         click.echo()
         click.echo(f"Persisting _freeze/ → {persist_dir.relative_to(project_root)}/")
-        persist_dir.mkdir(parents=True, exist_ok=True)
-
-        # Merge: copy only updated entries (don't wipe existing cache for other pages)
-        updated_files = 0
-        for item in build_freeze.iterdir():
-            dest = persist_dir / item.name
-            if item.is_dir():
-                if dest.exists():
-                    shutil.rmtree(dest)
-                shutil.copytree(item, dest)
-            else:
-                shutil.copy2(item, dest)
-            updated_files += sum(1 for _ in (dest.rglob("*") if dest.is_dir() else [dest]))
-
+        updated_files = freeze_cache.merge(build_freeze, persist_dir)
         click.echo(f"  Updated {updated_files} cached file(s)")
 
         # Show git status hint

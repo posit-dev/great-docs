@@ -6,6 +6,7 @@ import pytest
 from yaml12 import read_yaml, write_yaml
 
 from great_docs import GreatDocs
+from great_docs._build import freeze
 from great_docs._build.pipeline import Run
 from great_docs._layout import Layout
 from great_docs._utils import QUARTO_YML_HEADER
@@ -113,10 +114,10 @@ def test_freeze_round_trip(
             cache = build / "_freeze" / name
             cache.parent.mkdir(parents=True, exist_ok=True)
             cache.write_text(content)
-    assert gd._persist_freeze_cache() == 3
+    assert freeze.save(gd.layout) == 3
     assert (gd.layout.freeze_dir / "guide/old.json").read_text() == "old"
     assert (gd.layout.freeze_dir / "guide/shared.json").read_text() == "latest"
-    assert gd._persist_freeze_cache() == 3
+    assert freeze.save(gd.layout) == 3
     monkeypatch.chdir(gd.layout.build_dir_for("1.0", "2.0"))
     runpy.run_path(str(gd.assets_path / "restore-freeze.py"))
     assert (Path.cwd() / "_freeze/guide/shared.json").read_text() == "latest"
