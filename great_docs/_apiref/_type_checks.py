@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from typing import TYPE_CHECKING, Literal, cast
 
 import griffe as gf
@@ -92,76 +93,16 @@ def is_protocol(obj: gf.Object | gf.Alias) -> bool:
 _ENUM_BASES = frozenset({"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum", "EnumCheck"})
 
 _EXCEPTION_BASES = frozenset(
-    {
-        "Exception",
-        "BaseException",
-        # Built-in error types
-        "ArithmeticError",
-        "AssertionError",
-        "AttributeError",
-        "BlockingIOError",
-        "BrokenPipeError",
-        "BufferError",
-        "BytesWarning",
-        "ChildProcessError",
-        "ConnectionAbortedError",
-        "ConnectionError",
-        "ConnectionRefusedError",
-        "ConnectionResetError",
-        "DeprecationWarning",
-        "EOFError",
-        "EnvironmentError",
-        "FileExistsError",
-        "FileNotFoundError",
-        "FloatingPointError",
-        "FutureWarning",
-        "GeneratorExit",
-        "IOError",
-        "ImportError",
-        "ImportWarning",
-        "IndentationError",
-        "IndexError",
-        "InterruptedError",
-        "IsADirectoryError",
-        "KeyError",
-        "KeyboardInterrupt",
-        "LookupError",
-        "MemoryError",
-        "ModuleNotFoundError",
-        "NameError",
-        "NotADirectoryError",
-        "NotImplementedError",
-        "OSError",
-        "OverflowError",
-        "PendingDeprecationWarning",
-        "PermissionError",
-        "ProcessLookupError",
-        "RecursionError",
-        "ReferenceError",
-        "ResourceWarning",
-        "RuntimeError",
-        "RuntimeWarning",
-        "StopAsyncIteration",
-        "StopIteration",
-        "SyntaxError",
-        "SyntaxWarning",
-        "SystemError",
-        "SystemExit",
-        "TabError",
-        "TimeoutError",
-        "TypeError",
-        "UnboundLocalError",
-        "UnicodeDecodeError",
-        "UnicodeEncodeError",
-        "UnicodeError",
-        "UnicodeTranslationError",
-        "UnicodeWarning",
-        "UserWarning",
-        "ValueError",
-        "Warning",
-        "ZeroDivisionError",
-    }
+    name
+    for name, value in vars(builtins).items()
+    if isinstance(value, type) and issubclass(value, BaseException)
 )
+"""
+The names of the built-in exception and warning classes
+
+The set follows the interpreter that runs great-docs:
+`PythonFinalizationError`, for example, is in it from Python 3.13.
+"""
 
 ClassKind = Literal[
     "dataclass", "enum", "exception", "namedtuple", "typeddict", "protocol", "abc", "class"

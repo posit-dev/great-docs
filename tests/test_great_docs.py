@@ -27463,6 +27463,8 @@ def test_shortcode_str():
         ("from dataclasses import dataclass\n@dataclass\nclass C(ValueError): ...\n", "dataclass"),
         ("import enum\nclass C(enum.IntEnum): ...\n", "enum"),
         ("class C(ValueError): ...\n", "exception"),
+        ("class C(ExceptionGroup): ...\n", "exception"),
+        ("class C(EncodingWarning): ...\n", "exception"),
         ("from typing import NamedTuple\nclass C(NamedTuple): ...\n", "namedtuple"),
         ("from typing import TypedDict\nclass C(TypedDict): ...\n", "typeddict"),
         ("import typing\nclass C(typing.Protocol): ...\n", "protocol"),
