@@ -1228,44 +1228,6 @@ class TestCategorizeReferencedObjects:
 
 
 # ---------------------------------------------------------------------------
-# Linkify GitHub references
-# ---------------------------------------------------------------------------
-
-
-class TestLinkifyGithubReferences:
-    def test_bare_issue_number(self):
-        result = GreatDocs._linkify_github_references("Fixed #42", "owner", "repo")
-        assert "[#42](https://github.com/owner/repo/issues/42)" in result
-
-    def test_gh_issue_keyword(self):
-        result = GreatDocs._linkify_github_references("gh issue #7", "owner", "repo")
-        assert "[#7](https://github.com/owner/repo/issues/7)" in result
-
-    def test_gh_pr_keyword(self):
-        result = GreatDocs._linkify_github_references("gh PR #99", "owner", "repo")
-        assert "[#99](https://github.com/owner/repo/issues/99)" in result
-
-    def test_at_username(self):
-        result = GreatDocs._linkify_github_references("Thanks @alice", "o", "r")
-        assert "[@alice](https://github.com/alice)" in result
-
-    def test_backslash_escapes_removed(self):
-        result = GreatDocs._linkify_github_references(r"\#123 by \@bob", "o", "r")
-        assert "[#123]" in result
-        assert "[@bob]" in result
-
-    def test_compare_url_linked(self):
-        url = "https://github.com/owner/repo/compare/v1.0...v2.0"
-        result = GreatDocs._linkify_github_references(f"Full Changelog: {url}", "owner", "repo")
-        assert f"[{url}]({url})" in result
-
-    def test_already_linked_not_doubled(self):
-        text = "[#10](https://github.com/owner/repo/issues/10)"
-        result = GreatDocs._linkify_github_references(text, "owner", "repo")
-        assert result.count("[#10]") == 1
-
-
-# ---------------------------------------------------------------------------
 # Parse Click help parts
 # ---------------------------------------------------------------------------
 

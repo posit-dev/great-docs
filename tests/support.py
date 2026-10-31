@@ -42,7 +42,6 @@ _BUILD_METHODS: tuple[str, ...] = (
     "_generate_skill_md",
     "_get_package_metadata",
     "_get_github_repo_info",
-    "_generate_changelog_page",
     "_add_changelog_to_navbar",
     "_resolve_importable_name",
     "_discover_click_cli",

@@ -14,8 +14,10 @@ from ._build import freeze as freeze_cache
 from ._build import from_repo as repository
 from ._build import quarto, serve
 from ._build.steps import BuildError
+from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
+from ._website import changelog as changelog_page
 from .config import ConfigError
 from .core import GreatDocs
 
@@ -2377,10 +2379,6 @@ def changelog(
     try:
         docs = GreatDocs(project_path=project_path, config_path=config_path)
 
-        # Override max_releases in config if provided
-        if max_releases is not None:
-            docs._config._config.setdefault("changelog", {})["max_releases"] = max_releases
-
         owner, repo, _base_url = docs._get_github_repo_info()
         if not owner or not repo:
             click.echo(
@@ -2391,10 +2389,17 @@ def changelog(
             )
             sys.exit(1)
 
-        result = docs._generate_changelog_page()
-        if result:
+        page = changelog_page.write_page(
+            docs._config,
+            docs.build_dir,
+            GithubRepo(owner, repo),
+            docs._remote,
+            max_releases=max_releases,
+            report=click.echo,
+        )
+        if page:
             docs._add_changelog_to_navbar()
-            click.echo(f"✅ Changelog generated: {docs.build_dir / result}")
+            click.echo(f"✅ Changelog generated: {page}")
         else:
             click.echo("No published releases found on GitHub.")
 

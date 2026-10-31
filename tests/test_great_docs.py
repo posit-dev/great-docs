@@ -24,7 +24,7 @@ import griffe
 import griffe as gf
 import pytest
 import requests
-from click.testing import CliRunner
+from click.testing import CliRunner, Result
 from griffe import AliasResolutionError, DocstringSectionKind, ExprName
 from PIL import Image as PILImage
 from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
@@ -4230,281 +4230,6 @@ def test_convert_rst_to_markdown_real_pandoc():
         assert "Item 1" in result
 
 
-def test_generate_changelog_page():
-    """Test changelog.qmd page generation."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        # Create minimal project structure
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
-        )
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        fake_releases = [
-            {
-                "tag_name": "v2.0.0",
-                "name": "Version 2.0",
-                "body": "Major update.\n\n### Breaking changes\n\n- Removed X\n",
-                "published_at": "2026-02-10T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v2.0.0",
-                "prerelease": False,
-            },
-            {
-                "tag_name": "v1.0.0",
-                "name": "Version 1.0",
-                "body": "Initial release.",
-                "published_at": "2025-12-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
-                "prerelease": False,
-            },
-        ]
-
-        docs._remote = StubRemote(releases=fake_releases)
-        result = docs._generate_changelog_page()
-
-        assert result == "changelog.qmd"
-
-        changelog_qmd = build_dir / "changelog.qmd"
-
-        assert changelog_qmd.exists()
-
-        content = changelog_qmd.read_text()
-
-        assert 'title: "Changelog"' in content
-        assert "## Version 2.0" in content
-        assert "## Version 1.0" in content
-        assert "*2026-02-10*" in content
-        # Body headings are bumped one level to nest under the version ## heading
-        assert "#### Breaking changes" in content
-        assert "Initial release." in content
-        assert "https://github.com/owner/repo/releases" in content
-
-        # The TOC is a flat list of releases under a "Releases" title
-        assert "body-classes: gd-changelog-page" in content
-        assert "toc-depth: 1" in content
-        assert 'toc-title: "Releases"' in content
-        assert "shift-heading-level-by: -1" in content
-
-
-@pytest.mark.parametrize(("lang", "expected"), [("fr", "Versions"), ("ja", "リリース")])
-def test_generate_changelog_page_toc_title_translated(lang, expected):
-    """Test that the changelog TOC title follows the site language."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
-        )
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text(f"site:\n  lang: {lang}\n")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        fake_releases = [
-            {
-                "tag_name": "v1.0.0",
-                "name": "v1.0.0",
-                "body": "Initial release.",
-                "published_at": "2026-01-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
-                "prerelease": False,
-            },
-        ]
-
-        docs._remote = StubRemote(releases=fake_releases)
-        docs._generate_changelog_page()
-
-        content = (build_dir / "changelog.qmd").read_text()
-
-        assert f'toc-title: "{expected}"' in content
-
-
-def test_generate_changelog_page_no_github():
-    """Test that changelog is skipped when no GitHub repo is configured."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test-pkg"\nversion = "0.1.0"\n')
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._generate_changelog_page()
-
-        assert result is None
-
-
-def test_generate_changelog_page_no_releases():
-    """Test that changelog is skipped when there are no releases."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
-        )
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-        (project_path / "great-docs").mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        docs._remote = StubRemote()
-        result = docs._generate_changelog_page()
-
-        assert result is None
-
-
-def test_generate_changelog_page_heading_normalization():
-    """Test that release body headings are bumped one level to nest under version ##."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
-        )
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Simulate release notes that use ## headings (like Pointblank)
-        fake_releases = [
-            {
-                "tag_name": "v1.0.0",
-                "name": "v1.0.0",
-                "body": (
-                    "## Features\n\n"
-                    "- Added X\n\n"
-                    "## Bug Fixes\n\n"
-                    "- Fixed Y\n\n"
-                    "### Sub-section\n\n"
-                    "- Detail Z\n"
-                ),
-                "published_at": "2026-01-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
-                "prerelease": False,
-            },
-        ]
-
-        docs._remote = StubRemote(releases=fake_releases)
-        result = docs._generate_changelog_page()
-
-        assert result == "changelog.qmd"
-        content = (build_dir / "changelog.qmd").read_text()
-
-        # Version heading stays at ##
-        assert "## v1.0.0" in content
-
-        # Body ## headings should be bumped to ###
-        assert "### Features" in content
-        assert "### Bug Fixes" in content
-
-        # Body ### headings should be bumped to ####
-        assert "#### Sub-section" in content
-
-        # Original ## headings should NOT remain in body (check line-level)
-        lines = content.split("\n")
-        assert not any(line.startswith("## Features") for line in lines)
-        assert not any(line.startswith("## Bug Fixes") for line in lines)
-
-
-def test_generate_changelog_page_h3_body_headings_bumped():
-    """Test that ### body headings are also bumped (to ####)."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
-        )
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Simulate release notes that already use ### headings (like Great Docs itself)
-        fake_releases = [
-            {
-                "tag_name": "v0.5.0",
-                "name": "v0.5.0",
-                "body": ("### New Features\n\n- Feature A\n\n### Fixes\n\n- Fix B\n"),
-                "published_at": "2026-03-15T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v0.5.0",
-                "prerelease": False,
-            },
-        ]
-
-        docs._remote = StubRemote(releases=fake_releases)
-        result = docs._generate_changelog_page()
-
-        content = (build_dir / "changelog.qmd").read_text()
-
-        # ### in body → ####
-        assert "#### New Features" in content
-        assert "#### Fixes" in content
-        lines = content.split("\n")
-        assert not any(line.startswith("### New Features") for line in lines)
-
-
-def test_generate_changelog_page_h1_body_headings_not_bumped():
-    """Test that # (h1) body headings are left alone (unusual but possible)."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
-        )
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        fake_releases = [
-            {
-                "tag_name": "v0.1.0",
-                "name": "v0.1.0",
-                "body": "# Release Title\n\nSome text.\n",
-                "published_at": "2025-06-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v0.1.0",
-                "prerelease": False,
-            },
-        ]
-
-        docs._remote = StubRemote(releases=fake_releases)
-        docs._generate_changelog_page()
-
-        content = (build_dir / "changelog.qmd").read_text()
-
-        # Single # heading should be left untouched
-        assert "# Release Title" in content
-
-
 def test_add_changelog_to_navbar_manual_yaml():
     """Test that a Changelog link is added to the navbar."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -4680,136 +4405,6 @@ def test_changelog_config_custom():
 
         assert config.changelog_enabled is False
         assert config.changelog_max_releases == 10
-
-
-def test_linkify_bare_issue_number():
-    """Test that bare #NNN references become links."""
-    docs = GreatDocs()
-    text = "Fixed a bug (#42) and another issue #100."
-    result = docs._linkify_github_references(text, "owner", "repo")
-
-    assert "[#42](https://github.com/owner/repo/issues/42)" in result
-    assert "[#100](https://github.com/owner/repo/issues/100)" in result
-
-
-def test_linkify_gh_issue_and_pr():
-    """Test 'gh issue #NNN' and 'gh pr #NNN' patterns."""
-    docs = GreatDocs()
-    text = "Reported by @amureki (gh issue #662, gh pr #679)"
-    result = docs._linkify_github_references(text, "owner", "repo")
-
-    assert "[#662](https://github.com/owner/repo/issues/662)" in result
-    assert "[#679](https://github.com/owner/repo/issues/679)" in result
-
-    # The "gh issue" / "gh pr" prefix should be consumed
-    assert "gh issue" not in result
-    assert "gh pr" not in result
-
-
-def test_linkify_at_mention():
-    """Test @username becomes a link to GitHub profile."""
-    docs = GreatDocs()
-    text = "Reported and fixed by @amureki and @some-user."
-    result = docs._linkify_github_references(text, "o", "r")
-
-    assert "[@amureki](https://github.com/amureki)" in result
-    assert "[@some-user](https://github.com/some-user)" in result
-
-
-def test_linkify_no_double_linking():
-    """Test that already-linked references are not double-wrapped."""
-    docs = GreatDocs()
-
-    # After one pass, #42 becomes [#42](…/42); a second pass must not re-wrap
-    text = "[#42](https://github.com/owner/repo/issues/42)"
-    result = docs._linkify_github_references(text, "owner", "repo")
-
-    # Should still have exactly one link, not nested
-    assert result.count("[#42]") == 1
-
-
-def test_linkify_email_not_matched():
-    """Test that email addresses are not treated as @mentions."""
-    docs = GreatDocs()
-    text = "Contact user@example.com for help."
-    result = docs._linkify_github_references(text, "o", "r")
-
-    assert "[@example" not in result
-    assert "user@example.com" in result
-
-
-def test_linkify_case_insensitive_gh_prefix():
-    """Test that GH Issue / GH PR are matched case-insensitively."""
-    docs = GreatDocs()
-    text = "See GH Issue #10 and GH PR #20."
-    result = docs._linkify_github_references(text, "o", "r")
-
-    assert "[#10](https://github.com/o/r/issues/10)" in result
-    assert "[#20](https://github.com/o/r/issues/20)" in result
-
-
-def test_linkify_backslash_escaped_refs():
-    """Test that GitHub API backslash escapes (\\@, \\#) are handled."""
-    docs = GreatDocs()
-    # Raw body from GitHub API often contains \@ and \# escapes
-    text = r"Reported by \@hawkEye-01 (gh issue \#1167). Fixed by \@Mifrill (gh pr \#1168)"
-    result = docs._linkify_github_references(text, "dateutil", "dateutil")
-
-    assert "[@hawkEye-01](https://github.com/hawkEye-01)" in result
-    assert "[#1167](https://github.com/dateutil/dateutil/issues/1167)" in result
-    assert "[#1168](https://github.com/dateutil/dateutil/issues/1168)" in result
-
-    # No leftover backslashes before @ or #
-    assert "\\@" not in result
-    assert "\\#" not in result
-
-
-def test_linkify_backslash_escaped_quotes():
-    """Test that escaped quotes and apostrophes are cleaned up."""
-    docs = GreatDocs()
-    text = r"Fixed a bug where it doesn\'t work with \"special\" input."
-    result = docs._linkify_github_references(text, "o", "r")
-
-    assert "doesn't" in result
-    assert '"special"' in result
-    assert "\\" not in result
-
-
-def test_linkify_integrated_in_changelog():
-    """Test that linkification happens when generating changelog.qmd."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\nversion = "1.0"\n\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
-        )
-        (project_path / "great-docs.yml").write_text("")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        fake_releases = [
-            {
-                "tag_name": "v1.0.0",
-                "name": "Version 1.0",
-                "body": "Fixed #55 by @contributor (gh pr #60).",
-                "published_at": "2025-06-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
-                "prerelease": False,
-            },
-        ]
-
-        docs._remote = StubRemote(releases=fake_releases)
-        docs._generate_changelog_page()
-
-        content = (build_dir / "changelog.qmd").read_text()
-
-        assert "[#55](https://github.com/owner/repo/issues/55)" in content
-        assert "[#60](https://github.com/owner/repo/issues/60)" in content
-        assert "[@contributor](https://github.com/contributor)" in content
 
 
 def test_process_sections_empty_config_with_files():
@@ -16904,60 +16499,6 @@ def test_is_compiled_extension():
         assert isinstance(result, bool)
 
 
-def test_linkify_github_references_bare_issue():
-    """Test _linkify_github_references converts bare #NNN references."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._linkify_github_references("Fixed bug #42 and #100.", "owner", "repo")
-        assert "[#42](https://github.com/owner/repo/issues/42)" in result
-        assert "[#100](https://github.com/owner/repo/issues/100)" in result
-
-
-def test_linkify_github_references_gh_issue():
-    """Test _linkify_github_references converts gh issue/pr references."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._linkify_github_references("See gh issue #55 and gh pr #77.", "usr", "proj")
-        assert "[#55](https://github.com/usr/proj/issues/55)" in result
-        assert "[#77](https://github.com/usr/proj/issues/77)" in result
-
-
-def test_linkify_github_references_at_username():
-    """Test _linkify_github_references converts @username references."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._linkify_github_references("Thanks @contributor-1 for the fix.", "own", "rp")
-        assert "[@contributor-1](https://github.com/contributor-1)" in result
-
-
-def test_linkify_github_references_no_match():
-    """Test _linkify_github_references with text that has no references."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        text = "Just a plain changelog entry."
-        result = docs._linkify_github_references(text, "o", "r")
-        assert result == text
-
-
-def test_linkify_github_references_compare_url():
-    """Bare GitHub compare URLs should be converted to Markdown links."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        text = "**Full Changelog**: https://github.com/owner/repo/compare/v0.1...v0.2"
-        result = docs._linkify_github_references(text, "owner", "repo")
-        expected = "[https://github.com/owner/repo/compare/v0.1...v0.2](https://github.com/owner/repo/compare/v0.1...v0.2)"
-        assert expected in result
-
-
-def test_linkify_github_references_compare_url_already_linked():
-    """Already linked GitHub compare URLs should remain unchanged."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        text = "[https://github.com/owner/repo/compare/v0.1...v0.2](https://github.com/owner/repo/compare/v0.1...v0.2)"
-        result = docs._linkify_github_references(text, "owner", "repo")
-        assert result == text
-
-
 def test_count_cli_sidebar_items_flat():
     """Test _count_cli_sidebar_items with flat list."""
     result = GreatDocs._count_cli_sidebar_items(["a.qmd", "b.qmd", "c.qmd"])
@@ -18550,74 +18091,6 @@ def test_detect_hero_logo_none():
         assert result is None
 
 
-def test_generate_changelog_page_with_prerelease():
-    """Test _generate_changelog_page includes pre-release tag."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n[project.urls]\n'
-            'Repository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir(parents=True, exist_ok=True)
-
-        mock_releases = [
-            {
-                "tag_name": "v2.0.0rc1",
-                "name": "v2.0.0rc1",
-                "body": "Release candidate.",
-                "published_at": "2024-06-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v2.0.0rc1",
-                "prerelease": True,
-            }
-        ]
-
-        docs._remote = StubRemote(releases=mock_releases)
-        result = docs._generate_changelog_page()
-
-        assert result == "changelog.qmd"
-        changelog = (build_dir / "changelog.qmd").read_text(encoding="utf-8")
-        assert "pre-release" in changelog
-
-
-def test_generate_changelog_page_linkify_issues():
-    """Test _generate_changelog_page linkifies issue references in body."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n[project.urls]\n'
-            'Repository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir(parents=True, exist_ok=True)
-
-        mock_releases = [
-            {
-                "tag_name": "v1.1.0",
-                "name": "v1.1.0",
-                "body": "Fixed #42 and #55.",
-                "published_at": "2024-03-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v1.1.0",
-                "prerelease": False,
-            }
-        ]
-
-        docs._remote = StubRemote(releases=mock_releases)
-        result = docs._generate_changelog_page()
-
-        changelog = (build_dir / "changelog.qmd").read_text(encoding="utf-8")
-        assert "[#42]" in changelog
-        assert "[#55]" in changelog
-
-
 def test_strip_frontmatter_complex():
     """Test _strip_frontmatter with multiple --- in content."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -18913,14 +18386,6 @@ def test_get_package_metadata_setup_cfg_author_email():
         assert len(result["authors"]) == 1
         assert result["authors"][0]["name"] == "Dev One"
         assert result["authors"][0]["email"] == "dev@example.com"
-
-
-def test_linkify_github_references_prs():
-    """Test _linkify_github_references handles PR references."""
-    result = GreatDocs._linkify_github_references("Fixed #42 and PR #55.", "owner", "repo")
-    assert "[#42]" in result
-    assert "[#55]" in result
-    assert "github.com/owner/repo/issues/42" in result
 
 
 def test_find_package_init_src_layout():
@@ -20463,60 +19928,6 @@ def test_format_authors_yaml_empty():
         assert result == ""
 
 
-def test_generate_changelog_page_no_repo():
-    """Test _generate_changelog_page returns None without repo info."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._generate_changelog_page()
-
-        assert result is None
-
-
-def test_generate_changelog_page_with_releases():
-    """Test _generate_changelog_page generates changelog.qmd."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n[project.urls]\n'
-            'Repository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir()
-
-        mock_releases = [
-            {
-                "tag_name": "v1.0.0",
-                "name": "Version 1.0",
-                "body": "Initial release with #42 fix",
-                "published_at": "2024-06-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
-                "prerelease": False,
-            },
-            {
-                "tag_name": "v0.9.0-beta",
-                "name": "Beta",
-                "body": "Pre-release",
-                "published_at": "2024-05-01T00:00:00Z",
-                "html_url": "https://github.com/owner/repo/releases/tag/v0.9.0-beta",
-                "prerelease": True,
-            },
-        ]
-
-        docs._remote = StubRemote(releases=mock_releases)
-        result = docs._generate_changelog_page()
-
-        assert result == "changelog.qmd"
-
-        content = (build_dir / "changelog.qmd").read_text()
-
-        assert "Version 1.0" in content
-        assert "pre-release" in content
-        assert "2024-06-01" in content
-
-
 def test_get_package_exports_with_all():
     """Test _get_package_exports reads __all__ from __init__.py."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -20851,20 +20262,31 @@ def test_build_non_dynamic_failure_raises(tmp_path):
         docs.build(watch=False, refresh=True)
 
 
+# A published release as `Remote.github_releases` returns it
+GITHUB_RELEASE = {
+    "tag_name": "v1.0.0",
+    "name": "",
+    "body": "",
+    "published_at": "2026-01-01T00:00:00Z",
+    "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
+    "prerelease": False,
+}
+
+
 def test_build_with_changelog(tmp_path):
-    """Test build() generates changelog when enabled."""
-    docs = _buildable_docs(tmp_path, changelog_enabled=True)
+    """Check that the build generates a changelog when enabled"""
+    docs = _buildable_docs(tmp_path, changelog_enabled=True, changelog_max_releases=50)
+    docs._remote = StubRemote(releases=[GITHUB_RELEASE])
 
     with stubbed_build(
         docs,
         _detect_package_name="mypkg",
         _get_package_metadata={"cli_enabled": False},
         _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
-        _generate_changelog_page="changelog.qmd",
     ) as stubs:
         docs.build(watch=False, refresh=False)
 
-    stubs.steps["_generate_changelog_page"].assert_called_once()
+    assert "## v1.0.0" in (docs.build_dir / "changelog.qmd").read_text(encoding="utf-8")
     stubs.steps["_add_changelog_to_navbar"].assert_called_once()
 
 
@@ -20875,16 +20297,17 @@ def test_build_changelog_error_stops_the_build(tmp_path):
     The changelog step handles unreachable or malformed GitHub releases. Any other failure
     is an error in great-docs and must stop the build.
     """
-    docs = _buildable_docs(tmp_path, changelog_enabled=True)
+    docs = _buildable_docs(tmp_path, changelog_enabled=True, changelog_max_releases=50)
+    docs._remote = StubRemote(releases=[GITHUB_RELEASE])
+    # The page cannot be written over a directory
+    (docs.build_dir / "changelog.qmd").mkdir()
 
     with stubbed_build(
         docs,
         _detect_package_name="mypkg",
         _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
     ) as stubs:
-        stubs.steps["_generate_changelog_page"].side_effect = OSError("disk full")
-
-        with pytest.raises(OSError, match="disk full"):
+        with pytest.raises(IsADirectoryError):
             docs.build(watch=False, refresh=False)
 
     stubs.steps["_add_changelog_to_navbar"].assert_not_called()
@@ -23526,17 +22949,18 @@ def test_build_changelog_no_releases(tmp_path):
     """
     Check that a changelog without releases gets no navbar entry
     """
-    docs = _buildable_docs(tmp_path, changelog_enabled=True)
+    docs = _buildable_docs(tmp_path, changelog_enabled=True, changelog_max_releases=50)
+    docs._remote = StubRemote()
 
     with stubbed_build(
         docs,
         _detect_package_name="mypkg",
         _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
-        _generate_changelog_page=None,
     ) as stubs:
         docs.build(watch=False, refresh=False)
 
-    stubs.steps["_generate_changelog_page"].assert_called_once()
+    assert "github_releases" in docs._remote.calls
+    assert not (docs.build_dir / "changelog.qmd").exists()
     stubs.steps["_add_changelog_to_navbar"].assert_not_called()
 
 
@@ -23544,14 +22968,16 @@ def test_build_changelog_no_repo(tmp_path):
     """
     Check that projects without a GitHub repository skip the changelog and its navbar entry
     """
-    docs = _buildable_docs(tmp_path, changelog_enabled=True)
+    docs = _buildable_docs(tmp_path, changelog_enabled=True, changelog_max_releases=50)
+    docs._remote = StubRemote(releases=[GITHUB_RELEASE])
 
     with stubbed_build(
         docs, _detect_package_name="mypkg", _get_github_repo_info=(None, None, None)
     ) as stubs:
         docs.build(watch=False, refresh=False)
 
-    stubs.steps["_generate_changelog_page"].assert_not_called()
+    assert "github_releases" not in docs._remote.calls
+    assert not (docs.build_dir / "changelog.qmd").exists()
     stubs.steps["_add_changelog_to_navbar"].assert_not_called()
 
 
@@ -26132,38 +25558,83 @@ def test_cli_check_links_error():
             assert "Error: check failed" in result.output
 
 
-def test_cli_changelog_success():
-    """CLI changelog generates changelog page."""
-    runner = CliRunner()
+def _invoke_changelog(project: Path, remote: StubRemote, *args: str) -> Result:
+    """
+    Run `great-docs changelog` on a project with preset GitHub data
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs._get_github_repo_info.return_value = ("owner", "repo", "https://github.com")
-            mock_docs._generate_changelog_page.return_value = "great-docs/changelog.qmd"
-            mock_docs.build_dir = Path(tmp_dir)
+    Parameters
+    ----------
+    project
+        The project directory.
+    remote
+        The GitHub data the command reads.
+    *args
+        Further command-line arguments.
 
-            result = runner.invoke(changelog, ["--project-path", tmp_dir])
-            assert result.exit_code == 0
-            assert "Changelog generated" in result.output
-            mock_docs._add_changelog_to_navbar.assert_called_once()
+    Returns
+    -------
+    :
+        The command's result.
+    """
+
+    def make_docs(project_path: str | None, config_path: str | None) -> GreatDocs:
+        docs = GreatDocs(project_path=project_path, config_path=config_path)
+        docs._remote = remote
+        return docs
+
+    with patch("great_docs.cli.GreatDocs", side_effect=make_docs):
+        return CliRunner().invoke(changelog, ["--project-path", str(project), *args])
 
 
-def test_cli_changelog_no_releases():
-    """CLI changelog reports when no releases found."""
-    runner = CliRunner()
+def _changelog_project(root: Path) -> Path:
+    """
+    Create a project with a GitHub repository URL and a navbar in its build directory
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs._get_github_repo_info.return_value = ("owner", "repo", "https://github.com")
-            mock_docs._generate_changelog_page.return_value = None
+    Parameters
+    ----------
+    root
+        The project directory.
 
-            result = runner.invoke(changelog, ["--project-path", tmp_dir])
-            assert result.exit_code == 0
-            assert "No published releases found" in result.output
+    Returns
+    -------
+    :
+        The build directory.
+    """
+    (root / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\n[project.urls]\nRepository = "https://github.com/owner/repo"\n'
+    )
+    build_dir = root / "great-docs"
+    build_dir.mkdir()
+    (build_dir / "_quarto.yml").write_text(
+        "website:\n  navbar:\n    left:\n      - text: Reference\n        href: reference/index.qmd\n"
+    )
+    return build_dir
+
+
+def test_cli_changelog_success(tmp_path: Path):
+    """Check that the changelog command generates the page"""
+    build_dir = _changelog_project(tmp_path)
+
+    result = _invoke_changelog(tmp_path, StubRemote(releases=[GITHUB_RELEASE]))
+
+    assert result.exit_code == 0, result.output
+    page = build_dir / "changelog.qmd"
+    assert result.output == f"Created {page}\n✅ Changelog generated: {page}\n"
+    assert "## v1.0.0" in page.read_text(encoding="utf-8")
+    navbar = read_quarto_yml(build_dir)["website"]["navbar"]["left"]
+    assert navbar[-1] == {"text": "Changelog", "href": "changelog.qmd"}
+
+
+def test_cli_changelog_no_releases(tmp_path: Path):
+    """Check that the changelog command reports when no releases are found"""
+    build_dir = _changelog_project(tmp_path)
+
+    result = _invoke_changelog(tmp_path, StubRemote())
+
+    assert result.exit_code == 0, result.output
+    assert "No published releases found" in result.output
+    assert not (build_dir / "changelog.qmd").exists()
+    assert len(read_quarto_yml(build_dir)["website"]["navbar"]["left"]) == 1
 
 
 def test_cli_changelog_no_github_repo():
@@ -26179,24 +25650,6 @@ def test_cli_changelog_no_github_repo():
             result = runner.invoke(changelog, ["--project-path", tmp_dir])
             assert result.exit_code == 1
             assert "No GitHub repository URL found" in result.output
-
-
-def test_cli_changelog_with_max_releases():
-    """CLI changelog --max-releases passes value."""
-    runner = CliRunner()
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs._get_github_repo_info.return_value = ("owner", "repo", "https://github.com")
-            mock_docs._generate_changelog_page.return_value = "great-docs/changelog.qmd"
-            mock_docs.build_dir = Path(tmp_dir)
-            mock_docs._config._config = {}
-
-            result = runner.invoke(changelog, ["--project-path", tmp_dir, "--max-releases", "10"])
-            assert result.exit_code == 0
-            assert mock_docs._config._config["changelog"]["max_releases"] == 10
 
 
 def test_cli_changelog_max_releases_without_pyproject(tmp_path: Path):

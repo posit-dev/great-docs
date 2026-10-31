@@ -50,6 +50,7 @@ from ._utils import (
     record_site_ownership,
 )
 from ._website import (
+    changelog,
     i18n,
     markdown_pages,
     page_dates,
@@ -1698,159 +1699,6 @@ class GreatDocs:
     # =========================================================================
     # Changelog (GitHub Releases) Methods
     # =========================================================================
-
-    @staticmethod
-    def _linkify_github_references(text: str, owner: str, repo: str) -> str:
-        """
-        Turn GitHub shorthand references into Markdown links.
-
-        Converts bare `#123`, `gh issue #123`, `gh pr #123`, and
-        `@username` references into clickable Markdown links that point to
-        the correct GitHub URL.
-
-        Parameters
-        ----------
-        text
-            The Markdown body text from a GitHub Release.
-        owner
-            GitHub repository owner.
-        repo
-            GitHub repository name.
-
-        Returns
-        -------
-        str
-            Text with shorthand references replaced by Markdown links.
-        """
-        base = f"https://github.com/{owner}/{repo}"
-
-        # 0.  Remove GitHub's backslash escapes (the API often returns
-        #     \@, \#, \', \" which break Markdown rendering and block
-        #     the regex patterns below).
-        text = re.sub(r"\\([\\@#'\"])", r"\1", text)
-
-        # 1.  "gh issue #NNN" / "gh pr #NNN"  (case-insensitive)
-        text = re.sub(
-            r"(?i)\bgh\s+(?:issue|pr)\s+#(\d+)",
-            rf"[#\1]({base}/issues/\1)",
-            text,
-        )
-
-        # 2.  Bare "#NNN" not already inside a Markdown link.
-        #     Skip when preceded by '[' (link text from step 1) or
-        #     when inside a URL (preceded by '/').
-        text = re.sub(
-            r"(?<!\[)(?<!/)#(\d+)\b",
-            rf"[#\1]({base}/issues/\1)",
-            text,
-        )
-
-        # 3.  "@username": valid GitHub usernames: alphanumeric + hyphens,
-        #     1-39 chars, not starting/ending with hyphen.
-        #     Negative look-behind avoids matching email addresses.
-        text = re.sub(
-            r"(?<![\w.])@([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?)",
-            r"[@\1](https://github.com/\1)",
-            text,
-        )
-
-        # 4. Bare GitHub compare URLs (e.g., "Full Changelog: https://...")
-        #    are not always auto-linked by downstream Markdown renderers.
-        #    Wrap them explicitly as Markdown links when not already linked.
-        compare_url_pattern = re.escape(base) + r"/compare/[^\s)]+"
-        text = re.sub(
-            rf"(?<!\[)(?<!\(){compare_url_pattern}",
-            lambda m: f"[{m.group(0)}]({m.group(0)})",
-            text,
-        )
-
-        return text
-
-    def _generate_changelog_page(self) -> str | None:
-        """
-        Generate a changelog.qmd page from GitHub Releases.
-
-        Fetches releases via the GitHub API and renders them as a dated
-        Markdown changelog. Returns the filename written (`"changelog.qmd"`)
-        or `None` if the page could not be generated.
-
-        Returns
-        -------
-        str | None
-            `"changelog.qmd"` on success, `None` otherwise.
-        """
-        owner, repo, _base_url = self._get_github_repo_info()
-        if not owner or not repo:
-            return None
-
-        max_releases = self._config.changelog_max_releases
-        releases = self._remote.github_releases(GithubRepo(owner, repo), max_releases)
-        if not releases:
-            return None
-
-        from ._translations import get_translation
-
-        toc_title = get_translation("releases", self._config.lang)
-
-        # Build .qmd content. The TOC lists only the release headings: the
-        # heading shift is pinned so releases always render at level 1, which
-        # keeps `toc-depth: 1` from also picking up the subsections of each
-        # release body (or from listing nothing at all).
-        lines: list[str] = [
-            "---",
-            'title: "Changelog"',
-            f"{page_dates.AUTO_GENERATED}: true",
-            "body-classes: gd-changelog-page",
-            "toc: true",
-            "toc-depth: 1",
-            f'toc-title: "{toc_title}"',
-            "shift-heading-level-by: -1",
-            "---",
-            "",
-            "This changelog is generated automatically from ",
-            f"[GitHub Releases](https://github.com/{owner}/{repo}/releases).",
-            "",
-        ]
-
-        for rel in releases:
-            # --- heading ------------------------------------------------
-            tag = rel["tag_name"]
-            name = rel["name"] or tag
-            published = rel["published_at"][:10] if rel["published_at"] else ""
-            gh_url = rel["html_url"]
-
-            heading = f"## {name}  {{.changelog-version}}"  # noqa: F541
-
-            lines.append(heading)
-            lines.append("")
-
-            # Date + link line
-            meta_parts: list[str] = []
-            if published:
-                meta_parts.append(f"*{published}*")
-            if rel["prerelease"]:
-                meta_parts.append("*(pre-release)*")
-            meta_parts.append(f"[GitHub]({gh_url})")
-            lines.append(" · ".join(meta_parts))
-            lines.append("")
-
-            # --- body ---------------------------------------------------
-            body = (rel.get("body") or "").strip()
-            if body:
-                body = self._linkify_github_references(body, owner, repo)
-
-                # Ensure body headings nest under the version ## heading.
-                # Bump ##..###### → ###..#######  (i.e., add one # to every heading)
-                body = re.sub(r"^(#{2,6})\s", lambda m: m.group(1) + "# ", body, flags=re.MULTILINE)
-
-                lines.append(body)
-                lines.append("")
-
-        changelog_path = self.build_dir / "changelog.qmd"
-        changelog_path.write_text("\n".join(lines), encoding="utf-8")
-        print(f"Created {changelog_path}")
-
-        return "changelog.qmd"
 
     def _add_changelog_to_navbar(self) -> None:
         """Add a *Changelog* link to the navbar (idempotent)."""
@@ -14253,7 +14101,10 @@ anchor-sections: true
         owner, repo, _base_url = self._get_github_repo_info()
         if not (owner and repo):
             return Skipped("no GitHub repo info")
-        if not self._generate_changelog_page():
+        page = changelog.write_page(
+            self._config, self.build_dir, GithubRepo(owner, repo), self._remote, report=print
+        )
+        if page is None:
             return "No releases found; skipped"
         self._add_changelog_to_navbar()
         return "Changelog from GitHub Releases"
