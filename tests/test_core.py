@@ -469,21 +469,6 @@ class TestGenerateMcpManifest:
         assert called_with["server_info"] == {"name": "test", "tools": []}
 
 
-class TestReorderNavbar:
-    """Cover _reorder_navbar edge case."""
-
-    def test_empty_navbar_left_returns_early(self, tmp_path, monkeypatch):
-        """Navbar left is empty returns early."""
-        gd = _make_gd(tmp_path)
-        monkeypatch.setattr(
-            type(gd._config), "navbar_order", property(lambda self: ["Reference", "API"])
-        )
-        config = {"website": {"navbar": {"left": []}}}
-        gd._reorder_navbar(config)
-
-        assert config["website"]["navbar"]["left"] == []
-
-
 class TestRemoveMcpFromRefSections:
     """Cover _remove_mcp_from_ref_sections branching."""
 
@@ -1225,40 +1210,6 @@ class TestBacktickCliProse:
     def test_already_backticked_not_doubled(self):
         result = GreatDocs._backtick_cli_prose("Use `--watch` now", {"--watch"})
         assert result.count("`--watch`") == 1
-
-
-# ---------------------------------------------------------------------------
-# Bump heading levels
-# ---------------------------------------------------------------------------
-
-
-class TestBumpHeadingLevels:
-    def test_h1_becomes_h2(self):
-        result = GreatDocs._bump_heading_levels("# Title\n\nParagraph")
-        assert result.startswith("## Title")
-
-    def test_h3_becomes_h4(self):
-        result = GreatDocs._bump_heading_levels("### Section")
-        assert result == "#### Section"
-
-    def test_headings_in_fenced_block_untouched(self):
-        content = "```python\n# this is a comment\n```"
-        result = GreatDocs._bump_heading_levels(content)
-        assert "## this is a comment" not in result
-        assert "# this is a comment" in result
-
-    def test_tilde_fence_respected(self):
-        content = "~~~\n# comment\n~~~"
-        result = GreatDocs._bump_heading_levels(content)
-        assert "# comment" in result
-        assert "## comment" not in result
-
-    def test_mixed_content(self):
-        content = "# Top\n\n```\n# inside\n```\n\n## Below"
-        result = GreatDocs._bump_heading_levels(content)
-        assert "## Top" in result
-        assert "# inside" in result
-        assert "### Below" in result
 
 
 # ---------------------------------------------------------------------------

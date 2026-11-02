@@ -4,7 +4,8 @@ Shared configuration and build setup for `GreatDocs` tests
 `write_config` writes and loads `great-docs.yml`. `mock_config` provides a `Config` double
 with empty defaults. `make_run` creates build state for testing build methods directly.
 `stubbed_build` stubs Quarto and build steps while preserving the build's control flow.
-`StubRemote` supplies GitHub and PyPI data without network requests.
+`StubRemote` supplies GitHub and PyPI data without network requests. `homepage_hero` and
+`homepage_margin` build the homepage hero and sidebar from the project's configuration and metadata.
 """
 
 from __future__ import annotations
@@ -21,6 +22,8 @@ from yaml12 import format_yaml
 
 from great_docs import Config, GreatDocs
 from great_docs._build.pipeline import Run
+from great_docs._website.homepage import hero, margin
+from great_docs._website.project_pages import community
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -384,3 +387,62 @@ class StubRemote:
         """
         self.calls.append("pypi_release_dates")
         return {name: date for name, date in self.release_dates.items() if name in package_names}
+
+
+def homepage_hero(docs: GreatDocs, readme: str | None = None) -> tuple[str, str | None]:
+    """
+    Build a project's homepage hero from its configuration and metadata
+
+    Parameters
+    ----------
+    docs
+        The project.
+    readme
+        The homepage Markdown, or `None` for a page that is not a README.
+
+    Returns
+    -------
+    :
+        The hero HTML, or `""` when the homepage has none, and the README without its badges,
+        or `None` when the hero leaves it unchanged.
+    """
+    found = hero.find(docs._config, docs.layout.source_dir, readme)
+    if found is None:
+        return "", None
+    html = hero.render(
+        found,
+        docs._config,
+        docs.layout,
+        docs.build_dir,
+        metadata=docs._get_package_metadata(),
+        package_name=docs._detect_package_name(),
+        pages=docs._page_map(),
+    )
+    return html, found.body if html else None
+
+
+def homepage_margin(docs: GreatDocs) -> str:
+    """
+    Write a project's community pages and render its homepage sidebar, as a build does
+
+    Parameters
+    ----------
+    docs
+        The project.
+
+    Returns
+    -------
+    :
+        The sidebar's Markdown.
+    """
+    package_root = docs.layout.package_root
+    return margin.render(
+        docs._config,
+        docs.build_dir,
+        package_root=package_root,
+        metadata=docs._get_package_metadata(),
+        package_name=docs._detect_package_name(),
+        community_pages=community.write_pages(
+            docs._config, package_root, docs.build_dir, docs._page_authors
+        ),
+    )

@@ -13,6 +13,7 @@ from .._builtin.directives import DIRECTIVES
 from .._interlinks import AliasClaims, LoadedSources, build_index, load_sources
 from .._layout import Layout
 from .._utils import fenced_lines, is_in_great_docs_build_dir, parse_seealso
+from .._website.homepage import source as homepage_source
 from .._yaml import YamlMapping, YamlValue, split_front_matter
 from ..config import _PARSERS
 
@@ -1113,8 +1114,9 @@ def _site_page_sources(docs: GreatDocs) -> list[Path]:
             directories.append(source_dir / str(section["dir"]))
     directories.extend(Path(entry["source_dir"]) for entry in docs._get_custom_page_sources())
 
-    homepage, _ = docs._find_index_source_file()
-    pages = [homepage] if homepage is not None and homepage.suffix in (".md", ".qmd") else []
+    pages = [
+        path for path in homepage_source.find(docs.layout)[:1] if path.suffix in (".md", ".qmd")
+    ]
     for directory in directories:
         if not directory.is_dir():
             continue
@@ -1143,13 +1145,14 @@ def _check_page_descriptions(docs: GreatDocs, project_root: Path, result: LintRe
     result
         Aggregated results to append to.
     """
+    from .._website.homepage import hero
     from .._website.seo import description
 
     config = docs._config
     if not config.seo_enabled:
         return
 
-    homepage, _ = docs._find_index_source_file()
+    homepage = next(iter(homepage_source.find(docs.layout)), None)
     has_default = docs._default_description() is not None
     for path in _site_page_sources(docs):
         front_matter, body = split_front_matter(path.read_text(encoding="utf-8"))
@@ -1157,8 +1160,9 @@ def _check_page_descriptions(docs: GreatDocs, project_root: Path, result: LintRe
             continue
         if path == homepage:
             # The homepage is described after badges and hero elements are removed
-            _, cleaned = docs._build_hero_section(body)
-            body = cleaned if cleaned is not None else body
+            found = hero.find(config, docs.layout.source_dir, body)
+            if found is not None and found.body is not None:
+                body = found.body
         citations = description.resolves_citations(front_matter, config)
         fallback = description.first_paragraph(body, citations=citations).fallback
         if fallback is None:
