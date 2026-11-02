@@ -3,6 +3,8 @@ from pathlib import Path
 from threading import Event
 from unittest.mock import Mock, patch
 
+import pytest
+
 from great_docs import GreatDocs
 
 # ============================================================================
@@ -1137,28 +1139,45 @@ class TestErrorHandling:
             assert len(results["broken"]) == 1
             assert "SSL Error" in results["broken"][0]["error"]
 
-    def test_handles_unreadable_file(self):
-        """Test handling of files that can't be read."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs_dir = Path(tmp_dir) / "user_guide"
-            docs_dir.mkdir()
+    def test_reports_unreadable_file_and_continues(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ):
+        """Report an unreadable file and continue checking the remaining files"""
+        docs_dir = tmp_path / "user_guide"
+        (docs_dir / "folder.md").mkdir(parents=True)
+        (docs_dir / "valid.md").write_text("https://example.com/valid")
 
-            # Create a valid file
-            test_md = docs_dir / "valid.md"
-            test_md.write_text("https://example.com/valid")
+        results = GreatDocs(project_path=tmp_path).check_links(
+            include_source=False, include_docs=True, ignore_patterns=["example.com"], verbose=True
+        )
 
-            quarto_yml = docs_dir / "_quarto.yml"
-            quarto_yml.write_text("project:\n  type: website\n")
+        assert results["skipped"] == ["https://example.com/valid"]
+        assert f"Warning: Could not read {docs_dir / 'folder.md'}" in capsys.readouterr().out
 
-            docs = GreatDocs(project_path=tmp_dir)
-            # Should complete without error even if some files are problematic
-            results = docs.check_links(
-                include_source=False,
-                include_docs=True,
-                ignore_patterns=["example.com"],
-            )
+    @patch("requests.head")
+    def test_reports_other_request_errors_as_broken(self, mock_head: Mock, tmp_path: Path):
+        """Record an otherwise unhandled request error as a broken link with its message"""
+        import requests
 
-            assert "total" in results
+        mock_head.side_effect = requests.exceptions.InvalidURL("bad host")
+        (tmp_path / "user_guide").mkdir()
+        (tmp_path / "user_guide" / "test.md").write_text("https://bad.test/page")
+
+        results = GreatDocs(project_path=tmp_path).check_links(
+            include_source=False, include_docs=True
+        )
+
+        assert results["broken"][0]["error"] == "bad host"
+
+    @patch("requests.head")
+    def test_propagates_errors_outside_requests(self, mock_head: Mock, tmp_path: Path):
+        """Propagate an error that `requests` does not raise instead of marking the URL broken"""
+        mock_head.side_effect = ValueError("bug")
+        (tmp_path / "user_guide").mkdir()
+        (tmp_path / "user_guide" / "test.md").write_text("https://ok.test/page")
+
+        with pytest.raises(ValueError, match="bug"):
+            GreatDocs(project_path=tmp_path).check_links(include_source=False, include_docs=True)
 
 
 # ============================================================================
@@ -1260,6 +1279,24 @@ class TestFileFiltering:
 
             assert results["total"] == 1
             assert "README.md" in results["by_file"]
+
+    def test_scans_build_directory_without_user_guide(self, tmp_path: Path):
+        """Scan build pages when no source `user_guide/` directory exists"""
+        docs = GreatDocs(project_path=tmp_path)
+        build_dir = docs.layout.build_dir
+        (build_dir / "guide").mkdir(parents=True)
+        (build_dir / "guide" / "page.qmd").write_text("https://qmd.example.com")
+        (build_dir / "notes.md").write_text("https://md.example.com")
+
+        results = docs.check_links(
+            include_source=False, include_docs=True, ignore_patterns=["example.com"]
+        )
+
+        rel_build = build_dir.relative_to(tmp_path)
+        assert results["by_file"] == {
+            str(rel_build / "guide" / "page.qmd"): ["https://qmd.example.com"],
+            str(rel_build / "notes.md"): ["https://md.example.com"],
+        }
 
 
 # ============================================================================
