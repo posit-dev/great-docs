@@ -53,6 +53,7 @@ from ._utils import (
     record_site_ownership,
 )
 from ._website import (
+    branding,
     changelog,
     i18n,
     markdown_pages,
@@ -79,7 +80,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
     import click
-    from PIL import Image
 
     from ._apiref.api_reference import APIReference
     from ._apiref.inventory import InventoryItem
@@ -774,279 +774,6 @@ class GreatDocs:
             return potential_packages[0].name
 
         return None
-
-    def _detect_logo(self) -> dict[str, str] | None:
-        """
-        Scan conventional paths for logo files.
-
-        Looks for logo files in the project root using common naming conventions. If a matching file
-        is found, returns a normalized logo dict. Also checks for dark-mode variants automatically.
-
-        Returns
-        -------
-        dict | None
-            A dict with `light` (and optionally `dark`) keys pointing to paths relative to the
-            project root, or `None` if no logo file was found.
-        """
-        package_root = self.layout.source_dir
-        package_name = self._detect_package_name() or ""
-        importable = package_name.replace("-", "_")
-
-        # Candidate paths for the primary (light) logo, in priority order
-        candidates = [
-            "logo.svg",
-            "logo.png",
-            "assets/logo.svg",
-            "assets/logo.png",
-            "docs/assets/logo.svg",
-            "docs/assets/logo.png",
-        ]
-        # Package-name variants
-        if package_name:
-            candidates.extend(
-                [
-                    f"{package_name}_logo.svg",
-                    f"{package_name}_logo.png",
-                    f"assets/{package_name}_logo.svg",
-                    f"assets/{package_name}_logo.png",
-                ]
-            )
-        if importable and importable != package_name:
-            candidates.extend(
-                [
-                    f"{importable}_logo.svg",
-                    f"{importable}_logo.png",
-                    f"assets/{importable}_logo.svg",
-                    f"assets/{importable}_logo.png",
-                ]
-            )
-        # Also try logo-light naming convention
-        candidates.extend(
-            [
-                "assets/logo-light.svg",
-                "assets/logo-light.png",
-            ]
-        )
-
-        found_path: str | None = None
-        for candidate in candidates:
-            full = package_root / candidate
-            if full.is_file():
-                found_path = candidate
-                break
-
-        if found_path is None:
-            return None
-
-        # Build the result dict
-        result: dict[str, str] = {"light": found_path}
-
-        # Check for a dark variant alongside the found file
-        light_p = Path(found_path)
-        stem = light_p.stem.replace("-light", "")
-        parent = str(light_p.parent) if str(light_p.parent) != "." else ""
-
-        for ext in [light_p.suffix]:  # same extension first
-            dark_name = f"{stem}-dark{ext}"
-            dark_candidate = f"{parent}/{dark_name}" if parent else dark_name
-            if (package_root / dark_candidate).is_file():
-                result["dark"] = dark_candidate
-                break
-
-        # If no separate dark variant, use the same file for both
-        if "dark" not in result:
-            result["dark"] = found_path
-
-        return result
-
-    def _detect_hero_logo(self) -> dict[str, str] | None:
-        """
-        Scan conventional paths for hero-specific logo files.
-
-        Looks for `logo-hero.*` files in the project root and `assets/` directory.  If a light/dark
-        pair is found (`logo-hero-light.*` and `logo-hero-dark.*`), both are returned.
-
-        Returns
-        -------
-        dict | None
-            A dict with `light` (and optionally `dark`) keys, or `None` if no hero logo file was
-            found.
-        """
-        package_root = self.layout.source_dir
-
-        # Candidate paths in priority order
-        candidates = [
-            "logo-hero.svg",
-            "logo-hero.png",
-            "assets/logo-hero.svg",
-            "assets/logo-hero.png",
-            "logo-hero-light.svg",
-            "logo-hero-light.png",
-            "assets/logo-hero-light.svg",
-            "assets/logo-hero-light.png",
-        ]
-
-        found_path: str | None = None
-        for candidate in candidates:
-            if (package_root / candidate).is_file():
-                found_path = candidate
-                break
-
-        if found_path is None:
-            return None
-
-        result: dict[str, str] = {"light": found_path}
-
-        # Check for a dark variant alongside the found file
-        light_p = Path(found_path)
-        stem = light_p.stem.replace("-light", "")
-        parent = str(light_p.parent) if str(light_p.parent) != "." else ""
-
-        dark_name = f"{stem}-dark{light_p.suffix}"
-        dark_candidate = f"{parent}/{dark_name}" if parent else dark_name
-        if (package_root / dark_candidate).is_file():
-            result["dark"] = dark_candidate
-
-        # If no separate dark variant, use the same file for both
-        if "dark" not in result:
-            result["dark"] = found_path
-
-        return result
-
-    def _generate_favicons(self, logo_src: Path, dest_dir: Path) -> dict[str, str]:
-        """
-        Generate favicon files from a source logo image.
-
-        Produces raster favicons from SVG or PNG sources using cairosvg and Pillow. For SVG sources,
-        cairosvg rasterizes to PNG first, then Pillow creates the multi-size ICO and
-        apple-touch-icon. For PNG sources, Pillow resizes directly.
-
-        Parameters
-        ----------
-        logo_src
-            Absolute path to the source logo file (SVG or PNG).
-        dest_dir
-            Directory to write generated favicon files into.
-
-        Returns
-        -------
-        dict[str, str]
-            Mapping of purpose to filename (relative to dest_dir). Possible keys: `"icon"` (primary
-            favicon), `"icon-svg"`, `"icon-32"`, `"icon-16"`, `"apple-touch-icon"`. Only includes
-            files that were successfully generated.
-        """
-        import io
-
-        from PIL import Image
-
-        try:
-            import cairosvg
-        except (ImportError, OSError):
-            cairosvg = None  # type: ignore[assignment]
-
-        result: dict[str, str] = {}
-        suffix = logo_src.suffix.lower()
-
-        print(f"Favicon: generating from {logo_src.name}")
-
-        # --- SVG source ---
-        if suffix == ".svg":
-            # Always copy the SVG as favicon.svg (modern browsers support it)
-            shutil.copy2(logo_src, dest_dir / "favicon.svg")
-            result["icon-svg"] = "favicon.svg"
-            result["icon"] = "favicon.svg"
-
-            if cairosvg is None:
-                print(
-                    "Favicon: cairosvg is not installed; skipping raster favicon "
-                    "generation from SVG. Install it with:\n"
-                    "  pip install 'great-docs[svg]'\n"
-                    "On Linux you also need: apt install libcairo2-dev\n"
-                    "On macOS (see installation notes): brew install cairo"
-                )
-                return result
-
-            # Rasterize SVG → PNG preserving aspect ratio, then resize
-            png_data = cairosvg.svg2png(url=str(logo_src), scale=4)
-            raw = Image.open(io.BytesIO(png_data))
-
-            # Fit into a square canvas with transparent padding
-            master = self._fit_to_square(raw, 512)
-
-            # Generate standard favicon sizes
-            for size, name in [
-                (16, "favicon-16x16.png"),
-                (32, "favicon-32x32.png"),
-                (180, "apple-touch-icon.png"),
-            ]:
-                resized = master.resize((size, size), Image.Resampling.LANCZOS)
-                resized.save(dest_dir / name, "PNG")
-                if size == 16:
-                    result["icon-16"] = name
-                elif size == 32:
-                    result["icon-32"] = name
-                elif size == 180:
-                    result["apple-touch-icon"] = name
-
-            # Generate ICO with multiple sizes embedded
-            master.save(
-                dest_dir / "favicon.ico",
-                format="ICO",
-                sizes=[(16, 16), (32, 32), (48, 48)],
-            )
-            result["icon"] = "favicon.ico"
-
-        # --- PNG source ---
-        elif suffix == ".png":
-            raw = Image.open(logo_src)
-            # Fit into a square canvas with transparent padding
-            master = self._fit_to_square(raw, max(raw.size))
-
-            for size, name in [
-                (16, "favicon-16x16.png"),
-                (32, "favicon-32x32.png"),
-                (180, "apple-touch-icon.png"),
-            ]:
-                resized = master.resize((size, size), Image.Resampling.LANCZOS)
-                resized.save(dest_dir / name, "PNG")
-                if size == 16:
-                    result["icon-16"] = name
-                elif size == 32:
-                    result["icon-32"] = name
-                elif size == 180:
-                    result["apple-touch-icon"] = name
-
-            # Generate ICO with multiple sizes embedded
-            master.save(
-                dest_dir / "favicon.ico",
-                format="ICO",
-                sizes=[(16, 16), (32, 32), (48, 48)],
-            )
-            result["icon"] = "favicon.ico"
-            result["icon-32"] = "favicon-32x32.png"
-
-        if result:
-            files = ", ".join(dict.fromkeys(result.values()))
-            print(f"Favicon: created {files}")
-
-        return result
-
-    @staticmethod
-    def _fit_to_square(img: "Image.Image", size: int) -> "Image.Image":
-        """Fit an image into a square canvas, preserving aspect ratio.
-
-        The image is scaled to fit within `size x size`, then centered on a transparent canvas of
-        exactly `size x size`.
-        """
-        from PIL import Image
-
-        img = img.convert("RGBA")
-        img.thumbnail((size, size), Image.Resampling.LANCZOS)
-        canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-        x = (size - img.width) // 2
-        y = (size - img.height) // 2
-        canvas.paste(img, (x, y), img)
-        return canvas
 
     def _normalize_package_name(self, package_name: str) -> str:
         """
@@ -7171,7 +6898,7 @@ class GreatDocs:
         if not self._config.hero_enabled:
             # Not explicitly enabled and no config-level logo — auto-enable
             # if hero logo files are detected on disk or README has hero content.
-            if self._detect_hero_logo() is None and not readme_hero:
+            if branding.detect_hero_logo(self.layout.source_dir) is None and not readme_hero:
                 return "", None
 
         metadata = self._get_package_metadata()
@@ -7184,11 +6911,11 @@ class GreatDocs:
         # Fallback chain: explicit hero.logo → auto-detected hero logo
         # → explicit top-level logo → auto-detected navbar logo
         if logo_config is None:
-            logo_config = self._detect_hero_logo()
+            logo_config = branding.detect_hero_logo(self.layout.source_dir)
         if logo_config is None:
             logo_config = self._config.logo
         if logo_config is None:
-            logo_config = self._detect_logo()
+            logo_config = branding.detect_logo(self.layout.source_dir, self._detect_package_name())
         if logo_config is None and readme_hero.get("logo_url"):
             logo_config = readme_hero["logo_url"]  # pragma: no cover
         if logo_config is False:
@@ -9238,7 +8965,7 @@ anchor-sections: true
         logo_config = self._config.logo
         if logo_config is None:
             # Auto-detect logo from conventional paths
-            logo_config = self._detect_logo()
+            logo_config = branding.detect_logo(self.layout.source_dir, self._detect_package_name())
 
         if logo_config is not None:
             navbar = config["website"]["navbar"]
@@ -9311,7 +9038,9 @@ anchor-sections: true
                 if icon_src_path:
                     fav_src = self.layout.source_dir / icon_src_path
                     if fav_src.is_file():
-                        generated = self._generate_favicons(fav_src, self.build_dir)
+                        generated = branding.generate_favicons(
+                            fav_src, self.build_dir, report=print
+                        )
                         if generated.get("icon"):
                             config["website"]["favicon"] = generated["icon"]
                         else:
@@ -9322,7 +9051,7 @@ anchor-sections: true
                         print(f"Warning: Favicon file not found: {fav_src}")  # pragma: no cover
             elif light_src.is_file():
                 # Auto-generate favicons from the logo
-                generated = self._generate_favicons(light_src, self.build_dir)
+                generated = branding.generate_favicons(light_src, self.build_dir, report=print)
                 if generated.get("icon"):
                     config["website"]["favicon"] = generated["icon"]
 

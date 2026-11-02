@@ -6446,64 +6446,6 @@ _MINIMAL_SVG = (
     "</svg>"
 )
 
-# Non-square SVG (200x100)
-_WIDE_SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100">'
-    '<rect width="200" height="100" fill="#318BFC"/>'
-    "</svg>"
-)
-
-
-class TestFitToSquare:
-    """Tests for GreatDocs._fit_to_square()."""
-
-    def test_square_image_unchanged_dimensions(self):
-        """A square image should remain square with the requested size."""
-        img = PILImage.new("RGBA", (100, 100), (255, 0, 0, 255))
-        result = GreatDocs._fit_to_square(img, 64)
-
-        assert result.size == (64, 64)
-
-    def test_wide_image_padded_to_square(self):
-        """A wide image should be padded vertically to become square."""
-        img = PILImage.new("RGBA", (200, 100), (255, 0, 0, 255))
-        result = GreatDocs._fit_to_square(img, 200)
-
-        assert result.size == (200, 200)
-
-        # Top-left corner should be transparent (padding)
-        assert result.getpixel((0, 0))[3] == 0
-
-        # Center should be opaque (the image)
-        assert result.getpixel((100, 100))[3] == 255
-
-    def test_tall_image_padded_to_square(self):
-        """A tall image should be padded horizontally to become square."""
-        img = PILImage.new("RGBA", (100, 200), (0, 255, 0, 255))
-        result = GreatDocs._fit_to_square(img, 200)
-
-        assert result.size == (200, 200)
-
-        # Left edge should be transparent (padding)
-        assert result.getpixel((0, 100))[3] == 0
-
-        # Center should be opaque
-        assert result.getpixel((100, 100))[3] == 255
-
-    def test_output_is_rgba(self):
-        """Output should always be RGBA regardless of input mode."""
-        img = PILImage.new("RGB", (50, 50), (0, 0, 255))
-        result = GreatDocs._fit_to_square(img, 64)
-
-        assert result.mode == "RGBA"
-
-    def test_downscale_preserves_aspect_ratio(self):
-        """A large image should be scaled down to fit within the target size."""
-        img = PILImage.new("RGBA", (400, 200), (255, 0, 0, 255))
-        result = GreatDocs._fit_to_square(img, 100)
-
-        assert result.size == (100, 100)
-
 
 def _make_mock_cairosvg():
     """Create a mock cairosvg module that returns valid PNG data from svg2png."""
@@ -6519,216 +6461,6 @@ def _make_mock_cairosvg():
 
     mock_mod.svg2png = svg2png  # type: ignore[attr-defined]
     return mock_mod
-
-
-class TestGenerateFaviconsSvg:
-    """Tests for _generate_favicons with SVG source."""
-
-    @pytest.fixture(autouse=True)
-    def _mock_cairosvg(self):
-        with patch.dict("sys.modules", {"cairosvg": _make_mock_cairosvg()}):
-            yield
-
-    def test_svg_generates_all_files(self):
-        """SVG source should produce ico, svg, 16px, 32px, and apple-touch-icon."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            svg_file = tmp / "logo.svg"
-            svg_file.write_text(_MINIMAL_SVG)
-
-            dest = tmp / "output"
-            dest.mkdir()
-
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._generate_favicons(svg_file, dest)
-
-            assert result["icon"] == "favicon.ico"
-            assert result["icon-svg"] == "favicon.svg"
-            assert result["icon-16"] == "favicon-16x16.png"
-            assert result["icon-32"] == "favicon-32x32.png"
-            assert result["apple-touch-icon"] == "apple-touch-icon.png"
-
-    def test_svg_files_exist_on_disk(self):
-        """All generated favicon files should actually exist."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            svg_file = tmp / "logo.svg"
-            svg_file.write_text(_MINIMAL_SVG)
-
-            dest = tmp / "output"
-            dest.mkdir()
-
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._generate_favicons(svg_file, dest)
-
-            assert (dest / "favicon.ico").exists()
-            assert (dest / "favicon.svg").exists()
-            assert (dest / "favicon-16x16.png").exists()
-            assert (dest / "favicon-32x32.png").exists()
-            assert (dest / "apple-touch-icon.png").exists()
-
-    def test_svg_png_sizes_correct(self):
-        """Generated PNGs should have the correct pixel dimensions."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            svg_file = tmp / "logo.svg"
-            svg_file.write_text(_MINIMAL_SVG)
-
-            dest = tmp / "output"
-            dest.mkdir()
-
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._generate_favicons(svg_file, dest)
-
-            assert PILImage.open(dest / "favicon-16x16.png").size == (16, 16)
-            assert PILImage.open(dest / "favicon-32x32.png").size == (32, 32)
-            assert PILImage.open(dest / "apple-touch-icon.png").size == (180, 180)
-
-    def test_svg_copied_as_favicon_svg(self):
-        """The SVG source should be copied verbatim as favicon.svg."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            svg_file = tmp / "logo.svg"
-            svg_file.write_text(_MINIMAL_SVG)
-
-            dest = tmp / "output"
-            dest.mkdir()
-
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._generate_favicons(svg_file, dest)
-
-            assert (dest / "favicon.svg").read_text() == _MINIMAL_SVG
-
-    def test_non_square_svg_generates_square_favicons(self):
-        """A non-square SVG should produce square favicons via padding."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            svg_file = tmp / "wide-logo.svg"
-            svg_file.write_text(_WIDE_SVG)
-
-            dest = tmp / "output"
-            dest.mkdir()
-
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._generate_favicons(svg_file, dest)
-
-            # All outputs should be square
-            assert result["icon"] == "favicon.ico"
-            for name in ["favicon-16x16.png", "favicon-32x32.png", "apple-touch-icon.png"]:
-                img = PILImage.open(dest / name)
-
-                assert img.size[0] == img.size[1], f"{name} should be square"
-
-
-class TestGenerateFaviconsPng:
-    """Tests for _generate_favicons with PNG source."""
-
-    def test_png_generates_all_raster_files(self):
-        """PNG source should produce ico, 16px, 32px, and apple-touch-icon."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            png_file = tmp / "logo.png"
-            PILImage.new("RGBA", (128, 128), (255, 0, 0, 255)).save(png_file, "PNG")
-
-            dest = tmp / "output"
-            dest.mkdir()
-
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._generate_favicons(png_file, dest)
-
-            assert result["icon"] == "favicon.ico"
-            assert result["icon-16"] == "favicon-16x16.png"
-            assert result["icon-32"] == "favicon-32x32.png"
-            assert result["apple-touch-icon"] == "apple-touch-icon.png"
-
-    def test_png_does_not_produce_svg(self):
-        """PNG source should not produce a favicon.svg."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            png_file = tmp / "logo.png"
-            PILImage.new("RGBA", (64, 64), (0, 0, 255, 255)).save(png_file, "PNG")
-
-            dest = tmp / "output"
-            dest.mkdir()
-
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._generate_favicons(png_file, dest)
-
-            assert "icon-svg" not in result
-            assert not (dest / "favicon.svg").exists()
-
-    def test_png_files_exist_on_disk(self):
-        """All generated files from PNG source should exist."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            png_file = tmp / "logo.png"
-            PILImage.new("RGBA", (128, 128), (255, 0, 0, 255)).save(png_file, "PNG")
-
-            dest = tmp / "output"
-            dest.mkdir()
-
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._generate_favicons(png_file, dest)
-
-            assert (dest / "favicon.ico").exists()
-            assert (dest / "favicon-16x16.png").exists()
-            assert (dest / "favicon-32x32.png").exists()
-            assert (dest / "apple-touch-icon.png").exists()
-
-    def test_png_sizes_correct(self):
-        """Generated PNGs from PNG source should have correct dimensions."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            png_file = tmp / "logo.png"
-            PILImage.new("RGBA", (256, 256), (0, 128, 0, 255)).save(png_file, "PNG")
-
-            dest = tmp / "output"
-            dest.mkdir()
-
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._generate_favicons(png_file, dest)
-
-            assert PILImage.open(dest / "favicon-16x16.png").size == (16, 16)
-            assert PILImage.open(dest / "favicon-32x32.png").size == (32, 32)
-            assert PILImage.open(dest / "apple-touch-icon.png").size == (180, 180)
-
-    def test_non_square_png_generates_square_favicons(self):
-        """A non-square PNG should produce square favicons via padding."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            png_file = tmp / "wide-logo.png"
-            PILImage.new("RGBA", (200, 100), (255, 0, 0, 255)).save(png_file, "PNG")
-
-            dest = tmp / "output"
-            dest.mkdir()
-
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._generate_favicons(png_file, dest)
-
-            assert result["icon"] == "favicon.ico"
-            for name in ["favicon-16x16.png", "favicon-32x32.png", "apple-touch-icon.png"]:
-                img = PILImage.open(dest / name)
-
-                assert img.size[0] == img.size[1], f"{name} should be square"
-
-
-class TestGenerateFaviconsUnsupported:
-    """Tests for _generate_favicons with unsupported formats."""
-
-    def test_unsupported_extension_returns_empty(self):
-        """An unsupported file extension should return an empty dict."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            gif_file = tmp / "logo.gif"
-            gif_file.write_text("not a real gif")
-
-            dest = tmp / "output"
-            dest.mkdir()
-
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._generate_favicons(gif_file, dest)
-
-            assert result == {}
 
 
 class TestFaviconConfigNormalization:
@@ -7244,112 +6976,6 @@ def test_detect_package_name_from_setup_py_preexisting():
         docs = GreatDocs(project_path=tmp_dir)
 
         assert docs._detect_package_name() == "my-setup-package"
-
-
-def test_detect_logo_finds_svg():
-    """_detect_logo finds logo.svg in project root."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-        (Path(tmp_dir) / "logo.svg").write_text("<svg/>")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_logo()
-
-        assert result is not None
-        assert result["light"] == "logo.svg"
-
-
-def test_detect_logo_finds_png_in_assets():
-    """_detect_logo finds logo.png in assets/ directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-        assets = Path(tmp_dir) / "assets"
-        assets.mkdir()
-        (assets / "logo.png").write_bytes(b"\x89PNG")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_logo()
-
-        assert result is not None
-        assert result["light"] == "assets/logo.png"
-
-
-def test_detect_logo_returns_none():
-    """_detect_logo returns None when no logo file is found."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._detect_logo() is None
-
-
-def test_detect_logo_light_dark_pair():
-    """_detect_logo finds light/dark logo pair."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-        (Path(tmp_dir) / "logo.svg").write_text("<svg/>")
-        (Path(tmp_dir) / "logo-dark.svg").write_text("<svg dark/>")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_logo()
-
-        assert result is not None
-        assert result["light"] == "logo.svg"
-        assert result["dark"] == "logo-dark.svg"
-
-
-def test_detect_hero_logo_finds_svg():
-    """_detect_hero_logo finds logo-hero.svg."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-        (Path(tmp_dir) / "logo-hero.svg").write_text("<svg hero/>")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_hero_logo()
-
-        assert result is not None
-        assert result["light"] == "logo-hero.svg"
-
-
-def test_detect_hero_logo_light_dark_pair():
-    """_detect_hero_logo finds light/dark hero pair."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-        (Path(tmp_dir) / "logo-hero-light.svg").write_text("<svg light/>")
-        (Path(tmp_dir) / "logo-hero-dark.svg").write_text("<svg dark/>")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_hero_logo()
-
-        assert result is not None
-        assert result["light"] == "logo-hero-light.svg"
-        assert result["dark"] == "logo-hero-dark.svg"
-
-
-def test_detect_hero_logo_returns_none():
-    """_detect_hero_logo returns None when no hero logo exists."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._detect_hero_logo() is None
-
-
-def test_detect_hero_logo_in_assets():
-    """_detect_hero_logo finds hero logo in assets/ directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-        assets = Path(tmp_dir) / "assets"
-        assets.mkdir()
-        (assets / "logo-hero.png").write_bytes(b"\x89PNG")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_hero_logo()
-
-        assert result is not None
-        assert result["light"] == "assets/logo-hero.png"
 
 
 def test_normalize_package_name_multiple_formats():
@@ -16359,14 +15985,6 @@ def test_detect_package_name_not_found():
         assert result is None
 
 
-def test_detect_logo_no_logo():
-    """Test _detect_logo returns None when no logo file found."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_logo()
-        assert result is None
-
-
 def test_copy_section_files_basic():
     """Test _copy_section_files copies and parses files correctly."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -16790,14 +16408,6 @@ def test_reference_enabled_config():
         gd_yml.write_text("reference: false\n", encoding="utf-8")
         config = Config(Path(tmp_dir))
         assert config.reference_enabled is False
-
-
-def test_detect_hero_logo_none():
-    """Test _detect_hero_logo returns None when no hero logo found."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_hero_logo()
-        assert result is None
 
 
 def test_build_metadata_margin_with_authors_b9():
@@ -17734,48 +17344,6 @@ def test_detect_package_name_from_single_package_dir():
         assert name == "mypkg"
 
 
-def test_detect_logo_finds_logo_svg():
-    """Test _detect_logo finds logo.svg at project root."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "logo.svg").write_text("<svg></svg>")
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_logo()
-        assert result is not None
-        assert result["light"] == "logo.svg"
-
-
-def test_detect_logo_finds_dark_variant():
-    """Test _detect_logo discovers dark variant alongside light logo."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "logo.svg").write_text("<svg>light</svg>")
-        (Path(tmp_dir) / "logo-dark.svg").write_text("<svg>dark</svg>")
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_logo()
-        assert result is not None
-        assert result["light"] == "logo.svg"
-        assert result["dark"] == "logo-dark.svg"
-
-
-def test_detect_logo_no_files():
-    """Test _detect_logo returns None when no logo files exist."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_logo()
-        assert result is None
-
-
-def test_detect_logo_assets_dir():
-    """Test _detect_logo finds logo in assets/ subdirectory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        assets = Path(tmp_dir) / "assets"
-        assets.mkdir()
-        (assets / "logo.png").write_text("PNG data")
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_logo()
-        assert result is not None
-        assert result["light"] == "assets/logo.png"
-
-
 def test_get_package_metadata_from_setup_cfg():
     """Test _get_package_metadata reads from setup.cfg fallback."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -17934,18 +17502,6 @@ def test_detect_git_ref():
         docs = GreatDocs(project_path=tmp_dir)
         ref = docs._detect_git_ref()
         assert isinstance(ref, str)
-
-
-def test_detect_logo_package_name_variant():
-    """Test _detect_logo finds package-name-specific logo files."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "coolpkg"\n', encoding="utf-8")
-        (Path(tmp_dir) / "coolpkg_logo.svg").write_text("<svg></svg>")
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_logo()
-        assert result is not None
-        assert "coolpkg_logo.svg" in result["light"]
 
 
 def test_strip_numeric_prefix_basic():
@@ -20523,8 +20079,8 @@ def test_build_hero_section_auto_badges():
                 "_extract_badges_from_content",
                 return_value=(badges, "cleaned content", {}),
             ),
-            patch.object(docs, "_detect_hero_logo", return_value=None),
-            patch.object(docs, "_detect_logo", return_value=None),
+            patch("great_docs.core.branding.detect_hero_logo", return_value=None),
+            patch("great_docs.core.branding.detect_logo", return_value=None),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_build_metadata_margin", return_value=""),
         ):
@@ -20552,8 +20108,8 @@ def test_build_hero_section_no_content():
         )
 
         with (
-            patch.object(docs, "_detect_hero_logo", return_value=None),
-            patch.object(docs, "_detect_logo", return_value=None),
+            patch("great_docs.core.branding.detect_hero_logo", return_value=None),
+            patch("great_docs.core.branding.detect_logo", return_value=None),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_detect_package_name", return_value=None),
         ):
@@ -21467,7 +21023,9 @@ def test_update_quarto_config_dark_logo():
             gd_yml_content="logo:\n  light: logo-light.png\n  dark: logo-dark.png\n",
         )
 
-        with patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}):
+        with patch(
+            "great_docs.core.branding.generate_favicons", return_value={"icon": "favicon.ico"}
+        ):
             docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
@@ -21492,7 +21050,9 @@ def test_update_quarto_config_logo_name_collision():
             gd_yml_content="logo:\n  light: light/logo.png\n  dark: dark/logo.png\n",
         )
 
-        with patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}):
+        with patch(
+            "great_docs.core.branding.generate_favicons", return_value={"icon": "favicon.ico"}
+        ):
             docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
@@ -21525,7 +21085,9 @@ def test_update_quarto_config_dark_logo_not_found():
             gd_yml_content="logo:\n  light: logo.png\n  dark: nonexistent-dark.png\n",
         )
 
-        with patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}):
+        with patch(
+            "great_docs.core.branding.generate_favicons", return_value={"icon": "favicon.ico"}
+        ):
             docs._update_quarto_config(make_run())
 
 
@@ -21541,7 +21103,9 @@ def test_update_quarto_config_favicon_file():
             gd_yml_content="logo:\n  light: logo.png\nfavicon:\n  icon: my-favicon.ico\n",
         )
 
-        with patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}):
+        with patch(
+            "great_docs.core.branding.generate_favicons", return_value={"icon": "favicon.ico"}
+        ):
             docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
@@ -21561,7 +21125,7 @@ def test_update_quarto_config_favicon_not_found():
             gd_yml_content="logo:\n  light: logo.png\nfavicon:\n  source: nonexistent.ico\n",
         )
 
-        with patch.object(docs, "_generate_favicons", return_value={}):
+        with patch("great_docs.core.branding.generate_favicons", return_value={}):
             docs._update_quarto_config(make_run())
 
 
@@ -21584,7 +21148,7 @@ def test_update_quarto_config_favicon_resources_added():
             "apple-touch-icon": "apple-touch-icon.png",
         }
 
-        with patch.object(docs, "_generate_favicons", return_value=generated):
+        with patch("great_docs.core.branding.generate_favicons", return_value=generated):
             docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
@@ -21626,7 +21190,7 @@ def test_update_quarto_config_favicon_absolute_urls_with_site_url():
             "apple-touch-icon": "apple-touch-icon.png",
         }
 
-        with patch.object(docs, "_generate_favicons", return_value=generated):
+        with patch("great_docs.core.branding.generate_favicons", return_value=generated):
             docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
@@ -21674,7 +21238,7 @@ def test_update_quarto_config_favicon_no_links_without_site_url():
             "apple-touch-icon": "apple-touch-icon.png",
         }
 
-        with patch.object(docs, "_generate_favicons", return_value=generated):
+        with patch("great_docs.core.branding.generate_favicons", return_value=generated):
             docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
@@ -21719,7 +21283,7 @@ def test_update_quarto_config_favicon_absolute_urls_from_pyproject():
             "icon-svg": "favicon.svg",
         }
 
-        with patch.object(docs, "_generate_favicons", return_value=generated):
+        with patch("great_docs.core.branding.generate_favicons", return_value=generated):
             docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
@@ -21918,7 +21482,9 @@ def test_update_quarto_config_logo_href():
             gd_yml_content="logo:\n  light: logo.png\n  href: https://example.com\n",
         )
 
-        with patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}):
+        with patch(
+            "great_docs.core.branding.generate_favicons", return_value={"icon": "favicon.ico"}
+        ):
             docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
@@ -36328,34 +35894,6 @@ def test_bump_heading_levels_quarto_cell_option():
     result = GreatDocs._bump_heading_levels(content)
     assert "## Heading" in result
     assert "#| echo: false" in result  # not bumped to ##|
-
-
-# ---------------------------------------------------------------------------
-# _generate_favicons — SVG source with cairosvg=None
-# ---------------------------------------------------------------------------
-
-
-def test_generate_favicons_svg_no_cairosvg(tmp_path):
-    """SVG logo with cairosvg unavailable returns partial result (svg only)."""
-    svg_content = (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
-        '<rect width="10" height="10"/></svg>'
-    )
-    svg_file = tmp_path / "logo.svg"
-    svg_file.write_text(svg_content)
-    dest = tmp_path / "output"
-    dest.mkdir()
-
-    docs = GreatDocs(project_path=str(tmp_path))
-
-    with patch.dict(sys.modules, {"cairosvg": None}):
-        result = docs._generate_favicons(svg_file, dest)
-
-    assert result["icon"] == "favicon.svg"
-    assert result["icon-svg"] == "favicon.svg"
-    assert "icon-16" not in result
-    assert "icon-32" not in result
-    assert (dest / "favicon.svg").exists()
 
 
 # ---------------------------------------------------------------------------
