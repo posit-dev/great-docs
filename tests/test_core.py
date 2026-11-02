@@ -413,6 +413,20 @@ class TestUpdateSidebarWithMcp:
         mcp_section = next(s for s in sidebar if s.get("id") == "mcp-reference")
         assert "MCP Reference" in mcp_section["title"]
 
+    def test_sidebar_uses_site_language(self, tmp_path: Path):
+        (tmp_path / "great-docs.yml").write_text(
+            "module: mypkg\nsite:\n  lang: fr\n", encoding="utf-8"
+        )
+        gd = GreatDocs(project_path=str(tmp_path))
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        (gd.build_dir / "_quarto.yml").write_text("website:\n  sidebar: []\n", encoding="utf-8")
+
+        gd._update_sidebar_with_mcp(["reference/mcp/tool.qmd"])
+
+        sections = quarto_yml_file.read(gd.build_dir)["website"]["sidebar"]
+        section = next(item for item in sections if item.get("id") == "mcp-reference")
+        assert section["title"] == "Référence MCP"
+
     def test_updates_existing_mcp_section(self, tmp_path, monkeypatch):
         """existing mcp-reference section gets updated."""
         gd = _make_gd(tmp_path)
@@ -443,10 +457,9 @@ class TestUpdateSidebarWithMcp:
 
 
 class TestBuildMcpReference:
-    """Verify reference publishing uses project metadata and language"""
-
     def test_passes_metadata_and_language(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         gd = _make_gd(tmp_path)
+        gd._config._config["site"]["lang"] = "fr"
         gd._config._config["site_url"] = "https://example.org"
         pages: dict[str, object] = {}
         manifest: dict[str, object] = {}
@@ -467,6 +480,7 @@ class TestBuildMcpReference:
         )
 
         assert files == ["reference/mcp/tool.qmd"]
+        assert pages["language"] == "fr"
         assert manifest["package_name"] == "mypkg"
         assert manifest["repo_url"] == "https://github.com/owner/repo"
         assert manifest["site_url"] == "https://example.org"

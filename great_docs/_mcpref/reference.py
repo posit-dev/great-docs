@@ -554,7 +554,9 @@ def generate_mcp_reference_pages(
             f"reference/mcp/resource_{re.sub(r'[^a-zA-Z0-9_]', '_', r['name'])}.qmd"
             for r in resources
         ]
-        sidebar_items.append({"section": "Resources", "contents": resource_paths})
+        sidebar_items.append(
+            {"section": get_translation("mcp_resources", language), "contents": resource_paths}
+        )
 
     # Add resource template section to sidebar
     if resource_templates:
@@ -564,7 +566,7 @@ def generate_mcp_reference_pages(
         ]
         sidebar_items.append(
             {
-                "section": "Resource Templates",
+                "section": get_translation("mcp_resource_templates", language),
                 "contents": template_paths,
             }
         )
@@ -572,7 +574,9 @@ def generate_mcp_reference_pages(
     # Add prompt section to sidebar
     if prompts:
         prompt_paths = [f"reference/mcp/prompt_{p['name'].replace('-', '_')}.qmd" for p in prompts]
-        sidebar_items.append({"section": "Prompts", "contents": prompt_paths})
+        sidebar_items.append(
+            {"section": get_translation("mcp_prompts", language), "contents": prompt_paths}
+        )
 
     # Print summary
     if generated_paths:

@@ -2782,6 +2782,8 @@ class GreatDocs:
         if not mcp_files:
             return
 
+        from ._translations import get_translation
+
         if not quarto_yml.path(self.build_dir).exists():
             return
 
@@ -2799,14 +2801,24 @@ class GreatDocs:
             for section in sidebar:
                 if isinstance(section, dict) and section.get("id") == "mcp-reference":
                     mcp_section_exists = True
+                    section["title"] = get_translation("mcp_reference", self._config.lang)
                     section["contents"] = mcp_files
                     break
 
             if not mcp_section_exists:
                 mcp_section = {
                     "id": "mcp-reference",
-                    "title": "MCP Reference",
-                    "contents": [{"text": "MCP Index", "href": "reference/mcp/index.qmd"}]
+                    "title": get_translation("mcp_reference", self._config.lang),
+                    "contents": [
+                        {
+                            "text": (
+                                "MCP Index"
+                                if self._config.lang == "en"
+                                else get_translation("mcp_reference", self._config.lang)
+                            ),
+                            "href": "reference/mcp/index.qmd",
+                        }
+                    ]
                     + mcp_files,
                 }
                 sidebar.append(mcp_section)
