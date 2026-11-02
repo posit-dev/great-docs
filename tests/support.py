@@ -20,6 +20,7 @@ from unittest.mock import MagicMock, NonCallableMagicMock, patch
 from yaml12 import format_yaml
 
 from great_docs import Config, GreatDocs
+from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
 
 if TYPE_CHECKING:
@@ -63,9 +64,13 @@ _BUILD_METHODS: tuple[str, ...] = (
     "_print_layout_notice",
 )
 
-# `great_docs.config` imports these names only while type checking, so its annotations resolve
-# only when they are supplied.
-_TYPE_CHECKING_NAMES: dict[str, Any] = {"Any": Any, "ConfigDict": dict[str, Any]}
+# Configuration and build annotations use names imported only while type
+# checking. Supply them so the annotations can be resolved at runtime.
+_TYPE_CHECKING_NAMES: dict[str, Any] = {
+    "Any": Any,
+    "BuildLog": BuildLog,
+    "ConfigDict": dict[str, Any],
+}
 
 # Public attributes that `Config.__init__` sets and the class does not declare.
 _CONFIG_INSTANCE_ATTRIBUTES = ("project_root", "config_path", "cache_dir")
