@@ -2060,7 +2060,7 @@ class TestPageDescriptions:
         code = gd.build_dir / "code.qmd"
         code.write_text("```python\nx = 1\n```\n", encoding="utf-8")
 
-        gd._write_page_metadata()
+        gd._step_freeze_cache(make_run())
 
         assert f"description-meta: {self.LONG}" in prose.read_text(encoding="utf-8")
         assert "description-meta: Site default" in code.read_text(encoding="utf-8")
@@ -2072,7 +2072,7 @@ class TestPageDescriptions:
         page = gd.build_dir / "guide.qmd"
         page.write_text(f"{self.LONG}\n", encoding="utf-8")
 
-        gd._write_page_metadata()
+        gd._step_freeze_cache(make_run())
 
         assert "description-meta" not in page.read_text(encoding="utf-8")
 
@@ -2082,7 +2082,7 @@ class TestPageDescriptions:
         page = gd.build_dir / "guide.qmd"
         page.write_text(f"{self.LONG}\n", encoding="utf-8")
 
-        gd._write_page_metadata()
+        gd._step_freeze_cache(make_run())
 
         assert "description-meta" not in page.read_text(encoding="utf-8")
 
@@ -2092,7 +2092,7 @@ class TestPageDescriptions:
         page = gd.build_dir / "guide.qmd"
         page.write_text(f"---\nscale-to-fit: [.wide]\n---\n\n{self.LONG}\n", encoding="utf-8")
 
-        gd._write_page_metadata(watch=True)
+        gd._step_freeze_cache(make_run(watch=True))
 
         content = page.read_text(encoding="utf-8")
         assert "description-meta" in content

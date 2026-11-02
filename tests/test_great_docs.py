@@ -19521,7 +19521,7 @@ def test_build_no_api_reference(tmp_path):
         docs.build(watch=False, refresh=False)
 
     mock_builder_class.assert_not_called()
-    stubs.steps["_write_page_metadata"].assert_called_once()
+    stubs.steps["_default_description"].assert_called_once()
 
 
 def test_build_after_a_build_without_api_reference_generates_one(tmp_path):
@@ -19711,7 +19711,7 @@ def test_build_changelog_error_stops_the_build(tmp_path):
             docs.build(watch=False, refresh=False)
 
     assert _navbar_hrefs(docs) == ["reference/index.qmd"]
-    stubs.steps["_write_page_metadata"].assert_not_called()
+    stubs.steps["_default_description"].assert_not_called()
 
 
 def test_build_with_cli_documentation(tmp_path):
@@ -19813,7 +19813,7 @@ def test_build_cli_error_handled(tmp_path, capsys):
 
     assert "Error generating CLI docs: click" in capsys.readouterr().out
     stubs.steps["_generate_cli_reference_pages"].assert_not_called()
-    stubs.steps["_write_page_metadata"].assert_called_once()
+    stubs.steps["_default_description"].assert_called_once()
 
 
 def test_build_log_numbers_every_step(tmp_path, capsys):
@@ -22305,7 +22305,7 @@ def test_build_reports_project_errors_as_failures(tmp_path, capsys, method, titl
     out = capsys.readouterr().out
     assert "Build failed at Step" in out
     assert f"   {error}" in out
-    stubs.steps["_write_page_metadata"].assert_not_called()
+    stubs.steps["_default_description"].assert_not_called()
 
 
 def test_build_lets_own_errors_through(tmp_path):
@@ -22320,7 +22320,7 @@ def test_build_lets_own_errors_through(tmp_path):
         with pytest.raises(AttributeError, match="renamed method"):
             docs.build(watch=False, refresh=False)
 
-    stubs.steps["_write_page_metadata"].assert_not_called()
+    stubs.steps["_default_description"].assert_not_called()
 
 
 def test_build_changelog_no_releases(tmp_path):

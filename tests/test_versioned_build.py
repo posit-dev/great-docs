@@ -29,7 +29,6 @@ from great_docs._versioned_build import (
     _snapshot_cache_path,
     _validate_git_ref_is_tag,
     _version_build_dir,
-    _write_page_metadata,
     _write_snapshot_inventory,
     assemble_site,
     check_build_dir_collisions,
@@ -42,6 +41,7 @@ from great_docs._versioned_build import (
     write_version_map,
 )
 from great_docs._versioning import VersionEntry, parse_versions_config
+from great_docs._website import prerender
 
 if TYPE_CHECKING:
     from great_docs.config import Config
@@ -295,7 +295,7 @@ class TestPreprocessVersion:
         for i, entry in enumerate(versions[:2]):
             dest = tmp_path / f"build{i}"
             preprocess_version(source, dest, entry, versions, config=config)
-            _write_page_metadata(dest, config, None, None)
+            prerender.write_page_metadata(dest, config, None, None)
             front_matter = (dest / "page.qmd").read_text().split("---")[1]
             descriptions.append(parse_yaml(front_matter)["description-meta"])
 
