@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from yaml12 import read_yaml
 
+from great_docs._website import page_status
 from great_docs.config import Config
 from great_docs.core import GreatDocs
 from tests.support import make_run, write_config
@@ -127,13 +128,23 @@ class TestPageStatusConfig:
 
 
 class TestCollectPageStatuses:
+    def test_skips_reference_and_index_pages(self, tmp_path: Path):
+        gd = _bootstrap_project(tmp_path)
+        _make_qmd(gd.build_dir / "reference" / "item.qmd", "Item", status="new")
+        _make_qmd(gd.build_dir / "user-guide" / "index.qmd", "Guide", status="new")
+        _make_qmd(gd.build_dir / "user-guide" / "topic.qmd", "Topic", status="new")
+
+        assert page_status.collect(gd._config, gd.layout, gd.build_dir) == {
+            "user-guide/topic.qmd": "new"
+        }
+
     def test_collect_from_user_guide(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
         ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "intro.qmd", "Introduction", status="new")
         _make_qmd(ug_dir / "advanced.qmd", "Advanced Usage", status="deprecated")
 
-        result = gd._collect_page_statuses()
+        result = page_status.collect(gd._config, gd.layout, gd.build_dir)
 
         assert result["user-guide/intro.qmd"] == "new"
         assert result["user-guide/advanced.qmd"] == "deprecated"
@@ -143,7 +154,7 @@ class TestCollectPageStatuses:
         recipes_dir = gd.build_dir / "recipes"
         _make_qmd(recipes_dir / "recipe1.qmd", "Easy Recipe", status="beta")
 
-        result = gd._collect_page_statuses()
+        result = page_status.collect(gd._config, gd.layout, gd.build_dir)
 
         assert result["recipes/recipe1.qmd"] == "beta"
 
@@ -152,7 +163,7 @@ class TestCollectPageStatuses:
         ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "page.qmd", "A Page", status="nonexistent")
 
-        result = gd._collect_page_statuses()
+        result = page_status.collect(gd._config, gd.layout, gd.build_dir)
 
         assert len(result) == 0
         captured = capsys.readouterr()
@@ -163,12 +174,12 @@ class TestCollectPageStatuses:
         ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "page.qmd", "No Status")
 
-        result = gd._collect_page_statuses()
+        result = page_status.collect(gd._config, gd.layout, gd.build_dir)
         assert len(result) == 0
 
     def test_no_qmd_files(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        result = gd._collect_page_statuses()
+        result = page_status.collect(gd._config, gd.layout, gd.build_dir)
         assert len(result) == 0
 
     def test_case_insensitive_status(self, tmp_path: Path):
@@ -176,7 +187,7 @@ class TestCollectPageStatuses:
         ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "page.qmd", "A Page", status="New")
 
-        result = gd._collect_page_statuses()
+        result = page_status.collect(gd._config, gd.layout, gd.build_dir)
 
         assert result["user-guide/page.qmd"] == "new"
 
@@ -188,7 +199,7 @@ class TestCollectPageStatuses:
         tut_dir = gd.build_dir / "tutorials"
         _make_qmd(tut_dir / "first.qmd", "First Tutorial", status="new")
 
-        result = gd._collect_page_statuses()
+        result = page_status.collect(gd._config, gd.layout, gd.build_dir)
 
         assert result["tutorials/first.qmd"] == "new"
 
@@ -201,7 +212,7 @@ class TestCollectPageStatuses:
         section_dir = gd.build_dir / "docs" / "examples"
         _make_qmd(section_dir / "ex.qmd", "Example", status="new")
 
-        result = gd._collect_page_statuses()
+        result = page_status.collect(gd._config, gd.layout, gd.build_dir)
 
         assert result["docs/examples/ex.qmd"] == "new"
 
@@ -210,11 +221,27 @@ class TestCollectPageStatuses:
 
 
 class TestGenerateStatusJson:
+    def test_builtin_overrides_and_unknown_icon(self, tmp_path: Path, capsys):
+        gd = _bootstrap_project(
+            tmp_path,
+            "page_status:\n  enabled: true\n  statuses:\n    new:\n"
+            "      label: Fresh\n      description: Newly published\n      icon: no-such-icon\n",
+        )
+        page_status.write(gd._config, gd.build_dir, {})
+
+        definition = json.loads((gd.build_dir / "_page_status.json").read_text())["definitions"][
+            "new"
+        ]
+        assert definition["label"] == "Fresh"
+        assert definition["description"] == "Newly published"
+        assert definition["icon"] == ""
+        assert "no-such-icon" in capsys.readouterr().out
+
     def test_generates_json_file(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
         status_map = {"user-guide/intro.qmd": "new"}
 
-        gd._generate_status_json(status_map)
+        page_status.write(gd._config, gd.build_dir, status_map)
 
         json_path = gd.build_dir / "_page_status.json"
         assert json_path.exists()
@@ -229,7 +256,7 @@ class TestGenerateStatusJson:
         gd = _bootstrap_project(tmp_path)
         status_map = {"user-guide/intro.qmd": "new"}
 
-        gd._generate_status_json(status_map)
+        page_status.write(gd._config, gd.build_dir, status_map)
 
         json_path = gd.build_dir / "_page_status.json"
         data = json.loads(json_path.read_text(encoding="utf-8"))
@@ -244,7 +271,7 @@ class TestGenerateStatusJson:
 class TestProcessPageStatuses:
     def test_no_pages_returns_false(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        result = gd._process_page_statuses()
+        result = page_status.process(gd._config, gd.layout, gd.build_dir)
         assert result is False
 
     def test_with_pages_returns_true(self, tmp_path: Path):
@@ -252,7 +279,7 @@ class TestProcessPageStatuses:
         ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "intro.qmd", "Intro", status="new")
 
-        result = gd._process_page_statuses()
+        result = page_status.process(gd._config, gd.layout, gd.build_dir)
         assert result is True
 
         # Verify JSON file was created
