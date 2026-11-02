@@ -44,7 +44,9 @@ from ._contribution import NavbarLink
 from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import Layout
+from ._reference import block as reference_block
 from ._reference import discovery, probe
+from ._reference import sections as reference_sections
 from ._reference.discovery import Categories
 from ._remote import HttpRemote, Remote
 from ._subprocess import TEXT_MODE_KWARGS
@@ -492,7 +494,7 @@ class GreatDocs:
         # (auto-skips if no documentable exports are found)
         self._add_api_reference_config(run)
         if run.has_api_reference:
-            self._update_sidebar_from_sections()
+            reference_sections.update_sidebar(self._config, self.build_dir)
 
         # Build the homepage after the API reference configuration. Its metadata
         # margin can then include links to `llms.txt` and `llms-full.txt` when the
@@ -4325,449 +4327,6 @@ class GreatDocs:
             report=print,
         )
 
-    def _create_api_sections(self, package_name: str) -> list | None:
-        """
-        Create API reference sections based on discovered package exports.
-
-        Uses static analysis (griffe) to discover public objects.
-
-        Uses this heuristic:
-
-        - classes with ≤5 methods: documented inline
-        - classes with >5 methods: separate pages for each method
-
-        Parameters
-        ----------
-        package_name
-            The name of the package.
-
-        Returns
-        -------
-        list | None
-            List of section dictionaries, or None if no sections could be created.
-        """
-        exports = self._get_package_exports(package_name)
-        if not exports:
-            return None
-
-        # Filter out metadata variables at the export level too
-        skip_names = {"__version__", "__author__", "__email__", "__all__"}
-        exports = [e for e in exports if e not in skip_names]
-
-        if not exports:
-            return None  # pragma: no cover
-
-        print(f"Found {len(exports)} exported names to document")
-
-        # Categorize the exports
-        categories = self._categorise_exports(package_name, exports)
-
-        sections = []
-
-        # i18n helper for section titles/descriptions
-        from ._translations import get_translation
-
-        lang = self._config.lang
-
-        def _t(key: str, fallback: str) -> str:
-            return get_translation(key, lang) if lang != "en" else fallback
-
-        # ── Helper: build a class section with big-class splitting ────────
-        def _make_class_section(title: str, desc: str, class_names: list) -> list[dict]:
-            """Return section dicts (possibly with a Methods companion section)."""
-            if not class_names:
-                return []
-
-            class_contents = []
-            separate_methods = []
-
-            for class_name in class_names:
-                method_count = categories["class_methods"].get(class_name, 0)
-                if self._config.should_split_methods(method_count):
-                    class_contents.append({"name": class_name, "members": []})
-                    separate_methods.append(class_name)
-                else:
-                    class_contents.append(class_name)
-
-            result = [{"title": title, "desc": desc, "contents": class_contents}]
-
-            for class_name in separate_methods:
-                method_names = categories["class_method_names"].get(class_name, [])
-                method_count = len(method_names)
-                method_contents = [f"{class_name}.{method}" for method in method_names]
-                result.append(
-                    {
-                        "title": f"{class_name} Methods",
-                        "desc": f"Methods for the {class_name} class",
-                        "contents": method_contents,
-                    }
-                )
-                print(f"  Created separate section for {class_name} with {method_count} methods")
-
-            return result
-
-        # ── Class-like sections ──────────────────────────────────────────
-        sections.extend(
-            _make_class_section(
-                _t("classes", "Classes"),
-                _t("core_classes_desc", "Core classes"),
-                categories["classes"],
-            )
-        )
-        sections.extend(
-            _make_class_section(
-                _t("dataclasses", "Dataclasses"),
-                _t("data_classes_desc", "Data-holding classes"),
-                categories["dataclasses"],
-            )
-        )
-        sections.extend(
-            _make_class_section(
-                _t("abstract_classes", "Abstract Classes"),
-                _t("abstract_classes_desc", "Abstract base classes"),
-                categories["abstract_classes"],
-            )
-        )
-        sections.extend(
-            _make_class_section(
-                _t("protocols", "Protocols"),
-                _t("protocols_desc", "Structural typing protocols"),
-                categories["protocols"],
-            )
-        )
-
-        # Enums, Exceptions, NamedTuples, TypedDicts — no big-class splitting
-        if categories["enums"]:
-            sections.append(
-                {
-                    "title": _t("enumerations", "Enumerations"),
-                    "desc": _t("enum_types_desc", "Enum types"),
-                    "contents": categories["enums"],
-                }
-            )
-        if categories["exceptions"]:
-            sections.append(
-                {
-                    "title": _t("exceptions", "Exceptions"),
-                    "desc": _t("exception_classes_desc", "Exception classes"),
-                    "contents": categories["exceptions"],
-                }
-            )
-        if categories["namedtuples"]:
-            sections.append(
-                {
-                    "title": _t("named_tuples", "Named Tuples"),
-                    "desc": _t("namedtuple_types_desc", "NamedTuple types"),
-                    "contents": categories["namedtuples"],
-                }
-            )
-        if categories["typeddicts"]:
-            sections.append(
-                {
-                    "title": _t("typed_dicts", "Typed Dicts"),
-                    "desc": _t("typeddict_types_desc", "TypedDict types"),
-                    "contents": categories["typeddicts"],
-                }
-            )
-
-        # ── Function sections ────────────────────────────────────────────
-        if categories["functions"]:
-            sections.append(
-                {
-                    "title": _t("functions", "Functions"),
-                    "desc": _t("public_functions_desc", "Public functions"),
-                    "contents": categories["functions"],
-                }
-            )
-
-        if categories["async_functions"]:
-            sections.append(
-                {
-                    "title": _t("async_functions", "Async Functions"),
-                    "desc": _t("async_functions_desc", "Asynchronous functions"),
-                    "contents": categories["async_functions"],
-                }
-            )
-
-        # ── Data sections ────────────────────────────────────────────────
-        if categories["constants"]:
-            sections.append(
-                {
-                    "title": _t("constants", "Constants"),
-                    "desc": _t("constants_desc", "Module-level constants and data"),
-                    "contents": categories["constants"],
-                }
-            )
-
-        if categories["type_aliases"]:
-            sections.append(
-                {
-                    "title": _t("type_aliases", "Type Aliases"),
-                    "desc": _t("type_alias_desc", "Type alias definitions"),
-                    "contents": categories["type_aliases"],
-                }
-            )
-
-        # ── Catch-all ────────────────────────────────────────────────────
-        if categories["other"]:
-            sections.append(
-                {
-                    "title": _t("other", "Other"),
-                    "desc": _t("additional_exports_desc", "Additional exports"),
-                    "contents": categories["other"],
-                }
-            )
-
-        return sections if sections else None
-
-    def _build_sections_from_reference_config(
-        self, reference_config: list[dict]
-    ) -> list[dict] | None:
-        """
-        Build API reference sections directly from reference config without validation.
-
-        This is a fallback method used when auto-discovery fails but the user has
-        explicitly specified their API structure in great-docs.yml. Unlike
-        `_create_api_sections_from_config`, this method doesn't attempt to
-        validate the references against discovered exports.
-
-        Parameters
-        ----------
-        reference_config
-            The reference configuration from great-docs.yml.
-
-        Returns
-        -------
-        list[dict] | None
-            List of section dictionaries, or None if config is empty.
-        """
-        if not reference_config:
-            return None
-
-        sections = []
-
-        for section_config in reference_config:
-            if not isinstance(section_config, dict):
-                continue
-            title = section_config.get("title")
-            subtitle = section_config.get("subtitle")
-            desc = section_config.get("desc", "")
-            contents_config = section_config.get("contents", [])
-
-            if not contents_config:
-                continue
-
-            section_contents = []
-
-            for item in contents_config:
-                if isinstance(item, str):
-                    # Simple string reference - use as-is
-                    section_contents.append(item)
-                elif isinstance(item, dict):
-                    # Dict with name and optional members config
-                    name = item.get("name", "")
-                    if not name:
-                        continue
-
-                    members = item.get("members", True)
-                    include_inherited = item.get("include_inherited", None)
-
-                    if members is False:
-                        # Don't document methods - just the class
-                        section_contents.append({"name": name, "members": []})
-                    elif isinstance(members, list):
-                        # Explicit member list — pass through directly
-                        entry: dict = {"name": name, "members": members}
-                        if include_inherited is not None:
-                            entry["include_inherited"] = include_inherited
-                        section_contents.append(entry)
-                    else:
-                        # Default: inline documentation (members: true)
-                        if include_inherited is not None:
-                            section_contents.append(
-                                {"name": name, "include_inherited": include_inherited}
-                            )
-                        else:
-                            section_contents.append(name)
-
-            if section_contents:
-                sections.append(
-                    {
-                        **(
-                            {"subtitle": subtitle}
-                            if subtitle is not None
-                            else {"title": title or "Untitled"}
-                        ),
-                        "desc": desc,
-                        "contents": section_contents,
-                    }
-                )
-
-        return sections if sections else None
-
-    def _create_api_sections_from_config(self, package_name: str) -> list | None:
-        """
-        Create API reference sections from the `reference` config in great-docs.yml.
-
-        This method reads the explicit section configuration from great-docs.yml
-        and generates API reference sections accordingly. If no `reference` config
-        is provided, returns None to fall back to auto-discovery.
-
-        Parameters
-        ----------
-        package_name
-            The name of the package.
-
-        Returns
-        -------
-        list | None
-            List of section dictionaries, or None if no reference config.
-        """
-        reference_config = self._config.reference
-        if not reference_config:
-            return None
-
-        print("Using explicit reference configuration from great-docs.yml")
-
-        # Classify only the listed names, which costs far less than categorising every export
-        try:
-            package = self._get_griffe_package(package_name)
-        except USER_CODE_ERRORS:
-            categories = discovery.empty_categories()
-        else:
-            try:
-                categories = discovery.categorise_references(package, reference_config)
-            except BuildError as error:
-                print(f"ERROR: {error}", file=sys.stderr)
-                raise
-
-        # Build a mapping of module names → their expanded member names across
-        # all categories.  When a user lists a bare module name (e.g. "parser")
-        # in their reference config we expand it into the individual classes,
-        # functions, constants, etc. that categorisation discovered.
-        _MEMBER_CATS = [
-            "classes",
-            "dataclasses",
-            "abstract_classes",
-            "protocols",
-            "enums",
-            "exceptions",
-            "namedtuples",
-            "typeddicts",
-            "functions",
-            "async_functions",
-            "constants",
-            "type_aliases",
-            "other",
-        ]
-        module_members: dict[str, list[str]] = {}
-        for cat_key in _MEMBER_CATS:
-            for qualified in categories.get(cat_key, []):
-                if "." in qualified:
-                    mod_prefix = qualified.split(".")[0]
-                    module_members.setdefault(mod_prefix, []).append(qualified)
-
-        sections = []
-
-        for section_config in reference_config:
-            if not isinstance(section_config, dict):
-                continue  # pragma: no cover
-            title = section_config.get("title")
-            subtitle = section_config.get("subtitle")
-            desc = section_config.get("desc", "")
-            contents_config = section_config.get("contents", [])
-
-            if not contents_config:
-                continue  # pragma: no cover
-
-            section_contents = []
-            # Track large classes that need companion method sections
-            large_classes_in_section: list[str] = []
-
-            for item in contents_config:
-                if isinstance(item, str):
-                    if item in module_members:
-                        # This is a module name — expand into its individual members
-                        for member in module_members[item]:
-                            method_count = categories["class_methods"].get(member, 0)
-                            if self._config.should_split_methods(method_count):
-                                section_contents.append(
-                                    {"name": member, "members": []}
-                                )  # pragma: no cover
-                                large_classes_in_section.append(member)  # pragma: no cover
-                            else:
-                                section_contents.append(member)
-                    else:
-                        # Regular item (class, function, etc.) — use as-is
-                        method_count = categories["class_methods"].get(item, 0)
-                        if self._config.should_split_methods(method_count):
-                            section_contents.append({"name": item, "members": []})
-                            large_classes_in_section.append(item)
-                        else:
-                            section_contents.append(item)
-                elif isinstance(item, dict):
-                    # Dict with name and optional members config
-                    name = item.get("name", "")
-                    if not name:
-                        continue  # pragma: no cover
-
-                    members = item.get("members", True)
-                    include_inherited = item.get("include_inherited", None)
-
-                    if members is False:
-                        # Don't document methods - just the class
-                        section_contents.append({"name": name, "members": []})
-                    elif isinstance(members, list):
-                        # Explicit member list — pass through so inherited
-                        # methods listed here are documented
-                        entry: dict = {"name": name, "members": members}
-                        if include_inherited is not None:
-                            entry["include_inherited"] = include_inherited
-                        section_contents.append(entry)
-                    else:
-                        # Default: inline documentation (members: true)
-                        if include_inherited is not None:
-                            section_contents.append(
-                                {"name": name, "include_inherited": include_inherited}
-                            )
-                        else:
-                            section_contents.append(name)
-
-            if section_contents:
-                sections.append(
-                    {
-                        **(
-                            {"subtitle": subtitle}
-                            if subtitle is not None
-                            else {"title": title or "Untitled"}
-                        ),
-                        "desc": desc,
-                        "contents": section_contents,
-                    }
-                )
-
-            # Add companion method sections for large classes
-            for class_name in large_classes_in_section:
-                method_names = categories["class_method_names"].get(class_name, [])
-                if method_names:
-                    method_contents = [f"{class_name}.{m}" for m in method_names]
-                    sections.append(
-                        {
-                            "title": f"{class_name} Methods",
-                            "desc": f"Methods for the {class_name} class",
-                            "contents": method_contents,
-                        }
-                    )
-                    print(
-                        f"  Created separate section for {class_name} "
-                        f"with {len(method_names)} methods"
-                    )
-
-        if sections:
-            print(f"Generated {len(sections)} section(s) from reference config")
-
-        return sections if sections else None
-
     @contextlib.contextmanager
     def _resolved_api_reference(self, package_name: str) -> "Iterator[APIReference | None]":
         """
@@ -4923,30 +4482,37 @@ class GreatDocs:
 
     def _create_api_sections_with_config(self, package_name: str) -> list | None:
         """
-        Create API reference sections, prioritizing explicit config over auto-discovery.
-
-        First checks for explicit `reference` configuration in great-docs.yml.
-        If not found, falls back to auto-generating sections from discovered exports.
-
-        Parameters
-        ----------
-        package_name
-            The name of the package.
-
-        Returns
-        -------
-        list | None
-            List of section dictionaries, or None if no exports found.
+        Build API sections from explicit entries or discovered exports
         """
-        # First, check for explicit reference config in great-docs.yml
-        config_sections = self._create_api_sections_from_config(package_name)
-        if config_sections:
-            sections = config_sections
-        else:
-            # Fall back to auto-generated sections from discovered exports
-            sections = self._create_api_sections(package_name)
+        reference_config = self._config.reference
+        if reference_config:
+            print("Using explicit reference configuration from great-docs.yml")
+            try:
+                package = self._get_griffe_package(package_name)
+            except USER_CODE_ERRORS:
+                categories = discovery.empty_categories()
+            else:
+                try:
+                    categories = discovery.categorise_references(package, reference_config)
+                except BuildError as error:
+                    print(f"ERROR: {error}", file=sys.stderr)
+                    raise
+            configured = reference_sections.from_explicit_config(
+                self._config, reference_config, categories
+            )
+            if configured:
+                return configured
 
-        return sections
+        exports = self._get_package_exports(package_name)
+        if not exports:
+            return None
+        skip_names = {"__version__", "__author__", "__email__", "__all__"}
+        exports = [name for name in exports if name not in skip_names]
+        if not exports:
+            return None
+        print(f"Found {len(exports)} exported names to document")
+        categories = self._categorise_exports(package_name, exports)
+        return reference_sections.from_categories(self._config, categories)
 
     def _extract_authors_from_pyproject(self) -> list[dict[str, str]]:
         """
@@ -5148,102 +4714,13 @@ class GreatDocs:
             )
         overrides["dynamic"] = f"dynamic: {'true' if dynamic_mode else 'false'}"
 
-        reference_yaml = self._build_reference_yaml(categories)
+        reference_yaml = reference_block.reference_yaml(self._config, categories)
         if "  - title:" in reference_yaml:
             overrides["reference"] = reference_yaml
 
         config_path.write_text(create_default_config(overrides), encoding="utf-8")
         print(f"Created {config_path}")
         return True
-
-    def _build_reference_yaml(self, categories: Categories) -> str:
-        """
-        Build the `reference:` YAML block from categorized exports
-
-        Parameters
-        ----------
-        categories
-            The package's exports sorted into the groups of the API reference.
-
-        Returns
-        -------
-        str
-            A YAML block beginning with `reference:`; bare `reference:` when no
-            category has items.
-        """
-        lines = ["reference:"]
-
-        class_methods = categories.get("class_methods", {})
-        class_method_names = categories.get("class_method_names", {})
-        large_classes: list[str] = []
-        has_prev_section = False
-
-        _class_like_sections = [
-            ("classes", "Classes", "Main classes provided by the package"),
-            ("dataclasses", "Dataclasses", "Dataclass definitions"),
-            ("abstract_classes", "Abstract Classes", "Abstract base classes"),
-            ("protocols", "Protocols", "Protocol / structural-typing interfaces"),
-        ]
-
-        for cat_key, title, desc in _class_like_sections:
-            items = categories.get(cat_key, [])
-            if not items:
-                continue
-            if has_prev_section:  # pragma: no cover
-                lines.append("")  # pragma: no cover
-            lines.append(f"  - title: {title}")
-            lines.append(f"    desc: {desc}")
-            lines.append("    contents:")
-            for class_name in sorted(items):
-                method_count = class_methods.get(class_name, 0)
-                if self._config.should_split_methods(method_count):
-                    lines.append(f"      - name: {class_name}")
-                    lines.append(f"        members: false  # {method_count} methods listed below")
-                    large_classes.append(class_name)
-                elif method_count > 0:  # pragma: no cover
-                    lines.append(
-                        f"      - {class_name}  # {method_count} method(s)"
-                    )  # pragma: no cover
-                else:
-                    lines.append(f"      - {class_name}")
-            has_prev_section = True
-
-        for class_name in large_classes:
-            method_names = class_method_names.get(class_name, [])
-            if method_names:
-                lines.append("")
-                lines.append(f"  - title: {class_name} Methods")
-                lines.append(f"    desc: Methods for the {class_name} class")
-                lines.append("    contents:")
-                for method_name in method_names:
-                    lines.append(f"      - {class_name}.{method_name}")
-
-        _flat_sections = [
-            ("enums", "Enumerations", "Enumeration types"),
-            ("exceptions", "Exceptions", "Exception classes"),
-            ("namedtuples", "Named Tuples", "Named tuple definitions"),
-            ("typeddicts", "Typed Dicts", "TypedDict definitions"),
-            ("functions", "Functions", "Utility functions"),
-            ("async_functions", "Async Functions", "Asynchronous functions"),
-            ("constants", "Constants", "Module-level constants and data"),
-            ("type_aliases", "Type Aliases", "Type alias definitions"),
-            ("other", "Other", "Additional exports"),
-        ]
-
-        for cat_key, title, desc in _flat_sections:
-            items = categories.get(cat_key, [])
-            if not items:
-                continue
-            if has_prev_section:
-                lines.append("")
-            lines.append(f"  - title: {title}")
-            lines.append(f"    desc: {desc}")
-            lines.append("    contents:")
-            for name in sorted(items):
-                lines.append(f"      - {name}")
-            has_prev_section = True
-
-        return "\n".join(lines)
 
     def _create_index_from_readme(
         self, has_api_reference: bool, force_rebuild: bool = False, fallback_to_index: bool = False
@@ -5534,189 +5011,12 @@ body-classes: "gd-homepage"
             run.has_api_reference = False
             return
 
-        # Add API reference configuration with sensible defaults
-        # Use the importable name (actual module name) for the package field.
-        # The reference index *page* title defaults to "API Reference" (consistent with the
-        # "CLI Reference" / "MCP Reference" index titles). The *navbar* keeps the shorter
-        # "Reference" umbrella label, since that entry covers the API, CLI, and MCP references
-        # via the reference switcher (and other code locates it by the literal text "Reference").
-        ref_title = self._config.reference_title or "API Reference"
-        nav_title = self._config.reference_title or "Reference"
-        ref_desc = self._config.reference_desc
-
-        # Translate default titles for i18n
-        if not self._config.reference_title and self._config.lang != "en":
-            from ._translations import get_translation  # pragma: no cover
-
-            ref_title = get_translation("api_reference", self._config.lang)  # pragma: no cover
-            nav_title = get_translation("reference", self._config.lang)  # pragma: no cover
-
-        # Configure the API reference
-        api_ref_config = {
-            "package": importable_name,
-            "dir": "reference",
-            "title": ref_title,
-        }
-        if ref_desc:
-            api_ref_config["desc"] = ref_desc  # pragma: no cover
-
-        # Get dynamic setting from great-docs.yml config (defaults to True)
-        dynamic = self._config.dynamic
-        api_ref_config["dynamic"] = dynamic
-        if not dynamic:
-            print("Using static introspection mode (dynamic: false)")  # pragma: no cover
-
-        # Get parser from great-docs.yml config (defaults to numpy)
-        parser = self._config.parser
-        if parser and parser != "numpy":
-            # Only add parser if it's not the default (numpy)
-            api_ref_config["parser"] = parser  # pragma: no cover
-            print(f"Using '{parser}' docstring parser")  # pragma: no cover
-        else:
-            # Always explicitly set parser for clarity
-            api_ref_config["parser"] = "numpy"
-
-        api_ref_config["callable_signatures"] = {
-            "style": self._config.callable_signatures_style,
-            "wrap": self._config.callable_signatures_wrap,
-        }
-
-        # Get jupyter kernel from great-docs.yml config (defaults to python3)
-        jupyter_kernel = self._config.jupyter
-        if jupyter_kernel:
-            config["jupyter"] = jupyter_kernel
-            print(f"Using '{jupyter_kernel}' Jupyter kernel")
-
-        api_ref_config["sections"] = sections
-        print(f"Auto-generated {len(sections)} section(s) from package exports")
-
-        config["api-reference"] = api_ref_config
-
-        # Add "Reference" link to navbar
-        if "website" in config and "navbar" in config["website"]:
-            navbar = config["website"]["navbar"]
-            left = navbar.get("left", [])
-            # Only add if not already present
-            has_ref = any(
-                isinstance(item, dict) and item.get("href") == "reference/index.qmd"
-                for item in left
-            )
-            if not has_ref:
-                left.append({"text": nav_title, "href": "reference/index.qmd"})
-                navbar["left"] = left
-
-        # Add reference sidebar
-        if "website" in config and "sidebar" in config["website"]:
-            sidebars = config["website"]["sidebar"]
-            has_ref_sidebar = any(
-                isinstance(s, dict) and s.get("id") == "reference" for s in sidebars
-            )
-            if not has_ref_sidebar:
-                sidebars.append({"id": "reference", "contents": "reference/"})
+        reference_block.configure(self._config, config, importable_name, sections)
 
         # Write back to file
         quarto_yml.write(self.build_dir, config, self._config)
 
         print(f"Added API reference configuration to {quarto_yml.path(self.build_dir)}")
-
-    def _refresh_api_reference_config(self) -> None:
-        """
-        Refresh the API reference sections in _quarto.yml based on current package exports.
-
-        This method re-discovers the package API and updates the API reference sections without touching
-        other configuration. Use this when your package API has changed (new classes, methods, or
-        functions added/removed).
-
-        The method preserves:
-
-        - package name and other API reference settings
-        - all non-API reference configuration in _quarto.yml
-
-        Only the 'sections' key in API reference config is regenerated.
-        """
-        if not quarto_yml.path(self.build_dir).exists():
-            print("Error: _quarto.yml not found. Run 'great-docs init' first.")
-            return
-
-        config = quarto_yml.read(self.build_dir)
-
-        if "api-reference" not in config:
-            print("Error: No API reference configuration found. Run 'great-docs init' first.")
-            return
-
-        # Get the package name from existing config
-        package_name = config["api-reference"].get("package")
-        if not package_name:
-            print("Error: No package name in API reference config.")
-            return
-
-        print(f"Re-discovering exports for package: {package_name}")
-
-        # Re-generate sections from current package exports
-        # Prioritizes explicit config from great-docs.yml over auto-discovery
-        sections = self._create_api_sections_with_config(package_name)
-
-        # Update parser and dynamic settings from great-docs.yml config
-        parser = self._config.parser
-        if parser:
-            config["api-reference"]["parser"] = parser
-
-        dynamic = self._config.dynamic
-        config["api-reference"]["dynamic"] = dynamic
-
-        # Update title and desc from great-docs.yml config
-        ref_title = self._config.reference_title
-        if ref_title:
-            config["api-reference"]["title"] = ref_title  # pragma: no cover
-        ref_desc = self._config.reference_desc
-        if ref_desc:
-            config["api-reference"]["desc"] = ref_desc  # pragma: no cover
-        elif "desc" in config["api-reference"]:
-            # Remove desc if it was previously set but is now absent
-            del config["api-reference"]["desc"]  # pragma: no cover
-
-        # Update jupyter kernel from great-docs.yml config
-        jupyter_kernel = self._config.jupyter
-        if jupyter_kernel:
-            config["jupyter"] = jupyter_kernel
-
-        if sections:
-            config["api-reference"]["sections"] = sections
-            print(f"Updated API reference config with {len(sections)} section(s)")
-
-            # Write back to file first, so sidebar update reads the new sections
-            quarto_yml.write(self.build_dir, config, self._config)
-
-            # Now update the sidebar to match the new sections
-            self._update_sidebar_from_sections()
-
-            print(f"✅ Refreshed API reference configuration in {quarto_yml.path(self.build_dir)}")
-        else:
-            # Check if user has explicit reference config that should be applied
-            # even though auto-discovery failed
-            reference_config = self._config.reference
-            if reference_config:
-                print(
-                    "Auto-discovery failed, but applying explicit reference config from great-docs.yml"
-                )
-                # Build sections directly from user config without validation
-                user_sections = self._build_sections_from_reference_config(reference_config)
-                if user_sections:
-                    config["api-reference"]["sections"] = user_sections
-                    quarto_yml.write(self.build_dir, config, self._config)
-                    self._update_sidebar_from_sections()
-                    print(f"✅ Applied {len(user_sections)} section(s) from great-docs.yml")
-                else:
-                    print(
-                        "Warning: reference config in great-docs.yml produced no sections"
-                    )  # pragma: no cover
-            else:
-                print(
-                    "Warning: Could not discover package exports. Config unchanged."
-                )  # pragma: no cover
-                print(  # pragma: no cover
-                    "Tip: Add a 'reference' section to great-docs.yml to manually specify your API structure."
-                )
 
     def _inject_nav_icons(self, config: dict) -> None:
         """Inject navigation icon data and script into the Quarto config.
@@ -7561,63 +6861,6 @@ body-classes: "gd-homepage"
         snap_dir = self.project_root / ".great-docs" / "snapshots"
         snap.save(snap_dir / f"{version}.json")
 
-    def _update_sidebar_from_sections(self) -> None:
-        """
-        Update sidebar navigation based on API reference sections.
-
-        Builds a structured sidebar with sections and their contents, and excludes the index page
-        from showing the sidebar.
-        """
-        if not quarto_yml.path(self.build_dir).exists():
-            return  # pragma: no cover
-
-        config = quarto_yml.read(self.build_dir)
-
-        from great_docs._apiref import APIReference, SpecObject
-
-        # Get API reference sections if they exist
-        if "api-reference" not in config or "sections" not in config["api-reference"]:
-            return
-
-        sidebar_contents = []
-
-        # Build sidebar structure from sections
-        for section in APIReference(config).sections:
-            heading = section.title or section.subtitle or ""
-            section_entry = {"section": heading, "contents": []}
-
-            # Add each item in the section
-            for entry in section.contents:
-                if isinstance(entry, SpecObject):
-                    section_entry["contents"].append(
-                        {"text": entry.name, "href": f"reference/{entry.page_path}.qmd"}
-                    )
-
-            sidebar_contents.append(section_entry)
-
-        # Update sidebar configuration
-        if "website" not in config:
-            config["website"] = {}  # pragma: no cover
-
-        # Build sidebar with API link at top (not subject to filtering)
-        # followed by the sectioned contents
-        from ._translations import get_translation
-
-        api_index_label = get_translation("api_index", self._config.lang)
-        full_contents = [
-            {"text": api_index_label, "href": "reference/index.qmd"},
-        ] + sidebar_contents
-
-        config["website"]["sidebar"] = [
-            {
-                "id": "reference",
-                "contents": full_contents,
-            }
-        ]
-
-        # Write back
-        quarto_yml.write(self.build_dir, config, self._config)
-
     def _generate_skill_md(self) -> None:
         """
         Generate a SKILL.md file conforming to the Agent Skills specification.
@@ -8975,7 +8218,9 @@ body-classes: "gd-homepage"
         if run.api_discovery_done:
             print("API reference already configured in this build, skipping re-discovery")
         else:
-            self._refresh_api_reference_config()
+            reference_block.refresh(
+                self._config, self.build_dir, self._create_api_sections_with_config
+            )
         return "API reference refreshed"
 
     def _step_llms_txt(self) -> Outcome:

@@ -1,7 +1,7 @@
 """
-Export discovery and configuration probes for the API reference
+Build and describe Python API reference content
 
-`discovery` finds exported names and groups them into reference sections. `probe` checks
-whether objects can be documented and detects docstring style and dynamic-mode settings for
-`great-docs.yml`.
+`discovery` finds exports and categorises them. `probe` checks whether objects can be
+documented and detects configuration defaults. `sections` builds section descriptions,
+and `block` writes the Quarto reference settings and navigation.
 """

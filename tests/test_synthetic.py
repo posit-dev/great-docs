@@ -27,6 +27,7 @@ import pytest
 
 from great_docs import GreatDocs
 from great_docs._content import code_includes
+from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import discover_exports, parse_dunder_all
 from great_docs._reference.probe import detect_docstring_style
 from tests.support import make_run, write_config
@@ -184,7 +185,7 @@ def test_L1_section_generation(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected.get("detected_module", pkg_name)
-    sections = docs._create_api_sections(module_name)
+    sections = docs._create_api_sections_with_config(module_name)
 
     if sections is None:
         pytest.skip(
@@ -211,7 +212,7 @@ def test_L1_big_class_method_section(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected.get("detected_module", pkg_name)
-    sections = docs._create_api_sections(module_name)
+    sections = docs._create_api_sections_with_config(module_name)
     assert sections is not None
 
     big_class = expected["big_class_name"]
@@ -454,7 +455,7 @@ def test_L2_explicit_reference_config(pkg_name: str, tmp_path: Path):
     assert reference, "Spec says explicit_reference but no reference config found"
 
     docs = GreatDocs(project_path=str(pkg_dir))
-    sections = docs._build_sections_from_reference_config(reference)
+    sections = reference_sections.from_reference_config(reference)
     assert sections is not None, "Sections were None from explicit reference config"
     assert len(sections) == len(reference)
 
