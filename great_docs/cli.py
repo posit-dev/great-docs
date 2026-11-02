@@ -2579,6 +2579,9 @@ def proofread(
         else:
             guide_dir = Path(docs_dir) if docs_dir else None
             files_to_check = _proofread.find_pages(docs.layout, guide_dir)
+            if include_docstrings and (package_name := docs._detect_package_name()):
+                module = docs._resolve_importable_name(package_name)
+                files_to_check += _proofread.find_modules(docs.project_root, module)
 
         if not files_to_check:
             click.echo("No documentation files found to check.", err=True)

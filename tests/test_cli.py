@@ -3244,26 +3244,6 @@ class TestProofreadMissedBranches:
 
     @patch("great_docs.cli.GreatDocs")
     @patch("great_docs._harper.run_harper")
-    def test_include_docstrings_flag(self, mock_harper, mock_gd_cls, tmp_path, monkeypatch):
-        """--include-docstrings finds .py files and passes them to run_harper."""
-        monkeypatch.chdir(tmp_path)
-        self._make_project(tmp_path)
-        pkg = tmp_path / "mypkg"
-        pkg.mkdir()
-        (pkg / "__init__.py").write_text('"""Module docstring."""\n')
-        mock_docs = MagicMock()
-        mock_docs.project_root = tmp_path
-        mock_gd_cls.return_value = mock_docs
-        mock_harper.return_value = []
-        runner = CliRunner()
-        result = runner.invoke(
-            cli,
-            ["proofread", "--include-docstrings", "--project-path", str(tmp_path)],
-        )
-        assert result.exit_code in (0, 3)
-
-    @patch("great_docs.cli.GreatDocs")
-    @patch("great_docs._harper.run_harper")
     def test_verbose_no_issues_shows_checkmark(
         self, mock_harper, mock_gd_cls, tmp_path, monkeypatch
     ):
@@ -4176,6 +4156,26 @@ class TestProofreadDictionaryFileError:
 
 
 class TestProofreadIncludeDocstrings:
+    @patch("great_docs._harper.run_harper", return_value=[])
+    @patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.0"))
+    def test_include_docstrings_finds_package_files(
+        self, mock_check, mock_run, tmp_path, monkeypatch
+    ):
+        """Discover package Python files with `--include-docstrings` and no explicit files"""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        (tmp_path / "README.md").write_text("# Test\n")
+        (tmp_path / "pkg").mkdir()
+        (tmp_path / "pkg" / "__init__.py").write_text('"""Package docstring."""\n')
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["proofread", "--include-docstrings", "--project-path", str(tmp_path)]
+        )
+        assert result.exit_code == 0
+        checked = [Path(f) for call in mock_run.call_args_list for f in call.args[0]]
+        assert tmp_path / "pkg" / "__init__.py" in checked
+
     @patch("great_docs._harper.run_harper")
     @patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.0"))
     def test_include_docstrings_checks_py_files(self, mock_check, mock_run, tmp_path, monkeypatch):
