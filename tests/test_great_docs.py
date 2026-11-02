@@ -1959,7 +1959,9 @@ class MyClass:
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            result = detect_dynamic_mode(docs._get_griffe_package("simple_pkg"), report=print)
+            result = detect_dynamic_mode(
+                docs._get_griffe_package("simple_pkg"), ["hello", "MyClass"], report=print
+            )
             # Should return True for a simple package
             assert result is True
         finally:
@@ -15181,7 +15183,7 @@ def test_generate_initial_config_is_template_with_detected_values(monkeypatch):
             "great_docs.core.probe.detect_docstring_style", lambda package, report: "google"
         )
         monkeypatch.setattr(
-            "great_docs.core.probe.detect_dynamic_mode", lambda package, report: False
+            "great_docs.core.probe.detect_dynamic_mode", lambda package, exports, report: False
         )
         monkeypatch.setattr(docs, "_get_package_exports", lambda name: ["Thing"])
         monkeypatch.setattr(
@@ -16874,10 +16876,70 @@ def test_detect_dynamic_mode_with_cyclic_error():
         def fake_get_object(path, dynamic=False):
             raise griffe.CyclicAliasError("Cyclic alias")
 
-        with patch("great_docs._reference.probe.get_object", side_effect=fake_get_object):
-            result = detect_dynamic_mode(mock_pkg, report=print)
+        # Patch object lookup before module importing; resolving a patch target imports its module.
+        with (
+            patch("great_docs._reference.probe.get_object", side_effect=fake_get_object),
+            patch("great_docs._reference.probe.importlib.import_module"),
+        ):
+            result = detect_dynamic_mode(mock_pkg, ["MyClass"], report=print)
 
         assert result is False
+
+
+def test_detect_dynamic_mode_samples_the_exports(tmp_path: Path):
+    """Verify that the dynamic probe samples discovered exports"""
+    pkg_dir = tmp_path / "sampled_dynpkg"
+    pkg_dir.mkdir()
+    (pkg_dir / "__init__.py").write_text(
+        "from dataclasses import dataclass\n"
+        "from typing import Any, TypeVar\n"
+        '__all__ = ["Widget"]\n'
+        "class Widget:\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    package = griffe.load("sampled_dynpkg", search_paths=[tmp_path])
+    paths: list[str] = []
+
+    def fake_get_object(path, dynamic=False):
+        paths.append(path)
+        return MagicMock(members={})
+
+    sys.path.insert(0, str(tmp_path))
+    try:
+        with patch("great_docs._reference.probe.get_object", side_effect=fake_get_object):
+            assert detect_dynamic_mode(package, ["Widget"], report=print) is True
+    finally:
+        sys.path.remove(str(tmp_path))
+        sys.modules.pop("sampled_dynpkg", None)
+
+    assert paths == ["sampled_dynpkg:Widget"]
+
+
+def test_detect_dynamic_mode_is_off_for_an_unimportable_package(tmp_path: Path):
+    """Verify that a failed package import disables dynamic mode and reports a hint"""
+    pkg_dir = tmp_path / "unimportable_dynpkg"
+    pkg_dir.mkdir()
+    (pkg_dir / "__init__.py").write_text(
+        "import not_a_real_dependency_xyz\nclass Widget:\n    pass\n", encoding="utf-8"
+    )
+    package = griffe.load("unimportable_dynpkg", search_paths=[tmp_path])
+    lines: list[str] = []
+
+    sys.path.insert(0, str(tmp_path))
+    try:
+        result = detect_dynamic_mode(package, ["Widget"], report=lines.append)
+    finally:
+        sys.path.remove(str(tmp_path))
+        sys.modules.pop("unimportable_dynpkg", None)
+
+    assert result is False
+    assert lines == [
+        "Warning: Could not import 'unimportable_dynpkg' (ModuleNotFoundError: "
+        "No module named 'not_a_real_dependency_xyz'); using dynamic: false",
+        "Install the package's dependencies and set `dynamic: true` in great-docs.yml "
+        "to document docstrings that are set at runtime",
+    ]
 
 
 def test_process_sections_blog_type():
@@ -19700,7 +19762,7 @@ def test_detect_dynamic_mode_no_exports():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            result = detect_dynamic_mode(docs._get_griffe_package("emptydynpkg"), report=print)
+            result = detect_dynamic_mode(docs._get_griffe_package("emptydynpkg"), [], report=print)
             assert result is True
         finally:
             sys.path.remove(tmp_dir)
@@ -20999,25 +21061,6 @@ def test_categorise_exports_cyclic_alias():
         finally:
             sys.path.remove(tmp_dir)
             sys.modules.pop("cyclicpkg2", None)
-
-
-def test_detect_dynamic_mode_with_simple_package():
-    """Verify that a simple package produces a dynamic-mode verdict"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "simpledynpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("class MyClass: pass\n", encoding="utf-8")
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = detect_dynamic_mode(docs._get_griffe_package("simpledynpkg"), report=print)
-            # Should return True or False without crashing
-            assert isinstance(result, bool)
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("simpledynpkg", None)
 
 
 def test_create_blended_index_creates_index():

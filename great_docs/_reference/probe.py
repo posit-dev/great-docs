@@ -18,7 +18,7 @@ from .._apiref.introspect import get_object, make_loader
 from .._build.steps import USER_CODE_ERRORS
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
 DocstringStyle = Literal["numpy", "google", "sphinx"]
 
@@ -36,8 +36,7 @@ _GOOGLE_SECTION = re.compile(
 )
 _SPHINX_FIELD = re.compile(r"^\s*:(param|type|returns|rtype|raises|var|ivar|cvar)\s", re.MULTILINE)
 
-# How many of the package's first members to consider, and how many of those to import.
-_DYNAMIC_CANDIDATES = 10
+# How many of the package's exports to import.
 _DYNAMIC_SAMPLES = 5
 # How many members of each sampled object to resolve.
 _DYNAMIC_MEMBER_SAMPLES = 3
@@ -117,34 +116,51 @@ def _docstrings(obj: gf.Object, depth: int) -> list[str]:
     return found
 
 
-def detect_dynamic_mode(package: gf.Module, *, report: Callable[[str], None]) -> bool:
+def detect_dynamic_mode(
+    package: gf.Module, exports: Iterable[str], *, report: Callable[[str], None]
+) -> bool:
     """
     Check whether the renderer can read a package by importing it
 
-    Import a few of the package's public members, with a few of their own members, and resolve
-    their aliases. Dynamic mode fails only when an alias forms a cycle; any other import error
+    Import the package, then its first few public exports with a few of their own members,
+    resolving their aliases. Dynamic mode fails when the package cannot be imported, which is
+    reported with a hint, or when an alias forms a cycle. Any other error importing an export
     is ignored.
 
     Parameters
     ----------
     package
         The loaded package.
+    exports
+        The names the package exports.
     report
         A callback that receives the verdict.
 
     Returns
     -------
     :
-        `False` if a sampled alias forms a cycle, and `True` otherwise.
+        `False` if the package cannot be imported or a sampled alias forms a cycle, and `True`
+        otherwise.
     """
-    candidates = [
-        name for name in list(package.members)[:_DYNAMIC_CANDIDATES] if not name.startswith("_")
-    ]
-    if not candidates:
+    try:
+        _ = importlib.import_module(package.path)
+    except USER_CODE_ERRORS as error:
+        report(
+            f"Warning: Could not import '{package.path}' ({type(error).__name__}: {error}); "
+            "using dynamic: false"
+        )
+        report(
+            "Install the package's dependencies and set `dynamic: true` in great-docs.yml "
+            "to document docstrings that are set at runtime"
+        )
+        return False
+
+    samples = [name for name in exports if not name.startswith("_")][:_DYNAMIC_SAMPLES]
+    if not samples:
         return True
 
     cycles = 0
-    for name in candidates[:_DYNAMIC_SAMPLES]:
+    for name in samples:
         try:
             obj = get_object(f"{package.path}:{name}", dynamic=True)
             _ = obj.kind

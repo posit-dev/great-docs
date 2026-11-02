@@ -6770,7 +6770,9 @@ class GreatDocs:
                 "'reference:' section in great-docs.yml to list your API."
             )
             print("Testing dynamic introspection mode...")
-            dynamic_mode = package is None or probe.detect_dynamic_mode(package, report=print)
+            dynamic_mode = package is None or probe.detect_dynamic_mode(
+                package, package.members, report=print
+            )
             overrides["dynamic"] = f"dynamic: {'true' if dynamic_mode else 'false'}"
             config_path.write_text(create_default_config(overrides), encoding="utf-8")
             print(f"Created {config_path}")
@@ -6788,7 +6790,9 @@ class GreatDocs:
             dynamic_mode = False  # pragma: no cover
         else:
             print("Testing dynamic introspection mode...")
-            dynamic_mode = package is None or probe.detect_dynamic_mode(package, report=print)
+            dynamic_mode = package is None or probe.detect_dynamic_mode(
+                package, exports, report=print
+            )
         overrides["dynamic"] = f"dynamic: {'true' if dynamic_mode else 'false'}"
 
         reference_yaml = self._build_reference_yaml(categories)
