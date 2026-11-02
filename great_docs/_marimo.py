@@ -7,9 +7,18 @@ supporting the marimo Quarto shortcode.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import importlib.util
+import io
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Generator
 
 # Marimo islands CDN base
 _ISLANDS_CDN = "https://cdn.jsdelivr.net/npm/@marimo-team/islands"
@@ -24,6 +33,30 @@ _FONT_URL = (
     "&amp;family=Lora&amp;family=PT+Sans:wght@400;700&amp;display=swap"
 )
 _KATEX_CSS = "https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css"
+
+# Marimo `--mode edit` WASM exports (iframe mode) start with stale cells and no kernel.
+# Outputs and reactivity remain unavailable until the reader runs the notebook.
+# The injected script clicks every cell's run button once a cell reports `outdated`,
+# indicating that the kernel is ready. This makes the embed live and reactive on load.
+# Run buttons remain in the DOM when the editor chrome is hidden with
+# `?show-chrome=false`, so autorun also works in that view.
+_AUTORUN_MARKER = "great-docs:marimo-autorun"
+_AUTORUN_SCRIPT = """
+<script>
+/* great-docs:marimo-autorun */
+(function () {
+  var done = false, tries = 0;
+  var timer = setInterval(function () {
+    if (done || tries++ > 200) { clearInterval(timer); return; }
+    if (!document.querySelector('[data-status="outdated"]')) return;
+    var btns = [].slice.call(document.querySelectorAll('[data-testid="run-button"]'));
+    if (!btns.length) return;
+    done = true; clearInterval(timer);
+    btns.forEach(function (b) { try { b.click(); } catch (e) {} });
+  }, 400);
+})();
+</script>
+"""
 
 
 def islands_runtime_version() -> str:
@@ -107,7 +140,7 @@ def generate_islands_html(  # pragma: no cover
     try:
         loop = asyncio.new_event_loop()
         try:
-            loop.run_until_complete(gen.build())
+            _ = loop.run_until_complete(gen.build())
         finally:
             loop.close()
     finally:
@@ -219,7 +252,139 @@ def generate_islands_for_build(  # pragma: no cover
         app_id=app_id,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(html, encoding="utf-8")
+    _ = output_path.write_text(html, encoding="utf-8")
+
+
+def prepare_notebooks(
+    source_dir: Path,
+    build_dir: Path,
+    *,
+    report: Callable[[str], None],
+    warn: Callable[[str], None],
+) -> None:
+    """
+    Copy marimo notebooks into the build directory and render them for embedding
+
+    Each `*.py` notebook in `notebooks/` produces two inline island HTML files in
+    `_marimo_islands/`: `<stem>.html` with code and `<stem>-nocode.html` without code.
+    An editable WASM export at `notebooks/<stem>/index.html` supports iframe embeds and runs
+    every cell once its kernel is ready.
+
+    Parameters
+    ----------
+    source_dir
+        The documentation root containing `notebooks/`.
+    build_dir
+        The Quarto project directory.
+    report
+        Callback for the warning when marimo is not installed. No notebooks are copied in
+        that case.
+    warn
+        Callback for each failed WASM export. The warning includes the start of the
+        exporter's output; iframe embeds of that notebook will not load.
+    """
+    if importlib.util.find_spec("marimo") is None:
+        # The build can continue: pages using the `{{< marimo >}}` shortcode show a
+        # "not generated" notice when notebook output is unavailable.
+        report(
+            "Warning: marimo notebooks are enabled in great-docs.yml but "
+            "the 'marimo' package is not installed; skipping notebook "
+            "island generation. Install it with: pip install marimo"
+        )
+        return
+
+    notebooks_src = source_dir / "notebooks"
+    if not notebooks_src.is_dir():
+        return
+    notebooks_dst = build_dir / "notebooks"
+    _ = shutil.copytree(notebooks_src, notebooks_dst, dirs_exist_ok=True)
+    notebooks = list(notebooks_src.glob("*.py"))
+
+    islands_dir = build_dir / "_marimo_islands"
+    with _text_streams():
+        islands_dir.mkdir(exist_ok=True)
+        for notebook in notebooks:
+            generate_islands_for_build(notebook, islands_dir / f"{notebook.stem}.html")
+            generate_islands_for_build(
+                notebook, islands_dir / f"{notebook.stem}-nocode.html", display_code=False
+            )
+
+    for notebook in notebooks:
+        _export_wasm(notebook, notebooks_dst / notebook.stem, warn=warn)
+
+
+@contextlib.contextmanager
+def _text_streams() -> Generator[None]:
+    """
+    Ensure `sys.stdout` and `sys.stderr` have an `encoding` during the block
+
+    Importing marimo reads `sys.stdout.encoding`. Streams without an `encoding`, such as the
+    build log's detail stream, are temporarily replaced with UTF-8 streams whose output is
+    discarded.
+
+    Yields
+    ------
+    :
+        Nothing; both original streams are restored on exit.
+    """
+    stdout, stderr = sys.stdout, sys.stderr
+    if not hasattr(stdout, "encoding"):
+        sys.stdout = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+    if not hasattr(stderr, "encoding"):
+        sys.stderr = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+    try:
+        yield
+    finally:
+        sys.stdout, sys.stderr = stdout, stderr
+
+
+def _export_wasm(notebook: Path, output_dir: Path, *, warn: Callable[[str], None]) -> None:
+    """
+    Export a notebook as an editable WASM page that runs its cells on load
+
+    Parameters
+    ----------
+    notebook
+        The marimo notebook to export.
+    output_dir
+        The destination for `index.html` and its assets.
+    warn
+        Callback for warnings when the export fails.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    # In `--mode edit`, readers can edit code and rerun cells; dependent cells update.
+    # Answer `n` to the exporter's prompt.
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "marimo",
+            "export",
+            "html-wasm",
+            str(notebook),
+            "-o",
+            str(output_dir) + "/",
+            "--mode",
+            "edit",
+        ],
+        input="n\n",
+        capture_output=True,
+        text=True,
+    )
+    index_html = output_dir / "index.html"
+    if result.returncode != 0 or not index_html.exists():
+        output = (result.stderr or result.stdout or "").strip()[:500]
+        warn(
+            f"Warning: marimo WASM export failed for {notebook.name} "
+            f"(iframe mode will 404). {output}"
+        )
+        return
+
+    html = index_html.read_text(encoding="utf-8")
+    if _AUTORUN_MARKER not in html:
+        _ = index_html.write_text(
+            html.replace("</body>", _AUTORUN_SCRIPT + "</body>", 1), encoding="utf-8"
+        )
 
 
 def parse_marimo_source(source: str) -> list[dict[str, str]]:
@@ -238,7 +403,7 @@ def parse_marimo_source(source: str) -> list[dict[str, str]]:
         body = match.group(2)
 
         lines = body.split("\n")
-        dedented = []
+        dedented: list[str] = []
         for line in lines:
             if line.startswith("    "):
                 dedented.append(line[4:])
@@ -248,11 +413,11 @@ def parse_marimo_source(source: str) -> list[dict[str, str]]:
                 dedented.append(line)
 
         while dedented and dedented[-1].strip() == "":
-            dedented.pop()
+            _ = dedented.pop()
         if dedented and dedented[-1].strip().startswith("return"):
-            dedented.pop()
+            _ = dedented.pop()
         while dedented and dedented[-1].strip() == "":
-            dedented.pop()
+            _ = dedented.pop()
 
         code = "\n".join(dedented)
         if code.strip():

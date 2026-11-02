@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import io
+import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+from great_docs import _marimo
 from great_docs._marimo import (
     _FALLBACK_VERSION,
     _ISLANDS_CDN,
@@ -13,8 +18,8 @@ from great_docs._marimo import (
     islands_runtime_version,
     notebook_source,
     parse_marimo_source,
+    prepare_notebooks,
 )
-
 
 # ---------------------------------------------------------------------------
 # islands_runtime_version
@@ -198,3 +203,132 @@ class TestNotebookSource:
         nb = tmp_path / "demo.py"
         nb.write_text("import marimo\n", encoding="utf-8")
         assert notebook_source(nb) == "import marimo\n"
+
+
+# ---------------------------------------------------------------------------
+# prepare_notebooks
+# ---------------------------------------------------------------------------
+
+
+def _found(name: str) -> object:
+    return object()
+
+
+def _missing(name: str) -> None:
+    return None
+
+
+class _Exporter:
+    """A stand-in for `marimo export html-wasm` that writes a fixed page or fails"""
+
+    def __init__(self, page: str | None, stderr: str = "") -> None:
+        self.page = page
+        self.stderr = stderr
+
+    def __call__(self, args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if self.page is None:
+            return subprocess.CompletedProcess(args, 1, stdout="", stderr=self.stderr)
+        output_dir = Path(args[args.index("-o") + 1])
+        (output_dir / "index.html").write_text(self.page, encoding="utf-8")
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+
+class TestPrepareNotebooks:
+    @pytest.fixture
+    def source_dir(self, tmp_path: Path) -> Path:
+        notebooks = tmp_path / "docs" / "notebooks"
+        notebooks.mkdir(parents=True)
+        (notebooks / "demo.py").write_text("import marimo\n", encoding="utf-8")
+        (notebooks / "data.json").write_text("{}", encoding="utf-8")
+        return tmp_path / "docs"
+
+    @pytest.fixture
+    def islands(self, monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, bool]]:
+        """Record island filenames and whether each variant shows code"""
+        written: list[tuple[str, bool]] = []
+
+        def generate(notebook: Path, output: Path, *, display_code: bool = True) -> None:
+            written.append((output.name, display_code))
+
+        monkeypatch.setattr(_marimo.importlib.util, "find_spec", _found)
+        monkeypatch.setattr(_marimo, "generate_islands_for_build", generate)
+        return written
+
+    def test_copies_notebooks_and_writes_both_island_variants(
+        self,
+        source_dir: Path,
+        tmp_path: Path,
+        islands: list[tuple[str, bool]],
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = tmp_path / "build"
+        monkeypatch.setattr(_marimo.subprocess, "run", _Exporter("<body></body>"))
+        prepare_notebooks(source_dir, build_dir, report=print, warn=pytest.fail)
+
+        assert (build_dir / "notebooks" / "data.json").read_text() == "{}"
+        assert islands == [("demo.html", True), ("demo-nocode.html", False)]
+        index = (build_dir / "notebooks" / "demo" / "index.html").read_text()
+        assert index.count("great-docs:marimo-autorun") == 1
+        assert index.endswith("</script>\n</body>")
+
+    def test_leaves_an_export_that_already_runs_its_cells(
+        self,
+        source_dir: Path,
+        tmp_path: Path,
+        islands: list[tuple[str, bool]],
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        page = "<body><!-- great-docs:marimo-autorun --></body>"
+        build_dir = tmp_path / "build"
+        monkeypatch.setattr(_marimo.subprocess, "run", _Exporter(page))
+        prepare_notebooks(source_dir, build_dir, report=print, warn=pytest.fail)
+
+        assert (build_dir / "notebooks" / "demo" / "index.html").read_text() == page
+
+    def test_warns_when_the_export_fails(
+        self,
+        source_dir: Path,
+        tmp_path: Path,
+        islands: list[tuple[str, bool]],
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        warnings: list[str] = []
+        monkeypatch.setattr(_marimo.subprocess, "run", _Exporter(None, stderr="  no kernel  "))
+        prepare_notebooks(source_dir, tmp_path / "build", report=print, warn=warnings.append)
+
+        assert warnings == [
+            "Warning: marimo WASM export failed for demo.py (iframe mode will 404). no kernel"
+        ]
+
+    def test_reports_missing_marimo_and_copies_nothing(
+        self, source_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        reports: list[str] = []
+        monkeypatch.setattr(_marimo.importlib.util, "find_spec", _missing)
+        prepare_notebooks(source_dir, tmp_path / "build", report=reports.append, warn=pytest.fail)
+
+        assert len(reports) == 1
+        assert "'marimo' package is not installed" in reports[0]
+        assert not (tmp_path / "build").exists()
+
+    def test_gives_streams_an_encoding_while_generating_islands(
+        self, source_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        # The build log's detail stream has no `encoding`, which the marimo import reads.
+        class DetailStream(io.RawIOBase):
+            pass
+
+        detail = DetailStream()
+        seen: list[bool] = []
+
+        def generate(notebook: Path, output: Path, *, display_code: bool = True) -> None:
+            seen.append(hasattr(sys.stdout, "encoding"))
+
+        monkeypatch.setattr(_marimo.importlib.util, "find_spec", _found)
+        monkeypatch.setattr(_marimo, "generate_islands_for_build", generate)
+        monkeypatch.setattr(_marimo.subprocess, "run", _Exporter("<body></body>"))
+        monkeypatch.setattr(sys, "stdout", detail)
+        prepare_notebooks(source_dir, tmp_path / "build", report=print, warn=pytest.fail)
+
+        assert seen == [True, True]
+        assert sys.stdout is detail
