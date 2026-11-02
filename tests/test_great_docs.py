@@ -28463,6 +28463,26 @@ api-reference:
         assert "[llms-full.txt](llms-full.txt)" in content
 
 
+def test_generated_skill_front_matter_quotes_punctuation(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\ndescription = "Tools: data and docs"\nlicense = "Custom: MIT"\n'
+    )
+    build_dir = tmp_path / "great-docs"
+    build_dir.mkdir()
+    (build_dir / "_quarto.yml").write_text(
+        "api-reference:\n  package: os\n  sections:\n    - title: Core\n      contents: [path]\n"
+    )
+    docs = GreatDocs(project_path=tmp_path)
+
+    _skills_writer(docs).write()
+
+    front_matter, _ = split_front_matter((build_dir / "skill.md").read_text())
+    assert front_matter.string("description").strip() == (
+        "Tools: data and docs. Use when writing Python code that uses the os package."
+    )
+    assert front_matter.string("license") == "Custom: MIT"
+
+
 def test_write_skill_well_known():
     """Test that SKILL.md is copied to .well-known/ directories with index.json."""
     with tempfile.TemporaryDirectory() as tmp_dir:

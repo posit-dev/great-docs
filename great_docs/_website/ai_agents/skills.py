@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
+from yaml12 import format_yaml
+
 from ..._layout import Layout
 from ..._yaml import split_front_matter
 from ...config import Config
@@ -112,24 +114,18 @@ class SkillsWriter:
 
         skill_name = install_name.lower()[:64] if install_name else "package"
 
-        lines = ["---"]
-        lines.append(f"name: {skill_name}")
-
         desc_parts: list[str] = []
         if description:
             desc_parts.append(description.rstrip(".") + ".")
         if package_name:
             desc_parts.append(f"Use when writing Python code that uses the {package_name} package.")
         skill_desc = " ".join(desc_parts)[:1024] if desc_parts else f"Use the {skill_name} package."
-        lines.append("description: >")
-        lines.append(f"  {skill_desc}")
-
+        front_matter = {"name": skill_name, "description": skill_desc}
         if license_text:
-            lines.append(f"license: {license_text}")
+            front_matter["license"] = license_text
         if requires_python:
-            lines.append(f"compatibility: Requires Python {requires_python}.")
-        lines.append("---")
-        lines.append("")
+            front_matter["compatibility"] = f"Requires Python {requires_python}."
+        lines = ["---", *format_yaml(front_matter).rstrip().splitlines(), "---", ""]
 
         display_name = self.config.display_name or package_name or skill_name
         lines.append(f"# {display_name}")
