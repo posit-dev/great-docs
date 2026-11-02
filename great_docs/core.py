@@ -57,8 +57,8 @@ from ._website import (
     i18n,
     markdown_pages,
     page_dates,
-    page_metadata,
     page_url,
+    prerender,
     quarto_yml,
     social_cards,
 )
@@ -4960,9 +4960,6 @@ class GreatDocs:
                 dst_file.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src_file, dst_file)
 
-    # Regex for detecting a top-level `freeze:` key in YAML frontmatter
-    _FREEZE_FM_RE = re.compile(r"^freeze:\s+(.+)$", re.MULTILINE)
-
     def _default_description(self) -> str | None:
         """
         Resolve the site's default search description
@@ -4991,85 +4988,6 @@ class GreatDocs:
             self._get_site_name(),
             self._get_canonical_base_url(),
         )
-
-    def _write_page_metadata(self, watch: bool = False) -> None:
-        """
-        Write front matter entries and `<head>` tags into the build directory's pages
-
-        Run after generating all pages and before rendering.
-
-        Parameters
-        ----------
-        watch
-            Whether Quarto previews the build directory itself. A versioned
-            site then skips its per-version pipeline, so its pages are written
-            here too.
-        """
-        # Versioned pages need descriptions from their resolved content.
-        if self._config.has_versions and not watch:
-            return
-        quarto_config = quarto_yml.read(self.build_dir, seed_website=True)
-        page_metadata.write_to_pages(
-            self.build_dir,
-            quarto_config,
-            self._config,
-            self._default_description(),
-            self._structured_data(),
-        )
-
-    def _normalize_freeze_shorthand(self) -> list[str]:
-        """Rewrite page-level `freeze: auto|true` to `execute: freeze: auto|true`.
-
-        Scans all `.qmd` files in the build directory and transforms the Great Docs shorthand into
-        the nested form that Quarto understands.
-
-        Returns the list of relative file paths that were modified.
-        """
-        modified: list[str] = []
-        for qmd in self.build_dir.rglob("*.qmd"):
-            content = qmd.read_text(encoding="utf-8")
-            if not content.startswith("---"):
-                continue
-
-            parts = content.split("---", 2)
-            if len(parts) < 3:  # pragma: no cover
-                continue  # pragma: no cover
-
-            frontmatter = parts[1]
-
-            # Check for top-level `freeze:` (not indented under `execute:`)
-            # The regex uses ^ with MULTILINE, so it only matches `freeze:` at column 0
-            m = self._FREEZE_FM_RE.search(frontmatter)
-            if not m:
-                continue
-
-            freeze_value = m.group(1).strip()
-
-            # Remove the standalone `freeze:` line
-            new_frontmatter = frontmatter[: m.start()] + frontmatter[m.end() :]
-
-            # Check if `execute:` block already exists
-            exec_match = re.search(r"^execute:\s*$", new_frontmatter, re.MULTILINE)
-            if exec_match:
-                # Insert `  freeze: <value>` after the `execute:` line
-                insert_pos = exec_match.end()
-                new_frontmatter = (
-                    new_frontmatter[:insert_pos]
-                    + f"\n  freeze: {freeze_value}"
-                    + new_frontmatter[insert_pos:]
-                )
-            else:
-                # Add a new `execute:` block
-                new_frontmatter = (
-                    new_frontmatter.rstrip() + f"\nexecute:\n  freeze: {freeze_value}\n"
-                )
-
-            content = f"---{new_frontmatter}---{parts[2]}"
-            qmd.write_text(content, encoding="utf-8")
-            rel_path = str(qmd.relative_to(self.build_dir))
-            modified.append(rel_path)
-
-        return modified
 
     def _generate_user_guide_sidebar(self, user_guide_info: dict) -> dict:
         """
@@ -12485,8 +12403,13 @@ anchor-sections: true
         :
             The result line or skip reason, and the pages whose freeze shorthand was expanded.
         """
-        frozen_pages = self._normalize_freeze_shorthand()
-        self._write_page_metadata(run.watch)
+        frozen_pages = prerender.expand_freeze_shorthand(self.build_dir)
+        # Versioned builds write metadata after resolving each version's content. Watch mode
+        # previews this directory without the per-version pipeline, so it needs metadata here.
+        if not self._config.has_versions or run.watch:
+            prerender.write_page_metadata(
+                self.build_dir, self._config, self._default_description(), self._structured_data()
+            )
         if frozen_pages:
             return f"Using {len(frozen_pages)} page(s) from the freeze cache", frozen_pages
         if self.layout.freeze_dir.is_dir():

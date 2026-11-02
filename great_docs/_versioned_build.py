@@ -33,7 +33,7 @@ from great_docs._versioning import (
     process_version_fences,
     version_url_segment,
 )
-from great_docs._website import page_metadata
+from great_docs._website import prerender
 from great_docs._website.navigation import shared_sidebar
 
 if TYPE_CHECKING:
@@ -1646,41 +1646,6 @@ def expand_version_callouts(content: str, entry: VersionEntry) -> str:
     return result
 
 
-def _write_page_metadata(
-    dest_dir: Path,
-    config: Config,
-    default: str | None,
-    structured_data: StructuredData | None,
-) -> None:
-    """
-    Write front matter entries and `<head>` tags into a version's pages
-
-    Run after resolving version fences to describe each version's content.
-
-    Run before setting the version's site title so cards use the latest site
-    title. The versions share a freeze cache keyed by page path and checked
-    against the page source. Version-specific card titles would change that
-    source and force repeated execution.
-
-    Parameters
-    ----------
-    dest_dir
-        Quarto project directory for the version.
-    config
-        Project configuration.
-    default
-        The site's default description as plain text.
-    structured_data
-        The JSON-LD for the homepage and reference pages, or `None` when
-        structured data is disabled.
-    """
-    from yaml12 import read_yaml
-
-    quarto_yml = dest_dir / "_quarto.yml"
-    quarto_config = read_yaml(quarto_yml) if quarto_yml.exists() else {}
-    page_metadata.write_to_pages(dest_dir, quarto_config or {}, config, default, structured_data)
-
-
 def _rewrite_quarto_yml_for_version(
     dest_dir: Path,
     entry: VersionEntry,
@@ -2119,8 +2084,11 @@ def run_versioned_build(  # pragma: no cover
             badge_expiry=badge_expiry,
             config=config,
         )
+        # Describe each version's resolved pages before the version's site title is set. The
+        # versions share a freeze cache checked against page sources, so card titles must
+        # name the same site in every version.
         if config is not None:
-            _write_page_metadata(ver_dir, config, default_description, structured_data)
+            prerender.write_page_metadata(ver_dir, config, default_description, structured_data)
         _prune_missing_sidebar_pages(ver_dir)
         _rewrite_quarto_yml_for_version(ver_dir, entry, latest_tag)
         _sync_status_inline_script(ver_dir)

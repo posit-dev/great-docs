@@ -56,8 +56,6 @@ _BUILD_METHODS: tuple[str, ...] = (
     "_process_page_statuses",
     "_copy_assets",
     "_update_quarto_config",
-    "_normalize_freeze_shorthand",
-    "_write_page_metadata",
     "_prerender_term_player",
     "_default_description",
     "_structured_data",

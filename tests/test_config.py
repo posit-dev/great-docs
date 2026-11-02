@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from great_docs import config as config_module
+from great_docs._website import prerender
 from great_docs.config import (
     DEFAULT_CONFIG,
     Config,
@@ -957,104 +958,81 @@ class TestPreRender:
         assert cfg.pre_render == ["a.py", "b.py"]
 
 
-class TestNormalizeFreezeShorthand:
-    """Test the page-level `freeze:` → `execute: freeze:` transformation."""
+class TestExpandFreezeShorthand:
+    """Expansion of page-level `freeze:` settings into `execute:` blocks"""
 
-    def _make_docs(self, tmp_path: Path):
-        """Create a minimal GreatDocs instance with a build directory."""
-        from great_docs.core import GreatDocs
-
-        (tmp_path / "great-docs.yml").write_text("freeze: auto\n")
-        # Minimal pyproject.toml so GreatDocs doesn't error
-        (tmp_path / "pyproject.toml").write_text('[project]\nname = "testpkg"\nversion = "0.1"\n')
-        docs = GreatDocs(project_path=str(tmp_path))
-        # Create build dir manually for testing
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-        return docs
-
-    def test_shorthand_auto(self, tmp_project: Path):
-        docs = self._make_docs(tmp_project)
-        qmd = docs.build_dir / "page.qmd"
+    def test_shorthand_auto(self, tmp_path: Path):
+        qmd = tmp_path / "page.qmd"
         qmd.write_text("---\ntitle: Test\nfreeze: auto\n---\n\n# Hello\n")
 
-        count = docs._normalize_freeze_shorthand()
+        modified = prerender.expand_freeze_shorthand(tmp_path)
 
-        assert len(count) == 1
-        result = qmd.read_text()
-        assert "freeze: auto" not in result.split("---")[1].split("\n")[0:5] or "execute:" in result
-        # Verify proper nesting
-        assert "execute:\n  freeze: auto" in result
+        assert modified == ["page.qmd"]
+        assert "execute:\n  freeze: auto" in qmd.read_text()
 
-    def test_shorthand_true(self, tmp_project: Path):
-        docs = self._make_docs(tmp_project)
-        qmd = docs.build_dir / "page.qmd"
+    def test_shorthand_true(self, tmp_path: Path):
+        qmd = tmp_path / "page.qmd"
         qmd.write_text("---\ntitle: Test\nfreeze: true\n---\n\n# Hello\n")
 
-        count = docs._normalize_freeze_shorthand()
+        modified = prerender.expand_freeze_shorthand(tmp_path)
 
-        assert len(count) == 1
-        result = qmd.read_text()
-        assert "execute:\n  freeze: true" in result
+        assert len(modified) == 1
+        assert "execute:\n  freeze: true" in qmd.read_text()
 
-    def test_already_nested_unchanged(self, tmp_project: Path):
-        docs = self._make_docs(tmp_project)
-        qmd = docs.build_dir / "page.qmd"
+    def test_already_nested_unchanged(self, tmp_path: Path):
+        qmd = tmp_path / "page.qmd"
         original = "---\ntitle: Test\nexecute:\n  freeze: auto\n---\n\n# Hello\n"
         qmd.write_text(original)
 
-        count = docs._normalize_freeze_shorthand()
+        modified = prerender.expand_freeze_shorthand(tmp_path)
 
-        assert len(count) == 0
+        assert modified == []
         assert qmd.read_text() == original
 
-    def test_no_frontmatter_skipped(self, tmp_project: Path):
-        docs = self._make_docs(tmp_project)
-        qmd = docs.build_dir / "page.qmd"
-        qmd.write_text("# No frontmatter\n")
-
-        count = docs._normalize_freeze_shorthand()
-        assert len(count) == 0
-
-    def test_no_freeze_key_skipped(self, tmp_project: Path):
-        docs = self._make_docs(tmp_project)
-        qmd = docs.build_dir / "page.qmd"
-        original = "---\ntitle: Normal Page\n---\n\n# Hello\n"
+    @pytest.mark.parametrize(
+        "original",
+        [
+            pytest.param("# No frontmatter\n", id="no-front-matter"),
+            pytest.param("---\nfreeze: auto\n", id="unclosed-front-matter"),
+            pytest.param("---\ntitle: Normal Page\n---\n\n# Hello\n", id="no-freeze-key"),
+        ],
+    )
+    def test_pages_without_the_shorthand_unchanged(self, tmp_path: Path, original: str):
+        qmd = tmp_path / "page.qmd"
         qmd.write_text(original)
 
-        count = docs._normalize_freeze_shorthand()
+        modified = prerender.expand_freeze_shorthand(tmp_path)
 
-        assert len(count) == 0
+        assert modified == []
         assert qmd.read_text() == original
 
-    def test_existing_execute_block_gets_freeze_added(self, tmp_project: Path):
-        docs = self._make_docs(tmp_project)
-        qmd = docs.build_dir / "page.qmd"
+    def test_existing_execute_block_gets_freeze_added(self, tmp_path: Path):
+        qmd = tmp_path / "page.qmd"
         qmd.write_text("---\ntitle: Test\nexecute:\n  echo: false\nfreeze: auto\n---\n\n# Hi\n")
 
-        count = docs._normalize_freeze_shorthand()
+        modified = prerender.expand_freeze_shorthand(tmp_path)
 
-        assert len(count) == 1
+        assert len(modified) == 1
         result = qmd.read_text()
-        # freeze: auto is inserted under execute: block
+        # `freeze: auto` joins the existing `execute:` block, which keeps its settings
         assert "execute:" in result
         assert "  freeze: auto" in result
         assert "  echo: false" in result
-        # The standalone freeze: line should be gone
+        # The top-level `freeze:` line is gone
         lines = result.split("---")[1].strip().split("\n")
-        top_level_freeze = [l for l in lines if l == "freeze: auto"]
+        top_level_freeze = [line for line in lines if line == "freeze: auto"]
         assert top_level_freeze == []
 
-    def test_multiple_files(self, tmp_project: Path):
-        docs = self._make_docs(tmp_project)
-        subdir = docs.build_dir / "user-guide"
+    def test_multiple_files(self, tmp_path: Path):
+        subdir = tmp_path / "user-guide"
         subdir.mkdir()
-        (docs.build_dir / "a.qmd").write_text("---\nfreeze: auto\n---\n\n# A\n")
+        (tmp_path / "a.qmd").write_text("---\nfreeze: auto\n---\n\n# A\n")
         (subdir / "b.qmd").write_text("---\nfreeze: true\n---\n\n# B\n")
-        (docs.build_dir / "c.qmd").write_text("---\ntitle: No freeze\n---\n\n# C\n")
+        (tmp_path / "c.qmd").write_text("---\ntitle: No freeze\n---\n\n# C\n")
 
-        count = docs._normalize_freeze_shorthand()
+        modified = prerender.expand_freeze_shorthand(tmp_path)
 
-        assert len(count) == 2
+        assert sorted(modified) == ["a.qmd", str(Path("user-guide", "b.qmd"))]
 
 
 class TestNavbarStyle:
