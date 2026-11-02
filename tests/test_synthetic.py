@@ -27,6 +27,8 @@ import pytest
 
 from great_docs import GreatDocs
 from great_docs._content import code_includes
+from great_docs._reference.discovery import discover_exports, parse_dunder_all
+from great_docs._reference.probe import detect_docstring_style
 from tests.support import make_run, write_config
 
 # ── Setup: make test-packages/synthetic importable ───────────────────────────
@@ -141,15 +143,17 @@ def test_L1_export_discovery(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected.get("detected_module", pkg_name)
-    exports = docs._parse_package_exports(module_name)
+    init_file = docs._find_package_init(module_name)
+    exports = init_file and parse_dunder_all(init_file, docs._config, report=print)
 
     # Packages without __all__ use griffe-based discovery
     if exports is None:
-        exports = docs._discover_package_exports(module_name)
+        exports = discover_exports(
+            docs._get_griffe_package(module_name), docs._config, report=print
+        )
 
     assert exports is not None, (
-        f"Neither _parse_package_exports nor _discover_package_exports found "
-        f"exports for {module_name!r}"
+        f"Neither `parse_dunder_all` nor `discover_exports` found exports for {module_name!r}"
     )
 
     expected_names = set(expected["export_names"])
@@ -272,7 +276,7 @@ def test_L1_docstring_parser_detection(pkg_name: str, tmp_path: Path):
     init_file = docs._find_package_init(module_name)
     assert init_file is not None
 
-    detected = docs._detect_docstring_style(module_name)
+    detected = detect_docstring_style(docs._get_griffe_package(module_name), report=print)
     assert detected == expected["detected_parser"], (
         f"Expected parser {expected['detected_parser']!r}, got {detected!r}"
     )

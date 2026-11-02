@@ -1152,8 +1152,8 @@ def scan(
             click.echo("No exports discovered.")
             sys.exit(0)
 
-        # Categorize exports
-        categories = docs._categorize_api_objects(importable_name, exports)
+        # Group exports for comparison with the configured reference.
+        categories = docs._categorise_exports(importable_name, exports)
 
         # Build sets of what's in the reference config
         reference_config = docs._config.reference

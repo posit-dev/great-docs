@@ -16,7 +16,6 @@ from urllib.parse import unquote, urlsplit, urlunsplit
 from yaml12 import format_yaml, read_yaml
 
 from . import _proofread
-from ._apiref._type_checks import attribute_kind, class_kind, function_kind
 from ._build import freeze, outputs, quarto, serve, timings
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
@@ -44,6 +43,8 @@ from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import Layout
 from ._proofread import CheckedFile
+from ._reference import discovery, probe
+from ._reference.discovery import Categories
 from ._remote import HttpRemote, Remote
 from ._subprocess import TEXT_MODE_KWARGS
 from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
@@ -5871,973 +5872,101 @@ class GreatDocs:
 
         return None
 
-    def _parse_package_exports(self, package_name: str) -> list | None:
+    def _get_package_exports(self, package_name: str) -> list[str] | None:
         """
-        Parse __all__ from package's __init__.py to get public API.
+        Find the names a package exports, and remember them for later calls
 
-        Also checks for exclude in great-docs.yml to filter out
-        non-documentable items.
+        Read griffe's model of the package. When griffe cannot load the package, or its
+        `__all__` lists only names it does not define, read a literal `__all__` from its
+        `__init__.py` instead.
 
         Parameters
         ----------
         package_name
-            The name of the package to parse.
+            The package's importable name. Dashes count as underscores.
 
         Returns
         -------
-        list | None
-            List of public names from __all__ (filtered by exclusions), or None if not found.
-        """
-        # Find the package's __init__.py file
-        init_file = self._find_package_init(package_name)
-        if not init_file:
-            # Show both the original and normalized name for clarity
-            normalized = package_name.replace("-", "_")
-            if normalized != package_name:
-                print(
-                    f"Could not locate __init__.py for package '{package_name}' (module name: '{normalized}')",
-                    file=sys.stderr,
-                )
-                print(
-                    f"Tip: Ensure a '{normalized}/' directory exists with an __init__.py file",
-                    file=sys.stderr,
-                )
-            else:
-                print(
-                    f"Could not locate __init__.py for package '{package_name}'",
-                    file=sys.stderr,
-                )
-            return None
-
-        print(f"Found package __init__.py at: {init_file.relative_to(self.project_root)}")
-
-        # Get exclusions from great-docs.yml
-        metadata = self._get_package_metadata()
-        config_exclude = metadata.get("exclude", [])
-
-        try:
-            with open(init_file, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            # Try to extract __all__ using AST (safer than eval)
-            import ast
-
-            tree = ast.parse(content)
-
-            all_exports = None
-
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Assign):
-                    for target in node.targets:
-                        # Extract __all__
-                        if isinstance(target, ast.Name) and target.id == "__all__":
-                            if isinstance(node.value, ast.List):
-                                all_exports = []
-                                for elt in node.value.elts:
-                                    if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
-                                        all_exports.append(elt.value)
-
-            if all_exports:
-                print(f"Successfully parsed __all__ with {len(all_exports)} exports")
-
-                # Filter out excluded items from great-docs.yml
-                if config_exclude:
-                    filtered = [e for e in all_exports if e not in config_exclude]
-                    excluded_count = len(all_exports) - len(filtered)
-                    if excluded_count > 0:
-                        print(
-                            f"Filtered out {excluded_count} item(s) from great-docs.yml exclude: {', '.join(config_exclude)}"
-                        )
-                    return filtered
-                else:
-                    return all_exports
-
-            print("No __all__ definition found in __init__.py")
-            return None
-        except Exception as e:  # pragma: no cover
-            print(f"Error parsing __all__: {type(e).__name__}: {e}")
-            return None
-
-    # Auto-excluded names that are typically not meant for documentation
-    # These are common internal/utility exports that most packages don't want documented
-    AUTO_EXCLUDE = {
-        # CLI and entry points
-        "main",  # CLI entry point function
-        "cli",  # CLI module
-        # Version and metadata
-        "version",  # Version string/function
-        "VERSION",  # Uppercase version constant
-        "VERSION_INFO",  # Version info tuple
-        # Common module re-exports
-        "core",  # Core module
-        "utils",  # Utilities module
-        "helpers",  # Helpers module
-        "constants",  # Constants module
-        "config",  # Config module
-        "settings",  # Settings module
-        # Standard library re-exports
-        "PackageNotFoundError",  # importlib.metadata exception
-        "typing",  # typing module re-export
-        "annotations",  # annotations module re-export
-        "TYPE_CHECKING",  # typing.TYPE_CHECKING constant
-        # Logging
-        "logger",  # Module-level logger instance
-        "log",  # Alternative logger name
-        "logging",  # logging module re-export
-    }
-
-    def _discover_package_exports(self, package_name: str) -> list | None:
-        """
-        Discover public API objects using griffe introspection.
-
-        This method uses griffe (the project's introspection module) to statically analyze the
-        package and discover all public objects by filtering out private/internal names (those
-        starting with underscore).
-
-        Auto-excludes common internal names (see `AUTO_EXCLUDE`). Additional items can be
-        excluded via the `exclude` option in `great-docs.yml`.
-
-        Parameters
-        ----------
-        package_name
-            The name of the package to discover exports from.
-
-        Returns
-        -------
-        list | None
-            List of public names discovered (filtered by exclusions), or `None` if discovery failed.
-        """
-        try:
-            import griffe
-
-            # Normalize package name (replace dashes with underscores)
-            normalized_name = package_name.replace("-", "_")
-
-            # Load the package using the per-build griffe cache
-            try:
-                pkg = self._get_griffe_package(normalized_name)
-            except Exception as e:
-                print(
-                    f"Warning: Could not load package with griffe ({type(e).__name__})",
-                    file=sys.stderr,
-                )
-                if package_name != normalized_name:
-                    print(
-                        f"   (Looking for module '{normalized_name}' from project '{package_name}')",
-                        file=sys.stderr,
-                    )
-                return None
-
-            # Get all members from the package (equivalent to dir(package))
-            all_members = list(pkg.members.keys())
-
-            # If the package defines __all__, restrict to those names
-            if pkg.exports:
-                public_members = [name for name in all_members if name in set(pkg.exports)]
-                print(f"Using __all__ with {len(public_members)} exports")
-                # If __all__ lists names that griffe couldn't resolve as actual
-                # members (e.g., lazy imports, re-exports), fall back to AST
-                # parsing so the names are still discovered.
-                if not public_members and pkg.exports:
-                    return None
-            else:
-                # Filter out private names (starting with underscore)
-                # This also filters out dunder names like __version__, __all__, etc.
-                public_members = [name for name in all_members if not name.startswith("_")]
-                print(f"Discovered {len(public_members)} public names")
-
-            # Get config from great-docs.yml
-            metadata = self._get_package_metadata()
-            config_exclude = set(metadata.get("exclude", []))
-            auto_include = set(metadata.get("auto_include", []))
-            no_auto_exclude = metadata.get("no_auto_exclude", False)
-
-            # Determine effective auto-exclude set
-            if no_auto_exclude:
-                effective_auto_exclude: set[str] = set()
-                print("Auto-exclude list bypassed (no_auto_exclude: true)")
-            else:
-                effective_auto_exclude = self.AUTO_EXCLUDE - auto_include
-                if auto_include:
-                    forced = auto_include & self.AUTO_EXCLUDE
-                    if forced:
-                        print(
-                            f"Force-including {len(forced)} auto-excluded name(s): "
-                            f"{', '.join(sorted(forced))}"
-                        )
-
-            # Apply auto-exclusions
-            auto_excluded_found = [
-                name for name in public_members if name in effective_auto_exclude
-            ]
-            if auto_excluded_found:
-                print(
-                    f"Auto-excluding {len(auto_excluded_found)} item(s): "
-                    f"{', '.join(sorted(auto_excluded_found))}"
-                )
-
-            # Combine all exclusions (auto + user-specified)
-            all_exclude = effective_auto_exclude | config_exclude
-
-            # Filter out excluded items
-            filtered = [name for name in public_members if name not in all_exclude]
-
-            # Report user-specified exclusions separately
-            if config_exclude:
-                user_excluded_found = [
-                    name
-                    for name in public_members
-                    if name in config_exclude and name not in effective_auto_exclude
-                ]
-                if user_excluded_found:
-                    print(
-                        f"Filtered out {len(user_excluded_found)} item(s) from great-docs.yml exclude: "
-                        f"{', '.join(sorted(user_excluded_found))}"
-                    )
-
-            # Validate exports using the already-loaded griffe tree.
-            # This catches cyclic/unresolvable aliases, submodules, Rust/PyO3
-            # objects, and external re-exports without the cost of per-item
-            # dynamic imports (which dominated build time for large packages).
-            safe_exports = []
-            failed_exports = {}
-
-            for name in filtered:
-                if name not in pkg.members:  # pragma: no cover
-                    failed_exports[name] = "not found"  # pragma: no cover
-                    continue  # pragma: no cover
-
-                obj = pkg.members[name]
-
-                try:
-                    kind_val = obj.kind.value
-                except griffe.CyclicAliasError:
-                    failed_exports[name] = "cyclic alias"
-                    continue
-                except griffe.AliasResolutionError:
-                    failed_exports[name] = "unresolvable alias"
-                    continue
-                except KeyError:
-                    failed_exports[name] = "not found (likely Rust/PyO3)"
-                    continue
-                except Exception as e:
-                    failed_exports[name] = f"{type(e).__name__}"
-                    continue
-
-                if kind_val == "module":
-                    safe_exports.append(name)
-                    continue
-
-                try:
-                    _ = obj.members
-                except griffe.CyclicAliasError:
-                    failed_exports[name] = "cyclic alias"
-                    continue
-                except griffe.AliasResolutionError:
-                    failed_exports[name] = "unresolvable alias"
-                    continue
-                except Exception as e:
-                    failed_exports[name] = f"{type(e).__name__}"
-                    continue
-
-                if hasattr(obj, "is_alias") and obj.is_alias:
-                    try:
-                        canon = obj.canonical_path
-                        if not canon.startswith(normalized_name + "."):
-                            failed_exports[name] = "external re-export"
-                            continue
-                    except Exception:
-                        pass
-
-                safe_exports.append(name)
-
-            # Report excluded items grouped by error type
-            if failed_exports:
-                # Group by error type for cleaner output
-                by_error = {}
-                for name, error in failed_exports.items():
-                    by_error.setdefault(error, []).append(name)
-
-                for error_type, names in sorted(by_error.items()):
-                    print(
-                        f"Excluding {len(names)} object(s) ({error_type}): "
-                        f"{', '.join(sorted(names))}"
-                    )
-
-            return safe_exports
-
-        except ImportError:  # pragma: no cover
-            print("Warning: griffe not available, cannot use dir() discovery")  # pragma: no cover
-            return None  # pragma: no cover
-        except Exception as e:  # pragma: no cover
-            print(
-                f"Error discovering exports via dir(): {type(e).__name__}: {e}"
-            )  # pragma: no cover
-            return None  # pragma: no cover
-
-    def _detect_docstring_style(self, package_name: str) -> str:
-        """
-        Detect the docstring style used in a package.
-
-        Analyzes docstrings from the package to determine if they use NumPy, Google,
-        or Sphinx style formatting. The detection is based on characteristic patterns:
-
-        - NumPy style: Uses `---` underlines under section headers (Parameters, Returns, etc.)
-        - Google style: Uses section headers with colons but NO underlines (Args:, Returns:)
-        - Sphinx style: Uses `:param:`, `:returns:`, etc. field markers
-
-        Parameters
-        ----------
-        package_name
-            The name of the package to analyze.
-
-        Returns
-        -------
-        str
-            The detected docstring style: "numpy", "google", or "sphinx".
-            Defaults to "numpy" if detection is inconclusive.
-        """
-        try:
-            # Normalize package name
-            normalized_name = package_name.replace("-", "_")
-
-            # Load the package using the per-build griffe cache
-            try:
-                pkg = self._get_griffe_package(normalized_name)
-            except Exception as e:
-                print(
-                    f"Warning: Could not load package for docstring detection ({type(e).__name__})"
-                )
-                return "numpy"
-
-            # Collect docstrings from the package
-            docstrings = []
-
-            def collect_docstrings(obj, depth=0):
-                """Recursively collect docstrings from an object and its members."""
-                if depth > 2:  # Limit recursion depth
-                    return  # pragma: no cover
-
-                # Get the object's docstring
-                if hasattr(obj, "docstring") and obj.docstring:
-                    docstrings.append(obj.docstring.value)
-
-                # Recurse into members
-                if hasattr(obj, "members"):
-                    for member in obj.members.values():
-                        try:
-                            # Skip aliases to avoid infinite loops
-                            if hasattr(member, "is_alias") and member.is_alias:
-                                continue  # pragma: no cover
-                            collect_docstrings(member, depth + 1)
-                        except Exception:  # pragma: no cover
-                            continue
-
-            collect_docstrings(pkg)
-
-            if not docstrings:
-                print("No docstrings found, defaulting to numpy style")
-                return "numpy"
-
-            # Analyze docstrings for style indicators
-            numpy_indicators = 0
-            google_indicators = 0
-            sphinx_indicators = 0
-
-            # Patterns for detection
-            # NumPy: section headers followed by dashes (e.g., "Parameters\n----------")
-            numpy_section_pattern = re.compile(
-                r"^\s*(Parameters|Returns|Yields|Raises|Examples|Attributes|Methods|See Also|Notes|References|Warnings)\s*\n\s*-{3,}",
-                re.MULTILINE,
-            )
-
-            # Google: section headers with colons (e.g., "Args:", "Returns:")
-            google_section_pattern = re.compile(
-                r"^\s*(Args|Arguments|Returns|Yields|Raises|Examples|Attributes|Note|Notes|Todo|Warning|Warnings):\s*$",
-                re.MULTILINE,
-            )
-
-            # Sphinx: field markers (e.g., ":param name:", ":returns:")
-            sphinx_pattern = re.compile(
-                r"^\s*:(param|type|returns|rtype|raises|var|ivar|cvar)\s",
-                re.MULTILINE,
-            )
-
-            # Example blocks with >>> are common in both NumPy and Google styles
-            # but the presence/absence of --- is the key differentiator
-
-            for docstring in docstrings:
-                if not docstring:
-                    continue  # pragma: no cover
-
-                # Check for NumPy style (section + dashes)
-                if numpy_section_pattern.search(docstring):
-                    numpy_indicators += 1
-
-                # Check for Google style (section headers with colons, no dashes)
-                if google_section_pattern.search(docstring):
-                    # Only count as Google if there are NO numpy-style dashes nearby
-                    if not numpy_section_pattern.search(docstring):
-                        google_indicators += 1
-
-                # Check for Sphinx style
-                if sphinx_pattern.search(docstring):
-                    sphinx_indicators += 1
-
-            # Determine the winner
-            total_indicators = numpy_indicators + google_indicators + sphinx_indicators
-
-            if total_indicators == 0:
-                print("No clear docstring style detected, defaulting to numpy")
-                return "numpy"
-
-            # Report findings
-            print(
-                f"Docstring style detection: numpy={numpy_indicators}, "
-                f"google={google_indicators}, sphinx={sphinx_indicators}"
-            )
-
-            # Return the style with most indicators
-            if sphinx_indicators > numpy_indicators and sphinx_indicators > google_indicators:
-                print("Detected sphinx docstring style")
-                return "sphinx"
-            elif google_indicators > numpy_indicators:
-                print("Detected google docstring style")
-                return "google"
-            else:
-                print("Detected numpy docstring style")
-                return "numpy"
-
-        except Exception as e:  # pragma: no cover
-            print(f"Error detecting docstring style: {type(e).__name__}: {e}")
-            return "numpy"
-
-    def _detect_dynamic_mode(self, package_name: str) -> bool:
-        """
-        Detect whether dynamic introspection mode works for a package.
-
-        This method tests if dynamic mode works by attempting to load objects
-        with the renderer's get_object function in dynamic mode AND accessing their
-        members (which is what triggers cyclic alias errors in some packages).
-
-        Parameters
-        ----------
-        package_name
-            The name of the package to test.
-
-        Returns
-        -------
-        bool
-            True if dynamic mode works, False if it causes errors.
-        """
-        if not package_name or not package_name.strip():
-            return True
-
-        try:
-            import griffe
-
-            from great_docs._apiref.introspect import get_object as qd_get_object
-        except ImportError:  # pragma: no cover
-            # If renderer isn't available, default to True (will fail at build time anyway)
-            return True  # pragma: no cover
-
-        # Normalize package name
-        normalized_name = package_name.replace("-", "_")
-
-        # Get a sample of exports to test
-        try:
-            pkg = self._get_griffe_package(normalized_name)
-            exports = [
-                name
-                for name in list(pkg.members.keys())[:10]  # Test first 10
-                if not name.startswith("_")
-            ]
-        except Exception:
-            # Can't load package, default to True
-            return True
-
-        if not exports:
-            return True
-
-        # Test dynamic mode with a few exports
-        # We need to actually access .members and .kind to trigger cyclic alias errors
-        cyclic_errors = 0
-        for name in exports[:5]:  # Test up to 5 exports
-            try:
-                obj = qd_get_object(f"{normalized_name}:{name}", dynamic=True)
-                # Access .members to trigger cyclic alias resolution
-                # This is what the renderer does when rendering docs
-                _ = obj.members
-                _ = obj.kind
-                # For classes, try to access individual members too
-                if hasattr(obj, "members") and obj.members:
-                    for member_name, member in list(obj.members.items())[:3]:  # pragma: no cover
-                        try:  # pragma: no cover
-                            _ = member.kind  # pragma: no cover
-                        except griffe.CyclicAliasError:  # pragma: no cover
-                            cyclic_errors += 1  # pragma: no cover
-                            break  # pragma: no cover
-            except griffe.CyclicAliasError:
-                cyclic_errors += 1  # pragma: no cover
-            except Exception:  # pragma: no cover
-                # Other errors don't necessarily mean dynamic mode won't work
-                pass  # pragma: no cover
-
-        if cyclic_errors > 0:
-            print(f"Detected {cyclic_errors} cyclic alias error(s), using dynamic: false")
-            return False
-        else:
-            print("Dynamic introspection mode works for this package")
-            return True
-
-    def _get_package_exports(self, package_name: str) -> list | None:
-        """
-        Get package exports using static analysis.
-
-        Uses griffe to statically analyze the package and discover public objects.
-        Falls back to parsing __all__ if griffe introspection fails.
-
-        Parameters
-        ----------
-        package_name
-            The name of the package to get exports from.
-
-        Returns
-        -------
-        list | None
-            List of exported/public names, or None if discovery failed.
+        :
+            The exported names, or `None` if neither source lists any.
         """
         normalized = package_name.replace("-", "_")
         if self._cached_package_name == normalized and self._cached_exports is not None:
             return self._cached_exports
 
-        exports = self._discover_package_exports(package_name)
+        exports = None
+        try:
+            package = self._get_griffe_package(normalized)
+        except USER_CODE_ERRORS as error:
+            print(
+                f"Warning: Could not load package with griffe ({type(error).__name__})",
+                file=sys.stderr,
+            )
+            if package_name != normalized:
+                print(
+                    f"   (Looking for module '{normalized}' from project '{package_name}')",
+                    file=sys.stderr,
+                )
+        else:
+            exports = discovery.discover_exports(package, self._config, report=print)
+
         if exports is None:
             print("Falling back to __all__ discovery", file=sys.stderr)
-            exports = self._parse_package_exports(package_name)
+            init_file = self._find_package_init(package_name)
+            if init_file is None:
+                print(
+                    f"Could not locate __init__.py for package '{package_name}'"
+                    + (f" (module name: '{normalized}')" if normalized != package_name else ""),
+                    file=sys.stderr,
+                )
+                if normalized != package_name:
+                    print(
+                        f"Tip: Ensure a '{normalized}/' directory exists with an __init__.py file",
+                        file=sys.stderr,
+                    )
+            else:
+                print(f"Found package __init__.py at: {init_file.relative_to(self.project_root)}")
+                exports = discovery.parse_dunder_all(init_file, self._config, report=print)
 
         self._cached_package_name = normalized
         self._cached_exports = exports
         return exports
 
-    # ── Sub-classification label -> category key ─────────────────────────
-    # Maps `class_kind` results to keys of `_empty_categories`.
-    _CLASS_SUB_MAP = {
-        "dataclass": "dataclasses",
-        "enum": "enums",
-        "exception": "exceptions",
-        "namedtuple": "namedtuples",
-        "typeddict": "typeddicts",
-        "protocol": "protocols",
-        "abc": "abstract_classes",
-        "class": "classes",
-    }
-
-    @staticmethod
-    def _empty_categories() -> dict:
-        """Return a fresh, empty categories dict with all keys."""
-        return {
-            # ── Class-like ──
-            "classes": [],
-            "dataclasses": [],
-            "enums": [],
-            "exceptions": [],
-            "namedtuples": [],
-            "typeddicts": [],
-            "protocols": [],
-            "abstract_classes": [],
-            # ── Function-like ──
-            "functions": [],
-            "async_functions": [],
-            # ── Data ──
-            "constants": [],
-            "type_aliases": [],
-            # ── Catch-all ──
-            "other": [],
-            # ── Metadata ──
-            "class_methods": {},
-            "class_method_names": {},
-            "cyclic_alias_count": 0,
-        }
-
-    def _categorize_api_objects(self, package_name: str, exports: list) -> dict:
+    def _categorise_exports(self, package_name: str, exports: list[str]) -> Categories:
         """
-        Categorise API exports by inspecting the package with griffe
+        Sort a package's exports into the groups of the API reference
 
-        Inspect the package structure without importing it, including packages
-        with non-Python components such as Rust bindings.
-
-        If griffe cannot load the package, print a warning and group exports under
-        `other`. Exclude common metadata names whether or not the package loads.
+        A method, or a member of an exported module, stays only if the renderer can document
+        it after importing the package. When griffe cannot load the package, every export
+        other than a metadata name such as `__version__` goes under `other`.
 
         Parameters
         ----------
         package_name
-            The name of the package.
+            The package's importable name. Dashes count as underscores.
         exports
-            List of exported names from __all__.
+            The names to sort.
 
         Returns
         -------
-        dict
-            Dictionary with these keys:
-            - classes: list of regular class names
-            - dataclasses: list of dataclass names
-            - enums: list of enum class names
-            - exceptions: list of exception class names
-            - namedtuples: list of NamedTuple class names
-            - typeddicts: list of TypedDict class names
-            - protocols: list of Protocol class names
-            - abstract_classes: list of ABC class names
-            - functions: list of function names
-            - async_functions: list of async function names
-            - constants: list of module-level constant names
-            - type_aliases: list of type alias names
-            - other: list of other object names
-            - class_methods: dict mapping class name to method count
-            - class_method_names: dict mapping class name to list of method names
+        :
+            The sorted exports.
         """
-        # Exclude metadata names even when the package cannot be loaded.
-        skip_names = {"__version__", "__author__", "__email__", "__all__"}
-
-        import griffe
-
-        # Load the package using griffe
-        normalized_name = package_name.replace("-", "_")
-
-        # Try to use the renderer's `get_object()` for validation
-        # Use a shared loader to avoid re-loading the module on every call
-        gd_get_object = None
+        normalized = package_name.replace("-", "_")
         try:
-            from functools import partial
-
-            from great_docs._apiref.introspect import (
-                get_object as qd_get_object,
-            )
-            from great_docs._apiref.introspect import make_loader
-
-            _shared_loader = make_loader("numpy")
-            gd_get_object = partial(qd_get_object, dynamic=True, loader=_shared_loader)
-        except ImportError:  # pragma: no cover
-            pass  # pragma: no cover
-
-        # Try to load the package with griffe (uses per-build cache)
-        try:
-            pkg = self._get_griffe_package(normalized_name)
-        except Exception as e:
+            package = self._get_griffe_package(normalized)
+        except USER_CODE_ERRORS as error:
             print(
-                f"Warning: Could not load package with griffe ({type(e).__name__})",
+                f"Warning: Could not load package with griffe ({type(error).__name__})",
                 file=sys.stderr,
             )
-            categories = self._empty_categories()
-            categories["other"] = [name for name in exports if name not in skip_names]
+            categories = discovery.empty_categories()
+            categories["other"] = [name for name in exports if name not in discovery.METADATA_NAMES]
             return categories
 
-        categories = self._empty_categories()
-        failed_introspection = []
-        cyclic_aliases = []
-
-        for name in exports:
-            # Skip metadata variables
-            if name in skip_names:
-                continue
-
-            try:
-                # Get the object from the loaded package
-                if name not in pkg.members:
-                    categories["other"].append(name)
-                    failed_introspection.append(name)
-                    continue
-
-                obj = pkg.members[name]
-
-                # Categorize based on griffe's kind
-                # Note: Accessing obj.kind or obj.members on an Alias can trigger
-                # resolution which may raise CyclicAliasError or AliasResolutionError
-                if obj.kind.value == "class":
-                    # Sub-classify the class
-                    sub = class_kind(obj)
-                    cat_key = self._CLASS_SUB_MAP.get(sub, "classes")
-                    categories[cat_key].append(name)
-                    # Get documentable methods (exclude private methods but include
-                    # documented dunder methods like __repr__, __eq__, __len__, etc.)
-                    # __init__ is excluded because its parameters are already shown
-                    # in the class constructor signature.
-                    # We need to handle each member individually to catch cyclic aliases
-                    # AND validate each method with get_object to catch type hint issues
-                    # Collect (method_name, lineno) tuples to preserve source order
-                    _INIT_DUNDERS = {"__init__", "__new__", "__init_subclass__"}
-                    method_entries = []
-                    skipped_methods = []
-                    try:
-                        for member_name, member in obj.members.items():
-                            if member_name.startswith("__") and member_name.endswith("__"):
-                                # Dunder method: skip constructor-related ones,
-                                # include the rest (they have user-written docstrings)
-                                if member_name in _INIT_DUNDERS:
-                                    continue
-                            elif member_name.startswith("_"):
-                                # Single-underscore private method: skip
-                                continue
-                            try:
-                                # Accessing member.kind can trigger alias resolution
-                                if member.kind.value in ("function", "method"):
-                                    # Get line number for source ordering. Dynamically inspected
-                                    # members (PyO3 / .so extensions) often have `lineno=None`;
-                                    # coerce to inf so sort() doesn't crash comparing
-                                    # `None < None`.
-                                    lineno = getattr(member, "lineno", None)
-                                    if lineno is None:  # pragma: no cover
-                                        lineno = float("inf")  # pragma: no cover
-                                    # Validate with get_object if available
-                                    if gd_get_object is not None:
-                                        try:
-                                            qd_obj = gd_get_object(
-                                                f"{normalized_name}:{name}.{member_name}"
-                                            )
-                                            # Try to access properties that might fail
-                                            _ = qd_obj.members
-                                            _ = qd_obj.kind
-                                            method_entries.append((member_name, lineno))
-                                        except Exception:  # pragma: no cover
-                                            # Method can't be documented by the renderer
-                                            skipped_methods.append(member_name)  # pragma: no cover
-                                    else:
-                                        method_entries.append(
-                                            (member_name, lineno)
-                                        )  # pragma: no cover
-                            except (
-                                griffe.CyclicAliasError,
-                                griffe.AliasResolutionError,
-                            ):  # pragma: no cover
-                                # Skip cyclic/unresolvable class members
-                                skipped_methods.append(member_name)  # pragma: no cover
-                            except Exception:  # pragma: no cover
-                                # Skip members that can't be introspected
-                                pass  # pragma: no cover
-                    except (
-                        griffe.CyclicAliasError,
-                        griffe.AliasResolutionError,
-                    ):  # pragma: no cover
-                        # If we can't even iterate members, class has issues
-                        skipped_methods.append("<members>")  # pragma: no cover
-
-                    # Sort by line number to preserve source file order
-                    method_entries.sort(key=lambda x: x[1])
-                    method_names = [entry[0] for entry in method_entries]
-
-                    if skipped_methods:
-                        print(  # pragma: no cover
-                            f"{name}: class with {len(method_names)} public methods "
-                            f"(skipped {len(skipped_methods)} undocumentable method(s): "
-                            f"{', '.join(skipped_methods[:3])}{'...' if len(skipped_methods) > 3 else ''})"
-                        )
-                    else:
-                        print(f"{name}: class with {len(method_names)} public methods")
-
-                    categories["class_methods"][name] = len(method_names)
-                    categories["class_method_names"][name] = method_names
-                elif obj.kind.value == "function":
-                    # Sub-classify the function
-                    sub = function_kind(obj)
-                    if sub == "async":
-                        categories["async_functions"].append(name)
-                    else:
-                        categories["functions"].append(name)
-                elif obj.kind.value in ("attribute", "type alias"):
-                    sub = attribute_kind(obj)
-                    if sub == "typealias":
-                        categories["type_aliases"].append(name)  # pragma: no cover
-                    elif sub == "typevar":
-                        categories["type_aliases"].append(name)  # pragma: no cover
-                    else:
-                        categories["constants"].append(name)
-                elif obj.kind.value == "module":
-                    # Drill into the module to discover its public classes and functions
-                    # Use qualified names like "module.ClassName" so the renderer resolves
-                    # them relative to the package (e.g., dateutil:easter.easter)
-                    module_had_members = False
-                    # Build a set of short names already in the exports list so we
-                    # can skip submodule members that are re-exported at the package
-                    # level (avoids duplicate entries like both "Model" and
-                    # "models.Model" appearing in the reference).
-                    _exports_set = set(exports)
-                    try:
-                        for member_name, member in obj.members.items():
-                            if member_name.startswith("_"):
-                                continue
-                            # If this member is already re-exported at the
-                            # package level (i.e. its short name is in
-                            # __all__ / exports), skip the qualified version
-                            # to avoid duplicate reference entries.
-                            if member_name in _exports_set:
-                                continue  # pragma: no cover
-                            try:
-                                member_kind = member.kind.value
-                            except (
-                                griffe.CyclicAliasError,
-                                griffe.AliasResolutionError,
-                            ):  # pragma: no cover
-                                continue  # pragma: no cover
-                            except Exception:  # pragma: no cover
-                                continue  # pragma: no cover
-
-                            qualified = f"{name}.{member_name}"
-
-                            # Validate with get_object if available
-                            # Try dynamic first, fall back to static if it fails
-                            if gd_get_object is not None:
-                                try:
-                                    qd_obj = gd_get_object(f"{normalized_name}:{qualified}")
-                                    _ = qd_obj.kind  # pragma: no cover
-                                except Exception:  # pragma: no cover
-                                    # Dynamic mode failed; try static (no dynamic=True)
-                                    try:
-                                        from great_docs._apiref.introspect import (
-                                            get_object as qd_get,
-                                        )
-
-                                        qd_obj = qd_get(
-                                            f"{normalized_name}:{qualified}",
-                                            parser="numpy",
-                                        )
-                                        _ = qd_obj.kind
-                                    except Exception:  # pragma: no cover
-                                        # Neither mode works; skip this member
-                                        continue  # pragma: no cover
-
-                            if member_kind == "class":
-                                sub = class_kind(member)
-                                cat_key = self._CLASS_SUB_MAP.get(sub, "classes")
-                                categories[cat_key].append(qualified)
-                                module_had_members = True
-
-                                # Count public methods for classes inside modules
-                                method_entries = []
-                                try:
-                                    for meth_name, meth in member.members.items():
-                                        if meth_name.startswith("_"):
-                                            continue  # pragma: no cover
-                                        try:
-                                            if meth.kind.value in ("function", "method"):
-                                                # `lineno` may be `None` for dynamically
-                                                # inspected (PyO3) methods.
-                                                lineno = getattr(meth, "lineno", None)
-                                                if lineno is None:  # pragma: no cover
-                                                    lineno = float("inf")  # pragma: no cover
-                                                if gd_get_object is not None:
-                                                    try:
-                                                        qd_m = gd_get_object(
-                                                            f"{normalized_name}:{qualified}.{meth_name}"
-                                                        )
-                                                        _ = qd_m.kind  # pragma: no cover
-                                                        method_entries.append(  # pragma: no cover
-                                                            (meth_name, lineno)
-                                                        )
-                                                    except Exception:  # pragma: no cover
-                                                        # Dynamic failed; try static
-                                                        try:
-                                                            from great_docs._apiref.introspect import (
-                                                                get_object as qd_get,
-                                                            )
-
-                                                            qd_m = qd_get(
-                                                                f"{normalized_name}:{qualified}.{meth_name}",
-                                                                parser="numpy",
-                                                            )
-                                                            _ = qd_m.kind
-                                                            method_entries.append(
-                                                                (meth_name, lineno)
-                                                            )
-                                                        except Exception:  # pragma: no cover
-                                                            pass  # pragma: no cover
-                                                else:
-                                                    method_entries.append(
-                                                        (meth_name, lineno)
-                                                    )  # pragma: no cover
-                                        except (
-                                            griffe.CyclicAliasError,
-                                            griffe.AliasResolutionError,
-                                        ):  # pragma: no cover
-                                            pass  # pragma: no cover
-                                        except Exception:  # pragma: no cover
-                                            pass  # pragma: no cover
-                                except (
-                                    griffe.CyclicAliasError,
-                                    griffe.AliasResolutionError,
-                                ):  # pragma: no cover
-                                    pass  # pragma: no cover
-
-                                method_entries.sort(key=lambda x: x[1])
-                                method_names_list = [e[0] for e in method_entries]
-                                categories["class_methods"][qualified] = len(method_names_list)
-                                categories["class_method_names"][qualified] = method_names_list
-                                print(
-                                    f"{qualified}: class with "
-                                    f"{len(method_names_list)} public methods"
-                                )
-
-                            elif member_kind == "function":
-                                sub = function_kind(member)
-                                if sub == "async":
-                                    categories["async_functions"].append(
-                                        qualified
-                                    )  # pragma: no cover
-                                else:
-                                    categories["functions"].append(qualified)
-                                module_had_members = True
-
-                            elif member_kind in ("attribute", "type alias"):
-                                sub = attribute_kind(member)
-                                if sub == "typealias":
-                                    categories["type_aliases"].append(qualified)  # pragma: no cover
-                                elif sub == "typevar":
-                                    categories["type_aliases"].append(qualified)  # pragma: no cover
-                                else:
-                                    categories["constants"].append(qualified)
-                                module_had_members = True
-
-                    except (  # pragma: no cover
-                        griffe.CyclicAliasError,
-                        griffe.AliasResolutionError,
-                    ):
-                        # Can't iterate module members
-                        pass  # pragma: no cover
-
-                    if not module_had_members:
-                        # Module has no documentable public members
-                        categories["other"].append(name)
-                else:
-                    # Aliases and other unknown kinds
-                    categories["other"].append(name)  # pragma: no cover
-
-            except griffe.CyclicAliasError:  # pragma: no cover
-                # Cyclic alias detected (e.g., re-exported symbol pointing to itself)
-                # This can happen with complex re-export patterns
-                # Do NOT add to categories (these must be excluded entirely)
-                print(f"  Warning: Cyclic alias detected for '{name}', excluding from docs")
-                cyclic_aliases.append(name)
-            except griffe.AliasResolutionError:  # pragma: no cover
-                # Alias could not be resolved (target not found)
-                # Do NOT add to categories (these must be excluded entirely)
-                print(f"  Warning: Could not resolve alias for '{name}', excluding from docs")
-                failed_introspection.append(name)
-            except Exception as e:  # pragma: no cover
-                # If introspection fails for a specific object, still include it
-                print(f"  Warning: Could not introspect '{name}': {type(e).__name__}")
-                categories["other"].append(name)
-                failed_introspection.append(name)
-
-        if cyclic_aliases:  # pragma: no cover
-            print(f"Note: Excluded {len(cyclic_aliases)} cyclic alias(es) from documentation")
-            categories["cyclic_alias_count"] = len(cyclic_aliases)
-
-        if failed_introspection:  # pragma: no cover
-            print(
-                f"Note: Could not introspect {len(failed_introspection)} item(s), categorizing as 'Other'"
-            )
-
-        return categories
+        return discovery.categorise_exports(
+            package, exports, renderable=probe.renderer_check(normalized), report=print
+        )
 
     def _create_api_sections(self, package_name: str) -> list | None:
         """
@@ -6874,7 +6003,7 @@ class GreatDocs:
         print(f"Found {len(exports)} exported names to document")
 
         # Categorize the exports
-        categories = self._categorize_api_objects(package_name, exports)
+        categories = self._categorise_exports(package_name, exports)
 
         sections = []
 
@@ -7119,195 +6248,6 @@ class GreatDocs:
 
         return sections if sections else None
 
-    def _categorize_referenced_objects(self, package_name: str, reference_config: list) -> dict:
-        """
-        Lightweight categorization that only inspects objects listed in the reference config.
-
-        Unlike `_categorize_api_objects` which introspects all package exports and deep-enumerates
-        every class's methods (O(exports x methods)), this method only classifies the specific names
-        referenced in great-docs.yml. For a package with 195 exports and 500+ methods, this could
-        avoid ~90% of griffe work.
-
-        Parameters
-        ----------
-        package_name
-            The package name (may contain dashes).
-        reference_config
-            The `reference:` list from great-docs.yml.
-
-        Returns
-        -------
-        dict
-            A categories dict in the shape `_categorize_api_objects` returns.
-        """
-        import griffe
-
-        normalized_name = package_name.replace("-", "_")
-
-        try:
-            pkg = self._get_griffe_package(normalized_name)
-        except Exception:
-            return self._empty_categories()
-
-        # Collect all names referenced in the config
-        referenced_names: set[str] = set()
-        for section in reference_config:
-            if not isinstance(section, dict):
-                continue
-            for item in section.get("contents", []):
-                if isinstance(item, str):
-                    referenced_names.add(item)
-                elif isinstance(item, dict):
-                    name = item.get("name", "")
-                    if name:
-                        referenced_names.add(name)
-
-        categories = self._empty_categories()
-
-        # Reduce `ClassName.method` references to their class name
-        top_level_names: set[str] = set()
-        for name in referenced_names:
-            if "." in name:
-                top_level_names.add(name.split(".", 1)[0])
-            else:
-                top_level_names.add(name)
-
-        # Classify each top-level name
-        missing_names: list[str] = []
-        for name in sorted(top_level_names):
-            if name not in pkg.members:
-                missing_names.append(name)
-                continue
-
-            try:
-                obj = pkg.members[name]
-                kind = obj.kind.value
-            except (griffe.CyclicAliasError, griffe.AliasResolutionError):
-                categories["other"].append(name)
-                continue
-            except Exception:
-                categories["other"].append(name)
-                continue
-
-            if kind == "class":
-                sub = class_kind(obj)
-                cat_key = self._CLASS_SUB_MAP.get(sub, "classes")
-                categories[cat_key].append(name)
-
-                # Count public methods for should_split_methods check
-                # (lightweight: just count, don't validate each with get_object)
-                # Only count functions/methods and @property attributes and not
-                # plain attributes (e.g., dataclass fields) which aren't methods.
-                _INIT_DUNDERS = {"__init__", "__new__", "__init_subclass__"}
-                method_count = 0
-                method_names_list: list[str] = []
-                try:
-                    for member_name, member in obj.members.items():
-                        if member_name.startswith("__") and member_name.endswith("__"):
-                            if member_name in _INIT_DUNDERS:
-                                continue
-                        elif member_name.startswith("_"):
-                            continue
-                        try:
-                            member_kind = member.kind.value
-                            if member_kind in ("function", "method"):
-                                method_count += 1
-                                method_names_list.append(member_name)
-                            elif member_kind == "attribute":
-                                # Only count @property attributes, not plain fields
-                                try:
-                                    if "property" in member.labels:
-                                        method_count += 1
-                                        method_names_list.append(member_name)
-                                except Exception:
-                                    pass
-                        except (
-                            griffe.CyclicAliasError,
-                            griffe.AliasResolutionError,
-                        ):
-                            pass
-                        except Exception:
-                            pass
-                except (griffe.CyclicAliasError, griffe.AliasResolutionError):
-                    pass
-
-                categories["class_methods"][name] = method_count
-                if method_names_list:
-                    categories["class_method_names"][name] = method_names_list
-
-            elif kind == "function":
-                sub = function_kind(obj)
-                if sub == "async":
-                    categories["async_functions"].append(name)
-                else:
-                    categories["functions"].append(name)
-            elif kind in ("attribute", "type alias"):
-                sub = attribute_kind(obj)
-                if sub == "typealias":
-                    categories["type_aliases"].append(name)
-                elif sub == "typevar":
-                    categories["type_aliases"].append(name)
-                else:
-                    categories["constants"].append(name)
-            elif kind == "module":
-                # Expand module members into qualified names for module_members mapping
-                try:
-                    for member_name, member in obj.members.items():
-                        if member_name.startswith("_"):
-                            continue
-                        try:
-                            member_kind = member.kind.value
-                        except (
-                            griffe.CyclicAliasError,
-                            griffe.AliasResolutionError,
-                        ):
-                            continue
-                        except Exception:
-                            continue
-                        qualified = f"{name}.{member_name}"
-                        if member_kind == "class":
-                            sub = class_kind(member)
-                            cat_key_mod = self._CLASS_SUB_MAP.get(sub, "classes")
-                            categories[cat_key_mod].append(qualified)
-                        elif member_kind == "function":
-                            categories["functions"].append(qualified)
-                        elif member_kind in ("attribute", "type alias"):
-                            categories["constants"].append(qualified)
-                except (griffe.CyclicAliasError, griffe.AliasResolutionError):
-                    pass
-                except Exception:
-                    pass
-            else:
-                categories["other"].append(name)
-
-        # Fail loudly if configured items cannot be found in the package,
-        # but only when the package is genuinely installed (has a resolvable version).
-        # If the package isn't installed (version unknown), this is likely a
-        # bootstrap/development scenario — fall back gracefully.
-        if missing_names:
-            try:
-                from importlib.metadata import version as _mv
-
-                pkg_ver = _mv(package_name)
-            except Exception:
-                pkg_ver = None
-
-            if pkg_ver is not None:
-                items_str = ", ".join(f"`{n}`" for n in missing_names)
-                message = (
-                    f"Configured reference item(s) not found in "
-                    f"`{package_name}` v{pkg_ver}: {items_str}\n"
-                    f"Check that the correct version of `{package_name}` is installed "
-                    f"and that these names exist in the package's public API."
-                )
-                print(f"ERROR: {message}", file=sys.stderr)
-                raise BuildError(message)
-            else:
-                # Package not installed — treat missing items as "other" (old behavior)
-                categories["other"].extend(missing_names)
-
-        return categories
-
     def _create_api_sections_from_config(self, package_name: str) -> list | None:
         """
         Create API reference sections from the `reference` config in great-docs.yml.
@@ -7332,13 +6272,22 @@ class GreatDocs:
 
         print("Using explicit reference configuration from great-docs.yml")
 
-        # Use lightweight targeted categorization instead of full export enumeration
-        categories = self._categorize_referenced_objects(package_name, reference_config)
+        # Classify only the listed names, which costs far less than categorising every export
+        try:
+            package = self._get_griffe_package(package_name)
+        except USER_CODE_ERRORS:
+            categories = discovery.empty_categories()
+        else:
+            try:
+                categories = discovery.categorise_references(package, reference_config)
+            except BuildError as error:
+                print(f"ERROR: {error}", file=sys.stderr)
+                raise
 
         # Build a mapping of module names → their expanded member names across
         # all categories.  When a user lists a bare module name (e.g. "parser")
         # in their reference config we expand it into the individual classes,
-        # functions, constants, etc. that _categorize_api_objects discovered.
+        # functions, constants, etc. that categorisation discovered.
         _MEMBER_CATS = [
             "classes",
             "dataclasses",
@@ -7792,7 +6741,16 @@ class GreatDocs:
 
         # Detect docstring style
         print("Detecting docstring style...")
-        parser_style = self._detect_docstring_style(importable_name)
+        package = None
+        try:
+            package = self._get_griffe_package(importable_name)
+        except USER_CODE_ERRORS as error:
+            print(
+                f"Warning: Could not load package for docstring detection ({type(error).__name__})"
+            )
+            parser_style = "numpy"
+        else:
+            parser_style = probe.detect_docstring_style(package, report=print)
         overrides["parser"] = f"parser: {parser_style}"
 
         # Authors from pyproject.toml
@@ -7808,7 +6766,7 @@ class GreatDocs:
                 "'reference:' section in great-docs.yml to list your API."
             )
             print("Testing dynamic introspection mode...")
-            dynamic_mode = self._detect_dynamic_mode(importable_name)
+            dynamic_mode = package is None or probe.detect_dynamic_mode(package, report=print)
             overrides["dynamic"] = f"dynamic: {'true' if dynamic_mode else 'false'}"
             config_path.write_text(create_default_config(overrides), encoding="utf-8")
             print(f"Created {config_path}")
@@ -7816,7 +6774,7 @@ class GreatDocs:
 
         # Categorize exports (this also detects cyclic aliases)
         print("Categorizing API objects...")
-        categories = self._categorize_api_objects(importable_name, exports)
+        categories = self._categorise_exports(importable_name, exports)
 
         cyclic_alias_count = categories.get("cyclic_alias_count", 0)
         if cyclic_alias_count > 0:
@@ -7826,7 +6784,7 @@ class GreatDocs:
             dynamic_mode = False  # pragma: no cover
         else:
             print("Testing dynamic introspection mode...")
-            dynamic_mode = self._detect_dynamic_mode(importable_name)
+            dynamic_mode = package is None or probe.detect_dynamic_mode(package, report=print)
         overrides["dynamic"] = f"dynamic: {'true' if dynamic_mode else 'false'}"
 
         reference_yaml = self._build_reference_yaml(categories)
@@ -7837,15 +6795,14 @@ class GreatDocs:
         print(f"Created {config_path}")
         return True
 
-    def _build_reference_yaml(self, categories: dict) -> str:
+    def _build_reference_yaml(self, categories: Categories) -> str:
         """
         Build the `reference:` YAML block from categorized exports
 
         Parameters
         ----------
         categories
-            Dictionary from `_categorize_api_objects` with class-like and flat
-            export groups plus method-count metadata.
+            The package's exports sorted into the groups of the API reference.
 
         Returns
         -------

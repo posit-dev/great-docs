@@ -194,6 +194,7 @@ include = [
     "great_docs/_layout_notice.py",
     "great_docs/_mcp_runner.py",
     "great_docs/_proofread.py",
+    "great_docs/_reference",
     "great_docs/_remote.py",
     "great_docs/_source_refs.py",
     "great_docs/_subprocess.py",

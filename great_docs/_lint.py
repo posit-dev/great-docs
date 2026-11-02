@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
+from ._build.steps import USER_CODE_ERRORS
 from ._builtin.directives import DIRECTIVES
 from ._interlinks import AliasClaims, LoadedSources, build_index, load_sources
 from ._layout import Layout
@@ -177,25 +178,9 @@ def run_lint(
     importable_name = docs._resolve_importable_name(package_name)
     result.package_name = importable_name
 
-    # Load package via griffe for introspection
     try:
-        import griffe
-    except ImportError:
-        if quiet:
-            sys.stdout = _saved_stdout
-        result.issues.append(
-            LintIssue(
-                check="config",
-                severity="error",
-                symbol="",
-                message="griffe is required for lint checks but is not installed.",
-            )
-        )
-        return result
-
-    try:
-        pkg = griffe.load(importable_name, search_paths=docs._griffe_search_paths())
-    except Exception as e:
+        pkg = docs._get_griffe_package(importable_name)
+    except USER_CODE_ERRORS as e:
         if quiet:
             sys.stdout = _saved_stdout
         result.issues.append(

@@ -604,7 +604,7 @@ class TestHandleScan:
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         mock_docs._get_package_exports.return_value = ["do_thing", "helper"]
-        mock_docs._categorize_api_objects.return_value = {
+        mock_docs._categorise_exports.return_value = {
             "functions": ["do_thing", "helper"],
             "classes": [],
         }
@@ -621,7 +621,7 @@ class TestHandleScan:
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         mock_docs._get_package_exports.return_value = ["MyClass"]
-        mock_docs._categorize_api_objects.return_value = {
+        mock_docs._categorise_exports.return_value = {
             "classes": ["MyClass"],
             "class_method_names": {"MyClass": ["method_a"]},
         }
@@ -640,7 +640,7 @@ class TestHandleScan:
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         mock_docs._get_package_exports.return_value = ["do_thing"]
-        mock_docs._categorize_api_objects.return_value = {"functions": ["do_thing"]}
+        mock_docs._categorise_exports.return_value = {"functions": ["do_thing"]}
         mock_docs._config = mock_config(reference=[{"contents": ["do_thing"]}])
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             result = asyncio.run(_handle_scan({}))
@@ -997,7 +997,7 @@ class TestReadResource:
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         mock_docs._get_package_exports.return_value = ["do_thing"]
-        mock_docs._categorize_api_objects.return_value = {"functions": ["do_thing"]}
+        mock_docs._categorise_exports.return_value = {"functions": ["do_thing"]}
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             result = asyncio.run(read_resource(self._uri("gd://api-surface")))
         assert "do_thing" in result
@@ -1257,7 +1257,7 @@ class TestHandleScanRefConfigDictItem:
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         mock_docs._get_package_exports.return_value = ["do_thing"]
-        mock_docs._categorize_api_objects.return_value = {"functions": ["do_thing"]}
+        mock_docs._categorise_exports.return_value = {"functions": ["do_thing"]}
         # Reference config uses dict items, not str items
         mock_docs._config.reference = [{"contents": [{"name": "do_thing"}]}]
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
