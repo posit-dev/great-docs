@@ -4388,7 +4388,7 @@ class GreatDocs:
             print("No MCP module configured or found")
             return None
 
-        from ._mcp_docs import discover_mcp_server
+        from ._mcpref.reference import discover_mcp_server
 
         return discover_mcp_server(
             module_path=module_path,
@@ -4504,7 +4504,7 @@ class GreatDocs:
         mcp_info
             Server metadata from _discover_mcp_server().
         """
-        from ._mcp_docs import generate_mcp_manifest
+        from ._mcpref.reference import generate_mcp_manifest
 
         # Gather project metadata
         package_name = self._detect_package_name()
@@ -12174,7 +12174,7 @@ anchor-sections: true
                 run.mcp_pages_generated = False
                 self._remove_mcp_from_ref_sections()
                 return Skipped("no MCP server found")
-            from ._mcp_docs import generate_mcp_reference_pages
+            from ._mcpref.reference import generate_mcp_reference_pages
 
             mcp_files = generate_mcp_reference_pages(
                 server_info=mcp_info,

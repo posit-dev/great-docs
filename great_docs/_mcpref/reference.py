@@ -4,7 +4,7 @@ Introspects an MCP server module to extract tool, resource, and prompt
 definitions, then generates Quarto reference pages.
 
 Introspection is performed over the MCP *wire protocol*: the target server is
-launched in a subprocess (via `great_docs._mcp_runner`) and queried with a
+launched in a subprocess (via `great_docs._mcpref.runner`) and queried with a
 standard MCP client. This keeps discovery independent of the `mcp` library's
 internal handler registries, which change between major releases: the JSON the
 protocol returns is stable regardless of the installed library version.
@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from ._translations import get_translation
+from .._translations import get_translation
 
 # How long (seconds) to wait for the server subprocess to answer each request
 # before giving up on protocol introspection.
@@ -110,7 +110,7 @@ def _introspect_via_protocol(
 ) -> dict[str, Any] | None:
     """Launch the server and read its capabilities over the MCP protocol.
 
-    Runs the target server in a subprocess via `great_docs._mcp_runner` and
+    Runs the target server in a subprocess via `great_docs._mcpref.runner` and
     speaks the MCP protocol to it with a standard client session. Returns the
     server metadata dict, or `None` if the client could not connect or the
     `mcp` client APIs are unavailable.
@@ -137,7 +137,7 @@ async def _collect_over_protocol(  # pragma: no cover
     from mcp import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
 
-    args = ["-m", "great_docs._mcp_runner", module_path]
+    args = ["-m", "great_docs._mcpref.runner", module_path]
     if server_var:
         args.append(server_var)
 

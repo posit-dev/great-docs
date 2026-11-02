@@ -1,4 +1,4 @@
-"""Tests for _mcp_docs.py (pure page-generation functions) and _mcp_runner.py."""
+"""Tests for _mcpref/reference.py (pure page-generation functions) and _mcpref/runner.py."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from great_docs._mcp_docs import (
+from great_docs._mcpref.reference import (
     _dump,
     _extract_tools_from_source,
     _first_sentence,
@@ -595,9 +595,9 @@ class TestExtractToolsFromSource:
         mod = types.ModuleType("fake")
         mod.__file__ = "<string>"
         # Patch inspect.getsource to return the given source
-        with patch("great_docs._mcp_docs.inspect") as mock_inspect:
+        with patch("great_docs._mcpref.reference.inspect") as mock_inspect:
             mock_inspect.getsource.return_value = source
-            from great_docs._mcp_docs import _extract_tools_from_source as fn
+            from great_docs._mcpref.reference import _extract_tools_from_source as fn
 
             return fn(mod)
 
@@ -630,8 +630,8 @@ Tool(name="tool_b", description="Second tool", inputSchema={})
 
     def test_returns_empty_on_getsource_error(self):
         mod = types.ModuleType("fake")
-        with patch("great_docs._mcp_docs.inspect.getsource", side_effect=OSError):
-            from great_docs._mcp_docs import _extract_tools_from_source as fn
+        with patch("great_docs._mcpref.reference.inspect.getsource", side_effect=OSError):
+            from great_docs._mcpref.reference import _extract_tools_from_source as fn
 
             assert fn(mod) == []
 
@@ -792,14 +792,15 @@ class TestGenerateMcpManifest:
 class TestDiscoverMcpServer:
     def test_returns_none_on_import_error(self):
         with patch(
-            "great_docs._mcp_docs.importlib.import_module", side_effect=ImportError("no module")
+            "great_docs._mcpref.reference.importlib.import_module",
+            side_effect=ImportError("no module"),
         ):
             result = discover_mcp_server("nonexistent.module")
         assert result is None
 
     def test_returns_none_when_no_server_found(self):
         mod = types.ModuleType("fake")
-        with patch("great_docs._mcp_docs.importlib.import_module", return_value=mod):
+        with patch("great_docs._mcpref.reference.importlib.import_module", return_value=mod):
             result = discover_mcp_server("fake")
         assert result is None
 
@@ -814,7 +815,7 @@ class TestDiscoverMcpServer:
         mod.srv = mock_server
 
         with (
-            patch("great_docs._mcp_docs._introspect_via_protocol", return_value=None),
+            patch("great_docs._mcpref.reference._introspect_via_protocol", return_value=None),
             patch.object(inspect, "getsource", return_value=source),
             patch("importlib.import_module", return_value=mod),
         ):
@@ -841,8 +842,10 @@ class TestDiscoverMcpServer:
             "completions_enabled": False,
         }
 
-        with patch("great_docs._mcp_docs._introspect_via_protocol", return_value=protocol_info):
-            with patch("great_docs._mcp_docs.importlib.import_module", return_value=mod):
+        with patch(
+            "great_docs._mcpref.reference._introspect_via_protocol", return_value=protocol_info
+        ):
+            with patch("great_docs._mcpref.reference.importlib.import_module", return_value=mod):
                 result = discover_mcp_server("fake")
 
         assert result is not None
@@ -867,21 +870,23 @@ class TestDiscoverMcpServer:
             "completions_enabled": False,
         }
 
-        with patch("great_docs._mcp_docs._introspect_via_protocol", return_value=protocol_info):
-            with patch("great_docs._mcp_docs.importlib.import_module", return_value=mod):
+        with patch(
+            "great_docs._mcpref.reference._introspect_via_protocol", return_value=protocol_info
+        ):
+            with patch("great_docs._mcpref.reference.importlib.import_module", return_value=mod):
                 result = discover_mcp_server("fake")
 
         assert result["name"] == "fallback-name"
 
 
 # ---------------------------------------------------------------------------
-# _mcp_runner: _find_server
+# MCP server discovery
 # ---------------------------------------------------------------------------
 
 
 class TestFindServer:
     def setup_method(self):
-        from great_docs._mcp_runner import _find_server
+        from great_docs._mcpref.runner import _find_server
 
         self._find_server = _find_server
 
@@ -920,21 +925,21 @@ class TestFindServer:
 
 
 # ---------------------------------------------------------------------------
-# _mcp_runner: _run
+# MCP server execution
 # ---------------------------------------------------------------------------
 
 
 class TestMcpRunnerRun:
     def test_raises_system_exit_when_no_server(self):
-        from great_docs._mcp_runner import _run
+        from great_docs._mcpref.runner import _run
 
         mod = types.ModuleType("fake")
-        with patch("great_docs._mcp_runner.importlib.import_module", return_value=mod):
+        with patch("great_docs._mcpref.runner.importlib.import_module", return_value=mod):
             with pytest.raises(SystemExit):
                 asyncio.run(_run("fake.module", None))
 
     def test_calls_run_stdio_async_on_fastmcp(self):
-        from great_docs._mcp_runner import _run
+        from great_docs._mcpref.runner import _run
 
         mock_server = AsyncMock()
         mock_server.run_stdio_async = AsyncMock()
@@ -944,13 +949,13 @@ class TestMcpRunnerRun:
         mod = types.ModuleType("fake")
         mod.app = mock_server
 
-        with patch("great_docs._mcp_runner.importlib.import_module", return_value=mod):
+        with patch("great_docs._mcpref.runner.importlib.import_module", return_value=mod):
             asyncio.run(_run("fake.module", None))
 
         mock_server.run_stdio_async.assert_called_once()
 
     def test_explicit_server_var_used(self):
-        from great_docs._mcp_runner import _run
+        from great_docs._mcpref.runner import _run
 
         mock_server = AsyncMock()
         mock_server.run_stdio_async = AsyncMock()
@@ -960,7 +965,7 @@ class TestMcpRunnerRun:
         mod = types.ModuleType("fake")
         mod.named_server = mock_server
 
-        with patch("great_docs._mcp_runner.importlib.import_module", return_value=mod):
+        with patch("great_docs._mcpref.runner.importlib.import_module", return_value=mod):
             asyncio.run(_run("fake.module", "named_server"))
 
         mock_server.run_stdio_async.assert_called_once()
@@ -973,12 +978,12 @@ class TestMcpRunnerRun:
 
 class TestIntrospectViaProtocol:
     def test_returns_none_when_collect_raises(self):
-        from great_docs._mcp_docs import _introspect_via_protocol
+        from great_docs._mcpref.reference import _introspect_via_protocol
 
         async def _bad_coro(*args, **kwargs):
             raise RuntimeError("connection refused")
 
-        with patch("great_docs._mcp_docs._collect_over_protocol", _bad_coro):
+        with patch("great_docs._mcpref.reference._collect_over_protocol", _bad_coro):
             result = _introspect_via_protocol("fake.module", None)
 
         assert result is None
