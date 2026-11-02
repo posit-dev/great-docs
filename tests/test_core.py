@@ -469,21 +469,6 @@ class TestGenerateMcpManifest:
         assert called_with["server_info"] == {"name": "test", "tools": []}
 
 
-class TestReorderNavbar:
-    """Cover _reorder_navbar edge case."""
-
-    def test_empty_navbar_left_returns_early(self, tmp_path, monkeypatch):
-        """Navbar left is empty returns early."""
-        gd = _make_gd(tmp_path)
-        monkeypatch.setattr(
-            type(gd._config), "navbar_order", property(lambda self: ["Reference", "API"])
-        )
-        config = {"website": {"navbar": {"left": []}}}
-        gd._reorder_navbar(config)
-
-        assert config["website"]["navbar"]["left"] == []
-
-
 class TestRemoveMcpFromRefSections:
     """Cover _remove_mcp_from_ref_sections branching."""
 

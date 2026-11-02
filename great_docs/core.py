@@ -31,7 +31,7 @@ from ._build.steps import (
 )
 from ._checks import links, proofread
 from ._checks.proofread import CheckedFile
-from ._content import publish
+from ._content import publish, sections
 from ._content.naming import (
     published_path,
     strip_numeric_prefix,
@@ -39,6 +39,7 @@ from ._content.naming import (
 )
 from ._content.pages import PageMap, output_destination, section_destination
 from ._content.sections import source_dirs as section_source_dirs
+from ._contribution import NavbarLink
 from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import Layout
@@ -69,6 +70,7 @@ from ._website.homepage import hero, landing, margin, readme
 from ._website.homepage import source as homepage_source
 from ._website.navigation import github as nav_github
 from ._website.navigation import label as nav_label
+from ._website.navigation import navbar as nav_navbar
 from ._website.navigation import release as nav_release
 from ._website.navigation import shared_sidebar
 from ._website.project_pages import citation, community, licence, package_info
@@ -77,7 +79,7 @@ from ._website.seo import description as seo_description
 from ._website.seo import noindex
 from ._website.seo import title as seo_title
 from ._website.seo.structured_data import StructuredData
-from ._yaml import YamlMapping, locate_front_matter, set_front_matter_option, split_front_matter
+from ._yaml import YamlMapping, set_front_matter_option, split_front_matter
 from .config import Config, create_default_config
 
 if TYPE_CHECKING:
@@ -1481,755 +1483,64 @@ class GreatDocs:
 
     def _process_sections(self) -> int:
         """
-        Process custom sections: discover files, copy, generate index, wire nav.
-
-        Each configured section gets its own navbar link, sidebar, and (optionally) an
-        auto-generated index page. Blog-type sections use Quarto's native `listing:` directive
-        instead of cards and skip the sidebar.
+        Publish the configured sections and add their sidebars and navbar links
 
         Returns
         -------
-        int
-            Number of sections successfully processed.
+        :
+            The number of sections published.
         """
-        sections_config = self._config.sections
-        if not sections_config:
+        found = sections.read(
+            self._config, self.layout, report=lambda message: print(f"   ⚠️  {message}")
+        )
+        if not found:
             return 0
 
-        # Sections must be a list of dicts
-        if not isinstance(sections_config, list):
-            print(f"   ⚠️  'sections' must be a list, got {type(sections_config).__name__}")
-            return 0
-
-        processed = 0
-
-        for section_cfg in sections_config:
-            if not isinstance(section_cfg, dict):
-                print(f"   ⚠️  Section entry must be a dict, skipping: {section_cfg}")
-                continue
-            title = section_cfg.get("title")
-            src_dir = section_cfg.get("dir")
-            if not title or not src_dir:
-                print(f"   ⚠️  Section missing 'title' or 'dir', skipping: {section_cfg}")
-                continue
-
-            source_path = self.layout.source_dir / src_dir
-            if not source_path.exists() or not source_path.is_dir():
-                print(f"   ⚠️  Section directory '{src_dir}' not found, skipping")
-                continue
-
-            section_type = section_cfg.get("type", "default")
-
-            # Discover .qmd / .md files, skipping this project's own generated output at
-            # any depth. Only ancestors within the section directory are consulted, since
-            # a hidden directory above the project says nothing about the content inside.
-            files = sorted(
-                f
-                for f in source_path.rglob("*")
-                if f.suffix in (".qmd", ".md")
-                and f.name != "README.md"
-                and not any(
-                    self.layout.is_reserved_directory(parent)
-                    for parent in f.parents
-                    if parent != source_path and parent.is_relative_to(source_path)
-                )
-            )
-
-            if not files:
-                print(f"   ⚠️  Section '{title}' directory '{src_dir}' has no .qmd/.md files")
-                continue
-
-            # Tag and status scanning must use the same section destination
-            dest_dir = section_destination(self.layout, section_cfg)
-            assert dest_dir is not None
-            slug = dest_dir.relative_to(self.build_dir).as_posix()
-            dest_dir.mkdir(parents=True, exist_ok=True)
-
-            # Copy asset directories (images, data, code snippets, etc.)
-            for item in source_path.iterdir():
+        pages = self._page_map()
+        add_dates = partial(page_dates.add_to_page, config=self._config, authors=self._page_authors)
+        for section in found:
+            section.destination.mkdir(parents=True, exist_ok=True)
+            # Copy asset directories first so published pages replace their raw copies
+            for item in section.source.iterdir():
                 if (
                     item.is_dir()
                     and not self.layout.is_reserved_directory(item)
                     and self._is_asset_dir(item)
                 ):
-                    dst_dir = dest_dir / item.name
-                    if dst_dir.exists():
-                        shutil.rmtree(dst_dir)
-                    shutil.copytree(item, dst_dir)
+                    destination = section.destination / item.name
+                    if destination.exists():
+                        shutil.rmtree(destination)
+                    shutil.copytree(item, destination)
 
-            if section_type == "blog":
-                # Blog sections use Quarto's native listing directive
-                copied = self._copy_blog_files(files, source_path, dest_dir)
-
-                # For blogs, only a root-level index.qmd counts as a user index
-                # (subdirectory index.qmd files are individual blog posts)
-                has_user_index = (source_path / "index.qmd").exists()
-                if has_user_index:
-                    # Inject blog-index layout options into the user's index
-                    blog_index = dest_dir / "index.qmd"
-                    idx_content = blog_index.read_text(encoding="utf-8")
-                    idx_content = set_front_matter_option(idx_content, "toc", False)
-                    idx_content = set_front_matter_option(
-                        idx_content, "body-classes", "gd-blog-index"
-                    )
-                    blog_index.write_text(idx_content, encoding="utf-8")
-                    index_href = f"{slug}/index.qmd"
-                else:
-                    self._generate_blog_index(title, slug, dest_dir)
-                    index_href = f"{slug}/index.qmd"
-
-                # Blog sections don't get a sidebar — the listing page
-                # is the primary navigation experience.
-            else:
-                # Default: sections with sidebar (index page is opt-in)
-                copied = self._copy_section_files(files, source_path, dest_dir)
-                self._copy_directory_metadata(files, source_path, dest_dir, strip_prefix=True)
-
-                has_user_index = (source_path / "index.qmd").exists()
-                generate_index = section_cfg.get("index", False)
-
-                if has_user_index:
-                    # User provided their own index.qmd — always use it
-                    index_href = f"{slug}/index.qmd"
-                elif generate_index:
-                    # Auto-generate a card-based index page (opt-in)
-                    index_columns = section_cfg.get("index_columns", 2)
-                    self._generate_section_index(
-                        title, copied, slug, dest_dir, columns=index_columns
-                    )
-                    index_href = f"{slug}/index.qmd"
-                else:
-                    # No index page — navbar links to the first content page
-                    first_page = next((p for p in copied if p["filename"] != "index.qmd"), None)
-                    if first_page:
-                        index_href = f"{slug}/{first_page['filename']}"
-                    else:
-                        index_href = f"{slug}/index.qmd"  # pragma: no cover
-
-                # Add sidebar (skipped for single-page sections)
-                dir_titles = section_cfg.get("dir_titles", {})
-                sidebar_groups = section_cfg.get("sidebar_groups")
-                self._add_section_sidebar(
-                    title,
-                    slug,
-                    copied,
-                    has_user_index,
-                    generate_index,
-                    dir_titles=dir_titles,
-                    sidebar_groups=sidebar_groups,
-                )
-
-                # For single-page sections (no sidebar), inject a body class so
-                # CSS can expand the content area into the sidebar space.
-                content_pages = [p for p in copied if p["filename"] != "index.qmd"]
-                has_index = has_user_index or generate_index
-                sidebar_items = (1 if has_index else 0) + len(content_pages)
-                if sidebar_items <= 1:
-                    self._inject_section_body_class(slug, copied, dest_dir)
-
-            # Add navbar link
-            navbar_after = section_cfg.get("navbar_after")
-            self._add_section_to_navbar(title, index_href, navbar_after)
-
-            n_pages = len(copied)
-            label = "📰" if section_type == "blog" else "📂"
-            print(f"   {label} {title}: {n_pages} post(s) from {src_dir}/")
-            processed += 1
-
-        return processed
-
-    def _copy_section_files(
-        self,
-        files: list[Path],
-        source_dir: Path,
-        dest_dir: Path,
-    ) -> list[dict]:
-        """
-        Copy section files to the build directory.
-
-        Strips numeric prefixes and adds `bread-crumbs: false` to frontmatter.
-
-        Parameters
-        ----------
-        files
-            List of source file paths.
-        source_dir
-            Root of the section source directory.
-        dest_dir
-            Destination directory in the build tree.
-
-        Returns
-        -------
-        list[dict]
-            List of dicts with `filename`, `title`, `description`, `image` keys.
-        """
-        copied: list[dict] = []
-        pages = self._page_map()
-        add_dates = partial(page_dates.add_to_page, config=self._config, authors=self._page_authors)
-
-        for src_file in files:
-            # Copied paths and rewritten links must strip the same numeric prefixes
-            # from every path component
-            published = published_path(src_file.relative_to(source_dir), strip_prefix=True)
-            front_matter = publish.page(
-                src_file,
-                dest_dir / published,
-                layout=self.layout,
-                pages=pages,
-                add_dates=add_dates,
-                strip_prefix=True,
-                breadcrumbs=True,
+            published = sections.publish(
+                section, layout=self.layout, pages=pages, add_dates=add_dates
             )
-            copied.append(
-                {
-                    "filename": str(published),
-                    "title": front_matter.string("title") or title_from_name(published.stem),
-                    "description": front_matter.string("description") or "",
-                    "image": front_matter.string("image") or "",
-                }
-            )
-
-        return copied
-
-    def _copy_blog_files(
-        self,
-        files: list[Path],
-        source_dir: Path,
-        dest_dir: Path,
-    ) -> list[dict]:
-        """
-        Copy blog post files to the build directory.
-
-        Preserves subdirectory structure (e.g., `blog/my-post/index.qmd`)
-        and leaves blog frontmatter intact so Quarto's `listing:` directive
-        can read `title`, `author`, `date`, `categories`, etc.
-
-        Also copies co-located asset files (images, data files, etc.)
-        from any directory that contains a .qmd/.md file, so that
-        relative references like `![](./image.png)` resolve correctly.
-
-        Parameters
-        ----------
-        files
-            List of source file paths.
-        source_dir
-            Root of the blog source directory.
-        dest_dir
-            Destination directory in the build tree.
-
-        Returns
-        -------
-        list[dict]
-            List of dicts with `filename`, `title`, `description` keys.
-        """
-        copied: list[dict] = []
-
-        # Track directories that contain content files so we can copy
-        # their co-located assets afterward
-        content_dirs: set[Path] = set()
-        pages = self._page_map()
-        add_dates = partial(page_dates.add_to_page, config=self._config, authors=self._page_authors)
-
-        for src_file in files:
-            rel = src_file.relative_to(source_dir)
-            content_dirs.add(src_file.parent)
-            # Preserve the post's front matter for Quarto's listing
-            front_matter = publish.page(
-                src_file,
-                dest_dir / rel,
-                layout=self.layout,
-                pages=pages,
-                add_dates=add_dates,
-                strip_prefix=False,
-                breadcrumbs=False,
-            )
-            copied.append(
-                {
-                    "filename": str(rel),
-                    "title": front_matter.string("title") or title_from_name(rel.stem),
-                    "description": front_matter.string("description") or "",
-                }
-            )
-
-        # Copy co-located non-content files (images, data, etc.) from
-        # every directory that contained a .qmd/.md file
-        content_suffixes = {".qmd", ".md"}
-        for src_dir_path in content_dirs:
-            for item in src_dir_path.iterdir():
-                if item.is_file() and item.suffix.lower() not in content_suffixes:
-                    rel = item.relative_to(source_dir)
-                    dest_file = dest_dir / rel
-                    dest_file.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(item, dest_file)
-            # Also copy subdirectories that don't contain .qmd files
-            # (e.g., blog/my-post/datasets/)
-            for item in src_dir_path.iterdir():
-                if item.is_dir():
-                    has_content = any(f.suffix in content_suffixes for f in item.rglob("*"))
-                    if not has_content:
-                        rel = item.relative_to(source_dir)
-                        dest_sub = dest_dir / rel
-                        if dest_sub.exists():  # pragma: no cover
-                            shutil.rmtree(dest_sub)  # pragma: no cover
-                        shutil.copytree(item, dest_sub)
-
-        return copied
-
-    def _generate_blog_index(
-        self,
-        title: str,
-        slug: str,
-        dest_dir: Path,
-    ) -> None:
-        """
-        Auto-generate a blog listing index using Quarto's `listing:` directive.
-
-        Creates a page that mirrors the approach used by Quarto-based project blogs: a table-style
-        listing sorted by date.
-
-        Parameters
-        ----------
-        title
-            Blog section title (used as page heading).
-        slug
-            URL slug for the blog section.
-        dest_dir
-            Build directory for the blog section.
-        """
-        lines = [
-            "---",
-            f'title: "{title}"',
-            "listing:",
-            "  type: default",
-            '  sort: "date desc"',
-            "  contents:",
-            '    - "**.qmd"',
-            "bread-crumbs: false",
-            "toc: false",
-            "body-classes: gd-blog-index",
-            "---",
-            "",
-        ]
-
-        index_file = dest_dir / "index.qmd"
-        index_file.write_text("\n".join(lines), encoding="utf-8")
-
-    def _generate_section_index(
-        self,
-        title: str,
-        pages: list[dict],
-        slug: str,
-        dest_dir: Path,
-        columns: int = 2,
-    ) -> None:
-        """
-        Auto-generate an index page for a custom section.
-
-        Creates a gallery-style listing from each page's frontmatter title
-        and description.  Entries that have an `image` field are rendered
-        as image cards in a grid (1- or 2-column); entries without images
-        are rendered as a simple single-column link list below the cards.
-
-        Parameters
-        ----------
-        title
-            Section title (used as page heading).
-        pages
-            List of page dicts from `_copy_section_files`.
-        slug
-            URL slug for the section.
-        dest_dir
-            Build directory for the section.
-        columns
-            Number of columns for image-card grid (1 or 2, default 2).
-        """
-        lines = [
-            "---",
-            f'title: "{title}"',
-            "bread-crumbs: false",
-            "---",
-            "",
-        ]
-
-        # Filter out the index itself if present
-        entries = [p for p in pages if p["filename"] != "index.qmd"]
-
-        if not entries:
-            lines.append("*No pages found.*")
-        else:
-            # Split entries into image cards and plain links
-            image_entries = [e for e in entries if e.get("image")]
-            plain_entries = [e for e in entries if not e.get("image")]
-
-            # Use inline styles to ensure card layout renders correctly
-            # regardless of Quarto's page-columns grid system.
-            # Build as a single contiguous HTML block so Quarto's Markdown
-            # parser does not inject extra <p> or duplicate <a> elements.
-            parts: list[str] = []
-
-            # --- Image card grid ---
-            if image_entries:
-                columns = max(1, min(columns, 2))
-                col_cls = "section-cards-1col" if columns == 1 else "section-cards-2col"
-                if columns == 1:
-                    grid_style = (
-                        "display: grid; grid-template-columns: 1fr; gap: 1rem; margin-top: 0.5rem;"
-                    )
-                else:
-                    grid_style = (
-                        "display: grid; "
-                        "grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); "
-                        "gap: 1rem; "
-                        "margin-top: 0.5rem;"
-                    )
-                card_style = (
-                    "display: block; "
-                    "padding: 1.25rem 1.5rem; "
-                    "border: 1px solid #dee2e6; "
-                    "border-radius: 0.5rem; "
-                    "color: inherit; "
-                    "text-decoration: none;"
-                )
-                title_style = (
-                    "font-size: 1.1rem; font-weight: 600; margin-bottom: 0.35rem; color: #0d6efd;"
-                )
-                desc_style = "font-size: 0.9rem; color: #6c757d; line-height: 1.45;"
-
-                parts.append(f'<div class="section-cards {col_cls}" style="{grid_style}">')
-                for entry in image_entries:
-                    href = entry["filename"]
-                    entry_title = entry["title"]
-                    desc = entry.get("description", "")
-                    image = entry["image"]
-
-                    parts.append(f'<a href="{href}" class="section-card" style="{card_style}">')
-                    parts.append(
-                        f'<img src="{image}" class="section-card-img" '
-                        'style="width: 100%; border-radius: 0.375rem; '
-                        'margin-bottom: 0.75rem;" />'
-                    )
-                    parts.append(
-                        f'<div class="section-card-title" style="{title_style}">{entry_title}</div>'
-                    )
-                    if desc:
-                        parts.append(
-                            f'<div class="section-card-desc" style="{desc_style}">{desc}</div>'
-                        )
-                    parts.append("</a>")
-
-                # Close grid container on the same line as the last </a>
-                parts[-1] = parts[-1] + "</div>"
-
-            # --- Separator ---
-            if image_entries and plain_entries:
-                parts.append("<hr>")
-
-            # --- Plain link list ---
-            if plain_entries:
-                card_style = (
-                    "display: block; "
-                    "padding: 1.25rem 1.5rem; "
-                    "border: 1px solid #dee2e6; "
-                    "border-radius: 0.5rem; "
-                    "color: inherit; "
-                    "text-decoration: none;"
-                )
-                title_style = (
-                    "font-size: 1.1rem; font-weight: 600; margin-bottom: 0.35rem; color: #0d6efd;"
-                )
-                desc_style = "font-size: 0.9rem; color: #6c757d; line-height: 1.45;"
-
-                parts.append(
-                    '<div class="section-cards section-cards-list" '
-                    'style="display: grid; grid-template-columns: 1fr; '
-                    'gap: 1rem; margin-top: 0.5rem;">'
-                )
-                for entry in plain_entries:
-                    href = entry["filename"]
-                    entry_title = entry["title"]
-                    desc = entry.get("description", "")
-
-                    parts.append(f'<a href="{href}" class="section-card" style="{card_style}">')
-                    parts.append(
-                        f'<div class="section-card-title" style="{title_style}">{entry_title}</div>'
-                    )
-                    if desc:
-                        parts.append(
-                            f'<div class="section-card-desc" style="{desc_style}">{desc}</div>'
-                        )
-                    parts.append("</a>")
-
-                # Close list container
-                parts[-1] = parts[-1] + "</div>"
-
-            # Join without blank lines to keep it as one HTML block
-            lines.append("\n".join(parts))
-
-        lines.append("")
-        index_file = dest_dir / "index.qmd"
-        index_file.write_text("\n".join(lines), encoding="utf-8")
-
-    def _add_section_sidebar(
-        self,
-        title: str,
-        slug: str,
-        pages: list[dict],
-        has_user_index: bool,
-        has_generated_index: bool = False,
-        dir_titles: dict[str, str] | None = None,
-        sidebar_groups: list[dict] | None = None,
-    ) -> None:
-        """
-        Add a sidebar for the custom section to `_quarto.yml`.
-
-        Parameters
-        ----------
-        title
-            Section title.
-        slug
-            URL slug for the section directory.
-        pages
-            List of page dicts from `_copy_section_files`.
-        has_user_index
-            Whether the user provided their own index.qmd.
-        has_generated_index
-            Whether an auto-generated index page was created.
-        dir_titles
-            Optional mapping of subdirectory names (after prefix stripping) to
-            custom sidebar section titles.
-        sidebar_groups
-            Optional list of group dicts for organizing flat pages into sidebar sections. Each dict
-            has `section` (title) and `contents` (list of page filenames without numeric prefix).
-        """
-        config = quarto_yml.read(self.build_dir, seed_website=True)
-
-        sidebar_id = slug
-        contents: list[dict | str] = []
-
-        has_index = has_user_index or has_generated_index
-
-        if has_index:
-            # Add index as the first item when one exists
-            contents.append({"text": title, "href": f"{slug}/index.qmd"})
-
-        # Build a filename -> page dict lookup for grouped sidebar
-        page_by_filename: dict[str, dict] = {}
-        for page in pages:
-            if page["filename"] != "index.qmd":
-                page_by_filename[page["filename"]] = page
-
-        if sidebar_groups:
-            # Use explicit sidebar groups to organize flat pages into sections
-            grouped_filenames: set[str] = set()
-            for group in sidebar_groups:
-                section_title = group.get("section", "")
-                group_contents_cfg = group.get("contents", [])
-                section_contents = []
-                for filename in group_contents_cfg:
-                    # Match against stripped filenames in page_by_filename
-                    page = page_by_filename.get(filename)
-                    if page:
-                        section_contents.append(
-                            {
-                                "text": page["title"],
-                                "href": f"{slug}/{page['filename']}",
-                            }
-                        )
-                        grouped_filenames.add(filename)
-                if section_contents:
-                    contents.append({"section": section_title, "contents": section_contents})
-
-            # Add any ungrouped pages at the end
-            for filename, page in page_by_filename.items():
-                if filename not in grouped_filenames:
-                    contents.append(
-                        {
-                            "text": page["title"],
-                            "href": f"{slug}/{page['filename']}",
-                        }
-                    )
-        else:
-            # Default: flat listing with optional subdirectory grouping
-            from pathlib import PurePosixPath
-
-            subdir_groups_dict: dict[str, list[dict]] = {}
-            top_level_pages: list[dict] = []
-
-            for page in pages:
-                if page["filename"] == "index.qmd":
-                    continue
-                parts = PurePosixPath(page["filename"]).parts
-                if len(parts) > 1:
-                    # Page is in a subdirectory — group by parent dir
-                    subdir = parts[0]  # pragma: no cover
-                    subdir_groups_dict.setdefault(subdir, []).append(page)  # pragma: no cover
-                else:
-                    top_level_pages.append(page)
-
-            # Add top-level pages first
-            for page in top_level_pages:
-                contents.append(
-                    {
-                        "text": page["title"],
-                        "href": f"{slug}/{page['filename']}",
-                    }
+            if not section.blog:
+                self._copy_directory_metadata(
+                    section.files, section.source, section.destination, strip_prefix=True
                 )
 
-            # Add subdirectory groups as section headers
-            if dir_titles is None:
-                dir_titles = {}
-            # Preserve source discovery order rather than sorting the keys. The
-            # source file list is sorted with numeric prefixes intact, so first
-            # encounter order already reflects the author's intended ordering.
-            # Sorting here would use the prefix-stripped names and lose it.
-            for subdir in subdir_groups_dict:
-                clean_subdir = strip_numeric_prefix(subdir)  # pragma: no cover
-                section_title = dir_titles.get(  # pragma: no cover
-                    clean_subdir, title_from_name(clean_subdir)
-                )  # pragma: no cover
-                section_contents = []  # pragma: no cover
-                for page in subdir_groups_dict[subdir]:  # pragma: no cover
-                    section_contents.append(  # pragma: no cover
-                        {
-                            "text": page["title"],
-                            "href": f"{slug}/{page['filename']}",
-                        }
-                    )
-                contents.append(
-                    {"section": section_title, "contents": section_contents}
-                )  # pragma: no cover
+            quarto_config = quarto_yml.read(self.build_dir, seed_website=True)
+            changed = published.sidebar is not None
+            if published.sidebar is not None:
+                sidebar_id = published.sidebar["id"]
+                quarto_config["website"]["sidebar"] = [
+                    *(
+                        entry
+                        for entry in quarto_config["website"]["sidebar"]
+                        if not (isinstance(entry, dict) and entry.get("id") == sidebar_id)
+                    ),
+                    published.sidebar,
+                ]
+            if nav_navbar.add_link(quarto_config, published.navbar, after=published.navbar_after):
+                changed = True
+            if changed:
+                quarto_yml.write(self.build_dir, quarto_config, self._config)
 
-        # Skip sidebar when a section has only a single page — the lone item
-        # provides no navigation value and wastes horizontal space.  Without a
-        # sidebar entry the page content expands into the full width.
-        if len(contents) <= 1:
-            return
+            label = "📰" if section.blog else "📂"
+            print(f"   {label} {section.title}: {len(published.pages)} post(s) from {section.dir}/")
 
-        sidebar_config = {
-            "id": sidebar_id,
-            "title": title,
-            "contents": contents,
-        }
-
-        # Remove existing sidebar with same id
-        sidebar = config["website"]["sidebar"]
-        sidebar = [s for s in sidebar if not (isinstance(s, dict) and s.get("id") == sidebar_id)]
-        sidebar.append(sidebar_config)
-        config["website"]["sidebar"] = sidebar
-
-        quarto_yml.write(self.build_dir, config, self._config)
-
-    def _inject_section_body_class(
-        self,
-        slug: str,
-        pages: list[dict],
-        dest_dir: Path,
-    ) -> None:
-        """
-        Add `body-classes: gd-section-no-sidebar` to frontmatter of every page in a single-page
-        section so CSS can expand the content area.
-        """
-        for page in pages:
-            qmd_path = dest_dir / page["filename"]
-            if not qmd_path.exists():
-                continue
-
-            content = qmd_path.read_text(encoding="utf-8")
-            block = locate_front_matter(content)
-            if block is None:
-                continue
-
-            # Merge body-classes
-            classes = " ".join(block.mapping.strings("body-classes")).split()
-            if "gd-section-no-sidebar" not in classes:
-                classes.append("gd-section-no-sidebar")
-                updated = {**block.mapping.data, "body-classes": " ".join(classes)}
-                qmd_path.write_text(
-                    f"---\n{format_yaml(updated)}\n---\n{content[block.end :]}", encoding="utf-8"
-                )
-
-    def _add_section_to_navbar(
-        self,
-        title: str,
-        href: str,
-        navbar_after: str | None = None,
-    ) -> None:
-        """
-        Add a navbar link for the custom section.
-
-        Parameters
-        ----------
-        title
-            Link text.
-        href
-            Link target.
-        navbar_after
-            Name of an existing navbar item to insert after. If None,
-            inserts before "Reference".
-        """
-        config = quarto_yml.read(self.build_dir, seed_website=True)
-
-        navbar = config.get("website", {}).get("navbar", {})
-        if not navbar or "left" not in navbar:
-            return  # pragma: no cover
-
-        # Check if link already exists
-        if any(isinstance(item, dict) and item.get("text") == title for item in navbar["left"]):
-            return
-
-        link = {"text": title, "href": href}
-
-        if navbar_after:
-            # Find the item to insert after
-            for i, item in enumerate(navbar["left"]):
-                if isinstance(item, dict) and item.get("text") == navbar_after:
-                    navbar["left"].insert(i + 1, link)
-                    break
-            else:
-                # Fallback: insert before Reference
-                self._insert_before_reference(navbar["left"], link)
-        else:
-            # Default: insert before Reference
-            self._insert_before_reference(navbar["left"], link)
-
-        quarto_yml.write(self.build_dir, config, self._config)
-
-    def _reorder_navbar(self, config: dict) -> None:
-        """Reorder navbar items according to `navbar_order` in config."""
-        order = self._config.navbar_order
-        if not order:
-            return
-
-        navbar = config.get("website", {}).get("navbar", {})
-        left = navbar.get("left", [])
-        if not left:
-            return
-
-        by_text: dict[str, dict] = {}
-        for item in left:
-            if isinstance(item, dict) and "text" in item:
-                by_text[item["text"]] = item
-
-        ordered: list[dict] = []
-        for label in order:
-            if label in by_text:
-                ordered.append(by_text.pop(label))
-
-        for item in left:
-            if isinstance(item, dict) and item.get("text") in by_text:
-                ordered.append(item)
-                by_text.pop(item["text"], None)
-
-        navbar["left"] = ordered
-
-    def _insert_before_reference(self, navbar_items: list, link: dict) -> None:
-        """Insert a link before the 'Reference' navbar item, or append."""
-        for i, item in enumerate(navbar_items):
-            if isinstance(item, dict) and item.get("text") == "Reference":
-                navbar_items.insert(i, link)
-                return
-        # If no Reference found then append
-        navbar_items.append(link)
+        return len(found)
 
     # =========================================================================
     # Custom Static Pages Methods
@@ -2415,7 +1726,10 @@ class GreatDocs:
                 navbar_cfg = self._get_custom_page_navbar_config(frontmatter, page_title)
                 if navbar_cfg is not None:
                     nav_text, navbar_after = navbar_cfg
-                    self._add_section_to_navbar(nav_text, nav_href, navbar_after)
+                    quarto_config = quarto_yml.read(self.build_dir, seed_website=True)
+                    link = NavbarLink(text=nav_text, href=nav_href)
+                    if nav_navbar.add_link(quarto_config, link, after=navbar_after):
+                        quarto_yml.write(self.build_dir, quarto_config, self._config)
 
                 processed += 1
 
@@ -8236,7 +7550,7 @@ body-classes: "gd-homepage"
         markdown_pages.register(config, self._config)
 
         # Apply explicit navbar ordering from config (if set)
-        self._reorder_navbar(config)
+        nav_navbar.reorder(config, self._config)
 
         # Write back to file
         quarto_yml.write(self.build_dir, config, self._config)
