@@ -71,8 +71,6 @@ from great_docs._apiref._render import (
     get_render_type,
 )
 from great_docs._apiref._render._label import (
-    _attribute_label,
-    _class_label,
     _function_label,
     get_label,
 )
@@ -97,6 +95,9 @@ from great_docs._apiref._render.reference_section import RenderReferenceSection
 from great_docs._apiref._signature import make_call_signature_text
 from great_docs._apiref._tools import render_code_variable, render_type_object
 from great_docs._apiref._type_checks import (
+    attribute_kind,
+    class_kind,
+    function_kind,
     griffe_to_doc,
     is_doc_attribute,
     is_doc_class,
@@ -6382,6 +6383,26 @@ def test_fetch_members_include_empty_skips_docstring_filter():
     assert "undocumented" in result
 
 
+def test_fetch_members_keeps_undocumented_members_of_an_enum():
+    """An enum lists its undocumented members; a dataclass with an enum base does not"""
+    from great_docs._apiref.api_reference import Settings
+
+    source = (
+        "import enum\n"
+        "from dataclasses import dataclass\n"
+        "class Color(enum.Enum):\n"
+        "    RED = 1\n"
+        "@dataclass\n"
+        "class Point(enum.Enum):\n"
+        "    X = 1\n"
+    )
+    with gf.temporary_visited_package("pkg", {"__init__.py": source}) as pkg:
+        resolver = Resolver(Settings(parser="numpy"))
+        el = SpecObject(name="Color").with_defaults(SpecOptions())
+        assert resolver._fetch_members(el, pkg["Color"]) == ["RED"]
+        assert resolver._fetch_members(el, pkg["Point"]) == []
+
+
 def test_autogenerate_sections_returns_sections(capsys):
     """Verify that a valid module produces default API sections"""
     import griffe as gf
@@ -7841,220 +7862,6 @@ def test_find_package_init_hatch_packages():
 
         assert result is not None
         assert result.parent.name == "hatch_mod"
-
-
-def test_sub_classify_class_dataclass_plain_mock():
-    """_sub_classify_class identifies dataclasses."""
-
-    class FakeObj:
-        labels = {"dataclass"}
-        bases = []
-        decorators = []
-
-    assert GreatDocs._sub_classify_class(FakeObj()) == "dataclass"
-
-
-def test_sub_classify_class_enum_str_compare():
-    """_sub_classify_class identifies enums."""
-
-    class FakeObj:
-        labels = set()
-
-        class FakeBase:
-            def __str__(self):
-                return "enum.IntEnum"
-
-        bases = [FakeBase()]
-        decorators = []
-
-    assert GreatDocs._sub_classify_class(FakeObj()) == "enum"
-
-
-def test_sub_classify_class_exception_generic():
-    """_sub_classify_class identifies exceptions."""
-
-    class FakeObj:
-        labels = set()
-
-        class FakeBase:
-            def __str__(self):
-                return "Exception"
-
-        bases = [FakeBase()]
-        decorators = []
-
-    assert GreatDocs._sub_classify_class(FakeObj()) == "exception"
-
-
-def test_sub_classify_class_namedtuple_unqualified():
-    """_sub_classify_class identifies NamedTuples."""
-
-    class FakeObj:
-        labels = set()
-
-        class FakeBase:
-            def __str__(self):
-                return "NamedTuple"
-
-        bases = [FakeBase()]
-        decorators = []
-
-    assert GreatDocs._sub_classify_class(FakeObj()) == "namedtuple"
-
-
-def test_sub_classify_class_typeddict_unqualified():
-    """_sub_classify_class identifies TypedDicts."""
-
-    class FakeObj:
-        labels = set()
-
-        class FakeBase:
-            def __str__(self):
-                return "TypedDict"
-
-        bases = [FakeBase()]
-        decorators = []
-
-    assert GreatDocs._sub_classify_class(FakeObj()) == "typeddict"
-
-
-def test_sub_classify_class_protocol_unqualified():
-    """_sub_classify_class identifies Protocols."""
-
-    class FakeObj:
-        labels = set()
-
-        class FakeBase:
-            def __str__(self):
-                return "Protocol"
-
-        bases = [FakeBase()]
-        decorators = []
-
-    assert GreatDocs._sub_classify_class(FakeObj()) == "protocol"
-
-
-def test_sub_classify_class_abc_unqualified():
-    """_sub_classify_class identifies ABCs."""
-
-    class FakeObj:
-        labels = set()
-
-        class FakeBase:
-            def __str__(self):
-                return "ABC"
-
-        bases = [FakeBase()]
-        decorators = []
-
-    assert GreatDocs._sub_classify_class(FakeObj()) == "abc"
-
-
-def test_sub_classify_class_abc_from_decorator():
-    """_sub_classify_class identifies ABCs from abstractmethod decorator."""
-
-    class FakeDecorator:
-        def __init__(self):
-            self.value = "abstractmethod"
-
-    class FakeObj:
-        labels = set()
-        bases = []
-        decorators = [FakeDecorator()]
-
-    assert GreatDocs._sub_classify_class(FakeObj()) == "abc"
-
-
-def test_sub_classify_class_plain_no_bases():
-    """_sub_classify_class returns 'class' for regular classes."""
-
-    class FakeObj:
-        labels = set()
-        bases = []
-        decorators = []
-
-    assert GreatDocs._sub_classify_class(FakeObj()) == "class"
-
-
-def test_sub_classify_function_async():
-    """_sub_classify_function identifies async functions."""
-
-    class FakeObj:
-        labels = {"async"}
-
-    assert GreatDocs._sub_classify_function(FakeObj()) == "async"
-
-
-def test_sub_classify_function_classmethod():
-    """_sub_classify_function identifies classmethods."""
-
-    class FakeObj:
-        labels = {"classmethod"}
-
-    assert GreatDocs._sub_classify_function(FakeObj()) == "classmethod"
-
-
-def test_sub_classify_function_staticmethod():
-    """_sub_classify_function identifies staticmethods."""
-
-    class FakeObj:
-        labels = {"staticmethod"}
-
-    assert GreatDocs._sub_classify_function(FakeObj()) == "staticmethod"
-
-
-def test_sub_classify_function_property():
-    """_sub_classify_function identifies properties."""
-
-    class FakeObj:
-        labels = {"property"}
-
-    assert GreatDocs._sub_classify_function(FakeObj()) == "property"
-
-
-def test_sub_classify_function_plain():
-    """_sub_classify_function returns 'function' for regular functions."""
-
-    class FakeObj:
-        labels = set()
-
-    assert GreatDocs._sub_classify_function(FakeObj()) == "function"
-
-
-def test_sub_classify_attribute_type_alias_plain_mock():
-    """_sub_classify_attribute identifies type aliases via kind."""
-
-    class FakeKind:
-        value = "type alias"
-
-    class FakeObj:
-        labels = set()
-        kind = FakeKind()
-        annotation = None
-
-    assert GreatDocs._sub_classify_attribute(FakeObj()) == "type_alias"
-
-
-def test_sub_classify_attribute_typevar_no_kind():
-    """_sub_classify_attribute identifies TypeVar annotations."""
-
-    class FakeObj:
-        labels = set()
-        kind = None
-        annotation = "TypeVar"
-
-    assert GreatDocs._sub_classify_attribute(FakeObj()) == "typevar"
-
-
-def test_sub_classify_attribute_constant_no_kind():
-    """_sub_classify_attribute returns 'constant' for regular attributes."""
-
-    class FakeObj:
-        labels = set()
-        kind = None
-        annotation = None
-
-    assert GreatDocs._sub_classify_attribute(FakeObj()) == "constant"
 
 
 def test_count_cli_sidebar_items_flat_inline():
@@ -16596,64 +16403,6 @@ def test_generate_landing_page_content_pip_install():
         assert "pip install" in result
 
 
-def test_sub_classify_class_dataclass():
-    """Test _sub_classify_class identifies dataclass."""
-
-    obj = MagicMock()
-    obj.labels = {"dataclass"}
-    obj.bases = []
-    result = GreatDocs._sub_classify_class(obj)
-
-    assert result == "dataclass"
-
-
-def test_sub_classify_class_plain():
-    """Test _sub_classify_class returns 'class' for plain class."""
-
-    obj = MagicMock()
-    obj.labels = set()
-    obj.bases = ["object"]
-    obj.decorators = []
-    result = GreatDocs._sub_classify_class(obj)
-
-    assert result == "class"
-
-
-def test_sub_classify_attribute_type_alias():
-    """Test _sub_classify_attribute identifies type alias."""
-
-    obj = MagicMock()
-    obj.labels = set()
-    obj.kind.value = "type alias"
-    result = GreatDocs._sub_classify_attribute(obj)
-
-    assert result == "type_alias"
-
-
-def test_sub_classify_attribute_typevar():
-    """Test _sub_classify_attribute identifies TypeVar."""
-
-    obj = MagicMock()
-    obj.labels = set()
-    obj.kind.value = "attribute"
-    obj.annotation = "TypeVar"
-    result = GreatDocs._sub_classify_attribute(obj)
-
-    assert result == "typevar"
-
-
-def test_sub_classify_attribute_constant():
-    """Test _sub_classify_attribute returns 'constant' by default."""
-
-    obj = MagicMock()
-    obj.labels = set()
-    obj.kind.value = "attribute"
-    obj.annotation = None
-    result = GreatDocs._sub_classify_attribute(obj)
-
-    assert result == "constant"
-
-
 def test_get_package_metadata_license_string():
     """Test _get_package_metadata reads PEP 639 string license."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -17033,22 +16782,6 @@ def test_auto_exclude_set():
     assert "cli" in GreatDocs.AUTO_EXCLUDE
     assert "version" in GreatDocs.AUTO_EXCLUDE
     assert "VERSION" in GreatDocs.AUTO_EXCLUDE
-
-
-def test_exception_bases_set():
-    """Test _EXCEPTION_BASES contains expected exception classes."""
-    assert "Exception" in GreatDocs._EXCEPTION_BASES
-    assert "ValueError" in GreatDocs._EXCEPTION_BASES
-    assert "TypeError" in GreatDocs._EXCEPTION_BASES
-    assert "KeyError" in GreatDocs._EXCEPTION_BASES
-
-
-def test_enum_bases_set():
-    """Test _ENUM_BASES contains expected enum classes."""
-    assert "Enum" in GreatDocs._ENUM_BASES
-    assert "IntEnum" in GreatDocs._ENUM_BASES
-    assert "StrEnum" in GreatDocs._ENUM_BASES
-    assert "Flag" in GreatDocs._ENUM_BASES
 
 
 def test_copy_user_guide_to_docs_basic():
@@ -17827,61 +17560,6 @@ def test_reference_enabled_config():
         assert config.reference_enabled is False
 
 
-def test_sub_classify_function_regular():
-    """Test _sub_classify_function for a regular function."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        obj = MagicMock()
-        obj.labels = set()
-        result = docs._sub_classify_function(obj)
-        assert result in ("function", "async", "classmethod", "staticmethod", "property")
-
-
-def test_sub_classify_function_async_b9():
-    """Test _sub_classify_function for async function."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        obj = MagicMock()
-        obj.labels = {"async"}
-        result = docs._sub_classify_function(obj)
-        assert result == "async"
-
-
-def test_sub_classify_function_classmethod_b9():
-    """Test _sub_classify_function for classmethod."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        obj = MagicMock()
-        obj.labels = {"classmethod"}
-        result = docs._sub_classify_function(obj)
-        assert result == "classmethod"
-
-
-def test_sub_classify_function_staticmethod_b9():
-    """Test _sub_classify_function for staticmethod."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        obj = MagicMock()
-        obj.labels = {"staticmethod"}
-        result = docs._sub_classify_function(obj)
-        assert result == "staticmethod"
-
-
-def test_sub_classify_function_property_b9():
-    """Test _sub_classify_function for property."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        obj = MagicMock()
-        obj.labels = {"property"}
-        result = docs._sub_classify_function(obj)
-        assert result == "property"
-
-
 def test_detect_hero_logo_none():
     """Test _detect_hero_logo returns None when no hero logo found."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -18419,54 +18097,6 @@ def test_empty_categories_has_all_keys():
         ]
         for key in expected_keys:
             assert key in cats
-
-
-def test_sub_classify_class_with_decorators_abc():
-    """Test _sub_classify_class detects ABC from decorators."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        obj = MagicMock()
-        obj.labels = set()
-        obj.bases = []
-
-        decorator = MagicMock()
-        decorator.value = "abstractmethod"
-        obj.decorators = [decorator]
-
-        result = docs._sub_classify_class(obj)
-        assert result == "abc"
-
-
-def test_sub_classify_attribute_type_alias_kind():
-    """Test _sub_classify_attribute detects type alias from kind.value."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        obj = MagicMock()
-        obj.labels = set()
-        obj.kind.value = "type alias"
-        obj.annotation = None
-
-        result = docs._sub_classify_attribute(obj)
-        assert result == "type_alias"
-
-
-def test_sub_classify_attribute_paramspec():
-    """Test _sub_classify_attribute detects ParamSpec as typevar."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        obj = MagicMock()
-        obj.labels = set()
-        obj.kind.value = "attribute"
-        obj.annotation = "ParamSpec"
-
-        result = docs._sub_classify_attribute(obj)
-        assert result == "typevar"
 
 
 def test_get_package_metadata_cli_config():
@@ -20506,16 +20136,17 @@ def test_categorize_api_objects_with_exception():
         pkg_dir = Path(tmp_dir) / "excpkg"
         pkg_dir.mkdir()
         (pkg_dir / "__init__.py").write_text(
-            'class MyError(Exception):\n    """Custom error."""\n    pass\n',
+            'class MyError(Exception):\n    """Custom error."""\n'
+            'class MyChildError(MyError):\n    """Child error."""\n',
             encoding="utf-8",
         )
 
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorize_api_objects("excpkg", ["MyError"])
+            result = docs._categorize_api_objects("excpkg", ["MyError", "MyChildError"])
 
-            assert "MyError" in result["exceptions"]
+            assert result["exceptions"] == ["MyError", "MyChildError"]
         finally:
             sys.path.remove(tmp_dir)
 
@@ -22293,18 +21924,21 @@ def test_categorize_api_objects_type_alias():
         pkg_dir = Path(tmp_dir) / "tapkg"
         pkg_dir.mkdir()
         (pkg_dir / "__init__.py").write_text(
-            'from typing import TypeVar\nT = TypeVar("T")\nMY_CONST = "hello"\n',
+            "from typing import TypeAlias, TypeVar\n"
+            'T = TypeVar("T")\n'
+            "A: TypeAlias = int\n"
+            'MY_CONST = "hello"\n',
             encoding="utf-8",
         )
 
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorize_api_objects("tapkg", ["T", "MY_CONST"])
+            result = docs._categorize_api_objects("tapkg", ["T", "A", "MY_CONST"])
 
             assert "MY_CONST" in result["constants"]
-            # T should be type_alias or constant depending on griffe
-            assert "T" in result["type_aliases"] or "T" in result["constants"]
+            assert "T" in result["type_aliases"]
+            assert "A" in result["type_aliases"]
         finally:
             sys.path.remove(tmp_dir)
             sys.modules.pop("tapkg", None)
@@ -22450,32 +22084,6 @@ def test_categorize_api_objects_cyclic_alias():
         finally:
             sys.path.remove(tmp_dir)
             sys.modules.pop("cyclicpkg2", None)
-
-
-def test_sub_classify_class_abc():
-    """Test _sub_classify_class detects ABC."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "abcpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "from abc import ABC, abstractmethod\n"
-            "class Base(ABC):\n"
-            '    """Abstract base."""\n'
-            "    @abstractmethod\n"
-            "    def do_it(self): ...\n",
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            pkg = griffe.load("abcpkg")
-            obj = pkg.members["Base"]
-            result = GreatDocs._sub_classify_class(obj)
-            assert result == "abc"
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("abcpkg", None)
 
 
 def test_detect_dynamic_mode_with_simple_package():
@@ -27785,6 +27393,126 @@ def test_shortcode_str():
     assert "key=value" in result2
 
 
+@pytest.mark.parametrize(
+    ("source", "kind"),
+    [
+        ("from dataclasses import dataclass\n@dataclass\nclass C(ValueError): ...\n", "dataclass"),
+        ("import enum\nclass C(enum.IntEnum): ...\n", "enum"),
+        ("class C(ValueError): ...\n", "exception"),
+        ("class C(ExceptionGroup): ...\n", "exception"),
+        ("class C(EncodingWarning): ...\n", "exception"),
+        ("from typing import NamedTuple\nclass C(NamedTuple): ...\n", "namedtuple"),
+        ("from typing import TypedDict\nclass C(TypedDict): ...\n", "typeddict"),
+        ("import typing\nclass C(typing.Protocol): ...\n", "protocol"),
+        ("from abc import ABC\nclass C(ABC): ...\n", "abc"),
+        ("from abc import abstractmethod\n@abstractmethod\nclass C: ...\n", "class"),
+        ("class C(object): ...\n", "class"),
+    ],
+)
+def test_class_kind(source, kind):
+    """The first rule that matches decides the kind of a class"""
+
+    with gf.temporary_visited_package("pkg", {"__init__.py": source}) as pkg:
+        assert class_kind(pkg["C"]) == kind
+
+
+def test_class_kind_of_reexported_class():
+    """A re-exported class is classified by its target"""
+
+    files = {"__init__.py": "from ._impl import C\n", "_impl.py": "class C(KeyError): ...\n"}
+    with gf.temporary_visited_package("pkg", files) as pkg:
+        assert isinstance(pkg["C"], gf.Alias)
+        assert class_kind(pkg["C"]) == "exception"
+
+
+def test_class_kind_of_package_exception_subclass():
+    """A class that inherits from an exception defined in the package is an exception"""
+
+    files = {
+        "__init__.py": "from ._errors import Err, MyErr\nfrom .other import Leaf\n",
+        "_errors.py": "class Err(ValueError): ...\nclass MyErr(Err): ...\n",
+        "other.py": "from . import _errors\nclass Leaf(_errors.MyErr): ...\n",
+    }
+    with gf.temporary_visited_package("pkg", files) as pkg:
+        assert class_kind(pkg["MyErr"]) == "exception"
+        assert class_kind(pkg["Leaf"]) == "exception"
+        assert get_label(pkg["Leaf"]) == "exception"
+
+
+def test_class_kind_of_inheritance_cycle():
+    """A class in an inheritance cycle is classified by its own bases"""
+
+    files = {"__init__.py": "from .a import A\n", "a.py": "from .b import B\nclass A(B): ...\n"}
+    files["b.py"] = "from .a import A\nclass B(A): ...\n"
+    with gf.temporary_visited_package("pkg", files) as pkg:
+        assert class_kind(pkg["A"]) == "class"
+
+
+@pytest.mark.parametrize(
+    ("source", "path", "kind"),
+    [
+        ("async def f(): ...\n", "f", "async"),
+        ("class C:\n    @classmethod\n    def f(cls): ...\n", "C.f", "classmethod"),
+        ("class C:\n    @staticmethod\n    def f(): ...\n", "C.f", "staticmethod"),
+        ("def f(): ...\n", "f", "function"),
+    ],
+)
+def test_function_kind(source, path, kind):
+    """The first label that matches decides the kind of a function"""
+
+    with gf.temporary_visited_package("pkg", {"__init__.py": source}) as pkg:
+        assert function_kind(pkg[path]) == kind
+
+
+def test_function_kind_property():
+    """A function labelled `property` is a property"""
+
+    obj = gf.Function(name="f", lineno=1)
+    obj.labels.add("property")
+    assert function_kind(obj) == "property"
+
+
+@pytest.mark.parametrize(
+    ("source", "kind"),
+    [
+        ("from typing import TypeVar\nX: TypeVar = TypeVar('X')\n", "typevar"),
+        ("from typing import ParamSpec\nX: ParamSpec = ParamSpec('X')\n", "typevar"),
+        ("from typing import TypeVar\nX = TypeVar('X')\n", "typevar"),
+        ("import typing\nX = typing.TypeVarTuple('X')\n", "typevar"),
+        ("from typing import TypeAlias\nX: TypeAlias = int\n", "typealias"),
+        ("import typing\nX: typing.TypeAlias = int\n", "typealias"),
+        ("X: int = 1\n", "constant"),
+        ("X = 1\n", "constant"),
+    ],
+)
+def test_attribute_kind(source, kind):
+    """The annotation, then the value, decides the kind of an attribute"""
+
+    with gf.temporary_visited_package("pkg", {"__init__.py": source}) as pkg:
+        assert attribute_kind(pkg["X"]) == kind
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 12),
+    reason="PEP 695 `type` statement requires Python 3.12+",
+)
+def test_attribute_kind_type_alias():
+    """A PEP 695 type alias, or an alias to one, is a type alias"""
+
+    files = {"__init__.py": "from ._impl import X\n", "_impl.py": "type X = int\n"}
+    with gf.temporary_visited_package("pkg", files) as pkg:
+        assert attribute_kind(pkg["_impl.X"]) == "typealias"
+        assert attribute_kind(pkg["X"]) == "typealias"
+
+
+def test_attribute_kind_property():
+    """A property, which griffe models as a labelled attribute, is a property"""
+
+    source = "class C:\n    @property\n    def x(self) -> int: ...\n"
+    with gf.temporary_visited_package("pkg", {"__init__.py": source}) as pkg:
+        assert attribute_kind(pkg["C.x"]) == "property"
+
+
 def test_is_typealias_with_exprname():
     """is_typealias returns True for Attribute with TypeAlias annotation."""
 
@@ -28153,42 +27881,12 @@ def test_get_label_typealias_legacy_spelling():
         assert get_label(pkg["Contract"]) == "typealias"
 
 
-def test_attribute_label_typevar():
-    """_attribute_label returns 'typevar' for TypeVar annotation."""
-
-    obj = gf.Attribute(name="T", lineno=1, annotation="TypeVar('T')")
-    assert _attribute_label(obj) == "typevar"
-
-
-def test_attribute_label_paramspec():
-    """_attribute_label returns 'typevar' for ParamSpec annotation."""
-
-    obj = gf.Attribute(name="P", lineno=1, annotation="ParamSpec('P')")
-    assert _attribute_label(obj) == "typevar"
-
-
-def test_attribute_label_property():
-    """_attribute_label returns 'property' for a property attribute."""
-
-    obj = gf.Attribute(name="val", lineno=1)
-    obj.labels.add("property")
-    assert _attribute_label(obj) == "property"
-
-
 def test_function_label_method():
     """_function_label returns 'method' for a class method."""
 
     parent = gf.Class(name="MyClass", lineno=1)
     obj = gf.Function(name="do_thing", lineno=2, parent=parent)
     assert _function_label(obj) == "method"
-
-
-def test_class_label_dataclass():
-    """_class_label returns 'dataclass' for a dataclass."""
-
-    obj = gf.Class(name="MyDC", lineno=1)
-    obj.labels.add("dataclass")
-    assert _class_label(obj) == "dataclass"
 
 
 def test_create_inventory_basic():
@@ -28693,116 +28391,6 @@ def test_get_label_typealias_kind():
         obj = pkg["MyType"]
         assert obj.kind is gf.Kind.TYPE_ALIAS
         assert get_label(obj) == "typealias"
-
-
-def test_attribute_label_typevar_annotation():
-    """_attribute_label returns 'typevar' for TypeVar annotation."""
-
-    obj = gf.Attribute(name="T", lineno=1)
-    obj.annotation = gf.ExprName("TypeVar")
-
-    assert _attribute_label(obj) == "typevar"
-
-
-def test_function_label_async():
-    """_function_label returns 'async' for async functions."""
-
-    obj = gf.Function(name="afunc", lineno=1)
-    obj.labels.add("async")
-
-    assert _function_label(obj) == "async"
-
-
-def test_function_label_classmethod():
-    """_function_label returns 'classmethod'."""
-
-    obj = gf.Function(name="cm", lineno=1)
-    obj.labels.add("classmethod")
-
-    assert _function_label(obj) == "classmethod"
-
-
-def test_function_label_staticmethod():
-    """_function_label returns 'staticmethod'."""
-
-    obj = gf.Function(name="sm", lineno=1)
-    obj.labels.add("staticmethod")
-
-    assert _function_label(obj) == "staticmethod"
-
-
-def test_function_label_property():
-    """_function_label returns 'property'."""
-
-    obj = gf.Function(name="prop", lineno=1)
-    obj.labels.add("property")
-
-    assert _function_label(obj) == "property"
-
-
-def test_class_label_bases_exception():
-    """_class_label catches exceptions accessing bases."""
-
-    obj = MagicMock()
-    obj.labels = set()
-    type(obj).bases = PropertyMock(side_effect=Exception("broken"))
-    result = _class_label(obj)
-
-    assert result == "class"
-
-
-def test_class_label_enum():
-    """_class_label returns 'enum' for Enum bases."""
-
-    obj = gf.Class(name="MyEnum", lineno=1)
-    obj.bases = [gf.ExprName("IntEnum")]
-
-    assert _class_label(obj) == "enum"
-
-
-def test_class_label_exception():
-    """_class_label returns 'exception' for Exception bases."""
-
-    obj = gf.Class(name="MyErr", lineno=1)
-    obj.bases = [gf.ExprName("ValueError")]
-
-    assert _class_label(obj) == "exception"
-
-
-def test_class_label_namedtuple():
-    """_class_label returns 'namedtuple' for NamedTuple bases."""
-
-    obj = gf.Class(name="NT", lineno=1)
-    obj.bases = [gf.ExprName("NamedTuple")]
-
-    assert _class_label(obj) == "namedtuple"
-
-
-def test_class_label_typeddict():
-    """_class_label returns 'typeddict' for TypedDict bases."""
-
-    obj = gf.Class(name="TD", lineno=1)
-    obj.bases = [gf.ExprName("TypedDict")]
-
-    assert _class_label(obj) == "typeddict"
-
-
-def test_class_label_protocol():
-    """_class_label returns 'protocol' for Protocol bases."""
-
-    obj = gf.Class(name="Proto", lineno=1)
-    obj.bases = [gf.ExprName("Protocol")]
-
-    assert _class_label(obj) == "protocol"
-
-
-def test_class_label_abc():
-    """_class_label returns 'abc' for ABC bases."""
-
-    obj = gf.Class(name="Base", lineno=1)
-    obj.bases = [gf.ExprName("ABC")]
-
-    assert _class_label(obj) == "abc"
 
 
 def test_extend_base_class_with_super():
@@ -30714,177 +30302,6 @@ class TestBuildSectionsFromReferenceConfig:
             result = docs._build_sections_from_reference_config(config)
             # No valid contents, so the section is skipped
             assert result is None
-
-
-class TestSubClassify:
-    """Tests for _sub_classify_class, _sub_classify_function, _sub_classify_attribute."""
-
-    def test_classify_class_dataclass(self):
-        """Classifies a dataclass."""
-        obj = MagicMock()
-        obj.labels = {"dataclass"}
-        assert GreatDocs._sub_classify_class(obj) == "dataclass"
-
-    def test_classify_class_enum(self):
-        """Classifies an enum."""
-        obj = MagicMock()
-        obj.labels = set()
-        obj.bases = ["enum.Enum"]
-        assert GreatDocs._sub_classify_class(obj) == "enum"
-
-    def test_classify_class_exception(self):
-        """Classifies an exception."""
-        obj = MagicMock()
-        obj.labels = set()
-        obj.bases = ["builtins.Exception"]
-        assert GreatDocs._sub_classify_class(obj) == "exception"
-
-    def test_classify_class_namedtuple(self):
-        """Classifies a NamedTuple."""
-        obj = MagicMock()
-        obj.labels = set()
-        obj.bases = ["typing.NamedTuple"]
-        assert GreatDocs._sub_classify_class(obj) == "namedtuple"
-
-    def test_classify_class_typeddict(self):
-        """Classifies a TypedDict."""
-        obj = MagicMock()
-        obj.labels = set()
-        obj.bases = ["typing.TypedDict"]
-        assert GreatDocs._sub_classify_class(obj) == "typeddict"
-
-    def test_classify_class_protocol(self):
-        """Classifies a Protocol."""
-        obj = MagicMock()
-        obj.labels = set()
-        obj.bases = ["typing.Protocol"]
-        assert GreatDocs._sub_classify_class(obj) == "protocol"
-
-    def test_classify_class_abc(self):
-        """Classifies an ABC."""
-        obj = MagicMock()
-        obj.labels = set()
-        obj.bases = ["ABC"]
-        obj.decorators = []
-        assert GreatDocs._sub_classify_class(obj) == "abc"
-
-    def test_classify_class_abc_via_decorator(self):
-        """Classifies ABC via @abstractmethod decorator."""
-        obj = MagicMock()
-        obj.labels = set()
-        obj.bases = ["object"]
-        dec = MagicMock()
-        dec.value = "abstractmethod"
-        obj.decorators = [dec]
-        assert GreatDocs._sub_classify_class(obj) == "abc"
-
-    def test_classify_class_fallback(self):
-        """Falls back to 'class' for unrecognized bases."""
-        obj = MagicMock()
-        obj.labels = set()
-        obj.bases = ["object"]
-        obj.decorators = []
-        assert GreatDocs._sub_classify_class(obj) == "class"
-
-    def test_classify_class_labels_exception(self):
-        """Handles exception when accessing labels."""
-        obj = MagicMock()
-        type(obj).labels = PropertyMock(side_effect=AttributeError)
-        obj.bases = []
-        obj.decorators = []
-        assert GreatDocs._sub_classify_class(obj) == "class"
-
-    def test_classify_class_bases_exception(self):
-        """Handles exception when accessing bases."""
-        obj = MagicMock()
-        obj.labels = set()
-        type(obj).bases = PropertyMock(side_effect=AttributeError)
-        obj.decorators = []
-        assert GreatDocs._sub_classify_class(obj) == "class"
-
-    def test_classify_function_async(self):
-        """Classifies async function."""
-        obj = MagicMock()
-        obj.labels = {"async"}
-        assert GreatDocs._sub_classify_function(obj) == "async"
-
-    def test_classify_function_classmethod(self):
-        """Classifies classmethod."""
-        obj = MagicMock()
-        obj.labels = {"classmethod"}
-        assert GreatDocs._sub_classify_function(obj) == "classmethod"
-
-    def test_classify_function_staticmethod(self):
-        """Classifies staticmethod."""
-        obj = MagicMock()
-        obj.labels = {"staticmethod"}
-        assert GreatDocs._sub_classify_function(obj) == "staticmethod"
-
-    def test_classify_function_property(self):
-        """Classifies property."""
-        obj = MagicMock()
-        obj.labels = {"property"}
-        assert GreatDocs._sub_classify_function(obj) == "property"
-
-    def test_classify_function_fallback(self):
-        """Falls back to 'function'."""
-        obj = MagicMock()
-        obj.labels = set()
-        assert GreatDocs._sub_classify_function(obj) == "function"
-
-    def test_classify_function_labels_exception(self):
-        """Handles exception when accessing labels."""
-        obj = MagicMock()
-        type(obj).labels = PropertyMock(side_effect=RuntimeError)
-        assert GreatDocs._sub_classify_function(obj) == "function"
-
-    def test_classify_attribute_type_alias_kind(self):
-        """Classifies type alias via kind.value."""
-        obj = MagicMock()
-        obj.labels = set()
-        obj.kind.value = "type alias"
-        assert GreatDocs._sub_classify_attribute(obj) == "type_alias"
-
-    def test_classify_attribute_typevar(self):
-        """Classifies TypeVar from annotation."""
-        obj = MagicMock()
-        obj.labels = set()
-        obj.kind.value = "attribute"
-        obj.annotation = "TypeVar('T')"
-        assert GreatDocs._sub_classify_attribute(obj) == "typevar"
-
-    def test_classify_attribute_paramspec(self):
-        """Classifies ParamSpec from annotation."""
-        obj = MagicMock()
-        obj.labels = set()
-        obj.kind.value = "attribute"
-        obj.annotation = "ParamSpec('P')"
-        assert GreatDocs._sub_classify_attribute(obj) == "typevar"
-
-    def test_classify_attribute_constant(self):
-        """Falls back to constant for regular attributes."""
-        obj = MagicMock()
-        obj.labels = set()
-        obj.kind.value = "attribute"
-        obj.annotation = "int"
-        assert GreatDocs._sub_classify_attribute(obj) == "constant"
-
-    def test_classify_attribute_no_annotation(self):
-        """Handles attribute with no annotation."""
-        obj = MagicMock()
-        obj.labels = set()
-        obj.kind.value = "attribute"
-        obj.annotation = None
-        assert GreatDocs._sub_classify_attribute(obj) == "constant"
-
-    def test_classify_attribute_kind_exception(self):
-        """Handles exception when accessing kind."""
-        obj = MagicMock()
-        obj.labels = set()
-        obj.kind.value = None
-        type(obj.kind).value = PropertyMock(side_effect=AttributeError)
-        obj.annotation = None
-        assert GreatDocs._sub_classify_attribute(obj) == "constant"
 
 
 class TestFindPackageInit:
@@ -36537,78 +35954,6 @@ def test_generate_robots_txt_no_site_dir(capsys):
         gd._generate_robots_txt()
         captured = capsys.readouterr()
         assert "_site" in captured.out
-
-
-# ── _sub_classify_class (additional branches) ────────────────────────
-
-
-def test_sub_classify_class_enum():
-    """_sub_classify_class returns 'enum' for Enum subclass."""
-    mock_obj = MagicMock()
-    mock_obj.labels = set()
-    mock_obj.bases = ["enum.Enum"]
-    assert GreatDocs._sub_classify_class(mock_obj) == "enum"
-
-
-def test_sub_classify_class_exception():
-    """_sub_classify_class returns 'exception' for Exception subclass."""
-    mock_obj = MagicMock()
-    mock_obj.labels = set()
-    mock_obj.bases = ["Exception"]
-    assert GreatDocs._sub_classify_class(mock_obj) == "exception"
-
-
-def test_sub_classify_class_namedtuple():
-    """_sub_classify_class returns 'namedtuple' for NamedTuple subclass."""
-    mock_obj = MagicMock()
-    mock_obj.labels = set()
-    mock_obj.bases = ["NamedTuple"]
-    assert GreatDocs._sub_classify_class(mock_obj) == "namedtuple"
-
-
-def test_sub_classify_class_typeddict():
-    """_sub_classify_class returns 'typeddict' for TypedDict subclass."""
-    mock_obj = MagicMock()
-    mock_obj.labels = set()
-    mock_obj.bases = ["TypedDict"]
-    assert GreatDocs._sub_classify_class(mock_obj) == "typeddict"
-
-
-def test_sub_classify_class_protocol():
-    """_sub_classify_class returns 'protocol' for Protocol subclass."""
-    mock_obj = MagicMock()
-    mock_obj.labels = set()
-    mock_obj.bases = ["Protocol"]
-    assert GreatDocs._sub_classify_class(mock_obj) == "protocol"
-
-
-def test_sub_classify_class_abc_by_decorator():
-    """_sub_classify_class returns 'abc' when abstractmethod is in decorators."""
-    mock_obj = MagicMock()
-    mock_obj.labels = set()
-    mock_obj.bases = ["object"]
-    decorator = MagicMock()
-    decorator.value = "abstractmethod"
-    mock_obj.decorators = [decorator]
-    assert GreatDocs._sub_classify_class(mock_obj) == "abc"
-
-
-def test_sub_classify_class_labels_exception():
-    """_sub_classify_class handles exception when reading labels."""
-    mock_obj = MagicMock()
-    type(mock_obj).labels = property(lambda self: (_ for _ in ()).throw(AttributeError))
-    mock_obj.bases = ["list"]
-    mock_obj.decorators = []
-    assert GreatDocs._sub_classify_class(mock_obj) == "class"
-
-
-def test_sub_classify_class_bases_exception():
-    """_sub_classify_class handles exception when reading bases."""
-    mock_obj = MagicMock()
-    mock_obj.labels = set()
-    type(mock_obj).bases = property(lambda self: (_ for _ in ()).throw(AttributeError))
-    mock_obj.decorators = []
-    assert GreatDocs._sub_classify_class(mock_obj) == "class"
 
 
 # ── _collect_page_tags (shadow tags) ─────────────────────────────────
