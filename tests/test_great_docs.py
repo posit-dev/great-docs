@@ -18877,7 +18877,7 @@ def test_build_versioned_all_failed_raises(tmp_path: Path, capsys: pytest.Captur
 
     with (
         stubbed_build(docs),
-        patch("great_docs._versioned_build.run_versioned_build", return_value=failed),
+        patch("great_docs._versions.build.run_versioned_build", return_value=failed),
         pytest.raises(BuildError, match="All version builds failed"),
     ):
         docs.build(watch=False, refresh=False)

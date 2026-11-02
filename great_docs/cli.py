@@ -3518,7 +3518,7 @@ def versions(project_path: str | None, check: bool, config_path: str | None = No
       great-docs versions              # List all configured versions
       great-docs versions --check      # Validate configuration
     """
-    from great_docs._versioning import get_latest_version, parse_versions_config
+    from great_docs._versions.model import get_latest_version, parse_versions_config
     from great_docs.config import Config
 
     try:

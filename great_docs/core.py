@@ -10390,7 +10390,7 @@ anchor-sections: true
         """
         import html as html_mod
 
-        from great_docs._versioning import build_version_map, parse_versions_config
+        from great_docs._versions.model import build_version_map, parse_versions_config
 
         with quarto_yml.edit(self.build_dir, self._config) as config:
             versions = parse_versions_config(self._config.versions)
@@ -12648,8 +12648,8 @@ anchor-sections: true
         StepError
             If every version fails to render.
         """
-        from great_docs._versioned_build import run_versioned_build
-        from great_docs._versioning import get_latest_version, parse_versions_config
+        from great_docs._versions.build import run_versioned_build
+        from great_docs._versions.model import get_latest_version, parse_versions_config
 
         versions = parse_versions_config(self._config.versions)
         if latest_only:
@@ -12710,7 +12710,7 @@ anchor-sections: true
             `None`; the step has no result line.
         """
         if self.layout.site_dir != self.build_dir / "_site":
-            from ._versioned_build import assemble_site
+            from ._versions.build import assemble_site
 
             assemble_site(self.build_dir, [], "", self.layout.site_dir, layout=self.layout)
         return None

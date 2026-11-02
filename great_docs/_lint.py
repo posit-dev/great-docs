@@ -877,7 +877,7 @@ def _check_stale_versions(
     if not versions_raw:
         return
 
-    from ._versioning import parse_versions_config
+    from ._versions.model import parse_versions_config
 
     versions = parse_versions_config(versions_raw)
     if not versions:
@@ -904,7 +904,7 @@ def _check_stale_versions(
     callout_threshold = int(stale_cfg.get("callout_threshold", _DEFAULT_CALLOUT_THRESHOLD))
 
     # Parse the real badge expiry config (new_is_old)
-    from ._versioning import is_badge_expired, parse_badge_expiry
+    from ._versions.model import is_badge_expired, parse_badge_expiry
 
     badge_expiry = parse_badge_expiry(raw_config.get("new_is_old"))
 
@@ -916,7 +916,7 @@ def _check_stale_versions(
             if v.version:
                 released_versions.add(v.version)
 
-    # Compiled patterns (same as in _versioned_build)
+    # Match the version markup recognised by versioned builds.
     badge_re = re.compile(
         r"\[version-badge\s+(new|changed|deprecated)(?:\s+(\S+))?\]",
         re.IGNORECASE,
@@ -1057,7 +1057,7 @@ def _version_distance(
 
     Returns None if the version is not found in the list.
     """
-    from ._versioning import _find_entry
+    from ._versions.model import _find_entry
 
     entry = _find_entry(badge_version, versions)
     if entry is None:

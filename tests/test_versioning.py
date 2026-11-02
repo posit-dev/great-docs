@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from great_docs._versioning import (
+from great_docs._versions.model import (
     _resolve_version_str,
     _parse_version_tuple,
     _find_entry,

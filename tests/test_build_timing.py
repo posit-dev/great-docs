@@ -268,7 +268,7 @@ class TestVersionedBuildTimings:
 
     def test_returns_5_tuple(self, tmp_path: Path):
         """Return a five-element result with page timings last"""
-        from great_docs._versioned_build import _render_version
+        from great_docs._versions.build import _render_version
 
         fake_dir = tmp_path / "fake"
         fake_dir.mkdir()

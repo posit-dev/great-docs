@@ -1878,14 +1878,14 @@ class TestCheckStaleVersions:
 
         (tmp_path / "great-docs.yml").write_text("versions:\n  - tag: v0.1\n    label: '0.1'\n")
         result = LintResult()
-        with patch("great_docs._versioning.parse_versions_config", return_value=[]):
+        with patch("great_docs._versions.model.parse_versions_config", return_value=[]):
             _check_stale_versions(tmp_path, result)
         assert result.issues == []
 
     def test_no_latest_marked_falls_back_to_first_nonprerelease(self, tmp_path):
         """No version has latest=True: fallback loop sets latest_entry to first non-prerelease."""
         from great_docs._lint import _check_stale_versions
-        from great_docs._versioning import VersionEntry
+        from great_docs._versions.model import VersionEntry
 
         # Return versions with no latest=True so the fallback loop (lines 584-587) is exercised
         versions_no_latest = [
@@ -1895,7 +1895,9 @@ class TestCheckStaleVersions:
         ]
         (tmp_path / "great-docs.yml").write_text("versions:\n  - tag: '0.5'\n    label: '0.5'\n")
         result = LintResult()
-        with patch("great_docs._versioning.parse_versions_config", return_value=versions_no_latest):
+        with patch(
+            "great_docs._versions.model.parse_versions_config", return_value=versions_no_latest
+        ):
             _check_stale_versions(tmp_path, result)
         # Ran without error; latest_entry was set to 0.5 via fallback loop
 
@@ -2059,7 +2061,7 @@ class TestVersionDistance:
     """Tests for the _version_distance() helper."""
 
     def _entry(self, tag: str, prerelease: bool = False):
-        from great_docs._versioning import VersionEntry
+        from great_docs._versions.model import VersionEntry
 
         return VersionEntry(tag=tag, label=tag, prerelease=prerelease)
 

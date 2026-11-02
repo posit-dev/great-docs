@@ -338,7 +338,7 @@ def test_layout_notice_once_per_build_or_preview_session(
 
     monkeypatch.setattr(subprocess, "run", run_quarto)
     monkeypatch.setattr(subprocess, "Popen", start_quarto)
-    monkeypatch.setattr("great_docs._versioned_build.render_versions_parallel", render_versions)
+    monkeypatch.setattr("great_docs._versions.build.render_versions_parallel", render_versions)
     monkeypatch.setattr("http.server.ThreadingHTTPServer", MagicMock())
     monkeypatch.setattr("threading.Timer", MagicMock())
     if mode == "analysis-error":
@@ -2792,7 +2792,7 @@ class TestVersionsCommandMissedBranches:
         with (
             patch("great_docs.config.Config", return_value=cfg),
             patch(
-                "great_docs._versioning.parse_versions_config",
+                "great_docs._versions.model.parse_versions_config",
                 side_effect=ValueError("bad config"),
             ),
         ):
@@ -2805,7 +2805,7 @@ class TestVersionsCommandMissedBranches:
         assert "bad config" in combined
 
     def test_check_flag_no_latest_exits_one(self, tmp_path):
-        from great_docs._versioning import VersionEntry
+        from great_docs._versions.model import VersionEntry
 
         runner = CliRunner()
         entry = VersionEntry(tag="v1.0", label="1.0")
@@ -2813,10 +2813,10 @@ class TestVersionsCommandMissedBranches:
         with (
             patch("great_docs.config.Config", return_value=cfg),
             patch(
-                "great_docs._versioning.parse_versions_config",
+                "great_docs._versions.model.parse_versions_config",
                 return_value=[entry],
             ),
-            patch("great_docs._versioning.get_latest_version", return_value=None),
+            patch("great_docs._versions.model.get_latest_version", return_value=None),
         ):
             result = runner.invoke(cli, ["versions", "--check", "--project-path", str(tmp_path)])
 
@@ -2827,7 +2827,7 @@ class TestVersionsCommandMissedBranches:
         assert "Warning" in combined or "no version marked" in combined
 
     def test_versions_table_with_all_flags(self, tmp_path):
-        from great_docs._versioning import VersionEntry
+        from great_docs._versions.model import VersionEntry
 
         runner = CliRunner()
         e1 = VersionEntry(tag="v2.0", label="2.0 (latest)")
@@ -2855,7 +2855,7 @@ class TestVersionsCommandMissedBranches:
         with (
             patch("great_docs.config.Config", return_value=cfg),
             patch(
-                "great_docs._versioning.parse_versions_config",
+                "great_docs._versions.model.parse_versions_config",
                 return_value=[e1, e2, e3],
             ),
         ):
