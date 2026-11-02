@@ -74,3 +74,19 @@ def test_build_step_registers_the_output_as_a_resource(tmp_path, monkeypatch):
     assert (docs.build_dir / "termshow" / "demos" / "demo" / "manifest.json").exists()
     assert added == [["termshow/**"]]
     assert "Pre-rendered 1 terminal recording(s)" in stream.getvalue()
+
+
+def test_build_step_leaves_out_recordings_that_are_not_documentation(tmp_path):
+    (tmp_path / "great-docs.yml").write_text("{}\n", encoding="utf-8")
+    _write(tmp_path / "demos")
+    (tmp_path / "venv").mkdir()
+    (tmp_path / "venv" / "pyvenv.cfg").write_text("", encoding="utf-8")
+    for foreign in (".git", ".venv", "venv/lib", "node_modules/tool", "great-docs-v1/demos"):
+        _write(tmp_path / foreign)
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs._prerender_term_player(BuildLog(stream=io.StringIO()))
+    rendered = docs.build_dir / "termshow"
+    found = sorted(
+        p.parent.relative_to(rendered).as_posix() for p in rendered.rglob("manifest.json")
+    )
+    assert found == ["demos/demo"]

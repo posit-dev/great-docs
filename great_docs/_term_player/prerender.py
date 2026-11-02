@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+from .._content.walk import find_files
 from .manifest import Manifest, generate_manifest
 from .parser import Recording, parse_asciicast, parse_termshow
 from .script import Script, apply_script, load_script
@@ -135,25 +136,29 @@ def render_recording(
     return manifest
 
 
-def find_recordings(source_dir: Path) -> list[Path]:
+def find_recordings(source_dir: Path, skip: Iterable[Path], *, prune_non_doc: bool) -> list[Path]:
     """
     Find the `.termshow` recordings in a documentation source directory
+
+    Hidden directories are never searched.
 
     Parameters
     ----------
     source_dir
         The directory to search.
+    skip
+        Directories containing generated output, excluded with all their contents.
+    prune_non_doc
+        Whether to exclude virtual environments, installed packages, test directories
+        and other directories without documentation, as needed when the source
+        directory is the package root.
 
     Returns
     -------
     :
-        The recordings, leaving out those in the build and site directories.
+        The recordings in sorted path order.
     """
-    return [
-        path
-        for path in source_dir.rglob("*.termshow")
-        if path.relative_to(source_dir).parts[0] not in ("great-docs", "_site", "_quarto")
-    ]
+    return find_files(source_dir, ".termshow", skip=skip, prune_non_doc=prune_non_doc)
 
 
 def render_recordings(

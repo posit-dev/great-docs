@@ -10431,7 +10431,11 @@ body-classes: "gd-homepage"
             successful renders, if any.
         """
         source_dir = self.layout.source_dir
-        recordings = term_prerender.find_recordings(source_dir)
+        recordings = term_prerender.find_recordings(
+            source_dir,
+            self.layout.generated_dirs(),
+            prune_non_doc=source_dir == self.layout.package_root,
+        )
         done = term_prerender.render_recordings(
             recordings, source_dir, self.build_dir, report=log.warn
         )
