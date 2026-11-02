@@ -10,12 +10,12 @@ from datetime import datetime
 from functools import partial
 from importlib import resources
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
 
-from ._apiref._type_checks import attribute_kind, class_kind, function_kind
+from . import _proofread
 from ._build import freeze, outputs, quarto, serve, timings
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
@@ -42,6 +42,9 @@ from ._content.sections import source_dirs as section_source_dirs
 from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import Layout
+from ._proofread import CheckedFile
+from ._reference import discovery, probe
+from ._reference.discovery import Categories
 from ._remote import HttpRemote, Remote
 from ._subprocess import TEXT_MODE_KWARGS
 from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
@@ -59,6 +62,7 @@ from ._website import (
     quarto_yml,
     social_cards,
 )
+from ._website.ai_agents import llms_txt
 from ._website.navigation import github as nav_github
 from ._website.navigation import label as nav_label
 from ._website.navigation import release as nav_release
@@ -5868,973 +5872,105 @@ class GreatDocs:
 
         return None
 
-    def _parse_package_exports(self, package_name: str) -> list | None:
+    def _get_package_exports(self, package_name: str) -> list[str] | None:
         """
-        Parse __all__ from package's __init__.py to get public API.
+        Find the names a package exports, and remember them for later calls
 
-        Also checks for exclude in great-docs.yml to filter out
-        non-documentable items.
+        Read griffe's model of the package. When griffe cannot load the package, or its
+        `__all__` lists only names it does not define, read a literal `__all__` from its
+        `__init__.py` instead.
 
         Parameters
         ----------
         package_name
-            The name of the package to parse.
+            The package's importable name. Dashes count as underscores.
 
         Returns
         -------
-        list | None
-            List of public names from __all__ (filtered by exclusions), or None if not found.
-        """
-        # Find the package's __init__.py file
-        init_file = self._find_package_init(package_name)
-        if not init_file:
-            # Show both the original and normalized name for clarity
-            normalized = package_name.replace("-", "_")
-            if normalized != package_name:
-                print(
-                    f"Could not locate __init__.py for package '{package_name}' (module name: '{normalized}')",
-                    file=sys.stderr,
-                )
-                print(
-                    f"Tip: Ensure a '{normalized}/' directory exists with an __init__.py file",
-                    file=sys.stderr,
-                )
-            else:
-                print(
-                    f"Could not locate __init__.py for package '{package_name}'",
-                    file=sys.stderr,
-                )
-            return None
-
-        print(f"Found package __init__.py at: {init_file.relative_to(self.project_root)}")
-
-        # Get exclusions from great-docs.yml
-        metadata = self._get_package_metadata()
-        config_exclude = metadata.get("exclude", [])
-
-        try:
-            with open(init_file, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            # Try to extract __all__ using AST (safer than eval)
-            import ast
-
-            tree = ast.parse(content)
-
-            all_exports = None
-
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Assign):
-                    for target in node.targets:
-                        # Extract __all__
-                        if isinstance(target, ast.Name) and target.id == "__all__":
-                            if isinstance(node.value, ast.List):
-                                all_exports = []
-                                for elt in node.value.elts:
-                                    if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
-                                        all_exports.append(elt.value)
-
-            if all_exports:
-                print(f"Successfully parsed __all__ with {len(all_exports)} exports")
-
-                # Filter out excluded items from great-docs.yml
-                if config_exclude:
-                    filtered = [e for e in all_exports if e not in config_exclude]
-                    excluded_count = len(all_exports) - len(filtered)
-                    if excluded_count > 0:
-                        print(
-                            f"Filtered out {excluded_count} item(s) from great-docs.yml exclude: {', '.join(config_exclude)}"
-                        )
-                    return filtered
-                else:
-                    return all_exports
-
-            print("No __all__ definition found in __init__.py")
-            return None
-        except Exception as e:  # pragma: no cover
-            print(f"Error parsing __all__: {type(e).__name__}: {e}")
-            return None
-
-    # Auto-excluded names that are typically not meant for documentation
-    # These are common internal/utility exports that most packages don't want documented
-    AUTO_EXCLUDE = {
-        # CLI and entry points
-        "main",  # CLI entry point function
-        "cli",  # CLI module
-        # Version and metadata
-        "version",  # Version string/function
-        "VERSION",  # Uppercase version constant
-        "VERSION_INFO",  # Version info tuple
-        # Common module re-exports
-        "core",  # Core module
-        "utils",  # Utilities module
-        "helpers",  # Helpers module
-        "constants",  # Constants module
-        "config",  # Config module
-        "settings",  # Settings module
-        # Standard library re-exports
-        "PackageNotFoundError",  # importlib.metadata exception
-        "typing",  # typing module re-export
-        "annotations",  # annotations module re-export
-        "TYPE_CHECKING",  # typing.TYPE_CHECKING constant
-        # Logging
-        "logger",  # Module-level logger instance
-        "log",  # Alternative logger name
-        "logging",  # logging module re-export
-    }
-
-    def _discover_package_exports(self, package_name: str) -> list | None:
-        """
-        Discover public API objects using griffe introspection.
-
-        This method uses griffe (the project's introspection module) to statically analyze the
-        package and discover all public objects by filtering out private/internal names (those
-        starting with underscore).
-
-        Auto-excludes common internal names (see `AUTO_EXCLUDE`). Additional items can be
-        excluded via the `exclude` option in `great-docs.yml`.
-
-        Parameters
-        ----------
-        package_name
-            The name of the package to discover exports from.
-
-        Returns
-        -------
-        list | None
-            List of public names discovered (filtered by exclusions), or `None` if discovery failed.
-        """
-        try:
-            import griffe
-
-            # Normalize package name (replace dashes with underscores)
-            normalized_name = package_name.replace("-", "_")
-
-            # Load the package using the per-build griffe cache
-            try:
-                pkg = self._get_griffe_package(normalized_name)
-            except Exception as e:
-                print(
-                    f"Warning: Could not load package with griffe ({type(e).__name__})",
-                    file=sys.stderr,
-                )
-                if package_name != normalized_name:
-                    print(
-                        f"   (Looking for module '{normalized_name}' from project '{package_name}')",
-                        file=sys.stderr,
-                    )
-                return None
-
-            # Get all members from the package (equivalent to dir(package))
-            all_members = list(pkg.members.keys())
-
-            # If the package defines __all__, restrict to those names
-            if pkg.exports:
-                public_members = [name for name in all_members if name in set(pkg.exports)]
-                print(f"Using __all__ with {len(public_members)} exports")
-                # If __all__ lists names that griffe couldn't resolve as actual
-                # members (e.g., lazy imports, re-exports), fall back to AST
-                # parsing so the names are still discovered.
-                if not public_members and pkg.exports:
-                    return None
-            else:
-                # Filter out private names (starting with underscore)
-                # This also filters out dunder names like __version__, __all__, etc.
-                public_members = [name for name in all_members if not name.startswith("_")]
-                print(f"Discovered {len(public_members)} public names")
-
-            # Get config from great-docs.yml
-            metadata = self._get_package_metadata()
-            config_exclude = set(metadata.get("exclude", []))
-            auto_include = set(metadata.get("auto_include", []))
-            no_auto_exclude = metadata.get("no_auto_exclude", False)
-
-            # Determine effective auto-exclude set
-            if no_auto_exclude:
-                effective_auto_exclude: set[str] = set()
-                print("Auto-exclude list bypassed (no_auto_exclude: true)")
-            else:
-                effective_auto_exclude = self.AUTO_EXCLUDE - auto_include
-                if auto_include:
-                    forced = auto_include & self.AUTO_EXCLUDE
-                    if forced:
-                        print(
-                            f"Force-including {len(forced)} auto-excluded name(s): "
-                            f"{', '.join(sorted(forced))}"
-                        )
-
-            # Apply auto-exclusions
-            auto_excluded_found = [
-                name for name in public_members if name in effective_auto_exclude
-            ]
-            if auto_excluded_found:
-                print(
-                    f"Auto-excluding {len(auto_excluded_found)} item(s): "
-                    f"{', '.join(sorted(auto_excluded_found))}"
-                )
-
-            # Combine all exclusions (auto + user-specified)
-            all_exclude = effective_auto_exclude | config_exclude
-
-            # Filter out excluded items
-            filtered = [name for name in public_members if name not in all_exclude]
-
-            # Report user-specified exclusions separately
-            if config_exclude:
-                user_excluded_found = [
-                    name
-                    for name in public_members
-                    if name in config_exclude and name not in effective_auto_exclude
-                ]
-                if user_excluded_found:
-                    print(
-                        f"Filtered out {len(user_excluded_found)} item(s) from great-docs.yml exclude: "
-                        f"{', '.join(sorted(user_excluded_found))}"
-                    )
-
-            # Validate exports using the already-loaded griffe tree.
-            # This catches cyclic/unresolvable aliases, submodules, Rust/PyO3
-            # objects, and external re-exports without the cost of per-item
-            # dynamic imports (which dominated build time for large packages).
-            safe_exports = []
-            failed_exports = {}
-
-            for name in filtered:
-                if name not in pkg.members:  # pragma: no cover
-                    failed_exports[name] = "not found"  # pragma: no cover
-                    continue  # pragma: no cover
-
-                obj = pkg.members[name]
-
-                try:
-                    kind_val = obj.kind.value
-                except griffe.CyclicAliasError:
-                    failed_exports[name] = "cyclic alias"
-                    continue
-                except griffe.AliasResolutionError:
-                    failed_exports[name] = "unresolvable alias"
-                    continue
-                except KeyError:
-                    failed_exports[name] = "not found (likely Rust/PyO3)"
-                    continue
-                except Exception as e:
-                    failed_exports[name] = f"{type(e).__name__}"
-                    continue
-
-                if kind_val == "module":
-                    safe_exports.append(name)
-                    continue
-
-                try:
-                    _ = obj.members
-                except griffe.CyclicAliasError:
-                    failed_exports[name] = "cyclic alias"
-                    continue
-                except griffe.AliasResolutionError:
-                    failed_exports[name] = "unresolvable alias"
-                    continue
-                except Exception as e:
-                    failed_exports[name] = f"{type(e).__name__}"
-                    continue
-
-                if hasattr(obj, "is_alias") and obj.is_alias:
-                    try:
-                        canon = obj.canonical_path
-                        if not canon.startswith(normalized_name + "."):
-                            failed_exports[name] = "external re-export"
-                            continue
-                    except Exception:
-                        pass
-
-                safe_exports.append(name)
-
-            # Report excluded items grouped by error type
-            if failed_exports:
-                # Group by error type for cleaner output
-                by_error = {}
-                for name, error in failed_exports.items():
-                    by_error.setdefault(error, []).append(name)
-
-                for error_type, names in sorted(by_error.items()):
-                    print(
-                        f"Excluding {len(names)} object(s) ({error_type}): "
-                        f"{', '.join(sorted(names))}"
-                    )
-
-            return safe_exports
-
-        except ImportError:  # pragma: no cover
-            print("Warning: griffe not available, cannot use dir() discovery")  # pragma: no cover
-            return None  # pragma: no cover
-        except Exception as e:  # pragma: no cover
-            print(
-                f"Error discovering exports via dir(): {type(e).__name__}: {e}"
-            )  # pragma: no cover
-            return None  # pragma: no cover
-
-    def _detect_docstring_style(self, package_name: str) -> str:
-        """
-        Detect the docstring style used in a package.
-
-        Analyzes docstrings from the package to determine if they use NumPy, Google,
-        or Sphinx style formatting. The detection is based on characteristic patterns:
-
-        - NumPy style: Uses `---` underlines under section headers (Parameters, Returns, etc.)
-        - Google style: Uses section headers with colons but NO underlines (Args:, Returns:)
-        - Sphinx style: Uses `:param:`, `:returns:`, etc. field markers
-
-        Parameters
-        ----------
-        package_name
-            The name of the package to analyze.
-
-        Returns
-        -------
-        str
-            The detected docstring style: "numpy", "google", or "sphinx".
-            Defaults to "numpy" if detection is inconclusive.
-        """
-        try:
-            # Normalize package name
-            normalized_name = package_name.replace("-", "_")
-
-            # Load the package using the per-build griffe cache
-            try:
-                pkg = self._get_griffe_package(normalized_name)
-            except Exception as e:
-                print(
-                    f"Warning: Could not load package for docstring detection ({type(e).__name__})"
-                )
-                return "numpy"
-
-            # Collect docstrings from the package
-            docstrings = []
-
-            def collect_docstrings(obj, depth=0):
-                """Recursively collect docstrings from an object and its members."""
-                if depth > 2:  # Limit recursion depth
-                    return  # pragma: no cover
-
-                # Get the object's docstring
-                if hasattr(obj, "docstring") and obj.docstring:
-                    docstrings.append(obj.docstring.value)
-
-                # Recurse into members
-                if hasattr(obj, "members"):
-                    for member in obj.members.values():
-                        try:
-                            # Skip aliases to avoid infinite loops
-                            if hasattr(member, "is_alias") and member.is_alias:
-                                continue  # pragma: no cover
-                            collect_docstrings(member, depth + 1)
-                        except Exception:  # pragma: no cover
-                            continue
-
-            collect_docstrings(pkg)
-
-            if not docstrings:
-                print("No docstrings found, defaulting to numpy style")
-                return "numpy"
-
-            # Analyze docstrings for style indicators
-            numpy_indicators = 0
-            google_indicators = 0
-            sphinx_indicators = 0
-
-            # Patterns for detection
-            # NumPy: section headers followed by dashes (e.g., "Parameters\n----------")
-            numpy_section_pattern = re.compile(
-                r"^\s*(Parameters|Returns|Yields|Raises|Examples|Attributes|Methods|See Also|Notes|References|Warnings)\s*\n\s*-{3,}",
-                re.MULTILINE,
-            )
-
-            # Google: section headers with colons (e.g., "Args:", "Returns:")
-            google_section_pattern = re.compile(
-                r"^\s*(Args|Arguments|Returns|Yields|Raises|Examples|Attributes|Note|Notes|Todo|Warning|Warnings):\s*$",
-                re.MULTILINE,
-            )
-
-            # Sphinx: field markers (e.g., ":param name:", ":returns:")
-            sphinx_pattern = re.compile(
-                r"^\s*:(param|type|returns|rtype|raises|var|ivar|cvar)\s",
-                re.MULTILINE,
-            )
-
-            # Example blocks with >>> are common in both NumPy and Google styles
-            # but the presence/absence of --- is the key differentiator
-
-            for docstring in docstrings:
-                if not docstring:
-                    continue  # pragma: no cover
-
-                # Check for NumPy style (section + dashes)
-                if numpy_section_pattern.search(docstring):
-                    numpy_indicators += 1
-
-                # Check for Google style (section headers with colons, no dashes)
-                if google_section_pattern.search(docstring):
-                    # Only count as Google if there are NO numpy-style dashes nearby
-                    if not numpy_section_pattern.search(docstring):
-                        google_indicators += 1
-
-                # Check for Sphinx style
-                if sphinx_pattern.search(docstring):
-                    sphinx_indicators += 1
-
-            # Determine the winner
-            total_indicators = numpy_indicators + google_indicators + sphinx_indicators
-
-            if total_indicators == 0:
-                print("No clear docstring style detected, defaulting to numpy")
-                return "numpy"
-
-            # Report findings
-            print(
-                f"Docstring style detection: numpy={numpy_indicators}, "
-                f"google={google_indicators}, sphinx={sphinx_indicators}"
-            )
-
-            # Return the style with most indicators
-            if sphinx_indicators > numpy_indicators and sphinx_indicators > google_indicators:
-                print("Detected sphinx docstring style")
-                return "sphinx"
-            elif google_indicators > numpy_indicators:
-                print("Detected google docstring style")
-                return "google"
-            else:
-                print("Detected numpy docstring style")
-                return "numpy"
-
-        except Exception as e:  # pragma: no cover
-            print(f"Error detecting docstring style: {type(e).__name__}: {e}")
-            return "numpy"
-
-    def _detect_dynamic_mode(self, package_name: str) -> bool:
-        """
-        Detect whether dynamic introspection mode works for a package.
-
-        This method tests if dynamic mode works by attempting to load objects
-        with the renderer's get_object function in dynamic mode AND accessing their
-        members (which is what triggers cyclic alias errors in some packages).
-
-        Parameters
-        ----------
-        package_name
-            The name of the package to test.
-
-        Returns
-        -------
-        bool
-            True if dynamic mode works, False if it causes errors.
-        """
-        if not package_name or not package_name.strip():
-            return True
-
-        try:
-            import griffe
-
-            from great_docs._apiref.introspect import get_object as qd_get_object
-        except ImportError:  # pragma: no cover
-            # If renderer isn't available, default to True (will fail at build time anyway)
-            return True  # pragma: no cover
-
-        # Normalize package name
-        normalized_name = package_name.replace("-", "_")
-
-        # Get a sample of exports to test
-        try:
-            pkg = self._get_griffe_package(normalized_name)
-            exports = [
-                name
-                for name in list(pkg.members.keys())[:10]  # Test first 10
-                if not name.startswith("_")
-            ]
-        except Exception:
-            # Can't load package, default to True
-            return True
-
-        if not exports:
-            return True
-
-        # Test dynamic mode with a few exports
-        # We need to actually access .members and .kind to trigger cyclic alias errors
-        cyclic_errors = 0
-        for name in exports[:5]:  # Test up to 5 exports
-            try:
-                obj = qd_get_object(f"{normalized_name}:{name}", dynamic=True)
-                # Access .members to trigger cyclic alias resolution
-                # This is what the renderer does when rendering docs
-                _ = obj.members
-                _ = obj.kind
-                # For classes, try to access individual members too
-                if hasattr(obj, "members") and obj.members:
-                    for member_name, member in list(obj.members.items())[:3]:  # pragma: no cover
-                        try:  # pragma: no cover
-                            _ = member.kind  # pragma: no cover
-                        except griffe.CyclicAliasError:  # pragma: no cover
-                            cyclic_errors += 1  # pragma: no cover
-                            break  # pragma: no cover
-            except griffe.CyclicAliasError:
-                cyclic_errors += 1  # pragma: no cover
-            except Exception:  # pragma: no cover
-                # Other errors don't necessarily mean dynamic mode won't work
-                pass  # pragma: no cover
-
-        if cyclic_errors > 0:
-            print(f"Detected {cyclic_errors} cyclic alias error(s), using dynamic: false")
-            return False
-        else:
-            print("Dynamic introspection mode works for this package")
-            return True
-
-    def _get_package_exports(self, package_name: str) -> list | None:
-        """
-        Get package exports using static analysis.
-
-        Uses griffe to statically analyze the package and discover public objects.
-        Falls back to parsing __all__ if griffe introspection fails.
-
-        Parameters
-        ----------
-        package_name
-            The name of the package to get exports from.
-
-        Returns
-        -------
-        list | None
-            List of exported/public names, or None if discovery failed.
+        :
+            The exported names, or `None` if neither source lists any.
         """
         normalized = package_name.replace("-", "_")
         if self._cached_package_name == normalized and self._cached_exports is not None:
             return self._cached_exports
 
-        exports = self._discover_package_exports(package_name)
+        exports = None
+        try:
+            package = self._get_griffe_package(normalized)
+        except USER_CODE_ERRORS as error:
+            print(
+                f"Warning: Could not load package with griffe ({type(error).__name__})",
+                file=sys.stderr,
+            )
+            if package_name != normalized:
+                print(
+                    f"   (Looking for module '{normalized}' from project '{package_name}')",
+                    file=sys.stderr,
+                )
+        else:
+            exports = discovery.discover_exports(package, self._config, report=print)
+
         if exports is None:
             print("Falling back to __all__ discovery", file=sys.stderr)
-            exports = self._parse_package_exports(package_name)
+            init_file = self._find_package_init(package_name)
+            if init_file is None:
+                print(
+                    f"Could not locate __init__.py for package '{package_name}'"
+                    + (f" (module name: '{normalized}')" if normalized != package_name else ""),
+                    file=sys.stderr,
+                )
+                if normalized != package_name:
+                    print(
+                        f"Tip: Ensure a '{normalized}/' directory exists with an __init__.py file",
+                        file=sys.stderr,
+                    )
+            else:
+                print(f"Found package __init__.py at: {init_file.relative_to(self.project_root)}")
+                exports = discovery.parse_dunder_all(init_file, self._config, report=print)
 
         self._cached_package_name = normalized
         self._cached_exports = exports
         return exports
 
-    # ── Sub-classification label -> category key ─────────────────────────
-    # Maps `class_kind` results to keys of `_empty_categories`.
-    _CLASS_SUB_MAP = {
-        "dataclass": "dataclasses",
-        "enum": "enums",
-        "exception": "exceptions",
-        "namedtuple": "namedtuples",
-        "typeddict": "typeddicts",
-        "protocol": "protocols",
-        "abc": "abstract_classes",
-        "class": "classes",
-    }
-
-    @staticmethod
-    def _empty_categories() -> dict:
-        """Return a fresh, empty categories dict with all keys."""
-        return {
-            # ── Class-like ──
-            "classes": [],
-            "dataclasses": [],
-            "enums": [],
-            "exceptions": [],
-            "namedtuples": [],
-            "typeddicts": [],
-            "protocols": [],
-            "abstract_classes": [],
-            # ── Function-like ──
-            "functions": [],
-            "async_functions": [],
-            # ── Data ──
-            "constants": [],
-            "type_aliases": [],
-            # ── Catch-all ──
-            "other": [],
-            # ── Metadata ──
-            "class_methods": {},
-            "class_method_names": {},
-            "cyclic_alias_count": 0,
-        }
-
-    def _categorize_api_objects(self, package_name: str, exports: list) -> dict:
+    def _categorise_exports(self, package_name: str, exports: list[str]) -> Categories:
         """
-        Categorise API exports by inspecting the package with griffe
+        Sort a package's exports into the groups of the API reference
 
-        Inspect the package structure without importing it, including packages
-        with non-Python components such as Rust bindings.
-
-        If griffe cannot load the package, print a warning and group exports under
-        `other`. Exclude common metadata names whether or not the package loads.
+        A method, or a member of an exported module, stays only if the renderer can document
+        it after importing the package; if the package cannot be imported, finding it by static
+        analysis is enough. When griffe cannot load the package, every export other than a
+        metadata name such as `__version__` goes under `other`.
 
         Parameters
         ----------
         package_name
-            The name of the package.
+            The package's importable name. Dashes count as underscores.
         exports
-            List of exported names from __all__.
+            The names to sort.
 
         Returns
         -------
-        dict
-            Dictionary with these keys:
-            - classes: list of regular class names
-            - dataclasses: list of dataclass names
-            - enums: list of enum class names
-            - exceptions: list of exception class names
-            - namedtuples: list of NamedTuple class names
-            - typeddicts: list of TypedDict class names
-            - protocols: list of Protocol class names
-            - abstract_classes: list of ABC class names
-            - functions: list of function names
-            - async_functions: list of async function names
-            - constants: list of module-level constant names
-            - type_aliases: list of type alias names
-            - other: list of other object names
-            - class_methods: dict mapping class name to method count
-            - class_method_names: dict mapping class name to list of method names
+        :
+            The sorted exports.
         """
-        # Exclude metadata names even when the package cannot be loaded.
-        skip_names = {"__version__", "__author__", "__email__", "__all__"}
-
-        import griffe
-
-        # Load the package using griffe
-        normalized_name = package_name.replace("-", "_")
-
-        # Try to use the renderer's `get_object()` for validation
-        # Use a shared loader to avoid re-loading the module on every call
-        gd_get_object = None
+        normalized = package_name.replace("-", "_")
         try:
-            from functools import partial
-
-            from great_docs._apiref.introspect import (
-                get_object as qd_get_object,
-            )
-            from great_docs._apiref.introspect import make_loader
-
-            _shared_loader = make_loader("numpy")
-            gd_get_object = partial(qd_get_object, dynamic=True, loader=_shared_loader)
-        except ImportError:  # pragma: no cover
-            pass  # pragma: no cover
-
-        # Try to load the package with griffe (uses per-build cache)
-        try:
-            pkg = self._get_griffe_package(normalized_name)
-        except Exception as e:
+            package = self._get_griffe_package(normalized)
+        except USER_CODE_ERRORS as error:
             print(
-                f"Warning: Could not load package with griffe ({type(e).__name__})",
+                f"Warning: Could not load package with griffe ({type(error).__name__})",
                 file=sys.stderr,
             )
-            categories = self._empty_categories()
-            categories["other"] = [name for name in exports if name not in skip_names]
+            categories = discovery.empty_categories()
+            categories["other"] = [name for name in exports if name not in discovery.METADATA_NAMES]
             return categories
 
-        categories = self._empty_categories()
-        failed_introspection = []
-        cyclic_aliases = []
-
-        for name in exports:
-            # Skip metadata variables
-            if name in skip_names:
-                continue
-
-            try:
-                # Get the object from the loaded package
-                if name not in pkg.members:
-                    categories["other"].append(name)
-                    failed_introspection.append(name)
-                    continue
-
-                obj = pkg.members[name]
-
-                # Categorize based on griffe's kind
-                # Note: Accessing obj.kind or obj.members on an Alias can trigger
-                # resolution which may raise CyclicAliasError or AliasResolutionError
-                if obj.kind.value == "class":
-                    # Sub-classify the class
-                    sub = class_kind(obj)
-                    cat_key = self._CLASS_SUB_MAP.get(sub, "classes")
-                    categories[cat_key].append(name)
-                    # Get documentable methods (exclude private methods but include
-                    # documented dunder methods like __repr__, __eq__, __len__, etc.)
-                    # __init__ is excluded because its parameters are already shown
-                    # in the class constructor signature.
-                    # We need to handle each member individually to catch cyclic aliases
-                    # AND validate each method with get_object to catch type hint issues
-                    # Collect (method_name, lineno) tuples to preserve source order
-                    _INIT_DUNDERS = {"__init__", "__new__", "__init_subclass__"}
-                    method_entries = []
-                    skipped_methods = []
-                    try:
-                        for member_name, member in obj.members.items():
-                            if member_name.startswith("__") and member_name.endswith("__"):
-                                # Dunder method: skip constructor-related ones,
-                                # include the rest (they have user-written docstrings)
-                                if member_name in _INIT_DUNDERS:
-                                    continue
-                            elif member_name.startswith("_"):
-                                # Single-underscore private method: skip
-                                continue
-                            try:
-                                # Accessing member.kind can trigger alias resolution
-                                if member.kind.value in ("function", "method"):
-                                    # Get line number for source ordering. Dynamically inspected
-                                    # members (PyO3 / .so extensions) often have `lineno=None`;
-                                    # coerce to inf so sort() doesn't crash comparing
-                                    # `None < None`.
-                                    lineno = getattr(member, "lineno", None)
-                                    if lineno is None:  # pragma: no cover
-                                        lineno = float("inf")  # pragma: no cover
-                                    # Validate with get_object if available
-                                    if gd_get_object is not None:
-                                        try:
-                                            qd_obj = gd_get_object(
-                                                f"{normalized_name}:{name}.{member_name}"
-                                            )
-                                            # Try to access properties that might fail
-                                            _ = qd_obj.members
-                                            _ = qd_obj.kind
-                                            method_entries.append((member_name, lineno))
-                                        except Exception:  # pragma: no cover
-                                            # Method can't be documented by the renderer
-                                            skipped_methods.append(member_name)  # pragma: no cover
-                                    else:
-                                        method_entries.append(
-                                            (member_name, lineno)
-                                        )  # pragma: no cover
-                            except (
-                                griffe.CyclicAliasError,
-                                griffe.AliasResolutionError,
-                            ):  # pragma: no cover
-                                # Skip cyclic/unresolvable class members
-                                skipped_methods.append(member_name)  # pragma: no cover
-                            except Exception:  # pragma: no cover
-                                # Skip members that can't be introspected
-                                pass  # pragma: no cover
-                    except (
-                        griffe.CyclicAliasError,
-                        griffe.AliasResolutionError,
-                    ):  # pragma: no cover
-                        # If we can't even iterate members, class has issues
-                        skipped_methods.append("<members>")  # pragma: no cover
-
-                    # Sort by line number to preserve source file order
-                    method_entries.sort(key=lambda x: x[1])
-                    method_names = [entry[0] for entry in method_entries]
-
-                    if skipped_methods:
-                        print(  # pragma: no cover
-                            f"{name}: class with {len(method_names)} public methods "
-                            f"(skipped {len(skipped_methods)} undocumentable method(s): "
-                            f"{', '.join(skipped_methods[:3])}{'...' if len(skipped_methods) > 3 else ''})"
-                        )
-                    else:
-                        print(f"{name}: class with {len(method_names)} public methods")
-
-                    categories["class_methods"][name] = len(method_names)
-                    categories["class_method_names"][name] = method_names
-                elif obj.kind.value == "function":
-                    # Sub-classify the function
-                    sub = function_kind(obj)
-                    if sub == "async":
-                        categories["async_functions"].append(name)
-                    else:
-                        categories["functions"].append(name)
-                elif obj.kind.value in ("attribute", "type alias"):
-                    sub = attribute_kind(obj)
-                    if sub == "typealias":
-                        categories["type_aliases"].append(name)  # pragma: no cover
-                    elif sub == "typevar":
-                        categories["type_aliases"].append(name)  # pragma: no cover
-                    else:
-                        categories["constants"].append(name)
-                elif obj.kind.value == "module":
-                    # Drill into the module to discover its public classes and functions
-                    # Use qualified names like "module.ClassName" so the renderer resolves
-                    # them relative to the package (e.g., dateutil:easter.easter)
-                    module_had_members = False
-                    # Build a set of short names already in the exports list so we
-                    # can skip submodule members that are re-exported at the package
-                    # level (avoids duplicate entries like both "Model" and
-                    # "models.Model" appearing in the reference).
-                    _exports_set = set(exports)
-                    try:
-                        for member_name, member in obj.members.items():
-                            if member_name.startswith("_"):
-                                continue
-                            # If this member is already re-exported at the
-                            # package level (i.e. its short name is in
-                            # __all__ / exports), skip the qualified version
-                            # to avoid duplicate reference entries.
-                            if member_name in _exports_set:
-                                continue  # pragma: no cover
-                            try:
-                                member_kind = member.kind.value
-                            except (
-                                griffe.CyclicAliasError,
-                                griffe.AliasResolutionError,
-                            ):  # pragma: no cover
-                                continue  # pragma: no cover
-                            except Exception:  # pragma: no cover
-                                continue  # pragma: no cover
-
-                            qualified = f"{name}.{member_name}"
-
-                            # Validate with get_object if available
-                            # Try dynamic first, fall back to static if it fails
-                            if gd_get_object is not None:
-                                try:
-                                    qd_obj = gd_get_object(f"{normalized_name}:{qualified}")
-                                    _ = qd_obj.kind  # pragma: no cover
-                                except Exception:  # pragma: no cover
-                                    # Dynamic mode failed; try static (no dynamic=True)
-                                    try:
-                                        from great_docs._apiref.introspect import (
-                                            get_object as qd_get,
-                                        )
-
-                                        qd_obj = qd_get(
-                                            f"{normalized_name}:{qualified}",
-                                            parser="numpy",
-                                        )
-                                        _ = qd_obj.kind
-                                    except Exception:  # pragma: no cover
-                                        # Neither mode works; skip this member
-                                        continue  # pragma: no cover
-
-                            if member_kind == "class":
-                                sub = class_kind(member)
-                                cat_key = self._CLASS_SUB_MAP.get(sub, "classes")
-                                categories[cat_key].append(qualified)
-                                module_had_members = True
-
-                                # Count public methods for classes inside modules
-                                method_entries = []
-                                try:
-                                    for meth_name, meth in member.members.items():
-                                        if meth_name.startswith("_"):
-                                            continue  # pragma: no cover
-                                        try:
-                                            if meth.kind.value in ("function", "method"):
-                                                # `lineno` may be `None` for dynamically
-                                                # inspected (PyO3) methods.
-                                                lineno = getattr(meth, "lineno", None)
-                                                if lineno is None:  # pragma: no cover
-                                                    lineno = float("inf")  # pragma: no cover
-                                                if gd_get_object is not None:
-                                                    try:
-                                                        qd_m = gd_get_object(
-                                                            f"{normalized_name}:{qualified}.{meth_name}"
-                                                        )
-                                                        _ = qd_m.kind  # pragma: no cover
-                                                        method_entries.append(  # pragma: no cover
-                                                            (meth_name, lineno)
-                                                        )
-                                                    except Exception:  # pragma: no cover
-                                                        # Dynamic failed; try static
-                                                        try:
-                                                            from great_docs._apiref.introspect import (
-                                                                get_object as qd_get,
-                                                            )
-
-                                                            qd_m = qd_get(
-                                                                f"{normalized_name}:{qualified}.{meth_name}",
-                                                                parser="numpy",
-                                                            )
-                                                            _ = qd_m.kind
-                                                            method_entries.append(
-                                                                (meth_name, lineno)
-                                                            )
-                                                        except Exception:  # pragma: no cover
-                                                            pass  # pragma: no cover
-                                                else:
-                                                    method_entries.append(
-                                                        (meth_name, lineno)
-                                                    )  # pragma: no cover
-                                        except (
-                                            griffe.CyclicAliasError,
-                                            griffe.AliasResolutionError,
-                                        ):  # pragma: no cover
-                                            pass  # pragma: no cover
-                                        except Exception:  # pragma: no cover
-                                            pass  # pragma: no cover
-                                except (
-                                    griffe.CyclicAliasError,
-                                    griffe.AliasResolutionError,
-                                ):  # pragma: no cover
-                                    pass  # pragma: no cover
-
-                                method_entries.sort(key=lambda x: x[1])
-                                method_names_list = [e[0] for e in method_entries]
-                                categories["class_methods"][qualified] = len(method_names_list)
-                                categories["class_method_names"][qualified] = method_names_list
-                                print(
-                                    f"{qualified}: class with "
-                                    f"{len(method_names_list)} public methods"
-                                )
-
-                            elif member_kind == "function":
-                                sub = function_kind(member)
-                                if sub == "async":
-                                    categories["async_functions"].append(
-                                        qualified
-                                    )  # pragma: no cover
-                                else:
-                                    categories["functions"].append(qualified)
-                                module_had_members = True
-
-                            elif member_kind in ("attribute", "type alias"):
-                                sub = attribute_kind(member)
-                                if sub == "typealias":
-                                    categories["type_aliases"].append(qualified)  # pragma: no cover
-                                elif sub == "typevar":
-                                    categories["type_aliases"].append(qualified)  # pragma: no cover
-                                else:
-                                    categories["constants"].append(qualified)
-                                module_had_members = True
-
-                    except (  # pragma: no cover
-                        griffe.CyclicAliasError,
-                        griffe.AliasResolutionError,
-                    ):
-                        # Can't iterate module members
-                        pass  # pragma: no cover
-
-                    if not module_had_members:
-                        # Module has no documentable public members
-                        categories["other"].append(name)
-                else:
-                    # Aliases and other unknown kinds
-                    categories["other"].append(name)  # pragma: no cover
-
-            except griffe.CyclicAliasError:  # pragma: no cover
-                # Cyclic alias detected (e.g., re-exported symbol pointing to itself)
-                # This can happen with complex re-export patterns
-                # Do NOT add to categories (these must be excluded entirely)
-                print(f"  Warning: Cyclic alias detected for '{name}', excluding from docs")
-                cyclic_aliases.append(name)
-            except griffe.AliasResolutionError:  # pragma: no cover
-                # Alias could not be resolved (target not found)
-                # Do NOT add to categories (these must be excluded entirely)
-                print(f"  Warning: Could not resolve alias for '{name}', excluding from docs")
-                failed_introspection.append(name)
-            except Exception as e:  # pragma: no cover
-                # If introspection fails for a specific object, still include it
-                print(f"  Warning: Could not introspect '{name}': {type(e).__name__}")
-                categories["other"].append(name)
-                failed_introspection.append(name)
-
-        if cyclic_aliases:  # pragma: no cover
-            print(f"Note: Excluded {len(cyclic_aliases)} cyclic alias(es) from documentation")
-            categories["cyclic_alias_count"] = len(cyclic_aliases)
-
-        if failed_introspection:  # pragma: no cover
-            print(
-                f"Note: Could not introspect {len(failed_introspection)} item(s), categorizing as 'Other'"
-            )
-
-        return categories
+        return discovery.categorise_exports(
+            package,
+            exports,
+            renderable=probe.RendererCheck(normalized, report=print),
+            report=print,
+        )
 
     def _create_api_sections(self, package_name: str) -> list | None:
         """
@@ -6871,7 +6007,7 @@ class GreatDocs:
         print(f"Found {len(exports)} exported names to document")
 
         # Categorize the exports
-        categories = self._categorize_api_objects(package_name, exports)
+        categories = self._categorise_exports(package_name, exports)
 
         sections = []
 
@@ -7116,195 +6252,6 @@ class GreatDocs:
 
         return sections if sections else None
 
-    def _categorize_referenced_objects(self, package_name: str, reference_config: list) -> dict:
-        """
-        Lightweight categorization that only inspects objects listed in the reference config.
-
-        Unlike `_categorize_api_objects` which introspects all package exports and deep-enumerates
-        every class's methods (O(exports x methods)), this method only classifies the specific names
-        referenced in great-docs.yml. For a package with 195 exports and 500+ methods, this could
-        avoid ~90% of griffe work.
-
-        Parameters
-        ----------
-        package_name
-            The package name (may contain dashes).
-        reference_config
-            The `reference:` list from great-docs.yml.
-
-        Returns
-        -------
-        dict
-            A categories dict in the shape `_categorize_api_objects` returns.
-        """
-        import griffe
-
-        normalized_name = package_name.replace("-", "_")
-
-        try:
-            pkg = self._get_griffe_package(normalized_name)
-        except Exception:
-            return self._empty_categories()
-
-        # Collect all names referenced in the config
-        referenced_names: set[str] = set()
-        for section in reference_config:
-            if not isinstance(section, dict):
-                continue
-            for item in section.get("contents", []):
-                if isinstance(item, str):
-                    referenced_names.add(item)
-                elif isinstance(item, dict):
-                    name = item.get("name", "")
-                    if name:
-                        referenced_names.add(name)
-
-        categories = self._empty_categories()
-
-        # Reduce `ClassName.method` references to their class name
-        top_level_names: set[str] = set()
-        for name in referenced_names:
-            if "." in name:
-                top_level_names.add(name.split(".", 1)[0])
-            else:
-                top_level_names.add(name)
-
-        # Classify each top-level name
-        missing_names: list[str] = []
-        for name in sorted(top_level_names):
-            if name not in pkg.members:
-                missing_names.append(name)
-                continue
-
-            try:
-                obj = pkg.members[name]
-                kind = obj.kind.value
-            except (griffe.CyclicAliasError, griffe.AliasResolutionError):
-                categories["other"].append(name)
-                continue
-            except Exception:
-                categories["other"].append(name)
-                continue
-
-            if kind == "class":
-                sub = class_kind(obj)
-                cat_key = self._CLASS_SUB_MAP.get(sub, "classes")
-                categories[cat_key].append(name)
-
-                # Count public methods for should_split_methods check
-                # (lightweight: just count, don't validate each with get_object)
-                # Only count functions/methods and @property attributes and not
-                # plain attributes (e.g., dataclass fields) which aren't methods.
-                _INIT_DUNDERS = {"__init__", "__new__", "__init_subclass__"}
-                method_count = 0
-                method_names_list: list[str] = []
-                try:
-                    for member_name, member in obj.members.items():
-                        if member_name.startswith("__") and member_name.endswith("__"):
-                            if member_name in _INIT_DUNDERS:
-                                continue
-                        elif member_name.startswith("_"):
-                            continue
-                        try:
-                            member_kind = member.kind.value
-                            if member_kind in ("function", "method"):
-                                method_count += 1
-                                method_names_list.append(member_name)
-                            elif member_kind == "attribute":
-                                # Only count @property attributes, not plain fields
-                                try:
-                                    if "property" in member.labels:
-                                        method_count += 1
-                                        method_names_list.append(member_name)
-                                except Exception:
-                                    pass
-                        except (
-                            griffe.CyclicAliasError,
-                            griffe.AliasResolutionError,
-                        ):
-                            pass
-                        except Exception:
-                            pass
-                except (griffe.CyclicAliasError, griffe.AliasResolutionError):
-                    pass
-
-                categories["class_methods"][name] = method_count
-                if method_names_list:
-                    categories["class_method_names"][name] = method_names_list
-
-            elif kind == "function":
-                sub = function_kind(obj)
-                if sub == "async":
-                    categories["async_functions"].append(name)
-                else:
-                    categories["functions"].append(name)
-            elif kind in ("attribute", "type alias"):
-                sub = attribute_kind(obj)
-                if sub == "typealias":
-                    categories["type_aliases"].append(name)
-                elif sub == "typevar":
-                    categories["type_aliases"].append(name)
-                else:
-                    categories["constants"].append(name)
-            elif kind == "module":
-                # Expand module members into qualified names for module_members mapping
-                try:
-                    for member_name, member in obj.members.items():
-                        if member_name.startswith("_"):
-                            continue
-                        try:
-                            member_kind = member.kind.value
-                        except (
-                            griffe.CyclicAliasError,
-                            griffe.AliasResolutionError,
-                        ):
-                            continue
-                        except Exception:
-                            continue
-                        qualified = f"{name}.{member_name}"
-                        if member_kind == "class":
-                            sub = class_kind(member)
-                            cat_key_mod = self._CLASS_SUB_MAP.get(sub, "classes")
-                            categories[cat_key_mod].append(qualified)
-                        elif member_kind == "function":
-                            categories["functions"].append(qualified)
-                        elif member_kind in ("attribute", "type alias"):
-                            categories["constants"].append(qualified)
-                except (griffe.CyclicAliasError, griffe.AliasResolutionError):
-                    pass
-                except Exception:
-                    pass
-            else:
-                categories["other"].append(name)
-
-        # Fail loudly if configured items cannot be found in the package,
-        # but only when the package is genuinely installed (has a resolvable version).
-        # If the package isn't installed (version unknown), this is likely a
-        # bootstrap/development scenario — fall back gracefully.
-        if missing_names:
-            try:
-                from importlib.metadata import version as _mv
-
-                pkg_ver = _mv(package_name)
-            except Exception:
-                pkg_ver = None
-
-            if pkg_ver is not None:
-                items_str = ", ".join(f"`{n}`" for n in missing_names)
-                message = (
-                    f"Configured reference item(s) not found in "
-                    f"`{package_name}` v{pkg_ver}: {items_str}\n"
-                    f"Check that the correct version of `{package_name}` is installed "
-                    f"and that these names exist in the package's public API."
-                )
-                print(f"ERROR: {message}", file=sys.stderr)
-                raise BuildError(message)
-            else:
-                # Package not installed — treat missing items as "other" (old behavior)
-                categories["other"].extend(missing_names)
-
-        return categories
-
     def _create_api_sections_from_config(self, package_name: str) -> list | None:
         """
         Create API reference sections from the `reference` config in great-docs.yml.
@@ -7329,13 +6276,22 @@ class GreatDocs:
 
         print("Using explicit reference configuration from great-docs.yml")
 
-        # Use lightweight targeted categorization instead of full export enumeration
-        categories = self._categorize_referenced_objects(package_name, reference_config)
+        # Classify only the listed names, which costs far less than categorising every export
+        try:
+            package = self._get_griffe_package(package_name)
+        except USER_CODE_ERRORS:
+            categories = discovery.empty_categories()
+        else:
+            try:
+                categories = discovery.categorise_references(package, reference_config)
+            except BuildError as error:
+                print(f"ERROR: {error}", file=sys.stderr)
+                raise
 
         # Build a mapping of module names → their expanded member names across
         # all categories.  When a user lists a bare module name (e.g. "parser")
         # in their reference config we expand it into the individual classes,
-        # functions, constants, etc. that _categorize_api_objects discovered.
+        # functions, constants, etc. that categorisation discovered.
         _MEMBER_CATS = [
             "classes",
             "dataclasses",
@@ -7789,7 +6745,16 @@ class GreatDocs:
 
         # Detect docstring style
         print("Detecting docstring style...")
-        parser_style = self._detect_docstring_style(importable_name)
+        package = None
+        try:
+            package = self._get_griffe_package(importable_name)
+        except USER_CODE_ERRORS as error:
+            print(
+                f"Warning: Could not load package for docstring detection ({type(error).__name__})"
+            )
+            parser_style = "numpy"
+        else:
+            parser_style = probe.detect_docstring_style(package, report=print)
         overrides["parser"] = f"parser: {parser_style}"
 
         # Authors from pyproject.toml
@@ -7805,7 +6770,9 @@ class GreatDocs:
                 "'reference:' section in great-docs.yml to list your API."
             )
             print("Testing dynamic introspection mode...")
-            dynamic_mode = self._detect_dynamic_mode(importable_name)
+            dynamic_mode = package is None or probe.detect_dynamic_mode(
+                package, package.members, report=print
+            )
             overrides["dynamic"] = f"dynamic: {'true' if dynamic_mode else 'false'}"
             config_path.write_text(create_default_config(overrides), encoding="utf-8")
             print(f"Created {config_path}")
@@ -7813,7 +6780,7 @@ class GreatDocs:
 
         # Categorize exports (this also detects cyclic aliases)
         print("Categorizing API objects...")
-        categories = self._categorize_api_objects(importable_name, exports)
+        categories = self._categorise_exports(importable_name, exports)
 
         cyclic_alias_count = categories.get("cyclic_alias_count", 0)
         if cyclic_alias_count > 0:
@@ -7823,7 +6790,9 @@ class GreatDocs:
             dynamic_mode = False  # pragma: no cover
         else:
             print("Testing dynamic introspection mode...")
-            dynamic_mode = self._detect_dynamic_mode(importable_name)
+            dynamic_mode = package is None or probe.detect_dynamic_mode(
+                package, exports, report=print
+            )
         overrides["dynamic"] = f"dynamic: {'true' if dynamic_mode else 'false'}"
 
         reference_yaml = self._build_reference_yaml(categories)
@@ -7834,15 +6803,14 @@ class GreatDocs:
         print(f"Created {config_path}")
         return True
 
-    def _build_reference_yaml(self, categories: dict) -> str:
+    def _build_reference_yaml(self, categories: Categories) -> str:
         """
         Build the `reference:` YAML block from categorized exports
 
         Parameters
         ----------
         categories
-            Dictionary from `_categorize_api_objects` with class-like and flat
-            export groups plus method-count metadata.
+            The package's exports sorted into the groups of the API reference.
 
         Returns
         -------
@@ -8476,7 +7444,7 @@ class GreatDocs:
                 '<path d="M20 3v4"/><path d="M22 5h-4"/></svg>'
             )
             ai_items.append(f'<a href="skills.html">Skills{_sparkle_svg}</a><br>')
-        if self._llms_txt_available():
+        if llms_txt.is_planned(self.build_dir):
             ai_items.append("[llms.txt](llms.txt)<br>")
             ai_items.append("[llms-full.txt](llms-full.txt)<br>")
 
@@ -11659,363 +10627,6 @@ anchor-sections: true
         # Write back
         quarto_yml.write(self.build_dir, config, self._config)
 
-    def _llms_txt_available(self) -> bool:
-        """
-        Predict whether the build will generate `llms.txt` and `llms-full.txt`
-
-        The homepage margin queries this before either file exists, so it must
-        predict whether the build will generate them.
-
-        Both files require `_quarto.yml` to contain an `api-reference` block
-        with an importable `package` and at least one section.
-
-        Returns
-        -------
-        bool
-            Whether the build should write both files.
-        """
-        config = self._llms_txt_quarto_config()
-        if config is None:
-            return False
-        api_ref_config = config["api-reference"]
-        package_name = api_ref_config["package"]
-        try:
-            import importlib
-
-            importlib.import_module(str(package_name).replace("-", "_"))
-        except ImportError:
-            return False
-        return True
-
-    def _llms_txt_quarto_config(self) -> dict[str, Any] | None:
-        """
-        Read the `_quarto.yml` configuration the llms.txt files are built from
-
-        Both `_generate_llms_txt` and `_generate_llms_full_txt` build their file
-        from the `api-reference` block, and `_llms_txt_available` predicts
-        whether they will run. Sharing this one guard keeps the three in
-        agreement, so a page can never advertise a file the build will not
-        write, and neither can a file appear without being advertised.
-
-        Returns
-        -------
-        dict[str, Any] | None
-            The parsed `_quarto.yml`, guaranteed to carry an `api-reference`
-            block with a `package` and at least one section, or `None` when the
-            build directory has no usable `_quarto.yml`.
-        """
-        if not quarto_yml.path(self.build_dir).exists():
-            return None
-        try:
-            config = quarto_yml.read(self.build_dir)
-        except (OSError, ValueError):
-            return None
-        if not isinstance(config, dict):
-            return None
-        api_ref_config = config.get("api-reference")
-        if not isinstance(api_ref_config, dict):
-            return None
-        if not api_ref_config.get("package") or not api_ref_config.get("sections"):
-            return None
-        return cast("dict[str, Any]", config)
-
-    def _generate_llms_txt(self) -> None:
-        """
-        Generate an llms.txt file for LLM documentation indexing.
-
-        Creates a structured markdown file that indexes the API reference pages, following the
-        llms.txt standard format for LLM-readable documentation. The file is saved to the docs
-        directory and will be included in the built site.
-
-        The format follows the structure:
-
-        - package title with description
-        - API Reference section with links to each documented item
-        """
-        from great_docs._apiref import APIReference, SpecObject
-
-        config = self._llms_txt_quarto_config()
-        if config is None:
-            return
-
-        # Get API reference sections and package info
-        api_ref_config = config["api-reference"]
-        sections = api_ref_config["sections"]
-        package_name = api_ref_config["package"]
-
-        # Get package metadata for description and site URL
-        metadata = self._get_package_metadata()
-        description = metadata.get("description", "")
-
-        # Get the site URL and prefer the Documentation URL from pyproject.toml,
-        # fall back to site-url from _quarto.yml
-        urls = metadata.get("urls", {})
-        site_url = urls.get("Documentation", "") or config.get("website", {}).get("site-url", "")
-
-        # Clean up site URL and remove any trailing anchors or paths that aren't the base
-        if site_url:
-            # Remove trailing #readme or similar anchors
-            if "#" in site_url:
-                site_url = site_url.split("#")[0]
-            # Ensure trailing slash
-            if not site_url.endswith("/"):
-                site_url += "/"
-
-        # Build the llms.txt content
-        lines = []
-
-        # Header with package name
-        lines.append(f"# {package_name}")
-        lines.append("")
-
-        # Description
-        if description:
-            lines.append(f"> {description}")
-            lines.append("")
-
-        # API Reference section
-        lines.append("## Docs")
-        lines.append("")
-        lines.append("### API Reference")
-        lines.append("")
-
-        # Process each section
-        for section in APIReference(config).sections:
-            section_title = section.title or section.subtitle or ""
-            section_desc = section.desc or ""
-
-            # Add section header as a comment or sub-heading if there are multiple sections
-            if len(sections) > 1 and section_title:
-                lines.append(f"#### {section_title}")
-                if section_desc:
-                    lines.append(f"> {section_desc}")
-                lines.append("")
-
-            # Add each item in the section
-            for entry in section.contents:
-                if not isinstance(entry, SpecObject):
-                    continue  # pragma: no cover
-                item_name = entry.name
-
-                # Get description from docstring if available
-                item_desc = self._get_docstring_summary(package_name, item_name)
-
-                if site_url:
-                    url = f"{site_url}reference/{entry.page_path}.html"
-                else:
-                    url = f"reference/{entry.page_path}.html"
-
-                # Format the line
-                if item_desc:
-                    lines.append(f"- [{item_name}]({url}): {item_desc}")
-                else:
-                    lines.append(f"- [{item_name}]({url})")
-
-            lines.append("")
-
-        # Write the llms.txt file
-        llms_txt_path = self.build_dir / "llms.txt"
-        with open(llms_txt_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines))
-
-        print(f"Created {llms_txt_path}")
-
-    def _get_docstring_summary(self, package_name: str, item_name: str) -> str:
-        """
-        Get the first line of a docstring for an item.
-
-        Parameters
-        ----------
-        package_name
-            The name of the package containing the item.
-        item_name
-            The name of the class, function, or module to get the docstring for.
-
-        Returns
-        -------
-        str
-            The first line of the docstring, or empty string if not available.
-        """
-        try:
-            import importlib
-
-            # Normalize package name
-            normalized_name = package_name.replace("-", "_")
-            module = importlib.import_module(normalized_name)
-
-            # Try to get the object
-            obj = getattr(module, item_name, None)
-            if obj is None:
-                return ""
-
-            # Get docstring
-            docstring = getattr(obj, "__doc__", None)
-            if not docstring:
-                return ""  # pragma: no cover
-
-            # Extract first line/sentence
-            first_line = docstring.strip().split("\n")[0].strip()
-
-            # Clean up the line (remove trailing periods, normalize whitespace)
-            first_line = first_line.rstrip(".")
-
-            return first_line
-
-        except Exception:  # pragma: no cover
-            return ""  # pragma: no cover
-
-    def _generate_llms_full_txt(self) -> None:
-        """
-        Generate an llms-full.txt file with comprehensive API documentation for LLMs.
-
-        Creates a detailed markdown file containing full function/class signatures and
-        docstrings, plus CLI help text if available. This provides comprehensive context
-        for LLM-based tools to understand and work with the package's API.
-
-        The format includes:
-        - Package header with description
-        - Full API documentation with signatures and docstrings organized by section
-        - CLI documentation with --help output for all commands
-        """
-
-        config = self._llms_txt_quarto_config()
-        if config is None:
-            return
-
-        # Get API reference sections and package info
-        api_ref_config = config["api-reference"]
-        sections = api_ref_config["sections"]
-        package_name = api_ref_config["package"]
-
-        # Get package metadata
-        metadata = self._get_package_metadata()
-        description = metadata.get("description", "")
-
-        # Import the package
-        try:
-            import importlib
-
-            normalized_name = package_name.replace("-", "_")
-            module = importlib.import_module(normalized_name)
-        except ImportError as e:
-            print(f"Could not import {package_name}: {e}")
-            return
-
-        sep_line = "-" * 70
-
-        # Build the content
-        lines = []
-        lines.append(sep_line)
-        lines.append(f"This is the API documentation for the {package_name} library.")
-        lines.append(sep_line)
-        lines.append("")
-
-        # Process each section
-        for section in sections:
-            section_title = section.get("title") or section.get("subtitle") or ""
-            section_desc = section.get("desc", "")
-
-            # Add section header
-            if section_title:
-                lines.append(f"\n## {section_title}\n")
-                if section_desc:
-                    lines.append(f"{section_desc}\n")
-                lines.append("")
-
-            # Process each item in the section
-            for item in section.get("contents", []):
-                # Handle both string and dict formats
-                if isinstance(item, str):
-                    item_name = item
-                elif isinstance(item, dict):
-                    item_name = item.get("name", str(item))
-                else:
-                    continue  # pragma: no cover
-
-                # Get the object's signature and docstring
-                api_text = self._get_api_details(module, item_name)
-                if api_text:
-                    lines.append(api_text)
-                    lines.append("")
-
-        # Add CLI documentation if enabled
-        cli_text = self._get_cli_help_text_for_llms()
-        if cli_text:
-            lines.append("")
-            lines.append(sep_line)
-            lines.append("This is the CLI documentation for the package.")
-            lines.append(sep_line)
-            lines.append("")
-            lines.append(cli_text)
-
-        # Add User Guide content if available
-        user_guide_text = self._get_user_guide_text_for_llms()
-        if user_guide_text:
-            lines.append("")
-            lines.append(sep_line)
-            lines.append("This is the User Guide documentation for the package.")
-            lines.append(sep_line)
-            lines.append("")
-            lines.append(user_guide_text)
-
-        # Write the llms-full.txt file
-        llms_full_path = self.build_dir / "llms-full.txt"
-        with open(llms_full_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines))
-
-        print(f"Created {llms_full_path}")
-
-    def _get_api_details(self, module, item_name: str) -> str:
-        """
-        Retrieve the signature and docstring for a function/class.
-
-        Parameters
-        ----------
-        module
-            The module from which to retrieve the function/class.
-        item_name
-            The name of the function or class (can be dotted for nested attributes).
-
-        Returns
-        -------
-        str
-            A string containing the name, signature, and docstring.
-        """
-        import inspect
-
-        try:
-            # Split the attribute path to handle nested attributes (e.g., "Class.method")
-            parts = item_name.split(".")
-            obj = module
-            for part in parts:
-                obj = getattr(obj, part)
-
-            # Get the name of the object
-            obj_name = getattr(obj, "__name__", item_name)
-
-            # Get the function/class signature
-            try:
-                sig = inspect.signature(obj)
-                sig_str = f"{obj_name}{sig}"
-            except (ValueError, TypeError):
-                # Some objects don't have signatures (e.g., some built-ins)
-                sig_str = obj_name
-
-            # Get the docstring
-            doc = getattr(obj, "__doc__", None) or ""
-
-            # Clean up the docstring - remove excessive indentation
-            if doc:
-                doc = inspect.cleandoc(doc)
-
-            # Combine the signature and docstring
-            return f"{sig_str}\n\n{doc}" if doc else sig_str
-
-        except AttributeError:  # pragma: no cover
-            return ""  # pragma: no cover
-        except Exception:  # pragma: no cover
-            return ""  # pragma: no cover
-
     def _generate_skill_md(self) -> None:
         """
         Generate a SKILL.md file conforming to the Agent Skills specification.
@@ -12190,7 +10801,7 @@ anchor-sections: true
                     else:
                         continue  # pragma: no cover
 
-                    item_desc = self._get_docstring_summary(package_name, item_name)
+                    item_desc = llms_txt.docstring_summary(package_name, item_name)
                     if item_desc:
                         lines.append(f"- `{item_name}`: {item_desc}")  # pragma: no cover
                     else:
@@ -12229,7 +10840,7 @@ anchor-sections: true
         lines.append("")
         if site_url:
             lines.append(f"- [Full documentation]({site_url})")
-        if self._llms_txt_available():
+        if llms_txt.is_planned(self.build_dir):
             lines.append("- [llms.txt](llms.txt) — Indexed API reference for LLMs")
             lines.append("- [llms-full.txt](llms-full.txt) — Comprehensive documentation for LLMs")
         if repo_url:
@@ -13312,142 +11923,6 @@ anchor-sections: true
         self._generate_sitemap_xml()
         self._generate_robots_txt()
 
-    def _get_cli_help_text_for_llms(self) -> str:
-        """
-        Get CLI help text formatted for llms-full.txt.
-
-        Returns
-        -------
-        str
-            Formatted CLI help text with all commands and subcommands.
-        """
-        metadata = self._get_package_metadata()
-
-        if not metadata.get("cli_enabled", False):
-            return ""
-
-        package_name = self._detect_package_name()
-        if not package_name:
-            return ""  # pragma: no cover
-
-        # The Click CLI is imported from the package's module, which can differ
-        # from the PyPI project name.
-        importable_name = self._resolve_importable_name(package_name)
-        cli_info = self._discover_click_cli(importable_name, display_name=package_name)
-        if not cli_info:
-            return ""  # pragma: no cover
-
-        lines = []
-        entry_point = cli_info.get("entry_point_name", package_name)
-
-        # Main CLI help
-        lines.append(f"## CLI: {entry_point}")
-        lines.append("")
-        lines.append("```")
-        lines.append(cli_info.get("help_text", ""))
-        lines.append("```")
-        lines.append("")
-
-        # Process subcommands recursively
-        def add_subcommand_help(cmd_info: dict, depth: int = 0):
-            nonlocal lines
-            for subcmd in cmd_info.get("commands", []):
-                if subcmd.get("hidden"):
-                    continue
-
-                full_path = subcmd.get("full_path", subcmd.get("name", ""))
-                lines.append(f"### {full_path}")
-                lines.append("")
-                lines.append("```")
-                lines.append(subcmd.get("help_text", ""))
-                lines.append("```")
-                lines.append("")
-
-                # Recurse for nested subcommands
-                if subcmd.get("commands"):
-                    add_subcommand_help(subcmd, depth + 1)  # pragma: no cover
-
-        add_subcommand_help(cli_info)
-
-        return "\n".join(lines)
-
-    def _get_user_guide_text_for_llms(self) -> str:
-        """
-        Get User Guide content formatted for llms-full.txt.
-
-        Reads all user guide .qmd files in order and extracts their content, stripping YAML
-        frontmatter but preserving the document structure.
-
-        Returns
-        -------
-        str
-            Formatted User Guide content with all pages in order.
-        """
-        user_guide_info = self._discover_user_guide()
-        if not user_guide_info:
-            return ""
-
-        lines = []
-        files = user_guide_info.get("files", [])
-
-        if not files:
-            return ""  # pragma: no cover
-
-        current_section = None
-
-        for file_info in files:
-            file_path = file_info.get("path")
-            title = file_info.get("title", "")
-            section = file_info.get("section")
-
-            if not file_path or not file_path.exists():
-                continue  # pragma: no cover
-
-            # Add section header if this is a new section
-            if section and section != current_section:
-                lines.append(f"\n## {section}\n")
-                current_section = section
-
-            # Read the file content
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-            except Exception:  # pragma: no cover
-                continue  # pragma: no cover
-
-            # Strip YAML frontmatter
-            content = self._strip_frontmatter(content)
-
-            # Add the page title as a header if not already starting with one
-            content_stripped = content.strip()
-            if not content_stripped.startswith("#"):
-                lines.append(f"### {title}\n")
-
-            lines.append(content)
-            lines.append("")
-
-        return "\n".join(lines)
-
-    def _strip_frontmatter(self, content: str) -> str:
-        """
-        Remove YAML frontmatter from a document.
-
-        Parameters
-        ----------
-        content
-            The document content.
-
-        Returns
-        -------
-        str
-            The content with frontmatter removed.
-        """
-        if content.startswith("---"):
-            parts = content.split("---", 2)
-            if len(parts) >= 3:
-                return parts[2].lstrip()
-        return content
-
     def uninstall(self) -> None:
         """
         Remove Great Docs configuration and generated build directories
@@ -13567,15 +12042,29 @@ anchor-sections: true
         """
         Write `llms.txt` and `llms-full.txt`
 
+        `llms-full.txt` includes user guide pages and, when `cli.enabled` is set, Click
+        command-line help.
+
         Returns
         -------
         :
             The result line or skip reason.
         """
-        if not self._llms_txt_available():
+        if not llms_txt.is_planned(self.build_dir):
             return Skipped("no API reference")
-        self._generate_llms_txt()
-        self._generate_llms_full_txt()
+        metadata = self._get_package_metadata()
+        llms_txt.write_index(self.build_dir, metadata, report=print)
+
+        cli = None
+        package_name = self._detect_package_name() if metadata.get("cli_enabled", False) else None
+        if package_name:
+            # The importable module name can differ from the PyPI project name.
+            cli = self._discover_click_cli(
+                self._resolve_importable_name(package_name), display_name=package_name
+            )
+        llms_txt.write_full(
+            self.build_dir, cli=cli, user_guide=self._discover_user_guide(), report=print
+        )
         return "Created llms.txt + llms-full.txt"
 
     def _step_skill_md(self) -> Outcome:
@@ -15247,60 +13736,66 @@ anchor-sections: true
         self,
         include_docs: bool = True,
         include_docstrings: bool = False,
-        custom_dictionary: list[str] | None = None,
+        custom_words: list[str] | None = None,
         dialect: str = "us",
         ignore_rules: list[str] | None = None,
         only_rules: list[str] | None = None,
+        strict: bool = False,
         verbose: bool = False,
-    ) -> dict:
+    ) -> list[CheckedFile]:
         """
-        Check spelling and grammar in documentation files using Harper.
+        Check spelling and grammar in documentation pages and Python docstrings with Harper
 
         ::: {.callout-note}
         In practice, you would normally use the `great-docs proofread` CLI command rather than
         calling this method directly. See the [CLI reference](cli/proofread.qmd) for details.
         :::
 
-        This method uses Harper, a fast privacy-first grammar checker, to scan documentation files
-        (`.qmd`, `.md`) for spelling errors, grammatical issues, style problems, and more. Harper
-        runs locally and provides comprehensive English language checking.
+        Harper checks `.qmd` and `.md` files recursively in the user guide and recipes
+        directories under the documentation source directory, plus `README.md` at the package
+        root. The checks use the same defaults as `great-docs proofread`: a built-in dictionary
+        of technical terms and a set of ignored rules for technical writing. Front matter and
+        fenced code blocks are excluded from `.qmd` checks.
 
         Parameters
         ----------
         include_docs
-            If `True`, scan documentation files (`.qmd`, `.md`). Default is `True`.
+            If `True`, check the documentation pages. Default is `True`.
         include_docstrings
-            If `True`, also scan Python docstrings in the package. Default is `False`.
-        custom_dictionary
-            List of additional words to consider correct (e.g., project-specific terms, library
-            names). Default is `None`.
+            If `True`, check docstrings in Python files under the package's importable module
+            directory. Skip these files if no package is detected. Default is `False`.
+        custom_words
+            Additional accepted words, such as project-specific terms and library names.
+            Default is `None`.
         dialect
-            English dialect: "us", "uk", "au", "in", "ca". Default is `"us"`.
+            English dialect: `"us"`, `"uk"`, `"au"`, `"in"` or `"ca"`. Default is `"us"`.
         ignore_rules
-            List of Harper rule names to skip (e.g., `["SentenceCapitalization"]`). Default is
-            `None`.
+            Harper rule names to skip, such as `["SentenceCapitalization"]`, in addition to
+            any default exclusions enabled by `strict=False`. Default is `None`.
         only_rules
-            List of Harper rule names to run exclusively (e.g., `["SpellCheck"]`). Default is
-            `None`.
+            Harper rule names to run exclusively (e.g., `["SpellCheck"]`). Default is `None`.
+        strict
+            If `True`, disable the built-in dictionary and default rule exclusions. Explicit
+            `custom_words`, `only_rules` and `ignore_rules` still apply. Default is `False`.
         verbose
-            If `True`, print detailed progress information. Default is `False`.
+            If `True`, print progress as files are checked. Default is `False`.
 
         Returns
         -------
-        dict
-            A dictionary containing:
-
-            - `files_checked`: number of files checked
-            - `total_issues`: total number of issues found
-            - `by_kind`: dict mapping lint kind to count (e.g., "Spelling", "Grammar")
-            - `by_rule`: dict mapping rule name to count (e.g., "SpellCheck")
-            - `issues`: list of issue dicts with file, line, column, message, etc.
-            - `by_file`: dict mapping file paths to their issues
+        :
+            A list of checked files, each with a `file` path, a sequence of `issues` and an
+            `error` message if checking failed, or `None` if it succeeded. Each issue has
+            `line`, `column`, `kind`, `rule`, `message`, `matched_text` and `suggestions`.
+            For `.qmd` pages, `file` is relative to the project root and issue line numbers
+            refer to the original page.
 
         Raises
         ------
         RuntimeError
-            If harper-cli is not installed.
+            If `harper-cli` is missing or a batch of `.md` or `.py` file checks raises
+            `HarperError`. A missing executable stops the whole run, including runs with only
+            `.qmd` pages. An `OSError`, `UnicodeDecodeError` or `HarperError` on a `.qmd` page
+            is returned as that page's `error` instead.
 
         Examples
         --------
@@ -15312,19 +13807,15 @@ anchor-sections: true
         docs = GreatDocs()
         results = docs.proofread()
 
-        print(f"Checked {results['files_checked']} files")
-        print(f"Issues: {results['total_issues']}")
-
-        for issue in results["issues"]:
-            print(f"  {issue['file']}:{issue['line']} - {issue['message']}")
+        for file_result in results:
+            for issue in file_result.issues:
+                print(f"{file_result.file}:{issue.line} - {issue.message}")
         ```
 
-        Check with custom dictionary:
+        Accept project-specific words:
 
         ```python
-        results = docs.proofread(
-            custom_dictionary=["griffe", "quartodoc", "navbar"]
-        )
+        results = docs.proofread(custom_words=["griffe", "quartodoc", "navbar"])
         ```
 
         Check only spelling:
@@ -15333,179 +13824,29 @@ anchor-sections: true
         results = docs.proofread(only_rules=["SpellCheck"])
         ```
         """
-        import tempfile
-        from collections import defaultdict
+        from ._harper import HarperError, HarperNotFoundError
 
-        from ._harper import (
-            HarperError,
-            HarperFileResult,
-            HarperNotFoundError,
-            run_harper,
-            run_harper_on_text,
+        files = _proofread.find_pages(self.layout) if include_docs else []
+        if include_docstrings and (package_name := self._detect_package_name()):
+            module = self._resolve_importable_name(package_name)
+            files += _proofread.find_modules(self.project_root, module)
+
+        options = _proofread.Options(
+            dialect=dialect,
+            words=custom_words or (),
+            only_rules=only_rules or (),
+            ignore_rules=ignore_rules or (),
+            builtin_dictionary=not strict,
+            default_ignores=not strict,
         )
-
-        # Collect files to check
-        files_to_check: list[Path] = []
-
-        if include_docs:
-            # Scan user_guide directory if it exists
-            user_guide_dir = self.layout.source_dir / "user_guide"
-            if user_guide_dir.exists():
-                files_to_check.extend(user_guide_dir.rglob("*.qmd"))
-                files_to_check.extend(user_guide_dir.rglob("*.md"))
-
-            # Check README in project root
-            readme = self.project_root / "README.md"
-            if readme.exists():
-                files_to_check.append(readme)  # pragma: no cover
-
-            # Check recipes if they exist
-            recipes_dir = self.project_root / "recipes"
-            if recipes_dir.exists():
-                files_to_check.extend(recipes_dir.rglob("*.qmd"))  # pragma: no cover
-                files_to_check.extend(recipes_dir.rglob("*.md"))  # pragma: no cover
-
-        # Add Python files if checking docstrings
-        py_files: list[Path] = []
-        if include_docstrings:
-            # Scan the importable module directory, which can differ from the
-            # PyPI project name. Skip when no package is detectable.
-            package_name = self._detect_package_name()
-            if package_name:
-                importable_name = self._resolve_importable_name(package_name)
-                # Dotted module names (e.g. namespace packages "firebird.base")
-                # map to nested directories.
-                package_dir = self.project_root.joinpath(*importable_name.split("."))
-                if package_dir.exists():
-                    py_files.extend(package_dir.rglob("*.py"))
-
-        # Build custom dictionary file if needed
-        dict_path = None
-        if custom_dictionary:
-            tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
-            tmp.write("\n".join(custom_dictionary))
-            tmp.close()
-            dict_path = tmp.name
-
-        all_results: list[HarperFileResult] = []
-
         try:
-            # Separate files by type
-            md_files = [f for f in files_to_check if f.suffix == ".md"]
-            qmd_files = [f for f in files_to_check if f.suffix == ".qmd"]
-
-            # Check .md files directly
-            if md_files:
-                if verbose:  # pragma: no cover
-                    print(f"Checking {len(md_files)} Markdown file(s)...")  # pragma: no cover
-
-                results = run_harper(  # pragma: no cover
-                    md_files,
-                    dialect=dialect,
-                    user_dict_path=dict_path,
-                    ignore_rules=ignore_rules,
-                    only_rules=only_rules,
-                )
-                all_results.extend(results)  # pragma: no cover
-
-            # Check .qmd files via stdin (Harper doesn't recognize extension)
-            for qmd_file in qmd_files:
-                if verbose:
-                    print(f"Checking {qmd_file.name}...")  # pragma: no cover
-
-                try:
-                    content = qmd_file.read_text(encoding="utf-8")
-                    lints = run_harper_on_text(
-                        content,
-                        dialect=dialect,
-                        user_dict_path=dict_path,
-                        ignore_rules=ignore_rules,
-                        only_rules=only_rules,
-                    )
-
-                    rel_path = str(qmd_file.relative_to(self.project_root))
-                    for lint in lints:
-                        lint.file = rel_path
-
-                    all_results.append(
-                        HarperFileResult(
-                            file=rel_path,
-                            lint_count=len(lints),
-                            lints=lints,
-                            error=None,
-                        )
-                    )
-                except Exception as e:  # pragma: no cover
-                    rel_path = str(qmd_file.relative_to(self.project_root))  # pragma: no cover
-                    all_results.append(  # pragma: no cover
-                        HarperFileResult(
-                            file=rel_path,
-                            lint_count=0,
-                            lints=[],
-                            error=str(e),
-                        )
-                    )
-
-            # Check Python files if requested
-            if py_files:
-                if verbose:  # pragma: no cover
-                    print(f"Checking {len(py_files)} Python file(s)...")  # pragma: no cover
-
-                results = run_harper(  # pragma: no cover
-                    py_files,
-                    dialect=dialect,
-                    user_dict_path=dict_path,
-                    ignore_rules=ignore_rules,
-                    only_rules=only_rules,
-                )
-                all_results.extend(results)  # pragma: no cover
-
-        except HarperNotFoundError as e:  # pragma: no cover
-            raise RuntimeError(str(e)) from e  # pragma: no cover
-        except HarperError as e:  # pragma: no cover
-            raise RuntimeError(f"Harper error: {e}") from e  # pragma: no cover
-        finally:
-            # Clean up temp dictionary file
-            if dict_path:
-                try:
-                    Path(dict_path).unlink()
-                except Exception:  # pragma: no cover
-                    pass  # pragma: no cover
-
-        # Aggregate results
-        total_issues = sum(r.lint_count for r in all_results)
-        by_kind: dict[str, int] = defaultdict(int)
-        by_rule: dict[str, int] = defaultdict(int)
-        by_file: dict[str, list[dict]] = {}
-        all_issues: list[dict] = []
-
-        for result in all_results:
-            if result.lints:
-                by_file[result.file] = []
-
-            for lint in result.lints:
-                by_kind[lint.kind] += 1
-                by_rule[lint.rule] += 1
-
-                issue = {
-                    "file": lint.file,
-                    "line": lint.line,
-                    "column": lint.column,
-                    "kind": lint.kind,
-                    "rule": lint.rule,
-                    "message": lint.message,
-                    "matched_text": lint.matched_text,
-                    "suggestions": lint.suggestions,
-                    "priority": lint.priority,
-                }
-                all_issues.append(issue)
-                by_file[result.file].append(issue)
-
-        return {
-            "files_checked": len(files_to_check) + len(py_files),
-            "total_issues": total_issues,
-            "by_kind": dict(by_kind),
-            "by_rule": dict(by_rule),
-            "issues": all_issues,
-            "by_file": by_file,
-        }
+            return _proofread.check(
+                files,
+                self.project_root,
+                options,
+                report=print if verbose else lambda _line: None,
+            )
+        except HarperNotFoundError as e:
+            raise RuntimeError(str(e)) from e
+        except HarperError as e:
+            raise RuntimeError(f"Harper error: {e}") from e

@@ -527,7 +527,7 @@ async def _handle_scan(arguments: dict) -> list[TextContent]:
     if not exports:
         return [TextContent(type="text", text="No exports discovered.")]
 
-    categories = docs._categorize_api_objects(importable_name, exports)
+    categories = docs._categorise_exports(importable_name, exports)
 
     # Build structured output
     lines = [f"Package: {importable_name}", f"Total exports: {len(exports)}", ""]
@@ -1176,7 +1176,7 @@ async def read_resource(uri: AnyUrl) -> str:
             exports = docs._get_package_exports(importable_name)
             if not exports:
                 return f"No exports discovered for {importable_name}."
-            categories = docs._categorize_api_objects(importable_name, exports)
+            categories = docs._categorise_exports(importable_name, exports)
 
             lines = [f"Package: {importable_name}", f"Total exports: {len(exports)}", ""]
             for cat_key, label in [

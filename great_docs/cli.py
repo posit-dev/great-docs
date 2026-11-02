@@ -1152,8 +1152,8 @@ def scan(
             click.echo("No exports discovered.")
             sys.exit(0)
 
-        # Categorize exports
-        categories = docs._categorize_api_objects(importable_name, exports)
+        # Group exports for comparison with the configured reference.
+        categories = docs._categorise_exports(importable_name, exports)
 
         # Build sets of what's in the reference config
         reference_config = docs._config.reference
@@ -2553,18 +2553,10 @@ def proofread(
       cargo install harper-cli # any platform
     """
     import json as json_module
-    import tempfile
     from collections import defaultdict
 
-    from ._harper import (
-        HarperError,
-        HarperNotFoundError,
-        check_harper_available,
-        get_builtin_dictionary,
-        get_default_ignore_rules,
-        run_harper,
-        run_harper_on_text,
-    )
+    from . import _proofread
+    from ._harper import HarperError, HarperNotFoundError, check_harper_available
 
     try:
         # Check if Harper is available
@@ -2573,53 +2565,29 @@ def proofread(
             click.echo(f"Error: {harper_info}", err=True)
             sys.exit(3)
 
-        if verbose and not json_output and not compact:
+        show_progress = verbose and not json_output and not compact
+        if show_progress:
             click.echo(f"\n🔍 Proofreading with {harper_info}...\n")
             if not strict:
                 click.echo("Using smart defaults for technical docs. Use --strict to disable.\n")
 
         # Determine files to check
         docs = GreatDocs(project_path=project_path, config_path=config_path)
-        files_to_check: list[Path] = []
 
         if files:
-            # User specified files
             files_to_check = [Path(f) for f in files]
         else:
-            # Auto-discover documentation files
-            user_guide_dir = Path(docs_dir) if docs_dir else docs.layout.source_dir / "user_guide"
-            if user_guide_dir.exists():
-                files_to_check.extend(user_guide_dir.rglob("*.qmd"))
-                files_to_check.extend(user_guide_dir.rglob("*.md"))
-
-            # Check README
-            readme = docs.project_root / "README.md"
-            if readme.exists():
-                files_to_check.append(readme)
-
-            # Check recipes if they exist
-            recipes_dir = docs.layout.source_dir / "recipes"
-            if recipes_dir.exists():
-                files_to_check.extend(recipes_dir.rglob("*.qmd"))
-                files_to_check.extend(recipes_dir.rglob("*.md"))
+            guide_dir = Path(docs_dir) if docs_dir else None
+            files_to_check = _proofread.find_pages(docs.layout, guide_dir)
+            if include_docstrings and (package_name := docs._detect_package_name()):
+                module = docs._resolve_importable_name(package_name)
+                files_to_check += _proofread.find_modules(docs.project_root, module)
 
         if not files_to_check:
             click.echo("No documentation files found to check.", err=True)
             sys.exit(0)
 
-        # Build custom dictionary file
-        # Start with builtin dictionary unless disabled
-        dict_path = None
-        words = []
-
-        if not strict and not no_builtin_dictionary:
-            words.extend(get_builtin_dictionary())
-
-        # Add user-provided words
-        if custom_words:
-            words.extend(custom_words)
-
-        # Load from dictionary file if provided
+        words = list(custom_words)
         if dictionary_file:
             try:
                 with open(dictionary_file, "r", encoding="utf-8") as f:
@@ -2627,133 +2595,34 @@ def proofread(
                         word = line.strip()
                         if word and not word.startswith("#"):
                             words.append(word)
-            except Exception as e:
+            except (OSError, UnicodeDecodeError) as e:
                 click.echo(f"Warning: Could not read dictionary file: {e}", err=True)
 
-        if words:
-            # Create temporary dictionary file
-            tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
-            tmp.write("\n".join(words))
-            tmp.close()
-            dict_path = tmp.name
-
-        # Build rule filters
-        only = None
-        ignore = None
-
-        # Start with default ignores for technical docs (unless --strict)
-        if not strict:
-            ignore = get_default_ignore_rules()
-
-        if spelling_only:
-            only = ["SpellCheck"]
-        elif grammar_only:
-            ignore = (ignore or []) + ["SpellCheck"]
-
+        only = ["SpellCheck"] if spelling_only else []
+        ignore = ["SpellCheck"] if grammar_only and not spelling_only else []
         if only_rules:
-            only = only_rules.split(",") if only is None else only + only_rules.split(",")
-
+            only.extend(only_rules.split(","))
         if ignore_rules:
-            ignore = ignore_rules.split(",") if ignore is None else ignore + ignore_rules.split(",")
+            ignore.extend(ignore_rules.split(","))
 
-        # Separate files by type (Harper doesn't recognize .qmd)
-        md_files = [f for f in files_to_check if f.suffix == ".md"]
-        qmd_files = [f for f in files_to_check if f.suffix == ".qmd"]
-        py_files = [f for f in files_to_check if f.suffix == ".py"]
-
-        all_results = []
-
-        # Check .md files directly
-        if md_files:
-            if verbose and not json_output and not compact:
-                click.echo(f"Checking {len(md_files)} Markdown file(s)...\n")
-
-            results = run_harper(
-                md_files,
-                dialect=dialect,
-                user_dict_path=dict_path,
-                ignore_rules=ignore,
-                only_rules=only,
-            )
-            all_results.extend(results)
-
-        # Check .qmd files via stdin (Harper doesn't recognize extension)
-        # We extract prose only (skip code blocks) to avoid false positives
-        for qmd_file in qmd_files:
-            if verbose and not json_output and not compact:
-                click.echo(f"Checking {qmd_file.name}...")
-
-            try:
-                from ._harper import extract_prose_from_markdown
-
-                content = qmd_file.read_text(encoding="utf-8")
-
-                # Extract prose sections, skipping fenced code blocks and frontmatter
-                prose_content, line_mapping = extract_prose_from_markdown(content)
-
-                lints = run_harper_on_text(
-                    prose_content,
-                    dialect=dialect,
-                    user_dict_path=dict_path,
-                    ignore_rules=ignore,
-                    only_rules=only,
-                )
-
-                # Convert to file result with proper path and remap line numbers
-                from ._harper import HarperFileResult
-
-                rel_path = str(qmd_file.relative_to(docs.project_root))
-                for lint in lints:
-                    lint.file = rel_path
-                    # Remap line number from prose content back to original file
-                    if lint.line in line_mapping:
-                        lint.line = line_mapping[lint.line]
-
-                all_results.append(
-                    HarperFileResult(
-                        file=rel_path,
-                        lint_count=len(lints),
-                        lints=lints,
-                        error=None,
-                    )
-                )
-            except Exception as e:
-                from ._harper import HarperFileResult
-
-                rel_path = str(qmd_file.relative_to(docs.project_root))
-                all_results.append(
-                    HarperFileResult(
-                        file=rel_path,
-                        lint_count=0,
-                        lints=[],
-                        error=str(e),
-                    )
-                )
-
-        # Check Python files if requested
-        if include_docstrings and py_files:
-            if verbose and not json_output and not compact:
-                click.echo(f"\nChecking {len(py_files)} Python file(s) for docstrings...\n")
-
-            results = run_harper(
-                py_files,
-                dialect=dialect,
-                user_dict_path=dict_path,
-                ignore_rules=ignore,
-                only_rules=only,
-            )
-            all_results.extend(results)
-
-        # Clean up temp dictionary file
-        if dict_path:
-            try:
-                Path(dict_path).unlink()
-            except Exception:
-                pass
+        options = _proofread.Options(
+            dialect=dialect,
+            words=words,
+            only_rules=only,
+            ignore_rules=ignore,
+            builtin_dictionary=not strict and not no_builtin_dictionary,
+            default_ignores=not strict,
+        )
+        # Exclude Python files unless docstring checking is requested.
+        all_results = _proofread.check(
+            [f for f in files_to_check if include_docstrings or f.suffix != ".py"],
+            docs.project_root,
+            options,
+            report=click.echo if show_progress else lambda _line: None,
+        )
 
         # Aggregate results
-        total_issues = sum(r.lint_count for r in all_results)
-        files_with_issues = sum(1 for r in all_results if r.lint_count > 0)
+        total_issues = sum(len(r.issues) for r in all_results)
 
         # Group by kind and rule
         by_kind = defaultdict(int)
@@ -2761,7 +2630,7 @@ def proofread(
         all_lints = []
 
         for result in all_results:
-            for lint in result.lints:
+            for lint in result.issues:
                 by_kind[lint.kind] += 1
                 by_rule[lint.rule] += 1
                 all_lints.append(lint)
@@ -2807,9 +2676,9 @@ def proofread(
             # Human-readable output
             if all_results:
                 for result in all_results:
-                    if result.lint_count > 0:
-                        click.echo(f"\n📄 {result.file} ({result.lint_count} issue(s))")
-                        for lint in result.lints:
+                    if result.issues:
+                        click.echo(f"\n📄 {result.file} ({len(result.issues)} issue(s))")
+                        for lint in result.issues:
                             # Clean up suggestion format
                             suggestion = ""
                             if lint.suggestions:

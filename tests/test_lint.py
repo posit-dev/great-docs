@@ -894,33 +894,7 @@ class TestRunLint:
         assert "Could not detect package name" in result.issues[0].message
 
     @patch("great_docs.core.GreatDocs")
-    def test_griffe_import_error(self, mock_gd_cls, tmp_path):
-        mock_gd = _mock_docs()
-        mock_gd._detect_package_name.return_value = "mypkg"
-        mock_gd._detect_module_name.return_value = None
-        mock_gd._normalize_package_name.return_value = "mypkg"
-        mock_gd_cls.return_value = mock_gd
-
-        with patch.dict("sys.modules", {"griffe": None}):
-            # Simulate ImportError for griffe
-            import builtins
-
-            original_import = builtins.__import__
-
-            def mock_import(name, *args, **kwargs):
-                if name == "griffe":
-                    raise ImportError("No module named 'griffe'")
-                return original_import(name, *args, **kwargs)
-
-            with patch("builtins.__import__", side_effect=mock_import):
-                result = run_lint(tmp_path)
-
-        assert result.status == "fail"
-        assert any("griffe" in i.message for i in result.issues)
-
-    @patch("griffe.load")
-    @patch("great_docs.core.GreatDocs")
-    def test_successful_lint_run(self, mock_gd_cls, mock_griffe_load, tmp_path):
+    def test_successful_lint_run(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
         mock_gd._detect_package_name.return_value = "mypkg"
         mock_gd._resolve_importable_name.return_value = "mypkg"
@@ -934,7 +908,7 @@ class TestRunLint:
 
         mock_pkg = MagicMock()
         mock_pkg.members = members
-        mock_griffe_load.return_value = mock_pkg
+        mock_gd._get_griffe_package.return_value = mock_pkg
 
         result = run_lint(tmp_path)
 
@@ -944,12 +918,9 @@ class TestRunLint:
         # func_b has no docstring -> error
         assert any(i.check == "missing-docstring" and i.symbol == "func_b" for i in result.issues)
 
-    @patch("griffe.load")
     @patch("great_docs.core.GreatDocs")
-    def test_ambiguity_check_respects_the_renderer_member_selection(
-        self, mock_gd_cls, mock_griffe_load, tmp_path
-    ):
-        """A `members:` config narrowing NetCache must not make `flush` look ambiguous."""
+    def test_ambiguity_check_respects_the_renderer_member_selection(self, mock_gd_cls, tmp_path):
+        """Verify that configured member selection does not make `flush` ambiguous"""
         mock_gd = _mock_docs()
         mock_gd._detect_package_name.return_value = "mypkg"
         mock_gd._resolve_importable_name.return_value = "mypkg"
@@ -978,21 +949,23 @@ class TestRunLint:
         )
         mock_pkg = MagicMock()
         mock_pkg.members = {"StoreCache": store_cls, "NetCache": net_cls}
-        mock_griffe_load.return_value = mock_pkg
+        mock_gd._get_griffe_package.return_value = mock_pkg
 
         result = run_lint(tmp_path)
 
         assert not any(i.check == "ambiguous-xref" for i in result.issues)
 
     @patch("great_docs._lint.load_sources")
-    @patch("griffe.load")
     @patch("great_docs.core.GreatDocs")
     def test_an_unresolvable_reference_reads_no_sources(
-        self, mock_gd_cls, mock_griffe_load, mock_load_sources, tmp_path
+        self, mock_gd_cls, mock_load_sources, tmp_path
     ):
-        """`load_sources` is the only thing that would put a lint run on the
-        network, so a run over a project whose reference resolves nothing
-        must never call it."""
+        """
+        Verify that an unresolved reference triggers no source loading
+
+        Source loading is the only operation that could access the network during linting.
+        A reference that resolves no objects must therefore load no sources.
+        """
         mock_gd = _mock_docs()
         mock_gd._detect_package_name.return_value = "mypkg"
         mock_gd._resolve_importable_name.return_value = "mypkg"
@@ -1004,19 +977,15 @@ class TestRunLint:
         func_a = _make_griffe_obj(docstring="Docs.\n\n%seealso nope")
         mock_pkg = MagicMock()
         mock_pkg.members = {"func_a": func_a}
-        mock_griffe_load.return_value = mock_pkg
+        mock_gd._get_griffe_package.return_value = mock_pkg
 
         run_lint(tmp_path)
 
         mock_load_sources.assert_not_called()
 
-    @patch("griffe.load")
     @patch("great_docs.core.GreatDocs")
-    def test_resolves_module_name_when_project_name_differs(
-        self, mock_gd_cls, mock_griffe_load, tmp_path
-    ):
-        """Regression: run_lint loads griffe by the importable module name, not the
-        dash-normalized PyPI project name, when the two diverge."""
+    def test_resolves_module_name_when_project_name_differs(self, mock_gd_cls, tmp_path):
+        """Verify that lint loads the importable module when its name differs from the project"""
         mock_gd = _mock_docs()
         mock_gd._detect_package_name.return_value = "my-dist"
         mock_gd._resolve_importable_name.return_value = "actual_module"
@@ -1027,19 +996,16 @@ class TestRunLint:
         func_a = _make_griffe_obj(docstring="Documented.\n\nParameters\n----------\nx : int\n")
         mock_pkg = MagicMock()
         mock_pkg.members = {"func_a": func_a}
-        mock_griffe_load.return_value = mock_pkg
+        mock_gd._get_griffe_package.return_value = mock_pkg
 
         result = run_lint(tmp_path)
 
         mock_gd._resolve_importable_name.assert_called_once_with("my-dist")
-        mock_griffe_load.assert_called_once_with(
-            "actual_module", search_paths=mock_gd._griffe_search_paths.return_value
-        )
+        mock_gd._get_griffe_package.assert_called_once_with("actual_module")
         assert result.package_name == "actual_module"
 
-    @patch("griffe.load")
     @patch("great_docs.core.GreatDocs")
-    def test_selective_checks(self, mock_gd_cls, mock_griffe_load, tmp_path):
+    def test_selective_checks(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
         mock_gd._detect_package_name.return_value = "mypkg"
         mock_gd._detect_module_name.return_value = None
@@ -1054,21 +1020,20 @@ class TestRunLint:
 
         mock_pkg = MagicMock()
         mock_pkg.members = members
-        mock_griffe_load.return_value = mock_pkg
+        mock_gd._get_griffe_package.return_value = mock_pkg
 
-        # Only run docstrings check — should find no issue (func_a has a docstring)
+        # A documented function passes the presence check even when its style differs.
         result = run_lint(tmp_path, checks={"docstrings"})
 
         assert all(i.check != "style-mismatch" for i in result.issues)
 
-        # Only run style check — should find style mismatch
+        # The style check detects the mismatch independently of docstring presence.
         result = run_lint(tmp_path, checks={"style"})
 
         assert any(i.check == "style-mismatch" for i in result.issues)
 
-    @patch("griffe.load")
     @patch("great_docs.core.GreatDocs")
-    def test_config_check_runs_alone(self, mock_gd_cls, mock_griffe_load, tmp_path):
+    def test_config_check_runs_alone(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
         mock_gd._detect_package_name.return_value = "mypkg"
         mock_gd._normalize_package_name.return_value = "mypkg"
@@ -1080,7 +1045,7 @@ class TestRunLint:
         # func_a has no docstring, so the docstrings check would report it.
         mock_pkg = MagicMock()
         mock_pkg.members = {"func_a": _make_griffe_obj(docstring=None)}
-        mock_griffe_load.return_value = mock_pkg
+        mock_gd._get_griffe_package.return_value = mock_pkg
 
         result = run_lint(tmp_path, checks={"config"})
 
@@ -1094,9 +1059,8 @@ class TestRunLint:
 
         assert result.issues == []
 
-    @patch("griffe.load")
     @patch("great_docs.core.GreatDocs")
-    def test_no_exports(self, mock_gd_cls, mock_griffe_load, tmp_path):
+    def test_no_exports(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
         mock_gd._detect_package_name.return_value = "mypkg"
         mock_gd._normalize_package_name.return_value = "mypkg"
@@ -1106,22 +1070,21 @@ class TestRunLint:
 
         mock_pkg = MagicMock()
         mock_pkg.members = {}
-        mock_griffe_load.return_value = mock_pkg
+        mock_gd._get_griffe_package.return_value = mock_pkg
 
         result = run_lint(tmp_path)
 
         assert result.status == "pass"
         assert result.exports_count == 0
 
-    @patch("griffe.load")
     @patch("great_docs.core.GreatDocs")
-    def test_griffe_load_failure(self, mock_gd_cls, mock_griffe_load, tmp_path):
+    def test_griffe_load_failure(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
         mock_gd._detect_package_name.return_value = "mypkg"
         mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd_cls.return_value = mock_gd
 
-        mock_griffe_load.side_effect = Exception("Module not found")
+        mock_gd._get_griffe_package.side_effect = ImportError("Module not found")
 
         result = run_lint(tmp_path)
 
@@ -1152,9 +1115,8 @@ class TestJsonOutput:
 class TestRunLintQuiet:
     """Tests that exercise the quiet=True branches for stdout suppression."""
 
-    @patch("griffe.load")
     @patch("great_docs.core.GreatDocs")
-    def test_quiet_suppresses_output(self, mock_gd_cls, mock_griffe_load, tmp_path, capsys):
+    def test_quiet_suppresses_output(self, mock_gd_cls, tmp_path, capsys):
         mock_gd = _mock_docs()
         mock_gd._detect_package_name.return_value = "mypkg"
         mock_gd._normalize_package_name.return_value = "mypkg"
@@ -1165,7 +1127,7 @@ class TestRunLintQuiet:
         func_a = _make_griffe_obj(docstring="Documented.")
         mock_pkg = MagicMock()
         mock_pkg.members = {"func_a": func_a}
-        mock_griffe_load.return_value = mock_pkg
+        mock_gd._get_griffe_package.return_value = mock_pkg
 
         result = run_lint(tmp_path, quiet=True)
 
@@ -1187,42 +1149,13 @@ class TestRunLintQuiet:
         assert result.status == "fail"
 
     @patch("great_docs.core.GreatDocs")
-    def test_quiet_griffe_import_error_restores_stdout(self, mock_gd_cls, tmp_path):
+    def test_quiet_griffe_load_failure_restores_stdout(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
         mock_gd._detect_package_name.return_value = "mypkg"
         mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd_cls.return_value = mock_gd
 
-        import builtins
-        import sys
-
-        original_import = builtins.__import__
-        original_stdout = sys.stdout
-
-        def mock_import(name, *args, **kwargs):
-            if name == "griffe":
-                raise ImportError("No module named 'griffe'")
-            return original_import(name, *args, **kwargs)
-
-        with patch.dict("sys.modules", {"griffe": None}):
-            with patch("builtins.__import__", side_effect=mock_import):
-                result = run_lint(tmp_path, quiet=True)
-
-        assert sys.stdout is original_stdout
-        assert result.status == "fail"
-        assert any("griffe" in i.message for i in result.issues)
-
-    @patch("griffe.load")
-    @patch("great_docs.core.GreatDocs")
-    def test_quiet_griffe_load_failure_restores_stdout(
-        self, mock_gd_cls, mock_griffe_load, tmp_path
-    ):
-        mock_gd = _mock_docs()
-        mock_gd._detect_package_name.return_value = "mypkg"
-        mock_gd._normalize_package_name.return_value = "mypkg"
-        mock_gd_cls.return_value = mock_gd
-
-        mock_griffe_load.side_effect = RuntimeError("Cannot load")
+        mock_gd._get_griffe_package.side_effect = RuntimeError("Cannot load")
 
         import sys
 
