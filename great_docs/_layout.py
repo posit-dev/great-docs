@@ -117,6 +117,26 @@ class Layout:
         reserved = (self.build_dir, self.site_dir, self.cache_dir, self.freeze_dir)
         return any(path == location or location.is_relative_to(path) for location in reserved)
 
+    def generated_dirs(self) -> list[Path]:
+        """
+        List the directories that hold generated copies of authored files
+
+        These include the build, site, freeze and cache directories, plus every
+        historical version build: `great-docs-<tag>/` beside `great-docs/` in an
+        unmigrated project, or the whole `_quarto/` directory in a migrated project.
+
+        Returns
+        -------
+        :
+            The resolved directory paths.
+        """
+        dirs = [self.build_dir, self.site_dir, self.freeze_dir, self.cache_dir]
+        if self.source_dir == self.package_root:
+            dirs.extend(self.package_root.glob(f"{self.build_dir.name}-*"))
+        else:
+            dirs.append(self.build_dir.parent)
+        return [d.resolve() for d in dirs]
+
     def build_dir_for(self, tag: str, latest_tag: str) -> Path:
         """
         Derive the Quarto project directory for a version tag
