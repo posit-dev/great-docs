@@ -83,6 +83,7 @@ def build_mcp_reference(
         output_dir=build_dir / "reference" / "mcp",
         categories=config.mcp_categories or None,
         display_name=config.mcp_name,
+        language=config.lang,
     )
     if files:
         _ = reference.generate_mcp_manifest(
