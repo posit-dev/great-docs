@@ -2156,6 +2156,22 @@ class TestCheckPageDescriptions:
     def test_nothing_is_flagged_when_seo_is_disabled(self, tmp_path: Path):
         assert self._issues(tmp_path, seo=False) == []
 
+    def test_homepage_is_described_without_its_badges(self, tmp_path: Path):
+        from great_docs._checks.lint import _check_page_descriptions
+
+        docs = self._project(tmp_path)
+        (tmp_path / "logo-hero.svg").write_text("<svg/>")
+        (tmp_path / "README.md").write_text(
+            '<div align="center">\n\n[![CI](https://img.shields.io/ci)](https://ci)\n\n</div>\n\n'
+            f"{self.LONG}\n"
+        )
+        result = LintResult()
+
+        _check_page_descriptions(docs, tmp_path, result)
+
+        assert "README.md" not in {issue.symbol for issue in result.issues}
+        assert not docs.build_dir.exists()
+
 
 class TestCheckFrontMatter:
     """Warnings for Great Docs front matter values with unsupported types"""

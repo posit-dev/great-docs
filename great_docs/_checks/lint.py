@@ -1160,18 +1160,9 @@ def _check_page_descriptions(docs: GreatDocs, project_root: Path, result: LintRe
             continue
         if path == homepage:
             # The homepage is described after badges and hero elements are removed
-            if found := hero.find(config, docs.layout.source_dir, body):
-                html = hero.render(
-                    found,
-                    config,
-                    docs.layout,
-                    docs.build_dir,
-                    metadata=docs._get_package_metadata(),
-                    package_name=docs._detect_package_name(),
-                    pages=docs._page_map(),
-                )
-                if html and found.body is not None:
-                    body = found.body
+            found = hero.find(config, docs.layout.source_dir, body)
+            if found is not None and found.body is not None:
+                body = found.body
         citations = description.resolves_citations(front_matter, config)
         fallback = description.first_paragraph(body, citations=citations).fallback
         if fallback is None:
