@@ -15,7 +15,6 @@ from urllib.parse import unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
 
-from . import _proofread
 from ._build import freeze, outputs, quarto, serve, timings
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
@@ -31,6 +30,8 @@ from ._build.steps import (
     count_listed,
     run_steps,
 )
+from ._checks import proofread
+from ._checks.proofread import CheckedFile
 from ._content import publish
 from ._content.naming import (
     published_path,
@@ -42,7 +43,6 @@ from ._content.sections import source_dirs as section_source_dirs
 from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import Layout
-from ._proofread import CheckedFile
 from ._reference import discovery, probe
 from ._reference.discovery import Categories
 from ._remote import HttpRemote, Remote
@@ -13747,14 +13747,14 @@ anchor-sections: true
         results = docs.proofread(only_rules=["SpellCheck"])
         ```
         """
-        from ._harper import HarperError, HarperNotFoundError
+        from ._checks.harper import HarperError, HarperNotFoundError
 
-        files = _proofread.find_pages(self.layout) if include_docs else []
+        files = proofread.find_pages(self.layout) if include_docs else []
         if include_docstrings and (package_name := self._detect_package_name()):
             module = self._resolve_importable_name(package_name)
-            files += _proofread.find_modules(self.project_root, module)
+            files += proofread.find_modules(self.project_root, module)
 
-        options = _proofread.Options(
+        options = proofread.Options(
             dialect=dialect,
             words=custom_words or (),
             only_rules=only_rules or (),
@@ -13763,7 +13763,7 @@ anchor-sections: true
             default_ignores=not strict,
         )
         try:
-            return _proofread.check(
+            return proofread.check(
                 files,
                 self.project_root,
                 options,

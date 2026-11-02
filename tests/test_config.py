@@ -90,7 +90,7 @@ class TestGetRemoved:
         assert not hasattr(Config, "get")
 
     def test_lint_parser_read(self, tmp_project: Path):
-        # _lint reads the parser through subscript now
+        # Use the same parser lookup as linting.
         assert Config(tmp_project)["parser"] == "numpy"
 
 

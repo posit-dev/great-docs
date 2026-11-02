@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from great_docs._harper import (
+from great_docs._checks.harper import (
     HarperError,
     HarperFileResult,
     HarperLint,
@@ -377,22 +377,22 @@ def test_get_default_ignore_rules():
     assert len(rules) > 0
 
 
-@patch("great_docs._harper.shutil.which")
+@patch("great_docs._checks.harper.shutil.which")
 def test_find_harper_cli_from_path(mock_which):
     """Finds harper-cli on PATH."""
     mock_which.side_effect = lambda name: "/usr/bin/harper-cli" if name == "harper-cli" else None
     assert find_harper_cli() == "/usr/bin/harper-cli"
 
 
-@patch("great_docs._harper.shutil.which")
+@patch("great_docs._checks.harper.shutil.which")
 def test_find_harper_cli_alternative_name(mock_which):
     """Falls back to 'harper' if 'harper-cli' not found."""
     mock_which.side_effect = lambda name: "/usr/bin/harper" if name == "harper" else None
     assert find_harper_cli() == "/usr/bin/harper"
 
 
-@patch("great_docs._harper.shutil.which", return_value=None)
-@patch("great_docs._harper.Path.home")
+@patch("great_docs._checks.harper.shutil.which", return_value=None)
+@patch("great_docs._checks.harper.Path.home")
 def test_find_harper_cli_cargo_bin(mock_home, mock_which):
     """Falls back to ~/.cargo/bin/harper-cli."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -405,8 +405,8 @@ def test_find_harper_cli_cargo_bin(mock_home, mock_which):
         assert "harper-cli" in result
 
 
-@patch("great_docs._harper.shutil.which", return_value=None)
-@patch("great_docs._harper.Path.home")
+@patch("great_docs._checks.harper.shutil.which", return_value=None)
+@patch("great_docs._checks.harper.Path.home")
 def test_find_harper_cli_not_found(mock_home, mock_which):
     """Returns None when harper-cli is nowhere."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -414,46 +414,46 @@ def test_find_harper_cli_not_found(mock_home, mock_which):
         assert find_harper_cli() is None
 
 
-@patch("great_docs._harper.subprocess.run")
-@patch("great_docs._harper.find_harper_cli", return_value="/usr/bin/harper-cli")
+@patch("great_docs._checks.harper.subprocess.run")
+@patch("great_docs._checks.harper.find_harper_cli", return_value="/usr/bin/harper-cli")
 def test_get_harper_version_success(mock_find, mock_run):
     """Parses version from 'harper-cli 1.12.0' output."""
     mock_run.return_value = MagicMock(returncode=0, stdout="harper-cli 1.12.0\n")
     assert get_harper_version() == "1.12.0"
 
 
-@patch("great_docs._harper.subprocess.run")
-@patch("great_docs._harper.find_harper_cli", return_value="/usr/bin/harper-cli")
+@patch("great_docs._checks.harper.subprocess.run")
+@patch("great_docs._checks.harper.find_harper_cli", return_value="/usr/bin/harper-cli")
 def test_get_harper_version_no_space(mock_find, mock_run):
     """Returns raw output when no space in version string."""
     mock_run.return_value = MagicMock(returncode=0, stdout="1.12.0\n")
     assert get_harper_version() == "1.12.0"
 
 
-@patch("great_docs._harper.find_harper_cli", return_value=None)
+@patch("great_docs._checks.harper.find_harper_cli", return_value=None)
 def test_get_harper_version_not_installed(mock_find):
     """Returns None when harper-cli not installed."""
     assert get_harper_version() is None
 
 
-@patch("great_docs._harper.subprocess.run")
-@patch("great_docs._harper.find_harper_cli", return_value="/usr/bin/harper-cli")
+@patch("great_docs._checks.harper.subprocess.run")
+@patch("great_docs._checks.harper.find_harper_cli", return_value="/usr/bin/harper-cli")
 def test_get_harper_version_subprocess_error(mock_find, mock_run):
     """Returns None on subprocess error."""
     mock_run.side_effect = subprocess.SubprocessError("fail")
     assert get_harper_version() is None
 
 
-@patch("great_docs._harper.subprocess.run")
-@patch("great_docs._harper.find_harper_cli", return_value="/usr/bin/harper-cli")
+@patch("great_docs._checks.harper.subprocess.run")
+@patch("great_docs._checks.harper.find_harper_cli", return_value="/usr/bin/harper-cli")
 def test_get_harper_version_nonzero_exit(mock_find, mock_run):
     """Returns None on non-zero exit code."""
     mock_run.return_value = MagicMock(returncode=1, stdout="")
     assert get_harper_version() is None
 
 
-@patch("great_docs._harper.subprocess.run")
-@patch("great_docs._harper.find_harper_cli", return_value="/usr/bin/harper-cli")
+@patch("great_docs._checks.harper.subprocess.run")
+@patch("great_docs._checks.harper.find_harper_cli", return_value="/usr/bin/harper-cli")
 def test_run_harper_empty_output(mock_find, mock_run):
     """Returns empty list when harper produces no output."""
     mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
@@ -461,7 +461,7 @@ def test_run_harper_empty_output(mock_find, mock_run):
     assert results == []
 
 
-@patch("great_docs._harper.subprocess.run")
+@patch("great_docs._checks.harper.subprocess.run")
 def test_run_harper_json_results(mock_run):
     """Parses JSON output into HarperFileResult objects."""
     harper_output = json.dumps(
@@ -496,14 +496,14 @@ def test_run_harper_json_results(mock_run):
     assert results[0].lints[0].char_end == 24
 
 
-@patch("great_docs._harper.find_harper_cli", return_value=None)
+@patch("great_docs._checks.harper.find_harper_cli", return_value=None)
 def test_run_harper_not_installed(mock_find):
     """Raises HarperNotFoundError when harper-cli not available."""
     with pytest.raises(HarperNotFoundError):
         run_harper([Path("file.md")])
 
 
-@patch("great_docs._harper.subprocess.run")
+@patch("great_docs._checks.harper.subprocess.run")
 def test_run_harper_timeout(mock_run):
     """Raises HarperError on timeout."""
     mock_run.side_effect = subprocess.TimeoutExpired(cmd="harper-cli", timeout=30)
@@ -511,7 +511,7 @@ def test_run_harper_timeout(mock_run):
         run_harper([Path("file.md")], harper_path="/usr/bin/harper-cli")
 
 
-@patch("great_docs._harper.subprocess.run")
+@patch("great_docs._checks.harper.subprocess.run")
 def test_run_harper_os_error(mock_run):
     """Raises HarperError on OSError."""
     mock_run.side_effect = OSError("permission denied")
@@ -519,7 +519,7 @@ def test_run_harper_os_error(mock_run):
         run_harper([Path("file.md")], harper_path="/usr/bin/harper-cli")
 
 
-@patch("great_docs._harper.subprocess.run")
+@patch("great_docs._checks.harper.subprocess.run")
 def test_run_harper_invalid_json(mock_run):
     """Raises HarperError on invalid JSON output."""
     mock_run.return_value = MagicMock(returncode=0, stdout="not json{", stderr="")
@@ -527,7 +527,7 @@ def test_run_harper_invalid_json(mock_run):
         run_harper([Path("file.md")], harper_path="/usr/bin/harper-cli")
 
 
-@patch("great_docs._harper.subprocess.run")
+@patch("great_docs._checks.harper.subprocess.run")
 def test_run_harper_stderr_error(mock_run):
     """Raises HarperError when stderr has real errors (not Note: lines)."""
     mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="Error: file not found\n")
@@ -535,7 +535,7 @@ def test_run_harper_stderr_error(mock_run):
         run_harper([Path("file.md")], harper_path="/usr/bin/harper-cli")
 
 
-@patch("great_docs._harper.subprocess.run")
+@patch("great_docs._checks.harper.subprocess.run")
 def test_run_harper_with_user_dict(mock_run):
     """User dictionary path is added to command."""
     mock_run.return_value = MagicMock(returncode=0, stdout="[]", stderr="")
@@ -549,7 +549,7 @@ def test_run_harper_with_user_dict(mock_run):
     assert "/tmp/dict.txt" in cmd
 
 
-@patch("great_docs._harper.subprocess.run")
+@patch("great_docs._checks.harper.subprocess.run")
 def test_run_harper_on_text_json_results(mock_run):
     """Parses JSON output into HarperLint objects."""
     harper_output = json.dumps(
@@ -580,7 +580,7 @@ def test_run_harper_on_text_json_results(mock_run):
     assert lints[0].file == "<stdin>"
 
 
-@patch("great_docs._harper.subprocess.run")
+@patch("great_docs._checks.harper.subprocess.run")
 def test_run_harper_on_text_empty(mock_run):
     """Returns empty list when no output."""
     mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
@@ -588,14 +588,14 @@ def test_run_harper_on_text_empty(mock_run):
     assert lints == []
 
 
-@patch("great_docs._harper.find_harper_cli", return_value=None)
+@patch("great_docs._checks.harper.find_harper_cli", return_value=None)
 def test_run_harper_on_text_not_installed(mock_find):
     """Raises HarperNotFoundError when harper-cli not available."""
     with pytest.raises(HarperNotFoundError):
         run_harper_on_text("Some text.")
 
 
-@patch("great_docs._harper.subprocess.run")
+@patch("great_docs._checks.harper.subprocess.run")
 def test_run_harper_on_text_with_user_dict(mock_run):
     """User dictionary path is added to command for text checking."""
     mock_run.return_value = MagicMock(returncode=0, stdout="[]", stderr="")
@@ -608,7 +608,7 @@ def test_run_harper_on_text_with_user_dict(mock_run):
     assert "--user-dict-path" in cmd
 
 
-@patch("great_docs._harper.subprocess.run")
+@patch("great_docs._checks.harper.subprocess.run")
 def test_run_harper_on_text_timeout(mock_run):
     """Raises HarperError on timeout."""
     mock_run.side_effect = subprocess.TimeoutExpired(cmd="harper-cli", timeout=30)
@@ -616,7 +616,7 @@ def test_run_harper_on_text_timeout(mock_run):
         run_harper_on_text("Text.", harper_path="/usr/bin/harper-cli")
 
 
-@patch("great_docs._harper.find_harper_cli", return_value=None)
+@patch("great_docs._checks.harper.find_harper_cli", return_value=None)
 def test_check_harper_available_not_installed(mock_find):
     """Returns (False, message) when harper not found."""
     available, msg = check_harper_available()
@@ -624,8 +624,8 @@ def test_check_harper_available_not_installed(mock_find):
     assert "not installed" in msg
 
 
-@patch("great_docs._harper.get_harper_version", return_value="1.12.0")
-@patch("great_docs._harper.find_harper_cli", return_value="/usr/bin/harper-cli")
+@patch("great_docs._checks.harper.get_harper_version", return_value="1.12.0")
+@patch("great_docs._checks.harper.find_harper_cli", return_value="/usr/bin/harper-cli")
 def test_check_harper_available_with_version(mock_find, mock_version):
     """Returns (True, version_string) when installed."""
     available, msg = check_harper_available()
@@ -633,8 +633,8 @@ def test_check_harper_available_with_version(mock_find, mock_version):
     assert "1.12.0" in msg
 
 
-@patch("great_docs._harper.get_harper_version", return_value=None)
-@patch("great_docs._harper.find_harper_cli", return_value="/usr/bin/harper-cli")
+@patch("great_docs._checks.harper.get_harper_version", return_value=None)
+@patch("great_docs._checks.harper.find_harper_cli", return_value="/usr/bin/harper-cli")
 def test_check_harper_available_unknown_version(mock_find, mock_version):
     """Returns (True, unknown) when version can't be determined."""
     available, msg = check_harper_available()

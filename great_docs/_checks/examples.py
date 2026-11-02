@@ -12,10 +12,10 @@ from html import unescape
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from ._build import quarto
+from .._build import quarto
 
 if TYPE_CHECKING:
-    from ._layout import Layout
+    from .._layout import Layout
 
 # Reuse the fence/hashpipe regexes from _mock_code
 _EXEC_FENCE_RE = re.compile(r"^```\{python\}\s*$")

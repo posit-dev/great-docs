@@ -1032,10 +1032,10 @@ def test_lint_help():
     assert "--json" in result.output
 
 
-@patch("great_docs._lint.run_lint")
+@patch("great_docs._checks.lint.run_lint")
 def test_lint_no_issues(mock_lint, tmp_path, monkeypatch):
     """lint with no issues prints success."""
-    from great_docs._lint import LintResult
+    from great_docs._checks.lint import LintResult
 
     mock_lint.return_value = LintResult(issues=[], package_name="mypkg", exports_count=10)
     runner = CliRunner()
@@ -1045,10 +1045,10 @@ def test_lint_no_issues(mock_lint, tmp_path, monkeypatch):
     assert "passed" in result.output
 
 
-@patch("great_docs._lint.run_lint")
+@patch("great_docs._checks.lint.run_lint")
 def test_lint_with_errors(mock_lint, tmp_path, monkeypatch):
     """lint with errors exits non-zero."""
-    from great_docs._lint import LintIssue, LintResult
+    from great_docs._checks.lint import LintIssue, LintResult
 
     mock_lint.return_value = LintResult(
         issues=[
@@ -1069,10 +1069,10 @@ def test_lint_with_errors(mock_lint, tmp_path, monkeypatch):
     assert "error" in result.output.lower()
 
 
-@patch("great_docs._lint.run_lint")
+@patch("great_docs._checks.lint.run_lint")
 def test_lint_json_output(mock_lint, tmp_path, monkeypatch):
     """lint --json outputs valid JSON."""
-    from great_docs._lint import LintIssue, LintResult
+    from great_docs._checks.lint import LintIssue, LintResult
 
     mock_lint.return_value = LintResult(
         issues=[
@@ -1095,10 +1095,10 @@ def test_lint_json_output(mock_lint, tmp_path, monkeypatch):
     assert len(data["issues"]) == 1
 
 
-@patch("great_docs._lint.run_lint")
+@patch("great_docs._checks.lint.run_lint")
 def test_lint_warnings_only(mock_lint, tmp_path, monkeypatch):
     """lint with only warnings exits 0."""
-    from great_docs._lint import LintIssue, LintResult
+    from great_docs._checks.lint import LintIssue, LintResult
 
     mock_lint.return_value = LintResult(
         issues=[
@@ -1119,7 +1119,7 @@ def test_lint_warnings_only(mock_lint, tmp_path, monkeypatch):
     assert "warning" in result.output.lower()
 
 
-@patch("great_docs._lint.run_lint", side_effect=RuntimeError("boom"))
+@patch("great_docs._checks.lint.run_lint", side_effect=RuntimeError("boom"))
 def test_lint_exception(mock_lint, tmp_path, monkeypatch):
     """lint handles runtime errors gracefully."""
     runner = CliRunner()
@@ -1128,7 +1128,7 @@ def test_lint_exception(mock_lint, tmp_path, monkeypatch):
     assert result.exit_code == 1
 
 
-@patch("great_docs._lint.run_lint", side_effect=RuntimeError("boom"))
+@patch("great_docs._checks.lint.run_lint", side_effect=RuntimeError("boom"))
 def test_lint_exception_json(mock_lint, tmp_path, monkeypatch):
     """lint --json returns error JSON on exception."""
     runner = CliRunner()
@@ -1139,10 +1139,10 @@ def test_lint_exception_json(mock_lint, tmp_path, monkeypatch):
     assert "boom" in data["error"]
 
 
-@patch("great_docs._lint.run_lint")
+@patch("great_docs._checks.lint.run_lint")
 def test_lint_with_check_filter(mock_lint, tmp_path, monkeypatch):
     """lint --check docstrings passes filter to run_lint."""
-    from great_docs._lint import LintResult
+    from great_docs._checks.lint import LintResult
 
     mock_lint.return_value = LintResult(issues=[], package_name="mypkg", exports_count=5)
     runner = CliRunner()
@@ -1730,7 +1730,7 @@ def test_api_diff_graph_no_snapshot(mock_diff, mock_snap, tmp_path, monkeypatch)
     assert "snapshot" in result.output.lower()
 
 
-@patch("great_docs._harper.check_harper_available", return_value=(False, "not installed"))
+@patch("great_docs._checks.harper.check_harper_available", return_value=(False, "not installed"))
 def test_proofread_harper_not_available(mock_check, tmp_path, monkeypatch):
     """proofread exits with error when harper is not installed."""
     runner = CliRunner()
@@ -1739,8 +1739,8 @@ def test_proofread_harper_not_available(mock_check, tmp_path, monkeypatch):
     assert result.exit_code != 0
 
 
-@patch("great_docs._harper.run_harper", return_value=[])
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_no_files(mock_check, mock_harper, tmp_path, monkeypatch):
     """proofread with no docs files exits cleanly."""
     runner = CliRunner()
@@ -1750,11 +1750,11 @@ def test_proofread_no_files(mock_check, mock_harper, tmp_path, monkeypatch):
     assert "No documentation files" in result.output or result.exit_code == 0
 
 
-@patch("great_docs._harper.run_harper")
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper")
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_md_files(mock_check, mock_run, tmp_path, monkeypatch):
     """proofread checks .md files."""
-    from great_docs._harper import HarperFileResult, HarperLint
+    from great_docs._checks.harper import HarperFileResult, HarperLint
 
     mock_run.return_value = [
         HarperFileResult(
@@ -1783,11 +1783,11 @@ def test_proofread_md_files(mock_check, mock_run, tmp_path, monkeypatch):
     assert "tset" in result.output
 
 
-@patch("great_docs._harper.run_harper")
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper")
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_json(mock_check, mock_run, tmp_path, monkeypatch):
     """proofread --json-output produces valid JSON."""
-    from great_docs._harper import HarperFileResult, HarperLint
+    from great_docs._checks.harper import HarperFileResult, HarperLint
 
     mock_run.return_value = [
         HarperFileResult(
@@ -1816,11 +1816,11 @@ def test_proofread_json(mock_check, mock_run, tmp_path, monkeypatch):
     assert data["dialect"] == "us"
 
 
-@patch("great_docs._harper.run_harper")
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper")
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_compact(mock_check, mock_run, tmp_path, monkeypatch):
     """proofread --compact produces GCC-style output."""
-    from great_docs._harper import HarperFileResult, HarperLint
+    from great_docs._checks.harper import HarperFileResult, HarperLint
 
     mock_run.return_value = [
         HarperFileResult(
@@ -1848,8 +1848,8 @@ def test_proofread_compact(mock_check, mock_run, tmp_path, monkeypatch):
     assert "SpellCheck" in result.output
 
 
-@patch("great_docs._harper.run_harper", return_value=[])
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_no_issues(mock_check, mock_run, tmp_path, monkeypatch):
     """proofread with no issues exits 0 and shows success."""
     runner = CliRunner()
@@ -1861,11 +1861,11 @@ def test_proofread_no_issues(mock_check, mock_run, tmp_path, monkeypatch):
     assert "No issues" in result.output
 
 
-@patch("great_docs._harper.run_harper")
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper")
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_verbose(mock_check, mock_run, tmp_path, monkeypatch):
     """proofread --verbose shows detailed output."""
-    from great_docs._harper import HarperFileResult, HarperLint
+    from great_docs._checks.harper import HarperFileResult, HarperLint
 
     mock_run.return_value = [
         HarperFileResult(
@@ -1897,11 +1897,11 @@ def test_proofread_verbose(mock_check, mock_run, tmp_path, monkeypatch):
     assert "Did you mean" in result.output
 
 
-@patch("great_docs._harper.run_harper")
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper")
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_max_issues_exceeded(mock_check, mock_run, tmp_path, monkeypatch):
     """proofread --max-issues exits 1 when threshold exceeded."""
-    from great_docs._harper import HarperFileResult, HarperLint
+    from great_docs._checks.harper import HarperFileResult, HarperLint
 
     mock_run.return_value = [
         HarperFileResult(
@@ -1933,12 +1933,12 @@ def test_proofread_max_issues_exceeded(mock_check, mock_run, tmp_path, monkeypat
     assert "exceeds" in result.output
 
 
-@patch("great_docs._harper.run_harper_on_text")
-@patch("great_docs._harper.run_harper", return_value=[])
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper_on_text")
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_qmd_files(mock_check, mock_run_files, mock_run_text, tmp_path, monkeypatch):
     """proofread processes .qmd files via text extraction."""
-    from great_docs._harper import HarperLint
+    from great_docs._checks.harper import HarperLint
 
     mock_run_text.return_value = [
         HarperLint(
@@ -1961,8 +1961,8 @@ def test_proofread_qmd_files(mock_check, mock_run_files, mock_run_text, tmp_path
     assert result.exit_code == 1
 
 
-@patch("great_docs._harper.run_harper", return_value=[])
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_strict_mode(mock_check, mock_run, tmp_path, monkeypatch):
     """proofread --strict disables smart defaults."""
     runner = CliRunner()
@@ -1976,8 +1976,8 @@ def test_proofread_strict_mode(mock_check, mock_run, tmp_path, monkeypatch):
     assert result.exit_code == 0
 
 
-@patch("great_docs._harper.run_harper", return_value=[])
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_custom_words(mock_check, mock_run, tmp_path, monkeypatch):
     """proofread -d word adds words to dictionary."""
     runner = CliRunner()
@@ -2000,8 +2000,8 @@ def test_proofread_custom_words(mock_check, mock_run, tmp_path, monkeypatch):
     assert result.exit_code == 0
 
 
-@patch("great_docs._harper.run_harper", return_value=[])
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_dictionary_file(mock_check, mock_run, tmp_path, monkeypatch):
     """proofread --dictionary-file loads words from file."""
     runner = CliRunner()
@@ -2023,8 +2023,8 @@ def test_proofread_dictionary_file(mock_check, mock_run, tmp_path, monkeypatch):
     assert result.exit_code == 0
 
 
-@patch("great_docs._harper.run_harper", return_value=[])
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_spelling_only(mock_check, mock_run, tmp_path, monkeypatch):
     """proofread --spelling-only passes SpellCheck filter."""
     runner = CliRunner()
@@ -2038,8 +2038,8 @@ def test_proofread_spelling_only(mock_check, mock_run, tmp_path, monkeypatch):
     assert result.exit_code == 0
 
 
-@patch("great_docs._harper.run_harper", return_value=[])
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_grammar_only(mock_check, mock_run, tmp_path, monkeypatch):
     """proofread --grammar-only excludes SpellCheck."""
     runner = CliRunner()
@@ -2053,8 +2053,8 @@ def test_proofread_grammar_only(mock_check, mock_run, tmp_path, monkeypatch):
     assert result.exit_code == 0
 
 
-@patch("great_docs._harper.run_harper", return_value=[])
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_auto_discover(mock_check, mock_run, tmp_path, monkeypatch):
     """proofread without files auto-discovers user_guide and recipes."""
     runner = CliRunner()
@@ -2070,11 +2070,11 @@ def test_proofread_auto_discover(mock_check, mock_run, tmp_path, monkeypatch):
     assert result.exit_code == 0
 
 
-@patch("great_docs._harper.run_harper")
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper")
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_suggestion_format(mock_check, mock_run, tmp_path, monkeypatch):
     """proofread shows cleaned suggestion text."""
-    from great_docs._harper import HarperFileResult, HarperLint
+    from great_docs._checks.harper import HarperFileResult, HarperLint
 
     mock_run.return_value = [
         HarperFileResult(
@@ -2102,8 +2102,8 @@ def test_proofread_suggestion_format(mock_check, mock_run, tmp_path, monkeypatch
     assert "test" in result.output
 
 
-@patch("great_docs._harper.run_harper", return_value=[])
-@patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
 def test_proofread_only_and_ignore_rules(mock_check, mock_run, tmp_path, monkeypatch):
     """proofread --only and --ignore rules are passed through."""
     runner = CliRunner()
@@ -3169,7 +3169,7 @@ class TestProofreadMissedBranches:
         (user_guide / "page.qmd").write_text("This text has no errors.")
 
     @patch("great_docs.cli.GreatDocs")
-    @patch("great_docs._harper.run_harper")
+    @patch("great_docs._checks.harper.run_harper")
     def test_auto_discover_user_guide(self, mock_harper, mock_gd_cls, tmp_path, monkeypatch):
         """Without --file, auto-discovers user_guide/*.qmd."""
         monkeypatch.chdir(tmp_path)
@@ -3186,7 +3186,7 @@ class TestProofreadMissedBranches:
         assert result.exit_code in (0, 1, 3)  # 3 = harper not found, 1 = issues found
 
     @patch("great_docs.cli.GreatDocs")
-    @patch("great_docs._harper.run_harper")
+    @patch("great_docs._checks.harper.run_harper")
     def test_dictionary_file_read(self, mock_harper, mock_gd_cls, tmp_path, monkeypatch):
         """--dictionary file is read line by line, skipping comments."""
         monkeypatch.chdir(tmp_path)
@@ -3205,7 +3205,7 @@ class TestProofreadMissedBranches:
         assert result.exit_code in (0, 3)
 
     @patch("great_docs.cli.GreatDocs")
-    @patch("great_docs._harper.run_harper")
+    @patch("great_docs._checks.harper.run_harper")
     def test_spelling_only_flag(self, mock_harper, mock_gd_cls, tmp_path, monkeypatch):
         """--spelling-only sets only_rules=["SpellCheck"]."""
         monkeypatch.chdir(tmp_path)
@@ -3221,11 +3221,11 @@ class TestProofreadMissedBranches:
         )
         assert result.exit_code in (0, 3)
 
-    @patch("great_docs._harper.run_harper_on_text")
-    @patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.0"))
+    @patch("great_docs._checks.harper.run_harper_on_text")
+    @patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.0"))
     def test_qmd_file_harper_error_handled(self, mock_check, mock_text, tmp_path, monkeypatch):
         """Check the remaining `.qmd` pages after a Harper failure on one page"""
-        from great_docs._harper import HarperError, HarperLint
+        from great_docs._checks.harper import HarperError, HarperLint
 
         monkeypatch.chdir(tmp_path)
         self._make_project(tmp_path)
@@ -3243,7 +3243,7 @@ class TestProofreadMissedBranches:
         assert "Spelling::SpellCheck: Misspelled" in result.output
 
     @patch("great_docs.cli.GreatDocs")
-    @patch("great_docs._harper.run_harper")
+    @patch("great_docs._checks.harper.run_harper")
     def test_verbose_no_issues_shows_checkmark(
         self, mock_harper, mock_gd_cls, tmp_path, monkeypatch
     ):
@@ -3254,7 +3254,7 @@ class TestProofreadMissedBranches:
         mock_docs.project_root = tmp_path
         mock_gd_cls.return_value = mock_docs
 
-        from great_docs._harper import HarperFileResult
+        from great_docs._checks.harper import HarperFileResult
 
         mock_harper.return_value = [
             HarperFileResult(file="user_guide/page.qmd", lint_count=0, lints=[], error=None)
@@ -3350,12 +3350,12 @@ class TestSeoMissedBranches:
 
 
 class TestLintInfoOutput:
-    @patch("great_docs._lint.run_lint")
+    @patch("great_docs._checks.lint.run_lint")
     def test_info_severity_output(self, mock_lint, tmp_path, monkeypatch):
         """Issues with severity='info' emit ℹ️ icon and are included in output."""
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-        from great_docs._lint import LintIssue, LintResult
+        from great_docs._checks.lint import LintIssue, LintResult
 
         result_obj = LintResult(
             package_name="pkg",
@@ -3368,12 +3368,12 @@ class TestLintInfoOutput:
         assert result.exit_code == 0
         assert "info" in result.output.lower() or "ℹ" in result.output or "Badge" in result.output
 
-    @patch("great_docs._lint.run_lint")
+    @patch("great_docs._checks.lint.run_lint")
     def test_no_entries_line(self, mock_lint, tmp_path, monkeypatch):
         """An empty check result shows '(no entries)'."""
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-        from great_docs._lint import LintResult
+        from great_docs._checks.lint import LintResult
 
         mock_lint.return_value = LintResult(package_name="pkg", exports_count=0, issues=[])
         runner = CliRunner()
@@ -3651,7 +3651,7 @@ class TestTermshowMissedBranches:
 
 class TestProofreadDictFileException:
     @patch("great_docs.cli.GreatDocs")
-    @patch("great_docs._harper.run_harper")
+    @patch("great_docs._checks.harper.run_harper")
     def test_dict_file_read_exception_shows_warning(
         self, mock_harper, mock_gd_cls, tmp_path, monkeypatch
     ):
@@ -4099,8 +4099,8 @@ class TestSetupGithubPagesPythonFloor:
 
 
 class TestProofreadReadmeAutoDiscover:
-    @patch("great_docs._harper.run_harper", return_value=[])
-    @patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.0"))
+    @patch("great_docs._checks.harper.run_harper", return_value=[])
+    @patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.0"))
     def test_readme_auto_discovered(self, mock_check, mock_run, tmp_path, monkeypatch):
         """README.md is auto-discovered when no files specified."""
         monkeypatch.chdir(tmp_path)
@@ -4117,8 +4117,8 @@ class TestProofreadReadmeAutoDiscover:
 
 
 class TestProofreadDictionaryFileError:
-    @patch("great_docs._harper.run_harper", return_value=[])
-    @patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.0"))
+    @patch("great_docs._checks.harper.run_harper", return_value=[])
+    @patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.0"))
     def test_dictionary_file_read_error(self, mock_check, mock_run, tmp_path, monkeypatch):
         """Exception reading dictionary file emits warning."""
         monkeypatch.chdir(tmp_path)
@@ -4156,8 +4156,8 @@ class TestProofreadDictionaryFileError:
 
 
 class TestProofreadIncludeDocstrings:
-    @patch("great_docs._harper.run_harper", return_value=[])
-    @patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.0"))
+    @patch("great_docs._checks.harper.run_harper", return_value=[])
+    @patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.0"))
     def test_include_docstrings_finds_package_files(
         self, mock_check, mock_run, tmp_path, monkeypatch
     ):
@@ -4176,8 +4176,8 @@ class TestProofreadIncludeDocstrings:
         checked = [Path(f) for call in mock_run.call_args_list for f in call.args[0]]
         assert tmp_path / "pkg" / "__init__.py" in checked
 
-    @patch("great_docs._harper.run_harper")
-    @patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.0"))
+    @patch("great_docs._checks.harper.run_harper")
+    @patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.0"))
     def test_include_docstrings_checks_py_files(self, mock_check, mock_run, tmp_path, monkeypatch):
         """--include-docstrings causes .py files to be checked."""
         monkeypatch.chdir(tmp_path)
@@ -4201,8 +4201,8 @@ class TestProofreadIncludeDocstrings:
         # run_harper should be called for py files
         assert mock_run.call_count >= 1
 
-    @patch("great_docs._harper.run_harper")
-    @patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.0"))
+    @patch("great_docs._checks.harper.run_harper")
+    @patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.0"))
     def test_include_docstrings_verbose(self, mock_check, mock_run, tmp_path, monkeypatch):
         """--include-docstrings --verbose shows Python file count."""
         monkeypatch.chdir(tmp_path)
@@ -4228,8 +4228,8 @@ class TestProofreadIncludeDocstrings:
 
 
 class TestProofreadTempDictCleanup:
-    @patch("great_docs._harper.run_harper", return_value=[])
-    @patch("great_docs._harper.check_harper_available", return_value=(True, "harper 1.0"))
+    @patch("great_docs._checks.harper.run_harper", return_value=[])
+    @patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.0"))
     def test_cleanup_exception_swallowed(self, mock_check, mock_run, tmp_path, monkeypatch):
         """Exception during temp dict cleanup is swallowed."""
         monkeypatch.chdir(tmp_path)
@@ -4256,7 +4256,7 @@ class TestProofreadTempDictCleanup:
 class TestProofreadExceptionHandlers:
     def test_harper_not_found_error(self, tmp_path, monkeypatch):
         """HarperNotFoundError exits with code 3."""
-        from great_docs._harper import HarperNotFoundError
+        from great_docs._checks.harper import HarperNotFoundError
 
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
@@ -4264,7 +4264,7 @@ class TestProofreadExceptionHandlers:
 
         runner = CliRunner()
         with patch(
-            "great_docs._harper.check_harper_available",
+            "great_docs._checks.harper.check_harper_available",
             side_effect=HarperNotFoundError("not installed"),
         ):
             result = runner.invoke(
@@ -4275,7 +4275,7 @@ class TestProofreadExceptionHandlers:
 
     def test_harper_error(self, tmp_path, monkeypatch):
         """HarperError exits with code 2."""
-        from great_docs._harper import HarperError
+        from great_docs._checks.harper import HarperError
 
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
@@ -4283,7 +4283,7 @@ class TestProofreadExceptionHandlers:
 
         runner = CliRunner()
         with patch(
-            "great_docs._harper.check_harper_available",
+            "great_docs._checks.harper.check_harper_available",
             side_effect=HarperError("failed"),
         ):
             result = runner.invoke(
@@ -4300,7 +4300,7 @@ class TestProofreadExceptionHandlers:
 
         runner = CliRunner()
         with patch(
-            "great_docs._harper.check_harper_available",
+            "great_docs._checks.harper.check_harper_available",
             side_effect=RuntimeError("unexpected"),
         ):
             result = runner.invoke(

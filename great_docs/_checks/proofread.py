@@ -14,13 +14,13 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from . import _harper
+from . import harper
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from ._harper import HarperFileResult, HarperLint
-    from ._layout import Layout
+    from .._layout import Layout
+    from .harper import HarperFileResult, HarperLint
 
 __all__ = ["CheckedFile", "Options", "check", "find_modules", "find_pages"]
 
@@ -150,9 +150,9 @@ def check(
 
     Raises
     ------
-    great_docs._harper.HarperNotFoundError
+    great_docs._checks.harper.HarperNotFoundError
         If `harper-cli` is not installed.
-    great_docs._harper.HarperError
+    great_docs._checks.harper.HarperError
         If `harper-cli` fails on a batch of `.md` or `.py` files. A `HarperError` on a
         `.qmd` page is returned as that page's `error`.
     """
@@ -161,24 +161,24 @@ def check(
     py_files = [f for f in files if f.suffix == ".py"]
 
     words = [
-        *(_harper.get_builtin_dictionary() if options.builtin_dictionary else []),
+        *(harper.get_builtin_dictionary() if options.builtin_dictionary else []),
         *options.words,
     ]
     ignore = [
-        *(_harper.get_default_ignore_rules() if options.default_ignores else []),
+        *(harper.get_default_ignore_rules() if options.default_ignores else []),
         *options.ignore_rules,
     ]
     dictionary = _write_dictionary(words) if words else None
     only = list(options.only_rules) or None
     run_files = partial(
-        _harper.run_harper,
+        harper.run_harper,
         dialect=options.dialect,
         user_dict_path=dictionary,
         ignore_rules=ignore or None,
         only_rules=only,
     )
     run_text = partial(
-        _harper.run_harper_on_text,
+        harper.run_harper_on_text,
         dialect=options.dialect,
         user_dict_path=dictionary,
         ignore_rules=ignore or None,
@@ -267,14 +267,14 @@ def _check_page(
 
     Raises
     ------
-    great_docs._harper.HarperNotFoundError
+    great_docs._checks.harper.HarperNotFoundError
         If `harper-cli` is missing. This error stops the run and is not stored per page.
     """
     path = str(page.relative_to(root))
     try:
-        prose, line_map = _harper.extract_prose_from_markdown(page.read_text(encoding="utf-8"))
+        prose, line_map = harper.extract_prose_from_markdown(page.read_text(encoding="utf-8"))
         issues = run_text(prose)
-    except (OSError, UnicodeDecodeError, _harper.HarperError) as e:
+    except (OSError, UnicodeDecodeError, harper.HarperError) as e:
         # HarperNotFoundError passes through: a missing `harper-cli` prevents the whole run.
         return CheckedFile(path, (), str(e))
 
