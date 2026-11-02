@@ -1,0 +1,186 @@
+"""
+A page of package dependencies, version constraints and latest PyPI release dates
+"""
+
+from __future__ import annotations
+
+import html
+from typing import TYPE_CHECKING, Any
+
+from ..._apiref._render._tables import html_table
+from ..._icons import get_icon_svg
+from ..._translations import get_translation
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+    from pathlib import Path
+
+    from ..._remote import Remote
+    from ...config import Config
+
+__all__ = ["FILENAME", "write_page"]
+
+FILENAME = "package-info.qmd"
+
+# Column widths in percent, in display order: package, version, last published and PyPI
+# link. Tables with any environment markers insert a marker column after the version.
+_COL_WIDTHS = (35, 30, 25, 10)
+_COL_WIDTHS_WITH_MARKER = (28, 24, 20, 20, 8)
+
+
+def write_page(
+    config: Config,
+    build_dir: Path,
+    metadata: Mapping[str, Any],
+    remote: Remote,
+    *,
+    report: Callable[[str], None],
+) -> Path | None:
+    """
+    Write the package-info page listing runtime and optional dependencies
+
+    The page has a table of runtime dependencies, a table for each non-empty optional
+    dependency group and a summary of dependency counts and the Python requirement.
+    Empty optional groups show a message instead of a table. Each row shows the version
+    constraint, the environment marker when the table has any, the date of the package's
+    latest PyPI release and a link to its PyPI page.
+
+    Parameters
+    ----------
+    config
+        The Great Docs configuration. No page is written when `package_info_page` is off
+        or the project has no Python component.
+    build_dir
+        The Quarto project directory to write the page into.
+    metadata
+        The project metadata, read for `dependencies`, `optional_dependencies_full` and
+        `requires_python`. No page is written when all three are empty.
+    remote
+        The source of PyPI release dates, queried only when the page is written. A
+        package with no known date shows a dash.
+    report
+        A callback that receives the line announcing the written page.
+
+    Returns
+    -------
+    :
+        The path of the written page, or `None` if no page was written.
+    """
+    if not config.package_info_page or not config.is_python_project:
+        return None
+
+    runtime_deps: list[dict[str, Any]] = metadata.get("dependencies", [])
+    optional_deps: dict[str, list[dict[str, Any]]] = metadata.get("optional_dependencies_full", {})
+    requires_python: str = metadata.get("requires_python", "")
+
+    if not runtime_deps and not optional_deps and not requires_python:
+        return None
+
+    lang = config.lang
+    title = get_translation("package_info", lang)
+    runtime_label = get_translation("runtime_dependencies", lang)
+    optional_label = get_translation("optional_dependencies", lang)
+    summary_label = get_translation("dependency_summary", lang)
+    package_header = get_translation("dep_package", lang)
+    version_header = get_translation("dep_version_constraint", lang)
+    marker_header = get_translation("dep_environment_marker", lang)
+
+    link_svg = get_icon_svg("external-link", size=14, css_class="")
+
+    all_dep_names = {d["name"] for d in runtime_deps}
+    for deps in optional_deps.values():
+        all_dep_names |= {d["name"] for d in deps}
+    pypi_dates = remote.pypi_release_dates(all_dep_names)
+
+    def dependency_table(deps: list[dict[str, Any]]) -> str:
+        """
+        Format a dependency table with PyPI release dates and links
+
+        Parameters
+        ----------
+        deps
+            The dependencies for this table, with names, version constraints and optional
+            environment markers.
+
+        Returns
+        -------
+        :
+            The HTML table, with a marker column only if a dependency in this table has
+            an environment marker.
+        """
+        has_markers = any(d.get("marker") for d in deps)
+        rows: list[list[str]] = []
+        for dep in deps:
+            name = dep["name"]
+            spec = f"<code>{html.escape(dep['specifier'])}</code>" if dep["specifier"] else "—"
+            date_str = html.escape(pypi_dates.get(name, "—"))
+            pypi_cell = (
+                f'<a href="https://pypi.org/project/{html.escape(name)}/"'
+                f' class="gd-pypi-link">{link_svg}</a>'
+            )
+            pkg_cell = f'<code class="gd-no-link">{html.escape(name)}</code>'
+            if has_markers:
+                marker = f"<code>{html.escape(dep['marker'])}</code>" if dep.get("marker") else ""
+                rows.append([pkg_cell, spec, marker, date_str, pypi_cell])
+            else:
+                rows.append([pkg_cell, spec, date_str, pypi_cell])
+
+        if has_markers:
+            headers = [package_header, version_header, marker_header, "Last Published", "PyPI"]
+            col_widths = _COL_WIDTHS_WITH_MARKER
+        else:
+            headers = [package_header, version_header, "Last Published", "PyPI"]
+            col_widths = _COL_WIDTHS
+        return html_table(rows, headers=headers, col_widths=col_widths, table_class="gd-dep-table")
+
+    sections: list[str] = []
+
+    if runtime_deps:
+        sections.append(f"## {runtime_label}\n")
+        sections.append(dependency_table(runtime_deps))
+        sections.append("")
+
+    if optional_deps:
+        sections.append(f"## {optional_label}\n")
+        for group_name, group_deps in sorted(optional_deps.items()):
+            sections.append(f"### `{group_name}`\n")
+            if group_deps:
+                sections.append(dependency_table(group_deps))
+                sections.append("")
+            else:
+                sections.append("*No dependencies declared.*\n")
+
+    sections.append(f"## {summary_label}\n")
+
+    all_opt_names = {dep["name"] for deps in optional_deps.values() for dep in deps}
+    all_names = {dep["name"] for dep in runtime_deps} | all_opt_names
+
+    if requires_python:
+        requires_label = get_translation("requires_python", lang)
+        sections.append(f"- **{requires_label}:** Python `{requires_python}`")
+    sections.append(f"- **{runtime_label}:** {len(runtime_deps)}")
+    if optional_deps:
+        sections.append(
+            f"- **{optional_label}:** {len(optional_deps)} groups"
+            f" ({len(all_opt_names)} unique packages)"
+        )
+    sections.append(f"- **Total unique dependencies:** {len(all_names)}")
+    sections.append("")
+
+    body = "\n".join(sections)
+
+    content = f"""---
+title: "{title}"
+toc: true
+sidebar: false
+body-classes: "gd-package-info-page"
+anchor-sections: true
+---
+
+{body}
+"""
+
+    path = build_dir / FILENAME
+    _ = path.write_text(content, encoding="utf-8")
+    report(f"Created {path}")
+    return path
