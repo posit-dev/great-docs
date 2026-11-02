@@ -52,7 +52,6 @@ _BUILD_METHODS: tuple[str, ...] = (
     "_process_user_guide",
     "_process_sections",
     "_process_custom_pages",
-    "_process_tags",
     "_process_page_statuses",
     "_copy_assets",
     "_update_quarto_config",

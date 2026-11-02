@@ -30,6 +30,7 @@ _NAVBAR_LABELS = {
     "Recipes": "recipes",
     "Reference": "reference",
     "Changelog": "changelog",
+    "Tags": "tags",
 }
 
 
@@ -174,9 +175,10 @@ def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
     """
     Add a build step's navigation to the Quarto configuration
 
-    Append each link to `website.navbar.left` unless an item there has the same `href`.
-    Applying the same contribution twice adds each link only once. Leave a configuration
-    without `website.navbar.left` unchanged.
+    Each link is added to `website.navbar.left` unless its `href` is already present.
+    It precedes the first item whose `href` matches its `before` target, or is appended
+    when no target is set or found. Repeated contributions add each link only once.
+    Configurations without `website.navbar.left` are unchanged.
 
     Parameters
     ----------
@@ -194,11 +196,17 @@ def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
         return
     items = cast("list[Any]", navbar["left"])
     # Writing the configuration translates labels, so match links by `href`.
-    hrefs = {cast("dict[str, Any]", item).get("href") for item in items if isinstance(item, dict)}
+    hrefs = [
+        cast("dict[str, Any]", item).get("href") if isinstance(item, dict) else None
+        for item in items
+    ]
     for link in contribution.navbar:
-        if link.href not in hrefs:
-            items.append({"text": link.text, "href": link.href})
-            hrefs.add(link.href)
+        if link.href in hrefs:
+            continue
+        before = link.before
+        position = hrefs.index(before) if before is not None and before in hrefs else len(items)
+        items.insert(position, {"text": link.text, "href": link.href})
+        hrefs.insert(position, link.href)
 
 
 def _translate_navbar_labels(quarto_config: dict[str, Any], lang: str) -> None:
