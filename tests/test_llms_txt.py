@@ -365,3 +365,15 @@ def test_full_file_keeps_a_page_without_closed_front_matter(page: str, body: str
     text = _write_full(tmp_path, user_guide=user_guide)
 
     assert text.endswith(f"\n{body}\n")
+
+
+def test_full_file_keeps_a_page_whose_front_matter_contains_three_dashes(tmp_path: Path):
+    """Keep the body and omit front matter containing an embedded `---`"""
+    _write_quarto_yml(tmp_path, _api_reference("json", SECTION))
+    (tmp_path / "page.qmd").write_text('---\ntitle: "Before --- after"\n---\n\n# Body\n')
+    user_guide = {"files": [{"path": tmp_path / "page.qmd", "title": "Page"}]}
+
+    text = _write_full(tmp_path, user_guide=user_guide)
+
+    assert text.endswith("\n# Body\n\n")
+    assert "after" not in text

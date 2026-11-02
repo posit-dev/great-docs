@@ -12,6 +12,7 @@ import inspect
 from typing import TYPE_CHECKING, Any, cast
 
 from ..._build.steps import USER_CODE_ERRORS
+from ..._yaml import locate_front_matter
 from .. import quarto_yml
 
 if TYPE_CHECKING:
@@ -413,7 +414,7 @@ def _cli_text(cli: Mapping[str, Any]) -> str:
 
 def _user_guide_text(user_guide: Mapping[str, Any]) -> str:
     """
-    Join user guide page sources in reading order, omitting their front matter
+    Join user guide page sources in reading order, omitting closed front matter
 
     Parameters
     ----------
@@ -426,7 +427,8 @@ def _user_guide_text(user_guide: Mapping[str, Any]) -> str:
     :
         The combined page text, with a heading for each new section and a title heading for
         each page that does not start with a heading. Missing pages and pages that cannot
-        be read or decoded are omitted.
+        be read or decoded are omitted. A page without a closed front matter block
+        retains its full source.
     """
     lines: list[str] = []
     current_section = None
@@ -448,31 +450,11 @@ def _user_guide_text(user_guide: Mapping[str, Any]) -> str:
         except (OSError, UnicodeDecodeError):
             continue
 
-        content = _strip_front_matter(content)
+        front_matter = locate_front_matter(content)
+        if front_matter is not None:
+            content = content[front_matter.end :].lstrip()
         if not content.strip().startswith("#"):
             lines.append(f"### {title}\n")
         lines += [content, ""]
 
     return "\n".join(lines)
-
-
-def _strip_front_matter(content: str) -> str:
-    """
-    Remove a page's leading YAML front matter
-
-    Parameters
-    ----------
-    content
-        The page source.
-
-    Returns
-    -------
-    :
-        The text after the second `---`, with leading whitespace removed. The source is
-        returned unchanged if it does not start with `---` or contains no second `---`.
-    """
-    if content.startswith("---"):
-        parts = content.split("---", 2)
-        if len(parts) >= 3:
-            return parts[2].lstrip()
-    return content
