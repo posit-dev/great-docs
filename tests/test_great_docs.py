@@ -36,6 +36,7 @@ from great_docs._build import freeze, quarto
 from great_docs._build.steps import Step, count_listed
 from great_docs._build_log import BuildLog
 from great_docs._content.naming import strip_numeric_prefix
+from great_docs._website.ai_agents import llms_txt
 from great_docs._website.quarto_yml import edit as edit_quarto_yml
 from great_docs._website.quarto_yml import read as read_quarto_yml
 from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
@@ -976,116 +977,6 @@ def test_setup_github_pages_install_from_main_with_poetry():
         content = workflow_file.read_text()
         assert "poetry install" in content
         assert "poetry run pip install git+https://github.com/posit-dev/great-docs.git" in content
-
-
-def test_generate_llms_txt():
-    """Test generation of llms.txt file."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Create a pyproject.toml with package info
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text("""
-[project]
-name = "test-package"
-description = "A test package"
-""")
-
-        # Create great-docs directory and _quarto.yml with API reference config
-        great_docs_dir = Path(tmp_dir) / "great-docs"
-        great_docs_dir.mkdir()
-        quarto_yml = great_docs_dir / "_quarto.yml"
-        quarto_yml.write_text("""
-api-reference:
-  package: test_package
-  sections:
-    - title: Main
-      desc: Main functions
-      contents:
-        - foo
-        - bar
-    - title: Classes
-      contents:
-        - MyClass
-""")
-
-        # Generate llms.txt
-        docs._generate_llms_txt()
-
-        # Check the file was created in great-docs directory
-        llms_txt = great_docs_dir / "llms.txt"
-
-        assert llms_txt.exists()
-
-        # Check content structure
-        content = llms_txt.read_text()
-
-        assert "# test_package" in content
-        assert "> A test package" in content
-        assert "## Docs" in content
-        assert "### API Reference" in content
-        assert "#### Main" in content
-        assert "> Main functions" in content
-        assert "- [foo](reference/foo.html)" in content
-        assert "- [bar](reference/bar.html)" in content
-        assert "#### Classes" in content
-        assert "- [MyClass](reference/MyClass.html)" in content
-
-
-def test_generate_llms_txt_with_site_url_absolute():
-    """Test llms.txt generation with site URL."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Create great-docs directory and _quarto.yml with API reference config and site URL
-        great_docs_dir = Path(tmp_dir) / "great-docs"
-        great_docs_dir.mkdir()
-        quarto_yml = great_docs_dir / "_quarto.yml"
-        quarto_yml.write_text("""
-website:
-  site-url: https://example.com/docs
-api-reference:
-  package: test_package
-  sections:
-    - title: Main
-      contents:
-        - foo
-""")
-
-        # Generate llms.txt
-        docs._generate_llms_txt()
-
-        # Check the file was created with absolute URLs in great-docs directory
-        llms_txt = great_docs_dir / "llms.txt"
-        content = llms_txt.read_text()
-        assert "https://example.com/docs/reference/foo.html" in content
-
-
-def test_generate_llms_txt_sanitizes_colons():
-    """Colons in `module:Item` entry names must be sanitized in llms.txt URLs."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Create great-docs directory and _quarto.yml with API reference config
-        great_docs_dir = Path(tmp_dir) / "great-docs"
-        great_docs_dir.mkdir()
-        quarto_yml = great_docs_dir / "_quarto.yml"
-        quarto_yml.write_text("""
-api-reference:
-  package: test_package
-  sections:
-    - title: Devices
-      contents:
-        - devices.keithley:Keithley2400
-""")
-
-        # Generate llms.txt
-        docs._generate_llms_txt()
-
-        content = (great_docs_dir / "llms.txt").read_text()
-        assert (
-            "- [devices.keithley:Keithley2400](reference/devices.keithley.Keithley2400.html)"
-        ) in content
 
 
 def test_get_github_repo_info():
@@ -7569,18 +7460,24 @@ def test_auto_save_snapshot_uses_module_name(mock_snapshot):
         assert mock_snapshot.call_args[0][0] == "actual_module"
 
 
+# An API reference that plans the llms files: the standard library's `json` always imports.
+LLMS_TXT_QUARTO_YML = "api-reference:\n  package: json\n  sections:\n    - contents: [dumps]\n"
+
+
 @patch.object(GreatDocs, "_discover_click_cli")
 def test_cli_help_for_llms_uses_module_name(mock_discover):
     """Regression: llms-full CLI help discovers the Click CLI by importable module
     name, not the PyPI project name, when the two diverge."""
-    mock_discover.return_value = {"help_text": "usage", "commands": []}
+    mock_discover.return_value = {"entry_point_name": "my-dist", "help_text": "usage"}
     with tempfile.TemporaryDirectory() as tmp_dir:
         root = Path(tmp_dir)
         (root / "pyproject.toml").write_text('[project]\nname = "my-dist"\n')
         (root / "great-docs.yml").write_text("module: actual_module\ncli:\n  enabled: true\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._get_cli_help_text_for_llms()
+        docs.build_dir.mkdir()
+        (docs.build_dir / "_quarto.yml").write_text(LLMS_TXT_QUARTO_YML)
+        docs._step_llms_txt()
 
         mock_discover.assert_called_once_with("actual_module", display_name="my-dist")
 
@@ -7657,13 +7554,15 @@ def test_cli_help_for_llms_display_name_is_project_name():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            text = docs._get_cli_help_text_for_llms()
+            docs.build_dir.mkdir()
+            (docs.build_dir / "_quarto.yml").write_text(LLMS_TXT_QUARTO_YML)
+            docs._step_llms_txt()
         finally:
             sys.path.remove(tmp_dir)
             sys.modules.pop("actual_module", None)
             sys.modules.pop("actual_module.cli", None)
 
-        assert "## CLI: my-dist" in text
+        assert "## CLI: my-dist" in (docs.build_dir / "llms-full.txt").read_text()
 
 
 def test_is_compiled_extension_cargo():
@@ -11782,52 +11681,6 @@ def test_build_metadata_margin_no_llms_links_without_api_reference():
         assert "llms-full.txt" not in result
 
 
-def test_llms_txt_available_matches_generators():
-    """The predicate agrees with the generators' own early returns."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gd_dir = Path(tmp_dir) / "great-docs"
-        gd_dir.mkdir()
-        docs = GreatDocs(project_path=tmp_dir)
-        assert docs._llms_txt_available() is False  # no _quarto.yml
-        quarto = gd_dir / "_quarto.yml"
-        quarto.write_text("project:\n  type: website\n", encoding="utf-8")
-        assert docs._llms_txt_available() is False  # no api-reference
-        quarto.write_text("api-reference:\n  package: os\n  sections: []\n", encoding="utf-8")
-        assert docs._llms_txt_available() is False  # no sections
-        quarto.write_text(
-            "api-reference:\n  package: os\n  sections:\n    - title: Core\n      contents: [os.getcwd]\n",
-            encoding="utf-8",
-        )
-        assert docs._llms_txt_available() is True
-
-
-def test_llms_txt_available_returns_false_for_non_dict_root():
-    """Return `False` for a list-valued `_quarto.yml` root"""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gd_dir = Path(tmp_dir) / "great-docs"
-        gd_dir.mkdir()
-        (gd_dir / "_quarto.yml").write_text("- foo\n- bar\n", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        assert docs._llms_txt_available() is False
-
-
-def test_llms_txt_available_returns_false_when_package_cannot_be_imported():
-    """Return `False` when the configured package cannot be imported"""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gd_dir = Path(tmp_dir) / "great-docs"
-        gd_dir.mkdir()
-        (gd_dir / "_quarto.yml").write_text(
-            "api-reference:\n"
-            "  package: totally_nonexistent_pkg_xyz\n"
-            "  sections:\n"
-            "    - title: Core\n"
-            "      contents: [totally_nonexistent_pkg_xyz.f]\n",
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        assert docs._llms_txt_available() is False
-
-
 LLMS_TXT_QUARTO_YMLS = [
     "no _quarto.yml",
     "no api-reference",
@@ -11863,25 +11716,6 @@ def _write_llms_txt_quarto_yml(build_dir: Path, label: str) -> None:
 
 
 @pytest.mark.parametrize("label", LLMS_TXT_QUARTO_YMLS)
-def test_generate_llms_full_txt_matches_the_predicate(label):
-    """`llms-full.txt` is written exactly when the homepage advertises it.
-
-    Regression for #350: `_generate_llms_full_txt` only checked that a `package`
-    was configured, so an `api-reference` block without sections still produced a
-    header-only `llms-full.txt` while every page advertised nothing.
-    """
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir()
-        _write_llms_txt_quarto_yml(build_dir, label)
-        docs = GreatDocs(project_path=tmp_dir)
-
-        docs._generate_llms_full_txt()
-
-        assert (build_dir / "llms-full.txt").exists() == docs._llms_txt_available(), label
-
-
-@pytest.mark.parametrize("label", LLMS_TXT_QUARTO_YMLS)
 def test_freeze_writes_the_llms_files_build_would(label: str, tmp_path: Path):
     """
     Write the llms files exactly when the homepage advertises them, as a build does
@@ -11892,11 +11726,10 @@ def test_freeze_writes_the_llms_files_build_would(label: str, tmp_path: Path):
     _write_llms_txt_quarto_yml(docs.build_dir, label)
     log = BuildLog(stream=io.StringIO())
 
-    llms = ["_llms_txt_available", "_generate_llms_txt", "_generate_llms_full_txt"]
-    with stubbed_build(docs, run=llms):
+    with stubbed_build(docs):
         freeze.prepare(docs._preparation_steps(make_run(), log), log, docs.build_dir)
 
-    available = docs._llms_txt_available()
+    available = llms_txt.is_planned(docs.build_dir)
     assert (docs.build_dir / "llms.txt").exists() == available, label
     assert (docs.build_dir / "llms-full.txt").exists() == available, label
 
@@ -11949,164 +11782,6 @@ def test_build_metadata_margin_citation_link():
         # (but it may not appear in margin sections if no explicit block uses it;
         # check the result doesn't error out at minimum)
         assert isinstance(result, str)
-
-
-def test_generate_llms_full_txt_creates_file():
-    """_generate_llms_full_txt creates llms-full.txt in project dir."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gd_dir = Path(tmp_dir) / "great-docs"
-        gd_dir.mkdir()
-        # Create a minimal _quarto.yml with api-reference
-        quarto_yml = gd_dir / "_quarto.yml"
-        quarto_config = {
-            "api-reference": {
-                "package": "json",  # use stdlib json as test target
-                "sections": [
-                    {
-                        "title": "Functions",
-                        "contents": ["dumps", "loads"],
-                    }
-                ],
-            }
-        }
-        with open(quarto_yml, "w") as f:
-            write_yaml(quarto_config, f)
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._generate_llms_full_txt()
-        llms_full = gd_dir / "llms-full.txt"
-
-        assert llms_full.exists()
-
-        content = llms_full.read_text(encoding="utf-8")
-
-        assert "json" in content
-
-
-def test_generate_llms_full_txt_no_api_reference_with_title():
-    """_generate_llms_full_txt returns early when no api-reference in config."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gd_dir = Path(tmp_dir) / "great-docs"
-        gd_dir.mkdir()
-        quarto_yml = gd_dir / "_quarto.yml"
-
-        with open(quarto_yml, "w") as f:
-            write_yaml({"website": {"title": "Test"}}, f)
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._generate_llms_full_txt()
-        llms_full = gd_dir / "llms-full.txt"
-
-        assert not llms_full.exists()
-
-
-def test_generate_llms_full_txt_no_package():
-    """_generate_llms_full_txt returns early when no package name in api-reference."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gd_dir = Path(tmp_dir) / "great-docs"
-        gd_dir.mkdir()
-        quarto_yml = gd_dir / "_quarto.yml"
-
-        with open(quarto_yml, "w") as f:
-            write_yaml({"api-reference": {"sections": []}}, f)
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._generate_llms_full_txt()
-        llms_full = gd_dir / "llms-full.txt"
-
-        assert not llms_full.exists()
-
-
-def test_generate_llms_full_txt_import_error():
-    """_generate_llms_full_txt handles ImportError for missing package."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gd_dir = Path(tmp_dir) / "great-docs"
-        gd_dir.mkdir()
-        quarto_yml = gd_dir / "_quarto.yml"
-        with open(quarto_yml, "w") as f:
-            write_yaml(
-                {
-                    "api-reference": {
-                        "package": "nonexistent_package_xyz_123",
-                        "sections": [{"title": "Test", "contents": ["x"]}],
-                    }
-                },
-                f,
-            )
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._generate_llms_full_txt()
-        llms_full = gd_dir / "llms-full.txt"
-
-        assert not llms_full.exists()
-
-
-def test_generate_llms_full_txt_with_sections():
-    """_generate_llms_full_txt includes section headers in output."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gd_dir = Path(tmp_dir) / "great-docs"
-        gd_dir.mkdir()
-        quarto_yml = gd_dir / "_quarto.yml"
-        quarto_config = {
-            "api-reference": {
-                "package": "json",
-                "sections": [
-                    {
-                        "title": "Encoding",
-                        "desc": "Encode Python objects to JSON",
-                        "contents": ["dumps"],
-                    },
-                    {
-                        "title": "Decoding",
-                        "desc": "Decode JSON to Python objects",
-                        "contents": ["loads"],
-                    },
-                ],
-            }
-        }
-        with open(quarto_yml, "w") as f:
-            write_yaml(quarto_config, f)
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._generate_llms_full_txt()
-        llms_full = gd_dir / "llms-full.txt"
-
-        assert llms_full.exists()
-
-        content = llms_full.read_text(encoding="utf-8")
-
-        assert "## Encoding" in content
-        assert "## Decoding" in content
-        assert "Encode Python objects to JSON" in content
-
-
-def test_generate_llms_full_txt_dict_item_format():
-    """_generate_llms_full_txt handles dict-style items in sections."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        gd_dir = Path(tmp_dir) / "great-docs"
-        gd_dir.mkdir()
-        quarto_yml = gd_dir / "_quarto.yml"
-        quarto_config = {
-            "api-reference": {
-                "package": "json",
-                "sections": [
-                    {
-                        "title": "Functions",
-                        "contents": [{"name": "dumps"}],
-                    }
-                ],
-            }
-        }
-        with open(quarto_yml, "w") as f:
-            write_yaml(quarto_config, f)
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._generate_llms_full_txt()
-        llms_full = gd_dir / "llms-full.txt"
-
-        assert llms_full.exists()
 
 
 def test_get_github_repo_info_from_pyproject_urls():
@@ -13174,64 +12849,6 @@ def test_detect_git_ref_fallback():
         assert result == "main"
 
 
-def test_strip_frontmatter_with_yaml():
-    """Test _strip_frontmatter removes YAML front matter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "---\ntitle: Test\n---\n\n# Hello\nWorld"
-        result = docs._strip_frontmatter(content)
-
-        assert "title: Test" not in result
-        assert "# Hello" in result
-        assert "World" in result
-
-
-def test_strip_frontmatter_no_frontmatter_simple():
-    """Test _strip_frontmatter with no frontmatter passes through."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        content = "# Hello\nWorld"
-        result = docs._strip_frontmatter(content)
-
-        assert "# Hello" in result
-        assert "World" in result
-
-
-def test_get_docstring_summary_returns_first_line():
-    """Test _get_docstring_summary extracts first line of docstring."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Use a known stdlib module
-        result = docs._get_docstring_summary("os", "path")
-
-        # os.path has a docstring, so result should be non-empty or empty
-        # (we just test it doesn't crash)
-        assert isinstance(result, str)
-
-
-def test_get_docstring_summary_nonexistent():
-    """Test _get_docstring_summary for nonexistent item returns empty."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        result = docs._get_docstring_summary("os", "nonexistent_xyz_abc")
-
-        assert result == ""
-
-
-def test_get_docstring_summary_no_docstring():
-    """Test _get_docstring_summary for object with no docstring returns empty."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        result = docs._get_docstring_summary("nonexistent_package_xyz", "whatever")
-
-        assert result == ""
-
-
 def test_update_sidebar_from_sections_basic():
     """Test _update_sidebar_from_sections builds sidebar from API reference."""
 
@@ -13384,139 +13001,6 @@ def test_update_sidebar_no_api_reference():
 
         # Should not raise
         docs._update_sidebar_from_sections()
-
-
-def test_generate_llms_txt_no_quarto_yml():
-    """Test _generate_llms_txt returns early when no _quarto.yml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._generate_llms_txt()
-
-        assert not (docs.build_dir / "llms.txt").exists()
-
-
-def test_generate_llms_txt_no_api_reference():
-    """Test _generate_llms_txt returns early when no api-reference config."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(quarto_yml, "w") as f:
-            write_yaml({"project": {"type": "website"}}, f)
-
-        docs._generate_llms_txt()
-
-        assert not (docs.build_dir / "llms.txt").exists()
-
-
-def test_generate_llms_txt_writes_file():
-    """Test _generate_llms_txt creates llms.txt with correct structure."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\ndescription = "A test package"\n',
-            encoding="utf-8",
-        )
-
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-
-        config = {
-            "project": {"type": "website"},
-            "api-reference": {
-                "package": "mypkg",
-                "sections": [
-                    {
-                        "title": "Functions",
-                        "desc": "Helper functions",
-                        "contents": ["func_a", "func_b"],
-                    },
-                ],
-            },
-        }
-
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
-
-        docs._generate_llms_txt()
-
-        llms_path = docs.build_dir / "llms.txt"
-
-        assert llms_path.exists()
-
-        content = llms_path.read_text()
-
-        assert "# mypkg" in content
-        assert "func_a" in content
-        assert "func_b" in content
-
-
-def test_generate_llms_txt_with_site_url():
-    """Test _generate_llms_txt uses site-url from quarto config."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-
-        config = {
-            "project": {"type": "website"},
-            "website": {"site-url": "https://example.com/docs#readme"},
-            "api-reference": {
-                "package": "mypkg",
-                "sections": [
-                    {
-                        "title": "API",
-                        "desc": "",
-                        "contents": ["Widget"],
-                    },
-                ],
-            },
-        }
-
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
-
-        docs._generate_llms_txt()
-
-        content = (docs.build_dir / "llms.txt").read_text()
-
-        # URL should have the anchor stripped
-        assert "https://example.com/docs/" in content
-        assert "#readme" not in content
-
-
-def test_generate_llms_full_txt_no_package_name():
-    """Test _generate_llms_full_txt returns early when no package name."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-
-        config = {
-            "api-reference": {
-                "sections": [{"title": "API", "contents": ["Foo"]}],
-            },
-        }
-
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
-
-        docs._generate_llms_full_txt()
-
-        assert not (docs.build_dir / "llms-full.txt").exists()
 
 
 def test_update_quarto_config_navbar_color_light_dark():
@@ -15283,59 +14767,6 @@ def test_update_quarto_config_page_footer_author_homepage():
         assert "<a href=" in footer_text
 
 
-def test_generate_llms_txt_dict_items_in_sections():
-    """Test _generate_llms_txt handles dict items in sections."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-
-        config = {
-            "project": {"type": "website"},
-            "api-reference": {
-                "package": "mypkg",
-                "sections": [
-                    {
-                        "title": "Core",
-                        "desc": "",
-                        "contents": [
-                            {"name": "BigClass", "members": []},
-                            "simple_func",
-                        ],
-                    },
-                ],
-            },
-        }
-
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
-
-        docs._generate_llms_txt()
-
-        content = (docs.build_dir / "llms.txt").read_text()
-
-        assert "BigClass" in content
-        assert "simple_func" in content
-
-
-def test_get_user_guide_text_for_llms_no_guide_empty_result():
-    """Test _get_user_guide_text_for_llms returns empty when no user guide."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        result = docs._get_user_guide_text_for_llms()
-
-        assert result == ""
-
-
 def test_build_sections_from_reference_config_skips_empty_sections():
     """Test that sections with no contents are skipped."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -15662,37 +15093,6 @@ def test_detect_module_name_no_pyproject():
         docs = GreatDocs(project_path=tmp_dir)
         result = docs._detect_module_name()
         assert result is None or isinstance(result, str)
-
-
-def test_get_api_details_function_stdlib():
-    """Test _get_api_details retrieves function signature and docstring."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        result = docs._get_api_details(os.path, "join")
-        assert result != ""
-        assert "join" in result
-
-
-def test_get_api_details_nonexistent():
-    """Test _get_api_details returns empty for nonexistent attribute."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        result = docs._get_api_details(os, "nonexistent_xyz_attr")
-        assert result == ""
-
-
-def test_get_api_details_nested_stdlib_dotted():
-    """Test _get_api_details handles dotted names (e.g., Class.method)."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        result = docs._get_api_details(os, "path.join")
-        assert "join" in result
 
 
 def test_generate_initial_config_with_package():
@@ -16656,38 +16056,6 @@ def test_process_user_guide_returns_false_no_guide():
         assert result is False
 
 
-def test_get_cli_help_text_for_llms_disabled():
-    """Test _get_cli_help_text_for_llms returns empty when CLI disabled."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        result = docs._get_cli_help_text_for_llms()
-        assert result == ""
-
-
-def test_get_user_guide_text_for_llms_no_guide():
-    """Test _get_user_guide_text_for_llms returns empty when no guide."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._get_user_guide_text_for_llms()
-        assert result == ""
-
-
-def test_get_user_guide_text_for_llms_with_files():
-    """Test _get_user_guide_text_for_llms reads user guide content."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-        (ug_dir / "01-intro.qmd").write_text(
-            "---\ntitle: Introduction\n---\n\n# Introduction\n\nWelcome to the guide.\n",
-            encoding="utf-8",
-        )
-        result = docs._get_user_guide_text_for_llms()
-        assert "Welcome to the guide" in result
-
-
 def test_update_sidebar_with_cli_no_files():
     """Test _update_sidebar_with_cli does nothing with empty cli_files."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -17094,78 +16462,6 @@ def test_update_config_with_user_guide():
         assert "user-guide" in sidebar_ids
 
 
-def test_get_api_details_no_attribute():
-    """Test _get_api_details returns empty for missing attribute."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        mock_module = types.ModuleType("mock_mod")
-        result = docs._get_api_details(mock_module, "nonexistent")
-        assert result == ""
-
-
-def test_get_api_details_nested():
-    """Test _get_api_details for dotted path like Class.method."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        mock_module = types.ModuleType("mock_mod")
-
-        class MyClass:
-            """A class."""
-
-            def my_method(self):
-                """A method."""
-                pass
-
-        mock_module.MyClass = MyClass
-        result = docs._get_api_details(mock_module, "MyClass.my_method")
-        assert "my_method" in result
-        assert "A method" in result
-
-
-def test_get_api_details_no_docstring():
-    """Test _get_api_details for function without docstring."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        mock_module = types.ModuleType("mock_mod")
-
-        def no_doc_func():
-            pass
-
-        mock_module.no_doc_func = no_doc_func
-        result = docs._get_api_details(mock_module, "no_doc_func")
-        assert "no_doc_func" in result
-
-
-def test_generate_llms_txt_b9():
-    """Test _generate_llms_txt creates an llms.txt file."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        # Create build directory with _quarto.yml containing api-reference
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir(parents=True, exist_ok=True)
-        quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "api-reference:\n  package: mypkg\n  sections:\n"
-            "  - title: Functions\n    contents:\n    - my_func\n",
-            encoding="utf-8",
-        )
-
-        with patch.object(docs, "_get_docstring_summary", return_value="A function."):
-            docs._generate_llms_txt()
-
-        llms_path = build_dir / "llms.txt"
-        assert llms_path.exists()
-        content = llms_path.read_text(encoding="utf-8")
-        assert "# mypkg" in content
-        assert "my_func" in content
-
-
 def test_create_index_from_readme_with_readme():
     """Test _create_index_from_readme creates index from README.md."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -17288,102 +16584,6 @@ def test_detect_package_name_prefers_pyproject():
         setup_cfg.write_text("[metadata]\nname = cfg-pkg\n", encoding="utf-8")
         result = docs._detect_package_name()
         assert result == "pyproject-pkg"
-
-
-def test_get_cli_help_text_for_llms_with_cli():
-    """Test _get_cli_help_text_for_llms generates formatted text."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        docs._config = write_config(Path(tmp_dir), "cli:\n  enabled: true\n")
-
-        mock_cli_info = {
-            "entry_point_name": "mypkg",
-            "help_text": "My CLI tool\n\nUsage: mypkg [OPTIONS]",
-            "commands": [
-                {
-                    "name": "sub",
-                    "full_path": "mypkg sub",
-                    "help_text": "A subcommand",
-                    "hidden": False,
-                    "commands": [],
-                }
-            ],
-        }
-
-        with patch.object(docs, "_discover_click_cli", return_value=mock_cli_info):
-            result = docs._get_cli_help_text_for_llms()
-
-        assert "## CLI: mypkg" in result
-        assert "My CLI tool" in result
-        assert "### mypkg sub" in result
-
-
-def test_get_cli_help_text_for_llms_hidden_command():
-    """Test _get_cli_help_text_for_llms skips hidden commands."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        docs._config = write_config(Path(tmp_dir), "cli:\n  enabled: true\n")
-
-        mock_cli_info = {
-            "entry_point_name": "mypkg",
-            "help_text": "CLI tool",
-            "commands": [
-                {
-                    "name": "visible",
-                    "full_path": "mypkg visible",
-                    "help_text": "Visible cmd",
-                    "hidden": False,
-                    "commands": [],
-                },
-                {
-                    "name": "secret",
-                    "full_path": "mypkg secret",
-                    "help_text": "Secret cmd",
-                    "hidden": True,
-                    "commands": [],
-                },
-            ],
-        }
-
-        with patch.object(docs, "_discover_click_cli", return_value=mock_cli_info):
-            result = docs._get_cli_help_text_for_llms()
-
-        assert "visible" in result
-        assert "secret" not in result
-
-
-def test_get_user_guide_text_for_llms_adds_title_header():
-    """Test _get_user_guide_text_for_llms adds ### title when no heading."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-        (ug_dir / "01-page.qmd").write_text(
-            "---\ntitle: My Page\n---\n\nJust text, no heading.\n",
-            encoding="utf-8",
-        )
-        result = docs._get_user_guide_text_for_llms()
-        assert "### My Page" in result
-
-
-def test_generate_llms_full_txt_no_sections():
-    """Test _generate_llms_full_txt handles case with no API sections."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir(parents=True, exist_ok=True)
-
-        # Should not crash with no sections
-        docs._generate_llms_full_txt()
 
 
 def test_detect_dynamic_mode_empty_package():
@@ -17566,16 +16766,6 @@ def test_detect_hero_logo_none():
         docs = GreatDocs(project_path=tmp_dir)
         result = docs._detect_hero_logo()
         assert result is None
-
-
-def test_strip_frontmatter_complex():
-    """Test _strip_frontmatter with multiple --- in content."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Test\ndate: 2024-01-01\n---\n\nBody here.\n\n---\n\nMore text."
-        result = docs._strip_frontmatter(content)
-        assert "title:" not in result
-        assert "Body here." in result
 
 
 def test_build_metadata_margin_with_authors_b9():
@@ -18304,28 +17494,6 @@ def test_update_quarto_config_with_assets():
         assert "assets/**" in resources or any("assets" in str(r) for r in resources)
 
 
-def test_get_user_guide_text_for_llms_with_content():
-    """Test _get_user_guide_text_for_llms returns content from user guide files."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        # User guide directory is at project_root level
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-
-        (ug_dir / "01-intro.qmd").write_text(
-            "---\ntitle: Introduction\n---\n\n# Getting Started\n\nWelcome.\n",
-            encoding="utf-8",
-        )
-        (ug_dir / "02-advanced.qmd").write_text(
-            "---\ntitle: Advanced Usage\n---\n\n# Advanced\n\nPower user stuff.\n",
-            encoding="utf-8",
-        )
-
-        result = docs._get_user_guide_text_for_llms()
-        assert "Getting Started" in result or "Introduction" in result
-        assert "Advanced" in result
-
-
 def test_prepare_build_directory_copies_assets():
     """Test _prepare_build_directory creates build dir and copies assets."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -18491,96 +17659,6 @@ def test_build_sections_from_reference_config_skips_nameless_dict():
         result = docs._build_sections_from_reference_config(ref_config)
         assert result is not None
         assert result[0]["contents"] == ["good"]
-
-
-def test_strip_frontmatter_with_frontmatter():
-    """Test _strip_frontmatter removes YAML frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Hello\n---\n\nBody text here."
-        result = docs._strip_frontmatter(content)
-        assert result.startswith("Body text here.")
-        assert "title:" not in result
-
-
-def test_strip_frontmatter_no_frontmatter():
-    """Test _strip_frontmatter returns content unchanged when no frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "# Just a heading\n\nSome text."
-        result = docs._strip_frontmatter(content)
-        assert result == content
-
-
-def test_strip_frontmatter_incomplete():
-    """Test _strip_frontmatter handles incomplete frontmatter (no closing ---)."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "---\ntitle: Hello\nNo closing delimiter"
-        result = docs._strip_frontmatter(content)
-        # Only one --- found, so len(parts) < 3, returns original
-        assert result == content
-
-
-def test_get_api_details_function():
-    """Test _get_api_details retrieves function signature and docstring."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Create a simple module with a function
-        mod = types.ModuleType("testmod")
-
-        def sample_func(x: int, y: str = "hello") -> bool:
-            """A sample function that does things."""
-            return True
-
-        mod.sample_func = sample_func
-        result = docs._get_api_details(mod, "sample_func")
-        assert "sample_func" in result
-        assert "A sample function" in result
-
-
-def test_get_api_details_nested_attribute():
-    """Test _get_api_details handles dotted names (Class.method)."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        mod = types.ModuleType("testmod")
-
-        class MyClass:
-            def my_method(self, val: int) -> None:
-                """Method docstring."""
-                pass
-
-        mod.MyClass = MyClass
-        result = docs._get_api_details(mod, "MyClass.my_method")
-        assert "my_method" in result
-        assert "Method docstring" in result
-
-
-def test_get_api_details_missing_attribute():
-    """Test _get_api_details returns empty string for nonexistent attribute."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        mod = types.ModuleType("testmod")
-        result = docs._get_api_details(mod, "nonexistent_func")
-        assert result == ""
-
-
-def test_get_api_details_no_signature():
-    """Test _get_api_details handles objects without signatures."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        mod = types.ModuleType("testmod")
-        mod.MY_CONST = 42  # type: ignore[attr-defined]
-        # Constants don't have signatures
-        result = docs._get_api_details(mod, "MY_CONST")
-        # Should handle gracefully (no crash)
-        assert isinstance(result, str)
 
 
 def test_detect_package_name_from_single_package_dir():
@@ -18766,14 +17844,6 @@ def test_detect_module_name_from_setuptools_find():
         assert name == "my_pkg"
 
 
-def test_get_cli_help_text_for_llms_no_cli():
-    """Test _get_cli_help_text_for_llms returns empty when CLI not enabled."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._get_cli_help_text_for_llms()
-        assert result == ""
-
-
 def test_get_cli_entry_point_gui_scripts():
     """Test _get_cli_entry_point_name reads from gui-scripts."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -18785,31 +17855,6 @@ def test_get_cli_entry_point_gui_scripts():
         docs = GreatDocs(project_path=tmp_dir)
         result = docs._get_cli_entry_point_name("mypkg")
         assert result == "mygui"
-
-
-def test_get_user_guide_text_for_llms_with_sections():
-    """Test _get_user_guide_text_for_llms includes section headers."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-
-        (ug_dir / "01-basics.qmd").write_text(
-            "---\ntitle: Basics\n---\n\n# Getting Started\n\nBasic stuff.\n",
-            encoding="utf-8",
-        )
-
-        result = docs._get_user_guide_text_for_llms()
-        # Should include file content
-        assert "Basic stuff" in result
-
-
-def test_get_user_guide_text_for_llms_empty():
-    """Test _get_user_guide_text_for_llms returns empty when no guide exists."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._get_user_guide_text_for_llms()
-        assert result == ""
 
 
 def test_normalize_package_name():
@@ -20659,138 +19704,6 @@ def test_detect_dynamic_mode_no_exports():
             docs = GreatDocs(project_path=tmp_dir)
             result = docs._detect_dynamic_mode("emptydynpkg")
             assert result is True
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_generate_llms_full_txt_no_quarto_yml():
-    """Test _generate_llms_full_txt does nothing when no _quarto.yml."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir = Path(tmp_dir) / "great-docs"
-        docs.build_dir.mkdir()
-
-        # No _quarto.yml — should return without writing anything
-        docs._generate_llms_full_txt()
-
-        assert not (docs.build_dir / "llms-full.txt").exists()
-
-
-def test_generate_llms_full_txt_no_api_reference():
-    """Test _generate_llms_full_txt does nothing when no api-reference in config."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir = Path(tmp_dir) / "great-docs"
-        docs.build_dir.mkdir()
-
-        (docs.build_dir / "_quarto.yml").write_text(
-            format_yaml({"project": {"type": "website"}}),
-            encoding="utf-8",
-        )
-
-        docs._generate_llms_full_txt()
-
-        assert not (docs.build_dir / "llms-full.txt").exists()
-
-
-def test_generate_llms_full_txt_basic():
-    """Test _generate_llms_full_txt generates content for a package."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "llmpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "def hello(name: str) -> str:\n"
-            '    """Say hello.\n\n'
-            "    Parameters\n"
-            "    ----------\n"
-            "    name\n"
-            "        Who to greet.\n"
-            '    """\n'
-            '    return f"Hello {name}"\n',
-            encoding="utf-8",
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir = Path(tmp_dir) / "great-docs"
-        docs.build_dir.mkdir()
-
-        config = {
-            "api-reference": {
-                "package": "llmpkg",
-                "sections": [
-                    {"title": "Functions", "contents": ["hello"]},
-                ],
-            },
-        }
-        (docs.build_dir / "_quarto.yml").write_text(format_yaml(config), encoding="utf-8")
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            with (
-                patch.object(
-                    docs,
-                    "_get_package_metadata",
-                    return_value={"description": "Test package"},
-                ),
-                patch.object(docs, "_get_cli_help_text_for_llms", return_value=""),
-                patch.object(docs, "_get_user_guide_text_for_llms", return_value=""),
-            ):
-                docs._generate_llms_full_txt()
-
-            llms_path = docs.build_dir / "llms-full.txt"
-            assert llms_path.exists()
-            content = llms_path.read_text()
-            assert "Functions" in content
-            assert "hello" in content
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_generate_llms_full_txt_with_cli_and_user_guide():
-    """Test _generate_llms_full_txt includes CLI and user guide content."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "cliugpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("def func(): pass\n", encoding="utf-8")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir = Path(tmp_dir) / "great-docs"
-        docs.build_dir.mkdir()
-
-        config = {
-            "api-reference": {
-                "package": "cliugpkg",
-                "sections": [
-                    {"title": "Funcs", "contents": ["func"]},
-                ],
-            },
-        }
-        (docs.build_dir / "_quarto.yml").write_text(format_yaml(config), encoding="utf-8")
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            with (
-                patch.object(docs, "_get_package_metadata", return_value={}),
-                patch.object(
-                    docs,
-                    "_get_cli_help_text_for_llms",
-                    return_value="## CLI: mytool\nUsage: mytool [OPTIONS]",
-                ),
-                patch.object(
-                    docs,
-                    "_get_user_guide_text_for_llms",
-                    return_value="## Introduction\nWelcome to the guide.",
-                ),
-            ):
-                docs._generate_llms_full_txt()
-
-            content = (docs.build_dir / "llms-full.txt").read_text()
-            assert "CLI documentation" in content
-            assert "User Guide documentation" in content
         finally:
             sys.path.remove(tmp_dir)
 
@@ -31453,75 +30366,6 @@ class TestGenerateUserGuideSidebarAutoBatch9:
             }
 
 
-class TestGetUserGuideTextForLlms:
-    """Tests for _get_user_guide_text_for_llms."""
-
-    def test_returns_empty_when_no_guide(self):
-        """Returns empty string when no user guide exists."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            assert docs._get_user_guide_text_for_llms() == ""
-
-    def test_gathers_content_with_section_headers(self):
-        """Includes section headers and stripped content."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            (ug_dir / "01-intro.qmd").write_text(
-                "---\ntitle: Introduction\nguide-section: Basics\n---\n# Introduction\nHello.\n"
-            )
-            (ug_dir / "02-config.qmd").write_text(
-                "---\ntitle: Configuration\nguide-section: Basics\n---\n# Configuration\nSetup.\n"
-            )
-            (ug_dir / "03-deploy.qmd").write_text(
-                "---\ntitle: Deployment\nguide-section: Advanced\n---\n# Deployment\nDeploy.\n"
-            )
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._get_user_guide_text_for_llms()
-            assert "## Basics" in result
-            assert "## Advanced" in result
-            assert "Introduction" in result
-            assert "Deploy" in result
-
-    def test_adds_title_header_for_pages_without_heading(self):
-        """Adds ### title when page content doesn't start with #."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            (ug_dir / "01-intro.qmd").write_text(
-                "---\ntitle: Introduction\n---\nNo heading here, just text.\n"
-            )
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._get_user_guide_text_for_llms()
-            assert "### Introduction" in result
-
-
-class TestStripFrontmatterBatch9:
-    """Tests for _strip_frontmatter."""
-
-    def test_strips_yaml_frontmatter(self):
-        """Removes YAML frontmatter delimited by ---."""
-        docs = GreatDocs()
-        result = docs._strip_frontmatter("---\ntitle: Hello\n---\nBody content")
-        assert result == "Body content"
-
-    def test_returns_content_without_frontmatter(self):
-        """Returns content unchanged when no frontmatter present."""
-        docs = GreatDocs()
-        result = docs._strip_frontmatter("No frontmatter here")
-        assert result == "No frontmatter here"
-
-    def test_returns_content_with_incomplete_frontmatter(self):
-        """Returns content when only one --- delimiter found."""
-        docs = GreatDocs()
-        result = docs._strip_frontmatter("---\nno closing delimiter here")
-        assert result == "---\nno closing delimiter here"
-
-
 class TestBuildHeroSectionBatch9:
     """Additional _build_hero_section coverage: logo fallbacks, badge types."""
 
@@ -31823,58 +30667,6 @@ class TestRefreshApiReferenceConfigBatch9:
                 write_yaml(config, f)
             docs._refresh_api_reference_config()
             # Should not crash — just warn and keep config unchanged
-
-
-class TestGenerateLlmsTxtBatch9:
-    """Tests for _generate_llms_txt."""
-
-    def test_generates_llms_txt_with_sections(self):
-        """Generates llms.txt with API reference sections."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.build_dir / "_quarto.yml"
-            config = {
-                "project": {"type": "website"},
-                "website": {"site-url": "https://example.com/docs/"},
-                "api-reference": {
-                    "package": "mypkg",
-                    "sections": [
-                        {"title": "Classes", "contents": ["MyClass"]},
-                        {"title": "Functions", "contents": ["func_a", "func_b"]},
-                    ],
-                },
-            }
-            with open(quarto_yml, "w") as f:
-                write_yaml(config, f)
-            # Also need pyproject.toml for metadata
-            (docs.project_root / "pyproject.toml").write_text(
-                '[project]\nname = "mypkg"\nversion = "1.0"\ndescription = "A test pkg"\n'
-            )
-            docs._generate_llms_txt()
-            llms_path = docs.build_dir / "llms.txt"
-            assert llms_path.exists()
-            content = llms_path.read_text()
-            assert "mypkg" in content
-
-    def test_noop_without_quarto_yml(self):
-        """Does nothing when _quarto.yml doesn't exist."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            docs._generate_llms_txt()
-            assert not (docs.build_dir / "llms.txt").exists()
-
-    def test_noop_without_api_reference(self):
-        """Does nothing when no api-reference in config."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.build_dir / "_quarto.yml"
-            with open(quarto_yml, "w") as f:
-                write_yaml({"website": {}}, f)
-            docs._generate_llms_txt()
-            assert not (docs.build_dir / "llms.txt").exists()
 
 
 class TestCopyUserGuideToDocsBatch9:

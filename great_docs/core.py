@@ -10,7 +10,7 @@ from datetime import datetime
 from functools import partial
 from importlib import resources
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
@@ -59,6 +59,7 @@ from ._website import (
     quarto_yml,
     social_cards,
 )
+from ._website.ai_agents import llms_txt
 from ._website.navigation import github as nav_github
 from ._website.navigation import label as nav_label
 from ._website.navigation import release as nav_release
@@ -8476,7 +8477,7 @@ class GreatDocs:
                 '<path d="M20 3v4"/><path d="M22 5h-4"/></svg>'
             )
             ai_items.append(f'<a href="skills.html">Skills{_sparkle_svg}</a><br>')
-        if self._llms_txt_available():
+        if llms_txt.is_planned(self.build_dir):
             ai_items.append("[llms.txt](llms.txt)<br>")
             ai_items.append("[llms-full.txt](llms-full.txt)<br>")
 
@@ -11659,363 +11660,6 @@ anchor-sections: true
         # Write back
         quarto_yml.write(self.build_dir, config, self._config)
 
-    def _llms_txt_available(self) -> bool:
-        """
-        Predict whether the build will generate `llms.txt` and `llms-full.txt`
-
-        The homepage margin queries this before either file exists, so it must
-        predict whether the build will generate them.
-
-        Both files require `_quarto.yml` to contain an `api-reference` block
-        with an importable `package` and at least one section.
-
-        Returns
-        -------
-        bool
-            Whether the build should write both files.
-        """
-        config = self._llms_txt_quarto_config()
-        if config is None:
-            return False
-        api_ref_config = config["api-reference"]
-        package_name = api_ref_config["package"]
-        try:
-            import importlib
-
-            importlib.import_module(str(package_name).replace("-", "_"))
-        except ImportError:
-            return False
-        return True
-
-    def _llms_txt_quarto_config(self) -> dict[str, Any] | None:
-        """
-        Read the `_quarto.yml` configuration the llms.txt files are built from
-
-        Both `_generate_llms_txt` and `_generate_llms_full_txt` build their file
-        from the `api-reference` block, and `_llms_txt_available` predicts
-        whether they will run. Sharing this one guard keeps the three in
-        agreement, so a page can never advertise a file the build will not
-        write, and neither can a file appear without being advertised.
-
-        Returns
-        -------
-        dict[str, Any] | None
-            The parsed `_quarto.yml`, guaranteed to carry an `api-reference`
-            block with a `package` and at least one section, or `None` when the
-            build directory has no usable `_quarto.yml`.
-        """
-        if not quarto_yml.path(self.build_dir).exists():
-            return None
-        try:
-            config = quarto_yml.read(self.build_dir)
-        except (OSError, ValueError):
-            return None
-        if not isinstance(config, dict):
-            return None
-        api_ref_config = config.get("api-reference")
-        if not isinstance(api_ref_config, dict):
-            return None
-        if not api_ref_config.get("package") or not api_ref_config.get("sections"):
-            return None
-        return cast("dict[str, Any]", config)
-
-    def _generate_llms_txt(self) -> None:
-        """
-        Generate an llms.txt file for LLM documentation indexing.
-
-        Creates a structured markdown file that indexes the API reference pages, following the
-        llms.txt standard format for LLM-readable documentation. The file is saved to the docs
-        directory and will be included in the built site.
-
-        The format follows the structure:
-
-        - package title with description
-        - API Reference section with links to each documented item
-        """
-        from great_docs._apiref import APIReference, SpecObject
-
-        config = self._llms_txt_quarto_config()
-        if config is None:
-            return
-
-        # Get API reference sections and package info
-        api_ref_config = config["api-reference"]
-        sections = api_ref_config["sections"]
-        package_name = api_ref_config["package"]
-
-        # Get package metadata for description and site URL
-        metadata = self._get_package_metadata()
-        description = metadata.get("description", "")
-
-        # Get the site URL and prefer the Documentation URL from pyproject.toml,
-        # fall back to site-url from _quarto.yml
-        urls = metadata.get("urls", {})
-        site_url = urls.get("Documentation", "") or config.get("website", {}).get("site-url", "")
-
-        # Clean up site URL and remove any trailing anchors or paths that aren't the base
-        if site_url:
-            # Remove trailing #readme or similar anchors
-            if "#" in site_url:
-                site_url = site_url.split("#")[0]
-            # Ensure trailing slash
-            if not site_url.endswith("/"):
-                site_url += "/"
-
-        # Build the llms.txt content
-        lines = []
-
-        # Header with package name
-        lines.append(f"# {package_name}")
-        lines.append("")
-
-        # Description
-        if description:
-            lines.append(f"> {description}")
-            lines.append("")
-
-        # API Reference section
-        lines.append("## Docs")
-        lines.append("")
-        lines.append("### API Reference")
-        lines.append("")
-
-        # Process each section
-        for section in APIReference(config).sections:
-            section_title = section.title or section.subtitle or ""
-            section_desc = section.desc or ""
-
-            # Add section header as a comment or sub-heading if there are multiple sections
-            if len(sections) > 1 and section_title:
-                lines.append(f"#### {section_title}")
-                if section_desc:
-                    lines.append(f"> {section_desc}")
-                lines.append("")
-
-            # Add each item in the section
-            for entry in section.contents:
-                if not isinstance(entry, SpecObject):
-                    continue  # pragma: no cover
-                item_name = entry.name
-
-                # Get description from docstring if available
-                item_desc = self._get_docstring_summary(package_name, item_name)
-
-                if site_url:
-                    url = f"{site_url}reference/{entry.page_path}.html"
-                else:
-                    url = f"reference/{entry.page_path}.html"
-
-                # Format the line
-                if item_desc:
-                    lines.append(f"- [{item_name}]({url}): {item_desc}")
-                else:
-                    lines.append(f"- [{item_name}]({url})")
-
-            lines.append("")
-
-        # Write the llms.txt file
-        llms_txt_path = self.build_dir / "llms.txt"
-        with open(llms_txt_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines))
-
-        print(f"Created {llms_txt_path}")
-
-    def _get_docstring_summary(self, package_name: str, item_name: str) -> str:
-        """
-        Get the first line of a docstring for an item.
-
-        Parameters
-        ----------
-        package_name
-            The name of the package containing the item.
-        item_name
-            The name of the class, function, or module to get the docstring for.
-
-        Returns
-        -------
-        str
-            The first line of the docstring, or empty string if not available.
-        """
-        try:
-            import importlib
-
-            # Normalize package name
-            normalized_name = package_name.replace("-", "_")
-            module = importlib.import_module(normalized_name)
-
-            # Try to get the object
-            obj = getattr(module, item_name, None)
-            if obj is None:
-                return ""
-
-            # Get docstring
-            docstring = getattr(obj, "__doc__", None)
-            if not docstring:
-                return ""  # pragma: no cover
-
-            # Extract first line/sentence
-            first_line = docstring.strip().split("\n")[0].strip()
-
-            # Clean up the line (remove trailing periods, normalize whitespace)
-            first_line = first_line.rstrip(".")
-
-            return first_line
-
-        except Exception:  # pragma: no cover
-            return ""  # pragma: no cover
-
-    def _generate_llms_full_txt(self) -> None:
-        """
-        Generate an llms-full.txt file with comprehensive API documentation for LLMs.
-
-        Creates a detailed markdown file containing full function/class signatures and
-        docstrings, plus CLI help text if available. This provides comprehensive context
-        for LLM-based tools to understand and work with the package's API.
-
-        The format includes:
-        - Package header with description
-        - Full API documentation with signatures and docstrings organized by section
-        - CLI documentation with --help output for all commands
-        """
-
-        config = self._llms_txt_quarto_config()
-        if config is None:
-            return
-
-        # Get API reference sections and package info
-        api_ref_config = config["api-reference"]
-        sections = api_ref_config["sections"]
-        package_name = api_ref_config["package"]
-
-        # Get package metadata
-        metadata = self._get_package_metadata()
-        description = metadata.get("description", "")
-
-        # Import the package
-        try:
-            import importlib
-
-            normalized_name = package_name.replace("-", "_")
-            module = importlib.import_module(normalized_name)
-        except ImportError as e:
-            print(f"Could not import {package_name}: {e}")
-            return
-
-        sep_line = "-" * 70
-
-        # Build the content
-        lines = []
-        lines.append(sep_line)
-        lines.append(f"This is the API documentation for the {package_name} library.")
-        lines.append(sep_line)
-        lines.append("")
-
-        # Process each section
-        for section in sections:
-            section_title = section.get("title") or section.get("subtitle") or ""
-            section_desc = section.get("desc", "")
-
-            # Add section header
-            if section_title:
-                lines.append(f"\n## {section_title}\n")
-                if section_desc:
-                    lines.append(f"{section_desc}\n")
-                lines.append("")
-
-            # Process each item in the section
-            for item in section.get("contents", []):
-                # Handle both string and dict formats
-                if isinstance(item, str):
-                    item_name = item
-                elif isinstance(item, dict):
-                    item_name = item.get("name", str(item))
-                else:
-                    continue  # pragma: no cover
-
-                # Get the object's signature and docstring
-                api_text = self._get_api_details(module, item_name)
-                if api_text:
-                    lines.append(api_text)
-                    lines.append("")
-
-        # Add CLI documentation if enabled
-        cli_text = self._get_cli_help_text_for_llms()
-        if cli_text:
-            lines.append("")
-            lines.append(sep_line)
-            lines.append("This is the CLI documentation for the package.")
-            lines.append(sep_line)
-            lines.append("")
-            lines.append(cli_text)
-
-        # Add User Guide content if available
-        user_guide_text = self._get_user_guide_text_for_llms()
-        if user_guide_text:
-            lines.append("")
-            lines.append(sep_line)
-            lines.append("This is the User Guide documentation for the package.")
-            lines.append(sep_line)
-            lines.append("")
-            lines.append(user_guide_text)
-
-        # Write the llms-full.txt file
-        llms_full_path = self.build_dir / "llms-full.txt"
-        with open(llms_full_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines))
-
-        print(f"Created {llms_full_path}")
-
-    def _get_api_details(self, module, item_name: str) -> str:
-        """
-        Retrieve the signature and docstring for a function/class.
-
-        Parameters
-        ----------
-        module
-            The module from which to retrieve the function/class.
-        item_name
-            The name of the function or class (can be dotted for nested attributes).
-
-        Returns
-        -------
-        str
-            A string containing the name, signature, and docstring.
-        """
-        import inspect
-
-        try:
-            # Split the attribute path to handle nested attributes (e.g., "Class.method")
-            parts = item_name.split(".")
-            obj = module
-            for part in parts:
-                obj = getattr(obj, part)
-
-            # Get the name of the object
-            obj_name = getattr(obj, "__name__", item_name)
-
-            # Get the function/class signature
-            try:
-                sig = inspect.signature(obj)
-                sig_str = f"{obj_name}{sig}"
-            except (ValueError, TypeError):
-                # Some objects don't have signatures (e.g., some built-ins)
-                sig_str = obj_name
-
-            # Get the docstring
-            doc = getattr(obj, "__doc__", None) or ""
-
-            # Clean up the docstring - remove excessive indentation
-            if doc:
-                doc = inspect.cleandoc(doc)
-
-            # Combine the signature and docstring
-            return f"{sig_str}\n\n{doc}" if doc else sig_str
-
-        except AttributeError:  # pragma: no cover
-            return ""  # pragma: no cover
-        except Exception:  # pragma: no cover
-            return ""  # pragma: no cover
-
     def _generate_skill_md(self) -> None:
         """
         Generate a SKILL.md file conforming to the Agent Skills specification.
@@ -12190,7 +11834,7 @@ anchor-sections: true
                     else:
                         continue  # pragma: no cover
 
-                    item_desc = self._get_docstring_summary(package_name, item_name)
+                    item_desc = llms_txt.docstring_summary(package_name, item_name)
                     if item_desc:
                         lines.append(f"- `{item_name}`: {item_desc}")  # pragma: no cover
                     else:
@@ -12229,7 +11873,7 @@ anchor-sections: true
         lines.append("")
         if site_url:
             lines.append(f"- [Full documentation]({site_url})")
-        if self._llms_txt_available():
+        if llms_txt.is_planned(self.build_dir):
             lines.append("- [llms.txt](llms.txt) — Indexed API reference for LLMs")
             lines.append("- [llms-full.txt](llms-full.txt) — Comprehensive documentation for LLMs")
         if repo_url:
@@ -13312,142 +12956,6 @@ anchor-sections: true
         self._generate_sitemap_xml()
         self._generate_robots_txt()
 
-    def _get_cli_help_text_for_llms(self) -> str:
-        """
-        Get CLI help text formatted for llms-full.txt.
-
-        Returns
-        -------
-        str
-            Formatted CLI help text with all commands and subcommands.
-        """
-        metadata = self._get_package_metadata()
-
-        if not metadata.get("cli_enabled", False):
-            return ""
-
-        package_name = self._detect_package_name()
-        if not package_name:
-            return ""  # pragma: no cover
-
-        # The Click CLI is imported from the package's module, which can differ
-        # from the PyPI project name.
-        importable_name = self._resolve_importable_name(package_name)
-        cli_info = self._discover_click_cli(importable_name, display_name=package_name)
-        if not cli_info:
-            return ""  # pragma: no cover
-
-        lines = []
-        entry_point = cli_info.get("entry_point_name", package_name)
-
-        # Main CLI help
-        lines.append(f"## CLI: {entry_point}")
-        lines.append("")
-        lines.append("```")
-        lines.append(cli_info.get("help_text", ""))
-        lines.append("```")
-        lines.append("")
-
-        # Process subcommands recursively
-        def add_subcommand_help(cmd_info: dict, depth: int = 0):
-            nonlocal lines
-            for subcmd in cmd_info.get("commands", []):
-                if subcmd.get("hidden"):
-                    continue
-
-                full_path = subcmd.get("full_path", subcmd.get("name", ""))
-                lines.append(f"### {full_path}")
-                lines.append("")
-                lines.append("```")
-                lines.append(subcmd.get("help_text", ""))
-                lines.append("```")
-                lines.append("")
-
-                # Recurse for nested subcommands
-                if subcmd.get("commands"):
-                    add_subcommand_help(subcmd, depth + 1)  # pragma: no cover
-
-        add_subcommand_help(cli_info)
-
-        return "\n".join(lines)
-
-    def _get_user_guide_text_for_llms(self) -> str:
-        """
-        Get User Guide content formatted for llms-full.txt.
-
-        Reads all user guide .qmd files in order and extracts their content, stripping YAML
-        frontmatter but preserving the document structure.
-
-        Returns
-        -------
-        str
-            Formatted User Guide content with all pages in order.
-        """
-        user_guide_info = self._discover_user_guide()
-        if not user_guide_info:
-            return ""
-
-        lines = []
-        files = user_guide_info.get("files", [])
-
-        if not files:
-            return ""  # pragma: no cover
-
-        current_section = None
-
-        for file_info in files:
-            file_path = file_info.get("path")
-            title = file_info.get("title", "")
-            section = file_info.get("section")
-
-            if not file_path or not file_path.exists():
-                continue  # pragma: no cover
-
-            # Add section header if this is a new section
-            if section and section != current_section:
-                lines.append(f"\n## {section}\n")
-                current_section = section
-
-            # Read the file content
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-            except Exception:  # pragma: no cover
-                continue  # pragma: no cover
-
-            # Strip YAML frontmatter
-            content = self._strip_frontmatter(content)
-
-            # Add the page title as a header if not already starting with one
-            content_stripped = content.strip()
-            if not content_stripped.startswith("#"):
-                lines.append(f"### {title}\n")
-
-            lines.append(content)
-            lines.append("")
-
-        return "\n".join(lines)
-
-    def _strip_frontmatter(self, content: str) -> str:
-        """
-        Remove YAML frontmatter from a document.
-
-        Parameters
-        ----------
-        content
-            The document content.
-
-        Returns
-        -------
-        str
-            The content with frontmatter removed.
-        """
-        if content.startswith("---"):
-            parts = content.split("---", 2)
-            if len(parts) >= 3:
-                return parts[2].lstrip()
-        return content
-
     def uninstall(self) -> None:
         """
         Remove Great Docs configuration and generated build directories
@@ -13567,15 +13075,29 @@ anchor-sections: true
         """
         Write `llms.txt` and `llms-full.txt`
 
+        `llms-full.txt` includes user guide pages and, when `cli.enabled` is set, Click
+        command-line help.
+
         Returns
         -------
         :
             The result line or skip reason.
         """
-        if not self._llms_txt_available():
+        if not llms_txt.is_planned(self.build_dir):
             return Skipped("no API reference")
-        self._generate_llms_txt()
-        self._generate_llms_full_txt()
+        metadata = self._get_package_metadata()
+        llms_txt.write_index(self.build_dir, metadata, report=print)
+
+        cli = None
+        package_name = self._detect_package_name() if metadata.get("cli_enabled", False) else None
+        if package_name:
+            # The importable module name can differ from the PyPI project name.
+            cli = self._discover_click_cli(
+                self._resolve_importable_name(package_name), display_name=package_name
+            )
+        llms_txt.write_full(
+            self.build_dir, cli=cli, user_guide=self._discover_user_guide(), report=print
+        )
         return "Created llms.txt + llms-full.txt"
 
     def _step_skill_md(self) -> Outcome:

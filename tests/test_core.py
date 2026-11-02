@@ -1531,28 +1531,6 @@ class TestGetTagIconHtml:
 
 
 # ---------------------------------------------------------------------------
-# Strip frontmatter
-# ---------------------------------------------------------------------------
-
-
-class TestStripFrontmatter:
-    def test_removes_frontmatter(self, tmp_path):
-        gd = _make_gd(tmp_path)
-        content = "---\ntitle: Hello\n---\nBody text"
-        assert gd._strip_frontmatter(content) == "Body text"
-
-    def test_no_frontmatter_unchanged(self, tmp_path):
-        gd = _make_gd(tmp_path)
-        content = "Just body text"
-        assert gd._strip_frontmatter(content) == content
-
-    def test_incomplete_frontmatter_unchanged(self, tmp_path):
-        gd = _make_gd(tmp_path)
-        content = "---\ntitle: Hello\nNo closing"
-        assert gd._strip_frontmatter(content) == content
-
-
-# ---------------------------------------------------------------------------
 # _get_package_exports – cache hit path
 # ---------------------------------------------------------------------------
 
