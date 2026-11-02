@@ -230,7 +230,7 @@ great-docs check-links && great-docs proofread
 
 ## Programmatic Usage
 
-You can also use the proofreader programmatically:
+Call `GreatDocs.proofread()` from Python to use the same dictionary and rule defaults as `great-docs proofread`. It returns a list of checked files, each with a `file` path, `issues` and an `error` message if checking failed:
 
 ```python
 from great_docs import GreatDocs
@@ -251,13 +251,20 @@ results = docs.proofread(
 # Strict mode (all rules enabled)
 results = docs.proofread(strict=True)
 
+# Check docstrings in the package's Python files
+results = docs.proofread(include_docstrings=True)
+
 # Process results
 for file_result in results:
+    if file_result.error:
+        print(f"{file_result.file}: not checked ({file_result.error})")
     for issue in file_result.issues:
         print(f"Line {issue.line}: {issue.message}")
         if issue.suggestions:
             print(f"  Suggestions: {issue.suggestions[:3]}")
 ```
+
+Use `dialect`, `only_rules` and `ignore_rules` as you would the CLI options `--dialect`, `--only` and `--ignore`. A missing `harper-cli` raises `RuntimeError` for the whole run, including runs that check only `.qmd` pages.
 
 ## Next Steps
 
@@ -265,4 +272,4 @@ Proofreading catches the small errors that accumulate over time: misspellings, r
 
 - [Link Checker](link-checker.qmd) validates that all links in your documentation resolve correctly
 - [Docs Linting](linting.qmd) checks docstring directives, cross-references, and structural issues
-- [Configuration](configuration.qmd) covers custom dictionaries and proofreading settings in `great-docs.yml`
+- [Configuration](configuration.qmd) describes the project settings available in `great-docs.yml`
