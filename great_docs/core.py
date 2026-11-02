@@ -7644,6 +7644,8 @@ title: "Security Policy"
                 )
 
         # License (folded into Community) — "Full license" link + small SPDX badge
+        import html as _html
+
         from ._license import get_license_info
 
         license_id = metadata.get("license", "")
@@ -7655,7 +7657,7 @@ title: "Security Policy"
                 # Underlined link + small SPDX badge with tooltip
                 spdx_html = (  # pragma: no cover
                     f'<a href="{license_link}">{_full_license}</a> '
-                    f'<span title="{license_info.full_name}" '
+                    f'<span title="{_html.escape(license_info.full_name)}" '
                     f'class="gd-spdx-badge">{license_info.spdx_id}</span>'
                 )
                 community_items.append(f"{spdx_html}<br>")  # pragma: no cover
