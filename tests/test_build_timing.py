@@ -81,7 +81,7 @@ class TestWriteBuildTiming:
 
     def test_parallel_render_stats(self, tmp_path: Path):
         """A parallel build records Quarto's start-up time, which the next one reads."""
-        from great_docs import _parallel_render
+        from great_docs._build import parallel_render
 
         layout = self._make_layout(tmp_path)
         layout.site_dir.mkdir(parents=True)
@@ -92,7 +92,7 @@ class TestWriteBuildTiming:
         )
         assert result is not None
         assert json.loads(result.read_text())["render"] == stats
-        assert _parallel_render.read_startup(result) == 4.9
+        assert parallel_render.read_startup(result) == 4.9
 
     def test_ordinary_build_has_no_render_stats(self, tmp_path: Path):
         layout = self._make_layout(tmp_path)

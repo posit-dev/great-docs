@@ -83,7 +83,7 @@ if TYPE_CHECKING:
 
     from ._apiref.api_reference import APIReference
     from ._apiref.inventory import InventoryItem
-    from ._build_log import BuildLog
+    from ._build.log import BuildLog
 
 # Injected into marimo `--mode edit` WASM exports (iframe mode). Those load inert
 # — cells are stale and the kernel isn't instantiated, so nothing renders and
@@ -12520,7 +12520,7 @@ anchor-sections: true
         """
         import threading
 
-        from great_docs import _parallel_render
+        from great_docs._build import parallel_render
 
         env = quarto.environment(self._config)
         result = None
@@ -12542,7 +12542,7 @@ anchor-sections: true
                     pages_started[0] = min(pages_started[0] + 1, bar.total)
                     bar.update(pages_started[0])
 
-            result = _parallel_render.render(
+            result = parallel_render.render(
                 self.build_dir,
                 env,
                 jobs,
@@ -13070,13 +13070,13 @@ anchor-sections: true
             print(f"Error: {e}", file=sys.stderr)
             raise
 
-        from great_docs import _parallel_render
-        from great_docs._build_log import BuildLog, estimate_build_time
+        from great_docs._build import parallel_render
+        from great_docs._build.log import BuildLog, estimate_build_time
 
         # Settle the render process count up front so a bad value fails fast, and read the last
         # build's page timings and Quarto start-up time before anything clears them (they guide
         # how pages are split)
-        render_jobs = _parallel_render.resolve_jobs(jobs)
+        render_jobs = parallel_render.resolve_jobs(jobs)
         last_timings: dict[str, float] = {}
         last_startup: float | None = None
         if render_jobs > 1:
@@ -13084,8 +13084,8 @@ anchor-sections: true
                 self.layout.site_dir / "build-timings.json",
                 self.build_dir / "_site" / "build-timings.json",
             )
-            last_timings = _parallel_render.read_timings(*timing_files)
-            last_startup = _parallel_render.read_startup(*timing_files)
+            last_timings = parallel_render.read_timings(*timing_files)
+            last_startup = parallel_render.read_startup(*timing_files)
 
         # --- Gather metadata for the build header -------------------------
         package_name = self._detect_package_name() or ""

@@ -123,7 +123,7 @@ def char_width(ch: str) -> int:
 
     Wide characters are the ones Unicode gives an East Asian Width of wide
     or fullwidth, which takes in CJK and most emoji. This is the same rule
-    that `great_docs._build_log` pads its boxes with.
+    that `great_docs._build.log` pads its boxes with.
     """
     if " " <= ch <= "~":
         return 1

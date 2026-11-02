@@ -1472,8 +1472,8 @@ def freeze(
 
     # Quarto requires matching page sources to reuse cached results. Use the build's
     # preparation steps to keep those sources consistent.
+    from ._build.log import BuildLog
     from ._build.pipeline import Run
-    from ._build_log import BuildLog
 
     docs = GreatDocs(project_path=project_path, config_path=config_path)
     log = BuildLog()
@@ -2251,7 +2251,7 @@ def check_examples(
       great-docs check-examples --parallel --jobs 4
       great-docs check-examples --no-docstrings --timeout 60
     """
-    from ._build_log import Colors, MultiProgressBar, ProgressBar
+    from ._build.log import Colors, MultiProgressBar, ProgressBar
     from ._check_examples import (
         check_examples as run_check,
     )

@@ -215,6 +215,9 @@ exclude = [
     "**/dist",
     "tests",
     "docs",
+    # Exclude modules in included packages until they pass strict checking
+    "great_docs/_build/log.py",
+    "great_docs/_build/parallel_render.py",
 ]
 reportMissingImports = true
 reportMissingTypeStubs = false

@@ -354,8 +354,8 @@ def build_site(rendered_dir: Path, name: str) -> Path:
 
     from great_docs import GreatDocs
     from great_docs._build import freeze, quarto
+    from great_docs._build.log import BuildLog
     from great_docs._build.pipeline import Run
-    from great_docs._build_log import BuildLog
 
     rendered_dir.mkdir(parents=True, exist_ok=True)
     staging = rendered_dir / f".building-{name}-{os.getpid()}"

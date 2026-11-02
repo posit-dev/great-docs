@@ -33,8 +33,8 @@ from yaml12 import parse_yaml as _parse_yaml
 
 from great_docs import BuildError, Config, GreatDocs, create_default_config, load_config
 from great_docs._build import freeze, quarto
+from great_docs._build.log import BuildLog
 from great_docs._build.steps import Step, count_listed
-from great_docs._build_log import BuildLog
 from great_docs._content.naming import strip_numeric_prefix
 from great_docs._reference.discovery import (
     AUTO_EXCLUDE,

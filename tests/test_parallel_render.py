@@ -1,7 +1,7 @@
 """
 Rendering a website with several Quarto processes
 
-`_parallel_render.render()` splits a project's pages into groups that each
+`parallel_render.render()` splits a project's pages into groups that each
 render in a copy of the project, then merges the copies' output. The merged
 site must match the output of a plain `quarto render`.
 """
@@ -16,7 +16,7 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from great_docs import _parallel_render as pr
+from great_docs._build import parallel_render as pr
 
 # ── Choosing the number of processes ─────────────────────────────────────────
 

@@ -14,7 +14,7 @@ import griffe
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from great_docs._build_log import BuildLog
+    from great_docs._build.log import BuildLog
 
 __all__ = [
     "USER_CODE_ERRORS",

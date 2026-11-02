@@ -53,9 +53,9 @@ from typing import Any
 
 from yaml12 import parse_yaml, write_yaml
 
-from ._build import quarto
-from ._subprocess import TEXT_MODE_KWARGS
-from ._utils import QUARTO_YML_HEADER
+from .._subprocess import TEXT_MODE_KWARGS
+from .._utils import QUARTO_YML_HEADER
+from . import quarto
 
 JOBS_ENV = "GREAT_DOCS_RENDER_JOBS"
 """Environment variable giving the number of render processes (`auto` or a number)"""
