@@ -45,6 +45,7 @@ from great_docs._reference.discovery import (
 )
 from great_docs._reference.probe import detect_docstring_style, detect_dynamic_mode
 from great_docs._website.ai_agents import llms_txt
+from great_docs._website.homepage.readme import Badge, HeroElements
 from great_docs._website.quarto_yml import edit as edit_quarto_yml
 from great_docs._website.quarto_yml import read as read_quarto_yml
 from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
@@ -207,7 +208,15 @@ from great_docs.pandoc.inlines import (
     inlinecontent_to_str,
     shortcode,
 )
-from tests.support import StubRemote, make_run, mock_config, stubbed_build, write_config
+from tests.support import (
+    StubRemote,
+    homepage_hero,
+    homepage_margin,
+    make_run,
+    mock_config,
+    stubbed_build,
+    write_config,
+)
 
 
 def test_great_docs_init():
@@ -3603,34 +3612,6 @@ def test_landing_page_generated_when_no_readme():
         assert "API Reference" in content
 
 
-def test_landing_page_includes_description_from_pyproject():
-    """Test that the landing page uses the description from pyproject.toml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "fancy-lib"\nversion = "2.0"\n'
-            'description = "Fancy library for doing fancy things"\n'
-        )
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-
-        pkg_dir = project_path / "fancy_lib"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        metadata = docs._get_package_metadata()
-
-        content = docs._generate_landing_page_content(metadata, has_api_reference=True)
-
-        assert "## fancy-lib" in content
-        assert "Fancy library for doing fancy things" in content
-        assert "pip install fancy-lib" in content
-
-
 def test_landing_page_metadata_fallback_to_setup_cfg():
     """Test that metadata falls back to setup.cfg when pyproject.toml lacks [project]."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -3741,81 +3722,6 @@ def test_landing_page_has_sidebar_metadata():
         assert "View on PyPI" in content
         assert "Full license" in content
         assert ">=3.9" in content
-
-
-def test_landing_page_with_no_metadata():
-    """Test landing page generation when minimal metadata is available."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        # Only a package directory, no pyproject.toml or setup.cfg
-        pkg_dir = project_path / "minimal_pkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("")
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        metadata = docs._get_package_metadata()
-
-        content = docs._generate_landing_page_content(metadata, has_api_reference=True)
-
-        assert "## minimal_pkg" in content
-        assert "pip install minimal_pkg" in content
-
-
-def test_find_index_source_priority_order():
-    """Test that _find_index_source_file returns files in correct priority order."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "1.0"\n')
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-
-        # If only README.rst exists, it should find it
-        (project_path / "README.rst").write_text("Title\n=====\n")
-        docs = GreatDocs(project_path=tmp_dir)
-        source, warnings = docs._find_index_source_file()
-
-        assert source is not None
-        assert source.name == "README.rst"
-        assert len(warnings) == 0
-
-        # If README.md exists, it should prefer it over README.rst
-        (project_path / "README.md").write_text("# Title\n")
-        source, warnings = docs._find_index_source_file()
-
-        assert source.name == "README.md"
-        assert len(warnings) == 1
-        assert "README.rst" in warnings[0]
-
-        # If index.md exists, it should prefer it
-        (project_path / "index.md").write_text("# Index\n")
-        source, warnings = docs._find_index_source_file()
-
-        assert source.name == "index.md"
-
-        # If index.qmd exists, it should prefer it
-        (project_path / "index.qmd").write_text("---\ntitle: Index\n---\n")
-        source, warnings = docs._find_index_source_file()
-
-        assert source.name == "index.qmd"
-
-
-def test_find_index_source_no_files():
-    """Test that _find_index_source_file returns None when no source files exist."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        source, warnings = docs._find_index_source_file()
-
-        assert source is None
-        assert len(warnings) == 0
 
 
 def test_readme_rst_creates_index():
@@ -4007,33 +3913,6 @@ def test_index_qmd_without_opening_paragraph_has_no_description():
         fm = _homepage_from("README.md", source, tmp_dir)
 
     assert "description-meta" not in fm
-
-
-def test_convert_rst_to_markdown_real_pandoc():
-    """Test RST to Markdown conversion via pandoc."""
-
-    # Skip if neither quarto nor pandoc is available
-    if not shutil.which("quarto") and not shutil.which("pandoc"):
-        pytest.skip("quarto/pandoc not available")
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-
-        rst_file = project_path / "test.rst"
-        rst_file.write_text(
-            "Title\n=====\n\nParagraph text.\n\nSubtitle\n--------\n\n- Item 1\n- Item 2\n"
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._convert_rst_to_markdown(rst_file)
-
-        # Should have Markdown headings
-        assert "# Title" in result
-        assert "## Subtitle" in result or "Subtitle" in result
-        assert "Paragraph text" in result
-        assert "Item 1" in result
 
 
 def test_reorder_navbar_applies_configured_order():
@@ -6619,134 +6498,6 @@ class TestFaviconLinkInjection:
             assert config.get("website", {}).get("favicon") == "favicon.ico"
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Badge Extraction from README Content
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestExtractBadgesFromContent:
-    """Tests for _extract_badges_from_content (top-of-file and centered-div strategies)."""
-
-    def _make_builder(self):
-        """Create a minimal GreatDocs instance for calling _extract_badges_from_content."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "test-pkg"\nversion = "0.1.0"\n')
-            (tmp / "test_pkg").mkdir()
-            (tmp / "test_pkg" / "__init__.py").write_text('"""Test."""\n')
-            builder = GreatDocs(str(tmp))
-        return builder
-
-    def test_top_of_file_badges_extracted(self):
-        """Badges right after the heading are extracted."""
-        content = (
-            "# My Package\n"
-            "\n"
-            "[![PyPI](https://img.shields.io/badge/pypi-v1-blue)](https://pypi.org/p)\n"
-            "[![License](https://img.shields.io/badge/license-MIT-green)](https://mit.edu)\n"
-            "\n"
-            "Some body text.\n"
-        )
-        builder = self._make_builder()
-        badges, cleaned, hero_extras = builder._extract_badges_from_content(content)
-
-        assert len(badges) == 2
-        assert badges[0]["alt"] == "PyPI"
-        assert "img.shields.io" in badges[0]["img"]
-
-        # Heading preserved, badges stripped, body preserved
-        assert "# My Package" in cleaned
-        assert "Some body text." in cleaned
-        assert "img.shields.io" not in cleaned
-
-        # No hero extras for top-of-file badges
-        assert hero_extras == {}
-
-    def test_centered_div_badges_extracted(self):
-        """Badges inside <div align="center"> are extracted and the entire div is stripped."""
-        content = (
-            "> [!TIP]\n"
-            "> Install via pip.\n"
-            "\n"
-            '<div align="center">\n'
-            '<img src="logo.png" width="350">\n'
-            "<br />\n"
-            "*A cool tagline*\n"
-            "<br />\n"
-            "[![PyPI](https://img.shields.io/badge/pypi-v1-blue)](https://pypi.org)\n"
-            "[![CI](https://img.shields.io/badge/ci-pass-green)](https://github.com/ci)\n"
-            "[![Coverage](https://codecov.io/badge.svg)](https://codecov.io)\n"
-            "</div>\n"
-            "\n"
-            "Body text after.\n"
-        )
-        builder = self._make_builder()
-        badges, cleaned, hero_extras = builder._extract_badges_from_content(content)
-
-        assert len(badges) == 3
-        assert badges[0]["alt"] == "PyPI"
-        assert badges[2]["alt"] == "Coverage"
-
-        # Entire div block removed
-        assert "<div" not in cleaned
-        assert "</div>" not in cleaned
-        assert "logo.png" not in cleaned
-        assert "cool tagline" not in cleaned
-
-        # Surrounding content preserved
-        assert "Install via pip" in cleaned
-        assert "Body text after." in cleaned
-
-        # Hero extras extracted from centered div
-        assert hero_extras["logo_url"] == "logo.png"
-        assert hero_extras["tagline"] == "A cool tagline"
-
-    def test_no_badges_returns_original(self):
-        """Content without badges returns empty list and original content."""
-        content = "# Title\n\nJust text, no badges.\n"
-        builder = self._make_builder()
-        badges, cleaned, hero_extras = builder._extract_badges_from_content(content)
-
-        assert badges == []
-        assert cleaned == content
-        assert hero_extras == {}
-
-    def test_non_badge_images_in_div_ignored(self):
-        """A centered div without badge host URLs is not stripped."""
-        content = '<div align="center">\n<img src="hero.png">\n</div>\n\nBody text.\n'
-        builder = self._make_builder()
-        badges, cleaned, hero_extras = builder._extract_badges_from_content(content)
-
-        assert badges == []
-        assert "<div" in cleaned
-
-    def test_centered_div_linked_logo_extracted(self):
-        """A linked <a><img></a> logo in the centered div is extracted."""
-        content = (
-            '<div align="center">\n'
-            "\n"
-            '<a href="https://example.com/"><img src="https://example.com/logo.svg" width="65%"/></a>\n'
-            "\n"
-            "_Obtain Polars DataFrames of NOAA historical weather data_\n"
-            "\n"
-            "[![PyPI](https://img.shields.io/pypi/pyversions/pkg.svg)](https://pypi.org/project/pkg/)\n"
-            "[![Tests](https://github.com/user/pkg/actions/workflows/tests.yml/badge.svg)](https://github.com/user/pkg/actions)\n"
-            "\n"
-            "</div>\n"
-            "\n"
-            "## Features\n"
-            "Some text.\n"
-        )
-        builder = self._make_builder()
-        badges, cleaned, hero_extras = builder._extract_badges_from_content(content)
-
-        assert len(badges) == 2
-        assert hero_extras["logo_url"] == "https://example.com/logo.svg"
-        assert hero_extras["tagline"] == "Obtain Polars DataFrames of NOAA historical weather data"
-        assert "<div" not in cleaned
-        assert "## Features" in cleaned
-
-
 def test_config_markdown_pages_disabled():
     """Test that markdown_pages: false excludes copy-page.js from Quarto config."""
 
@@ -7354,45 +7105,6 @@ def test_get_cli_entry_point_name_no_pyproject_returns_none():
         docs = GreatDocs(project_path=tmp_dir)
 
         assert docs._get_cli_entry_point_name("pkg") is None
-
-
-def test_find_index_source_file_readme_returns_tuple():
-    """_find_index_source_file finds README.md."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname="p"\n')
-        (Path(tmp_dir) / "README.md").write_text("# Hello\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        source, warnings = docs._find_index_source_file()
-
-        assert source is not None
-        assert source.name == "README.md"
-
-
-def test_find_index_source_file_index_qmd_priority():
-    """_find_index_source_file prefers index.qmd over README.md."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname="p"\n')
-        (Path(tmp_dir) / "index.qmd").write_text("---\ntitle: Main\n---\n")
-        (Path(tmp_dir) / "README.md").write_text("# Hello\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        source, warnings = docs._find_index_source_file()
-
-        assert source is not None
-        assert source.name == "index.qmd"
-        assert len(warnings) == 1  # warns about multiple candidates
-
-
-def test_find_index_source_file_none_empty_dir():
-    """_find_index_source_file returns None when no source file exists."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname="p"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-        source, warnings = docs._find_index_source_file()
-
-        assert source is None
 
 
 def test_get_package_metadata_setup_cfg_maintainer_basic():
@@ -9283,62 +8995,6 @@ def test_update_sidebar_with_cli_adds_api_link():
         assert ref["contents"][0]["text"] == "API Index"
 
 
-def test_find_index_source_file_readme_v2():
-    """_find_index_source_file finds README.md."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-        (tmp / "README.md").write_text("# My Package\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        winner, warnings = docs._find_index_source_file()
-
-        assert winner is not None
-        assert winner.name == "README.md"
-        assert len(warnings) == 0
-
-
-def test_find_index_source_file_priority():
-    """_find_index_source_file prefers index.qmd over README.md."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-        (tmp / "index.qmd").write_text("---\ntitle: Home\n---\n")
-        (tmp / "README.md").write_text("# My Package\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        winner, warnings = docs._find_index_source_file()
-
-        assert winner.name == "index.qmd"
-        assert len(warnings) == 1  # warns about README.md being ignored
-
-
-def test_find_index_source_file_none_v2():
-    """_find_index_source_file returns None when no candidates exist."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-        winner, warnings = docs._find_index_source_file()
-
-        assert winner is None
-
-
-def test_find_index_source_file_rst():
-    """_find_index_source_file finds README.rst as lowest priority."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-        (tmp / "README.rst").write_text("My Package\n==========\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        winner, warnings = docs._find_index_source_file()
-
-        assert winner is not None
-        assert winner.name == "README.rst"
-
-
 def test_detect_git_ref_configured():
     """_detect_git_ref returns configured source branch."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -10723,188 +10379,6 @@ def test_format_authors_yaml_empty_v2():
         assert result == ""
 
 
-def test_find_index_source_file_index_qmd_exact_warnings():
-    """_find_index_source_file prefers index.qmd over others."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "index.qmd").write_text("# Index", encoding="utf-8")
-        (Path(tmp_dir) / "README.md").write_text("# README", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        source, warnings = docs._find_index_source_file()
-
-        assert source is not None
-        assert source.name == "index.qmd"
-        assert len(warnings) == 1  # warns about multiple candidates
-
-
-def test_find_index_source_file_index_md():
-    """_find_index_source_file picks index.md when no index.qmd."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "index.md").write_text("# Index", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        source, warnings = docs._find_index_source_file()
-
-        assert source is not None
-        assert source.name == "index.md"
-        assert len(warnings) == 0
-
-
-def test_find_index_source_file_readme_md():
-    """_find_index_source_file picks README.md when no index files."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "README.md").write_text("# Hello", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        source, warnings = docs._find_index_source_file()
-
-        assert source is not None
-        assert source.name == "README.md"
-        assert len(warnings) == 0
-
-
-def test_find_index_source_file_readme_rst():
-    """_find_index_source_file picks README.rst as last resort."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "README.rst").write_text("Hello\n=====", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        source, warnings = docs._find_index_source_file()
-
-        assert source is not None
-        assert source.name == "README.rst"
-
-
-def test_find_index_source_file_none_v3():
-    """_find_index_source_file returns None when no candidates exist."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        source, warnings = docs._find_index_source_file()
-
-        assert source is None
-        assert len(warnings) == 0
-
-
-def test_find_index_source_file_multiple_warns():
-    """_find_index_source_file warns about multiple candidates."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "index.md").write_text("x", encoding="utf-8")
-        (Path(tmp_dir) / "README.md").write_text("y", encoding="utf-8")
-        (Path(tmp_dir) / "README.rst").write_text("z", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        source, warnings = docs._find_index_source_file()
-
-        assert source.name == "index.md"
-        assert len(warnings) == 1
-        assert "README.md" in warnings[0]
-        assert "README.rst" in warnings[0]
-
-
-def test_convert_rst_to_markdown_no_pandoc(monkeypatch):
-    """_convert_rst_to_markdown falls back to raw RST when pandoc not available."""
-    import shutil as shutil_mod
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        rst_file = Path(tmp_dir) / "README.rst"
-        rst_file.write_text("Hello\n=====\n\nWorld", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        monkeypatch.setattr(shutil_mod, "which", lambda _cmd: None)
-        result = docs._convert_rst_to_markdown(rst_file)
-
-        assert result == "Hello\n=====\n\nWorld"
-
-
-def test_convert_rst_to_markdown_pandoc_fails(monkeypatch):
-    """_convert_rst_to_markdown falls back to raw RST when pandoc fails."""
-    import shutil as shutil_mod
-    import subprocess as subprocess_mod
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        rst_file = Path(tmp_dir) / "README.rst"
-        rst_file.write_text("Hello\n=====", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        monkeypatch.setattr(
-            shutil_mod, "which", lambda cmd: "/usr/bin/pandoc" if cmd == "pandoc" else None
-        )
-
-        def mock_run(*args, **kwargs):
-            return subprocess_mod.CompletedProcess(
-                args=args, returncode=1, stderr="error", stdout=""
-            )
-
-        monkeypatch.setattr(subprocess_mod, "run", mock_run)
-        result = docs._convert_rst_to_markdown(rst_file)
-
-        assert result == "Hello\n====="
-
-
-def test_convert_rst_to_markdown_pandoc_exception(monkeypatch):
-    """_convert_rst_to_markdown falls back to raw RST on subprocess exception."""
-    import shutil as shutil_mod
-    import subprocess as subprocess_mod
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        rst_file = Path(tmp_dir) / "README.rst"
-        rst_file.write_text("Raw RST Content", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        monkeypatch.setattr(
-            shutil_mod, "which", lambda cmd: "/usr/bin/quarto" if cmd == "quarto" else None
-        )
-
-        def mock_run(*args, **kwargs):
-            raise OSError("pandoc crashed")
-
-        monkeypatch.setattr(subprocess_mod, "run", mock_run)
-        result = docs._convert_rst_to_markdown(rst_file)
-
-        assert result == "Raw RST Content"
-
-
-def test_generate_landing_page_content_basic():
-    """_generate_landing_page_content generates basic landing page."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        metadata = {"description": "A cool library", "name": "mylib"}
-        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
-
-        assert "### Installation" in result
-        assert "pip install" in result
-        assert "A cool library" in result
-
-
-def test_generate_landing_page_content_no_description():
-    """_generate_landing_page_content handles missing description."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        metadata = {}
-        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
-
-        assert "### Installation" in result
-        assert "pip install" in result
-
-
-def test_generate_landing_page_content_with_api_reference():
-    """_generate_landing_page_content includes API Reference link if available."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        metadata = {"description": "Test"}
-        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
-
-        assert "API Reference" in result
-        assert "reference/index.qmd" in result
-
-
-def test_generate_landing_page_content_with_user_guide():
-    """_generate_landing_page_content includes User Guide link if found."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Create user guide directory
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-        (ug_dir / "01-intro.qmd").write_text("# Intro", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        metadata = {"description": "Test"}
-        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
-
-        assert "User Guide" in result
-        assert "user-guide/index.qmd" in result
-
-
 def test_quarto_environment_sets_quarto_python():
     """Set `QUARTO_PYTHON` to a non-empty executable path"""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -11012,8 +10486,8 @@ def test_detect_module_name_fallback_to_package_init():
         assert result == "testpkg"
 
 
-def test_build_metadata_margin_with_package_name():
-    """_build_metadata_margin includes PyPI link when package name detected."""
+def test_homepage_margin_with_package_name():
+    """Verify that the sidebar includes a PyPI link when the package name is detected"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "testpkg"\n', encoding="utf-8")
@@ -11021,14 +10495,14 @@ def test_build_metadata_margin_with_package_name():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "pypi.org/project/testpkg" in result
         assert "#### Links" in result
 
 
-def test_build_metadata_margin_pypi_disabled():
-    """_build_metadata_margin omits PyPI link when pypi: false."""
+def test_homepage_margin_pypi_disabled():
+    """Verify that `pypi: false` removes the sidebar PyPI link"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "testpkg"\n', encoding="utf-8")
@@ -11037,14 +10511,14 @@ def test_build_metadata_margin_pypi_disabled():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "pypi.org" not in result
         assert "View on PyPI" not in result
 
 
-def test_build_metadata_margin_pypi_custom_url():
-    """_build_metadata_margin uses custom URL when pypi is a string."""
+def test_homepage_margin_pypi_custom_url():
+    """Verify that a string `pypi` value supplies the sidebar PyPI URL"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "testpkg"\n', encoding="utf-8")
@@ -11056,13 +10530,13 @@ def test_build_metadata_margin_pypi_custom_url():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "packages.example.com/simple/testpkg" in result
         assert "pypi.org" not in result
 
 
-def test_build_metadata_margin_pypi_disabled_with_citation():
+def test_homepage_margin_pypi_disabled_with_citation():
     """`pypi: false` must not break the citation section."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -11076,14 +10550,14 @@ def test_build_metadata_margin_pypi_disabled_with_citation():
         # for the citation section to render.
         (gd_dir / "citation.qmd").write_text("# Citation\n", encoding="utf-8")
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "pypi.org" not in result
         assert "citation.qmd" in result
         assert "testpkg" in result
 
 
-def test_build_metadata_margin_pypi_custom_url_with_citation():
+def test_homepage_margin_pypi_custom_url_with_citation():
     """A custom PyPI URL string must not break citation."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -11097,15 +10571,15 @@ def test_build_metadata_margin_pypi_custom_url_with_citation():
         gd_dir.mkdir()
         (gd_dir / "citation.qmd").write_text("# Citation\n", encoding="utf-8")
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "packages.example.com/simple/testpkg" in result
         assert "citation.qmd" in result
         assert "testpkg" in result
 
 
-def test_build_metadata_margin_with_license():
-    """_build_metadata_margin omits license when no LICENSE file exists."""
+def test_homepage_margin_with_license():
+    """Verify that the sidebar omits the licence when no `LICENSE` file exists"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text(
@@ -11115,15 +10589,15 @@ def test_build_metadata_margin_with_license():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         # Without a LICENSE file, no license entry should appear
         assert "Full license" not in result
         assert "gd-spdx-badge" not in result
 
 
-def test_build_metadata_margin_with_license_qmd():
-    """_build_metadata_margin links to license.qmd when it exists."""
+def test_homepage_margin_with_license_qmd():
+    """Verify that the sidebar links to `license.qmd` when it exists"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
@@ -11133,14 +10607,14 @@ def test_build_metadata_margin_with_license_qmd():
         # Create license.qmd in the build directory
         (gd_dir / "license.qmd").write_text("---\ntitle: License\n---\n", encoding="utf-8")
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "Full license" in result
         assert "license.qmd" in result
 
 
-def test_build_metadata_margin_with_contributing():
-    """_build_metadata_margin includes contributing guide and creates contributing.qmd."""
+def test_homepage_margin_with_contributing():
+    """Verify that sidebar setup creates and links to `contributing.qmd`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
@@ -11151,7 +10625,7 @@ def test_build_metadata_margin_with_contributing():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "#### Community" in result
         assert "Contributing guide" in result
@@ -11169,8 +10643,8 @@ def test_build_metadata_margin_with_contributing():
         assert content.count("# Contributing") == 0
 
 
-def test_build_metadata_margin_with_code_of_conduct():
-    """_build_metadata_margin includes code of conduct and creates code-of-conduct.qmd."""
+def test_homepage_margin_with_code_of_conduct():
+    """Verify that sidebar setup creates and links to `code-of-conduct.qmd`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
@@ -11181,7 +10655,7 @@ def test_build_metadata_margin_with_code_of_conduct():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "Code of conduct" in result
 
@@ -11194,8 +10668,8 @@ def test_build_metadata_margin_with_code_of_conduct():
         assert "Be nice." in content
 
 
-def test_build_metadata_margin_github_contributing():
-    """_build_metadata_margin finds CONTRIBUTING.md in .github directory."""
+def test_homepage_margin_github_contributing():
+    """Verify that sidebar setup finds `CONTRIBUTING.md` in `.github`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
@@ -11205,13 +10679,13 @@ def test_build_metadata_margin_github_contributing():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "Contributing guide" in result
 
 
-def test_build_metadata_margin_with_security():
-    """_build_metadata_margin includes security policy and creates security.qmd."""
+def test_homepage_margin_with_security():
+    """Verify that sidebar setup creates and links to `security.qmd`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
@@ -11221,7 +10695,7 @@ def test_build_metadata_margin_with_security():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "#### Community" in result
         assert "Security policy" in result
@@ -11238,8 +10712,8 @@ def test_build_metadata_margin_with_security():
         assert content.count("# Security Policy") == 0
 
 
-def test_build_metadata_margin_github_security():
-    """_build_metadata_margin finds SECURITY.md in .github directory."""
+def test_homepage_margin_github_security():
+    """Verify that sidebar setup finds `SECURITY.md` in `.github`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
@@ -11251,7 +10725,7 @@ def test_build_metadata_margin_github_security():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "Security policy" in result
 
@@ -11264,8 +10738,8 @@ def test_build_metadata_margin_github_security():
         assert "Contact security@example.com." in content
 
 
-def test_build_metadata_margin_security_disabled():
-    """_build_metadata_margin respects show_security: false config."""
+def test_homepage_margin_security_disabled():
+    """Verify that `show_security: false` omits the security policy page and sidebar link"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
@@ -11278,7 +10752,7 @@ def test_build_metadata_margin_security_disabled():
         config_file = Path(tmp_dir) / "great-docs.yml"
         config_file.write_text("site:\n  show_security: false\n", encoding="utf-8")
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "Security policy" not in result
 
@@ -11287,7 +10761,7 @@ def test_build_metadata_margin_security_disabled():
         assert not security_qmd.exists()
 
 
-def test_build_metadata_margin_security_root_over_github():
+def test_homepage_margin_security_root_over_github():
     """SECURITY.md in project root takes precedence over .github directory."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -11304,7 +10778,7 @@ def test_build_metadata_margin_security_root_over_github():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        docs._build_metadata_margin()
+        homepage_margin(docs)
 
         security_qmd = gd_dir / "security.qmd"
         content = security_qmd.read_text(encoding="utf-8")
@@ -11314,8 +10788,8 @@ def test_build_metadata_margin_security_root_over_github():
         assert "GitHub version." not in content
 
 
-def test_build_metadata_margin_with_urls():
-    """_build_metadata_margin includes project URLs from metadata."""
+def test_homepage_margin_with_urls():
+    """Verify that the sidebar includes project URLs from metadata"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text(
@@ -11325,14 +10799,14 @@ def test_build_metadata_margin_with_urls():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "Browse source code" in result
         assert "Report a bug" in result
 
 
-def test_build_metadata_margin_with_authors():
-    """_build_metadata_margin includes developers section from authors."""
+def test_homepage_margin_with_authors():
+    """Verify that the sidebar Developers section includes the package authors"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text(
@@ -11342,14 +10816,14 @@ def test_build_metadata_margin_with_authors():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "#### Developers" in result
         assert "Jane Doe" in result
 
 
-def test_build_metadata_margin_llms_links():
-    """_build_metadata_margin links llms.txt only when the files will be generated."""
+def test_homepage_margin_llms_links():
+    """Verify that the sidebar links to `llms.txt` files only when they will be generated"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
@@ -11358,13 +10832,13 @@ def test_build_metadata_margin_llms_links():
             encoding="utf-8",
         )
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "llms.txt" in result
         assert "llms-full.txt" in result
 
 
-def test_build_metadata_margin_no_llms_links_without_api_reference():
+def test_homepage_margin_no_llms_links_without_api_reference():
     """A docs-only site gets no llms.txt links, because no files are generated (#350)."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         gd_dir = Path(tmp_dir) / "great-docs"
@@ -11373,7 +10847,7 @@ def test_build_metadata_margin_no_llms_links_without_api_reference():
             "project:\n  type: website\nwebsite:\n  title: Docs only\n", encoding="utf-8"
         )
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "llms.txt" not in result
         assert "llms-full.txt" not in result
@@ -11432,8 +10906,8 @@ def test_freeze_writes_the_llms_files_build_would(label: str, tmp_path: Path):
     assert (docs.build_dir / "llms-full.txt").exists() == available, label
 
 
-def test_build_metadata_margin_authors_with_rich_metadata():
-    """_build_metadata_margin displays rich author metadata (github, orcid, etc.)."""
+def test_homepage_margin_authors_with_rich_metadata():
+    """Verify that the sidebar displays author metadata, including GitHub and ORCID links"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -11457,7 +10931,7 @@ def test_build_metadata_margin_authors_with_rich_metadata():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "Alice" in result
         assert "Maintainer" in result
@@ -11465,8 +10939,8 @@ def test_build_metadata_margin_authors_with_rich_metadata():
         assert "orcid.org/0000-0001-2345-6789" in result
 
 
-def test_build_metadata_margin_citation_link():
-    """_build_metadata_margin includes citation link when citation.qmd exists."""
+def test_homepage_margin_citation_link():
+    """Verify that the sidebar includes a citation link when `citation.qmd` exists"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
@@ -11474,7 +10948,7 @@ def test_build_metadata_margin_citation_link():
         gd_dir.mkdir()
         (gd_dir / "citation.qmd").write_text("---\ntitle: Citation\n---\n", encoding="utf-8")
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         # citation_link should be set since citation.qmd exists
         # (but it may not appear in margin sections if no explicit block uses it;
@@ -11548,28 +11022,8 @@ def test_get_github_repo_info_trailing_slash():
         assert repo_name == "project"
 
 
-def test_extract_badges_from_content_no_badges():
-    """_extract_badges_from_content returns empty list for content without badges."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        badges, cleaned, hero = docs._extract_badges_from_content("# Hello\n\nSome text here.")
-
-        assert badges == []
-
-
-def test_extract_badges_from_content_top_of_file_badges():
-    """_extract_badges_from_content extracts top-of-file badges."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = "# Project\n\n[![badge](https://img.shields.io/badge.svg)](https://example.com)\n\nSome text."
-        badges, cleaned, hero = docs._extract_badges_from_content(content)
-
-        assert len(badges) >= 1
-        assert badges[0]["img"] == "https://img.shields.io/badge.svg"
-
-
-def test_build_hero_section_disabled_no_logo():
-    """_build_hero_section returns empty when hero explicitly disabled."""
+def test_homepage_hero_disabled_no_logo():
+    """Verify that an explicitly disabled hero produces no HTML"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         gd_yml = Path(tmp_dir) / "great-docs.yml"
@@ -11577,14 +11031,14 @@ def test_build_hero_section_disabled_no_logo():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result, cleaned = docs._build_hero_section("# Hello\n\nContent")
+        result, cleaned = homepage_hero(docs, "# Hello\n\nContent")
 
         assert result == ""
         assert cleaned is None
 
 
-def test_build_hero_section_with_name_and_tagline():
-    """_build_hero_section uses config name and tagline when set."""
+def test_homepage_hero_with_name_and_tagline():
+    """Verify that the hero uses the configured name and tagline"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -11605,15 +11059,15 @@ def test_build_hero_section_with_name_and_tagline():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result, cleaned = docs._build_hero_section("# Test\n\nBody")
+        result, cleaned = homepage_hero(docs, "# Test\n\nBody")
 
         assert "My Proj" in result
         assert "A great tagline" in result
         assert "gd-hero" in result
 
 
-def test_build_hero_section_with_string_logo():
-    """_build_hero_section handles string logo config."""
+def test_homepage_hero_with_string_logo():
+    """Verify that the hero renders a logo configured as a string"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -11634,14 +11088,14 @@ def test_build_hero_section_with_string_logo():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result, cleaned = docs._build_hero_section("# Test\n\nBody")
+        result, cleaned = homepage_hero(docs, "# Test\n\nBody")
 
         assert "assets/logo.svg" in result
         assert "gd-hero-logo" in result
 
 
-def test_build_hero_section_with_badges():
-    """_build_hero_section includes badge HTML."""
+def test_homepage_hero_with_badges():
+    """Verify that the hero includes badge HTML"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -11654,13 +11108,13 @@ def test_build_hero_section_with_badges():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result, cleaned = docs._build_hero_section("# Test")
+        result, cleaned = homepage_hero(docs, "# Test")
 
         assert "gd-hero" in result
 
 
-def test_build_hero_section_badge_from_config():
-    """_build_hero_section renders badges from config list."""
+def test_homepage_hero_badge_from_config():
+    """Verify that the hero renders badges from the configured list"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -11684,7 +11138,7 @@ def test_build_hero_section_badge_from_config():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result, cleaned = docs._build_hero_section("# Test")
+        result, cleaned = homepage_hero(docs, "# Test")
 
         assert "gd-hero-badges" in result
         assert "https://ci.svg" in result
@@ -11766,8 +11220,8 @@ def test_build_sections_from_reference_config_dict_no_name_returns_none():
         assert result is None
 
 
-def test_build_metadata_margin_with_funding():
-    """_build_metadata_margin includes funding section from metadata."""
+def test_homepage_margin_with_funding():
+    """Verify that the sidebar includes funding details from metadata"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -11788,7 +11242,7 @@ def test_build_metadata_margin_with_funding():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         # Funding now appears under the Developers section
         assert "#### Developers" in result
@@ -11796,8 +11250,8 @@ def test_build_metadata_margin_with_funding():
         assert "Sponsor" in result
 
 
-def test_build_metadata_margin_with_funding_ror():
-    """_build_metadata_margin includes ROR icon link for funding with ROR URL."""
+def test_homepage_margin_with_funding_ror():
+    """Verify that the sidebar links the ROR icon to the funder's ROR URL"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -11817,15 +11271,15 @@ def test_build_metadata_margin_with_funding_ror():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "Research Inc" in result
         assert "ror.org/12345" in result
         assert "ror-sidebar-icon" in result
 
 
-def test_build_metadata_margin_with_meta_requires_python():
-    """_build_metadata_margin includes Python version requirement."""
+def test_homepage_margin_with_meta_requires_python():
+    """Verify that the sidebar includes the Python version requirement"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text(
@@ -11835,15 +11289,15 @@ def test_build_metadata_margin_with_meta_requires_python():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "#### Meta" in result
         assert "Requires:" in result
         assert ">=3.9" in result
 
 
-def test_build_metadata_margin_with_meta_extras():
-    """_build_metadata_margin includes optional dependency extras."""
+def test_homepage_margin_with_meta_extras():
+    """Verify that the sidebar includes optional dependency extras"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text(
@@ -11853,14 +11307,14 @@ def test_build_metadata_margin_with_meta_extras():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "#### Meta" in result
         assert "Provides-Extra:" in result
 
 
-def test_build_metadata_margin_citation_section():
-    """_build_metadata_margin includes citation link when citation.qmd exists."""
+def test_homepage_margin_citation_section():
+    """Verify that the sidebar includes a citation link when `citation.qmd` exists"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
@@ -11868,7 +11322,7 @@ def test_build_metadata_margin_citation_section():
         gd_dir.mkdir()
         (gd_dir / "citation.qmd").write_text("---\ntitle: Citation\n---\n", encoding="utf-8")
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         # Citation now appears under the Community section
         assert "#### Community" in result
@@ -12102,31 +11556,6 @@ def test_add_section_to_navbar_no_duplicate():
         assert guide_count == 1
 
 
-def test_extract_badges_centered_div():
-    """_extract_badges_from_content extracts badges from centered div blocks."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = '# Project\n\n<div align="center">\n\n[![badge](https://img.shields.io/badge.svg)](https://example.com)\n\n</div>\n\nSome text.'
-        badges, cleaned, hero = docs._extract_badges_from_content(content)
-
-        assert len(badges) >= 1
-
-
-def test_extract_badges_multiple():
-    """_extract_badges_from_content extracts multiple badges from known hosts."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        content = (
-            "# Project\n\n"
-            "[![CI](https://img.shields.io/badge/ci-pass.svg)](https://ci.com)\n"
-            "[![Coverage](https://codecov.io/badge.svg)](https://cov.com)\n\n"
-            "Some text."
-        )
-        badges, cleaned, hero = docs._extract_badges_from_content(content)
-
-        assert len(badges) >= 2
-
-
 def test_copy_assets_creates_assets_dir():
     """_copy_assets copies assets from source to build directory."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -12143,8 +11572,8 @@ def test_copy_assets_creates_assets_dir():
             assert (assets_dst / "logo.svg").exists()
 
 
-def test_build_metadata_margin_author_fallback_github():
-    """_build_metadata_margin uses repository URL for author GitHub fallback."""
+def test_homepage_margin_author_fallback_github():
+    """Verify that authors without a GitHub account link to the repository owner"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text(
@@ -12156,7 +11585,7 @@ def test_build_metadata_margin_author_fallback_github():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "#### Developers" in result
         assert "Bob" in result
@@ -12165,8 +11594,8 @@ def test_build_metadata_margin_author_fallback_github():
         assert "github.com/bob" in result
 
 
-def test_build_hero_section_with_light_dark_logo():
-    """_build_hero_section handles light/dark dict logo config."""
+def test_homepage_hero_with_light_dark_logo():
+    """Verify that the hero renders configured light and dark logo variants"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -12190,7 +11619,7 @@ def test_build_hero_section_with_light_dark_logo():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result, cleaned = docs._build_hero_section()
+        result, cleaned = homepage_hero(docs)
 
         assert "gd-only-light" in result
         assert "gd-only-dark" in result
@@ -12198,7 +11627,7 @@ def test_build_hero_section_with_light_dark_logo():
         assert "logo-dark.svg" in result
 
 
-def test_build_hero_section_dark_only_logo_still_renders():
+def test_homepage_hero_dark_only_logo_still_renders():
     """Regression: a dark-only `hero.logo` must still render an `<img>`.
 
     Final-review finding on the roborev #801 batch: without the config-side
@@ -12226,27 +11655,27 @@ def test_build_hero_section_dark_only_logo_still_renders():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result, cleaned = docs._build_hero_section()
+        result, cleaned = homepage_hero(docs)
 
         assert "<img" in result
         assert "hero-dark.svg" in result
 
 
-def test_build_hero_section_auto_enable_no_hero():
-    """_build_hero_section returns empty when not enabled and no hero detected."""
+def test_homepage_hero_auto_enable_no_hero():
+    """Verify that the hero produces no HTML when neither enabled nor detected"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "testpkg"\n', encoding="utf-8")
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result, cleaned = docs._build_hero_section("# Hello\n\nBody")
+        result, cleaned = homepage_hero(docs, "# Hello\n\nBody")
 
         assert result == ""
 
 
-def test_build_hero_section_metadata_fallback_name():
-    """_build_hero_section uses metadata name when hero_name not configured."""
+def test_homepage_hero_metadata_fallback_name():
+    """Verify that the hero uses the metadata name when no hero name is configured"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -12256,14 +11685,14 @@ def test_build_hero_section_metadata_fallback_name():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result, cleaned = docs._build_hero_section()
+        result, cleaned = homepage_hero(docs)
 
         # Should use package name as fallback
         assert "cool-pkg" in result or "cool_pkg" in result
 
 
-def test_build_hero_section_metadata_fallback_tagline():
-    """_build_hero_section uses metadata description as tagline fallback."""
+def test_homepage_hero_metadata_fallback_tagline():
+    """Verify that the metadata description supplies the default hero tagline"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -12276,7 +11705,7 @@ def test_build_hero_section_metadata_fallback_tagline():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        result, cleaned = docs._build_hero_section()
+        result, cleaned = homepage_hero(docs)
         assert "A wonderful library" in result
 
 
@@ -12341,21 +11770,6 @@ def test_create_index_from_readme_citation_two_authors():
 
         assert "Smith" in content
         assert "Jones" in content
-
-
-def test_generate_landing_page_content_with_both_sections():
-    """_generate_landing_page_content includes both API ref and User Guide."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-        (ug_dir / "01-intro.qmd").write_text("# Intro", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        metadata = {"description": "Test lib"}
-        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
-
-        assert "### Get Started" in result
-        assert "API Reference" in result
-        assert "User Guide" in result
 
 
 def test_detect_module_name_no_sources():
@@ -13523,8 +12937,9 @@ def test_create_index_from_readme_rst_source():
         docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         # Mock RST conversion since pandoc may not be available
-        with patch.object(
-            docs, "_convert_rst_to_markdown", return_value="# My Package\n\nSome RST content.\n"
+        with patch(
+            "great_docs._website.homepage.source.rst_to_markdown",
+            return_value="# My Package\n\nSome RST content.\n",
         ):
             docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
@@ -15125,82 +14540,6 @@ def test_discover_user_guide_basic_full_project():
         )  # May not find if naming doesn't match convention
 
 
-def test_find_index_source_file():
-    """Test _find_index_source_file finds README.md."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        readme = Path(tmp_dir) / "README.md"
-        readme.write_text("# Hello\n")
-
-        source_file, warnings = docs._find_index_source_file()
-        assert source_file is not None
-        assert source_file.name == "README.md"
-
-
-def test_find_index_source_file_index_qmd_v2():
-    """Test _find_index_source_file prefers index.qmd."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        readme = Path(tmp_dir) / "README.md"
-        readme.write_text("# Hello\n")
-
-        index_qmd = Path(tmp_dir) / "index.qmd"
-        index_qmd.write_text("---\ntitle: Home\n---\n")
-
-        source_file, _ = docs._find_index_source_file()
-        assert source_file is not None
-        assert source_file.name == "index.qmd"
-
-
-def test_find_index_source_file_none_v4():
-    """Test _find_index_source_file returns None when no source file."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        source_file, warnings = docs._find_index_source_file()
-        assert source_file is None
-
-
-def test_convert_rst_to_markdown():
-    """Test _convert_rst_to_markdown handles RST conversion."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        rst_file = Path(tmp_dir) / "README.rst"
-        rst_file.write_text("Title\n=====\n\nSome content.\n")
-
-        # Mock subprocess to simulate pandoc
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "# Title\n\nSome content.\n"
-
-        with patch("subprocess.run", return_value=mock_result):
-            result = docs._convert_rst_to_markdown(rst_file)
-
-        assert "Title" in result
-        assert "Some content" in result
-
-
-def test_generate_landing_page_content():
-    """Test _generate_landing_page_content generates page from metadata."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "MyPackage"\n', encoding="utf-8")
-
-        metadata = {
-            "description": "A great package for doing things.",
-        }
-
-        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
-        assert "MyPackage" in result
-        assert "great package" in result
-
-
 def test_is_compiled_extension():
     """Test _is_compiled_extension for standard Python package."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -15461,29 +14800,6 @@ def test_parse_dunder_all_no_all():
         result = parse_dunder_all(_package_init(docs, "mypkg"), docs._config, report=print)
 
         assert result is None
-
-
-def test_generate_landing_page_content_no_name():
-    """Test _generate_landing_page_content uses 'Package' when no name detected."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        metadata = {"description": "A description."}
-        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
-
-        assert "## Package" in result
-        assert "A description." in result
-
-
-def test_generate_landing_page_content_pip_install():
-    """Test _generate_landing_page_content includes pip install command."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "great-pkg"\n', encoding="utf-8")
-        metadata = {"description": "A package."}
-        result = docs._generate_landing_page_content(metadata, has_api_reference=True)
-
-        assert "pip install" in result
 
 
 def test_get_package_metadata_license_string():
@@ -15859,36 +15175,6 @@ def test_copy_user_guide_to_docs_basic():
         assert isinstance(result, list)
 
 
-def test_find_index_source_file_readme():
-    """Test _find_index_source_file finds README.md."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "README.md").write_text("# My Package\n")
-        result, warnings = docs._find_index_source_file()
-        assert result is not None
-        assert result.name == "README.md"
-
-
-def test_find_index_source_file_index_qmd():
-    """Test _find_index_source_file prefers index.qmd over README."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "README.md").write_text("# README\n")
-        (Path(tmp_dir) / "index.qmd").write_text("---\ntitle: Home\n---\n")
-        result, warnings = docs._find_index_source_file()
-        assert result is not None
-        assert result.name == "index.qmd"
-        assert len(warnings) >= 1  # Should warn about multiple candidates
-
-
-def test_find_index_source_file_none():
-    """Test _find_index_source_file returns None when nothing found."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result, warnings = docs._find_index_source_file()
-        assert result is None
-
-
 def test_get_package_metadata_setup_cfg_license():
     """Test _get_package_metadata reads license from setup.cfg."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -16185,23 +15471,23 @@ def test_create_index_from_readme_skip_existing():
         assert content == "existing content\n"
 
 
-def test_build_metadata_margin():
-    """Test _build_metadata_margin returns a string."""
+def test_homepage_margin():
+    """Verify that sidebar rendering returns a string"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
         assert isinstance(result, str)
 
 
-def test_build_hero_section_not_enabled():
-    """Test _build_hero_section returns empty when not enabled."""
+def test_homepage_hero_not_enabled():
+    """Verify that the hero produces no HTML when not enabled"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        result = docs._build_hero_section("# Some readme content\n")
+        result = homepage_hero(docs, "# Some readme content\n")
         assert isinstance(result, tuple)
         assert len(result) == 2
 
@@ -16410,8 +15696,8 @@ def test_reference_enabled_config():
         assert config.reference_enabled is False
 
 
-def test_build_metadata_margin_with_authors_b9():
-    """Test _build_metadata_margin shows authors when available."""
+def test_homepage_margin_with_authors_b9():
+    """Verify that the sidebar shows authors when available"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -16419,7 +15705,7 @@ def test_build_metadata_margin_with_authors_b9():
             '[project]\nname = "mypkg"\n[[project.authors]]\nname = "Dev One"\n',
             encoding="utf-8",
         )
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
         assert isinstance(result, str)
         # Should contain the author name
         assert "Dev One" in result
@@ -20043,20 +19329,20 @@ def test_check_links_python_comments_excluded():
         assert "https://example.com/in-comment" not in all_checked
 
 
-def test_build_hero_section_disabled():
-    """Test _build_hero_section returns empty when hero disabled."""
+def test_homepage_hero_disabled():
+    """Verify that a disabled hero produces no HTML"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         docs._config = mock_config(hero_explicitly_disabled=True)
 
-        html, cleaned = docs._build_hero_section()
+        html, cleaned = homepage_hero(docs)
         assert html == ""
         assert cleaned is None
 
 
-def test_build_hero_section_auto_badges():
-    """Test _build_hero_section extracts badges from readme content."""
+def test_homepage_hero_auto_badges():
+    """Verify that the hero extracts badges from README content"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -20071,20 +19357,16 @@ def test_build_hero_section_auto_badges():
             logo=None,
         )
 
-        badges = [{"alt": "CI", "img": "https://img.shields.io/badge", "url": "https://ci.com"}]
+        badge = Badge(alt="CI", img="https://img.shields.io/badge", url="https://ci.com")
+        elements = HeroElements(badges=[badge], body="cleaned content")
 
         with (
-            patch.object(
-                docs,
-                "_extract_badges_from_content",
-                return_value=(badges, "cleaned content", {}),
-            ),
+            patch("great_docs._website.homepage.hero.extract_hero_elements", return_value=elements),
             patch("great_docs.core.branding.detect_hero_logo", return_value=None),
             patch("great_docs.core.branding.detect_logo", return_value=None),
             patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_build_metadata_margin", return_value=""),
         ):
-            html, cleaned = docs._build_hero_section("# My Package\n![badge](url)\n")
+            html, cleaned = homepage_hero(docs, "# My Package\n![badge](url)\n")
 
         assert "gd-hero" in html
         assert "TestPkg" in html
@@ -20092,8 +19374,8 @@ def test_build_hero_section_auto_badges():
         assert cleaned == "cleaned content"
 
 
-def test_build_hero_section_no_content():
-    """Test _build_hero_section with no content produces empty result."""
+def test_homepage_hero_no_content():
+    """Verify that a hero with no content produces no HTML"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -20113,13 +19395,13 @@ def test_build_hero_section_no_content():
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_detect_package_name", return_value=None),
         ):
-            html, cleaned = docs._build_hero_section()
+            html, cleaned = homepage_hero(docs)
 
         assert html == ""
 
 
-def test_build_hero_section_with_logo_dict():
-    """Test _build_hero_section handles logo dict with light/dark variants."""
+def test_homepage_hero_with_logo_dict():
+    """Verify that the hero renders light and dark logo variants from a mapping"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -20143,7 +19425,7 @@ def test_build_hero_section_with_logo_dict():
         (pkg_root / "logo-dark.svg").write_text("<svg/>", encoding="utf-8")
 
         with patch.object(docs, "_get_package_metadata", return_value={}):
-            html, _ = docs._build_hero_section()
+            html, _ = homepage_hero(docs)
 
         assert "gd-only-light" in html
         assert "gd-only-dark" in html
@@ -20652,8 +19934,8 @@ def test_create_blended_index_creates_index():
         }
 
         with (
-            patch.object(docs, "_build_metadata_margin", return_value=""),
-            patch.object(docs, "_build_hero_section", return_value=("", None)),
+            patch("great_docs._website.homepage.margin.render", return_value=""),
+            patch("great_docs._website.homepage.hero.find", return_value=None),
         ):
             docs._create_blended_index(ug_info, [])
 
@@ -29947,8 +29229,8 @@ class TestGenerateUserGuideSidebarAutoBatch9:
             }
 
 
-class TestBuildHeroSectionBatch9:
-    """Additional _build_hero_section coverage: logo fallbacks, badge types."""
+class TestHomepageHeroBatch9:
+    """Homepage hero logo fallbacks and badge types"""
 
     def _make_project(self, tmp_dir, gd_config=None, readme="# MyPkg\nDescription.\n"):
         tmp = Path(tmp_dir)
@@ -29966,7 +29248,7 @@ class TestBuildHeroSectionBatch9:
         """Returns empty tuple when hero is explicitly disabled."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = self._make_project(tmp_dir, gd_config={"hero": False})
-            hero_html, cleaned = docs._build_hero_section()
+            hero_html, cleaned = homepage_hero(docs)
             assert hero_html == ""
             assert cleaned is None
 
@@ -29980,7 +29262,7 @@ class TestBuildHeroSectionBatch9:
             )
             # Create the logo file so detection doesn't fail
             (tmp / "logo.png").write_bytes(b"\x89PNG")
-            hero_html, _ = docs._build_hero_section()
+            hero_html, _ = homepage_hero(docs)
             assert 'src="logo.png"' in hero_html
             assert "gd-hero" in hero_html
 
@@ -30004,7 +29286,7 @@ class TestBuildHeroSectionBatch9:
                     }
                 },
             )
-            hero_html, _ = docs._build_hero_section()
+            hero_html, _ = homepage_hero(docs)
             assert "gd-hero-badges" in hero_html
             # Badge with url should be a link
             assert '<a href="https://example.com">' in hero_html
@@ -30018,7 +29300,7 @@ class TestBuildHeroSectionBatch9:
                 tmp_dir,
                 gd_config={"hero": {"enabled": True}},
             )
-            hero_html, _ = docs._build_hero_section()
+            hero_html, _ = homepage_hero(docs)
             assert "mypkg" in hero_html
 
     def test_hero_with_dict_logo_light_and_dark(self):
@@ -30036,7 +29318,7 @@ class TestBuildHeroSectionBatch9:
             )
             (tmp / "logo-light.png").write_bytes(b"\x89PNG")
             (tmp / "logo-dark.png").write_bytes(b"\x89PNG")
-            hero_html, _ = docs._build_hero_section()
+            hero_html, _ = homepage_hero(docs)
             assert "gd-only-light" in hero_html
             assert "gd-only-dark" in hero_html
 
@@ -30440,7 +29722,7 @@ class TestGetGithubRepoInfoBatch10:
             assert ".git" not in base_url
 
 
-class TestBuildHeroSectionBatch10:
+class TestHomepageHeroBatch10:
     """Cover hero section auto-detect and dual-logo paths."""
 
     def test_auto_detect_logo_dict_light_dark(self):
@@ -30455,7 +29737,7 @@ class TestBuildHeroSectionBatch10:
             (tmp / "logo-dark.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
             docs = GreatDocs(project_path=tmp_dir)
             docs.build_dir.mkdir(parents=True, exist_ok=True)
-            html, _ = docs._build_hero_section()
+            html, _ = homepage_hero(docs)
             assert "gd-only-light" in html
             assert "gd-only-dark" in html
 
@@ -30467,7 +29749,7 @@ class TestBuildHeroSectionBatch10:
             (tmp / "great-docs.yml").write_text("hero:\n  enabled: true\n")
             docs = GreatDocs(project_path=tmp_dir)
             docs.build_dir.mkdir(parents=True, exist_ok=True)
-            html, _ = docs._build_hero_section()
+            html, _ = homepage_hero(docs)
             assert "mypkg" in html
 
     def test_hero_returns_empty_when_no_parts(self):
@@ -30480,12 +29762,12 @@ class TestBuildHeroSectionBatch10:
             )
             docs = GreatDocs(project_path=tmp_dir)
             docs.build_dir.mkdir(parents=True, exist_ok=True)
-            html, cleaned = docs._build_hero_section()
+            html, cleaned = homepage_hero(docs)
             # Should have at least the name (fallback)
             assert isinstance(html, str)
 
 
-class TestBuildMetadataMarginBatch10:
+class TestHomepageMarginBatch10:
     """Cover author affiliation, homepage, and ORCID icon links."""
 
     def test_author_with_affiliation_homepage_orcid(self):
@@ -30504,7 +29786,7 @@ class TestBuildMetadataMarginBatch10:
                 "    orcid: 0000-0001-2345-6789\n"
             )
             docs = GreatDocs(project_path=tmp_dir)
-            margin = docs._build_metadata_margin()
+            margin = homepage_margin(docs)
             assert "MIT" in margin
             assert "jane.dev" in margin
             assert "orcid" in margin.lower()
@@ -31819,7 +31101,7 @@ def test_homepage_sidebar_skills_link_position():
             encoding="utf-8",
         )
 
-        margin = docs._build_metadata_margin()
+        margin = homepage_margin(docs)
 
         # Skills link should appear before llms.txt
         skills_pos = margin.find('href="skills.html"')
@@ -33583,10 +32865,10 @@ def test_collect_page_statuses_ignores_invalid():
         assert "user-guide/bad.qmd" not in status_map
 
 
-# ── _build_metadata_margin ─────────────────────────────────────────────
+# ── Homepage sidebar ───────────────────────────────────────────────────
 
 
-def test_build_metadata_margin_roadmap():
+def test_homepage_margin_roadmap():
     """Margin includes roadmap link when ROADMAP.md exists."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
@@ -33598,11 +32880,11 @@ def test_build_metadata_margin_roadmap():
         # Create ROADMAP.md
         (project / "ROADMAP.md").write_text("# Roadmap\n\nUpcoming features.")
 
-        result = gd._build_metadata_margin()
+        result = homepage_margin(gd)
         assert "roadmap" in result.lower()
 
 
-def test_build_metadata_margin_meta_tags():
+def test_homepage_margin_meta_tags():
     """Margin includes tags link when tags are enabled."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
@@ -33611,14 +32893,14 @@ def test_build_metadata_margin_meta_tags():
         gd = GreatDocs(project_path=tmp)
         gd.build_dir = project
 
-        result = gd._build_metadata_margin()
+        result = homepage_margin(gd)
         assert "tags" in result.lower()
 
 
-# ── _build_metadata_margin (meta section) ────────────────────────────
+# ── Homepage sidebar (meta section) ──────────────────────────────────
 
 
-def test_build_metadata_margin_requires_python():
+def test_homepage_margin_requires_python():
     """Margin includes requires_python in meta section."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
@@ -33629,11 +32911,11 @@ def test_build_metadata_margin_requires_python():
         gd = GreatDocs(project_path=tmp)
         gd.build_dir = project
 
-        result = gd._build_metadata_margin()
+        result = homepage_margin(gd)
         assert "3.9" in result
 
 
-def test_build_metadata_margin_extras():
+def test_homepage_margin_extras():
     """Margin includes optional dependency extras."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
@@ -33645,7 +32927,7 @@ def test_build_metadata_margin_extras():
         gd = GreatDocs(project_path=tmp)
         gd.build_dir = project
 
-        result = gd._build_metadata_margin()
+        result = homepage_margin(gd)
         assert "dev" in result
         assert "docs" in result
 
@@ -34341,8 +33623,8 @@ def test_get_package_metadata_parses_dependencies():
         assert opt_full["dev"][0]["name"] == "pytest"
 
 
-def test_build_metadata_margin_includes_package_info_link():
-    """_build_metadata_margin includes Package Info link when page exists."""
+def test_homepage_margin_includes_package_info_link():
+    """Verify that the sidebar includes a Package Info link when the page exists"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text(
@@ -34357,14 +33639,14 @@ def test_build_metadata_margin_includes_package_info_link():
             "---\ntitle: Package Info\n---\n", encoding="utf-8"
         )
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "Package Info" in result
         assert "package-info.html" in result
 
 
-def test_build_metadata_margin_no_package_info_link_when_missing():
-    """_build_metadata_margin omits Package Info link when page doesn't exist."""
+def test_homepage_margin_no_package_info_link_when_missing():
+    """Verify that the sidebar omits the Package Info link when the page is missing"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
@@ -34372,7 +33654,7 @@ def test_build_metadata_margin_no_package_info_link_when_missing():
         gd_dir.mkdir()
 
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._build_metadata_margin()
+        result = homepage_margin(docs)
 
         assert "package-info.html" not in result
 
@@ -35171,45 +34453,6 @@ def test_strip_numeric_prefix_preserves_non_numeric():
 
 
 # ---------------------------------------------------------------------------
-# _bump_heading_levels — static method
-# ---------------------------------------------------------------------------
-
-
-def test_bump_heading_levels_h1_to_h2():
-    result = GreatDocs._bump_heading_levels("# Title\n\nText")
-    assert "## Title" in result
-
-
-def test_bump_heading_levels_all_levels():
-    content = "# H1\n## H2\n### H3"
-    result = GreatDocs._bump_heading_levels(content)
-    assert "## H1" in result
-    assert "### H2" in result
-    assert "#### H3" in result
-
-
-def test_bump_heading_levels_skips_fenced_code():
-    content = "# Heading\n\n```\n# Not bumped\n```\n"
-    result = GreatDocs._bump_heading_levels(content)
-    assert "## Heading" in result
-    assert "# Not bumped" in result  # preserved
-
-
-def test_bump_heading_levels_skips_tilde_fence():
-    content = "# Heading\n\n~~~\n# Code comment\n~~~"
-    result = GreatDocs._bump_heading_levels(content)
-    assert "## Heading" in result
-    assert "# Code comment" in result
-
-
-def test_bump_heading_levels_quarto_cell_option():
-    content = "# Heading\n\n```python\n#| echo: false\nprint('x')\n```"
-    result = GreatDocs._bump_heading_levels(content)
-    assert "## Heading" in result
-    assert "#| echo: false" in result  # not bumped to ##|
-
-
-# ---------------------------------------------------------------------------
 # _detect_module_name
 # ---------------------------------------------------------------------------
 
@@ -35782,7 +35025,7 @@ def test_readme_homepage_without_margin_starts_with_front_matter_fence():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        with patch.object(docs, "_build_metadata_margin", return_value=""):
+        with patch("great_docs._website.homepage.margin.render", return_value=""):
             docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
 
         content = (docs.build_dir / "index.qmd").read_text(encoding="utf-8")

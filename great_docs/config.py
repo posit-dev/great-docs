@@ -292,9 +292,8 @@ class Config:
         if isinstance(hero_logo, dict):
             hero_logo = cast("ConfigDict", hero_logo)
             if not hero_logo.get("light") and hero_logo.get("dark"):
-                # Mirror the top-level `logo` dark-only fallback: a dark-only
-                # hero.logo must still resolve to a `light` asset, or
-                # core.py's _build_hero_section silently drops the image.
+                # A dark-only `hero.logo` falls back as the top-level `logo` does:
+                # without a `light` asset the hero silently drops the image.
                 hero_logo["light"] = hero_logo["dark"]
 
         # A bare `seo: true`/`seo: false` collapses the whole subtree to a bool;

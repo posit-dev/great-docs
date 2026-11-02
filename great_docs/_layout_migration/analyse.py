@@ -15,6 +15,7 @@ from great_docs._content.naming import section_slug
 from great_docs._layout import CONVENTIONAL_DOC_DIRS, Layout
 from great_docs._utils import is_great_docs_build_dir, recognised_build_dirs
 from great_docs._website import branding
+from great_docs._website.homepage import source as homepage_source
 from great_docs._yaml import YamlMapping, YamlValue
 
 from .content import (
@@ -68,8 +69,7 @@ _DISCOVERY_ROLES: dict[str, ConfigPath] = {
     "user-guide": ("user_guide",),
     "custom": ("custom_pages",),
     "notebooks": ("marimo",),
-    "index.qmd": ("index",),
-    "index.md": ("index",),
+    **{name: ("index",) for name in homepage_source.INDEX_NAMES},
 }
 
 
@@ -827,7 +827,7 @@ def analyse(layout: Layout, destination: Path) -> Migration:
     # `rewrite_config` never even considers rewriting a path under either tag. The same
     # is not true of ("custom_pages",), which does name a rewritable field and is kept
     # out of the allowlist deliberately.
-    for name in ("index.qmd", "index.md"):
+    for name in homepage_source.INDEX_NAMES:
         if (root / name).exists() or (root / name).is_symlink():
             selected.append((root / name, ("index",)))
             break
@@ -964,10 +964,7 @@ def analyse(layout: Layout, destination: Path) -> Migration:
         "user-guide",
         "custom",
         "notebooks",
-        "index.qmd",
-        "index.md",
-        "README.md",
-        "README.rst",
+        *homepage_source.NAMES,
     ):
         if (root / name).is_file() or not (root / name).exists():
             retain(root / name)
@@ -1116,7 +1113,7 @@ def analyse(layout: Layout, destination: Path) -> Migration:
         if not retained(source):
             continue
         _categorize_move_contents(source, config_path, documents, blockers, follow_up)
-    for name in ("README.md", "README.rst", "index.qmd", "index.md"):
+    for name in (*homepage_source.README_NAMES, *homepage_source.INDEX_NAMES):
         path = root / name
         if path.is_file():
             retain(path)
@@ -1214,8 +1211,8 @@ def analyse(layout: Layout, destination: Path) -> Migration:
         )
 
     generated_homepage = None
-    if not any((root / name).exists() for name in ("index.qmd", "index.md")) and any(
-        (root / name).is_file() for name in ("README.md", "README.rst")
+    if not any((root / name).exists() for name in homepage_source.INDEX_NAMES) and any(
+        (root / name).is_file() for name in homepage_source.README_NAMES
     ):
         generated_homepage = root / "index.qmd"
     for path in sorted(documents):

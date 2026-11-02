@@ -560,11 +560,12 @@ class TestHero:
         assert cfg.hero_enabled is True
 
     def test_hero_logo_only_auto_enables(self, tmp_project: Path):
-        """An explicit `hero.logo`, with no top-level `logo`, still auto-enables.
+        """
+        Verify that an explicit `hero.logo` enables the hero without a top-level `logo`
 
-        The hero and navbar logos share one fallback chain (core._build_hero_section:
-        explicit hero.logo -> detected hero logo -> navbar logo -> detected navbar
-        logo), so "auto" must consider both ends of it, not just the navbar logo.
+        The hero's logo fallback order is explicit `hero.logo`, detected hero logo,
+        navbar logo, then detected navbar logo. Automatic enabling must consider
+        both hero and navbar logos.
         """
         cfg = write_config(tmp_project, "hero:\n  logo: x.svg\n")
         assert cfg.hero_enabled is True
@@ -598,11 +599,11 @@ class TestHero:
         assert cfg.hero_explicitly_disabled is True
 
     def test_hero_logo_dark_only_falls_back_to_light(self, tmp_project: Path):
-        """A dark-only hero.logo dict must still resolve a `light` asset.
+        """
+        Verify that a dark-only `hero.logo` also resolves to a `light` asset
 
-        Mirrors TestLogo.test_dark_only for the top-level logo — without
-        this, core.py's _build_hero_section silently drops the hero logo
-        image entirely (final-review finding on roborev #801 batch).
+        The top-level `logo` uses the same fallback. Without it, the homepage hero
+        silently drops the image entirely.
         """
         cfg = write_config(tmp_project, "hero:\n  logo:\n    dark: hero-d.svg\n")
         assert cfg.hero_logo["dark"] == "hero-d.svg"

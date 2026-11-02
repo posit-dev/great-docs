@@ -14,6 +14,7 @@ from great_docs._layout import Layout
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._versions.build import assemble_site, run_versioned_build
 from great_docs._versions.model import VersionEntry, build_version_map, parse_versions_config
+from great_docs._website.homepage import source as homepage_source
 from tests.support import make_run
 
 
@@ -321,14 +322,13 @@ def test_landing_precedence_and_shared_references(source_project: tuple[Path, Pa
     (root / "README.md").write_text("# Package\n![Logo](assets/logo.svg?raw=1#logo)")
     gd = make_docs(root, source)
     gd.build_dir.mkdir(parents=True)
-    assert gd._find_index_source_file()[0] == root / "README.md"
+    assert homepage_source.find(gd.layout)[0] == root / "README.md"
     if source != root:
         (source / "index.md").write_text(
             '![Logo](../assets/logo.svg) <img src="../assets/logo.svg#mark"> [Download](../assets/logo.svg)'
         )
-        assert gd._find_index_source_file()[0] == source / "index.md"
-    page = gd._find_index_source_file()[0]
-    assert page is not None
+        assert homepage_source.find(gd.layout)[0] == source / "index.md"
+    page = homepage_source.find(gd.layout)[0]
     content = rebase(gd, page.read_text(), page, gd.build_dir / "index.qmd")
     assert "../assets" not in content
     assert "logo.svg" in content

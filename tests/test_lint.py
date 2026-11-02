@@ -243,7 +243,8 @@ def _mock_docs() -> MagicMock:
     docs._config = mock_config(seo_enabled=False, sections=[])
     docs._find_user_guide_dir.return_value = None
     docs._get_custom_page_sources.return_value = []
-    docs._find_index_source_file.return_value = (None, None)
+    docs.layout.source_dir = Path("/nonexistent/source")
+    docs.layout.package_root = Path("/nonexistent/source")
     return docs
 
 

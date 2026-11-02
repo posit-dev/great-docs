@@ -65,6 +65,8 @@ from ._website import (
     tags,
 )
 from ._website.ai_agents import llms_txt
+from ._website.homepage import hero, landing, margin, readme
+from ._website.homepage import source as homepage_source
 from ._website.navigation import github as nav_github
 from ._website.navigation import label as nav_label
 from ._website.navigation import release as nav_release
@@ -645,9 +647,8 @@ class GreatDocs:
         :
             The page map for the current sources and configuration.
         """
-        landing, _ = self._find_index_source_file()
         guide = self._find_user_guide_dir()
-        homepage = [] if landing is None else [landing]
+        homepage = homepage_source.find(self.layout)[:1]
         if guide is not None and self._config.homepage == "user_guide":
             info = self._discover_user_guide()
             if info and info["files"]:
@@ -4692,11 +4693,31 @@ class GreatDocs:
         # Quarto renders a proper title-block header matching other UG pages.
         content = set_front_matter_option(content, "toc", False)
 
-        # Build the metadata margin sidebar
-        margin_content = self._build_metadata_margin()
+        package_root = self.layout.package_root
+        metadata = self._get_package_metadata()
+        package_name = self._detect_package_name()
+        margin_content = margin.render(
+            self._config,
+            self.build_dir,
+            package_root=package_root,
+            metadata=metadata,
+            package_name=package_name,
+            community_pages=community.write_pages(
+                self._config, package_root, self.build_dir, self._page_authors
+            ),
+        )
 
-        # Build hero section for blended homepage
-        hero_html, _ = self._build_hero_section()
+        hero_html = ""
+        if found := hero.find(self._config, self.layout.source_dir, None):
+            hero_html = hero.render(
+                found,
+                self._config,
+                self.layout,
+                self.build_dir,
+                metadata=metadata,
+                package_name=package_name,
+                pages=self._page_map(),
+            )
 
         # Split content into frontmatter and body. Headings are NOT bumped
         # here, unlike _create_index_from_readme, because UG pages already
@@ -6018,824 +6039,6 @@ class GreatDocs:
 
         return "\n".join(lines)
 
-    def _find_index_source_file(self) -> tuple[Path | None, list[str]]:
-        """
-        Find the best source file for index.qmd based on priority.
-
-        Priority order (highest to lowest):
-        1. index.qmd in project root
-        2. index.md in project root
-        3. README.md in project root
-        4. README.rst in project root (converted to Markdown via pandoc)
-
-        Returns
-        -------
-        tuple[Path | None, list[str]]
-            A tuple of (source_file_path, warnings_list).
-            source_file_path is None if no suitable file is found.
-        """
-        source_dir = self.layout.source_dir
-        warnings = []
-        candidates = [
-            source_dir / name for name in ("index.qmd", "index.md", "README.md", "README.rst")
-        ]
-        if source_dir != self.layout.package_root:
-            candidates.extend(
-                self.layout.package_root / name for name in ("README.md", "README.rst")
-            )
-
-        found = [c for c in candidates if c.exists()]
-
-        if not found:
-            return None, warnings
-
-        winner = found[0]
-
-        # Warn if multiple candidates exist
-        if len(found) > 1:
-            others = ", ".join(f.name for f in found[1:])
-            warnings.append(
-                f"⚠️  Multiple index source files detected. Using {winner.name} (ignoring {others})"
-            )
-
-        return winner, warnings
-
-    def _convert_rst_to_markdown(self, rst_path: Path) -> str:
-        """
-        Convert a reStructuredText file to Markdown using Quarto's bundled pandoc.
-
-        Falls back to the raw RST content if pandoc conversion fails.
-
-        Parameters
-        ----------
-        rst_path
-            Path to the `.rst` file.
-
-        Returns
-        -------
-        str
-            The converted Markdown content.
-        """
-        # Try 'quarto pandoc' first (always available when quarto is installed),
-        # then fall back to standalone 'pandoc'
-        pandoc_cmd = None
-        if shutil.which("quarto"):
-            pandoc_cmd = ["quarto", "pandoc"]
-        elif shutil.which("pandoc"):
-            pandoc_cmd = ["pandoc"]
-
-        if pandoc_cmd is None:
-            print("   ⚠️  pandoc not found; using raw RST content for landing page")
-            return rst_path.read_text(encoding="utf-8")
-
-        try:
-            result = subprocess.run(
-                [*pandoc_cmd, str(rst_path), "-f", "rst", "-t", "markdown", "--wrap=none"],
-                capture_output=True,
-                **TEXT_MODE_KWARGS,
-                timeout=30,
-            )
-            if result.returncode == 0:
-                return result.stdout
-            else:
-                print(f"   ⚠️  pandoc conversion failed: {result.stderr.strip()}")
-                print("   Falling back to raw RST content")
-                return rst_path.read_text(encoding="utf-8")
-        except Exception as e:
-            print(f"   ⚠️  pandoc conversion error: {e}")
-            print("   Falling back to raw RST content")
-            return rst_path.read_text(encoding="utf-8")
-
-    def _generate_landing_page_content(self, metadata: dict, has_api_reference: bool) -> str:
-        """
-        Generate landing page content from package metadata.
-
-        When no README.md, index.md, or index.qmd is available, this method
-        creates a tasteful landing page drawn from package metadata including
-        the package name, description, installation instructions, and
-        navigation links to available documentation sections.
-
-        Parameters
-        ----------
-        metadata
-            Dictionary of package metadata from `_get_package_metadata()`.
-        has_api_reference
-            Whether the site has an API reference to link to.
-
-        Returns
-        -------
-        str
-            The generated Markdown content for the landing page body (not including YAML frontmatter
-            or sidebar as those are added by the caller).
-        """
-        package_name = self._detect_package_name() or "Package"
-        description = metadata.get("description", "")
-
-        lines = []
-        lines.append(f"## {package_name}")
-        lines.append("")
-
-        if description:
-            lines.append(description)
-            lines.append("")
-
-        # Installation section
-        install_name = package_name
-        lines.append("### Installation")
-        lines.append("")
-        lines.append("```bash")
-        lines.append(f"pip install {install_name}")
-        lines.append("```")
-        lines.append("")
-
-        # Get Started - link to available sections
-        nav_items = []
-
-        # API Reference (if documentable exports exist)
-        if has_api_reference:
-            nav_items.append("- [API Reference](reference/index.qmd) — Full API documentation")
-
-        # Check for User Guide (look at source directory since build hasn't run yet)
-        ug_source = self._discover_user_guide()
-        if ug_source:
-            nav_items.append("- [User Guide](user-guide/index.qmd) — Guides and tutorials")
-
-        if nav_items:
-            lines.append("### Get Started")
-            lines.append("")
-            lines.extend(nav_items)
-            lines.append("")
-
-        return "\n".join(lines) + "\n"
-
-    def _extract_badges_from_content(self, content: str) -> tuple[list[dict], str, dict]:
-        """Extract badge image-links and hero elements from README/index content.
-
-        Supports two common README layouts:
-
-        1. **Top-of-file badges** — bare `[![alt](img)](url)` lines right
-           after the first heading.
-        2. **Centered-div badges** — badges inside a
-           `<div align="center">` block. When this layout is detected, the entire
-           centered block (hero image, italic tagline, and badges) is
-           stripped because the hero section replaces it. The logo image
-           and tagline text are returned so the hero section can use them.
-
-        Parameters
-        ----------
-        content
-            Raw Markdown content (after any YAML frontmatter has been
-            stripped).
-
-        Returns
-        -------
-        tuple[list[dict], str, dict]
-            `(badges, cleaned_content, hero_extras)` — a list of badge
-            dicts (keys: `url`, `img`, `alt`), the content with the
-            badge block removed, and a dict of extracted hero elements
-            (optional keys: `logo_url`, `tagline`).
-        """
-        badge_hosts = (
-            "img.shields.io",
-            "badge.fury.io",
-            "github.com/",  # GitHub Actions badge URLs contain /badge.svg
-            "codecov.io",
-            "readthedocs.org",
-            "repostatus.org",
-            "pepy.tech",
-            "pyopensci.org",
-            "zenodo.org/badge",
-            "www.contributor-covenant.org",
-            "deepwiki.com",
-            "static.pepy.tech",
-        )
-
-        # Pattern: [![alt](img_url)](link_url)
-        md_badge_re = re.compile(r"\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)")
-
-        # ── Strategy 1: centered-div badges ─────────────────────────
-        # Look for <div align="center"> containing badge markdown.
-        center_div_re = re.compile(r'^<div\s+align=["\']center["\']', re.IGNORECASE)
-        # Patterns for extracting hero elements from centered divs
-        # HTML <a><img></a> (linked logo image)
-        linked_img_re = re.compile(
-            r'<a\s[^>]*href="([^"]+)"[^>]*>\s*<img\s[^>]*src="([^"]+)"[^>]*/?>\s*</a>',
-            re.IGNORECASE,
-        )
-        # Bare <img> tag (logo image without link)
-        bare_img_re = re.compile(
-            r'<img\s[^>]*src="([^"]+)"[^>]*/?>',
-            re.IGNORECASE,
-        )
-        # Italic tagline: *text* or _text_
-        italic_re = re.compile(r"^[*_](.+)[*_]$")
-
-        lines = content.split("\n")
-        div_start = None
-        div_end = None
-
-        for i, line in enumerate(lines):
-            if center_div_re.match(line.strip()):
-                # Found a centered div — scan forward for badges and hero elements
-                div_badges: list[dict] = []
-                hero_extras: dict = {}
-                for j in range(i + 1, len(lines)):
-                    sline = lines[j].strip()
-                    if sline == "</div>":
-                        div_end = j
-                        break
-
-                    # Collect badges
-                    for alt, img, url in md_badge_re.findall(sline):
-                        if any(host in img for host in badge_hosts):
-                            div_badges.append({"alt": alt, "img": img, "url": url})
-
-                    # Extract logo image (HTML <a><img> or bare <img>),
-                    # but skip lines that are markdown badge patterns
-                    if "logo_url" not in hero_extras and not md_badge_re.search(sline):
-                        linked_match = linked_img_re.search(sline)
-                        if linked_match:
-                            hero_extras["logo_url"] = linked_match.group(2)
-                        else:
-                            bare_match = bare_img_re.search(sline)
-                            if bare_match:
-                                hero_extras["logo_url"] = bare_match.group(1)
-
-                    # Extract italic tagline
-                    if "tagline" not in hero_extras:
-                        italic_match = italic_re.match(sline)
-                        if italic_match:
-                            hero_extras["tagline"] = italic_match.group(1)
-
-                if div_badges and div_end is not None:
-                    div_start = i
-                    # Remove the entire centered div block
-                    remaining = lines[:div_start] + lines[div_end + 1 :]
-                    cleaned = "\n".join(remaining)
-                    # Collapse excess blank lines at the splice point
-                    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-                    return div_badges, cleaned, hero_extras
-
-                # Not a badge div — keep scanning for other centered divs
-                continue
-
-        # ── Strategy 2: top-of-file badges ──────────────────────────
-        badges: list[dict] = []
-        badge_end_idx = 0
-
-        started = False
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-
-            if not started and not stripped:
-                continue  # pragma: no cover
-
-            if not started and stripped.startswith("# "):
-                started = True
-                continue
-
-            if not started and stripped:
-                started = True
-
-            if started and not stripped:
-                has_more_badges = False
-                for j in range(i + 1, min(i + 3, len(lines))):
-                    if md_badge_re.search(lines[j]):
-                        has_more_badges = True
-                        break
-                if has_more_badges:
-                    badge_end_idx = i + 1
-                    continue
-                else:
-                    break
-
-            found_in_line = md_badge_re.findall(stripped)
-            if found_in_line:
-                for alt, img, url in found_in_line:
-                    if any(host in img for host in badge_hosts):
-                        badges.append({"alt": alt, "img": img, "url": url})
-                badge_end_idx = i + 1
-            elif started:
-                break
-
-        if badges and badge_end_idx > 0:
-            kept_before: list[str] = []
-            for i in range(badge_end_idx):
-                stripped = lines[i].strip()
-                if stripped.startswith("# "):
-                    kept_before.append(lines[i])
-
-            remaining = lines[badge_end_idx:]
-            cleaned = "\n".join(kept_before + remaining)
-            cleaned = cleaned.lstrip("\n")
-            if kept_before:
-                heading = kept_before[0]
-                rest = "\n".join(remaining).lstrip("\n")
-                cleaned = heading + "\n\n" + rest
-        else:
-            cleaned = content
-
-        return badges, cleaned, {}
-
-    def _build_hero_section(
-        self,
-        readme_content: str | None = None,
-    ) -> tuple[str, str | None]:
-        """Build the hero section HTML and optionally clean badges from content.
-
-        Parameters
-        ----------
-        readme_content
-            Raw README/index Markdown content. When provided and badge
-            auto-extraction is enabled, badges are extracted and the cleaned
-            content is returned.
-
-        Returns
-        -------
-        tuple[str, str | None]
-            `(hero_html, cleaned_content)` — the hero HTML block (empty
-            string when hero is disabled) and the cleaned README content
-            (`None` when no cleaning was performed).
-        """
-        if self._config.hero_explicitly_disabled:
-            return "", None
-
-        # ── Early badge + hero extraction from README ───────────────
-        # This must happen before the auto-enable check so we can
-        # use README hero elements (logo, tagline) to decide whether
-        # to auto-enable.
-        badges_config = self._config.hero_badges
-        badges: list[dict] = []
-        cleaned_content = None
-        readme_hero: dict = {}
-
-        if badges_config == "auto" and readme_content:
-            badges, cleaned, readme_hero = self._extract_badges_from_content(readme_content)
-            if badges:
-                cleaned_content = cleaned
-        elif isinstance(badges_config, list):
-            badges = badges_config
-
-        if not self._config.hero_enabled:
-            # Not explicitly enabled and no config-level logo — auto-enable
-            # if hero logo files are detected on disk or README has hero content.
-            if branding.detect_hero_logo(self.layout.source_dir) is None and not readme_hero:
-                return "", None
-
-        metadata = self._get_package_metadata()
-
-        # ── Logo ────────────────────────────────────────────────────
-        logo_config = self._config.hero_logo
-        logo_height = self._config.hero_logo_height
-        logo_html = ""
-
-        # Fallback chain: explicit hero.logo → auto-detected hero logo
-        # → explicit top-level logo → auto-detected navbar logo
-        if logo_config is None:
-            logo_config = branding.detect_hero_logo(self.layout.source_dir)
-        if logo_config is None:
-            logo_config = self._config.logo
-        if logo_config is None:
-            logo_config = branding.detect_logo(self.layout.source_dir, self._detect_package_name())
-        if logo_config is None and readme_hero.get("logo_url"):
-            logo_config = readme_hero["logo_url"]  # pragma: no cover
-        if logo_config is False:
-            logo_config = None  # pragma: no cover
-
-        if logo_config:
-            if isinstance(logo_config, dict):
-                light = logo_config.get("light")
-                dark = logo_config.get("dark")
-                alt = logo_config.get("alt", "Logo")
-
-                if light and dark and light != dark:
-                    logo_html = (
-                        f'<img src="{light}" alt="{alt}" class="gd-hero-logo gd-only-light" style="max-height:{logo_height}" />\n'
-                        f'<img src="{dark}" alt="{alt}" class="gd-hero-logo gd-only-dark" style="max-height:{logo_height}" />'
-                    )
-                elif light:  # pragma: no cover
-                    logo_html = f'<img src="{light}" alt="{alt}" class="gd-hero-logo" style="max-height:{logo_height}" />'  # pragma: no cover
-            elif isinstance(logo_config, str):
-                logo_html = f'<img src="{logo_config}" alt="Logo" class="gd-hero-logo" style="max-height:{logo_height}" />'
-            logo_html = publish.rebase_references(
-                logo_html,
-                self.layout.config_path,
-                self.build_dir / "index.qmd",
-                layout=self.layout,
-                pages=self._page_map(),
-            )
-
-        # ── Name ────────────────────────────────────────────────────
-        hero_name = self._config.hero_name
-        if hero_name is None:
-            # Fallback to package name from metadata
-            hero_name = metadata.get("name") or self._detect_package_name()
-        name_html = f'<p class="gd-hero-name">{hero_name}</p>' if hero_name else ""
-
-        # ── Tagline ─────────────────────────────────────────────────
-        tagline = self._config.hero_tagline
-        if tagline is None:
-            tagline = readme_hero.get("tagline") or metadata.get("description", "")
-        tagline_html = f'<p class="gd-hero-tagline">{tagline}</p>' if tagline else ""
-
-        # ── Badges ──────────────────────────────────────────────────
-        badges_html = ""
-        if badges:
-            badge_items = []
-            for b in badges:
-                alt = b.get("alt", "")
-                img = b.get("img", "")
-                url = b.get("url", "")
-                if url:
-                    badge_items.append(f'<a href="{url}"><img alt="{alt}" src="{img}" /></a>')
-                else:
-                    badge_items.append(f'<img alt="{alt}" src="{img}" />')
-            badges_html = '<div class="gd-hero-badges">\n' + "\n".join(badge_items) + "\n</div>"
-
-        # ── Assemble ────────────────────────────────────────────────
-        parts = [p for p in [logo_html, name_html, tagline_html, badges_html] if p]
-        if not parts:
-            return "", None  # pragma: no cover
-
-        # ── Starfield canvas (optional) ─────────────────────────────
-        starfield_html = ""
-        if self._config.hero_starfield:
-            starfield_html = '<canvas id="gd-starfield"></canvas>\n'
-
-        hero_html = '<div class="gd-hero">\n' + starfield_html + "\n".join(parts) + "\n</div>\n\n"
-
-        # Append starfield script tag after the hero div so the canvas
-        # is in the DOM when the script executes.
-        if self._config.hero_starfield:
-            hero_html += script_tag("starfield.js") + "\n\n"
-
-        return hero_html, cleaned_content
-
-    def _build_metadata_margin(self) -> str:
-        """
-        Build the `.column-margin` metadata sidebar content for the homepage.
-
-        Generates Markdown for the right-hand margin containing project metadata
-        in five sections: Links, AI / Agents, Developers, Community, and Meta.
-
-        As a side effect, creates `contributing.qmd`, `code-of-conduct.qmd`,
-        `roadmap.qmd`, and `security.qmd` in the project directory if the
-        corresponding source files exist.
-
-        Returns
-        -------
-        str
-            The margin content as a Markdown string (without the `::: {.column-margin}`
-            wrapper). Empty string if no metadata is available.
-        """
-        package_root = self.layout.package_root
-        metadata = self._get_package_metadata()
-
-        # Determine which supporting pages exist (already created by _create_index_from_readme)
-        license_qmd = self.build_dir / "license.qmd"
-        license_link = "license.qmd" if license_qmd.exists() else None
-        citation_qmd = self.build_dir / "citation.qmd"
-        citation_link = "citation.qmd" if citation_qmd.exists() else None
-
-        margin_sections: list[str] = []
-
-        from ._translations import get_translation
-
-        lang = self._config.lang
-
-        # ── 1. Links ─────────────────────────────────────────────────────
-        links_items: list[str] = []
-
-        # Lucide arrow-up-right icon (indicates external link)
-        _ext_arrow = (
-            '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" '
-            'fill="none" stroke="currentColor" stroke-width="2" '
-            'stroke-linecap="round" stroke-linejoin="round" '
-            'style="vertical-align: -0.05em; margin-left: 0em; margin-top: 0.1em;" '
-            'viewBox="0 0 24 24">'
-            '<path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>'
-        )
-
-        package_name = self._detect_package_name()
-        pypi_setting = self._config.pypi
-        if pypi_setting is not False:
-            if isinstance(pypi_setting, str):
-                pypi_url = pypi_setting
-            else:
-                pypi_url = f"https://pypi.org/project/{package_name}/" if package_name else None
-            if pypi_url:
-                links_items.append(
-                    f'<a href="{pypi_url}">{get_translation("view_on_pypi", lang)}{_ext_arrow}</a><br>'
-                )
-
-        if metadata.get("urls"):
-            urls = metadata["urls"]
-            url_map = {
-                "homepage": None,
-                "repository": get_translation("browse_source_code", lang),
-                "bug_tracker": get_translation("report_a_bug", lang),
-                "documentation": None,
-            }
-            for name, url in urls.items():
-                name_lower = name.lower().replace(" ", "_")
-                display_name = url_map.get(name_lower, name.replace("_", " ").title())
-                if display_name:
-                    links_items.append(f'<a href="{url}">{display_name}{_ext_arrow}</a><br>')
-
-        if links_items:
-            margin_sections.append(f"#### {get_translation('links', lang)}\n")
-            margin_sections.extend(links_items)
-
-        # ── 2. AI / Agents ───────────────────────────────────────────────
-        ai_items: list[str] = []
-        if self._config.skill_enabled:
-            # Determine if skills are hand-written/curated (intensify effect)
-            _curated_skill = bool(self._config.skill_file or self._config.skill_skills)
-            if not _curated_skill:
-                pkg_name = self._detect_package_name() or ""
-                for cand in [pkg_name.replace("_", "-"), pkg_name]:  # pragma: no cover
-                    if (
-                        cand and (package_root / "skills" / cand / "SKILL.md").exists()
-                    ):  # pragma: no cover
-                        _curated_skill = True  # pragma: no cover
-                        break  # pragma: no cover
-
-            _sparkle_class = "gd-sparkle-curated" if _curated_skill else "gd-sparkle"
-            _sparkle_svg = (
-                '<svg class="' + _sparkle_class + '" xmlns="http://www.w3.org/2000/svg" '
-                'width="0.85em" height="0.85em" viewBox="0 0 24 24" fill="none" '
-                'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-                'stroke-linejoin="round" style="vertical-align: -0.1em; margin-left: 0.25em;">'
-                '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .963L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>'
-                '<path d="M20 3v4"/><path d="M22 5h-4"/></svg>'
-            )
-            ai_items.append(f'<a href="skills.html">Skills{_sparkle_svg}</a><br>')
-        if llms_txt.is_planned(self.build_dir):
-            ai_items.append("[llms.txt](llms.txt)<br>")
-            ai_items.append("[llms-full.txt](llms-full.txt)<br>")
-
-        if ai_items:
-            margin_sections.append(f"\n#### {get_translation('ai_agents', lang)}\n")
-            margin_sections.extend(ai_items)
-
-        # ── 3. Developers (Authors + Funding) ────────────────────────────
-        authors_to_display = metadata.get("rich_authors") or metadata.get("authors", [])
-        funding = metadata.get("funding")
-        has_funding = funding and isinstance(funding, dict) and funding.get("name")
-
-        if authors_to_display or has_funding:
-            margin_sections.append(f"\n#### {get_translation('developers', lang)}\n")
-
-            # Authors
-            fallback_github = None
-            if metadata.get("urls"):
-                repo_url = metadata["urls"].get("repository", "") or metadata["urls"].get(
-                    "Repository", ""
-                )
-                if "github.com/" in repo_url:
-                    parts = repo_url.rstrip("/").split("github.com/")
-                    if len(parts) > 1:
-                        username_part = parts[1].split("/")[0]
-                        if username_part:
-                            fallback_github = username_part
-
-            dev_idx = 0
-            for author in authors_to_display:
-                if isinstance(author, dict):
-                    name = author.get("name", "")
-                    email = author.get("email", "")
-                    role = author.get("role", "")
-                    affiliation = author.get("affiliation", "")
-                    github = author.get("github", "")
-                    homepage = author.get("homepage", "") or author.get("url", "")
-                    orcid = author.get("orcid", "")
-
-                    author_html_parts = []
-                    name_html = (
-                        f'<span><p><strong style="padding-bottom: 4px;">{name}</strong></p></span>'
-                    )
-                    author_html_parts.append(name_html)
-
-                    if role:
-                        role_html = (
-                            f'<span style="margin-top: -0.15em; display: block;">'
-                            f"<p><small>{role}</small></p></span>"
-                        )
-                        author_html_parts.append(role_html)
-
-                    if affiliation:
-                        affiliation_html = (
-                            f'<span><p><small style="margin-top: -0.15em; display: block;">'
-                            f"{affiliation}</small></p></span>"
-                        )
-                        author_html_parts.append(affiliation_html)
-
-                    icon_links = []
-                    if email:
-                        icon_links.append(
-                            f'<a href="mailto:{email}" title="Email"><i class="bi bi-envelope-fill"></i></a>'
-                        )
-                    if github:
-                        icon_links.append(
-                            f'<a href="https://github.com/{github}" title="GitHub"><i class="bi bi-github"></i></a>'
-                        )
-                    elif fallback_github:
-                        icon_links.append(
-                            f'<a href="https://github.com/{fallback_github}" title="GitHub"><i class="bi bi-github"></i></a>'
-                        )
-                    if homepage:
-                        icon_links.append(
-                            f'<a href="{homepage}" title="Website"><i class="bi bi-globe"></i></a>'
-                        )
-                    if orcid:
-                        orcid_url = (
-                            orcid if orcid.startswith("http") else f"https://orcid.org/{orcid}"
-                        )
-                        icon_links.append(
-                            f'<a href="{orcid_url}" title="ORCID"><i class="fa-brands fa-orcid"></i></a>'
-                        )
-
-                    if icon_links:
-                        icon_html = (
-                            '<span style="margin-top: -0.15em; display: block;">'
-                            + " ".join(icon_links)
-                            + "</span>"
-                        )
-                        author_html_parts.append(icon_html)
-
-                    author_div_content = "".join(author_html_parts)
-                    if dev_idx == 0:
-                        margin_sections.append(f"<div>{author_div_content}</div>")
-                    else:
-                        margin_sections.append(  # pragma: no cover
-                            f'<div style="padding-top: 10px;">{author_div_content}</div>'
-                        )
-                    dev_idx += 1
-
-            # Funding (rendered as another entry in the Developers section)
-            if has_funding:
-                funder_name = funding.get("name", "")
-                roles = funding.get("roles", [])
-                homepage = funding.get("homepage", "")
-                ror_url = funding.get("ror", "")
-
-                funder_html_parts = []
-                name_html = f'<span><p><strong style="padding-bottom: 4px;">{funder_name}</strong></p></span>'
-                funder_html_parts.append(name_html)
-
-                if roles:
-                    roles_text = ", ".join(roles)
-                    roles_html = (
-                        f'<span style="margin-top: -0.15em; display: block;">'
-                        f"<p><small>{roles_text}</small></p></span>"
-                    )
-                    funder_html_parts.append(roles_html)
-
-                icon_links = []
-                if homepage:
-                    icon_links.append(
-                        f'<a href="{homepage}" title="Website"><i class="bi bi-globe"></i></a>'
-                    )
-                if ror_url:
-                    ror_icon = (
-                        '<svg class="ror-sidebar-icon" viewBox="0 0 164 118" '
-                        'xmlns="http://www.w3.org/2000/svg" '
-                        'style="width: 1em; height: 0.75em; vertical-align: -0.05em; fill: currentColor;">'
-                        '<g transform="translate(-0.945,-0.815)">'
-                        '<path d="M68.65,4.16L56.52,22.74L44.38,4.16L68.65,4.16Z" style="fill:rgb(83,186,161);"/>'
-                        '<path d="M119.41,4.16L107.28,22.74L95.14,4.16L119.41,4.16Z" style="fill:rgb(83,186,161);"/>'
-                        '<path d="M44.38,115.47L56.52,96.88L68.65,115.47L44.38,115.47Z" style="fill:rgb(83,186,161);"/>'
-                        '<path d="M95.14,115.47L107.28,96.88L119.41,115.47L95.14,115.47Z" style="fill:rgb(83,186,161);"/>'
-                        '<path d="M145.53,63.71C149.83,62.91 153.1,61 155.33,57.99C157.57,54.98 158.68,51.32 158.68,47.03C158.68,43.47 158.06,40.51 156.83,38.13C155.6,35.75 153.93,33.86 151.84,32.45C149.75,31.05 147.31,30.04 144.53,29.44C141.75,28.84 138.81,28.54 135.72,28.54L112.16,28.54L112.16,47.37C111.97,46.82 111.77,46.28 111.55,45.74C109.92,41.79 107.64,38.42 104.71,35.64C101.78,32.86 98.32,30.72 94.3,29.23C90.29,27.74 85.9,26.99 81.14,26.99C76.38,26.99 72,27.74 67.98,29.23C63.97,30.72 60.5,32.86 57.57,35.64C54.95,38.13 52.85,41.1 51.27,44.54C51.04,42.07 50.46,39.93 49.53,38.13C48.3,35.75 46.63,33.86 44.54,32.45C42.45,31.05 40.01,30.04 37.23,29.44C34.45,28.84 31.51,28.54 28.42,28.54L4.87,28.54L4.87,89.42L18.28,89.42L18.28,65.08L24.9,65.08L37.63,89.42L53.71,89.42L38.24,63.71C42.54,62.91 45.81,61 48.04,57.99C48.14,57.85 48.23,57.7 48.33,57.56C48.31,58.03 48.3,58.5 48.3,58.98C48.3,63.85 49.12,68.27 50.75,72.22C52.38,76.17 54.66,79.54 57.59,82.32C60.51,85.1 63.98,87.24 68,88.73C72.01,90.22 76.4,90.97 81.16,90.97C85.92,90.97 90.3,90.22 94.32,88.73C98.33,87.24 101.8,85.1 104.73,82.32C107.65,79.54 109.93,76.17 111.57,72.22C111.79,71.69 111.99,71.14 112.18,70.59L112.18,89.42L125.59,89.42L125.59,65.08L132.21,65.08L144.94,89.42L161.02,89.42L145.53,63.71ZM36.39,50.81C35.67,51.73 34.77,52.4 33.68,52.83C32.59,53.26 31.37,53.52 30.03,53.6C28.68,53.69 27.41,53.73 26.2,53.73L18.29,53.73L18.29,39.89L27.06,39.89C28.26,39.89 29.5,39.98 30.76,40.15C32.02,40.32 33.14,40.65 34.11,41.14C35.08,41.63 35.89,42.33 36.52,43.25C37.15,44.17 37.47,45.4 37.47,46.95C37.47,48.6 37.11,49.89 36.39,50.81ZM98.74,66.85C97.85,69.23 96.58,71.29 94.91,73.04C93.25,74.79 91.26,76.15 88.93,77.13C86.61,78.11 84.01,78.59 81.15,78.59C78.28,78.59 75.69,78.1 73.37,77.13C71.05,76.16 69.06,74.79 67.39,73.04C65.73,71.29 64.45,69.23 63.56,66.85C62.67,64.47 62.23,61.85 62.23,58.98C62.23,56.17 62.67,53.56 63.56,51.15C64.45,48.74 65.72,46.67 67.39,44.92C69.05,43.17 71.04,41.81 73.37,40.83C75.69,39.86 78.28,39.37 81.15,39.37C84.02,39.37 86.61,39.86 88.93,40.83C91.25,41.8 93.24,43.17 94.91,44.92C96.57,46.67 97.85,48.75 98.74,51.15C99.63,53.56 100.07,56.17 100.07,58.98C100.07,61.85 99.63,64.47 98.74,66.85ZM143.68,50.81C142.96,51.73 142.06,52.4 140.97,52.83C139.88,53.26 138.66,53.52 137.32,53.6C135.97,53.69 134.7,53.73 133.49,53.73L125.58,53.73L125.58,39.89L134.35,39.89C135.55,39.89 136.79,39.98 138.05,40.15C139.31,40.32 140.43,40.65 141.4,41.14C142.37,41.63 143.18,42.33 143.81,43.25C144.44,44.17 144.76,45.4 144.76,46.95C144.76,48.6 144.4,49.89 143.68,50.81Z" style="fill:currentColor;"/>'
-                        "</g></svg>"
-                    )
-                    icon_links.append(
-                        f'<a href="{ror_url}" title="Research Organization Registry">{ror_icon}</a>'
-                    )
-
-                if icon_links:
-                    icon_html = (
-                        '<span style="margin-top: -0.15em; display: block;">'
-                        + " ".join(icon_links)
-                        + "</span>"
-                    )
-                    funder_html_parts.append(icon_html)
-
-                funder_div_content = "".join(funder_html_parts)
-                if dev_idx == 0:
-                    margin_sections.append(f"<div>{funder_div_content}</div>")
-                else:
-                    margin_sections.append(  # pragma: no cover
-                        f'<div style="padding-top: 10px;">{funder_div_content}</div>'
-                    )
-
-        # ── 4. Community (Contributing, CoC, Roadmap, License, Citation) ──
-        community_items: list[str] = []
-
-        for page in community.write_pages(
-            self._config, package_root, self.build_dir, self._page_authors
-        ):
-            label = get_translation(page.label_key, lang)
-            community_items.append(f"[{label}]({page.filename})<br>")
-
-        # License (folded into Community) — "Full license" link + small SPDX badge
-        import html as _html
-
-        from ._license import get_license_info
-
-        license_id = metadata.get("license", "")
-        license_info = get_license_info(license_id) if license_id else None
-
-        if license_link:
-            _full_license = get_translation("full_license", lang)
-            if license_info is not None:
-                # Underlined link + small SPDX badge with tooltip
-                spdx_html = (  # pragma: no cover
-                    f'<a href="{license_link}">{_full_license}</a> '
-                    f'<span title="{_html.escape(license_info.full_name)}" '
-                    f'class="gd-spdx-badge">{license_info.spdx_id}</span>'
-                )
-                community_items.append(f"{spdx_html}<br>")  # pragma: no cover
-            else:
-                community_items.append(f"[{_full_license}]({license_link})<br>")
-
-        # Citation (folded into Community)
-        if citation_link:
-            pkg_display = package_name or self._detect_package_name() or "this package"
-            _citing = get_translation("citing", lang)
-            community_items.append(f"[{_citing} {pkg_display}]({citation_link})<br>")
-
-        if community_items:
-            margin_sections.append(f"\n#### {get_translation('community', lang)}\n")
-            margin_sections.extend(community_items)
-
-        # ── 5. Meta ──────────────────────────────────────────────────────
-        meta_items: list[str] = []
-        if self._config.is_python_project and metadata.get("requires_python"):
-            _requires = get_translation("requires_python", lang)
-            meta_items.append(f"**{_requires}:** Python `{metadata['requires_python']}`")
-
-        if self._config.is_python_project and metadata.get("optional_dependencies"):
-            extras = list(metadata["optional_dependencies"].keys())
-            if extras:
-                extras_formatted = ", ".join(f"`{extra}`" for extra in extras)
-                _provides = get_translation("provides_extra", lang)
-                meta_items.append(f"**{_provides}:** {extras_formatted}")
-
-        if self._config.tags_enabled and self._config.tags_index_page:
-            tags_label = get_translation("site_tags", lang)
-            meta_items.append(f"[{tags_label}](tags/index.html)")
-
-        # Package Info page link
-        pkg_info_qmd = self.build_dir / "package-info.qmd"
-        if pkg_info_qmd.exists():
-            _pkg_info_label = get_translation("package_info", lang)
-            meta_items.append(f"[{_pkg_info_label}](package-info.html)")
-
-        if meta_items:
-            margin_sections.append(f"\n#### {get_translation('meta', lang)}\n")
-            margin_sections.append("<br>\n".join(meta_items))
-
-        return "\n".join(margin_sections) if margin_sections else ""
-
-    @staticmethod
-    def _bump_heading_levels(content: str) -> str:
-        """
-        Bump every Markdown heading up by one level, skipping fenced code blocks.
-
-        Headings (`# ` … `###### `) are promoted one level deeper so that the
-        embedded README body sits below the homepage wrapper. Lines inside
-        fenced code blocks (delimited by ``` or ~~~) are left untouched, which
-        prevents the bump from turning Quarto cell options like
-        `#| code-fold: true` into `##| code-fold: true` (a plain comment Quarto
-        ignores).
-        """
-        fence_re = re.compile(r"^\s*(`{3,}|~{3,})")
-        heading_re = re.compile(r"^(#{1,6})(\s+)")
-
-        lines = content.split("\n")
-        in_fence = False
-        fence_char = ""
-        for i, line in enumerate(lines):
-            fence_match = fence_re.match(line)
-            if fence_match:
-                marker = fence_match.group(1)
-                if not in_fence:
-                    in_fence = True
-                    fence_char = marker[0]
-                elif marker[0] == fence_char:
-                    in_fence = False
-                    fence_char = ""
-                continue
-
-            if in_fence:
-                continue
-
-            if heading_re.match(line):
-                lines[i] = "#" + line
-
-        return "\n".join(lines)
-
     def _create_index_from_readme(
         self, has_api_reference: bool, force_rebuild: bool = False, fallback_to_index: bool = False
     ) -> None:
@@ -6896,12 +6099,12 @@ class GreatDocs:
             print("index.qmd already exists, skipping creation")
             return
 
-        # Find the best source file
-        source_file, warnings = self._find_index_source_file()
-
-        # Print any warnings about multiple source files
-        for warning in warnings:
-            print(warning)
+        sources = homepage_source.find(self.layout)
+        if len(sources) > 1:
+            others = ", ".join(path.name for path in sources[1:])
+            print(
+                f"⚠️  Multiple index source files detected. Using {sources[0].name} (ignoring {others})"
+            )
 
         # Title for the generated homepage. Empty by default so "Home" doesn't
         # appear on an auto-generated landing page; a user-authored source file
@@ -6909,64 +6112,55 @@ class GreatDocs:
         homepage_title = ""
         # Description keys an authored source carries over to the homepage
         homepage_description: dict[str, object] = {}
+        package_name = self._detect_package_name()
 
-        if source_file is None:
+        if not sources:
             print("No index source file found (index.qmd, index.md, README.md, or README.rst)")
             print("Generating landing page from package metadata...")
-            readme_content = self._generate_landing_page_content(
-                self._get_package_metadata(), has_api_reference
+            readme_content = landing.markdown(
+                package_name,
+                metadata.get("description", ""),
+                has_api_reference=has_api_reference,
+                has_user_guide=bool(self._discover_user_guide()),
             )
         else:
-            source_name = source_file.name
+            source_file = sources[0]
             if force_rebuild:
-                print(f"Rebuilding index.qmd from {source_name}...")
+                print(f"Rebuilding index.qmd from {source_file.name}...")
             else:
-                print(f"Creating index.qmd from {source_name}...")
+                print(f"Creating index.qmd from {source_file.name}...")
 
-            # Read source content
-            with open(source_file, "r", encoding="utf-8") as f:
-                readme_content = f.read()
-
-            # Convert RST to Markdown using Quarto's bundled pandoc
-            if source_file.suffix.lower() == ".rst":
-                readme_content = self._convert_rst_to_markdown(source_file)
-
-            # Strip any leading YAML frontmatter from the source file. The
-            # wrapper template below supplies its own frontmatter, so embedding
-            # the source's frontmatter mid-document would render it as a
-            # horizontal rule plus visible raw YAML text (e.g. index.qmd files,
-            # which universally start with a `---` block). The source title is
-            # carried over into the wrapper so an authored title survives.
-            source_fm, readme_content = split_front_matter(readme_content)
-            readme_content = readme_content.lstrip("\n")
-            if source_title := source_fm.string("title"):
-                homepage_title = source_title
-            homepage_description = {
-                key: source_fm.get(key) for key in seo_description.PAGE_KEYS if key in source_fm
-            }
-
-            # Copy images referenced in the source file to the build directory
+            # The page wrapper supplies its own front matter. Only the source's
+            # title and description keys are carried over.
+            authored = homepage_source.read(source_file, report=print)
+            homepage_title = authored.title
+            homepage_description = dict(authored.description)
             readme_content = publish.rebase_references(
-                readme_content, source_file, index_qmd, layout=self.layout, pages=self._page_map()
+                authored.body, source_file, index_qmd, layout=self.layout, pages=self._page_map()
             )
 
-        # Build hero section (must run before heading adjustment so badge
-        # extraction works on original markdown)
-        hero_html, cleaned_content = self._build_hero_section(readme_content)
-        if cleaned_content is not None:
-            readme_content = cleaned_content  # pragma: no cover
+        # The hero takes the badges out of the README, so it is built before
+        # the headings change
+        hero_html = ""
+        if found := hero.find(self._config, self.layout.source_dir, readme_content):
+            hero_html = hero.render(
+                found,
+                self._config,
+                self.layout,
+                self.build_dir,
+                metadata=metadata,
+                package_name=package_name,
+                pages=self._page_map(),
+            )
+            if hero_html and found.body is not None:
+                readme_content = found.body
 
-        # If hero displays the package name, strip a matching first heading
-        # to avoid visual duplication
         if hero_html and self._config.hero_enabled:
             hero_name = self._config.hero_name
             if hero_name is None:
-                metadata = self._get_package_metadata()
-                hero_name = metadata.get("name") or self._detect_package_name()
+                hero_name = metadata.get("name") or package_name
             if hero_name:
-                first_h1 = re.match(r"^#\s+(.+)$", readme_content.strip(), re.MULTILINE)
-                if first_h1 and first_h1.group(1).strip().lower() == hero_name.strip().lower():
-                    readme_content = readme_content.replace(first_h1.group(0), "", 1).lstrip("\n")
+                readme_content = readme.strip_duplicate_title(readme_content, hero_name)
 
         # The wrapper below puts markup above the README, so the README's own
         # opening paragraph must be found before it is wrapped
@@ -6977,15 +6171,20 @@ class GreatDocs:
             if opening:
                 homepage_description = {"description-meta": seo_description.as_metadata(opening)}
 
-        if source_file is not None:
-            # Adjust heading levels: bump all headings up by one level. This
-            # prevents h1 from becoming paragraphs and keeps proper hierarchy.
-            # Lines inside fenced code blocks are skipped so Quarto cell options
-            # (`#| code-fold: true`) and shell-style comments aren't mangled.
-            readme_content = self._bump_heading_levels(readme_content)
+        if sources:
+            # The README's headings sit one level below the homepage's
+            readme_content = readme.bump_heading_levels(readme_content)
 
-        # Build margin content using the shared helper
-        margin_content = self._build_metadata_margin()
+        margin_content = margin.render(
+            self._config,
+            self.build_dir,
+            package_root=package_root,
+            metadata=metadata,
+            package_name=package_name,
+            community_pages=community.write_pages(
+                self._config, package_root, self.build_dir, self._page_authors
+            ),
+        )
 
         # CSS to reduce top margin of first heading element
         # The heading ends up inside a section.level1 > h1 structure
