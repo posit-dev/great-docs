@@ -19,6 +19,9 @@ class NavbarLink:
     href: str
     """The link's target, which identifies the link among the navbar's items"""
 
+    before: str | None = None
+    """The `href` of the item the link goes in front of; the link goes last without one"""
+
 
 @dataclass(frozen=True)
 class Contribution:

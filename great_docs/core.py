@@ -1568,34 +1568,6 @@ class GreatDocs:
 
         return None, None, None  # pragma: no cover
 
-    def _add_tags_to_navbar(self) -> None:
-        """Add a *Tags* link to the navbar (idempotent)."""
-        from ._translations import get_translation
-
-        lang = self._config.lang
-        tags_label = get_translation("site_tags", lang)
-
-        if not quarto_yml.path(self.build_dir).exists():
-            return
-
-        config = quarto_yml.read(self.build_dir)
-
-        navbar = config.get("website", {}).get("navbar")
-        if not navbar or "left" not in navbar:
-            return
-
-        # Already present?
-        if any(
-            isinstance(item, dict) and item.get("text") == tags_label for item in navbar["left"]
-        ):
-            return
-
-        link = {"text": tags_label, "href": "tags/index.qmd"}
-        # Insert before Reference
-        self._insert_before_reference(navbar["left"], link)
-
-        quarto_yml.write(self.build_dir, config, self._config)
-
     # =========================================================================
     # Page Status Badges Methods
     # =========================================================================
@@ -11756,7 +11728,7 @@ anchor-sections: true
 
     def _step_tags(self) -> Outcome:
         """
-        Write the tags index page and the tag data for tagged pages
+        Write the tags index, embed tag pill data and add the navbar link
 
         Returns
         -------
@@ -11768,11 +11740,12 @@ anchor-sections: true
         output = tags.write(self._config, self.layout, report=print)
         if output is None:
             return Skipped("no tagged pages found")
-        if output.page_data is not None:
-            with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+        with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+            if output.page_data is not None:
                 inline_data.add(
                     quarto_config, "__GD_TAGS_DATA__", output.page_data, before="page-tags.js"
                 )
+            quarto_yml.apply(quarto_config, output.contribution)
         return "Tags processed"
 
     def _step_page_statuses(self) -> Outcome:

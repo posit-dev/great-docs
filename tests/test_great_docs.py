@@ -34070,34 +34070,6 @@ def test_build_metadata_margin_meta_tags():
         assert "tags" in result.lower()
 
 
-# ── _add_tags_to_navbar ──────────────────────────────────────────────
-
-
-def test_add_tags_to_navbar_already_present():
-    """_add_tags_to_navbar is idempotent (does not duplicate)."""
-    with tempfile.TemporaryDirectory() as tmp:
-        project = Path(tmp)
-        (project / "great-docs.yml").write_text("tags: true\n")
-        gd = GreatDocs(project_path=tmp)
-        gd.build_dir = project
-
-        quarto_config = {
-            "website": {"navbar": {"left": [{"text": "Tags", "href": "tags/index.qmd"}]}}
-        }
-        quarto_yml = project / "_quarto.yml"
-        quarto_yml.write_text(format_yaml(quarto_config))
-
-        gd._add_tags_to_navbar()
-
-        result = read_yaml(quarto_yml)
-        tags_count = sum(
-            1
-            for item in result["website"]["navbar"]["left"]
-            if isinstance(item, dict) and item.get("text") == "Tags"
-        )
-        assert tags_count == 1
-
-
 # ── _build_metadata_margin (meta section) ────────────────────────────
 
 

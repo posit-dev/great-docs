@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from .._content.naming import title_from_name
+from .._contribution import Contribution, NavbarLink
 from .._icons import get_icon_svg
 from .._translations import get_translation
 from . import page_scan
@@ -86,10 +87,13 @@ class TagNode:
 
 @dataclass(frozen=True)
 class Output:
-    """Tag data for the site's Quarto configuration"""
+    """Tag data and navigation for the site's Quarto configuration"""
 
     page_data: dict[str, Any] | None
     """The data `page-tags.js` reads, or `None` when tags are not shown on pages"""
+
+    contribution: Contribution
+    """A navbar link to the index page in front of Reference, or nothing without the page"""
 
 
 def collect(config: Config, layout: Layout) -> list[TaggedPage]:
@@ -321,8 +325,8 @@ def write(config: Config, layout: Layout, *, report: Callable[[str], None]) -> O
     """
     Write the tags index page and the tag pill data
 
-    The index page is written when `tags.index_page` is set and the data file when
-    `tags.show_on_pages` is set.
+    The index page is written and linked from the navbar when `tags.index_page` is set. The
+    data file is written when `tags.show_on_pages` is set.
 
     Parameters
     ----------
@@ -336,8 +340,8 @@ def write(config: Config, layout: Layout, *, report: Callable[[str], None]) -> O
     Returns
     -------
     :
-        The tag data to embed in the Quarto configuration, or `None` when no page has
-        a visible tag.
+        The tag data and navigation to add to the Quarto configuration, or `None`
+        when no page has a visible tag.
     """
     build_dir = layout.build_dir
     pages = collect(config, layout)
@@ -345,17 +349,20 @@ def write(config: Config, layout: Layout, *, report: Callable[[str], None]) -> O
     if not groups:
         return None
 
+    contribution = Contribution()
     if config.tags_index_page:
         index = build_dir / INDEX_PAGE
         index.parent.mkdir(parents=True, exist_ok=True)
         _ = index.write_text(render_index(groups, config), encoding="utf-8")
         report(f"Created {index.relative_to(build_dir)}")
+        link = NavbarLink(text="Tags", href=INDEX_PAGE, before="reference/index.qmd")
+        contribution = Contribution(navbar=(link,))
 
     data = None
     if config.tags_show_on_pages:
         data = page_data(pages, groups, config, report=report)
         _ = (build_dir / DATA_FILENAME).write_text(json.dumps(data), encoding="utf-8")
-    return Output(page_data=data)
+    return Output(page_data=data, contribution=contribution)
 
 
 def _render_tree(lines: list[str], node: TagNode, config: Config, depth: int, prefix: str) -> None:

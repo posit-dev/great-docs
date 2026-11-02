@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 from great_docs._build.steps import Skipped
+from great_docs._contribution import Contribution, NavbarLink
 from great_docs._layout import Layout
 from great_docs._utils import validate_build_dir
 from great_docs._website import inline_data, page_scan, quarto_yml, tags
@@ -584,6 +585,9 @@ class TestWrite:
         written = json.loads((layout.build_dir / "_tags.json").read_text(encoding="utf-8"))
         assert written == output.page_data
         assert reported == ["Created tags/index.qmd"]
+        assert output.contribution == Contribution(
+            navbar=(NavbarLink("Tags", "tags/index.qmd", before="reference/index.qmd"),)
+        )
 
     def test_nothing_without_tagged_pages(self, tmp_path: Path):
         """Leave the build directory unchanged when no pages have tags"""
@@ -603,6 +607,7 @@ class TestWrite:
         assert output is not None
         assert output.page_data is not None
         assert not (layout.build_dir / "tags").exists()
+        assert output.contribution == Contribution()
 
     def test_not_shown_on_pages(self, tmp_path: Path):
         """Write the index without page data when tag pills are disabled"""
@@ -611,7 +616,8 @@ class TestWrite:
 
         output = tags.write(config, layout, report=print)
 
-        assert output == tags.Output(page_data=None)
+        assert output is not None
+        assert output.page_data is None
         assert (layout.build_dir / "tags" / "index.qmd").exists()
         assert not (layout.build_dir / "_tags.json").exists()
 
@@ -659,6 +665,9 @@ class TestInlineData:
 # ── Build step ───────────────────────────────────────────────────────────────
 
 
+REFERENCE = {"text": "Reference", "href": "reference/index.qmd"}
+
+
 def _docs(tmp_path: Path, yaml_text: str = "tags: true\n") -> GreatDocs:
     """
     Create a project whose build directory has the initial Quarto configuration
@@ -673,7 +682,8 @@ def _docs(tmp_path: Path, yaml_text: str = "tags: true\n") -> GreatDocs:
     Returns
     -------
     :
-        The project, with `page-tags.js` as its only after-body include.
+        The project, with `page-tags.js` as its only after-body include and a Reference
+        link in the left navbar.
     """
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "test-pkg"\n', encoding="utf-8")
     (tmp_path / "great-docs.yml").write_text(yaml_text, encoding="utf-8")
@@ -682,6 +692,7 @@ def _docs(tmp_path: Path, yaml_text: str = "tags: true\n") -> GreatDocs:
     quarto_yml.write_initial(docs.build_dir, docs._config)
     with quarto_yml.edit(docs.build_dir, docs._config) as quarto_config:
         quarto_config["format"]["html"]["include-after-body"] = ["page-tags.js"]
+        quarto_config["website"] = {"navbar": {"left": [REFERENCE]}}
     return docs
 
 
@@ -697,6 +708,20 @@ class TestStepTags:
         assert entries[0]["text"].startswith("<script>window.__GD_TAGS_DATA__=")
         assert entries[1] == "page-tags.js"
         validate_build_dir(docs.build_dir)
+
+    def test_links_the_index_page_before_reference(self, tmp_path: Path):
+        """Insert one translated Tags link before Reference across repeated builds"""
+        docs = _docs(tmp_path, "tags: true\nsite:\n  lang: fr\n")
+        _make_qmd(docs.build_dir / "user-guide" / "page.qmd", "Page", tags=["Python"])
+
+        _ = docs._step_tags()
+        _ = docs._step_tags()
+
+        left = quarto_yml.read(docs.build_dir)["website"]["navbar"]["left"]
+        assert left == [
+            {"text": "Étiquettes", "href": "tags/index.qmd"},
+            {"text": "Référence", "href": "reference/index.qmd"},
+        ]
 
     def test_skips_without_tagged_pages(self, tmp_path: Path):
         """Report a skipped step when the project has no tagged pages"""

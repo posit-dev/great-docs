@@ -149,3 +149,38 @@ def test_apply_without_a_left_navbar_changes_nothing(quarto_config: dict[str, An
     quarto_yml.apply(quarto_config, CHANGELOG)
 
     assert quarto_config == before
+
+
+TAGS = Contribution(navbar=(NavbarLink("Tags", "tags/index.qmd", before="reference/index.qmd"),))
+
+
+def test_apply_inserts_a_link_before_its_anchor():
+    """Match the insertion target by its path even when its label differs"""
+    guide = {"text": "User Guide", "href": "user-guide/index.qmd"}
+    reference = {"text": "API", "href": "reference/index.qmd"}
+    left = [guide, reference]
+
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, TAGS)
+
+    assert left == [guide, {"text": "Tags", "href": "tags/index.qmd"}, reference]
+
+
+def test_apply_appends_a_link_whose_anchor_is_missing():
+    """Append the link when its insertion target is absent"""
+    guide = {"text": "User Guide", "href": "user-guide/index.qmd"}
+    left = [guide]
+
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, TAGS)
+
+    assert left == [guide, {"text": "Tags", "href": "tags/index.qmd"}]
+
+
+def test_apply_inserts_an_anchored_link_once():
+    """Insert a positioned link only once across repeated contributions"""
+    reference = {"text": "Reference", "href": "reference/index.qmd"}
+    left = [reference]
+
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, TAGS)
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, TAGS)
+
+    assert left == [{"text": "Tags", "href": "tags/index.qmd"}, reference]

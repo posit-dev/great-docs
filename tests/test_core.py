@@ -1420,63 +1420,6 @@ class TestGetPackageExportsCacheHit:
 
 
 # ---------------------------------------------------------------------------
-# _add_tags_to_navbar – all branches
-# ---------------------------------------------------------------------------
-
-
-class TestAddTagsToNavbar:
-    def test_no_quarto_yml_returns_early(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        _patch_cfg(monkeypatch, gd, "lang", "en")
-        gd._add_tags_to_navbar()
-
-    def test_no_navbar_returns_early(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        _patch_cfg(monkeypatch, gd, "lang", "en")
-        quarto = gd.build_dir / "_quarto.yml"
-        quarto.write_text("website:\n  title: Test\n", encoding="utf-8")
-        gd._add_tags_to_navbar()
-
-    def test_no_left_key_returns_early(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        _patch_cfg(monkeypatch, gd, "lang", "en")
-        quarto = gd.build_dir / "_quarto.yml"
-        quarto.write_text(
-            "website:\n  navbar:\n    right:\n      - icon: github\n", encoding="utf-8"
-        )
-        gd._add_tags_to_navbar()
-
-    def test_already_present_skips(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        _patch_cfg(monkeypatch, gd, "lang", "en")
-        quarto = gd.build_dir / "_quarto.yml"
-        quarto.write_text(
-            "website:\n  navbar:\n    left:\n      - text: Site Tags\n        href: tags/index.qmd\n",
-            encoding="utf-8",
-        )
-        gd._add_tags_to_navbar()
-        content = quarto.read_text(encoding="utf-8")
-        assert content.count("Site Tags") == 1
-
-    def test_adds_tags_link(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        _patch_cfg(monkeypatch, gd, "lang", "en")
-        quarto = gd.build_dir / "_quarto.yml"
-        quarto.write_text(
-            "website:\n  navbar:\n    left:\n      - text: Reference\n        href: reference/index.qmd\n",
-            encoding="utf-8",
-        )
-        gd._add_tags_to_navbar()
-        content = quarto.read_text(encoding="utf-8")
-        assert "Tags" in content
-
-
-# ---------------------------------------------------------------------------
 # _generate_cli_command_page – edge cases (nargs, hidden, bullets, envvar, default)
 # ---------------------------------------------------------------------------
 
