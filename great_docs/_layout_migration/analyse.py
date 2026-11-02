@@ -14,6 +14,7 @@ from typing import Any
 from great_docs._content.naming import section_slug
 from great_docs._layout import CONVENTIONAL_DOC_DIRS, Layout
 from great_docs._utils import is_great_docs_build_dir, recognised_build_dirs
+from great_docs._website import branding
 from great_docs._yaml import YamlMapping, YamlValue
 
 from .content import (
@@ -335,40 +336,6 @@ def _package_metadata(root: Path) -> tuple[str, list[Path]]:
     if name:
         sources.append(root / name.replace("-", "_"))
     return name, sources
-
-
-def _logo_candidates(package: str, *, hero: bool) -> list[str]:
-    if hero:
-        return [
-            "logo-hero.svg",
-            "logo-hero.png",
-            "assets/logo-hero.svg",
-            "assets/logo-hero.png",
-            "logo-hero-light.svg",
-            "logo-hero-light.png",
-            "assets/logo-hero-light.svg",
-            "assets/logo-hero-light.png",
-        ]
-    candidates = [
-        "logo.svg",
-        "logo.png",
-        "assets/logo.svg",
-        "assets/logo.png",
-        "docs/assets/logo.svg",
-        "docs/assets/logo.png",
-    ]
-    for name in dict.fromkeys((package, package.replace("-", "_"))):
-        if name:
-            candidates.extend(
-                [
-                    f"{name}_logo.svg",
-                    f"{name}_logo.png",
-                    f"assets/{name}_logo.svg",
-                    f"assets/{name}_logo.png",
-                ]
-            )
-    candidates.extend(["assets/logo-light.svg", "assets/logo-light.png"])
-    return candidates
 
 
 def _relative_section_dirs(sections: list[YamlValue]) -> list[tuple[int, str, YamlMapping]]:
@@ -1041,17 +1008,17 @@ def analyse(layout: Layout, destination: Path) -> Migration:
         )
         if explicit:
             continue
-        for candidate in _logo_candidates(package, hero=hero):
+        candidates = branding.HERO_LOGO_CANDIDATES if hero else branding.logo_candidates(package)
+        for candidate in candidates:
             candidate_path = root / candidate
             if not retained(candidate_path):
                 break
             if candidate_path.is_file():
-                light = Path(candidate)
-                dark = light.with_name(light.stem.replace("-light", "") + "-dark" + light.suffix)
+                dark = branding.dark_variant(candidate)
                 retain(root / dark)
                 variants = {
                     "light": candidate,
-                    "dark": dark.as_posix() if (root / dark).is_file() else candidate,
+                    "dark": dark if (root / dark).is_file() else candidate,
                 }
                 if isinstance(existing, dict):
                     implicit.update({(*path, key): value for key, value in variants.items()})
