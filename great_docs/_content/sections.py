@@ -7,6 +7,8 @@ cards. A blog section publishes its posts under a listing page that Quarto fills
 
 from __future__ import annotations
 
+import html
+import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -479,7 +481,7 @@ def blog_index(title: str) -> str:
     """
     lines = [
         "---",
-        f'title: "{title}"',
+        f"title: {_yaml_string(title)}",
         "listing:",
         "  type: default",
         '  sort: "date desc"',
@@ -517,7 +519,7 @@ def card_index(title: str, pages: Sequence[Page], columns: int = 2) -> str:
     """
     lines = [
         "---",
-        f'title: "{title}"',
+        f"title: {_yaml_string(title)}",
         "bread-crumbs: false",
         "---",
         "",
@@ -562,10 +564,10 @@ def card_index(title: str, pages: Sequence[Page], columns: int = 2) -> str:
             parts.append(f'<div class="section-cards {col_cls}" style="{grid_style}">')
             for entry in image_entries:
                 parts.append(
-                    f'<a href="{entry["filename"]}" class="section-card" style="{card_style}">'
+                    f'<a href="{html.escape(entry["filename"])}" class="section-card" style="{card_style}">'
                 )
                 parts.append(
-                    f'<img src="{entry.get("image", "")}" class="section-card-img" '
+                    f'<img src="{html.escape(entry.get("image", ""))}" class="section-card-img" '
                     'style="width: 100%; border-radius: 0.375rem; '
                     'margin-bottom: 0.75rem;" />'
                 )
@@ -584,7 +586,7 @@ def card_index(title: str, pages: Sequence[Page], columns: int = 2) -> str:
             )
             for entry in plain_entries:
                 parts.append(
-                    f'<a href="{entry["filename"]}" class="section-card" style="{card_style}">'
+                    f'<a href="{html.escape(entry["filename"])}" class="section-card" style="{card_style}">'
                 )
                 parts.extend(_card_text(entry, title_style, desc_style))
                 parts.append("</a>")
@@ -594,6 +596,23 @@ def card_index(title: str, pages: Sequence[Page], columns: int = 2) -> str:
 
     lines.append("")
     return "\n".join(lines)
+
+
+def _yaml_string(text: str) -> str:
+    """
+    Return text as a double-quoted YAML scalar
+
+    Parameters
+    ----------
+    text
+        The text.
+
+    Returns
+    -------
+    :
+        A JSON string, which YAML reads back as `text`.
+    """
+    return json.dumps(str(text), ensure_ascii=False)
 
 
 def _card_text(entry: Page, title_style: str, desc_style: str) -> list[str]:
@@ -614,9 +633,11 @@ def _card_text(entry: Page, title_style: str, desc_style: str) -> list[str]:
     :
         The title line, then the description line when the page has a description.
     """
-    lines = [f'<div class="section-card-title" style="{title_style}">{entry["title"]}</div>']
+    title = html.escape(entry["title"], quote=False)
+    lines = [f'<div class="section-card-title" style="{title_style}">{title}</div>']
     description = entry.get("description", "")
     if description:
+        description = html.escape(description, quote=False)
         lines.append(f'<div class="section-card-desc" style="{desc_style}">{description}</div>')
     return lines
 

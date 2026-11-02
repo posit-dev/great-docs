@@ -1,5 +1,9 @@
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from great_docs import Config
 from great_docs._content import sections
@@ -315,6 +319,32 @@ def test_card_index_without_images_has_only_plain_cards():
     assert "section-cards-2col" not in content
     assert "<hr>" not in content
     assert "<img" not in content
+
+
+@pytest.mark.parametrize("index", [sections.blog_index, partial(sections.card_index, pages=[])])
+@pytest.mark.parametrize("title", ['Say "hi"', "C:\\temp", "Été: notes"])
+def test_generated_index_keeps_the_title(index: Callable[[str], str], title: str):
+    front_matter, _ = split_front_matter(index(title))
+
+    assert front_matter.string("title") == title
+
+
+def test_card_index_escapes_page_values():
+    pages: list[sections.Page] = [
+        {
+            "filename": 'say-"hi".qmd',
+            "title": "A < B & C",
+            "description": "Use <b> & 'quotes'",
+            "image": 'a"b.png',
+        },
+    ]
+
+    content = sections.card_index("Cards", pages)
+
+    assert 'href="say-&quot;hi&quot;.qmd"' in content
+    assert 'src="a&quot;b.png"' in content
+    assert ">A &lt; B &amp; C</div>" in content
+    assert ">Use &lt;b&gt; &amp; 'quotes'</div>" in content
 
 
 def _page(filename: str, title: str) -> sections.Page:
