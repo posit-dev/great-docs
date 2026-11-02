@@ -21,15 +21,14 @@ from great_docs._mcpref.reference import (
     _generate_resource_template_page,
     _generate_tool_page,
     _json_value,
-    _locate_server,
     _messages_for_prompt,
     _schema_type_display,
     categorize_tools,
     discover_mcp_server,
     generate_mcp_manifest,
     generate_mcp_reference_pages,
+    locate_server,
 )
-
 
 # ---------------------------------------------------------------------------
 # _dump
@@ -71,7 +70,7 @@ class TestDump:
 
 
 # ---------------------------------------------------------------------------
-# _locate_server
+# locate_server
 # ---------------------------------------------------------------------------
 
 
@@ -85,29 +84,29 @@ class TestLocateServer:
     def test_explicit_var_found(self):
         obj = object()
         mod = self._make_module(my_server=obj)
-        assert _locate_server(mod, "my_server") is obj
+        assert locate_server(mod, "my_server") is obj
 
     def test_explicit_var_missing_returns_none(self):
         mod = self._make_module()
-        assert _locate_server(mod, "missing_server") is None
+        assert locate_server(mod, "missing_server") is None
 
     def test_auto_detect_server_type(self):
         mock_server = MagicMock()
         type(mock_server).__name__ = "Server"
         type(mock_server).__module__ = "mcp.server"
         mod = self._make_module(srv=mock_server)
-        assert _locate_server(mod, None) is mock_server
+        assert locate_server(mod, None) is mock_server
 
     def test_auto_detect_fastmcp_type(self):
         mock_server = MagicMock()
         type(mock_server).__name__ = "FastMCP"
         type(mock_server).__module__ = "mcp.fastmcp"
         mod = self._make_module(app=mock_server)
-        assert _locate_server(mod, None) is mock_server
+        assert locate_server(mod, None) is mock_server
 
     def test_auto_detect_nothing_returns_none(self):
         mod = self._make_module(x=23, y="hello")
-        assert _locate_server(mod, None) is None
+        assert locate_server(mod, None) is None
 
 
 # ---------------------------------------------------------------------------
@@ -881,51 +880,6 @@ class TestDiscoverMcpServer:
 
 # ---------------------------------------------------------------------------
 # MCP server discovery
-# ---------------------------------------------------------------------------
-
-
-class TestFindServer:
-    def setup_method(self):
-        from great_docs._mcpref.runner import _find_server
-
-        self._find_server = _find_server
-
-    def _make_module(self, **attrs) -> types.ModuleType:
-        mod = types.ModuleType("fake")
-        for k, v in attrs.items():
-            setattr(mod, k, v)
-        return mod
-
-    def test_explicit_var_found(self):
-        obj = object()
-        mod = self._make_module(my_server=obj)
-        assert self._find_server(mod, "my_server") is obj
-
-    def test_explicit_var_missing_returns_none(self):
-        mod = self._make_module()
-        assert self._find_server(mod, "missing") is None
-
-    def test_auto_detect_server(self):
-        mock_server = MagicMock()
-        type(mock_server).__name__ = "Server"
-        type(mock_server).__module__ = "mcp.server.lowlevel"
-        mod = self._make_module(srv=mock_server)
-        assert self._find_server(mod, None) is mock_server
-
-    def test_auto_detect_fastmcp(self):
-        mock_server = MagicMock()
-        type(mock_server).__name__ = "FastMCP"
-        type(mock_server).__module__ = "mcp.fastmcp"
-        mod = self._make_module(app=mock_server)
-        assert self._find_server(mod, None) is mock_server
-
-    def test_auto_detect_nothing_returns_none(self):
-        mod = self._make_module(x=23)
-        assert self._find_server(mod, None) is None
-
-
-# ---------------------------------------------------------------------------
-# MCP server execution
 # ---------------------------------------------------------------------------
 
 

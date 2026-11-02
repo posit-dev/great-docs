@@ -17,26 +17,13 @@ from __future__ import annotations
 import asyncio
 import importlib
 import sys
-from typing import Any
 
-
-def _find_server(module: Any, server_var: str | None) -> Any:
-    """Locate the MCP `Server`/`FastMCP` instance in a module."""
-    if server_var:
-        return getattr(module, server_var, None)
-
-    for attr_name in dir(module):
-        obj = getattr(module, attr_name)
-        type_name = type(obj).__name__
-        module_name = type(obj).__module__ or ""
-        if "mcp" in module_name and type_name in ("Server", "FastMCP"):
-            return obj
-    return None
+from .reference import locate_server
 
 
 async def _run(module_path: str, server_var: str | None) -> None:
     module = importlib.import_module(module_path)
-    server = _find_server(module, server_var)
+    server = locate_server(module, server_var)
     if server is None:
         raise SystemExit(f"No MCP server instance found in {module_path}")
 

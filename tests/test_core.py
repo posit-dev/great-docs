@@ -15,6 +15,7 @@ import pytest
 
 from great_docs import GreatDocs
 from great_docs._build import freeze
+from great_docs._mcpref import build as mcp_build
 from great_docs._reference.discovery import (
     categorise_references,
     discover_exports,
@@ -343,7 +344,7 @@ class TestDiscoverMcpServer:
                 "great_docs._mcpref.reference.discover_mcp_server", return_value=server_info
             ) as discover,
         ):
-            result = gd._discover_mcp_server("mypkgxyz")
+            result = mcp_build.discover_server(gd._config, "mypkgxyz")
 
         assert result == server_info
         discover.assert_called_once_with(module_path=f"mypkgxyz.{module}", server_var=None)
@@ -360,7 +361,7 @@ class TestDiscoverMcpServer:
                 "great_docs._mcpref.reference.discover_mcp_server", return_value=None
             ) as discover,
         ):
-            gd._discover_mcp_server("mypkgxyz")
+            mcp_build.discover_server(gd._config, "mypkgxyz")
 
         discover.assert_called_once_with(module_path="elsewhere.tools", server_var=None)
 
@@ -369,7 +370,7 @@ class TestDiscoverMcpServer:
         gd = _make_root_project(tmp_path)
 
         with patch("great_docs._mcpref.reference.discover_mcp_server") as discover:
-            result = gd._discover_mcp_server(None)
+            result = mcp_build.discover_server(gd._config, None)
 
         assert result is None
         discover.assert_not_called()
@@ -440,33 +441,35 @@ class TestUpdateSidebarWithMcp:
         assert "sidebar" in quarto_yml_file.read(gd.build_dir)["website"]
 
 
-class TestGenerateMcpManifest:
-    """Cover _generate_mcp_manifest orchestration."""
+class TestBuildMcpReference:
+    """Verify reference publishing uses project metadata and language"""
 
-    def test_calls_generate_mcp_manifest(self, tmp_path, monkeypatch):
-        """Gathers metadata and calls generate_mcp_manifest."""
+    def test_passes_metadata_and_language(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         gd = _make_gd(tmp_path)
-        monkeypatch.setattr(gd, "_detect_package_name", lambda: "mypkg")
-        monkeypatch.setattr(
-            gd,
-            "_get_github_repo_info",
-            lambda: ("posit-dev", "mypkg", "https://github.com/posit-dev/mypkg"),
+        gd._config._config["site_url"] = "https://example.org"
+        pages: dict[str, object] = {}
+        manifest: dict[str, object] = {}
+
+        def fake_pages(**kwargs):
+            pages.update(kwargs)
+            return ["reference/mcp/tool.qmd"]
+
+        def fake_manifest(**kwargs):
+            manifest.update(kwargs)
+
+        monkeypatch.setattr("great_docs._mcpref.reference.generate_mcp_reference_pages", fake_pages)
+        monkeypatch.setattr("great_docs._mcpref.reference.generate_mcp_manifest", fake_manifest)
+        server = {"name": "test", "tools": []}
+
+        files = mcp_build.build_mcp_reference(
+            gd._config, server, gd.build_dir, "mypkg", "https://github.com/owner/repo"
         )
-        gd._config._config["site_url"] = "https://mypkg.readthedocs.io"
 
-        called_with = {}
-
-        def fake_gen(**kwargs):
-            called_with.update(kwargs)
-
-        with patch("great_docs.core.generate_mcp_manifest", create=True):
-            monkeypatch.setattr("great_docs._mcpref.reference.generate_mcp_manifest", fake_gen)
-            gd._generate_mcp_manifest({"name": "test", "tools": []})
-
-        assert called_with["package_name"] == "mypkg"
-        assert called_with["repo_url"] == "https://github.com/posit-dev/mypkg"
-        assert called_with["site_url"] == "https://mypkg.readthedocs.io"
-        assert called_with["server_info"] == {"name": "test", "tools": []}
+        assert files == ["reference/mcp/tool.qmd"]
+        assert manifest["package_name"] == "mypkg"
+        assert manifest["repo_url"] == "https://github.com/owner/repo"
+        assert manifest["site_url"] == "https://example.org"
+        assert manifest["server_info"] == server
 
 
 class TestRemoveMcpFromRefSections:

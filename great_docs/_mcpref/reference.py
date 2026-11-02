@@ -54,7 +54,7 @@ def discover_mcp_server(
         print(f"Could not import MCP module {module_path}: {e}")
         return None
 
-    server = _locate_server(module, server_var)
+    server = locate_server(module, server_var)
     if server is None:
         print(f"No MCP Server instance found in {module_path}")
         return None
@@ -90,8 +90,10 @@ def discover_mcp_server(
     return info
 
 
-def _locate_server(module: Any, server_var: str | None) -> Any:
-    """Locate the MCP `Server`/`FastMCP` instance in an imported module."""
+def locate_server(module: Any, server_var: str | None) -> Any:
+    """
+    Find an MCP server instance in an imported module
+    """
     if server_var:
         return getattr(module, server_var, None)
 
@@ -469,7 +471,7 @@ def generate_mcp_reference_pages(
     categories: dict[str, list[str]] | None = None,
     display_name: str | None = None,
     language: str = "en",
-) -> list[str | dict]:
+) -> list[str | dict[str, Any]]:
     """
     Generate Quarto .qmd pages for an MCP server's tools.
 
@@ -499,7 +501,7 @@ def generate_mcp_reference_pages(
 
     sections = categorize_tools(tools, categories)
     generated_paths: list[str] = []
-    sidebar_items: list[str | dict] = []
+    sidebar_items: list[str | dict[str, Any]] = []
 
     # Generate index page
     index_content = _generate_mcp_index_page(server_name, server_info, sections, language)
@@ -560,7 +562,12 @@ def generate_mcp_reference_pages(
             f"reference/mcp/template_{re.sub(r'[^a-zA-Z0-9_]', '_', t['name'])}.qmd"
             for t in resource_templates
         ]
-        sidebar_items.append({"section": "Resource Templates", "contents": template_paths})
+        sidebar_items.append(
+            {
+                "section": "Resource Templates",
+                "contents": template_paths,
+            }
+        )
 
     # Add prompt section to sidebar
     if prompts:
