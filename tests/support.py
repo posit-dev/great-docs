@@ -39,7 +39,6 @@ _BUILD_METHODS: tuple[str, ...] = (
     "_griffe_search_paths",
     "_find_user_guide_dir",
     "_prepare_build_directory",
-    "_generate_skill_md",
     "_get_package_metadata",
     "_get_github_repo_info",
     "_resolve_importable_name",

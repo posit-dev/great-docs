@@ -14,6 +14,7 @@ from great_docs._skill_install import (
     install_skill,
     list_skills,
 )
+from great_docs._website.ai_agents.skills import SkillsWriter
 from great_docs._yaml import split_front_matter
 
 # ---------------------------------------------------------------------------
@@ -493,7 +494,13 @@ class TestMultiSkillWellKnown:
             )
 
             docs = GreatDocs(project_path=tmp_dir)
-            docs._generate_skill_md()
+            SkillsWriter(
+                docs._config,
+                docs.layout,
+                docs.build_dir,
+                docs._detect_package_name(),
+                docs._get_package_metadata(),
+            ).write()
 
             # Check primary skill.md was created
             primary = great_docs_dir / "skill.md"
