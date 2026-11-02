@@ -421,6 +421,60 @@ class TestRenderIndex:
         assert '<span class="gd-tag-pill" data-tippy-content="1 page in User Guide"><span' in text
         assert "gd-tag-icon-svg" in text
 
+    def test_names_titles_and_sections_are_text(self, tmp_path: Path):
+        """Escape HTML and Markdown punctuation in tag names, titles and section labels"""
+        config, _ = _project(tmp_path)
+        page = _page("p.qmd", "__init__", "A<b>&", section='Odd "S" <s>', title="See [x] <z>")
+
+        text = tags.render_index({"__init__": [page], "A<b>&": [page]}, config)
+
+        assert (
+            '<span class="gd-tag-pill" data-tippy-content="1 page in Odd &quot;S&quot; &lt;s&gt;">'
+            in text
+        )
+        assert ">A&lt;b&gt;&amp;</span>" in text
+        assert r">\_\_init\_\_</span>" in text
+        assert (
+            r'[See \[x\] &lt;z&gt;](../p.qmd) <span class="gd-tag-section">Odd "S" &lt;s&gt;</span>'
+            in text
+        )
+
+    def test_title_keeps_its_markdown(self, tmp_path: Path):
+        """Preserve code and emphasis in page title links"""
+        config, _ = _project(tmp_path)
+        page = _page("p.qmd", "Python", title="Using `config` and *more*")
+
+        text = tags.render_index({"Python": [page]}, config)
+
+        assert "[Using `config` and *more*](../p.qmd)" in text
+
+    def test_closing_bracket_in_title_keeps_the_link(self, tmp_path: Path):
+        """Escape a closing bracket so it cannot end the page title link"""
+        config, _ = _project(tmp_path)
+        page = _page("p.qmd", "Python", title="Odd ] title")
+
+        text = tags.render_index({"Python": [page]}, config)
+
+        assert r"[Odd \] title](../p.qmd)" in text
+
+    def test_code_span_in_title_is_left_as_written(self, tmp_path: Path):
+        """Preserve literal code spans while escaping the surrounding title text"""
+        config, _ = _project(tmp_path)
+        page = _page("p.qmd", "Python", title="Index `a[0] < b` with [x] & <y>")
+
+        text = tags.render_index({"Python": [page]}, config)
+
+        assert r"[Index `a[0] < b` with \[x\] &amp; &lt;y&gt;](../p.qmd)" in text
+
+    def test_nested_tag_names_are_text(self, tmp_path: Path):
+        """Escape both segments of a nested tag pill"""
+        config, _ = _project(tmp_path)
+
+        text = tags.render_index({"<a>/b_c_": [_page("p.qmd", "<a>/b_c_")]}, config)
+
+        assert r'gd-tag-pill-parent">&lt;a&gt;</span>' in text
+        assert r'<span class="gd-tag-pill-segment">b\_c\_</span>' in text
+
     def test_unknown_icon_is_left_out(self, tmp_path: Path):
         """Render the tag without an icon when its configured icon is unknown"""
         config, _ = _project(tmp_path, "tags:\n  enabled: true\n  icons:\n    Python: no-such\n")

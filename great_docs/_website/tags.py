@@ -8,6 +8,7 @@ neither the index page nor the pills.
 
 from __future__ import annotations
 
+import html
 import json
 import re
 from dataclasses import dataclass, field
@@ -41,6 +42,12 @@ __all__ = [
 
 INDEX_PAGE = "tags/index.qmd"
 DATA_FILENAME = "_tags.json"
+
+# Pandoc parses Markdown inside raw HTML, so plain labels need Markdown escaping too.
+_MARKDOWN_PUNCTUATION = re.compile(r"([\\`*_\[\]$~^@])")
+
+# Inline code spans delimited by matching runs of backticks.
+_CODE_SPAN = re.compile(r"(?<!`)(?P<ticks>`+)(?!`).+?(?<!`)(?P=ticks)(?!`)")
 
 
 @dataclass(frozen=True)
@@ -412,8 +419,10 @@ def _render_page_links(lines: list[str], pages: Sequence[TaggedPage], *, indent_
     """
     lines.append(f'<div class="gd-tag-pages{indent_class}">')
     for page in pages:
-        badge = f' <span class="gd-tag-section">{page.section}</span>' if page.section else ""
-        lines.append(f'<div class="gd-tag-page-link">[{page.title}](../{page.href}){badge}</div>')
+        section = _text(page.section)
+        badge = f' <span class="gd-tag-section">{section}</span>' if section else ""
+        title = _title(page.title)
+        lines.append(f'<div class="gd-tag-page-link">[{title}](../{page.href}){badge}</div>')
     lines.extend(("</div>", ""))
 
 
@@ -498,13 +507,74 @@ def _heading_pill(
     :
         The pill as a `<span>`.
     """
-    tip_attr = f' data-tippy-content="{tooltip}"' if tooltip else ""
+    tip_attr = f' data-tippy-content="{html.escape(tooltip)}"' if tooltip else ""
     if parent:
         return (
             f'<span class="gd-tag-pill gd-tag-pill-segmented"{tip_attr}>'
-            f'<span class="gd-tag-pill-segment gd-tag-pill-parent">{parent_icon}{parent}</span>'
+            f'<span class="gd-tag-pill-segment gd-tag-pill-parent">{parent_icon}{_text(parent)}</span>'
             '<span class="gd-tag-pill-sep"></span>'
-            f'<span class="gd-tag-pill-segment">{name}</span>'
+            f'<span class="gd-tag-pill-segment">{_text(name)}</span>'
             "</span>"
         )
-    return f'<span class="gd-tag-pill"{tip_attr}>{icon}{name}</span>'
+    return f'<span class="gd-tag-pill"{tip_attr}>{icon}{_text(name)}</span>'
+
+
+def _text(value: str) -> str:
+    """
+    Escape plain text for the index page's HTML and Markdown
+
+    Parameters
+    ----------
+    value
+        A tag or section name.
+
+    Returns
+    -------
+    :
+        The text, which Quarto shows unchanged, without markup.
+    """
+    return _MARKDOWN_PUNCTUATION.sub(r"\\\1", html.escape(value, quote=False))
+
+
+def _title(value: str) -> str:
+    """
+    Escape a page title for the text of a Markdown link
+
+    Parameters
+    ----------
+    value
+        The page title, which Quarto reads as Markdown.
+
+    Returns
+    -------
+    :
+        The title with `&`, `<`, `>`, `[` and `]` escaped outside code spans. Code
+        spans remain literal, and Markdown such as emphasis renders as in the page's
+        own heading.
+    """
+    # Pandoc displays code span contents literally, so added escapes would be visible.
+    parts: list[str] = []
+    start = 0
+    for span in _CODE_SPAN.finditer(value):
+        parts.extend((_title_text(value[start : span.start()]), span.group()))
+        start = span.end()
+    parts.append(_title_text(value[start:]))
+    return "".join(parts)
+
+
+def _title_text(value: str) -> str:
+    """
+    Escape a title fragment outside code spans for a Markdown link
+
+    Parameters
+    ----------
+    value
+        A title fragment outside code spans.
+
+    Returns
+    -------
+    :
+        The fragment with `&`, `<` and `>` escaped for HTML and `[` and `]` escaped
+        for Markdown.
+    """
+    return re.sub(r"([\[\]])", r"\\\1", html.escape(value, quote=False))
