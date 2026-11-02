@@ -23,8 +23,8 @@ def publish(
     """
     Publish skills and their discovery index at `.well-known` paths
 
-    Creates individual `SKILL.md` files under `.well-known/agent-skills/{name}/` and a combined
-    `index.json` discovery manifest listing all skills.
+    Copy each skill and its companion files under `.well-known/agent-skills/{name}/`,
+    write a combined `index.json`, and retain the legacy path for the first skill.
 
     Parameters
     ----------
@@ -48,14 +48,14 @@ def publish(
         _ = shutil.copy2(skill_path, agent_skills_dir / SKILL_FILE)
 
         extra_files = [SKILL_FILE]
-        if source_dir and source_dir.is_dir():  # pragma: no cover
-            for extra in source_dir.rglob("*"):  # pragma: no cover
-                if extra.is_file() and extra.name != SKILL_FILE:  # pragma: no cover
-                    rel = extra.relative_to(source_dir)  # pragma: no cover
-                    dest = agent_skills_dir / rel  # pragma: no cover
-                    dest.parent.mkdir(parents=True, exist_ok=True)  # pragma: no cover
-                    _ = shutil.copy2(extra, dest)  # pragma: no cover
-                    extra_files.append(str(rel))  # pragma: no cover
+        if source_dir and source_dir.is_dir():
+            for extra in source_dir.rglob("*"):
+                if extra.is_file() and extra.name != SKILL_FILE:
+                    rel = extra.relative_to(source_dir)
+                    dest = agent_skills_dir / rel
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    _ = shutil.copy2(extra, dest)
+                    extra_files.append(str(rel))
 
         index_skills.append(
             {

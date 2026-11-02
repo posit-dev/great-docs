@@ -163,6 +163,7 @@ from great_docs._utils import QUARTO_YML_HEADER, validate_build_dir
 from great_docs._website import page_status
 from great_docs._website.ai_agents import llms_txt
 from great_docs._website.ai_agents.skills import SkillsWriter
+from great_docs._website.ai_agents.skills_page import SkillsPageWriter
 from great_docs._website.homepage.readme import Badge, HeroElements
 from great_docs._website.quarto_yml import edit as edit_quarto_yml
 from great_docs._website.quarto_yml import read as read_quarto_yml
@@ -28399,6 +28400,16 @@ def _skills_writer(docs: GreatDocs) -> SkillsWriter:
     )
 
 
+def _skills_page_writer(docs: GreatDocs) -> SkillsPageWriter:
+    return SkillsPageWriter(
+        docs._config,
+        docs.layout,
+        docs.build_dir,
+        docs._detect_package_name(),
+        docs._get_package_metadata(),
+    )
+
+
 def test_write_skill_basic():
     """Test basic SKILL.md generation with API sections."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -28806,7 +28817,9 @@ api-reference:
 
 
 def test_write_skill_no_quarto_yml():
-    """Skip skill writing when there is no Quarto configuration"""
+    """
+    Skip skill writing when there is no Quarto configuration
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         _skills_writer(docs).write()
@@ -31174,7 +31187,9 @@ def test_homepage_margin_extras():
 
 
 def test_write_skills_page_with_companions():
-    """Render companion files from skill subdirectories"""
+    """
+    Render companion files from skill subdirectories
+    """
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
@@ -31195,7 +31210,7 @@ def test_write_skills_page_with_companions():
         refs_dir.mkdir()
         (refs_dir / "api.md").write_text("# API Ref")
 
-        _skills_writer(gd).write_page(skill_md, skill_dir=skill_dir)
+        _skills_page_writer(gd).write(skill_md, skill_dir=skill_dir)
 
         skills_page = project / "skills.qmd"
         assert skills_page.exists()
@@ -31207,7 +31222,9 @@ def test_write_skills_page_with_companions():
 
 
 def test_write_skills_page_multi_skill_switcher():
-    """Render a switcher when the page contains multiple skills"""
+    """
+    Render a switcher when the page contains multiple skills
+    """
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
@@ -31235,7 +31252,7 @@ def test_write_skills_page_multi_skill_switcher():
             "# Revise Docstrings\n\nHelps fix docstrings."
         )
 
-        _skills_writer(gd).write_page(
+        _skills_page_writer(gd).write(
             skill_md_a,
             skill_dir=skill_dir_a,
             extra_skills=[(skill_md_b, skill_dir_b)],
@@ -31295,7 +31312,7 @@ def test_write_skills_page_multi_skill_install_section():
         skill_md_b = skill_dir_b / "SKILL.md"
         skill_md_b.write_text("---\nname: beta\ndescription: Skill beta\n---\n\n# Beta\n")
 
-        _skills_writer(gd).write_page(
+        _skills_page_writer(gd).write(
             skill_md_a,
             skill_dir=skill_dir_a,
             extra_skills=[(skill_md_b, skill_dir_b)],
@@ -31343,7 +31360,7 @@ def test_write_skills_page_multi_skill_no_cli_without_package_name():
         skill_md_b = skill_dir_b / "SKILL.md"
         skill_md_b.write_text("---\nname: beta\ndescription: Skill beta\n---\n\n# Beta\n")
 
-        _skills_writer(gd).write_page(
+        _skills_page_writer(gd).write(
             skill_md_a,
             skill_dir=skill_dir_a,
             extra_skills=[(skill_md_b, skill_dir_b)],
@@ -31374,7 +31391,7 @@ def test_write_skills_page_single_skill_install_section():
         skill_md = skill_dir / "SKILL.md"
         skill_md.write_text("---\nname: solo\ndescription: A solo skill\n---\n\n# Solo\n")
 
-        _skills_writer(gd).write_page(skill_md, skill_dir=skill_dir)
+        _skills_page_writer(gd).write(skill_md, skill_dir=skill_dir)
 
         content = (project / "skills.qmd").read_text()
 
@@ -31398,7 +31415,9 @@ def test_write_skills_page_single_skill_install_section():
 
 
 def test_write_skills_page_single_skill_no_switcher():
-    """Omit the switcher when the page contains one skill"""
+    """
+    Omit the switcher when the page contains one skill
+    """
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
@@ -31410,7 +31429,7 @@ def test_write_skills_page_single_skill_no_switcher():
         skill_md = skill_dir / "SKILL.md"
         skill_md.write_text("---\nname: solo_skill\ndescription: A lone skill\n---\n\n# Solo\n")
 
-        _skills_writer(gd).write_page(skill_md, skill_dir=skill_dir)
+        _skills_page_writer(gd).write(skill_md, skill_dir=skill_dir)
 
         content = (project / "skills.qmd").read_text()
 

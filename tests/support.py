@@ -221,6 +221,9 @@ def stubbed_build(
         raise AttributeError(f"GreatDocs has no {missing}; update the method list in {__name__}")
 
     with ExitStack() as stack:
+        stack.enter_context(
+            patch("great_docs._website.ai_agents.skills.SkillsWriter.write", autospec=True)
+        )
         stack.enter_context(patch("great_docs._build.quarto.ensure_installed", autospec=True))
         stack.enter_context(
             patch("great_docs._build.quarto.environment", autospec=True, return_value={})
