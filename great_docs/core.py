@@ -15,6 +15,7 @@ from urllib.parse import unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
 
+from . import _proofread
 from ._apiref._type_checks import attribute_kind, class_kind, function_kind
 from ._build import freeze, outputs, quarto, serve, timings
 from ._build.pipeline import Run
@@ -42,6 +43,7 @@ from ._content.sections import source_dirs as section_source_dirs
 from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import Layout
+from ._proofread import CheckedFile
 from ._remote import HttpRemote, Remote
 from ._subprocess import TEXT_MODE_KWARGS
 from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
@@ -14769,60 +14771,66 @@ anchor-sections: true
         self,
         include_docs: bool = True,
         include_docstrings: bool = False,
-        custom_dictionary: list[str] | None = None,
+        custom_words: list[str] | None = None,
         dialect: str = "us",
         ignore_rules: list[str] | None = None,
         only_rules: list[str] | None = None,
+        strict: bool = False,
         verbose: bool = False,
-    ) -> dict:
+    ) -> list[CheckedFile]:
         """
-        Check spelling and grammar in documentation files using Harper.
+        Check spelling and grammar in documentation pages and Python docstrings with Harper
 
         ::: {.callout-note}
         In practice, you would normally use the `great-docs proofread` CLI command rather than
         calling this method directly. See the [CLI reference](cli/proofread.qmd) for details.
         :::
 
-        This method uses Harper, a fast privacy-first grammar checker, to scan documentation files
-        (`.qmd`, `.md`) for spelling errors, grammatical issues, style problems, and more. Harper
-        runs locally and provides comprehensive English language checking.
+        Harper checks `.qmd` and `.md` files recursively in the user guide and recipes
+        directories under the documentation source directory, plus `README.md` at the package
+        root. The checks use the same defaults as `great-docs proofread`: a built-in dictionary
+        of technical terms and a set of ignored rules for technical writing. Front matter and
+        fenced code blocks are excluded from `.qmd` checks.
 
         Parameters
         ----------
         include_docs
-            If `True`, scan documentation files (`.qmd`, `.md`). Default is `True`.
+            If `True`, check the documentation pages. Default is `True`.
         include_docstrings
-            If `True`, also scan Python docstrings in the package. Default is `False`.
-        custom_dictionary
-            List of additional words to consider correct (e.g., project-specific terms, library
-            names). Default is `None`.
+            If `True`, check docstrings in Python files under the package's importable module
+            directory. Skip these files if no package is detected. Default is `False`.
+        custom_words
+            Additional accepted words, such as project-specific terms and library names.
+            Default is `None`.
         dialect
-            English dialect: "us", "uk", "au", "in", "ca". Default is `"us"`.
+            English dialect: `"us"`, `"uk"`, `"au"`, `"in"` or `"ca"`. Default is `"us"`.
         ignore_rules
-            List of Harper rule names to skip (e.g., `["SentenceCapitalization"]`). Default is
-            `None`.
+            Harper rule names to skip, such as `["SentenceCapitalization"]`, in addition to
+            any default exclusions enabled by `strict=False`. Default is `None`.
         only_rules
-            List of Harper rule names to run exclusively (e.g., `["SpellCheck"]`). Default is
-            `None`.
+            Harper rule names to run exclusively (e.g., `["SpellCheck"]`). Default is `None`.
+        strict
+            If `True`, disable the built-in dictionary and default rule exclusions. Explicit
+            `custom_words`, `only_rules` and `ignore_rules` still apply. Default is `False`.
         verbose
-            If `True`, print detailed progress information. Default is `False`.
+            If `True`, print progress as files are checked. Default is `False`.
 
         Returns
         -------
-        dict
-            A dictionary containing:
-
-            - `files_checked`: number of files checked
-            - `total_issues`: total number of issues found
-            - `by_kind`: dict mapping lint kind to count (e.g., "Spelling", "Grammar")
-            - `by_rule`: dict mapping rule name to count (e.g., "SpellCheck")
-            - `issues`: list of issue dicts with file, line, column, message, etc.
-            - `by_file`: dict mapping file paths to their issues
+        :
+            A list of checked files, each with a `file` path, a sequence of `issues` and an
+            `error` message if checking failed, or `None` if it succeeded. Each issue has
+            `line`, `column`, `kind`, `rule`, `message`, `matched_text` and `suggestions`.
+            For `.qmd` pages, `file` is relative to the project root and issue line numbers
+            refer to the original page.
 
         Raises
         ------
         RuntimeError
-            If harper-cli is not installed.
+            If `harper-cli` is missing or a batch of `.md` or `.py` file checks raises
+            `HarperError`. A missing executable stops the whole run, including runs with only
+            `.qmd` pages. An `OSError`, `UnicodeDecodeError` or `HarperError` on a `.qmd` page
+            is returned as that page's `error` instead.
 
         Examples
         --------
@@ -14834,19 +14842,15 @@ anchor-sections: true
         docs = GreatDocs()
         results = docs.proofread()
 
-        print(f"Checked {results['files_checked']} files")
-        print(f"Issues: {results['total_issues']}")
-
-        for issue in results["issues"]:
-            print(f"  {issue['file']}:{issue['line']} - {issue['message']}")
+        for file_result in results:
+            for issue in file_result.issues:
+                print(f"{file_result.file}:{issue.line} - {issue.message}")
         ```
 
-        Check with custom dictionary:
+        Accept project-specific words:
 
         ```python
-        results = docs.proofread(
-            custom_dictionary=["griffe", "quartodoc", "navbar"]
-        )
+        results = docs.proofread(custom_words=["griffe", "quartodoc", "navbar"])
         ```
 
         Check only spelling:
@@ -14855,179 +14859,29 @@ anchor-sections: true
         results = docs.proofread(only_rules=["SpellCheck"])
         ```
         """
-        import tempfile
-        from collections import defaultdict
+        from ._harper import HarperError, HarperNotFoundError
 
-        from ._harper import (
-            HarperError,
-            HarperFileResult,
-            HarperNotFoundError,
-            run_harper,
-            run_harper_on_text,
+        files = _proofread.find_pages(self.layout) if include_docs else []
+        if include_docstrings and (package_name := self._detect_package_name()):
+            module = self._resolve_importable_name(package_name)
+            files += _proofread.find_modules(self.project_root, module)
+
+        options = _proofread.Options(
+            dialect=dialect,
+            words=custom_words or (),
+            only_rules=only_rules or (),
+            ignore_rules=ignore_rules or (),
+            builtin_dictionary=not strict,
+            default_ignores=not strict,
         )
-
-        # Collect files to check
-        files_to_check: list[Path] = []
-
-        if include_docs:
-            # Scan user_guide directory if it exists
-            user_guide_dir = self.layout.source_dir / "user_guide"
-            if user_guide_dir.exists():
-                files_to_check.extend(user_guide_dir.rglob("*.qmd"))
-                files_to_check.extend(user_guide_dir.rglob("*.md"))
-
-            # Check README in project root
-            readme = self.project_root / "README.md"
-            if readme.exists():
-                files_to_check.append(readme)  # pragma: no cover
-
-            # Check recipes if they exist
-            recipes_dir = self.project_root / "recipes"
-            if recipes_dir.exists():
-                files_to_check.extend(recipes_dir.rglob("*.qmd"))  # pragma: no cover
-                files_to_check.extend(recipes_dir.rglob("*.md"))  # pragma: no cover
-
-        # Add Python files if checking docstrings
-        py_files: list[Path] = []
-        if include_docstrings:
-            # Scan the importable module directory, which can differ from the
-            # PyPI project name. Skip when no package is detectable.
-            package_name = self._detect_package_name()
-            if package_name:
-                importable_name = self._resolve_importable_name(package_name)
-                # Dotted module names (e.g. namespace packages "firebird.base")
-                # map to nested directories.
-                package_dir = self.project_root.joinpath(*importable_name.split("."))
-                if package_dir.exists():
-                    py_files.extend(package_dir.rglob("*.py"))
-
-        # Build custom dictionary file if needed
-        dict_path = None
-        if custom_dictionary:
-            tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
-            tmp.write("\n".join(custom_dictionary))
-            tmp.close()
-            dict_path = tmp.name
-
-        all_results: list[HarperFileResult] = []
-
         try:
-            # Separate files by type
-            md_files = [f for f in files_to_check if f.suffix == ".md"]
-            qmd_files = [f for f in files_to_check if f.suffix == ".qmd"]
-
-            # Check .md files directly
-            if md_files:
-                if verbose:  # pragma: no cover
-                    print(f"Checking {len(md_files)} Markdown file(s)...")  # pragma: no cover
-
-                results = run_harper(  # pragma: no cover
-                    md_files,
-                    dialect=dialect,
-                    user_dict_path=dict_path,
-                    ignore_rules=ignore_rules,
-                    only_rules=only_rules,
-                )
-                all_results.extend(results)  # pragma: no cover
-
-            # Check .qmd files via stdin (Harper doesn't recognize extension)
-            for qmd_file in qmd_files:
-                if verbose:
-                    print(f"Checking {qmd_file.name}...")  # pragma: no cover
-
-                try:
-                    content = qmd_file.read_text(encoding="utf-8")
-                    lints = run_harper_on_text(
-                        content,
-                        dialect=dialect,
-                        user_dict_path=dict_path,
-                        ignore_rules=ignore_rules,
-                        only_rules=only_rules,
-                    )
-
-                    rel_path = str(qmd_file.relative_to(self.project_root))
-                    for lint in lints:
-                        lint.file = rel_path
-
-                    all_results.append(
-                        HarperFileResult(
-                            file=rel_path,
-                            lint_count=len(lints),
-                            lints=lints,
-                            error=None,
-                        )
-                    )
-                except Exception as e:  # pragma: no cover
-                    rel_path = str(qmd_file.relative_to(self.project_root))  # pragma: no cover
-                    all_results.append(  # pragma: no cover
-                        HarperFileResult(
-                            file=rel_path,
-                            lint_count=0,
-                            lints=[],
-                            error=str(e),
-                        )
-                    )
-
-            # Check Python files if requested
-            if py_files:
-                if verbose:  # pragma: no cover
-                    print(f"Checking {len(py_files)} Python file(s)...")  # pragma: no cover
-
-                results = run_harper(  # pragma: no cover
-                    py_files,
-                    dialect=dialect,
-                    user_dict_path=dict_path,
-                    ignore_rules=ignore_rules,
-                    only_rules=only_rules,
-                )
-                all_results.extend(results)  # pragma: no cover
-
-        except HarperNotFoundError as e:  # pragma: no cover
-            raise RuntimeError(str(e)) from e  # pragma: no cover
-        except HarperError as e:  # pragma: no cover
-            raise RuntimeError(f"Harper error: {e}") from e  # pragma: no cover
-        finally:
-            # Clean up temp dictionary file
-            if dict_path:
-                try:
-                    Path(dict_path).unlink()
-                except Exception:  # pragma: no cover
-                    pass  # pragma: no cover
-
-        # Aggregate results
-        total_issues = sum(r.lint_count for r in all_results)
-        by_kind: dict[str, int] = defaultdict(int)
-        by_rule: dict[str, int] = defaultdict(int)
-        by_file: dict[str, list[dict]] = {}
-        all_issues: list[dict] = []
-
-        for result in all_results:
-            if result.lints:
-                by_file[result.file] = []
-
-            for lint in result.lints:
-                by_kind[lint.kind] += 1
-                by_rule[lint.rule] += 1
-
-                issue = {
-                    "file": lint.file,
-                    "line": lint.line,
-                    "column": lint.column,
-                    "kind": lint.kind,
-                    "rule": lint.rule,
-                    "message": lint.message,
-                    "matched_text": lint.matched_text,
-                    "suggestions": lint.suggestions,
-                    "priority": lint.priority,
-                }
-                all_issues.append(issue)
-                by_file[result.file].append(issue)
-
-        return {
-            "files_checked": len(files_to_check) + len(py_files),
-            "total_issues": total_issues,
-            "by_kind": dict(by_kind),
-            "by_rule": dict(by_rule),
-            "issues": all_issues,
-            "by_file": by_file,
-        }
+            return _proofread.check(
+                files,
+                self.project_root,
+                options,
+                report=print if verbose else lambda _line: None,
+            )
+        except HarperNotFoundError as e:
+            raise RuntimeError(str(e)) from e
+        except HarperError as e:
+            raise RuntimeError(f"Harper error: {e}") from e

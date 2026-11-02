@@ -7484,8 +7484,7 @@ def test_cli_help_for_llms_uses_module_name(mock_discover):
 
 @patch("great_docs._harper.run_harper")
 def test_proofread_docstrings_use_module_name(mock_run_harper):
-    """Regression: proofread(include_docstrings=True) scans the importable module
-    directory, not a directory named after the PyPI project."""
+    """Find docstrings under the importable module when its name differs from the project"""
     mock_run_harper.return_value = []
     with tempfile.TemporaryDirectory() as tmp_dir:
         root = Path(tmp_dir)
@@ -7498,16 +7497,15 @@ def test_proofread_docstrings_use_module_name(mock_run_harper):
         docs = GreatDocs(project_path=tmp_dir)
         result = docs.proofread(include_docs=False, include_docstrings=True)
 
-        assert result["files_checked"] == 1
+        assert result == []
         mock_run_harper.assert_called_once()
         scanned = mock_run_harper.call_args[0][0]
-        assert any(p.name == "__init__.py" for p in scanned)
+        assert [p.name for p in scanned] == ["__init__.py"]
 
 
 @patch("great_docs._harper.run_harper")
 def test_proofread_docstrings_dotted_module_name(mock_run_harper):
-    """Regression: proofread(include_docstrings=True) scans the nested directory
-    of a dotted module name (namespace package)."""
+    """Find docstrings in nested directories for a dotted module name"""
     mock_run_harper.return_value = []
     with tempfile.TemporaryDirectory() as tmp_dir:
         root = Path(tmp_dir)
@@ -7520,20 +7518,87 @@ def test_proofread_docstrings_dotted_module_name(mock_run_harper):
         docs = GreatDocs(project_path=tmp_dir)
         result = docs.proofread(include_docs=False, include_docstrings=True)
 
-        assert result["files_checked"] == 1
+        assert result == []
         mock_run_harper.assert_called_once()
         scanned = mock_run_harper.call_args[0][0]
-        assert any(p.name == "__init__.py" for p in scanned)
+        assert [p.name for p in scanned] == ["__init__.py"]
 
 
 def test_proofread_docstrings_no_package_no_crash():
-    """Regression: proofread(include_docstrings=True) skips the docstring scan
-    instead of crashing when no package is detectable."""
+    """Skip docstring discovery when no package is detectable"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         result = docs.proofread(include_docs=False, include_docstrings=True)
 
-        assert result["files_checked"] == 0
+        assert result == []
+
+
+def _proofread_project(tmp_path: Path) -> GreatDocs:
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+    guide = tmp_path / "user_guide"
+    guide.mkdir()
+    (guide / "page.qmd").write_text("---\ntitle: T\n---\n\n```python\nx = 1\n```\n\nA tset.\n")
+    return GreatDocs(project_path=tmp_path)
+
+
+def test_proofread_applies_the_commands_defaults(tmp_path):
+    """
+    Check page prose with the CLI defaults and caller-supplied words
+
+    Report issues against the original page and exclude front matter and fenced code.
+    """
+    from great_docs._harper import HarperLint, get_default_ignore_rules
+
+    docs = _proofread_project(tmp_path)
+    seen = {}
+
+    def run_text(text, **kwargs):
+        seen["text"] = text
+        seen["ignore_rules"] = kwargs["ignore_rules"]
+        seen["words"] = Path(kwargs["user_dict_path"]).read_text().splitlines()
+        return [HarperLint("SpellCheck", "Spelling", 9, 3, "Misspelled", "tset", file="<stdin>")]
+
+    with patch("great_docs._harper.run_harper_on_text", side_effect=run_text):
+        results = docs.proofread(custom_words=["griffe"])
+
+    assert "title" not in seen["text"] and "x = 1" not in seen["text"]
+    assert seen["ignore_rules"] == get_default_ignore_rules()
+    assert "quartodoc" in seen["words"] and seen["words"][-1] == "griffe"
+    [page] = results
+    assert page.file == "user_guide/page.qmd"
+    assert [issue.file for issue in page.issues] == ["user_guide/page.qmd"]
+
+
+def test_proofread_strict_checks_without_defaults(tmp_path):
+    """Disable default rule exclusions and the built-in dictionary with `strict=True`"""
+    docs = _proofread_project(tmp_path)
+    with patch("great_docs._harper.run_harper_on_text", return_value=[]) as run_text:
+        docs.proofread(strict=True)
+
+    assert run_text.call_args.kwargs["ignore_rules"] is None
+    assert run_text.call_args.kwargs["user_dict_path"] is None
+
+
+def test_proofread_missing_harper_raises(tmp_path):
+    """Raise `RuntimeError` for the whole run when `harper-cli` is missing"""
+    docs = _proofread_project(tmp_path)
+    with (
+        patch("great_docs._harper.find_harper_cli", return_value=None),
+        pytest.raises(RuntimeError, match="harper-cli is not installed"),
+    ):
+        docs.proofread()
+
+
+def test_proofread_harper_error_on_a_page_is_that_pages_error(tmp_path):
+    """Return a Harper failure as the affected page's `error`"""
+    from great_docs._harper import HarperError
+
+    docs = _proofread_project(tmp_path)
+    with patch("great_docs._harper.run_harper_on_text", side_effect=HarperError("timed out")):
+        [page] = docs.proofread()
+
+    assert page.issues == ()
+    assert page.error == "timed out"
 
 
 def test_cli_help_for_llms_display_name_is_project_name():

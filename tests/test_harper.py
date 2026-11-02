@@ -161,7 +161,7 @@ def test_harper_file_result_creation():
 
 @requires_harper
 def test_proofread_correct_text():
-    """Proofreading a file with correct text returns expected structure."""
+    """Return a checked file with no error for correctly written text"""
     with tempfile.TemporaryDirectory() as project_dir:
         project_path = Path(project_dir)
         user_guide_dir = project_path / "user_guide"
@@ -177,15 +177,13 @@ This is a simple test document with correct spelling and grammar.
         )
         gd = GreatDocs(project_path=project_path)
         results = gd.proofread()
-        assert "files_checked" in results
-        assert "total_issues" in results
-        assert "by_kind" in results
-        assert "issues" in results
+        assert [r.file for r in results] == ["user_guide/correct.qmd"]
+        assert results[0].error is None
 
 
 @requires_harper
 def test_proofread_with_errors():
-    """Proofreading a file with errors finds issues."""
+    """Report issues for a page containing spelling and grammar errors"""
     with tempfile.TemporaryDirectory() as project_dir:
         project_path = Path(project_dir)
         user_guide_dir = project_path / "user_guide"
@@ -201,13 +199,12 @@ This documment has mispelled words and their going to be detected.
         )
         gd = GreatDocs(project_path=project_path)
         results = gd.proofread()
-        assert results["total_issues"] > 0
-        assert len(results["issues"]) > 0
+        assert sum(len(r.issues) for r in results) > 0
 
 
 @requires_harper
-def test_proofread_with_custom_dictionary():
-    """Custom dictionary reduces griffe-related issues."""
+def test_proofread_with_custom_words():
+    """Report no more `griffe` issues when the word is explicitly accepted"""
     with tempfile.TemporaryDirectory() as project_dir:
         project_path = Path(project_dir)
         user_guide_dir = project_path / "user_guide"
@@ -222,18 +219,20 @@ The griffe library is useful.
 """
         )
         gd = GreatDocs(project_path=project_path)
-        results_without = gd.proofread()
+        results_without = gd.proofread(strict=True)
         griffe_issues_without = [
-            i for i in results_without["issues"] if "griffe" in i["matched_text"]
+            i for r in results_without for i in r.issues if "griffe" in i.matched_text
         ]
-        results_with = gd.proofread(custom_dictionary=["griffe"])
-        griffe_issues_with = [i for i in results_with["issues"] if "griffe" in i["matched_text"]]
+        results_with = gd.proofread(custom_words=["griffe"], strict=True)
+        griffe_issues_with = [
+            i for r in results_with for i in r.issues if "griffe" in i.matched_text
+        ]
         assert len(griffe_issues_with) <= len(griffe_issues_without)
 
 
 @requires_harper
 def test_proofread_only_rules():
-    """Proofreading with only specific rules limits results."""
+    """Return only `SpellCheck` issues when that rule is selected"""
     with tempfile.TemporaryDirectory() as project_dir:
         project_path = Path(project_dir)
         user_guide_dir = project_path / "user_guide"
@@ -249,7 +248,7 @@ This tset has errors. Their going to be caught.
         )
         gd = GreatDocs(project_path=project_path)
         results = gd.proofread(only_rules=["SpellCheck"])
-        assert all(i["rule"] == "SpellCheck" for i in results["issues"])
+        assert all(i.rule == "SpellCheck" for r in results for i in r.issues)
 
 
 def test_proofread_help():

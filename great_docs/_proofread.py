@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from ._harper import HarperFileResult, HarperLint
     from ._layout import Layout
 
-__all__ = ["CheckedFile", "Options", "check", "find_pages"]
+__all__ = ["CheckedFile", "Options", "check", "find_modules", "find_pages"]
 
 
 @dataclass(frozen=True)
@@ -95,6 +95,28 @@ def find_pages(layout: Layout, guide_dir: Path | None = None) -> list[Path]:
         pages.extend(recipes_dir.rglob("*.qmd"))
         pages.extend(recipes_dir.rglob("*.md"))
     return pages
+
+
+def find_modules(root: Path, module: str) -> list[Path]:
+    """
+    Find the Python files of an importable module
+
+    Parameters
+    ----------
+    root
+        The project root containing the module directory.
+    module
+        The importable module name. Dotted names such as `firebird.base` map to nested
+        directories.
+
+    Returns
+    -------
+    :
+        A list of `.py` files found recursively under the module directory, or an empty
+        list if that directory does not exist.
+    """
+    module_dir = root.joinpath(*module.split("."))
+    return list(module_dir.rglob("*.py")) if module_dir.exists() else []
 
 
 def check(
