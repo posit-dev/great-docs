@@ -1261,6 +1261,24 @@ class TestFileFiltering:
             assert results["total"] == 1
             assert "README.md" in results["by_file"]
 
+    def test_scans_build_directory_without_user_guide(self, tmp_path: Path):
+        """Scan build pages when no source `user_guide/` directory exists"""
+        docs = GreatDocs(project_path=tmp_path)
+        build_dir = docs.layout.build_dir
+        (build_dir / "guide").mkdir(parents=True)
+        (build_dir / "guide" / "page.qmd").write_text("https://qmd.example.com")
+        (build_dir / "notes.md").write_text("https://md.example.com")
+
+        results = docs.check_links(
+            include_source=False, include_docs=True, ignore_patterns=["example.com"]
+        )
+
+        rel_build = build_dir.relative_to(tmp_path)
+        assert results["by_file"] == {
+            str(rel_build / "guide" / "page.qmd"): ["https://qmd.example.com"],
+            str(rel_build / "notes.md"): ["https://md.example.com"],
+        }
+
 
 # ============================================================================
 # Result Structure Tests
