@@ -5937,8 +5937,9 @@ class GreatDocs:
         Sort a package's exports into the groups of the API reference
 
         A method, or a member of an exported module, stays only if the renderer can document
-        it after importing the package. When griffe cannot load the package, every export
-        other than a metadata name such as `__version__` goes under `other`.
+        it after importing the package; if the package cannot be imported, finding it by static
+        analysis is enough. When griffe cannot load the package, every export other than a
+        metadata name such as `__version__` goes under `other`.
 
         Parameters
         ----------
@@ -5965,7 +5966,10 @@ class GreatDocs:
             return categories
 
         return discovery.categorise_exports(
-            package, exports, renderable=probe.renderer_check(normalized), report=print
+            package,
+            exports,
+            renderable=probe.RendererCheck(normalized, report=print),
+            report=print,
         )
 
     def _create_api_sections(self, package_name: str) -> list | None:

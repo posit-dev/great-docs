@@ -19134,6 +19134,33 @@ def test_categorise_exports_basic():
             sys.path.remove(tmp_dir)
 
 
+def test_categorise_exports_keeps_methods_of_an_unimportable_package(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    """Verify that a failed package import warns and preserves statically discovered methods"""
+    pkg_dir = tmp_path / "unimportable_catpkg"
+    pkg_dir.mkdir()
+    (pkg_dir / "__init__.py").write_text(
+        "import not_a_real_dependency_xyz\n"
+        "class Widget:\n"
+        "    def grow(self): pass\n"
+        "    def shrink(self): pass\n",
+        encoding="utf-8",
+    )
+
+    sys.path.insert(0, str(tmp_path))
+    try:
+        docs = GreatDocs(project_path=str(tmp_path))
+        result = docs._categorise_exports("unimportable_catpkg", ["Widget"])
+    finally:
+        sys.path.remove(str(tmp_path))
+        sys.modules.pop("unimportable_catpkg", None)
+
+    assert result["class_method_names"]["Widget"] == ["grow", "shrink"]
+    out = capsys.readouterr().out
+    assert "Could not import 'unimportable_catpkg' (ModuleNotFoundError" in out
+
+
 def test_categorise_exports_with_enum():
     """Verify that enum exports are grouped as enums"""
 

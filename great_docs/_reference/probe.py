@@ -8,6 +8,7 @@ counts as a failed probe.
 
 from __future__ import annotations
 
+import importlib
 import re
 from typing import TYPE_CHECKING, Literal
 
@@ -165,33 +166,74 @@ def detect_dynamic_mode(package: gf.Module, *, report: Callable[[str], None]) ->
     return True
 
 
-def renderer_check(module_name: str) -> Callable[[str], bool]:
+class RendererCheck:
     """
-    Make a check whether the renderer can document an object by importing it
+    A check whether the renderer can document an object, given its path
 
-    The check imports the object and resolves its members. All checks from one call share a
-    griffe loader, so each module is loaded once.
+    The first check imports the package. While the package imports, each object is imported
+    and its members resolved, as the renderer does in dynamic mode. When the import fails,
+    the failure is reported once and each object only has to be found by static analysis, so
+    a package that needs a missing dependency keeps its methods.
+
+    All checks share a griffe loader, so each module is loaded once.
 
     Parameters
     ----------
     module_name
         The package's importable name.
-
-    Returns
-    -------
-    :
-        The check, which takes an object's path in the form `package:Class.method` and fails on
-        any error that importing user code can raise.
+    report
+        A callback that receives the line reporting a failed import.
     """
-    loader = make_loader("numpy")
 
-    def renderable(path: str) -> bool:
+    def __init__(self, module_name: str, *, report: Callable[[str], None]) -> None:
+        self._module_name = module_name
+        self._report = report
+        self._loader = make_loader("numpy")
+        self._imports: bool | None = None
+
+    def __call__(self, path: str) -> bool:
+        """
+        Check whether the renderer can document an object
+
+        Parameters
+        ----------
+        path
+            The object's path, in the form `package:Class.method`.
+
+        Returns
+        -------
+        :
+            Whether the object, and its members, can be read. An error that importing user
+            code can raise means it cannot.
+        """
+        if self._imports is None:
+            self._imports = self._import_package()
+        # Static analysis raises `KeyError` for a path it models nothing at.
+        errors = USER_CODE_ERRORS if self._imports else (KeyError, *USER_CODE_ERRORS)
         try:
-            obj = get_object(path, dynamic=True, loader=loader)
+            obj = get_object(path, dynamic=self._imports, loader=self._loader)
             _ = obj.members
             _ = obj.kind
-        except USER_CODE_ERRORS:
+        except errors:
             return False
         return True
 
-    return renderable
+    def _import_package(self) -> bool:
+        """
+        Import the package, reporting a failure
+
+        Returns
+        -------
+        :
+            Whether the import succeeded.
+        """
+        try:
+            _ = importlib.import_module(self._module_name)
+        except USER_CODE_ERRORS as error:
+            self._report(
+                f"Warning: Could not import '{self._module_name}' "
+                f"({type(error).__name__}: {error}); "
+                "checking methods with static analysis instead"
+            )
+            return False
+        return True
