@@ -22,7 +22,7 @@ from great_docs._utils import (
     validate_tree_symlinks,
     write_quarto_yml,
 )
-from great_docs._versioning import (
+from great_docs._versions.model import (
     VersionEntry,
     build_version_map,
     get_latest_version,
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from great_docs._interlinks import AliasClaims
     from great_docs._interlinks.sphinx_inventory import InventoryEntry
     from great_docs._layout import Layout
-    from great_docs._versioning import BadgeExpiry
+    from great_docs._versions.model import BadgeExpiry
     from great_docs._website.seo.structured_data import StructuredData
     from great_docs.config import Config
 
@@ -661,7 +661,7 @@ def preprocess_version(
         page_expiry = badge_expiry
         page_override = _extract_frontmatter_value(content, "new-is-old")
         if page_override is not None:
-            from great_docs._versioning import parse_badge_expiry
+            from great_docs._versions.model import parse_badge_expiry
 
             page_expiry = parse_badge_expiry(page_override)
 
@@ -913,7 +913,7 @@ def _published_claims(snap: ApiSnapshot, stems: Iterable[str]) -> AliasClaims:
         Claims accepted by
         `build_project_index`.
     """
-    from ._interlinks import AliasClaims
+    from .._interlinks import AliasClaims
 
     claimed: list[tuple[str, str]] = []
     published: list[str] = []
@@ -966,7 +966,7 @@ def _retained_entries(dest_dir: Path, snap: ApiSnapshot) -> tuple[InventoryEntry
     """
     import zlib
 
-    from ._interlinks.sphinx_inventory import INVENTORY_FILENAME, decode
+    from .._interlinks.sphinx_inventory import INVENTORY_FILENAME, decode
 
     try:
         published = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
@@ -1009,7 +1009,7 @@ def _snapshot_exceptions(snap: ApiSnapshot) -> set[str]:
     :
         Stems of the exception classes.
     """
-    from ._interlinks.sphinx_inventory import is_builtin_exception
+    from .._interlinks.sphinx_inventory import is_builtin_exception
 
     # A base is written as it was spelled at the point of use, which is
     # rarely the stem the snapshot files the class under.
@@ -1062,9 +1062,9 @@ def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config)
     config
         Project configuration, for the interlinks sources and cache.
     """
-    from ._apiref.inventory import reference_uri
-    from ._interlinks import build_project_index
-    from ._interlinks.sphinx_inventory import (
+    from .._apiref.inventory import reference_uri
+    from .._interlinks import build_project_index
+    from .._interlinks.sphinx_inventory import (
         INVENTORY_FILENAME,
         Inventory,
         InventoryEntry,
@@ -1516,7 +1516,7 @@ def expand_version_badges(
     str
         Content with markers replaced by HTML spans.
     """
-    from great_docs._versioning import BADGE_EXPIRY_NEVER, _find_entry, is_badge_expired
+    from great_docs._versions.model import BADGE_EXPIRY_NEVER, _find_entry, is_badge_expired
 
     effective_expiry = expiry or BADGE_EXPIRY_NEVER
 
@@ -2018,7 +2018,7 @@ def run_versioned_build(  # pragma: no cover
         validate_layout_outputs(layout)
 
     # Parse badge expiry config
-    from great_docs._versioning import parse_badge_expiry
+    from great_docs._versions.model import parse_badge_expiry
 
     badge_expiry = parse_badge_expiry(badge_expiry_raw)
 

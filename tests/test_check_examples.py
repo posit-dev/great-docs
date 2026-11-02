@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from great_docs._check_examples import (
+from great_docs._checks.examples import (
     Cell,
     CellError,
     CheckResult,
@@ -306,8 +306,8 @@ class TestCellSelection:
             (5, "c = 3"),
         ]
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto")
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto")
     def test_quarto_receives_only_eligible_cells(self, mock_render, mock_quarto, tmp_path):
         mock_render.return_value = PageResult("page.qmd", "pass", cells_checked=3)
         page = tmp_path / "page.qmd"
@@ -347,8 +347,8 @@ class TestCellSelection:
         assert cells_sent[2].source == "third = 3"
         assert cells_sent[2].index == 4
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto")
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto")
     def test_multiple_pages_get_correct_cells(self, mock_render, mock_quarto, tmp_path):
         mock_render.return_value = PageResult("", "pass", cells_checked=1)
         (tmp_path / "a.qmd").write_text(
@@ -379,8 +379,8 @@ class TestCellSelection:
         assert second_call_cells[0].source == "y_from_b = 20"
         assert second_call_cells[1].source == "z_from_b = 30"
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto")
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto")
     def test_opted_out_page_sends_no_cells(self, mock_render, mock_quarto, tmp_path):
         mock_render.return_value = PageResult("run.qmd", "pass", cells_checked=1)
         (tmp_path / "skip.qmd").write_text(
@@ -1466,8 +1466,8 @@ class TestCheckExamplesOrchestrator:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(textwrap.dedent(content))
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_passing_project(self, mock_render, mock_quarto, tmp_path):
         self._write_qmd(
             tmp_path / "page.qmd",
@@ -1486,8 +1486,8 @@ class TestCheckExamplesOrchestrator:
         assert result.pages_passed == 1
         assert result.cells_failed == 0
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_fail)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_fail)
     def test_failing_project(self, mock_render, mock_quarto, tmp_path):
         self._write_qmd(
             tmp_path / "page.qmd",
@@ -1501,8 +1501,8 @@ class TestCheckExamplesOrchestrator:
         assert result.pages_failed == 1
         assert result.cells_failed == 1
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_opted_out_page_skipped(self, mock_render, mock_quarto, tmp_path):
         self._write_qmd(
             tmp_path / "skipped.qmd",
@@ -1520,8 +1520,8 @@ class TestCheckExamplesOrchestrator:
         assert result.pages_checked == 0
         mock_render.assert_not_called()
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_no_executable_cells_page_skipped(self, mock_render, mock_quarto, tmp_path):
         self._write_qmd(
             tmp_path / "no_code.qmd",
@@ -1537,8 +1537,8 @@ class TestCheckExamplesOrchestrator:
         assert result.pages_checked == 0
         mock_render.assert_not_called()
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_eval_false_cells_excluded(self, mock_render, mock_quarto, tmp_path):
         self._write_qmd(
             tmp_path / "page.qmd",
@@ -1559,8 +1559,8 @@ class TestCheckExamplesOrchestrator:
         assert len(cells_arg) == 1
         assert "kept" in cells_arg[0].source
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_path_targeting(self, mock_render, mock_quarto, tmp_path):
         self._write_qmd(tmp_path / "a.qmd", "```{python}\nx = 1\n```\n")
         self._write_qmd(tmp_path / "b.qmd", "```{python}\ny = 2\n```\n")
@@ -1568,8 +1568,8 @@ class TestCheckExamplesOrchestrator:
         assert result.pages_checked == 1
         assert result.pages[0].path == "a.qmd"
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_include_filter(self, mock_render, mock_quarto, tmp_path):
         (tmp_path / "guide").mkdir()
         self._write_qmd(tmp_path / "guide" / "intro.qmd", "```{python}\nx = 1\n```\n")
@@ -1577,8 +1577,8 @@ class TestCheckExamplesOrchestrator:
         result = check_examples(tmp_path, include="guide/*", no_docstrings=True)
         assert result.pages_checked == 1
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_exclude_filter(self, mock_render, mock_quarto, tmp_path):
         (tmp_path / "draft").mkdir()
         self._write_qmd(tmp_path / "draft" / "wip.qmd", "```{python}\nx = 1\n```\n")
@@ -1590,7 +1590,7 @@ class TestCheckExamplesOrchestrator:
     def test_quarto_not_available(self, tmp_path):
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
         with patch(
-            "great_docs._check_examples._check_quarto_available",
+            "great_docs._checks.examples._check_quarto_available",
             return_value="Quarto is not installed",
         ):
             result = check_examples(tmp_path, no_docstrings=True)
@@ -1598,15 +1598,15 @@ class TestCheckExamplesOrchestrator:
         assert result.pages[0].status == "error"
         assert "Quarto" in result.pages[0].message
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_no_files_returns_empty_result(self, mock_render, mock_quarto, tmp_path):
         result = check_examples(tmp_path, no_docstrings=True)
         assert result.pages_checked == 0
         assert result.pages == []
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_build_dir_excluded(self, mock_render, mock_quarto, tmp_path):
         (tmp_path / "great-docs").mkdir()
         self._write_qmd(tmp_path / "great-docs" / "built.qmd", "```{python}\nx = 1\n```\n")
@@ -1615,11 +1615,11 @@ class TestCheckExamplesOrchestrator:
         assert result.pages_checked == 1
         assert result.pages[0].path == "real.qmd"
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
     def test_render_crash_reported_as_error(self, mock_quarto, tmp_path):
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
         with patch(
-            "great_docs._check_examples._render_page_with_quarto",
+            "great_docs._checks.examples._render_page_with_quarto",
             side_effect=Exception("render crashed"),
         ):
             result = check_examples(tmp_path, no_docstrings=True)
@@ -1627,25 +1627,25 @@ class TestCheckExamplesOrchestrator:
         assert result.pages[0].status == "error"
         assert "render crashed" in result.pages[0].message
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_docstrings_only_skips_qmd(self, mock_render, mock_quarto, tmp_path):
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
-        with patch("great_docs._check_examples.extract_docstring_examples", return_value=[]):
+        with patch("great_docs._checks.examples.extract_docstring_examples", return_value=[]):
             result = check_examples(tmp_path, docstrings_only=True)
         assert result.pages_checked == 0
         mock_render.assert_not_called()
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_no_docstrings_skips_docstring_extraction(self, mock_render, mock_quarto, tmp_path):
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
-        with patch("great_docs._check_examples.extract_docstring_examples") as mock_ds:
+        with patch("great_docs._checks.examples.extract_docstring_examples") as mock_ds:
             result = check_examples(tmp_path, no_docstrings=True)
         mock_ds.assert_not_called()
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto")
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto")
     def test_tally_counts(self, mock_render, mock_quarto, tmp_path):
         self._write_qmd(tmp_path / "a.qmd", "```{python}\nx = 1\n```\n\n```{python}\ny = 2\n```\n")
         self._write_qmd(tmp_path / "b.qmd", "```{python}\nz = 3\n```\n")
@@ -1670,8 +1670,8 @@ class TestCheckExamplesOrchestrator:
         assert result.cells_passed == 2
         assert result.cells_failed == 1
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_pages_sorted_by_path(self, mock_render, mock_quarto, tmp_path):
         self._write_qmd(tmp_path / "z.qmd", "```{python}\nx = 1\n```\n")
         self._write_qmd(tmp_path / "a.qmd", "```{python}\ny = 2\n```\n")
@@ -1772,8 +1772,8 @@ class TestCheckExamplesCLI:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(textwrap.dedent(content))
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_passing(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
@@ -1782,8 +1782,8 @@ class TestCheckExamplesCLI:
         assert result.exit_code == 0
         assert "1 passed" in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_docs_layout_from_source_dir(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
         docs = tmp_path / "docs"
@@ -1803,8 +1803,8 @@ class TestCheckExamplesCLI:
             (docs / "user_guide" / "intro.qmd").resolve()
         ]
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_fail)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_fail)
     def test_cli_failing_exit_code_1(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nbad\n```\n")
@@ -1817,14 +1817,14 @@ class TestCheckExamplesCLI:
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
         runner = CliRunner()
         with patch(
-            "great_docs._check_examples._check_quarto_available",
+            "great_docs._checks.examples._check_quarto_available",
             return_value="Quarto is not installed",
         ):
             result = runner.invoke(cli, ["check-examples", "--no-docstrings"])
         assert result.exit_code == 2
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_json_output(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
@@ -1835,8 +1835,8 @@ class TestCheckExamplesCLI:
         assert "summary" in data
         assert data["summary"]["pages_passed"] == 1
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_verbose(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
@@ -1844,8 +1844,8 @@ class TestCheckExamplesCLI:
         result = runner.invoke(cli, ["check-examples", "--no-docstrings", "--verbose"])
         assert result.exit_code == 0
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_with_path_argument(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         self._write_qmd(tmp_path / "a.qmd", "```{python}\nx = 1\n```\n")
@@ -1856,8 +1856,8 @@ class TestCheckExamplesCLI:
         assert "a.qmd" in result.output
         assert "b.qmd" not in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_project_path(self, mock_render, mock_quarto, tmp_path):
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
         runner = CliRunner()
@@ -1866,8 +1866,8 @@ class TestCheckExamplesCLI:
         )
         assert result.exit_code == 0
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto")
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto")
     def test_cli_log_file_written(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
 
@@ -1890,8 +1890,8 @@ class TestCheckExamplesCLI:
         assert log_path.exists()
         assert "full tb" in log_path.read_text()
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_no_files_exit_code_0(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
@@ -1899,8 +1899,8 @@ class TestCheckExamplesCLI:
         assert result.exit_code == 0
         assert "0 passed" in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_include(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "guide").mkdir()
@@ -1912,8 +1912,8 @@ class TestCheckExamplesCLI:
         assert "intro.qmd" in result.output
         assert "other.qmd" not in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_exclude(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "draft").mkdir()
@@ -1925,8 +1925,8 @@ class TestCheckExamplesCLI:
         assert "good.qmd" in result.output
         assert "wip.qmd" not in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_timeout(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
@@ -1953,20 +1953,20 @@ class TestCheckExamplesCLI:
         assert result.exit_code == 0
         assert "1 passed" in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_docstrings_only(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
         runner = CliRunner()
-        with patch("great_docs._check_examples.extract_docstring_examples", return_value=[]):
+        with patch("great_docs._checks.examples.extract_docstring_examples", return_value=[]):
             result = runner.invoke(cli, ["check-examples", "--docstrings-only"])
         assert result.exit_code == 0
         assert "page.qmd" not in result.output
         mock_render.assert_not_called()
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto")
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto")
     def test_cli_default_log_file_location(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
 
@@ -1987,8 +1987,8 @@ class TestCheckExamplesCLI:
         assert default_log.exists()
         assert "check-examples.log" in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_no_log_file_when_passing(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
@@ -1999,8 +1999,8 @@ class TestCheckExamplesCLI:
         assert not default_log.exists()
         assert "check-examples.log" not in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto")
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto")
     def test_cli_verbose_shows_traceback(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
 
@@ -2028,8 +2028,8 @@ class TestCheckExamplesCLI:
         assert "line 1 in <module>" in result.output
         assert "NameError: bad_call" in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto")
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto")
     def test_cli_no_verbose_hides_traceback(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
 
@@ -2057,8 +2057,8 @@ class TestCheckExamplesCLI:
         assert "NameError: bad_call not defined" in result.output
         assert "line 1 in <module>" not in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto")
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto")
     def test_cli_json_output_with_failure(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
 
@@ -2079,8 +2079,8 @@ class TestCheckExamplesCLI:
         assert data["summary"]["cells_failed"] == 1
         assert data["pages"][0]["errors"][0]["error_type"] == "ZeroDivisionError"
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_json_no_header(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
@@ -2090,8 +2090,8 @@ class TestCheckExamplesCLI:
         assert "Checking examples" not in result.output
         json.loads(result.output)
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_multiple_paths(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         self._write_qmd(tmp_path / "a.qmd", "```{python}\nx = 1\n```\n")
@@ -2104,8 +2104,8 @@ class TestCheckExamplesCLI:
         assert "b.qmd" in result.output
         assert "c.qmd" not in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_directory_path(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "guide").mkdir()
@@ -2119,8 +2119,8 @@ class TestCheckExamplesCLI:
         assert "advanced.qmd" in result.output
         assert "other.qmd" not in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_path_with_include(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "guide").mkdir()
@@ -2134,8 +2134,8 @@ class TestCheckExamplesCLI:
         assert "intro.qmd" in result.output
         assert "deep.qmd" not in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto")
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto")
     def test_cli_json_overrides_verbose(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
 
@@ -2181,8 +2181,8 @@ class TestCheckExamplesCLI:
         assert "1 failed" in result.output
         assert "ValueError" in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_include_exclude_json(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "guide").mkdir()
@@ -2232,8 +2232,8 @@ class TestCheckExamplesCLI:
         result = runner.invoke(cli, ["--help"])
         assert "check-examples" in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_cli_console_shows_checking_header(
         self, mock_render, mock_quarto, tmp_path, monkeypatch
     ):
@@ -2244,8 +2244,8 @@ class TestCheckExamplesCLI:
         assert result.exit_code == 0
         assert "Checking examples..." in result.output
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto")
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto")
     def test_cli_console_failure_format(self, mock_render, mock_quarto, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
 
@@ -2709,8 +2709,8 @@ class TestOrchestratorEdgeCases:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(textwrap.dedent(content))
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_all_pages_opted_out(self, mock_render, mock_quarto, tmp_path):
         self._write_qmd(
             tmp_path / "a.qmd",
@@ -2725,8 +2725,8 @@ class TestOrchestratorEdgeCases:
         assert result.pages == []
         mock_render.assert_not_called()
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_page_with_all_eval_false(self, mock_render, mock_quarto, tmp_path):
         self._write_qmd(
             tmp_path / "page.qmd",
@@ -2746,8 +2746,8 @@ class TestOrchestratorEdgeCases:
         assert result.pages_checked == 0
         mock_render.assert_not_called()
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto")
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto")
     def test_mixed_pass_fail_error_pages(self, mock_render, mock_quarto, tmp_path):
         self._write_qmd(tmp_path / "a_pass.qmd", "```{python}\nx = 1\n```\n")
         self._write_qmd(tmp_path / "b_fail.qmd", "```{python}\nbad\n```\n")
@@ -2781,16 +2781,16 @@ class TestOrchestratorEdgeCases:
         assert statuses["b_fail.qmd"] == "fail"
         assert statuses["c_crash.qmd"] == "error"
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_empty_qmd_file(self, mock_render, mock_quarto, tmp_path):
         (tmp_path / "empty.qmd").write_text("")
         result = check_examples(tmp_path, no_docstrings=True)
         assert result.pages_checked == 0
         mock_render.assert_not_called()
 
-    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
-    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_qmd_with_only_non_python_blocks(self, mock_render, mock_quarto, tmp_path):
         (tmp_path / "r_only.qmd").write_text(
             "```{r}\nlibrary(dplyr)\n```\n\n```bash\necho hello\n```\n"

@@ -482,7 +482,7 @@ class TestCallToolDispatch:
         monkeypatch.chdir(tmp_path)
         mock_result = MagicMock()
         mock_result.issues = []
-        with patch("great_docs._lint.run_lint", return_value=mock_result):
+        with patch("great_docs._checks.lint.run_lint", return_value=mock_result):
             result = asyncio.run(call_tool("gd_lint", {}))
         assert result[0].text
 
@@ -659,7 +659,7 @@ class TestHandleLint:
         monkeypatch.chdir(tmp_path)
         mock_result = MagicMock()
         mock_result.issues = []
-        with patch("great_docs._lint.run_lint", return_value=mock_result):
+        with patch("great_docs._checks.lint.run_lint", return_value=mock_result):
             result = asyncio.run(_handle_lint({}))
         assert "No lint issues" in result[0].text
 
@@ -672,7 +672,7 @@ class TestHandleLint:
         issue.message = "Missing docstring"
         mock_result = MagicMock()
         mock_result.issues = [issue]
-        with patch("great_docs._lint.run_lint", return_value=mock_result):
+        with patch("great_docs._checks.lint.run_lint", return_value=mock_result):
             result = asyncio.run(_handle_lint({}))
         assert "ERROR" in result[0].text
         assert "Missing docstring" in result[0].text
@@ -686,7 +686,7 @@ class TestHandleLint:
         issue.message = "Inconsistent style"
         mock_result = MagicMock()
         mock_result.issues = [issue]
-        with patch("great_docs._lint.run_lint", return_value=mock_result):
+        with patch("great_docs._checks.lint.run_lint", return_value=mock_result):
             result = asyncio.run(_handle_lint({}))
         assert "Inconsistent style" in result[0].text
 
@@ -694,7 +694,7 @@ class TestHandleLint:
         monkeypatch.chdir(tmp_path)
         mock_result = MagicMock()
         mock_result.issues = []
-        with patch("great_docs._lint.run_lint", return_value=mock_result) as mock_lint:
+        with patch("great_docs._checks.lint.run_lint", return_value=mock_result) as mock_lint:
             asyncio.run(_handle_lint({"checks": ["docstrings"]}))
         _, kwargs = mock_lint.call_args
         assert kwargs["checks"] == {"docstrings"}

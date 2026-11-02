@@ -891,7 +891,7 @@ class TestCharWidth:
 
     def test_matches_build_log_padding(self):
         """The build log pads its boxes to the widths the emulator gives."""
-        from great_docs._build_log import _display_width
+        from great_docs._build.log import _display_width
 
         for text in ["Site ready 🎉", "中文 docs", "plain"]:
             assert _display_width(text) == sum(char_width(ch) for ch in text)

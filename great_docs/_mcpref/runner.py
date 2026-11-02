@@ -1,6 +1,6 @@
 """Run an arbitrary MCP server module over stdio.
 
-This is a tiny, version-agnostic launcher used by `great_docs._mcp_docs`
+This is a tiny, version-agnostic launcher used by `great_docs._mcpref.reference`
 to introspect an MCP server *through the wire protocol* rather than by reaching
 into the `mcp` library's internal handler registries (which change between
 major releases). The launcher imports the target module, locates its server
@@ -9,7 +9,7 @@ instance, and runs it over stdio using whichever `run` shape the installed
 
 Usage:
 
-    python -m great_docs._mcp_runner <module_path> [<server_var>]
+    python -m great_docs._mcpref.runner <module_path> [<server_var>]
 """
 
 from __future__ import annotations
@@ -74,5 +74,5 @@ if __name__ == "__main__":
     module = sys.argv[1] if len(sys.argv) > 1 else ""
     var = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else None
     if not module:
-        raise SystemExit("usage: python -m great_docs._mcp_runner <module> [<var>]")
+        raise SystemExit("usage: python -m great_docs._mcpref.runner <module> [<var>]")
     asyncio.run(_run(module, var))

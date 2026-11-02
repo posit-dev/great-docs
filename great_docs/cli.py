@@ -1472,8 +1472,8 @@ def freeze(
 
     # Quarto requires matching page sources to reuse cached results. Use the build's
     # preparation steps to keep those sources consistent.
+    from ._build.log import BuildLog
     from ._build.pipeline import Run
-    from ._build_log import BuildLog
 
     docs = GreatDocs(project_path=project_path, config_path=config_path)
     log = BuildLog()
@@ -2251,11 +2251,11 @@ def check_examples(
       great-docs check-examples --parallel --jobs 4
       great-docs check-examples --no-docstrings --timeout 60
     """
-    from ._build_log import Colors, MultiProgressBar, ProgressBar
-    from ._check_examples import (
+    from ._build.log import Colors, MultiProgressBar, ProgressBar
+    from ._checks.examples import (
         check_examples as run_check,
     )
-    from ._check_examples import (
+    from ._checks.examples import (
         format_console,
         format_json,
         write_log_file,
@@ -2555,8 +2555,8 @@ def proofread(
     import json as json_module
     from collections import defaultdict
 
-    from . import _proofread
-    from ._harper import HarperError, HarperNotFoundError, check_harper_available
+    from ._checks import proofread as proofreading
+    from ._checks.harper import HarperError, HarperNotFoundError, check_harper_available
 
     try:
         # Check if Harper is available
@@ -2578,10 +2578,10 @@ def proofread(
             files_to_check = [Path(f) for f in files]
         else:
             guide_dir = Path(docs_dir) if docs_dir else None
-            files_to_check = _proofread.find_pages(docs.layout, guide_dir)
+            files_to_check = proofreading.find_pages(docs.layout, guide_dir)
             if include_docstrings and (package_name := docs._detect_package_name()):
                 module = docs._resolve_importable_name(package_name)
-                files_to_check += _proofread.find_modules(docs.project_root, module)
+                files_to_check += proofreading.find_modules(docs.project_root, module)
 
         if not files_to_check:
             click.echo("No documentation files found to check.", err=True)
@@ -2605,7 +2605,7 @@ def proofread(
         if ignore_rules:
             ignore.extend(ignore_rules.split(","))
 
-        options = _proofread.Options(
+        options = proofreading.Options(
             dialect=dialect,
             words=words,
             only_rules=only,
@@ -2614,7 +2614,7 @@ def proofread(
             default_ignores=not strict,
         )
         # Exclude Python files unless docstring checking is requested.
-        all_results = _proofread.check(
+        all_results = proofreading.check(
             [f for f in files_to_check if include_docstrings or f.suffix != ".py"],
             docs.project_root,
             options,
@@ -3074,7 +3074,7 @@ def lint(
     import json
     import textwrap
 
-    from ._lint import run_lint
+    from ._checks.lint import run_lint
 
     try:
         project_root = Path(project_path) if project_path else Path.cwd()
@@ -3518,7 +3518,7 @@ def versions(project_path: str | None, check: bool, config_path: str | None = No
       great-docs versions              # List all configured versions
       great-docs versions --check      # Validate configuration
     """
-    from great_docs._versioning import get_latest_version, parse_versions_config
+    from great_docs._versions.model import get_latest_version, parse_versions_config
     from great_docs.config import Config
 
     try:

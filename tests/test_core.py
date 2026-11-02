@@ -339,7 +339,9 @@ class TestDiscoverMcpServer:
 
         with (
             patch.dict(sys.modules),
-            patch("great_docs._mcp_docs.discover_mcp_server", return_value=server_info) as discover,
+            patch(
+                "great_docs._mcpref.reference.discover_mcp_server", return_value=server_info
+            ) as discover,
         ):
             result = gd._discover_mcp_server("mypkgxyz")
 
@@ -354,7 +356,9 @@ class TestDiscoverMcpServer:
 
         with (
             patch.dict(sys.modules),
-            patch("great_docs._mcp_docs.discover_mcp_server", return_value=None) as discover,
+            patch(
+                "great_docs._mcpref.reference.discover_mcp_server", return_value=None
+            ) as discover,
         ):
             gd._discover_mcp_server("mypkgxyz")
 
@@ -364,7 +368,7 @@ class TestDiscoverMcpServer:
         """With no package and no `mcp.module`, discovery introspects nothing and returns `None`"""
         gd = _make_root_project(tmp_path)
 
-        with patch("great_docs._mcp_docs.discover_mcp_server") as discover:
+        with patch("great_docs._mcpref.reference.discover_mcp_server") as discover:
             result = gd._discover_mcp_server(None)
 
         assert result is None
@@ -456,7 +460,7 @@ class TestGenerateMcpManifest:
             called_with.update(kwargs)
 
         with patch("great_docs.core.generate_mcp_manifest", create=True):
-            monkeypatch.setattr("great_docs._mcp_docs.generate_mcp_manifest", fake_gen)
+            monkeypatch.setattr("great_docs._mcpref.reference.generate_mcp_manifest", fake_gen)
             gd._generate_mcp_manifest({"name": "test", "tools": []})
 
         assert called_with["package_name"] == "mypkg"
@@ -2038,11 +2042,11 @@ class TestInjectVersionSelector:
         )
         mock_versions = [MagicMock(tag="v1.0"), MagicMock(tag="v2.0")]
         monkeypatch.setattr(
-            "great_docs._versioning.parse_versions_config",
+            "great_docs._versions.model.parse_versions_config",
             lambda v: mock_versions,
         )
         monkeypatch.setattr(
-            "great_docs._versioning.build_version_map",
+            "great_docs._versions.model.build_version_map",
             lambda versions, pages: {"versions": [{"tag": "v1.0"}, {"tag": "v2.0"}]},
         )
         _patch_cfg(monkeypatch, gd, "versions", [{"tag": "v1.0"}, {"tag": "v2.0"}])
@@ -2062,11 +2066,11 @@ class TestInjectVersionSelector:
         )
         mock_versions = [MagicMock(tag="v1.0")]
         monkeypatch.setattr(
-            "great_docs._versioning.parse_versions_config",
+            "great_docs._versions.model.parse_versions_config",
             lambda v: mock_versions,
         )
         monkeypatch.setattr(
-            "great_docs._versioning.build_version_map",
+            "great_docs._versions.model.build_version_map",
             lambda versions, pages: {},
         )
         _patch_cfg(monkeypatch, gd, "versions", [])
@@ -2085,11 +2089,11 @@ class TestInjectVersionSelector:
         )
         mock_versions = [MagicMock(tag="v1.0")]
         monkeypatch.setattr(
-            "great_docs._versioning.parse_versions_config",
+            "great_docs._versions.model.parse_versions_config",
             lambda v: mock_versions,
         )
         monkeypatch.setattr(
-            "great_docs._versioning.build_version_map",
+            "great_docs._versions.model.build_version_map",
             lambda versions, pages: {},
         )
         _patch_cfg(monkeypatch, gd, "versions", [])
@@ -2108,11 +2112,11 @@ class TestInjectVersionSelector:
         )
         mock_versions = [MagicMock(tag="v1.0")]
         monkeypatch.setattr(
-            "great_docs._versioning.parse_versions_config",
+            "great_docs._versions.model.parse_versions_config",
             lambda v: mock_versions,
         )
         monkeypatch.setattr(
-            "great_docs._versioning.build_version_map",
+            "great_docs._versions.model.build_version_map",
             lambda versions, pages: {},
         )
         _patch_cfg(monkeypatch, gd, "versions", [])
@@ -2131,11 +2135,11 @@ class TestInjectVersionSelector:
         )
         mock_versions = [MagicMock(tag="v1.0")]
         monkeypatch.setattr(
-            "great_docs._versioning.parse_versions_config",
+            "great_docs._versions.model.parse_versions_config",
             lambda v: mock_versions,
         )
         monkeypatch.setattr(
-            "great_docs._versioning.build_version_map",
+            "great_docs._versions.model.build_version_map",
             lambda versions, pages: {},
         )
         _patch_cfg(monkeypatch, gd, "versions", [])
@@ -2154,11 +2158,11 @@ class TestInjectVersionSelector:
         )
         mock_versions = [MagicMock(tag="v1.0")]
         monkeypatch.setattr(
-            "great_docs._versioning.parse_versions_config",
+            "great_docs._versions.model.parse_versions_config",
             lambda v: mock_versions,
         )
         monkeypatch.setattr(
-            "great_docs._versioning.build_version_map",
+            "great_docs._versions.model.build_version_map",
             lambda versions, pages: {},
         )
         _patch_cfg(monkeypatch, gd, "versions", [])

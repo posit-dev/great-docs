@@ -33,8 +33,8 @@ from yaml12 import parse_yaml as _parse_yaml
 
 from great_docs import BuildError, Config, GreatDocs, create_default_config, load_config
 from great_docs._build import freeze, quarto
+from great_docs._build.log import BuildLog
 from great_docs._build.steps import Step, count_listed
-from great_docs._build_log import BuildLog
 from great_docs._content.naming import strip_numeric_prefix
 from great_docs._reference.discovery import (
     AUTO_EXCLUDE,
@@ -7506,7 +7506,7 @@ def test_cli_help_for_llms_uses_module_name(mock_discover):
         mock_discover.assert_called_once_with("actual_module", display_name="my-dist")
 
 
-@patch("great_docs._harper.run_harper")
+@patch("great_docs._checks.harper.run_harper")
 def test_proofread_docstrings_use_module_name(mock_run_harper):
     """Find docstrings under the importable module when its name differs from the project"""
     mock_run_harper.return_value = []
@@ -7527,7 +7527,7 @@ def test_proofread_docstrings_use_module_name(mock_run_harper):
         assert [p.name for p in scanned] == ["__init__.py"]
 
 
-@patch("great_docs._harper.run_harper")
+@patch("great_docs._checks.harper.run_harper")
 def test_proofread_docstrings_dotted_module_name(mock_run_harper):
     """Find docstrings in nested directories for a dotted module name"""
     mock_run_harper.return_value = []
@@ -7571,7 +7571,7 @@ def test_proofread_applies_the_commands_defaults(tmp_path):
 
     Report issues against the original page and exclude front matter and fenced code.
     """
-    from great_docs._harper import HarperLint, get_default_ignore_rules
+    from great_docs._checks.harper import HarperLint, get_default_ignore_rules
 
     docs = _proofread_project(tmp_path)
     seen = {}
@@ -7582,7 +7582,7 @@ def test_proofread_applies_the_commands_defaults(tmp_path):
         seen["words"] = Path(kwargs["user_dict_path"]).read_text().splitlines()
         return [HarperLint("SpellCheck", "Spelling", 9, 3, "Misspelled", "tset", file="<stdin>")]
 
-    with patch("great_docs._harper.run_harper_on_text", side_effect=run_text):
+    with patch("great_docs._checks.harper.run_harper_on_text", side_effect=run_text):
         results = docs.proofread(custom_words=["griffe"])
 
     assert "title" not in seen["text"] and "x = 1" not in seen["text"]
@@ -7596,7 +7596,7 @@ def test_proofread_applies_the_commands_defaults(tmp_path):
 def test_proofread_strict_checks_without_defaults(tmp_path):
     """Disable default rule exclusions and the built-in dictionary with `strict=True`"""
     docs = _proofread_project(tmp_path)
-    with patch("great_docs._harper.run_harper_on_text", return_value=[]) as run_text:
+    with patch("great_docs._checks.harper.run_harper_on_text", return_value=[]) as run_text:
         docs.proofread(strict=True)
 
     assert run_text.call_args.kwargs["ignore_rules"] is None
@@ -7607,7 +7607,7 @@ def test_proofread_missing_harper_raises(tmp_path):
     """Raise `RuntimeError` for the whole run when `harper-cli` is missing"""
     docs = _proofread_project(tmp_path)
     with (
-        patch("great_docs._harper.find_harper_cli", return_value=None),
+        patch("great_docs._checks.harper.find_harper_cli", return_value=None),
         pytest.raises(RuntimeError, match="harper-cli is not installed"),
     ):
         docs.proofread()
@@ -7615,10 +7615,12 @@ def test_proofread_missing_harper_raises(tmp_path):
 
 def test_proofread_harper_error_on_a_page_is_that_pages_error(tmp_path):
     """Return a Harper failure as the affected page's `error`"""
-    from great_docs._harper import HarperError
+    from great_docs._checks.harper import HarperError
 
     docs = _proofread_project(tmp_path)
-    with patch("great_docs._harper.run_harper_on_text", side_effect=HarperError("timed out")):
+    with patch(
+        "great_docs._checks.harper.run_harper_on_text", side_effect=HarperError("timed out")
+    ):
         [page] = docs.proofread()
 
     assert page.issues == ()
@@ -18877,7 +18879,7 @@ def test_build_versioned_all_failed_raises(tmp_path: Path, capsys: pytest.Captur
 
     with (
         stubbed_build(docs),
-        patch("great_docs._versioned_build.run_versioned_build", return_value=failed),
+        patch("great_docs._versions.build.run_versioned_build", return_value=failed),
         pytest.raises(BuildError, match="All version builds failed"),
     ):
         docs.build(watch=False, refresh=False)

@@ -13,7 +13,7 @@ from yaml12 import read_yaml
 from great_docs._api_diff import ApiSnapshot, ParameterInfo, SymbolInfo
 from great_docs._layout import Layout
 from great_docs._utils import QUARTO_YML_HEADER
-from great_docs._versioned_build import (
+from great_docs._versions.build import (
     _version_build_dir,
     assemble_site,
     create_version_aliases,
@@ -22,7 +22,7 @@ from great_docs._versioned_build import (
     run_versioned_build,
     write_version_map,
 )
-from great_docs._versioning import (
+from great_docs._versions.model import (
     VersionEntry,
     get_latest_version,
     parse_versions_config,
@@ -49,7 +49,7 @@ def test_layout_pipeline(tmp_path: Path, directory: str) -> None:
             fake_quarto_render(build)
         return [(str(build), 0, "", "", []) for build in build_dirs]
 
-    with patch("great_docs._versioned_build.render_versions_parallel", side_effect=render):
+    with patch("great_docs._versions.build.render_versions_parallel", side_effect=render):
         result = run_versioned_build(
             layout.build_dir,
             tmp_path,
@@ -2135,7 +2135,7 @@ class TestVersionTitleSuffix:
         latest = get_latest_version(versions)
         latest_tag = latest.tag
 
-        from great_docs._versioned_build import _rewrite_quarto_yml_for_version
+        from great_docs._versions.build import _rewrite_quarto_yml_for_version
 
         for entry in versions:
             ver_dir = _version_build_dir(source_dir, entry, latest_tag)

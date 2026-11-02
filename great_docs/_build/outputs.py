@@ -44,8 +44,8 @@ def validate(config: Config, layout: Layout) -> None:
     """
     validate_layout_outputs(layout)
     if config.versions:
-        from .._versioned_build import check_build_dir_collisions
-        from .._versioning import get_latest_version, parse_versions_config
+        from .._versions.build import check_build_dir_collisions
+        from .._versions.model import get_latest_version, parse_versions_config
 
         versions = parse_versions_config(config.versions)
         latest = get_latest_version(versions)

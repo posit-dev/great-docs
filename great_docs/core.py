@@ -15,7 +15,6 @@ from urllib.parse import unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
 
-from . import _proofread
 from ._build import freeze, outputs, quarto, serve, timings
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
@@ -31,6 +30,8 @@ from ._build.steps import (
     count_listed,
     run_steps,
 )
+from ._checks import proofread
+from ._checks.proofread import CheckedFile
 from ._content import publish
 from ._content.naming import (
     published_path,
@@ -42,7 +43,6 @@ from ._content.sections import source_dirs as section_source_dirs
 from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import Layout
-from ._proofread import CheckedFile
 from ._reference import discovery, probe
 from ._reference.discovery import Categories
 from ._remote import HttpRemote, Remote
@@ -83,7 +83,7 @@ if TYPE_CHECKING:
 
     from ._apiref.api_reference import APIReference
     from ._apiref.inventory import InventoryItem
-    from ._build_log import BuildLog
+    from ._build.log import BuildLog
 
 # Injected into marimo `--mode edit` WASM exports (iframe mode). Those load inert
 # — cells are stale and the kernel isn't instantiated, so nothing renders and
@@ -4388,7 +4388,7 @@ class GreatDocs:
             print("No MCP module configured or found")
             return None
 
-        from ._mcp_docs import discover_mcp_server
+        from ._mcpref.reference import discover_mcp_server
 
         return discover_mcp_server(
             module_path=module_path,
@@ -4504,7 +4504,7 @@ class GreatDocs:
         mcp_info
             Server metadata from _discover_mcp_server().
         """
-        from ._mcp_docs import generate_mcp_manifest
+        from ._mcpref.reference import generate_mcp_manifest
 
         # Gather project metadata
         package_name = self._detect_package_name()
@@ -10390,7 +10390,7 @@ anchor-sections: true
         """
         import html as html_mod
 
-        from great_docs._versioning import build_version_map, parse_versions_config
+        from great_docs._versions.model import build_version_map, parse_versions_config
 
         with quarto_yml.edit(self.build_dir, self._config) as config:
             versions = parse_versions_config(self._config.versions)
@@ -12174,7 +12174,7 @@ anchor-sections: true
                 run.mcp_pages_generated = False
                 self._remove_mcp_from_ref_sections()
                 return Skipped("no MCP server found")
-            from ._mcp_docs import generate_mcp_reference_pages
+            from ._mcpref.reference import generate_mcp_reference_pages
 
             mcp_files = generate_mcp_reference_pages(
                 server_info=mcp_info,
@@ -12520,7 +12520,7 @@ anchor-sections: true
         """
         import threading
 
-        from great_docs import _parallel_render
+        from great_docs._build import parallel_render
 
         env = quarto.environment(self._config)
         result = None
@@ -12542,7 +12542,7 @@ anchor-sections: true
                     pages_started[0] = min(pages_started[0] + 1, bar.total)
                     bar.update(pages_started[0])
 
-            result = _parallel_render.render(
+            result = parallel_render.render(
                 self.build_dir,
                 env,
                 jobs,
@@ -12648,8 +12648,8 @@ anchor-sections: true
         StepError
             If every version fails to render.
         """
-        from great_docs._versioned_build import run_versioned_build
-        from great_docs._versioning import get_latest_version, parse_versions_config
+        from great_docs._versions.build import run_versioned_build
+        from great_docs._versions.model import get_latest_version, parse_versions_config
 
         versions = parse_versions_config(self._config.versions)
         if latest_only:
@@ -12710,7 +12710,7 @@ anchor-sections: true
             `None`; the step has no result line.
         """
         if self.layout.site_dir != self.build_dir / "_site":
-            from ._versioned_build import assemble_site
+            from ._versions.build import assemble_site
 
             assemble_site(self.build_dir, [], "", self.layout.site_dir, layout=self.layout)
         return None
@@ -13070,13 +13070,13 @@ anchor-sections: true
             print(f"Error: {e}", file=sys.stderr)
             raise
 
-        from great_docs import _parallel_render
-        from great_docs._build_log import BuildLog, estimate_build_time
+        from great_docs._build import parallel_render
+        from great_docs._build.log import BuildLog, estimate_build_time
 
         # Settle the render process count up front so a bad value fails fast, and read the last
         # build's page timings and Quarto start-up time before anything clears them (they guide
         # how pages are split)
-        render_jobs = _parallel_render.resolve_jobs(jobs)
+        render_jobs = parallel_render.resolve_jobs(jobs)
         last_timings: dict[str, float] = {}
         last_startup: float | None = None
         if render_jobs > 1:
@@ -13084,8 +13084,8 @@ anchor-sections: true
                 self.layout.site_dir / "build-timings.json",
                 self.build_dir / "_site" / "build-timings.json",
             )
-            last_timings = _parallel_render.read_timings(*timing_files)
-            last_startup = _parallel_render.read_startup(*timing_files)
+            last_timings = parallel_render.read_timings(*timing_files)
+            last_startup = parallel_render.read_startup(*timing_files)
 
         # --- Gather metadata for the build header -------------------------
         package_name = self._detect_package_name() or ""
@@ -13747,14 +13747,14 @@ anchor-sections: true
         results = docs.proofread(only_rules=["SpellCheck"])
         ```
         """
-        from ._harper import HarperError, HarperNotFoundError
+        from ._checks.harper import HarperError, HarperNotFoundError
 
-        files = _proofread.find_pages(self.layout) if include_docs else []
+        files = proofread.find_pages(self.layout) if include_docs else []
         if include_docstrings and (package_name := self._detect_package_name()):
             module = self._resolve_importable_name(package_name)
-            files += _proofread.find_modules(self.project_root, module)
+            files += proofread.find_modules(self.project_root, module)
 
-        options = _proofread.Options(
+        options = proofread.Options(
             dialect=dialect,
             words=custom_words or (),
             only_rules=only_rules or (),
@@ -13763,7 +13763,7 @@ anchor-sections: true
             default_ignores=not strict,
         )
         try:
-            return _proofread.check(
+            return proofread.check(
                 files,
                 self.project_root,
                 options,

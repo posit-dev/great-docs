@@ -22,9 +22,9 @@ from .steps import count_listed, run_steps
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from .._build_log import BuildLog
     from .._layout import Layout
     from ..config import Config
+    from .log import BuildLog
     from .steps import Step
 
 __all__ = ["find_page", "merge", "prepare", "render_page", "save"]

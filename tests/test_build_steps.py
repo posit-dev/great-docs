@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from great_docs._build.log import BuildLog
 from great_docs._build.steps import (
     BuildError,
     Outcome,
@@ -16,7 +17,6 @@ from great_docs._build.steps import (
     count_listed,
     run_steps,
 )
-from great_docs._build_log import BuildLog
 
 # The elapsed time at the end of a result line, such as `<0.1s`
 _TIMING = re.compile(r"\s+<?\d+(\.\d+)?s$")

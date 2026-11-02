@@ -585,7 +585,7 @@ async def _handle_scan(arguments: dict) -> list[TextContent]:
 
 async def _handle_lint(arguments: dict) -> list[TextContent]:
     """Run documentation lint checks."""
-    from ._lint import run_lint
+    from ._checks.lint import run_lint
 
     project_path = arguments.get("project_path")
     checks_arg = arguments.get("checks")

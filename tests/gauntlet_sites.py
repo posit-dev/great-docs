@@ -354,8 +354,8 @@ def build_site(rendered_dir: Path, name: str) -> Path:
 
     from great_docs import GreatDocs
     from great_docs._build import freeze, quarto
+    from great_docs._build.log import BuildLog
     from great_docs._build.pipeline import Run
-    from great_docs._build_log import BuildLog
 
     rendered_dir.mkdir(parents=True, exist_ok=True)
     staging = rendered_dir / f".building-{name}-{os.getpid()}"
@@ -390,7 +390,7 @@ def build_site(rendered_dir: Path, name: str) -> Path:
         # directory, separate from the public site. Mirror `GreatDocs.build()`
         # because this builder runs the render stages directly.
         if docs.layout.site_dir != docs.build_dir / "_site":
-            from great_docs._versioned_build import assemble_site
+            from great_docs._versions.build import assemble_site
 
             assemble_site(docs.build_dir, [], "", docs.layout.site_dir, layout=docs.layout)
 

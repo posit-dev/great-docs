@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 
+from great_docs._checks.lint import LintResult, _check_ambiguous_references
 from great_docs._interlinks import AliasClaims, resolve_aliases
-from great_docs._lint import LintResult, _check_ambiguous_references
 
 
 def _fake_item(name, docstring):
@@ -139,7 +139,7 @@ def test_a_real_reference_alongside_example_text_is_still_reported():
 
 
 def test_the_prose_walk_reads_docstrings_and_pages(tmp_path):
-    from great_docs._lint import _gather_prose
+    from great_docs._checks.lint import _gather_prose
 
     (tmp_path / "guide.qmd").write_text("See [](`Cache`).", encoding="utf-8")
 
@@ -151,7 +151,7 @@ def test_the_prose_walk_reads_docstrings_and_pages(tmp_path):
 
 def test_the_prose_walk_reads_a_submodule_qualified_docstring(tmp_path):
     """An object the renderer documents but the package does not export at top level."""
-    from great_docs._lint import _gather_prose
+    from great_docs._checks.lint import _gather_prose
 
     prose = _gather_prose([_fake_item("demo.store.Cache", "See [](`Cache`).")], tmp_path)
 

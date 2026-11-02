@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from great_docs._mcp_docs import (
+from great_docs._mcpref.reference import (
     _generate_mcp_index_page,
     _generate_prompt_page,
     _generate_resource_page,

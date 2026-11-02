@@ -5,9 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from great_docs._builtin.directives import DIRECTIVES
-from great_docs._interlinks import Source
-from great_docs._interlinks.sphinx_inventory import Inventory, InventoryEntry
-from great_docs._lint import (
+from great_docs._checks.lint import (
     LintIssue,
     LintResult,
     _check_config_keys,
@@ -21,6 +19,8 @@ from great_docs._lint import (
     _version_distance,
     run_lint,
 )
+from great_docs._interlinks import Source
+from great_docs._interlinks.sphinx_inventory import Inventory, InventoryEntry
 from great_docs._utils import QUARTO_YML_HEADER
 from tests.support import mock_config
 
@@ -35,12 +35,12 @@ def test_lint_includes_shared_sources(
     relative: bool,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from great_docs._layout import Layout
-    from great_docs._lint import (
+    from great_docs._checks.lint import (
         _check_ambiguous_references,
         _check_stale_versions,
         _gather_prose,
     )
+    from great_docs._layout import Layout
 
     source = tmp_path / directory
     source.mkdir(exist_ok=True)
@@ -955,7 +955,7 @@ class TestRunLint:
 
         assert not any(i.check == "ambiguous-xref" for i in result.issues)
 
-    @patch("great_docs._lint.load_sources")
+    @patch("great_docs._checks.lint.load_sources")
     @patch("great_docs.core.GreatDocs")
     def test_an_unresolvable_reference_reads_no_sources(
         self, mock_gd_cls, mock_load_sources, tmp_path
@@ -1182,7 +1182,7 @@ class TestRunLintQuiet:
 class TestHelperEdgeCases:
     def test_get_docstring_exception(self):
         """Test _get_docstring when accessing docstring raises an exception."""
-        from great_docs._lint import _get_docstring
+        from great_docs._checks.lint import _get_docstring
 
         obj = MagicMock()
         obj.docstring = property(lambda self: (_ for _ in ()).throw(RuntimeError("boom")))
@@ -1194,7 +1194,7 @@ class TestHelperEdgeCases:
 
     def test_iter_public_members_exception(self):
         """Test _iter_public_members when members.items() raises."""
-        from great_docs._lint import _iter_public_members
+        from great_docs._checks.lint import _iter_public_members
 
         obj = MagicMock()
         obj.members.items.side_effect = RuntimeError("broken")
@@ -1204,7 +1204,7 @@ class TestHelperEdgeCases:
 
     def test_iter_public_members_yields_dunders(self):
         """Test that public dunders (not __init__) are yielded."""
-        from great_docs._lint import _iter_public_members
+        from great_docs._checks.lint import _iter_public_members
 
         method_repr = MagicMock()
         method_init = MagicMock()
@@ -1615,7 +1615,7 @@ class TestCheckStaleVersions:
         )
 
     def test_stale_badge_detected(self, tmp_path):
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -1634,7 +1634,7 @@ class TestCheckStaleVersions:
         assert "4 releases behind" in stale[0].message
 
     def test_fresh_badge_not_flagged(self, tmp_path):
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -1651,7 +1651,7 @@ class TestCheckStaleVersions:
         assert len(stale) == 0
 
     def test_stale_callout_detected(self, tmp_path):
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -1673,7 +1673,7 @@ class TestCheckStaleVersions:
         assert stale[0].severity == "info"
 
     def test_fresh_callout_not_flagged(self, tmp_path):
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -1693,7 +1693,7 @@ class TestCheckStaleVersions:
         assert len(stale) == 0
 
     def test_stale_upcoming_detected(self, tmp_path):
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -1710,7 +1710,7 @@ class TestCheckStaleVersions:
         assert "already-released" in stale[0].message
 
     def test_valid_upcoming_not_flagged(self, tmp_path):
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -1725,7 +1725,7 @@ class TestCheckStaleVersions:
         assert len(stale) == 0
 
     def test_deprecated_callout_stale(self, tmp_path):
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -1746,7 +1746,7 @@ class TestCheckStaleVersions:
         assert "version-deprecated" in stale[0].message
 
     def test_custom_thresholds(self, tmp_path):
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         # Use a very high threshold so nothing is flagged
         config = (
@@ -1769,7 +1769,7 @@ class TestCheckStaleVersions:
         assert len(result.issues) == 0
 
     def test_no_versions_config_skips(self, tmp_path):
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         (tmp_path / "great-docs.yml").write_text("theme: default\n")
         result = LintResult()
@@ -1777,7 +1777,7 @@ class TestCheckStaleVersions:
         assert len(result.issues) == 0
 
     def test_skips_underscore_dirs(self, tmp_path):
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -1798,7 +1798,7 @@ class TestCheckStaleVersions:
         `great-docs-<tag>/`. Scanning those copies would duplicate each finding,
         while a nested user directory must remain in scope.
         """
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -1828,7 +1828,7 @@ class TestCheckStaleVersions:
         assert "great-docs-examples" in stale[0].symbol
 
     def test_checks_unmarked_root_directory_with_build_like_name(self, tmp_path):
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -1846,7 +1846,7 @@ class TestCheckStaleVersions:
         assert "great-docs-notes" in stale[0].symbol
 
     def test_line_numbers_correct(self, tmp_path):
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -1865,7 +1865,7 @@ class TestCheckStaleVersions:
 
     def test_yaml_parse_error_skips(self, tmp_path):
         """Invalid YAML in great-docs.yml returns silently."""
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         (tmp_path / "great-docs.yml").write_text("versions: [\n  unclosed bracket")
         result = LintResult()
@@ -1874,18 +1874,18 @@ class TestCheckStaleVersions:
 
     def test_empty_versions_after_parse_skips(self, tmp_path):
         """When parse_versions_config returns empty list, returns silently."""
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         (tmp_path / "great-docs.yml").write_text("versions:\n  - tag: v0.1\n    label: '0.1'\n")
         result = LintResult()
-        with patch("great_docs._versioning.parse_versions_config", return_value=[]):
+        with patch("great_docs._versions.model.parse_versions_config", return_value=[]):
             _check_stale_versions(tmp_path, result)
         assert result.issues == []
 
     def test_no_latest_marked_falls_back_to_first_nonprerelease(self, tmp_path):
         """No version has latest=True: fallback loop sets latest_entry to first non-prerelease."""
-        from great_docs._lint import _check_stale_versions
-        from great_docs._versioning import VersionEntry
+        from great_docs._checks.lint import _check_stale_versions
+        from great_docs._versions.model import VersionEntry
 
         # Return versions with no latest=True so the fallback loop (lines 584-587) is exercised
         versions_no_latest = [
@@ -1895,13 +1895,15 @@ class TestCheckStaleVersions:
         ]
         (tmp_path / "great-docs.yml").write_text("versions:\n  - tag: '0.5'\n    label: '0.5'\n")
         result = LintResult()
-        with patch("great_docs._versioning.parse_versions_config", return_value=versions_no_latest):
+        with patch(
+            "great_docs._versions.model.parse_versions_config", return_value=versions_no_latest
+        ):
             _check_stale_versions(tmp_path, result)
         # Ran without error; latest_entry was set to 0.5 via fallback loop
 
     def test_only_prerelease_versions_skips(self, tmp_path):
         """When all versions are prerelease, latest_entry stays None and returns."""
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         versions_yaml = '  - label: "dev"\n    tag: dev\n    prerelease: true\n'
         self._make_project(
@@ -1915,7 +1917,7 @@ class TestCheckStaleVersions:
 
     def test_version_field_added_to_released_set(self, tmp_path):
         """Non-prerelease version with a version field: version string added to released set."""
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         versions_yaml = (
             '  - label: "0.7"\n'
@@ -1941,7 +1943,7 @@ class TestCheckStaleVersions:
         """Files that raise OSError when read are silently skipped."""
         from pathlib import Path
 
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -1962,7 +1964,7 @@ class TestCheckStaleVersions:
 
     def test_badge_without_version_number_skipped(self, tmp_path):
         """Badge with no version arg ([version-badge new]) is skipped."""
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -1975,7 +1977,7 @@ class TestCheckStaleVersions:
 
     def test_expired_new_badge_advice(self, tmp_path):
         """Expired 'new' badge shows 'consider removing' advice."""
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         config = f"versions:\n{self._versions_yaml}\nnew_is_old: '3 releases'\n"
         (tmp_path / "great-docs.yml").write_text(config)
@@ -1989,7 +1991,7 @@ class TestCheckStaleVersions:
 
     def test_stale_changed_badge(self, tmp_path):
         """Stale 'changed' badge uses 'still displays in all versions' advice."""
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -2004,7 +2006,7 @@ class TestCheckStaleVersions:
 
     def test_version_note_without_version_attr_skipped(self, tmp_path):
         """::: {.version-note} without a version= attribute is skipped."""
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -2017,7 +2019,7 @@ class TestCheckStaleVersions:
 
     def test_deprecated_callout_without_version_attr_skipped(self, tmp_path):
         """::: {.version-deprecated} without a version= attribute is skipped."""
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -2030,7 +2032,7 @@ class TestCheckStaleVersions:
 
     def test_fresh_deprecated_callout_not_flagged(self, tmp_path):
         """Deprecated callout that is within the threshold is not reported."""
-        from great_docs._lint import _check_stale_versions
+        from great_docs._checks.lint import _check_stale_versions
 
         self._make_project(
             tmp_path,
@@ -2059,7 +2061,7 @@ class TestVersionDistance:
     """Tests for the _version_distance() helper."""
 
     def _entry(self, tag: str, prerelease: bool = False):
-        from great_docs._versioning import VersionEntry
+        from great_docs._versions.model import VersionEntry
 
         return VersionEntry(tag=tag, label=tag, prerelease=prerelease)
 
@@ -2125,7 +2127,7 @@ class TestCheckPageDescriptions:
         return GreatDocs(project_path=str(tmp_path))
 
     def _issues(self, tmp_path: Path, **kwargs) -> list[LintIssue]:
-        from great_docs._lint import _check_page_descriptions
+        from great_docs._checks.lint import _check_page_descriptions
 
         result = LintResult()
         _check_page_descriptions(self._project(tmp_path, **kwargs), tmp_path, result)
@@ -2158,7 +2160,7 @@ class TestCheckFrontMatter:
     """Warnings for Great Docs front matter values with unsupported types"""
 
     def _issues(self, tmp_path: Path, pages: dict[str, str]) -> list[LintIssue]:
-        from great_docs._lint import _check_front_matter
+        from great_docs._checks.lint import _check_front_matter
         from great_docs.core import GreatDocs
 
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\nversion = "1.0"\n')
