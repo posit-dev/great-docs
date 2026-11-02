@@ -48,6 +48,7 @@ from ._reference import discovery, probe
 from ._reference.discovery import Categories
 from ._remote import HttpRemote, Remote
 from ._subprocess import TEXT_MODE_KWARGS
+from ._term_player import prerender as term_prerender
 from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
 from ._utils import (
     GITIGNORE_CONTENT,
@@ -8823,82 +8824,31 @@ body-classes: "gd-homepage"
             partials.append("metadata.html")
         html_config["template-partials"] = partials
 
-    def _prerender_term_player(self, log) -> None:
+    def _prerender_term_player(self, log: "BuildLog") -> None:
         """
-        Pre-render `.termshow` recordings for the Quarto shortcode
-
-        Render recordings from the source directory as SVG keyframes, a
-        `manifest.json` and a transcript (`_transcript.md`), applying companion
-        `.termshow.yml` scripts when present.
-        Write output to `<build directory>/termshow/<relative path without suffix>/`.
-        Paths are relative to the source directory, so recordings with the same name
-        in different directories have separate output directories.
+        Render the source directory's `.termshow` recordings for the `termshow` shortcode
 
         Parameters
         ----------
-        log :
-            Build logger that receives progress and warning messages.
+        log
+            Build logger for warnings about failed recordings and a summary of
+            successful renders, if any.
         """
-
-        # Find all .termshow files in the project root (they live outside
-        # great-docs/ since that directory is ephemeral)
-        termshow_files = []
-        for f in self.layout.source_dir.rglob("*.termshow"):
-            rel = f.relative_to(self.layout.source_dir)
-            # Skip files inside great-docs/ or _site/
-            if rel.parts[0] in ("great-docs", "_site", "_quarto"):
-                continue
-            termshow_files.append(f)
-        if not termshow_files:
-            return
-
-        from great_docs._term_player import (
-            apply_script,
-            generate_manifest,
-            parse_termshow,
+        source_dir = self.layout.source_dir
+        recordings = term_prerender.find_recordings(
+            source_dir,
+            self.layout.generated_dirs(),
+            prune_non_doc=source_dir == self.layout.package_root,
         )
-        from great_docs._term_player.script import load_script
-        from great_docs._term_player.transcript import write_transcript
-
-        rendered_count = 0
-        manifest_bytes = 0
-        for ts_file in termshow_files:
-            rel_stem = ts_file.relative_to(self.layout.source_dir).with_suffix("")
-            # Output into the great-docs project directory (Quarto project)
-            output_dir = self.build_dir / "termshow" / rel_stem
-
-            try:
-                original = recording = parse_termshow(str(ts_file))
-
-                # Apply script if companion .termshow.yml exists
-                script = None
-                script_file = ts_file.with_suffix(".termshow.yml")
-                if script_file.exists():
-                    script = load_script(str(script_file))
-                    recording = apply_script(recording, script)
-
-                manifest = generate_manifest(
-                    recording,
-                    script=script,
-                    output_dir=str(output_dir),
-                    keyframe_interval=2.0,
-                )
-                # The text of the recording, which the shortcode embeds for screen
-                # readers and the page's Markdown version shows
-                write_transcript(original, script, output_dir)
-                rendered_count += 1
-                manifest_bytes += manifest.stats.manifest_bytes
-            except Exception as e:
-                log.warn(f"termshow: failed to render {rel_stem.as_posix()}.termshow: {e}")
-
-        if rendered_count:
+        done = term_prerender.render_recordings(
+            recordings, source_dir, self.build_dir, report=log.warn
+        )
+        if done.count:
             log.detail(
-                f"Pre-rendered {rendered_count} terminal recording(s) "
-                f"({manifest_bytes / 1024:.0f} KB of player data)"
+                f"Pre-rendered {done.count} terminal recording(s) "
+                f"({done.manifest_bytes / 1024:.0f} KB of player data)"
             )
-            # Register termshow output as a Quarto resource so it gets
-            # copied to _site/
-            self._add_project_resources(["termshow/**"], [])
+            self._add_project_resources([f"{term_prerender.OUTPUT_ROOT}/**"], [])
 
     def _generate_seo_files(self) -> None:
         """

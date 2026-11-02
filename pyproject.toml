@@ -199,6 +199,7 @@ include = [
     "great_docs/_remote.py",
     "great_docs/_source_refs.py",
     "great_docs/_subprocess.py",
+    "great_docs/_term_player/prerender.py",
     "great_docs/_translations.py",
     "great_docs/_typer_cli.py",
     "great_docs/_website",

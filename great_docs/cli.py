@@ -4115,41 +4115,16 @@ def term_render(source: str, output_dir: str | None, interval: float, script: st
     produces SVG keyframes + a manifest.json for the player, along with
     the recording's transcript (_transcript.md).
     """
-    from ._term_player import apply_script, generate_manifest, parse_asciicast, parse_termshow
-    from ._term_player.script import load_script
-    from ._term_player.transcript import write_transcript
+    from ._term_player.prerender import load_recording, render_recording
+    from ._term_player.prerender import output_dir as recording_output_dir
 
     source_path = Path(source)
-
-    # Parse recording
-    if source_path.suffix == ".cast":
-        recording = parse_asciicast(source_path)
-    else:
-        recording = parse_termshow(source_path)
-
-    # Load and apply script
-    script_obj = None
-    if script:
-        script_obj = load_script(script)
-    else:
-        # Auto-detect script file
-        script_path = source_path.with_suffix(".termshow.yml")
-        if script_path.exists():
-            script_obj = load_script(script_path)
-
-    original = recording
-    if script_obj:
-        recording = apply_script(recording, script_obj)
-
-    # Determine output directory
+    recording, script_obj = load_recording(source_path, Path(script) if script else None)
     if output_dir is None:
-        output_dir = str(source_path.parent / "termshow" / source_path.stem)
-
-    # Generate manifest and frames
-    manifest = generate_manifest(
-        recording, script_obj, output_dir=output_dir, keyframe_interval=interval
-    )
-    write_transcript(original, script_obj, output_dir)
+        # The shortcode's fallback expects output beside the recording in
+        # `termshow/<name>/`.
+        output_dir = str(recording_output_dir(source_path, source_path.parent, source_path.parent))
+    manifest = render_recording(recording, script_obj, Path(output_dir), keyframe_interval=interval)
 
     stats = manifest.stats
     click.echo(
@@ -4244,23 +4219,18 @@ def term_play(source: str, speed: float, script: str | None, no_script: bool) ->
       great-docs termshow play demos/install.termshow
       great-docs termshow play demos/install.termshow --speed 2
     """
-    from ._term_player import apply_script, parse_asciicast, parse_termshow
+    from ._term_player import apply_script
     from ._term_player.playback import play_recording
-    from ._term_player.script import load_script
+    from ._term_player.prerender import load_recording
 
     if speed <= 0:
         raise click.BadParameter("must be greater than 0", param_hint="--speed")
 
-    source_path = Path(source)
-    if source_path.suffix == ".cast":
-        recording = parse_asciicast(source_path)
-    else:
-        recording = parse_termshow(source_path)
-
-    if not no_script:
-        script_path = Path(script) if script else source_path.with_suffix(".termshow.yml")
-        if script_path.exists():
-            recording = apply_script(recording, load_script(script_path))
+    recording, script_obj = load_recording(
+        Path(source), Path(script) if script else None, use_script=not no_script
+    )
+    if script_obj is not None:
+        recording = apply_script(recording, script_obj)
 
     try:
         play_recording(recording, speed=speed)
@@ -4394,6 +4364,7 @@ def term_export(
     from ._term_player import apply_script, generate_manifest
     from ._term_player.bundle import BUNDLE_SUFFIX
     from ._term_player.export import SIZE_WARNING_BYTES, export_svg, picture_snippet
+    from ._term_player.prerender import load_recording
     from ._term_player.video import VIDEO_FORMATS
 
     # The file extension of each format, and the format of each extension
@@ -4434,7 +4405,9 @@ def term_export(
         raise click.BadParameter("must be more than 0", param_hint="--max-idle")
 
     source_path = Path(source)
-    recording, script_obj = _load_term_source(source_path, script, no_script)
+    recording, script_obj = load_recording(
+        source_path, Path(script) if script else None, use_script=not no_script
+    )
 
     out_path = Path(output) if output else source_path.with_suffix(f".{extensions.get(fmt, fmt)}")
     if fmt == "cast":
@@ -4556,24 +4529,6 @@ def _export_bundle(recording, script, out_path: Path) -> None:
     click.echo(f'\nPlay it with <termshow-player src="{out_path.name}"></termshow-player>')
 
 
-def _load_term_source(source_path: Path, script: str | None, no_script: bool):
-    """Read a .cast or .termshow recording and its script (None with --no-script, or when
-    there's no script). The script isn't applied."""
-    from ._term_player import parse_asciicast, parse_termshow
-    from ._term_player.script import load_script
-
-    if source_path.suffix == ".cast":
-        recording = parse_asciicast(source_path)
-    else:
-        recording = parse_termshow(source_path)
-    script_obj = None
-    if not no_script:
-        script_path = Path(script) if script else source_path.with_suffix(".termshow.yml")
-        if script_path.exists():
-            script_obj = load_script(script_path)
-    return recording, script_obj
-
-
 def _export_cast(recording, script, source_path: Path, out_path: Path, *, version: int) -> None:
     """Write `termshow export --cast`'s file and report what went into it."""
     from ._term_player.cast import export_asciicast, left_out
@@ -4664,6 +4619,7 @@ def term_snap(
     """
     from ._term_player import apply_script, generate_manifest
     from ._term_player.export import picture_snippet
+    from ._term_player.prerender import load_recording
     from ._term_player.snap import SnapError, rasterize, snap_svg, snap_time
 
     if sum([at is not None, chapter is not None, end]) > 1:
@@ -4684,7 +4640,9 @@ def term_snap(
         raise click.BadParameter("must be more than 0", param_hint="--scale")
 
     source_path = Path(source)
-    recording, script_obj = _load_term_source(source_path, script, no_script)
+    recording, script_obj = load_recording(
+        source_path, Path(script) if script else None, use_script=not no_script
+    )
     if script_obj is not None:
         recording = apply_script(recording, script_obj)
     manifest = generate_manifest(recording, script_obj)
@@ -4771,10 +4729,13 @@ def term_transcript(
       great-docs termshow transcript demos/install.termshow -o install.md
       great-docs termshow transcript demos/install.termshow --vtt -o install.vtt
     """
+    from ._term_player.prerender import load_recording
     from ._term_player.transcript import transcript_markdown, transcript_vtt
 
     source_path = Path(source)
-    recording, script_obj = _load_term_source(source_path, script, no_script)
+    recording, script_obj = load_recording(
+        source_path, Path(script) if script else None, use_script=not no_script
+    )
     if fmt == "markdown":
         text = transcript_markdown(recording, script_obj)
         empty = "The recording shows no text." if not text else ""

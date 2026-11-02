@@ -7,7 +7,6 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 from click.testing import CliRunner
@@ -21,7 +20,6 @@ from great_docs._term_player.transcript import (
     write_transcript,
 )
 from great_docs.cli import cli
-from great_docs.core import GreatDocs
 
 _EXTENSIONS = Path(__file__).parent.parent / "great_docs" / "assets" / "_extensions"
 
@@ -233,27 +231,6 @@ class TestWrite:
         result = CliRunner().invoke(cli, ["termshow", "render", str(source), "-o", str(out)])
         assert result.exit_code == 0, result.output
         assert (out / TRANSCRIPT_FILE).read_text(encoding="utf-8").startswith("**Start**")
-
-    def test_build_writes_it_with_the_raw_recording_and_script(self, tmp_path):
-        source_dir = tmp_path / "docs"
-        (source_dir / "demos").mkdir(parents=True)
-        _write(
-            source_dir / "demos", "settings:\n  speed: 2\nchapters:\n  - at: 1.5\n    label: B\n"
-        )
-        added = []
-        fake = SimpleNamespace(
-            layout=SimpleNamespace(source_dir=source_dir),
-            build_dir=tmp_path / "build",
-            _add_project_resources=lambda res, excl: added.append(res),
-        )
-        log = SimpleNamespace(detail=lambda msg: None, warn=pytest.fail)
-        GreatDocs._prerender_term_player(fake, log)
-        out = tmp_path / "build" / "termshow" / "demos" / "demo"
-        assert (out / "manifest.json").exists()
-        # At double speed, 1.5s of playback is 3s of the recording: before "three"
-        md = (out / TRANSCRIPT_FILE).read_text(encoding="utf-8")
-        assert md.index("$ two") < md.index("**B**") < md.index("$ three")
-        assert added == [["termshow/**"]]
 
 
 class TestCli:

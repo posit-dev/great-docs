@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import tempfile
@@ -13,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from .._build import quarto
+from .._content.walk import find_files
 
 if TYPE_CHECKING:
     from .._layout import Layout
@@ -538,19 +538,6 @@ def _run_page(
 # ---------------------------------------------------------------------------
 
 
-def _generated_dirs(layout: Layout) -> list[Path]:
-    # Build output, rendered site, freeze and cache directories hold generated
-    # copies of pages; checking them would duplicate (or fabricate) results
-    dirs = [layout.build_dir, layout.site_dir, layout.freeze_dir, layout.cache_dir]
-    if layout.source_dir == layout.package_root:
-        # Historical version builds sit beside `great-docs/` as `great-docs-<tag>/`
-        dirs.extend(layout.package_root.glob(f"{layout.build_dir.name}-*"))
-    else:
-        # `_quarto/` holds the default build and every historical version build
-        dirs.append(layout.build_dir.parent)
-    return [d.resolve() for d in dirs]
-
-
 def _page_label(path: Path, project_root: Path, layout: Layout | None = None) -> str:
     # Labels are relative to the documentation source directory so that page
     # paths, sections and include/exclude globs look the same in both layouts
@@ -560,35 +547,6 @@ def _page_label(path: Path, project_root: Path, layout: Layout | None = None) ->
         if path.is_relative_to(base):
             return path.relative_to(base).as_posix()
     return path.as_posix()
-
-
-# Directories in a root-layout project that never hold documentation pages but
-# may hold `.qmd` files (virtualenvs, installed packages, test fixtures)
-_NON_DOC_DIRS = frozenset(
-    {"__pycache__", "node_modules", "site-packages", "build", "dist", "tests", "test"}
-)
-
-
-def _scan_qmd_files(scan_root: Path, prune_non_doc: bool) -> list[Path]:
-    found: list[Path] = []
-    for dirpath, dirnames, filenames in os.walk(scan_root):
-        current = Path(dirpath)
-        # Prune in place so os.walk never descends into these directories
-        dirnames[:] = [
-            d
-            for d in dirnames
-            if not d.startswith(".")
-            and not (
-                prune_non_doc
-                and (
-                    d in _NON_DOC_DIRS
-                    or d.endswith(".egg-info")
-                    or (current / d / "pyvenv.cfg").exists()
-                )
-            )
-        ]
-        found.extend(current / name for name in filenames if name.endswith(".qmd"))
-    return sorted(found)
 
 
 def discover_qmd_files(
@@ -607,13 +565,13 @@ def discover_qmd_files(
             if target.is_file() and target.suffix == ".qmd":
                 targets.append(target)
             elif target.is_dir():
-                targets.extend(_scan_qmd_files(target, prune_non_doc=root_layout))
+                targets.extend(find_files(target, ".qmd", prune_non_doc=root_layout))
         files = targets
     else:
         scan_root = layout.source_dir if layout is not None else project_root
-        files = _scan_qmd_files(scan_root, prune_non_doc=root_layout)
+        files = find_files(scan_root, ".qmd", prune_non_doc=root_layout)
 
-    generated = _generated_dirs(layout) if layout is not None else [project_root / "great-docs"]
+    generated = layout.generated_dirs() if layout is not None else [project_root / "great-docs"]
     generated = [d.resolve() for d in generated]
 
     # Exclude build directories and hidden directories
