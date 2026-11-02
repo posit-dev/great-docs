@@ -98,6 +98,9 @@ def check(
     pattern is probed with `HEAD` and retried with `GET` on a 405 response. Redirects are
     not followed.
 
+    File reads that raise `OSError` produce a warning through `report`. Requests that raise
+    `requests.RequestException` mark the URL as broken. Other errors propagate.
+
     Parameters
     ----------
     files
@@ -129,14 +132,14 @@ def check(
     for file_path in files:
         try:
             content = file_path.read_text(encoding="utf-8", errors="ignore")
-            urls = _urls_in(content, file_path.suffix)
-            if urls:
-                rel_path = str(file_path.relative_to(root))
-                by_file[rel_path] = urls
-                for url in urls:
-                    url_to_files.setdefault(url, []).append(rel_path)
-        except Exception as e:
+        except OSError as e:
             report(f"Warning: Could not read {file_path}: {e}")
+            continue
+        if urls := _urls_in(content, file_path.suffix):
+            rel_path = str(file_path.relative_to(root))
+            by_file[rel_path] = urls
+            for url in urls:
+                url_to_files.setdefault(url, []).append(rel_path)
 
     ok: list[str] = []
     redirects: list[dict[str, Any]] = []
@@ -264,7 +267,7 @@ def _probe(url: str, timeout: float) -> _Probe:
     -------
     :
         A probe result with `kind` set to `ok` for a 2xx response, `redirects` for a 3xx
-        response, or `broken` for any other status or a failed request.
+        response, or `broken` for any other status or a `requests.RequestException`.
     """
     try:
         response = requests.head(url, timeout=timeout, allow_redirects=False, headers=_HEADERS)
@@ -287,5 +290,5 @@ def _probe(url: str, timeout: float) -> _Probe:
         return _Probe("broken", f"🔐 SSL Error: {url}", error=f"SSL Error: {str(e)[:50]}")
     except requests.exceptions.ConnectionError:
         return _Probe("broken", f"🔌 Connection failed: {url}", error="Connection failed")
-    except Exception as e:
+    except requests.RequestException as e:
         return _Probe("broken", f"⚠️  Error: {url} - {e}", error=str(e)[:100])

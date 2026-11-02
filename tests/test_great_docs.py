@@ -21218,27 +21218,6 @@ def test_check_links_invalid_regex_pattern():
         # Should not crash
 
 
-def test_check_links_generic_exception():
-    """Test check_links handles generic exceptions."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-        (ug_dir / "exc.qmd").write_text(
-            "---\ntitle: Exc\n---\n\nhttps://generic-error.example.com/\n",
-            encoding="utf-8",
-        )
-
-        with patch(
-            "requests.head",
-            side_effect=RuntimeError("weird error"),
-        ):
-            result = docs.check_links(include_source=False, include_docs=True)
-
-        assert len(result["broken"]) >= 1
-
-
 @pytest.mark.parametrize(
     ("method", "title", "error"),
     [
