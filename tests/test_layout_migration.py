@@ -14,7 +14,7 @@ from great_docs._layout_migration import analyse
 from great_docs._layout_migration.model import MigrationError, Move, Note, fingerprint
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs.cli import _print_notes, cli
-from tests.support import make_run
+from tests.support import discover_user_guide, make_run
 
 
 def test_note_behaves_as_its_message_string() -> None:
@@ -1776,7 +1776,7 @@ def test_migrated_shared_asset_is_staged_under_the_build(project: Path) -> None:
         move.source.rename(move.destination)
     gd = GreatDocs(str(project))
     gd._prepare_build_directory(make_run())
-    gd._copy_user_guide_to_docs(gd._discover_user_guide())
+    gd._publish_user_guide(discover_user_guide(gd))
     page = gd.build_dir / "user-guide/start.qmd"
     assert "![Chart](../_shared/assets/chart.png)" in page.read_text()
     assert (gd.build_dir / "_shared/assets/chart.png").read_bytes() == b"chart"

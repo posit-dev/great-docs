@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from great_docs._content import publish
+from great_docs._content import publish, user_guide
 from great_docs._content.pages import PageMap
 from great_docs._layout import Layout
 from tests.support import write_config
@@ -15,8 +15,10 @@ def layout(tmp_path: Path) -> Layout:
     return Layout.make(tmp_path)
 
 
-def page_map(root: Path, layout: Layout, guide: Path | None = None) -> PageMap:
-    return PageMap.make(write_config(root), layout, guide, [])
+def page_map(root: Path, layout: Layout) -> PageMap:
+    config = write_config(root)
+    guide = user_guide.discover(config, layout, report=print)
+    return PageMap.make(config, layout, guide, [])
 
 
 def test_copy_asset_keeps_an_identical_copy(tmp_path: Path, layout: Layout):
@@ -97,7 +99,7 @@ def test_a_link_to_a_page_points_at_its_published_path(tmp_path: Path, layout: L
         guide / "01-start.qmd",
         layout.build_dir / "user-guide/start.qmd",
         layout=layout,
-        pages=page_map(tmp_path, layout, guide),
+        pages=page_map(tmp_path, layout),
     )
 
     assert result == "[Next](next.qmd#more)"
@@ -154,7 +156,7 @@ def test_a_page_is_written_with_its_includes_and_rebased_links(tmp_path: Path, l
         source,
         destination,
         layout=layout,
-        pages=page_map(tmp_path, layout, guide),
+        pages=page_map(tmp_path, layout),
         add_dates=stamp,
         strip_prefix=True,
         breadcrumbs=False,

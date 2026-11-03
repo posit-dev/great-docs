@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
+from great_docs._checks import proofread as proofreading
 from great_docs._checks.harper import (
     HarperError,
     HarperFileResult,
@@ -655,3 +656,56 @@ def test_run_harper_only_rules_extends_cmd(mock_run):
     assert "--only" in cmd
     idx = cmd.index("--only")
     assert cmd[idx + 1] == "spelling,grammar"
+
+
+GUIDE_DIRECTORIES = pytest.mark.parametrize(
+    ("settings", "directory"),
+    [("user_guide: guides\n", "guides"), ("", "user-guide")],
+    ids=["configured", "hyphenated"],
+)
+
+
+@GUIDE_DIRECTORIES
+def test_proofread_reads_the_guide_directory_the_build_uses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, settings: str, directory: str
+):
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    (tmp_path / "great-docs.yml").write_text(settings)
+    (tmp_path / directory).mkdir()
+    (tmp_path / directory / "page.qmd").write_text("# Page\n")
+    checked: list[Path] = []
+
+    def check(files: list[Path], *args: object, **kwargs: object) -> list[object]:
+        checked.extend(files)
+        return []
+
+    monkeypatch.setattr(proofreading, "check", check)
+
+    GreatDocs(project_path=tmp_path).proofread()
+
+    assert checked == [tmp_path / directory / "page.qmd"]
+
+
+@GUIDE_DIRECTORIES
+def test_proofread_command_reads_the_guide_directory_the_build_uses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, settings: str, directory: str
+):
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    (tmp_path / "great-docs.yml").write_text(settings)
+    (tmp_path / directory).mkdir()
+    (tmp_path / directory / "page.qmd").write_text("# Page\n")
+    checked: list[Path] = []
+
+    def check(files: list[Path], *args: object, **kwargs: object) -> list[object]:
+        checked.extend(files)
+        return []
+
+    monkeypatch.setattr(proofreading, "check", check)
+    monkeypatch.setattr(
+        "great_docs._checks.harper.check_harper_available", lambda: (True, "harper-cli")
+    )
+
+    result = CliRunner().invoke(cli, ["proofread", "--project-path", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert checked == [tmp_path / directory / "page.qmd"]

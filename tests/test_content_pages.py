@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from great_docs._content import user_guide
 from great_docs._content.pages import PageMap, output_destination, section_destination
 from great_docs._layout import Layout
 from tests.support import write_config
@@ -57,20 +58,21 @@ def test_homepage_sources_publish_as_the_homepage(tmp_path: Path, layout: Layout
 
 
 def test_an_automatic_user_guide_drops_numeric_prefixes(tmp_path: Path, layout: Layout):
-    guide = tmp_path / "user_guide"
-    page = write_page(guide / "01-basics/02-setup.qmd")
+    page = write_page(tmp_path / "user_guide/01-basics/02-setup.qmd")
+    config = write_config(tmp_path)
+    guide = user_guide.discover(config, layout, report=print)
 
-    pages = PageMap.make(write_config(tmp_path), layout, guide, [])
+    pages = PageMap.make(config, layout, guide, [])
 
     assert pages.destination(page.resolve()) == layout.build_dir / "user-guide/basics/setup.qmd"
 
 
 def test_an_explicit_user_guide_keeps_its_file_names(tmp_path: Path, layout: Layout):
-    guide = tmp_path / "user_guide"
-    page = write_page(guide / "01-basics/02-setup.qmd")
+    page = write_page(tmp_path / "user_guide/01-basics/02-setup.qmd")
     config = write_config(
         tmp_path, {"user_guide": [{"section": "Basics", "contents": ["01-basics/02-setup.qmd"]}]}
     )
+    guide = user_guide.discover(config, layout, report=print)
 
     pages = PageMap.make(config, layout, guide, [])
 

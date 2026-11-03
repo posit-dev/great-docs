@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
     from .._layout import Layout
     from ..config import Config
+    from .user_guide import UserGuide
 
 
 def output_destination(layout: Layout, output: str) -> Path:
@@ -111,7 +112,7 @@ class PageMap:
 
     @classmethod
     def make(
-        cls, config: Config, layout: Layout, guide: Path | None, homepage: Iterable[Path]
+        cls, config: Config, layout: Layout, guide: UserGuide | None, homepage: Iterable[Path]
     ) -> PageMap:
         """
         Map a project's user guide, sections and custom pages to their published paths
@@ -123,7 +124,7 @@ class PageMap:
         layout
             The project's directories.
         guide
-            The user guide's source directory, or `None` when the project has none.
+            The user guide, or `None` when the project has no guide pages.
         homepage
             The sources that publish as the homepage.
 
@@ -138,9 +139,9 @@ class PageMap:
         if guide is not None:
             roots.append(
                 PageRoot(
-                    guide.resolve(),
+                    guide["source_dir"].resolve(),
                     layout.build_dir / "user-guide",
-                    not config.user_guide_is_explicit,
+                    not guide.get("explicit", False),
                 )
             )
         for entry in cast("list[object]", config.sections or []):

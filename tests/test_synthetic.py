@@ -33,7 +33,7 @@ from great_docs._content import code_includes
 from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import discover_exports, parse_dunder_all
 from great_docs._reference.probe import detect_docstring_style
-from tests.support import make_run, write_config
+from tests.support import discover_user_guide, make_run, write_config
 
 # ── Setup: make test-packages/synthetic importable ───────────────────────────
 
@@ -855,7 +855,7 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     docs._update_sidebar_with_cli(cli_files)
 
     # Process user guide
-    docs._process_user_guide(run.has_api_reference)
+    docs._process_user_guide(run.user_guide, run.has_api_reference)
 
     quarto_yml = docs.build_dir / "_quarto.yml"
     with open(quarto_yml, encoding="utf-8") as f:
@@ -983,7 +983,7 @@ def _setup_blended_homepage(pkg_dir: Path, spec: dict) -> GreatDocs:
 
     run = make_run()
     docs._prepare_build_directory(run)
-    docs._process_user_guide(run.has_api_reference)
+    docs._process_user_guide(run.user_guide, run.has_api_reference)
     return docs
 
 
@@ -1191,10 +1191,10 @@ def test_L3_code_include_expansion(tmp_path: Path):
     docs.install(force=True)
     docs._prepare_build_directory(make_run())
 
-    ug_info = docs._discover_user_guide()
+    ug_info = discover_user_guide(docs)
     assert ug_info is not None
 
-    docs._copy_user_guide_to_docs(ug_info)
+    docs._publish_user_guide(ug_info)
 
     built = docs.build_dir / "user-guide" / "includes.qmd"
     assert built.exists(), "includes.qmd not found in build dir"

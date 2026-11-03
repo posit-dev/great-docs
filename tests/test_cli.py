@@ -25,6 +25,7 @@ from great_docs.cli import (
     _print_timing_table,
     cli,
 )
+from tests.support import mock_config
 
 
 @pytest.fixture(autouse=True)
@@ -583,6 +584,25 @@ def test_freeze_info_reads_selected_sources_and_cache(tmp_path: Path) -> None:
     assert "website/_freeze" in result.output
     assert "demo.qmd" in result.output
     assert "auto" in result.output
+
+
+@pytest.mark.parametrize(
+    ("settings", "directory"),
+    [("user_guide: guides\n", "guides"), ("", "user-guide")],
+    ids=["configured", "hyphenated"],
+)
+def test_freeze_info_reads_the_guide_directory_the_build_uses(
+    tmp_path: Path, settings: str, directory: str
+):
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    (tmp_path / "great-docs.yml").write_text(settings)
+    (tmp_path / directory).mkdir()
+    (tmp_path / directory / "demo.qmd").write_text("---\nfreeze: true\n---\n")
+
+    result = CliRunner().invoke(cli, ["freeze", "--project-path", str(tmp_path), "--info"])
+
+    assert result.exit_code == 0, result.output
+    assert f"{directory}/demo.qmd  (freeze: true)" in result.output
 
 
 def test_build_command_uses_selected_config(
@@ -2522,9 +2542,7 @@ class TestPrintTimingTable:
 
 class TestFreezeInfo:
     def _make_mock_config(self, freeze_value=None):
-        cfg = MagicMock()
-        cfg.freeze = freeze_value
-        return cfg
+        return mock_config(freeze=freeze_value)
 
     def test_no_freeze_cache_dir(self, tmp_path, capsys):
         persist_dir = tmp_path / "_freeze"

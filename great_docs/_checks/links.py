@@ -52,7 +52,7 @@ class _Probe:
     """Why the URL counts as broken"""
 
 
-def find_pages(layout: Layout) -> list[Path]:
+def find_pages(layout: Layout, guide_dir: Path | None) -> list[Path]:
     """
     Find the documentation pages to check
 
@@ -60,17 +60,18 @@ def find_pages(layout: Layout) -> list[Path]:
     ----------
     layout
         The project's paths.
+    guide_dir
+        The user guide's source directory, or `None` when the project has none.
 
     Returns
     -------
     :
-        The `.qmd` files followed by the `.md` files under the source `user_guide/`
-        directory, or under the build directory if no source user guide exists. An existing
+        The `.qmd` files followed by the `.md` files under the user guide directory, or under
+        the build directory if the project has no user guide directory. An existing
         `README.md` in the package root comes last.
     """
     pages: list[Path] = []
-    guide_dir = layout.source_dir / "user_guide"
-    pages_dir = guide_dir if guide_dir.exists() else layout.build_dir
+    pages_dir = guide_dir if guide_dir is not None else layout.build_dir
     if pages_dir.exists():
         pages.extend(pages_dir.rglob("*.qmd"))
         pages.extend(pages_dir.rglob("*.md"))

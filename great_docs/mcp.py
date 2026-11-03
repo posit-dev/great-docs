@@ -35,8 +35,10 @@ from pydantic import AnyUrl
 
 from ._build import outputs
 from ._build.steps import BuildError
+from ._content import user_guide
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, LayoutError
 from ._utils import is_in_great_docs_build_dir, recognised_build_dirs
+from .config import Config
 
 server = Server("great-docs")
 
@@ -707,7 +709,8 @@ async def _handle_add_page(arguments: dict) -> list[TextContent]:
     filename = arguments.get("filename")
     content = arguments.get("content", "")
 
-    root = _get_layout(arguments).source_dir
+    layout = _get_layout(arguments)
+    root = layout.source_dir
 
     # Derive filename from title if not provided
     if not filename:
@@ -717,7 +720,13 @@ async def _handle_add_page(arguments: dict) -> list[TextContent]:
 
     # Determine target directory
     if section == "user_guide":
-        target_dir = root / "user_guide"
+        config = Config(
+            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
+        )
+        # A configured directory that does not exist yet receives the page
+        target_dir = user_guide.find_dir(config, layout, report=lambda _: None) or root / (
+            config.user_guide_dir or "user_guide"
+        )
     elif section == "recipes":
         target_dir = root / "recipes"
     else:
