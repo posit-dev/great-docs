@@ -24,6 +24,9 @@ if TYPE_CHECKING:
 
 __all__ = ["CheckedFile", "Options", "check", "find_modules", "find_pages"]
 
+# Package directories searched by the build, relative to the package root
+_PACKAGE_DIRS = ("src", "python", "lib")
+
 
 @dataclass(frozen=True)
 class Options:
@@ -96,14 +99,14 @@ def find_pages(layout: Layout, guide_dir: Path | None) -> list[Path]:
     return pages
 
 
-def find_modules(root: Path, module: str) -> list[Path]:
+def find_modules(layout: Layout, module: str) -> list[Path]:
     """
-    Find the Python files of an importable module
+    Find the Python files of an importable module in the project
 
     Parameters
     ----------
-    root
-        The project root containing the module directory.
+    layout
+        The project's paths.
     module
         The importable module name. Dotted names such as `firebird.base` map to nested
         directories.
@@ -111,11 +114,15 @@ def find_modules(root: Path, module: str) -> list[Path]:
     Returns
     -------
     :
-        A list of `.py` files found recursively under the module directory, or an empty
-        list if that directory does not exist.
+        The `.py` files found recursively under the first matching module directory, or an
+        empty list if no directory matches. The search starts at the package root, then
+        tries its `src/`, `python/` and `lib/` directories, as the build does.
     """
-    module_dir = root.joinpath(*module.split("."))
-    return list(module_dir.rglob("*.py")) if module_dir.exists() else []
+    for root in (layout.package_root, *(layout.package_root / name for name in _PACKAGE_DIRS)):
+        module_dir = root.joinpath(*module.split("."))
+        if module_dir.is_dir():
+            return list(module_dir.rglob("*.py"))
+    return []
 
 
 def check(

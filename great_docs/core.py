@@ -6239,7 +6239,7 @@ class GreatDocs:
         files: list[Path] = []
         if include_source and (package_name := self._detect_package_name()):
             module = self._resolve_importable_name(package_name)
-            files += proofread.find_modules(self.project_root, module)
+            files += proofread.find_modules(self.layout, module)
         if include_docs:
             guide_dir = user_guide.find_dir(self._config, self.layout, report=_print_warning)
             files += links.find_pages(self.layout, guide_dir)
@@ -6352,7 +6352,7 @@ class GreatDocs:
             files = proofread.find_pages(self.layout, guide_dir)
         if include_docstrings and (package_name := self._detect_package_name()):
             module = self._resolve_importable_name(package_name)
-            files += proofread.find_modules(self.project_root, module)
+            files += proofread.find_modules(self.layout, module)
 
         options = proofread.Options(
             dialect=dialect,

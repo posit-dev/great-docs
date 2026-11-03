@@ -709,3 +709,23 @@ def test_proofread_command_reads_the_guide_directory_the_build_uses(
 
     assert result.exit_code == 0, result.output
     assert checked == [tmp_path / directory / "page.qmd"]
+
+
+@pytest.mark.parametrize("directory", ["src", "python", "lib"])
+def test_proofread_reads_docstrings_where_the_build_loads_the_package(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, directory: str
+):
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    (tmp_path / directory / "demo").mkdir(parents=True)
+    (tmp_path / directory / "demo" / "__init__.py").write_text('"""A demo"""\n')
+    checked: list[Path] = []
+
+    def check(files: list[Path], *args: object, **kwargs: object) -> list[object]:
+        checked.extend(files)
+        return []
+
+    monkeypatch.setattr(proofreading, "check", check)
+
+    GreatDocs(project_path=tmp_path).proofread(include_docs=False, include_docstrings=True)
+
+    assert checked == [tmp_path / directory / "demo" / "__init__.py"]
