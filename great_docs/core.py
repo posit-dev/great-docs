@@ -10,8 +10,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlsplit, urlunsplit
 
-from yaml12 import format_yaml
-
 from . import _marimo
 from ._build import freeze, outputs, quarto, serve, timings
 from ._build.pipeline import Run
@@ -33,15 +31,12 @@ from ._checks.proofread import CheckedFile
 from ._cliref import click as cli_click
 from ._cliref import render as cli_render
 from ._cliref.model import CliCommand
-from ._content import publish, sections, user_guide
+from ._content import custom_pages, publish, sections, user_guide
 from ._content.naming import (
     published_path,
-    title_from_name,
 )
-from ._content.pages import PageMap, output_destination, section_destination
-from ._content.sections import source_dirs as section_source_dirs
+from ._content.pages import PageMap, section_destination
 from ._content.user_guide import UserGuide
-from ._contribution import NavbarLink
 from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import Layout
@@ -85,7 +80,6 @@ from ._website.scripts import script_include, stylesheet_include
 from ._website.seo import description as seo_description
 from ._website.seo import site_files
 from ._website.seo.structured_data import StructuredData
-from ._yaml import YamlMapping, split_front_matter
 from .config import Config, create_default_config
 
 if TYPE_CHECKING:
@@ -1263,59 +1257,6 @@ class GreatDocs:
     # Custom Static Pages Methods
     # =========================================================================
 
-    def _get_custom_page_sources(self) -> list[dict[str, Path | str]]:
-        """Return configured custom page source directories that exist."""
-        sources: list[dict[str, Path | str]] = []
-        is_default = self._config["custom_pages"] is None
-        claimed = section_source_dirs(self._config, self.layout)
-
-        for entry in self._config.custom_pages:
-            output_destination(self.layout, entry["output"])
-            source_dir = self.layout.source_dir / entry["dir"]
-            if not source_dir.exists() or not source_dir.is_dir():
-                if entry["dir"] != "custom" or self._config.exists():
-                    print(f"   ⚠️  Custom pages directory '{entry['dir']}' not found, skipping")
-                continue
-            # The default `custom/` yields to a section; an explicit claim fails validation.
-            if is_default and source_dir.resolve() in claimed:
-                continue
-
-            sources.append(
-                {
-                    "source_dir": source_dir,
-                    "output": entry["output"],
-                }
-            )
-
-        return sources
-
-    def _get_custom_page_navbar_config(
-        self,
-        frontmatter: YamlMapping,
-        default_title: str,
-    ) -> tuple[str, str | None] | None:
-        """Resolve optional navbar configuration for a custom page."""
-        navbar = frontmatter.get("navbar")
-        navbar_after = frontmatter.string("navbar_after")
-
-        if navbar in (None, False):
-            return None
-
-        if navbar is True:
-            return default_title, navbar_after
-
-        if isinstance(navbar, str):
-            return navbar, navbar_after
-
-        if isinstance(navbar, dict):
-            navbar = YamlMapping(navbar)
-            text = navbar.get("text", default_title)
-            after = navbar.get("after", navbar_after)
-            if isinstance(text, str) and text:
-                return text, after if isinstance(after, str) else None
-
-        return None  # pragma: no cover
-
     def _add_project_resources(
         self,
         resources_to_add: list[str],
@@ -1363,107 +1304,39 @@ class GreatDocs:
         :
             The number of pages processed.
         """
-        sources = self._get_custom_page_sources()
+        report = _print_warning
+        sources = custom_pages.find_sources(self._config, self.layout, report=report)
         if not sources:
             return 0
 
-        resources_to_add: list[str] = []
-        raw_render_excludes: list[str] = []
-        processed = 0
-        canonical_base_url = self._get_canonical_base_url()
-        card_image_url = (
-            self._resolve_social_card_image_url() if self._config.social_cards_enabled else None
+        head = custom_pages.RawPageHead(
+            base_url=self._get_canonical_base_url(),
+            card_image_url=(
+                self._resolve_social_card_image_url() if self._config.social_cards_enabled else None
+            ),
+            structured_data=self._structured_data(),
+            site_name=self._get_site_name(),
+            default_description=self._default_description(),
         )
-        structured_data = self._structured_data()
-        pages = self._page_map(guide)
-
-        for source in sources:
-            source_dir = source["source_dir"]
-            output_prefix = str(source["output"])
-            dest_dir = output_destination(self.layout, output_prefix)
-            dest_dir.mkdir(parents=True, exist_ok=True)
-
-            for src_path in sorted(source_dir.rglob("*")):
-                if not src_path.is_file():
-                    continue
-
-                rel_path = src_path.relative_to(source_dir)
-                dest_path = dest_dir / rel_path
-                output_rel_path = Path(output_prefix) / rel_path
-                dest_path.parent.mkdir(parents=True, exist_ok=True)
-
-                if src_path.suffix.lower() not in (".html", ".htm"):
-                    shutil.copy2(src_path, dest_path)
-                    resources_to_add.append(output_rel_path.as_posix())
-                    continue
-
-                content = src_path.read_text(encoding="utf-8")
-                content = publish.rebase_references(
-                    content, src_path, dest_path, layout=self.layout, pages=pages
-                )
-                frontmatter, body = split_front_matter(content)
-                body = body.lstrip("\n")
-                layout = (frontmatter.string("layout") or "passthrough").lower()
-                page_title = frontmatter.string("title") or title_from_name(src_path.stem)
-
-                if layout not in {"passthrough", "raw"}:
-                    print(  # pragma: no cover
-                        f"   ⚠️  Unsupported custom page layout '{layout}' in {output_rel_path}; "
-                        "defaulting to passthrough"
-                    )
-                    layout = "passthrough"  # pragma: no cover
-
-                if layout == "raw":
-                    body = page_url.add_to_raw_page(
-                        body, self._config, canonical_base_url, output_rel_path.as_posix()
-                    )
-                    body = i18n.add_to_raw_page(body, self._config)
-                    if self._config.seo_enabled:
-                        body = seo_description.add_to_raw_page(body, self._default_description())
-                    raw_url = None
-                    if canonical_base_url:
-                        raw_url = page_url.address(canonical_base_url, output_rel_path.as_posix())
-                    body = social_cards.add_to_raw_page(
-                        body,
-                        self._config,
-                        site_name=self._get_site_name(),
-                        default=self._default_description(),
-                        url=raw_url,
-                        image_url=card_image_url,
-                    )
-                    if structured_data:
-                        body = structured_data.add_to_raw_page(body, output_rel_path.as_posix())
-                    dest_path.write_text(body, encoding="utf-8")
-                    raw_resource = output_rel_path.as_posix()
-                    resources_to_add.append(raw_resource)
-                    raw_render_excludes.append(raw_resource)
-                    nav_href = raw_resource
-                else:
-                    qmd_path = dest_path.with_suffix(".qmd")
-                    qmd_frontmatter = dict(frontmatter.data)
-                    qmd_frontmatter.pop("layout", None)
-                    qmd_frontmatter.setdefault("title", page_title)
-                    qmd_frontmatter.setdefault("bread-crumbs", False)
-                    qmd_body = body if body.endswith("\n") else f"{body}\n"
-                    qmd_content = f"---\n{format_yaml(qmd_frontmatter)}\n---\n\n{qmd_body}"
-                    qmd_content = page_dates.add_to_page(
-                        qmd_content, src_path, self._config, self._page_authors
-                    )
-                    qmd_path.write_text(qmd_content, encoding="utf-8")
-                    nav_href = output_rel_path.with_suffix(".qmd").as_posix()
-
-                navbar_cfg = self._get_custom_page_navbar_config(frontmatter, page_title)
-                if navbar_cfg is not None:
-                    nav_text, navbar_after = navbar_cfg
-                    quarto_config = quarto_yml.read(self.build_dir, seed_website=True)
-                    link = NavbarLink(text=nav_text, href=nav_href)
-                    if nav_navbar.add_link(quarto_config, link, after=navbar_after):
-                        quarto_yml.write(self.build_dir, quarto_config, self._config)
-
-                processed += 1
-
-        self._add_project_resources(resources_to_add, raw_render_excludes)
-        return processed
+        published = custom_pages.publish(
+            sources,
+            config=self._config,
+            layout=self.layout,
+            pages=self._page_map(guide),
+            head=head,
+            add_dates=partial(
+                page_dates.add_to_page, config=self._config, authors=self._page_authors
+            ),
+            report=report,
+        )
+        # A page's `navbar_after` names a label, which a `Contribution` cannot express.
+        # Each link is written before the next is placed, as the write translates labels.
+        for link, after in published.navbar:
+            quarto_config = quarto_yml.read(self.build_dir, seed_website=True)
+            if nav_navbar.add_link(quarto_config, link, after=after):
+                quarto_yml.write(self.build_dir, quarto_config, self._config)
+        self._add_project_resources(published.resources, published.render_excludes)
+        return published.pages
 
     # =========================================================================
     # CLI Documentation Methods

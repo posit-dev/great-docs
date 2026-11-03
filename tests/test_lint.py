@@ -241,7 +241,6 @@ def _mock_docs() -> MagicMock:
     """
     docs = MagicMock()
     docs._config = mock_config(seo_enabled=False, sections=[])
-    docs._get_custom_page_sources.return_value = []
     docs.layout.source_dir = Path("/nonexistent/source")
     docs.layout.package_root = Path("/nonexistent/source")
     # The package documents nothing unless a test lists its documented objects.

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 from .._build.steps import USER_CODE_ERRORS
 from .._builtin.directives import DIRECTIVES
-from .._content import user_guide
+from .._content import custom_pages, user_guide
 from .._interlinks import AliasClaims, LoadedSources, build_index, load_sources
 from .._layout import Layout
 from .._utils import fenced_lines, is_in_great_docs_build_dir, parse_seealso
@@ -1114,15 +1114,20 @@ def _site_page_sources(docs: GreatDocs) -> list[Path]:
     """
     source_dir = docs.layout.source_dir
     directories: list[Path] = []
-    guide_dir = user_guide.find_dir(
-        docs._config, docs.layout, report=lambda message: print(f"   ⚠️  {message}")
-    )
+
+    def report(message: str) -> None:
+        print(f"   ⚠️  {message}")
+
+    guide_dir = user_guide.find_dir(docs._config, docs.layout, report=report)
     if guide_dir is not None:
         directories.append(guide_dir)
     for section in docs._config.sections or []:
         if isinstance(section, dict) and section.get("dir"):
             directories.append(source_dir / str(section["dir"]))
-    directories.extend(Path(entry["source_dir"]) for entry in docs._get_custom_page_sources())
+    directories.extend(
+        source.path
+        for source in custom_pages.find_sources(docs._config, docs.layout, report=report)
+    )
 
     pages = [
         path for path in homepage_source.find(docs.layout)[:1] if path.suffix in (".md", ".qmd")
