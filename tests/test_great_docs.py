@@ -8172,6 +8172,20 @@ def test_user_guide_navbar_link_targets_an_explicit_guide_first_page(tmp_path: P
     assert left[0] == {"text": "User Guide", "href": "user-guide/01-intro.qmd"}
 
 
+def test_links_into_a_guide_directory_without_guide_pages_are_not_rewritten(tmp_path: Path):
+    """Verify that links to unpublished guide pages keep their source paths"""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+    (tmp_path / "user_guide").mkdir()
+    draft = tmp_path / "user_guide" / "draft.qmd"
+    draft.write_text("# Draft\n")
+    write_config(tmp_path, "user_guide:\n  - section: Start\n    contents: [missing.qmd]\n")
+    docs = GreatDocs(project_path=str(tmp_path))
+    guide = discover_user_guide(docs)
+    assert guide is None
+
+    assert docs._page_map(guide).destination(draft.resolve()) is None
+
+
 def test_user_guide_navbar_link_is_added_once_in_a_translated_site(tmp_path: Path):
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
     (tmp_path / "user_guide").mkdir()

@@ -543,12 +543,10 @@ class GreatDocs:
         :
             The page map for the current sources and configuration.
         """
-        # Reuse the directory without repeating warnings from guide discovery
-        guide_dir = user_guide.find_dir(self._config, self.layout, report=lambda _: None)
         homepage = homepage_source.find(self.layout)[:1]
         if guide is not None and self._config.homepage == "user_guide":
             homepage.append(guide["files"][0]["path"])
-        return PageMap.make(self._config, self.layout, guide_dir, homepage)
+        return PageMap.make(self._config, self.layout, guide, homepage)
 
     def install(self, force: bool = False) -> None:
         """
