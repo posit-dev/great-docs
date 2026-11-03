@@ -172,6 +172,45 @@ class TestFindCommand:
             result = cli_click.find_command("mypkg", cli_module="mypkg.cli_mod", cli_name=None)
         assert result is None
 
+    @pytest.mark.parametrize("candidate", ["console", "commands"])
+    def test_finds_command_in_late_candidate_module(self, candidate):
+        """
+        Find a command in `console` or `commands`, matching reference page discovery
+        """
+        fake_mod = types.ModuleType(f"mypkg.{candidate}")
+        fake_cmd = click.Command("tool")
+        fake_mod.cli = fake_cmd
+
+        def mock_import(name, *args, **kwargs):
+            if name == f"mypkg.{candidate}":
+                return fake_mod
+            raise ImportError(f"no module {name}")
+
+        with patch("importlib.import_module", side_effect=mock_import):
+            result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
+        assert result is fake_cmd
+
+    def test_cli_name_naming_a_non_command_finds_none(self):
+        """
+        Return no command when `cli.name` names a non-command despite another command in the module
+        """
+        fake_mod = types.ModuleType("mypkg.custom_cli")
+        fake_mod.helper = "not a command"
+        fake_mod.cli = click.Command("other")
+
+        real_import = importlib.import_module
+
+        def mock_import(name, *args, **kwargs):
+            if name == "mypkg.custom_cli":
+                return fake_mod
+            return real_import(name, *args, **kwargs)
+
+        with patch("importlib.import_module", side_effect=mock_import):
+            result = cli_click.find_command(
+                "mypkg", cli_module="mypkg.custom_cli", cli_name="helper"
+            )
+        assert result is None
+
 
 def _make_root_project(tmp_path: Path, config: str = "") -> GreatDocs:
     """

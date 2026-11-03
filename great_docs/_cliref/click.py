@@ -153,11 +153,6 @@ def discover(
     """
     Find a package's command line and describe it for the reference pages
 
-    Import `cli_module`, or else the first of the package's `cli`, `__main__`, `main`, `console`
-    and `commands` modules that holds a command. In that module, take the attribute `cli_name`
-    names, or else the first command among `cli`, `main`, `app`, `command` and the module's own
-    name, or else the first public command.
-
     Parameters
     ----------
     module_name
@@ -172,35 +167,70 @@ def discover(
         The command's name when `pyproject.toml` lists no scripts, typically the project name.
         Defaults to `module_name`.
     report
-        Receives a line for the module found or the reason none was.
+        Receives a line for the command found or the reason none was.
 
     Returns
     -------
     :
-        The command tree, with `entry_point_name` set on the root, or `None` when the package
-        has no command line.
+        The command tree of the command `find_command` finds, with `entry_point_name` set on the
+        root, or `None` when the package has no command line.
     """
-    # Determine the CLI module to import
+    cli_obj = find_command(module_name, cli_module=cli_module, cli_name=cli_name, report=report)
+    if cli_obj is None:
+        return None
+
+    # When [project.scripts] is absent, fall back to the display name (the
+    # project name) rather than the importable module name, which may differ.
+    resolved_name = entry_point_name(package_root) or (display_name or module_name).replace(
+        "_", "-"
+    )
+
+    cli_info = extract_command(cli_obj, resolved_name)
+    cli_info["entry_point_name"] = resolved_name
+    return cli_info
+
+
+def find_command(
+    module_name: str,
+    *,
+    cli_module: str | None,
+    cli_name: str | None,
+    report: Callable[[str], None] = lambda _line: None,
+) -> Any | None:
+    """
+    Find a package's command line as a Click command
+
+    Import `cli_module`, or else the first of the package's `cli`, `__main__`, `main`, `console`
+    and `commands` modules that holds a command. In that module, take the attribute `cli_name`
+    names, or else the first command among `cli`, `main`, `app`, `command` and the module's own
+    name, or else the first public command. When `cli_name` names an attribute that is not a
+    command, the package has no command line.
+
+    Parameters
+    ----------
+    module_name
+        The package's importable name.
+    cli_module
+        The `cli.module` setting: the module that defines the command line.
+    cli_name
+        The `cli.name` setting: the attribute that holds the command.
+    report
+        Receives a line for the command found or the reason none was.
+
+    Returns
+    -------
+    :
+        The Click command, with a Typer app converted, or `None` when the package has no command
+        line.
+    """
     cli_module_path = cli_module
     if not cli_module_path:
-        # Try common CLI module locations
-        common_cli_modules = [
-            f"{module_name}.cli",
-            f"{module_name}.__main__",
-            f"{module_name}.main",
-            f"{module_name}.console",
-            f"{module_name}.commands",
-        ]
-        for module_path in common_cli_modules:
+        for candidate in ("cli", "__main__", "main", "console", "commands"):
+            module_path = f"{module_name}.{candidate}"
             try:
                 module = importlib.import_module(module_path)
-                # Look for a Click command/group or Typer app in the module
-                for attr_name in dir(module):
-                    attr = getattr(module, attr_name)
-                    if is_cli_command(attr):
-                        cli_module_path = module_path
-                        break
-                if cli_module_path:
+                if any(is_cli_command(getattr(module, attr_name)) for attr_name in dir(module)):
+                    cli_module_path = module_path
                     break
             except ImportError:
                 continue
@@ -215,14 +245,10 @@ def discover(
         report(f"Could not import CLI module {cli_module_path}: {e}")
         return None
 
-    # Find the main Click command/group
     cli_obj = None
-
-    # First, look for explicitly named CLI
     if cli_name:
         cli_obj = getattr(module, cli_name, None)
 
-    # Otherwise, search for Click commands/groups (or Typer apps)
     if not cli_obj:
         for attr_name in ["cli", "main", "app", "command", module_name]:
             attr = getattr(module, attr_name, None)
@@ -231,7 +257,6 @@ def discover(
                 cli_name = attr_name
                 break
 
-    # If still not found, look for any Click command/group or Typer app
     if not cli_obj:
         for attr_name in dir(module):
             if attr_name.startswith("_"):
@@ -242,83 +267,13 @@ def discover(
                 cli_name = attr_name
                 break
 
-    # Normalize to a Click command so the extraction below can introspect
-    # params/subcommands uniformly (Typer apps are converted here).
     cli_obj = to_click_command(cli_obj)
-
     if not cli_obj:
         report(f"No Click command/group found in {cli_module_path}")
         return None
 
     report(f"Found Click CLI: {cli_name} in {cli_module_path}")
-
-    # When [project.scripts] is absent, fall back to the display name (the
-    # project name) rather than the importable module name, which may differ.
-    resolved_name = entry_point_name(package_root) or (display_name or module_name).replace(
-        "_", "-"
-    )
-
-    cli_info = extract_command(cli_obj, resolved_name)
-    cli_info["entry_point_name"] = resolved_name
-    return cli_info
-
-
-def find_command(module_name: str, *, cli_module: str | None, cli_name: str | None) -> Any | None:
-    """
-    Find a package's command line as a Click command
-
-    Parameters
-    ----------
-    module_name
-        The package's importable name.
-    cli_module
-        The `cli.module` setting: the module that defines the command line.
-    cli_name
-        The `cli.name` setting: the attribute that holds the command.
-
-    Returns
-    -------
-    :
-        The Click command, or `None` when the package has no command line.
-    """
-    cli_module_path = cli_module
-    if not cli_module_path:
-        for mod in (
-            f"{module_name}.cli",
-            f"{module_name}.__main__",
-            f"{module_name}.main",
-        ):
-            try:
-                m = importlib.import_module(mod)
-                if any(is_cli_command(getattr(m, a, None)) for a in dir(m)):
-                    cli_module_path = mod
-                    break
-            except ImportError:
-                continue
-    if not cli_module_path:
-        return None
-    try:
-        module = importlib.import_module(cli_module_path)
-    except ImportError:
-        return None
-
-    if cli_name:
-        obj = to_click_command(getattr(module, cli_name, None))
-        if obj is not None:
-            return obj
-
-    for attr_name in ["cli", "main", "app", "command", module_name]:
-        obj = to_click_command(getattr(module, attr_name, None))
-        if obj is not None:
-            return obj
-
-    for attr_name in dir(module):
-        if attr_name.startswith("_"):
-            continue
-        obj = to_click_command(getattr(module, attr_name))
-        if obj is not None:
-            return obj
-    return None
+    return cli_obj
 
 
 def entry_point_name(package_root: Path) -> str | None:
