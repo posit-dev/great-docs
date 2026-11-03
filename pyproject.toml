@@ -186,7 +186,6 @@ include = [
     "great_docs/_cliref",
     "great_docs/_content",
     "great_docs/_contribution.py",
-    "great_docs/_git.py",
     "great_docs/_github.py",
     "great_docs/_icons.py",
     "great_docs/_install.py",
