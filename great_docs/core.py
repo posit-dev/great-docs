@@ -72,19 +72,19 @@ from ._website import (
 )
 from ._website.ai_agents import llms_txt
 from ._website.ai_agents.skills import SkillsWriter
-from ._website.homepage import hero, landing, margin, readme
+from ._website.homepage import page as homepage_page
 from ._website.homepage import source as homepage_source
 from ._website.navigation import github as nav_github
 from ._website.navigation import label as nav_label
 from ._website.navigation import navbar as nav_navbar
 from ._website.navigation import release as nav_release
 from ._website.navigation import shared_sidebar
-from ._website.project_pages import citation, community, licence, package_info
+from ._website.project_pages import citation, licence, package_info
 from ._website.scripts import script_include, stylesheet_include
 from ._website.seo import description as seo_description
 from ._website.seo import title as seo_title
 from ._website.seo.structured_data import StructuredData
-from ._yaml import YamlMapping, set_front_matter_option, split_front_matter
+from ._yaml import YamlMapping, split_front_matter
 from .config import Config, create_default_config
 
 if TYPE_CHECKING:
@@ -3595,11 +3595,9 @@ class GreatDocs:
 
     def _create_blended_index(self, user_guide_info: dict, copied_files: list[str]) -> str | None:
         """
-        Create `index.qmd` from the first user-guide page (blended homepage mode).
+        Promote the first user guide page to `index.qmd` in blended homepage mode
 
-        The first UG page becomes the site root `index.qmd` with the project
-        metadata sidebar appended in the right margin.  The duplicate file
-        under `user-guide/` is removed.
+        Remove the original page from `user-guide/` after writing the homepage.
 
         Parameters
         ----------
@@ -3635,89 +3633,16 @@ class GreatDocs:
             print(f"   ⚠️  First UG page '{first_ug_path}' not found for blended homepage")
             return None
 
-        # Read the first UG file content
-        with open(first_ug_path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        # Inject toc: false into frontmatter (bread-crumbs: false is already set
-        # by _copy_user_guide_to_docs). Keep the original frontmatter title so
-        # Quarto renders a proper title-block header matching other UG pages.
-        content = set_front_matter_option(content, "toc", False)
-
-        package_root = self.layout.package_root
-        metadata = self._get_package_metadata()
-        package_name = self._detect_package_name()
-        margin_content = margin.render(
+        homepage_page.write_blended(
             self._config,
+            self.layout,
             self.build_dir,
-            package_root=package_root,
-            metadata=metadata,
-            package_name=package_name,
-            community_pages=community.write_pages(
-                self._config, package_root, self.build_dir, self._page_authors
-            ),
+            first_ug_path.read_text(encoding="utf-8"),
+            metadata=self._get_package_metadata(),
+            package_name=self._detect_package_name(),
+            pages=self._page_map(),
+            page_authors=self._page_authors,
         )
-
-        hero_html = ""
-        if found := hero.find(self._config, self.layout.source_dir, None):
-            hero_html = hero.render(
-                found,
-                self._config,
-                self.layout,
-                self.build_dir,
-                metadata=metadata,
-                package_name=package_name,
-                pages=self._page_map(),
-            )
-
-        # Split content into frontmatter and body. Headings are NOT bumped
-        # here, unlike _create_index_from_readme, because UG pages already
-        # have a frontmatter title. Quarto absorbs the first body `#`
-        # heading (matching the title) and `shift-heading-level-by: -1`
-        # promotes the remaining `##` → `<h1>`, `###` → `<h2>`, etc.
-        # — exactly the same as every other UG page.
-        if content.startswith("---"):
-            parts = content.split("---", 2)
-            if len(parts) >= 3:
-                frontmatter_block = f"---{parts[1]}---\n"
-                body = parts[2].lstrip("\n")
-            else:
-                frontmatter_block = ""  # pragma: no cover
-                body = content  # pragma: no cover
-        else:
-            frontmatter_block = ""  # pragma: no cover
-            body = content  # pragma: no cover
-
-        # Strip the first `# …` heading from the body. The frontmatter
-        # `title` already provides the title-block heading; keeping the
-        # body `#` would render as a duplicate paragraph because
-        # `shift-heading-level-by: -1` demotes it below heading level.
-        body = re.sub(r"^#\s+[^\n]*\n?", "", body, count=1, flags=re.MULTILINE)
-
-        # Build hero block for insertion
-        hero_block = ""
-        if hero_html:
-            hero_block = f"""```{{=html}}
-{hero_html}```
-
-"""
-
-        # Reassemble with the metadata margin sidebar placed AFTER the body.
-        # On desktop `.gd-meta-sidebar` is absolutely positioned into the right
-        # margin (see great-docs.scss), so its position in the DOM is
-        # irrelevant there. On mobile it falls back into normal document flow;
-        # emitting it after the body keeps the hero/content first rather than
-        # pushing it below the metadata panel (links/developers/etc.). See
-        # https://github.com/posit-dev/great-docs/issues/220.
-        if margin_content:
-            blended_content = f"{frontmatter_block}\n{hero_block}{body}\n\n::: {{.gd-meta-sidebar .gd-homepage-sidebar}}\n{margin_content}\n:::\n"
-        else:
-            blended_content = f"{frontmatter_block}\n{hero_block}{body}"
-
-        # Write to index.qmd at the site root
-        index_qmd = self.build_dir / "index.qmd"
-        with open(index_qmd, "w", encoding="utf-8") as f:
-            f.write(blended_content)
 
         # Remove the duplicate from user-guide/
         first_ug_path.unlink()
@@ -4469,17 +4394,11 @@ class GreatDocs:
         self, has_api_reference: bool, force_rebuild: bool = False, fallback_to_index: bool = False
     ) -> None:
         """
-        Create or update index.qmd from the best available source file.
+        Write the licence, citation and package information pages, then the README homepage
 
-        Source file priority (highest to lowest):
-        1. index.qmd in project root
-        2. index.md in project root
-        3. README.md in project root
-        4. README.rst in project root (converted to Markdown via pandoc)
-
-        If none of these exist, a landing page is auto-generated from package
-        metadata (name, description, install command, navigation links).
-        Includes a metadata sidebar with package information (license, authors, links, etc.)
+        Use the project's index page or README, or generate a landing page from the package
+        metadata. With `homepage: user_guide`, skip the README homepage unless
+        `fallback_to_index` is `True`; the first user guide page supplies the homepage instead.
 
         Parameters
         ----------
@@ -4491,6 +4410,11 @@ class GreatDocs:
         fallback_to_index
             If `True`, create `index.qmd` even with `homepage: user_guide`, because the project
             has no user guide pages to promote.
+
+        Returns
+        -------
+        :
+            `None`.
         """
         package_root = self.layout.package_root
         metadata = self._get_package_metadata()
@@ -4513,159 +4437,27 @@ class GreatDocs:
         )
         package_info.write_page(self._config, self.build_dir, metadata, self._remote, report=print)
 
-        # Now check if we should create index.qmd
-        index_qmd = self.build_dir / "index.qmd"
-
-        # In "user_guide" homepage mode, the first UG page becomes index.qmd
-        # instead — skip README-based index generation entirely.
+        # User guide mode promotes its first page unless no guide pages are available.
         if self._config.homepage == "user_guide" and not fallback_to_index:
             return  # pragma: no cover
 
-        if index_qmd.exists() and not force_rebuild:
+        if (self.build_dir / "index.qmd").exists() and not force_rebuild:
             print("index.qmd already exists, skipping creation")
             return
 
-        sources = homepage_source.find(self.layout)
-        if len(sources) > 1:
-            others = ", ".join(path.name for path in sources[1:])
-            print(
-                f"⚠️  Multiple index source files detected. Using {sources[0].name} (ignoring {others})"
-            )
-
-        # Title for the generated homepage. Empty by default so "Home" doesn't
-        # appear on an auto-generated landing page; a user-authored source file
-        # may override it via its frontmatter title.
-        homepage_title = ""
-        # Description keys an authored source carries over to the homepage
-        homepage_description: dict[str, object] = {}
-        package_name = self._detect_package_name()
-
-        if not sources:
-            print("No index source file found (index.qmd, index.md, README.md, or README.rst)")
-            print("Generating landing page from package metadata...")
-            readme_content = landing.markdown(
-                package_name,
-                metadata.get("description", ""),
-                has_api_reference=has_api_reference,
-                has_user_guide=bool(self._discover_user_guide()),
-            )
-        else:
-            source_file = sources[0]
-            if force_rebuild:
-                print(f"Rebuilding index.qmd from {source_file.name}...")
-            else:
-                print(f"Creating index.qmd from {source_file.name}...")
-
-            # The page wrapper supplies its own front matter. Only the source's
-            # title and description keys are carried over.
-            authored = homepage_source.read(source_file, report=print)
-            homepage_title = authored.title
-            homepage_description = dict(authored.description)
-            readme_content = publish.rebase_references(
-                authored.body, source_file, index_qmd, layout=self.layout, pages=self._page_map()
-            )
-
-        # The hero takes the badges out of the README, so it is built before
-        # the headings change
-        hero_html = ""
-        if found := hero.find(self._config, self.layout.source_dir, readme_content):
-            hero_html = hero.render(
-                found,
-                self._config,
-                self.layout,
-                self.build_dir,
-                metadata=metadata,
-                package_name=package_name,
-                pages=self._page_map(),
-            )
-            if hero_html and found.body is not None:
-                readme_content = found.body
-
-        if hero_html and self._config.hero_enabled:
-            hero_name = self._config.hero_name
-            if hero_name is None:
-                hero_name = metadata.get("name") or package_name
-            if hero_name:
-                readme_content = readme.strip_duplicate_title(readme_content, hero_name)
-
-        # The wrapper below puts markup above the README, so the README's own
-        # opening paragraph must be found before it is wrapped
-        if self._config.seo_enabled and not homepage_description:
-            opening = seo_description.first_paragraph(
-                readme_content, citations=bool(self._config.bibliography)
-            ).text
-            if opening:
-                homepage_description = {"description-meta": seo_description.as_metadata(opening)}
-
-        if sources:
-            # The README's headings sit one level below the homepage's
-            readme_content = readme.bump_heading_levels(readme_content)
-
-        margin_content = margin.render(
+        homepage_page.write_readme(
             self._config,
+            self.layout,
             self.build_dir,
-            package_root=package_root,
             metadata=metadata,
-            package_name=package_name,
-            community_pages=community.write_pages(
-                self._config, package_root, self.build_dir, self._page_authors
-            ),
+            package_name=self._detect_package_name(),
+            pages=self._page_map(),
+            page_authors=self._page_authors,
+            has_api_reference=has_api_reference,
+            has_user_guide=lambda: bool(self._discover_user_guide()),
+            rebuild=force_rebuild,
+            report=print,
         )
-
-        # CSS to reduce top margin of first heading element
-        # The heading ends up inside a section.level1 > h1 structure
-        first_heading_style = """<style>
-section.level1:first-of-type > h1:first-child,
-section.level2:first-of-type > h2:first-child,
-.column-body-outset-right > section.level1:first-of-type > h1,
-#quarto-document-content > section:first-of-type > h1 {
-  margin-top: 4px !important;
-}
-</style>
-
-"""
-
-        # Create a qmd file with the README content
-        # Add margin content in a special div that Quarto will place in the margin
-        # Prepend hero section (raw HTML block) when enabled
-        hero_block = ""
-        if hero_html:
-            hero_block = f"""```{{=html}}
-{hero_html}```
-
-"""
-
-        # Render the authored keys YAML-safe (quotes/colons in an authored title
-        # are escaped). Empty title renders as `title: ""`.
-        page_keys = format_yaml({"title": homepage_title, **homepage_description}).rstrip()
-
-        if margin_content:
-            qmd_content = f"""---
-{page_keys}
-toc: false
-body-classes: "gd-homepage"
----
-
-{first_heading_style}{hero_block}::: {{.column-margin .gd-homepage-sidebar}}
-{margin_content}
-:::
-
-{readme_content}
-"""
-        else:
-            qmd_content = f"""---
-{page_keys}
-toc: false
-body-classes: "gd-homepage"
----
-
-{first_heading_style}{hero_block}{readme_content}
-"""
-
-        with open(index_qmd, "w", encoding="utf-8") as f:
-            f.write(qmd_content)
-
-        print(f"Created {index_qmd}")
 
     def _add_api_reference_config(self, run: Run) -> None:
         """
