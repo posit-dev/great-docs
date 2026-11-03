@@ -8,6 +8,8 @@ from pathlib import Path
 
 _PROJECT_MANIFESTS = ("pyproject.toml", "setup.py", "go.mod", "Cargo.toml")
 CONVENTIONAL_DOC_DIRS = ("docs", "docs-website", "doc", "website")
+PACKAGE_DIRS = ("src", "python", "lib")
+"""Directories beneath the package root that can contain the package"""
 _UNSAFE_TAG_CHARS = re.compile(r"[^A-Za-z0-9._-]")
 
 

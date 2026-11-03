@@ -13370,14 +13370,6 @@ def test_get_package_exports_with_fallback():
         assert result is None or isinstance(result, list)
 
 
-def test_custom_page_sources_skip_section_directory(tmp_path):
-    (tmp_path / "great-docs.yml").write_text("sections:\n  - title: Pages\n    dir: custom\n")
-    (tmp_path / "custom").mkdir()
-    docs = GreatDocs(project_path=tmp_path)
-
-    assert docs._get_custom_page_sources() == []
-
-
 def test_prepare_build_directory():
     """Test _prepare_build_directory creates build structure."""
     with tempfile.TemporaryDirectory() as tmp_dir:

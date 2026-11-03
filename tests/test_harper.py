@@ -24,6 +24,7 @@ from great_docs._checks.harper import (
 )
 from great_docs.cli import cli
 from great_docs.core import GreatDocs
+from tests.support import AUTHORED_PAGES, write_authored_pages
 
 _harper_available = find_harper_cli() is not None
 requires_harper = pytest.mark.skipif(not _harper_available, reason="harper-cli not installed")
@@ -709,3 +710,75 @@ def test_proofread_command_reads_the_guide_directory_the_build_uses(
 
     assert result.exit_code == 0, result.output
     assert checked == [tmp_path / directory / "page.qmd"]
+
+
+@pytest.mark.parametrize("directory", ["src", "python", "lib"])
+def test_proofread_reads_docstrings_where_the_build_loads_the_package(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, directory: str
+):
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    (tmp_path / directory / "demo").mkdir(parents=True)
+    (tmp_path / directory / "demo" / "__init__.py").write_text('"""A demo"""\n')
+    checked: list[Path] = []
+
+    def check(files: list[Path], *args: object, **kwargs: object) -> list[object]:
+        checked.extend(files)
+        return []
+
+    monkeypatch.setattr(proofreading, "check", check)
+
+    GreatDocs(project_path=tmp_path).proofread(include_docs=False, include_docstrings=True)
+
+    assert checked == [tmp_path / directory / "demo" / "__init__.py"]
+
+
+def _record_checked_files(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """
+    Record the files passed to proofreading without checking their prose
+
+    Parameters
+    ----------
+    monkeypatch
+        The test's patcher.
+
+    Returns
+    -------
+    :
+        A list populated with project-relative POSIX paths in discovery order.
+    """
+    checked: list[str] = []
+
+    def check(files: list[Path], root: Path, *args: object, **kwargs: object) -> list[object]:
+        checked.extend(path.relative_to(root).as_posix() for path in files)
+        return []
+
+    monkeypatch.setattr(proofreading, "check", check)
+    return checked
+
+
+def test_proofread_reads_the_authored_pages_the_build_publishes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    write_authored_pages(tmp_path)
+    checked = _record_checked_files(monkeypatch)
+
+    GreatDocs(project_path=tmp_path).proofread(include_docstrings=True)
+
+    assert checked == [*AUTHORED_PAGES, "src/demo/__init__.py"]
+
+
+def test_proofread_command_reads_the_authored_pages_the_build_publishes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    write_authored_pages(tmp_path)
+    checked = _record_checked_files(monkeypatch)
+    monkeypatch.setattr(
+        "great_docs._checks.harper.check_harper_available", lambda: (True, "harper-cli")
+    )
+
+    result = CliRunner().invoke(
+        cli, ["proofread", "--project-path", str(tmp_path), "--include-docstrings"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert checked == [*AUTHORED_PAGES, "src/demo/__init__.py"]

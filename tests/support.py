@@ -7,7 +7,8 @@ with empty defaults. `make_run` creates build state for testing build methods di
 `StubRemote` supplies GitHub and PyPI data without network requests. `homepage_hero` and
 `homepage_margin` build the homepage hero and sidebar from the project's configuration and metadata.
 `find_user_guide_dir` and `discover_user_guide` find a project's user guide and print its warnings
-as a build does.
+as a build does. `write_authored_pages` creates a project with each kind of authored page
+the build publishes.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import typing
 from collections.abc import Callable, Collection, Generator, Iterable, Mapping
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, NonCallableMagicMock, patch
 
@@ -30,8 +32,6 @@ from great_docs._website.homepage import hero, margin
 from great_docs._website.project_pages import community
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from great_docs._content.user_guide import UserGuide
     from great_docs._github import GithubRepo
 
@@ -498,3 +498,49 @@ def discover_user_guide(docs: GreatDocs) -> UserGuide | None:
         The guide, or `None` when the project has no guide pages.
     """
     return user_guide.discover(docs._config, docs.layout, report=_print_warning)
+
+
+AUTHORED_PAGES = [
+    "README.md",
+    "guides/intro.qmd",
+    "tutorials/first.md",
+    "pages/notes.md",
+]
+"""Published authored pages in expected discovery order"""
+
+
+def write_authored_pages(root: Path) -> None:
+    """
+    Write a project with a `src/` package and every kind of authored page
+
+    `README.md` supplies the homepage. The configured guide, section and custom page
+    directory each contain a page with a URL. The guide include file, unpublished `recipes/`
+    directory and generated build page also contain URLs, so checks must exclude those
+    sources. The package's `__init__.py` contains one URL for source and docstring checks.
+
+    Parameters
+    ----------
+    root
+        The project directory.
+
+    Returns
+    -------
+    :
+    """
+    files = {
+        "pyproject.toml": '[project]\nname = "demo"\n',
+        "great-docs.yml": (
+            "user_guide: guides\n"
+            "sections:\n  - title: Tutorials\n    dir: tutorials\n"
+            "custom_pages: pages\n"
+        ),
+        "src/demo/__init__.py": '"""See https://example.com/module"""\n',
+        "guides/_include.qmd": "See https://example.com/include\n",
+        "recipes/recipe.qmd": "See https://example.com/recipe\n",
+        "great-docs/generated.qmd": "See https://example.com/generated\n",
+    }
+    files.update({page: f"See https://example.com/{Path(page).stem}\n" for page in AUTHORED_PAGES})
+    for name, text in files.items():
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
