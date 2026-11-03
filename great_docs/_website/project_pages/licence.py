@@ -6,9 +6,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ..._license import BADGE_TOOLTIP_KEYS, build_license_features_html, get_license_info
 from ..._translations import get_translation
 from .. import page_dates
+from ..spdx import BADGE_TOOLTIP_KEYS, build_license_features_html, get_license_info
 
 if TYPE_CHECKING:
     from collections.abc import Callable

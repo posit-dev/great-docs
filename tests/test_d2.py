@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from great_docs._d2 import (
+from great_docs._website.d2 import (
     DEFAULT_DARK_THEME,
     DEFAULT_LIGHT_THEME,
     _build_d2_args,
@@ -42,12 +42,12 @@ def _ok(output: str) -> MagicMock:
 # Availability
 # --------------------------------------------------------------------------- #
 def test_d2_available_true():
-    with patch("great_docs._d2.shutil.which", return_value="/usr/bin/d2"):
+    with patch("great_docs._website.d2.shutil.which", return_value="/usr/bin/d2"):
         assert d2_available() is True
 
 
 def test_d2_available_false():
-    with patch("great_docs._d2.shutil.which", return_value=None):
+    with patch("great_docs._website.d2.shutil.which", return_value=None):
         assert d2_available() is False
 
 
@@ -253,7 +253,7 @@ def test_ensure_dimensions_noop_without_svg_tag():
 # --------------------------------------------------------------------------- #
 def test_render_success():
     svg_out = '<svg viewBox="0 0 10 20"></svg>'
-    with patch("great_docs._d2.subprocess.run", return_value=_ok(svg_out)) as run:
+    with patch("great_docs._website.d2.subprocess.run", return_value=_ok(svg_out)) as run:
         svg = render_d2_svg("a -> b", 0)
         # Dimensions are backfilled from the viewBox.
         assert 'width="10"' in svg and 'height="20"' in svg
@@ -266,18 +266,18 @@ def test_render_nonzero_returncode():
     bad.returncode = 1
     bad.stdout = b""
     bad.stderr = b"syntax error"
-    with patch("great_docs._d2.subprocess.run", return_value=bad):
+    with patch("great_docs._website.d2.subprocess.run", return_value=bad):
         assert render_d2_svg("a -> b", 0) is None
 
 
 def test_render_subprocess_error():
-    with patch("great_docs._d2.subprocess.run", side_effect=OSError("boom")):
+    with patch("great_docs._website.d2.subprocess.run", side_effect=OSError("boom")):
         assert render_d2_svg("a -> b", 0) is None
 
 
 def test_render_timeout():
     with patch(
-        "great_docs._d2.subprocess.run",
+        "great_docs._website.d2.subprocess.run",
         side_effect=subprocess.TimeoutExpired("d2", 30),
     ):
         assert render_d2_svg("a -> b", 0) is None
@@ -293,7 +293,7 @@ def _render_side_effect(diagram, theme, options=None, timeout=30):
 def test_process_content_renders_and_writes():
     content = "# T\n\n```{d2}\na -> b\n```\n"
     out_dir = Path(tempfile.mkdtemp())
-    with patch("great_docs._d2.render_d2_svg", side_effect=_render_side_effect):
+    with patch("great_docs._website.d2.render_d2_svg", side_effect=_render_side_effect):
         new, n = process_d2_content(content, out_dir)
     assert n == 1
     assert "```{d2}" not in new
@@ -315,7 +315,7 @@ def test_process_content_empty_source_block_kept():
     # A d2 block with only options (no diagram source) renders nothing and is
     # left untouched; the renderer is never invoked.
     content = "```{d2}\n#| pad: 10\n```"
-    with patch("great_docs._d2.render_d2_svg") as run:
+    with patch("great_docs._website.d2.render_d2_svg") as run:
         new, n = process_d2_content(content, Path(tempfile.mkdtemp()))
         run.assert_not_called()
     assert n == 0
@@ -324,7 +324,7 @@ def test_process_content_empty_source_block_kept():
 
 def test_process_content_render_failure_keeps_block():
     content = "```{d2}\na -> b\n```"
-    with patch("great_docs._d2.render_d2_svg", return_value=None):
+    with patch("great_docs._website.d2.render_d2_svg", return_value=None):
         new, n = process_d2_content(content, Path(tempfile.mkdtemp()))
     assert n == 0
     assert new == content  # original block preserved
@@ -336,13 +336,13 @@ def test_process_content_uses_cache():
     cache_dir = Path(tempfile.mkdtemp())
 
     # First pass renders and populates the cache.
-    with patch("great_docs._d2.render_d2_svg", side_effect=_render_side_effect) as run:
+    with patch("great_docs._website.d2.render_d2_svg", side_effect=_render_side_effect) as run:
         process_d2_content(content, out_dir, cache_dir)
         assert run.call_count == 2
 
     # Second pass should hit the cache and not call the renderer.
     out_dir2 = Path(tempfile.mkdtemp())
-    with patch("great_docs._d2.render_d2_svg", side_effect=_render_side_effect) as run:
+    with patch("great_docs._website.d2.render_d2_svg", side_effect=_render_side_effect) as run:
         _, n = process_d2_content(content, out_dir2, cache_dir)
         assert n == 1
         run.assert_not_called()
@@ -356,7 +356,7 @@ def test_process_qmd_file_modifies():
     d = Path(tempfile.mkdtemp())
     qmd = d / "page.qmd"
     qmd.write_text("```{d2}\na -> b\n```", encoding="utf-8")
-    with patch("great_docs._d2.render_d2_svg", side_effect=_render_side_effect):
+    with patch("great_docs._website.d2.render_d2_svg", side_effect=_render_side_effect):
         assert process_qmd_file(qmd) is True
     assert "```{d2}" not in qmd.read_text(encoding="utf-8")
 
@@ -365,7 +365,7 @@ def test_process_qmd_file_no_d2_early_out():
     d = Path(tempfile.mkdtemp())
     qmd = d / "page.qmd"
     qmd.write_text("# Just prose, no diagrams", encoding="utf-8")
-    with patch("great_docs._d2.render_d2_svg") as run:
+    with patch("great_docs._website.d2.render_d2_svg") as run:
         assert process_qmd_file(qmd) is False
         run.assert_not_called()
 
@@ -384,7 +384,7 @@ def test_process_qmd_file_d2_substring_but_no_block():
 def test_process_directory_skips_when_d2_unavailable():
     d = Path(tempfile.mkdtemp())
     (d / "page.qmd").write_text("```{d2}\na -> b\n```", encoding="utf-8")
-    with patch("great_docs._d2.d2_available", return_value=False):
+    with patch("great_docs._website.d2.d2_available", return_value=False):
         assert process_directory(d) == []
     # File is untouched.
     assert "```{d2}" in (d / "page.qmd").read_text(encoding="utf-8")
@@ -395,7 +395,7 @@ def test_process_directory_unavailable_no_blocks_no_warning():
     # completion without breaking and returns an empty list.
     d = Path(tempfile.mkdtemp())
     (d / "page.qmd").write_text("# Prose only, no diagrams", encoding="utf-8")
-    with patch("great_docs._d2.d2_available", return_value=False):
+    with patch("great_docs._website.d2.d2_available", return_value=False):
         assert process_directory(d) == []
 
 
@@ -404,8 +404,8 @@ def test_process_directory_renders():
     (d / "a.qmd").write_text("```{d2}\na -> b\n```", encoding="utf-8")
     (d / "b.qmd").write_text("no diagrams", encoding="utf-8")
     with (
-        patch("great_docs._d2.d2_available", return_value=True),
-        patch("great_docs._d2.render_d2_svg", side_effect=_render_side_effect),
+        patch("great_docs._website.d2.d2_available", return_value=True),
+        patch("great_docs._website.d2.render_d2_svg", side_effect=_render_side_effect),
     ):
         modified = process_directory(d)
     assert modified == ["a.qmd"]

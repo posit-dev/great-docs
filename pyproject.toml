@@ -186,14 +186,12 @@ include = [
     "great_docs/_cliref",
     "great_docs/_content",
     "great_docs/_contribution.py",
-    "great_docs/_git.py",
     "great_docs/_github.py",
     "great_docs/_icons.py",
     "great_docs/_install.py",
     "great_docs/_interlinks",
     "great_docs/_layout.py",
     "great_docs/_layout_migration",
-    "great_docs/_layout_notice.py",
     "great_docs/_marimo.py",
     "great_docs/_mcpref",
     "great_docs/_reference",
@@ -223,7 +221,13 @@ exclude = [
     "great_docs/_checks/examples.py",
     "great_docs/_checks/harper.py",
     "great_docs/_checks/lint.py",
+    "great_docs/_cliref/go.py",
+    "great_docs/_cliref/rust.py",
     "great_docs/_mcpref/reference.py",
+    "great_docs/_website/d2.py",
+    "great_docs/_website/mermaid.py",
+    "great_docs/_website/mock_code.py",
+    "great_docs/_website/spdx.py",
 ]
 reportMissingImports = true
 reportMissingTypeStubs = false

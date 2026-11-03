@@ -3,7 +3,7 @@
 
 import pytest
 
-from great_docs._license import (
+from great_docs._website.spdx import (
     LICENSES,
     LicenseInfo,
     build_license_features_html,

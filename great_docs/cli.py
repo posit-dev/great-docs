@@ -3163,7 +3163,7 @@ def lint(
 
             try:
                 from ._layout import Layout
-                from ._layout_notice import layout_notice
+                from ._layout_migration.notice import layout_notice
 
                 layout = Layout.make(
                     project_root,

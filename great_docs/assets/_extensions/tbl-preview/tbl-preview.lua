@@ -9,7 +9,7 @@
 --   {{< tbl-preview file="data.csv" show_all="true" caption="My Dataset" >}}
 --
 -- Calls the companion _tbl_preview_shortcode.py script, which imports
--- tbl_preview() from great_docs._tbl_preview and prints the resulting
+-- tbl_preview() from great_docs._tables.preview and prints the resulting
 -- HTML to stdout.
 
 local function kwarg_str(kwargs, key)

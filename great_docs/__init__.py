@@ -11,9 +11,9 @@ except PackageNotFoundError:  # pragma: no cover
 from . import _builtin  # noqa: F401  — registers great-docs' built-in event handlers
 from ._build.steps import BuildError
 from ._skill_install import check_skill, install_skill, list_skills
-from ._tbl_display import disable_tbl_preview, enable_tbl_preview
-from ._tbl_explorer import tbl_explorer
-from ._tbl_preview import tbl_preview
+from ._tables.display import disable_tbl_preview, enable_tbl_preview
+from ._tables.explorer import tbl_explorer
+from ._tables.preview import tbl_preview
 from .cli import main
 from .config import Config, create_default_config, load_config
 from .core import GreatDocs

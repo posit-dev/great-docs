@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from great_docs._go_cli import (
+from great_docs._cliref.go import (
     GoCliProject,
     _find_go_main_package,
     _parse_cobra_flag,
@@ -425,7 +425,7 @@ class TestBuildGoBinary:
             main_package=".",
             uses_cobra=False,
         )
-        with patch("great_docs._go_cli.subprocess.run", side_effect=FileNotFoundError):
+        with patch("great_docs._cliref.go.subprocess.run", side_effect=FileNotFoundError):
             result = build_go_binary(go_project, output_dir=tmp_path)
         assert result is None
 
@@ -440,7 +440,7 @@ class TestBuildGoBinary:
         mock_result = MagicMock()
         mock_result.returncode = 1
         mock_result.stderr = "build error"
-        with patch("great_docs._go_cli.subprocess.run", return_value=mock_result):
+        with patch("great_docs._cliref.go.subprocess.run", return_value=mock_result):
             result = build_go_binary(go_project, output_dir=tmp_path)
         assert result is None
 
@@ -454,7 +454,7 @@ class TestBuildGoBinary:
         )
         mock_result = MagicMock()
         mock_result.returncode = 0
-        with patch("great_docs._go_cli.subprocess.run", return_value=mock_result):
+        with patch("great_docs._cliref.go.subprocess.run", return_value=mock_result):
             result = build_go_binary(go_project, output_dir=tmp_path)
         assert result == tmp_path / "app"
 
@@ -467,7 +467,7 @@ class TestBuildGoBinary:
             uses_cobra=False,
         )
         with patch(
-            "great_docs._go_cli.subprocess.run",
+            "great_docs._cliref.go.subprocess.run",
             side_effect=subprocess.TimeoutExpired(cmd="go", timeout=120),
         ):
             result = build_go_binary(go_project, output_dir=tmp_path)
@@ -483,7 +483,7 @@ class TestIntrospectCobraCli:
             main_package=".",
             uses_cobra=False,
         )
-        with patch("great_docs._go_cli.build_go_binary", return_value=None):
+        with patch("great_docs._cliref.go.build_go_binary", return_value=None):
             result = introspect_cobra_cli(go_project)
         assert result is None
 
@@ -505,8 +505,8 @@ class TestIntrospectCobraCli:
         mock_proc.returncode = 0
 
         with (
-            patch("great_docs._go_cli.build_go_binary", return_value=binary),
-            patch("great_docs._go_cli.subprocess.run", return_value=mock_proc),
+            patch("great_docs._cliref.go.build_go_binary", return_value=binary),
+            patch("great_docs._cliref.go.subprocess.run", return_value=mock_proc),
         ):
             result = introspect_cobra_cli(go_project)
 

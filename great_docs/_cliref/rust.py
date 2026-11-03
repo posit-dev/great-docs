@@ -361,7 +361,7 @@ def _parse_clap_flag(raw: str) -> dict | None:
 def _short_help(description: str, limit: int = 150) -> str:
     """Condense a full command description into a one-line summary.
 
-    Mirrors ``_go_cli._short_help`` for consistency.
+    Mirrors `go._short_help` for consistency.
     """
     description = description.strip()
     if not description:

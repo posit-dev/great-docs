@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from great_docs._tbl_display import (
+from great_docs._tables.display import (
     _get_ipython,
     disable_tbl_preview,
     enable_tbl_preview,
@@ -52,7 +52,7 @@ class TestEnableTblPreview:
 
     def test_returns_none_when_no_ipython(self):
         with patch(
-            "great_docs._tbl_display._get_ipython",
+            "great_docs._tables.display._get_ipython",
             side_effect=RuntimeError("No active IPython session."),
         ):
             result = enable_tbl_preview()
@@ -68,7 +68,7 @@ class TestEnableTblPreview:
         mock_pl.DataFrame = type("PolarsDF", (), {})
 
         with (
-            patch("great_docs._tbl_display._get_ipython", return_value=mock_ip),
+            patch("great_docs._tables.display._get_ipython", return_value=mock_ip),
             patch.dict("sys.modules", {"polars": mock_pl}),
             patch("builtins.__import__", side_effect=_selective_import({"polars": mock_pl})),
         ):
@@ -98,11 +98,11 @@ class TestEnableTblPreview:
         mock_preview.as_html.return_value = "<table>polars</table>"
 
         with (
-            patch("great_docs._tbl_display._get_ipython", return_value=mock_ip),
+            patch("great_docs._tables.display._get_ipython", return_value=mock_ip),
             patch("builtins.__import__", side_effect=_selective_import({"polars": mock_pl})),
-            patch("great_docs._tbl_preview._is_polars", return_value=True),
-            patch("great_docs._tbl_preview._is_pandas", return_value=False),
-            patch("great_docs._tbl_preview.tbl_preview", return_value=mock_preview),
+            patch("great_docs._tables.preview._is_polars", return_value=True),
+            patch("great_docs._tables.preview._is_pandas", return_value=False),
+            patch("great_docs._tables.preview.tbl_preview", return_value=mock_preview),
         ):
             enable_tbl_preview()
 
@@ -129,10 +129,10 @@ class TestEnableTblPreview:
         html_formatter.for_type.side_effect = _capture_for_type
 
         with (
-            patch("great_docs._tbl_display._get_ipython", return_value=mock_ip),
+            patch("great_docs._tables.display._get_ipython", return_value=mock_ip),
             patch("builtins.__import__", side_effect=_selective_import({"polars": mock_pl})),
-            patch("great_docs._tbl_preview._is_polars", return_value=False),
-            patch("great_docs._tbl_preview._is_pandas", return_value=False),
+            patch("great_docs._tables.preview._is_polars", return_value=False),
+            patch("great_docs._tables.preview._is_pandas", return_value=False),
         ):
             enable_tbl_preview()
 
@@ -150,7 +150,7 @@ class TestEnableTblPreview:
         mock_pd.DataFrame = type("PandasDF", (), {})
 
         with (
-            patch("great_docs._tbl_display._get_ipython", return_value=mock_ip),
+            patch("great_docs._tables.display._get_ipython", return_value=mock_ip),
             patch("builtins.__import__", side_effect=_selective_import({"pandas": mock_pd})),
         ):
             enable_tbl_preview()
@@ -173,7 +173,7 @@ class TestEnableTblPreview:
         original_import = builtins.__import__
 
         with (
-            patch("great_docs._tbl_display._get_ipython", return_value=mock_ip),
+            patch("great_docs._tables.display._get_ipython", return_value=mock_ip),
             patch("builtins.__import__", side_effect=_raise_import),
         ):
             enable_tbl_preview()
@@ -192,7 +192,7 @@ class TestDisableTblPreview:
 
     def test_returns_none_when_no_ipython(self):
         with patch(
-            "great_docs._tbl_display._get_ipython",
+            "great_docs._tables.display._get_ipython",
             side_effect=RuntimeError("No active IPython session."),
         ):
             result = disable_tbl_preview()
@@ -207,7 +207,7 @@ class TestDisableTblPreview:
         mock_pl.DataFrame = type("PolarsDF", (), {})
 
         with (
-            patch("great_docs._tbl_display._get_ipython", return_value=mock_ip),
+            patch("great_docs._tables.display._get_ipython", return_value=mock_ip),
             patch("builtins.__import__", side_effect=_selective_import({"polars": mock_pl})),
         ):
             disable_tbl_preview()
@@ -223,7 +223,7 @@ class TestDisableTblPreview:
         mock_pd.DataFrame = type("PandasDF", (), {})
 
         with (
-            patch("great_docs._tbl_display._get_ipython", return_value=mock_ip),
+            patch("great_docs._tables.display._get_ipython", return_value=mock_ip),
             patch("builtins.__import__", side_effect=_selective_import({"pandas": mock_pd})),
         ):
             disable_tbl_preview()
@@ -245,7 +245,7 @@ class TestDisableTblPreview:
         original_import = builtins.__import__
 
         with (
-            patch("great_docs._tbl_display._get_ipython", return_value=mock_ip),
+            patch("great_docs._tables.display._get_ipython", return_value=mock_ip),
             patch("builtins.__import__", side_effect=_raise_import),
         ):
             disable_tbl_preview()

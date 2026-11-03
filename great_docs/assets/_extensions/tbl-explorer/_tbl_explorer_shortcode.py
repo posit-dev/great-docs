@@ -12,21 +12,21 @@ from pathlib import Path
 def _load_tbl_explorer():
     """Import tbl_explorer without triggering great_docs.__init__."""
     try:
-        from great_docs._tbl_explorer import tbl_explorer
+        from great_docs._tables.explorer import tbl_explorer
 
         return tbl_explorer
     except (ImportError, ModuleNotFoundError):
         here = Path(__file__).resolve().parent
         p = here
         while p != p.parent:
-            candidate = p / "great_docs" / "_tbl_explorer.py"
+            candidate = p / "great_docs" / "_tables" / "explorer.py"
             if candidate.exists():
                 spec = importlib.util.spec_from_file_location("_tbl_explorer", candidate)
                 mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(mod)
                 return mod.tbl_explorer
             p = p.parent
-        raise ImportError("Cannot find _tbl_explorer.py")
+        raise ImportError("Cannot find great_docs/_tables/explorer.py")
 
 
 def main() -> None:
