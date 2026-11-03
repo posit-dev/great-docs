@@ -34,7 +34,7 @@ def make_docs(root: Path, source: Path) -> GreatDocs:
 
 def rebase(gd: GreatDocs, content: str, source: Path, destination: Path) -> str:
     return publish.rebase_references(
-        content, source, destination, layout=gd.layout, pages=gd._page_map()
+        content, source, destination, layout=gd.layout, pages=gd._page_map(discover_user_guide(gd))
     )
 
 
@@ -279,8 +279,8 @@ def test_documentation_sources(source_project: tuple[Path, Path], explicit: bool
     gd._prepare_build_directory(make_run())
     gd._copy_assets()
     gd._publish_user_guide(discover_user_guide(gd))
-    gd._process_sections()
-    gd._process_custom_pages()
+    gd._process_sections(discover_user_guide(gd))
+    gd._process_custom_pages(discover_user_guide(gd))
     build = gd.build_dir
     assert build == (root / "great-docs" if root == source else source / "_quarto/default")
     assert not hasattr(gd, "project_path")
@@ -557,7 +557,7 @@ def test_custom_html_rebases_local_assets(source_project: tuple[Path, Path]) -> 
     )
     gd = make_docs(root, source)
     gd._prepare_build_directory(make_run())
-    gd._process_custom_pages()
+    gd._process_custom_pages(discover_user_guide(gd))
     result = (gd.build_dir / "custom/about.html").read_text()
     path = result.split('src="', 1)[1].split('"', 1)[0]
     assert (gd.build_dir / "custom" / unquote(urlsplit(path).path)).read_text() == "plot"

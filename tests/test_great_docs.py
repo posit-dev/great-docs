@@ -2056,7 +2056,7 @@ def test_citation_year_from_date_released():
         docs_dir.mkdir(parents=True, exist_ok=True)
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(has_api_reference=True)
+        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
 
         # Check that citation.qmd was created
         citation_qmd = docs_dir / "citation.qmd"
@@ -2100,7 +2100,7 @@ def test_citation_year_defaults_to_current():
         docs_dir.mkdir(parents=True, exist_ok=True)
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(has_api_reference=True)
+        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
 
         # Check that citation.qmd was created
         citation_qmd = docs_dir / "citation.qmd"
@@ -2147,7 +2147,7 @@ def test_citation_year_handles_invalid_date():
         docs_dir.mkdir(parents=True, exist_ok=True)
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(has_api_reference=True)
+        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
 
         # Check that citation.qmd was created
         citation_qmd = docs_dir / "citation.qmd"
@@ -3014,7 +3014,7 @@ def test_landing_page_generated_when_no_readme():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True)
+        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -3091,7 +3091,7 @@ def test_landing_page_not_generated_when_readme_exists():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True)
+        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -3128,7 +3128,7 @@ def test_landing_page_has_sidebar_metadata():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True)
+        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
 
         index_qmd = docs.build_dir / "index.qmd"
         content = index_qmd.read_text()
@@ -3158,7 +3158,7 @@ def test_readme_rst_creates_index():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True)
+        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -3193,7 +3193,7 @@ def test_readme_rst_not_used_when_readme_md_exists():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True)
+        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
 
         index_qmd = docs.build_dir / "index.qmd"
         content = index_qmd.read_text()
@@ -3226,7 +3226,9 @@ def test_index_qmd_frontmatter_title_preserved():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
 
         content = (docs.build_dir / "index.qmd").read_text()
         fm = _homepage_frontmatter(content)
@@ -3251,7 +3253,9 @@ def test_index_qmd_frontmatter_title_empty_without_source_title():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
 
         content = (docs.build_dir / "index.qmd").read_text()
         fm = _homepage_frontmatter(content)
@@ -3278,7 +3282,9 @@ def test_index_qmd_frontmatter_title_yaml_safe():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
 
         content = (docs.build_dir / "index.qmd").read_text()
         fm = _homepage_frontmatter(content)
@@ -3298,7 +3304,9 @@ def _homepage_from(source_name: str, source: str, tmp_dir: str) -> dict:
 
     docs = GreatDocs(project_path=tmp_dir)
     docs.build_dir.mkdir(parents=True, exist_ok=True)
-    docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+    docs._create_index_from_readme(
+        discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+    )
     return _homepage_frontmatter((docs.build_dir / "index.qmd").read_text())
 
 
@@ -3363,7 +3371,7 @@ def test_process_sections_empty_config_with_files():
         (project_path / "great-docs").mkdir()
 
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result == 0
 
@@ -3403,7 +3411,7 @@ def test_process_sections_discovers_and_copies():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result == 1
 
@@ -3476,7 +3484,7 @@ def test_process_sections_no_index_by_default():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result == 1
 
@@ -3537,7 +3545,7 @@ def test_process_sections_no_index_by_default():
         (demos_dir / "demo1.qmd").write_text('---\ntitle: "Demo One"\n---\n\nDemo\n')
 
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result == 1
 
@@ -3558,7 +3566,7 @@ def test_process_sections_missing_dir_config_only():
         (project_path / "great-docs").mkdir()
 
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result == 0
 
@@ -3589,7 +3597,7 @@ def test_process_sections_navbar_after():
         (tut_dir / "intro.qmd").write_text('---\ntitle: "Intro"\n---\n\nIntro\n')
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._process_sections()
+        docs._process_sections(discover_user_guide(docs))
 
         with open(quarto_yml) as f:
             config = read_yaml(f)
@@ -3630,7 +3638,7 @@ def test_process_sections_default_navbar_before_reference():
         (ex_dir / "demo.qmd").write_text('---\ntitle: "Demo"\n---\n\nDemo\n')
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._process_sections()
+        docs._process_sections(discover_user_guide(docs))
 
         with open(quarto_yml) as f:
             config = read_yaml(f)
@@ -3673,7 +3681,7 @@ def test_process_sections_multiple():
             (project_path / d / "page.qmd").write_text(f'---\ntitle: "{d} page"\n---\n\n{d}\n')
 
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result == 2
 
@@ -3714,8 +3722,8 @@ def test_process_sections_idempotent():
         (ex_dir / "page2.qmd").write_text('---\ntitle: "Page 2"\n---\n\nMore\n')
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._process_sections()
-        docs._process_sections()
+        docs._process_sections(discover_user_guide(docs))
+        docs._process_sections(discover_user_guide(docs))
 
         with open(quarto_yml) as f:
             config = read_yaml(f)
@@ -3774,7 +3782,7 @@ def test_process_sections_copies_asset_directories():
         (img_dir / "diagram.png").write_bytes(b"fake-png")
 
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result == 1
 
@@ -3824,7 +3832,7 @@ def test_process_sections_copies_directory_metadata():
         (topic / "_metadata.yml").write_text("number-sections: true\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        assert docs._process_sections() == 1
+        assert docs._process_sections(discover_user_guide(docs)) == 1
 
         dest = build_dir / "examples"
         assert (dest / "_metadata.yml").read_text() == "toc: false\n"
@@ -3846,7 +3854,7 @@ def test_directory_metadata_keeps_build_written_file(capsys):
         (section / "_metadata.yml").write_text("toc: false\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        assert docs._process_sections() == 1
+        assert docs._process_sections(discover_user_guide(docs)) == 1
 
         assert build_metadata.read_text() == "date: 2026-01-01\n"
         assert "reference/_metadata.yml" in capsys.readouterr().out
@@ -3889,7 +3897,7 @@ def test_process_sections_skips_dirs_with_qmd_files():
         (assets_dir / "style.css").write_text("body { color: red; }\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._process_sections()
+        docs._process_sections(discover_user_guide(docs))
 
         dest = build_dir / "examples"
 
@@ -3930,7 +3938,7 @@ def test_process_sections_asset_dirs_refreshed_on_rebuild():
         (data_dir / "old_file.txt").write_text("old")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._process_sections()
+        docs._process_sections(discover_user_guide(docs))
 
         dest = build_dir / "examples"
         assert (dest / "data" / "old_file.txt").exists()
@@ -3940,7 +3948,7 @@ def test_process_sections_asset_dirs_refreshed_on_rebuild():
         (data_dir / "new_file.txt").write_text("new")
 
         # Rebuild
-        docs._process_sections()
+        docs._process_sections(discover_user_guide(docs))
 
         # Old file should be gone, new file should be present
         assert not (dest / "data" / "old_file.txt").exists()
@@ -6097,7 +6105,7 @@ def test_cli_help_for_llms_uses_module_name(mock_discover):
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir()
         (docs.build_dir / "_quarto.yml").write_text(LLMS_TXT_QUARTO_YML)
-        docs._step_llms_txt()
+        docs._step_llms_txt(make_run(user_guide=discover_user_guide(docs)))
 
         mock_discover.assert_called_once_with(
             "actual_module",
@@ -6250,7 +6258,7 @@ def test_cli_help_for_llms_display_name_is_project_name():
             docs = GreatDocs(project_path=tmp_dir)
             docs.build_dir.mkdir()
             (docs.build_dir / "_quarto.yml").write_text(LLMS_TXT_QUARTO_YML)
-            docs._step_llms_txt()
+            docs._step_llms_txt(make_run(user_guide=discover_user_guide(docs)))
         finally:
             sys.path.remove(tmp_dir)
             sys.modules.pop("actual_module", None)
@@ -6481,7 +6489,7 @@ def test_process_custom_pages_passthrough_and_raw():
         )
         (custom_dir / "app.js").write_text("console.log('custom');\n", encoding="utf-8")
 
-        result = docs._process_custom_pages()
+        result = docs._process_custom_pages(discover_user_guide(docs))
 
         assert result == 2
 
@@ -6527,7 +6535,7 @@ def test_process_custom_pages_missing_dir():
         with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml({"website": {"sidebar": [], "navbar": {"left": []}}}, f)
 
-        assert docs._process_custom_pages() == 0
+        assert docs._process_custom_pages(discover_user_guide(docs)) == 0
 
 
 def test_process_custom_pages_respects_configured_output_prefix():
@@ -6558,7 +6566,7 @@ def test_process_custom_pages_respects_configured_output_prefix():
         )
         (marketing_dir / "app.js").write_text("console.log('marketing');\n", encoding="utf-8")
 
-        result = docs._process_custom_pages()
+        result = docs._process_custom_pages(discover_user_guide(docs))
 
         assert result == 1
         assert (docs.build_dir / "py" / "landing.qmd").exists()
@@ -6621,7 +6629,7 @@ def test_process_custom_pages_supports_multiple_directories():
             encoding="utf-8",
         )
 
-        result = docs._process_custom_pages()
+        result = docs._process_custom_pages(discover_user_guide(docs))
 
         assert result == 2
         assert (docs.build_dir / "py" / "landing.qmd").exists()
@@ -6669,7 +6677,7 @@ def test_process_custom_pages_supports_nested_output_prefixes():
         (apps_dir / "assets").mkdir()
         (apps_dir / "assets" / "widget.js").write_text("window.APPS = true;\n", encoding="utf-8")
 
-        result = docs._process_custom_pages()
+        result = docs._process_custom_pages(discover_user_guide(docs))
 
         assert result == 1
         assert (docs.build_dir / "products" / "python" / "start.qmd").exists()
@@ -6716,7 +6724,7 @@ def test_process_custom_pages_skips_missing_configured_directories():
             encoding="utf-8",
         )
 
-        result = docs._process_custom_pages()
+        result = docs._process_custom_pages(discover_user_guide(docs))
 
         assert result == 1
         assert not (docs.build_dir / "ghost").exists()
@@ -6749,7 +6757,7 @@ def test_process_custom_pages_can_be_disabled_explicitly():
         with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml({"website": {"sidebar": [], "navbar": {"left": []}}}, f)
 
-        assert docs._process_custom_pages() == 0
+        assert docs._process_custom_pages(discover_user_guide(docs)) == 0
         assert not (docs.build_dir / "custom" / "landing.qmd").exists()
 
 
@@ -6812,7 +6820,7 @@ def test_process_custom_pages_ignores_frontmatter_after_leading_blank_lines():
             encoding="utf-8",
         )
 
-        docs._process_custom_pages()
+        docs._process_custom_pages(discover_user_guide(docs))
 
         with open(docs.build_dir / "_quarto.yml") as f:
             config = read_yaml(f)
@@ -6856,7 +6864,7 @@ def test_process_custom_pages_adds_passthrough_navbar_link():
             encoding="utf-8",
         )
 
-        docs._process_custom_pages()
+        docs._process_custom_pages(discover_user_guide(docs))
 
         with open(docs.build_dir / "_quarto.yml") as f:
             config = read_yaml(f)
@@ -6909,7 +6917,7 @@ def test_process_custom_pages_adds_raw_navbar_link_with_custom_text():
             encoding="utf-8",
         )
 
-        docs._process_custom_pages()
+        docs._process_custom_pages(discover_user_guide(docs))
 
         with open(docs.build_dir / "_quarto.yml") as f:
             config = read_yaml(f)
@@ -7223,7 +7231,7 @@ def test_process_sections_default_section():
         with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(config, f)
 
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result == 1
         assert (docs.build_dir / "recipes").exists()
@@ -7249,7 +7257,7 @@ def test_process_sections_blog_section():
         with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(config, f)
 
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result == 1
 
@@ -7266,7 +7274,7 @@ def test_process_sections_missing_dir():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result == 0
 
@@ -7279,7 +7287,7 @@ def test_process_sections_missing_title():
         (tmp / "great-docs.yml").write_text("sections:\n  - dir: recipes\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result == 0
 
@@ -7309,7 +7317,7 @@ def test_process_sections_with_navbar_after():
         with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(config, f)
 
-        docs._process_sections()
+        docs._process_sections(discover_user_guide(docs))
 
         with open(docs.build_dir / "_quarto.yml") as f:
             result = read_yaml(f)
@@ -7332,7 +7340,7 @@ def test_process_sections_replaces_a_sidebar_with_the_same_id(tmp_path: Path):
     with open(docs.build_dir / "_quarto.yml", "w") as f:
         write_yaml({"website": {"sidebar": [old, other], "navbar": {"left": []}}}, f)
 
-    docs._process_sections()
+    docs._process_sections(discover_user_guide(docs))
 
     sidebar = read_quarto_yml(docs.build_dir)["website"]["sidebar"]
     assert [entry["title"] for entry in sidebar] == ["Other", "Recipes"]
@@ -7356,7 +7364,7 @@ def test_process_sections_finds_the_user_guide_once(tmp_path: Path, capsys):
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir()
 
-    docs._process_sections()
+    docs._process_sections(discover_user_guide(docs))
 
     assert capsys.readouterr().out.count("'missing_guide'") == 1
 
@@ -8211,7 +8219,7 @@ def test_process_user_guide_no_guide():
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._process_user_guide(has_api_reference=True) is False
+        assert docs._process_user_guide(discover_user_guide(docs), has_api_reference=True) is False
 
 
 def test_process_user_guide_with_pages():
@@ -8231,7 +8239,7 @@ def test_process_user_guide_with_pages():
         with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(config, f)
 
-        assert docs._process_user_guide(has_api_reference=True) is True
+        assert docs._process_user_guide(discover_user_guide(docs), has_api_reference=True) is True
         assert (docs.build_dir / "user-guide").exists()
 
 
@@ -8253,7 +8261,7 @@ def test_process_user_guide_with_sections():
         with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(config, f)
 
-        result = docs._process_user_guide(has_api_reference=True)
+        result = docs._process_user_guide(discover_user_guide(docs), has_api_reference=True)
 
         assert result is True
 
@@ -9375,7 +9383,9 @@ def test_create_index_from_readme_with_license():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
         license_qmd = gd_dir / "license.qmd"
 
         assert license_qmd.exists()
@@ -9402,7 +9412,9 @@ def test_create_index_from_readme_with_citation():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
         citation_qmd = gd_dir / "citation.qmd"
 
         assert citation_qmd.exists()
@@ -9422,7 +9434,9 @@ def test_create_index_from_readme_creates_index_qmd():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
         index_qmd = gd_dir / "index.qmd"
 
         assert index_qmd.exists()
@@ -9443,7 +9457,9 @@ def test_create_index_from_readme_generates_landing_page():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
         index_qmd = gd_dir / "index.qmd"
 
         assert index_qmd.exists()
@@ -9679,7 +9695,9 @@ def test_create_index_from_readme_citation_bibtex():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
         citation_qmd = gd_dir / "citation.qmd"
 
         assert citation_qmd.exists()
@@ -9712,7 +9730,9 @@ def test_create_index_from_readme_citation_two_authors():
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
         citation_qmd = gd_dir / "citation.qmd"
         content = citation_qmd.read_text(encoding="utf-8")
 
@@ -10735,7 +10755,9 @@ def test_create_index_from_readme_citation_parsing():
         readme.write_text("# My Package\n\nHello world.\n", encoding="utf-8")
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
 
         citation_qmd = docs.build_dir / "citation.qmd"
 
@@ -10776,7 +10798,9 @@ def test_create_index_from_readme_citation_single_author():
         readme.write_text("# Solo\n\nContent.\n", encoding="utf-8")
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
 
         citation_qmd = docs.build_dir / "citation.qmd"
 
@@ -10814,7 +10838,9 @@ def test_create_index_from_readme_citation_three_authors():
         readme.write_text("# Team\n\nContent.\n", encoding="utf-8")
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
 
         citation_qmd = docs.build_dir / "citation.qmd"
         content = citation_qmd.read_text()
@@ -10835,7 +10861,9 @@ def test_create_index_from_readme_no_citation():
         readme.write_text("# My Pkg\n\nSome content.\n", encoding="utf-8")
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
 
         citation_qmd = docs.build_dir / "citation.qmd"
 
@@ -10857,7 +10885,9 @@ def test_create_index_from_readme_heading_adjustment():
         )
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -10889,7 +10919,9 @@ def test_create_index_from_readme_rst_source():
             "great_docs._website.homepage.source.rst_to_markdown",
             return_value="# My Package\n\nSome RST content.\n",
         ):
-            docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+            docs._create_index_from_readme(
+                discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            )
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -10909,7 +10941,9 @@ def test_create_index_from_readme_landing_page_fallback():
 
         # No README.md, no index.qmd, no README.rst
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -10934,7 +10968,9 @@ def test_create_index_from_readme_hero_section():
         readme.write_text("# mypkg\n\nHello world.\n", encoding="utf-8")
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -10963,7 +10999,9 @@ def test_create_index_from_readme_hero_strips_duplicate_h1():
         readme.write_text("# testpkg\n\n## Features\n\nSome features.\n", encoding="utf-8")
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
 
         index_qmd = docs.build_dir / "index.qmd"
         content = index_qmd.read_text()
@@ -10985,7 +11023,9 @@ def test_create_index_from_readme_hero_name_true_keeps_title(tmp_path: Path):
     docs._config = write_config(tmp_path, "hero:\n  enabled: true\n  name: true\n")
     docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-    docs._create_index_from_readme(has_api_reference=False, force_rebuild=True)
+    docs._create_index_from_readme(
+        discover_user_guide(docs), has_api_reference=False, force_rebuild=True
+    )
 
     assert "## testpkg" in (docs.build_dir / "index.qmd").read_text(encoding="utf-8")
 
@@ -12600,7 +12640,7 @@ def test_process_sections_empty_config():
         docs = GreatDocs(project_path=tmp_dir)
 
         # No great-docs.yml -> config.sections is empty
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result == 0
 
@@ -12610,7 +12650,7 @@ def test_process_sections_not_list():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         docs._config = write_config(Path(tmp_dir), "sections: not-a-list\n")
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result == 0
 
@@ -12622,7 +12662,7 @@ def test_process_sections_missing_source_dir():
         docs._config = write_config(
             Path(tmp_dir), "sections:\n  - title: Recipes\n    dir: nonexistent\n"
         )
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result == 0
 
@@ -12638,7 +12678,7 @@ def test_process_sections_no_files_in_dir():
         docs._config = write_config(
             Path(tmp_dir), "sections:\n  - title: Recipes\n    dir: recipes\n"
         )
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result == 0
 
@@ -12676,7 +12716,7 @@ def test_process_sections_default_type():
             Path(tmp_dir), "sections:\n  - title: Recipes\n    dir: recipes\n"
         )
 
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
 
         assert result >= 1
 
@@ -12885,7 +12925,7 @@ def test_process_user_guide_returns_false_no_guide():
     """Test _process_user_guide returns False when no user guide."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._process_user_guide(has_api_reference=True)
+        result = docs._process_user_guide(discover_user_guide(docs), has_api_reference=True)
         assert result is False
 
 
@@ -13137,7 +13177,9 @@ def test_create_index_from_readme_with_readme():
         build_dir = Path(tmp_dir) / "great-docs"
         build_dir.mkdir(parents=True, exist_ok=True)
 
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
         index_qmd = build_dir / "index.qmd"
         assert index_qmd.exists()
         content = index_qmd.read_text(encoding="utf-8")
@@ -13158,7 +13200,9 @@ def test_create_index_from_readme_no_source():
         build_dir = Path(tmp_dir) / "great-docs"
         build_dir.mkdir(parents=True, exist_ok=True)
 
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
         index_qmd = build_dir / "index.qmd"
         assert index_qmd.exists()
         content = index_qmd.read_text(encoding="utf-8")
@@ -13175,7 +13219,9 @@ def test_create_index_from_readme_skip_existing():
         build_dir.mkdir(parents=True, exist_ok=True)
         (build_dir / "index.qmd").write_text("existing content\n")
 
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=False)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=False
+        )
         content = (build_dir / "index.qmd").read_text(encoding="utf-8")
         assert content == "existing content\n"
 
@@ -13230,7 +13276,7 @@ def test_process_user_guide_returns_true():
             encoding="utf-8",
         )
 
-        result = docs._process_user_guide(has_api_reference=True)
+        result = docs._process_user_guide(discover_user_guide(docs), has_api_reference=True)
         assert result is True
 
 
@@ -13505,7 +13551,7 @@ def test_process_sections_blog_type():
             encoding="utf-8",
         )
 
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
         assert result == 1
 
 
@@ -13540,7 +13586,7 @@ def test_process_sections_with_index_generation():
             encoding="utf-8",
         )
 
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
         assert result == 1
 
         # Check that index was generated
@@ -13555,7 +13601,7 @@ def test_process_sections_invalid_type():
 
         docs._config = write_config(Path(tmp_dir), "sections:\n  - just a string\n")
 
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
         assert result == 0
 
 
@@ -13566,7 +13612,7 @@ def test_process_sections_missing_title_or_dir():
 
         docs._config = write_config(Path(tmp_dir), "sections:\n  - title: NoDir\n")
 
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
         assert result == 0
 
 
@@ -13582,7 +13628,7 @@ def test_process_sections_empty_dir():
             Path(tmp_dir), "sections:\n  - title: Empty\n    dir: empty_section\n"
         )
 
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
         assert result == 0
 
 
@@ -13690,7 +13736,7 @@ def test_process_user_guide_homepage_mode():
         build_dir.mkdir(parents=True, exist_ok=True)
 
         # No user guide directory — should fall back to index mode
-        result = docs._process_user_guide(has_api_reference=True)
+        result = docs._process_user_guide(discover_user_guide(docs), has_api_reference=True)
         assert result is False
 
         # Just confirm no crash
@@ -13789,7 +13835,9 @@ def test_create_index_from_readme_with_badges():
         build_dir = Path(tmp_dir) / "great-docs"
         build_dir.mkdir(parents=True)
 
-        docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+        docs._create_index_from_readme(
+            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        )
         index_qmd = build_dir / "index.qmd"
         assert index_qmd.exists()
         content = index_qmd.read_text(encoding="utf-8")
@@ -14279,7 +14327,7 @@ def test_process_sections_no_config():
             encoding="utf-8",
         )
         # Should return 0 with no sections configured
-        result = docs._process_sections()
+        result = docs._process_sections(discover_user_guide(docs))
         assert result == 0
 
 
@@ -25029,7 +25077,7 @@ class TestProcessSections:
                     },
                     f,
                 )
-            count = docs._process_sections()
+            count = docs._process_sections(discover_user_guide(docs))
             assert count == 1
 
     def test_no_sections_config(self):
@@ -25038,7 +25086,7 @@ class TestProcessSections:
             tmp = Path(tmp_dir)
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             docs = GreatDocs(project_path=tmp_dir)
-            assert docs._process_sections() == 0
+            assert docs._process_sections(discover_user_guide(docs)) == 0
 
     def test_processes_blog_section(self):
         """Processes a blog-type section."""
@@ -25067,7 +25115,7 @@ class TestProcessSections:
                     },
                     f,
                 )
-            count = docs._process_sections()
+            count = docs._process_sections(discover_user_guide(docs))
             assert count == 1
             # Blog index should be generated
             assert (docs.build_dir / "blog" / "index.qmd").exists()
@@ -25434,7 +25482,7 @@ class TestProcessSectionsBatch9:
                     "blog/post-1.qmd": "---\ntitle: Post One\ndate: 2024-01-01\n---\nContent.\n",
                 },
             )
-            count = docs._process_sections()
+            count = docs._process_sections(discover_user_guide(docs))
             assert count == 1
             # User index was copied, so no generated index overwrites it
             index_content = (docs.build_dir / "blog" / "index.qmd").read_text()
@@ -25451,7 +25499,7 @@ class TestProcessSectionsBatch9:
                     "recipes/02-advanced.qmd": "---\ntitle: Advanced\n---\nContent.\n",
                 },
             )
-            count = docs._process_sections()
+            count = docs._process_sections(discover_user_guide(docs))
             assert count == 1
             # Navbar should link to the first content page (basic.qmd)
             with open(docs.build_dir / "_quarto.yml") as f:
@@ -25471,7 +25519,7 @@ class TestProcessSectionsBatch9:
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             (tmp / "great-docs.yml").write_text("sections: invalid_string\n")
             docs = GreatDocs(project_path=tmp_dir)
-            assert docs._process_sections() == 0
+            assert docs._process_sections(discover_user_guide(docs)) == 0
 
     def test_sections_entry_not_dict(self):
         """Skips section entries that are not dicts."""
@@ -25486,7 +25534,7 @@ class TestProcessSectionsBatch9:
                 "not_a_dict",
                 {"title": "Recipes", "dir": "recipes"},
             ]
-            count = docs._process_sections()
+            count = docs._process_sections(discover_user_guide(docs))
             assert count == 1
 
     def test_section_missing_title_or_dir(self):
@@ -25496,7 +25544,7 @@ class TestProcessSectionsBatch9:
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             (tmp / "great-docs.yml").write_text("sections:\n  - title: NoDir\n")
             docs = GreatDocs(project_path=tmp_dir)
-            assert docs._process_sections() == 0
+            assert docs._process_sections(discover_user_guide(docs)) == 0
 
     def test_section_dir_not_found(self):
         """Skips sections whose directory does not exist."""
@@ -25507,7 +25555,7 @@ class TestProcessSectionsBatch9:
                 "sections:\n  - title: Recipes\n    dir: nonexistent\n"
             )
             docs = GreatDocs(project_path=tmp_dir)
-            assert docs._process_sections() == 0
+            assert docs._process_sections(discover_user_guide(docs)) == 0
 
     def test_section_empty_dir(self):
         """Skips sections whose directory has no .qmd/.md files."""
@@ -25518,7 +25566,7 @@ class TestProcessSectionsBatch9:
             (tmp / "recipes").mkdir()
             (tmp / "recipes" / "notes.txt").write_text("not qmd")
             docs = GreatDocs(project_path=tmp_dir)
-            assert docs._process_sections() == 0
+            assert docs._process_sections(discover_user_guide(docs)) == 0
 
 
 class TestUpdateSidebarWithCliBatch9:
@@ -26375,7 +26423,7 @@ class TestProcessSectionsFallbackHrefBatch10:
                     },
                     f,
                 )
-            n = docs._process_sections()
+            n = docs._process_sections(discover_user_guide(docs))
             assert n >= 1
 
 
@@ -30985,19 +31033,21 @@ def _write_sections(docs: GreatDocs, project: Path) -> None:
     """Publish the project's `examples` section and blog"""
     with open(docs.build_dir / "_quarto.yml", "w") as f:
         write_yaml({"website": {"sidebar": [], "navbar": {"left": []}}}, f)
-    docs._process_sections()
+    docs._process_sections(discover_user_guide(docs))
 
 
 def _write_custom_pages(docs: GreatDocs, project: Path) -> None:
     """Wrap the project's passthrough custom page"""
     with open(docs.build_dir / "_quarto.yml", "w") as f:
         write_yaml({"website": {"sidebar": [], "navbar": {"left": []}}}, f)
-    docs._process_custom_pages()
+    docs._process_custom_pages(discover_user_guide(docs))
 
 
 def _write_index(docs: GreatDocs, project: Path) -> None:
     """Write the homepage and the community pages"""
-    docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+    docs._create_index_from_readme(
+        discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+    )
 
 
 @pytest.mark.parametrize(
@@ -31140,7 +31190,9 @@ def test_readme_homepage_without_margin_starts_with_front_matter_fence():
         docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         with patch("great_docs._website.homepage.margin.render", return_value=""):
-            docs._create_index_from_readme(has_api_reference=True, force_rebuild=True)
+            docs._create_index_from_readme(
+                discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            )
 
         content = (docs.build_dir / "index.qmd").read_text(encoding="utf-8")
 

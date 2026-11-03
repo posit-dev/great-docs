@@ -855,7 +855,7 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     docs._update_sidebar_with_cli(cli_files)
 
     # Process user guide
-    docs._process_user_guide(run.has_api_reference)
+    docs._process_user_guide(run.user_guide, run.has_api_reference)
 
     quarto_yml = docs.build_dir / "_quarto.yml"
     with open(quarto_yml, encoding="utf-8") as f:
@@ -983,7 +983,7 @@ def _setup_blended_homepage(pkg_dir: Path, spec: dict) -> GreatDocs:
 
     run = make_run()
     docs._prepare_build_directory(run)
-    docs._process_user_guide(run.has_api_reference)
+    docs._process_user_guide(run.user_guide, run.has_api_reference)
     return docs
 
 

@@ -27,7 +27,7 @@ from great_docs._reference.discovery import (
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website import quarto_yml as quarto_yml_file
 from great_docs._website.seo import robots
-from tests.support import StubRemote, make_run, mock_config
+from tests.support import StubRemote, discover_user_guide, make_run, mock_config
 
 
 def _make_gd(tmp_path: Path) -> GreatDocs:
@@ -271,7 +271,7 @@ def _build_mcp_candidates(gd: GreatDocs, monkeypatch: pytest.MonkeyPatch) -> lis
         imported.append(name)
         return real_import(name, package)
 
-    def stop_build(has_api_reference: bool) -> None:
+    def stop_build(guide: object, has_api_reference: bool) -> None:
         raise McpStepPassed
 
     monkeypatch.setattr("great_docs._build.quarto.ensure_installed", lambda: None)
@@ -1596,7 +1596,7 @@ class TestCanonicalIntegration:
             "---\nlayout: raw\n---\n<html><head></head></html>", encoding="utf-8"
         )
 
-        gd._process_custom_pages()
+        gd._process_custom_pages(discover_user_guide(gd))
 
         page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert (
@@ -1619,7 +1619,7 @@ class TestCanonicalIntegration:
             "---\nlayout: raw\n---\n<html><head></head></html>", encoding="utf-8"
         )
 
-        gd._process_custom_pages()
+        gd._process_custom_pages(discover_user_guide(gd))
 
         page = (gd.build_dir / "reference" / "demo.html").read_text(encoding="utf-8")
         assert page.count('<script type="application/ld+json">') == 1
@@ -1643,7 +1643,7 @@ class TestCanonicalIntegration:
             encoding="utf-8",
         )
 
-        gd._process_custom_pages()
+        gd._process_custom_pages(discover_user_guide(gd))
 
         page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert page.count('<meta property="og:title" content="Widget Lab">') == 1
@@ -1669,7 +1669,7 @@ class TestCanonicalIntegration:
             "---\nlayout: raw\n---\n<html><head></head></html>", encoding="utf-8"
         )
 
-        gd._process_custom_pages()
+        gd._process_custom_pages(discover_user_guide(gd))
 
         page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert page.count('<meta name="gd-i18n"') == 1
@@ -1751,7 +1751,7 @@ class TestPageDescriptions:
             "---\nlayout: raw\n---\n<html><head></head></html>", encoding="utf-8"
         )
 
-        gd._process_custom_pages()
+        gd._process_custom_pages(discover_user_guide(gd))
 
         page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert page.count('<meta name="description" content="Tom &amp; Jerry">') == 1

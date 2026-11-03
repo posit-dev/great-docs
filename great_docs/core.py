@@ -493,7 +493,8 @@ class GreatDocs:
         # Build the homepage after the API reference configuration. Its metadata
         # margin can then include links to `llms.txt` and `llms-full.txt` when the
         # build will generate them.
-        self._create_index_from_readme(run.has_api_reference, force_rebuild=True)
+        run.user_guide = user_guide.discover(self._config, self.layout, report=_print_warning)
+        self._create_index_from_readme(run.user_guide, run.has_api_reference, force_rebuild=True)
 
     def _copy_assets(self) -> bool:
         """
@@ -528,22 +529,26 @@ class GreatDocs:
 
         return True
 
-    def _page_map(self) -> PageMap:
+    def _page_map(self, guide: UserGuide | None) -> PageMap:
         """
         Map authored pages to their published paths for this build
+
+        Parameters
+        ----------
+        guide
+            The discovered user guide, or `None` when it has no pages.
 
         Returns
         -------
         :
             The page map for the current sources and configuration.
         """
-        guide = user_guide.find_dir(self._config, self.layout, report=_print_warning)
+        # Reuse the directory without repeating warnings from guide discovery
+        guide_dir = user_guide.find_dir(self._config, self.layout, report=lambda _: None)
         homepage = homepage_source.find(self.layout)[:1]
         if guide is not None and self._config.homepage == "user_guide":
-            info = user_guide.discover(self._config, self.layout, report=_print_warning)
-            if info and info["files"]:
-                homepage.append(info["files"][0]["path"])
-        return PageMap.make(self._config, self.layout, guide, homepage)
+            homepage.append(guide["files"][0]["path"])
+        return PageMap.make(self._config, self.layout, guide_dir, homepage)
 
     def install(self, force: bool = False) -> None:
         """
@@ -1190,9 +1195,14 @@ class GreatDocs:
     # Custom Sections Methods
     # =========================================================================
 
-    def _process_sections(self) -> int:
+    def _process_sections(self, guide: UserGuide | None) -> int:
         """
         Publish the configured sections and add their sidebars and navbar links
+
+        Parameters
+        ----------
+        guide
+            The discovered user guide, or `None` when it has no pages.
 
         Returns
         -------
@@ -1205,7 +1215,7 @@ class GreatDocs:
         if not found:
             return 0
 
-        pages = self._page_map()
+        pages = self._page_map(guide)
         add_dates = partial(page_dates.add_to_page, config=self._config, authors=self._page_authors)
         for section in found:
             section.destination.mkdir(parents=True, exist_ok=True)
@@ -1341,8 +1351,20 @@ class GreatDocs:
                     if exclude not in render:
                         render.append(exclude)
 
-    def _process_custom_pages(self) -> int:
-        """Process configured custom HTML pages."""
+    def _process_custom_pages(self, guide: UserGuide | None) -> int:
+        """
+        Publish the configured custom pages
+
+        Parameters
+        ----------
+        guide
+            The discovered user guide, or `None` when it has no pages.
+
+        Returns
+        -------
+        :
+            The number of pages processed.
+        """
         sources = self._get_custom_page_sources()
         if not sources:
             return 0
@@ -1355,7 +1377,7 @@ class GreatDocs:
             self._resolve_social_card_image_url() if self._config.social_cards_enabled else None
         )
         structured_data = self._structured_data()
-        pages = self._page_map()
+        pages = self._page_map(guide)
 
         for source in sources:
             source_dir = source["source_dir"]
@@ -1680,7 +1702,7 @@ class GreatDocs:
         strip_prefix = not guide.get("explicit", False)
         add_dates = partial(page_dates.add_to_page, config=self._config, authors=self._page_authors)
         copied_files = user_guide.copy_pages(
-            guide, target_dir, layout=self.layout, pages=self._page_map(), add_dates=add_dates
+            guide, target_dir, layout=self.layout, pages=self._page_map(guide), add_dates=add_dates
         )
 
         # Also copy any asset directories (images, data, code snippets, etc.)
@@ -1889,21 +1911,22 @@ class GreatDocs:
 
         quarto_yml.write(self.build_dir, config, self._config)
 
-    def _process_user_guide(self, has_api_reference: bool) -> bool:
+    def _process_user_guide(self, guide: UserGuide | None, has_api_reference: bool) -> bool:
         """
-        Process user guide content: discover, copy, and update configuration.
+        Publish the user guide and add its sidebar and navbar link
 
         Parameters
         ----------
+        guide
+            The discovered user guide, or `None` when it has no pages.
         has_api_reference
             Whether the site has an API reference, which a fallback homepage links to.
 
         Returns
         -------
-        bool
-            True if user guide was processed, False otherwise.
+        :
+            Whether the user guide was published.
         """
-        guide = user_guide.discover(self._config, self.layout, report=_print_warning)
         if not guide:
             # Fallback: if homepage mode is "user_guide" but no UG pages exist,
             # warn and create a normal index from README instead.
@@ -1913,7 +1936,7 @@ class GreatDocs:
                     "falling back to index mode"
                 )
                 self._create_index_from_readme(
-                    has_api_reference, force_rebuild=True, fallback_to_index=True
+                    guide, has_api_reference, force_rebuild=True, fallback_to_index=True
                 )
             return False
 
@@ -1977,7 +2000,7 @@ class GreatDocs:
             first_ug_path.read_text(encoding="utf-8"),
             metadata=self._get_package_metadata(),
             package_name=self._detect_package_name(),
-            pages=self._page_map(),
+            pages=self._page_map(guide),
             page_authors=self._page_authors,
         )
 
@@ -2575,7 +2598,11 @@ class GreatDocs:
         return True
 
     def _create_index_from_readme(
-        self, has_api_reference: bool, force_rebuild: bool = False, fallback_to_index: bool = False
+        self,
+        guide: UserGuide | None,
+        has_api_reference: bool,
+        force_rebuild: bool = False,
+        fallback_to_index: bool = False,
     ) -> None:
         """
         Write the licence, citation and package information pages, then the README homepage
@@ -2586,6 +2613,8 @@ class GreatDocs:
 
         Parameters
         ----------
+        guide
+            The discovered user guide, or `None` when it has no pages.
         has_api_reference
             Whether the site has an API reference, which a generated landing page links to.
         force_rebuild
@@ -2635,12 +2664,10 @@ class GreatDocs:
             self.build_dir,
             metadata=metadata,
             package_name=self._detect_package_name(),
-            pages=self._page_map(),
+            pages=self._page_map(guide),
             page_authors=self._page_authors,
             has_api_reference=has_api_reference,
-            has_user_guide=lambda: bool(
-                user_guide.discover(self._config, self.layout, report=_print_warning)
-            ),
+            has_user_guide=lambda: guide is not None,
             rebuild=force_rebuild,
             report=print,
         )
@@ -4815,12 +4842,17 @@ class GreatDocs:
             )
         return "API reference refreshed"
 
-    def _step_llms_txt(self) -> Outcome:
+    def _step_llms_txt(self, run: Run) -> Outcome:
         """
         Write `llms.txt` and `llms-full.txt`
 
         `llms-full.txt` includes user guide pages and, when `cli.enabled` is set, Click
         command-line help.
+
+        Parameters
+        ----------
+        run
+            The current build.
 
         Returns
         -------
@@ -4847,7 +4879,7 @@ class GreatDocs:
         llms_txt.write_full(
             self.build_dir,
             cli=cli,
-            user_guide=user_guide.discover(self._config, self.layout, report=_print_warning),
+            user_guide=run.user_guide,
             report=print,
         )
         return "Created llms.txt + llms-full.txt"
@@ -5089,13 +5121,18 @@ class GreatDocs:
         :
             The result line or skip reason.
         """
-        if not self._process_user_guide(run.has_api_reference):
+        if not self._process_user_guide(run.user_guide, run.has_api_reference):
             return Skipped("no user guide found")
         return "User Guide configured"
 
-    def _step_sections(self) -> Outcome:
+    def _step_sections(self, run: Run) -> Outcome:
         """
         Copy the configured custom sections into the build directory
+
+        Parameters
+        ----------
+        run
+            The current build.
 
         Returns
         -------
@@ -5104,21 +5141,26 @@ class GreatDocs:
         """
         if not self._config.sections:
             return Skipped("no sections configured")
-        n_sections = self._process_sections()
+        n_sections = self._process_sections(run.user_guide)
         if not n_sections:
             return "No sections to process"
         return f"{n_sections} section(s) processed"
 
-    def _step_custom_pages(self) -> Outcome:
+    def _step_custom_pages(self, run: Run) -> Outcome:
         """
         Copy the custom pages into the build directory
+
+        Parameters
+        ----------
+        run
+            The current build.
 
         Returns
         -------
         :
             The result line or skip reason.
         """
-        n_pages = self._process_custom_pages()
+        n_pages = self._process_custom_pages(run.user_guide)
         if not n_pages:
             return Skipped("no custom pages")
         return f"{n_pages} custom page(s)"
@@ -5770,7 +5812,7 @@ class GreatDocs:
             ),
             Step(
                 "Generate llms.txt / llms-full.txt",
-                lambda: self._step_llms_txt(),
+                lambda: self._step_llms_txt(run),
                 user_code=True,
             ),
             Step("Generate SKILL.md", lambda: self._step_skill_md(), user_code=True),
@@ -5826,12 +5868,12 @@ class GreatDocs:
             ),
             Step(
                 "Process custom sections",
-                lambda: self._step_sections(),
+                lambda: self._step_sections(run),
                 fails_on=(ValueError,),
             ),
             Step(
                 "Process custom pages",
-                lambda: self._step_custom_pages(),
+                lambda: self._step_custom_pages(run),
                 fails_on=(ValueError,),
             ),
             Step(
@@ -6059,7 +6101,8 @@ class GreatDocs:
             _page_dirs: list[Path] = []
 
             # User guide pages
-            ug_dir = user_guide.find_dir(self._config, self.layout, report=_print_warning)
+            # Build preparation has already reported directory warnings
+            ug_dir = user_guide.find_dir(self._config, self.layout, report=lambda _: None)
             if ug_dir and ug_dir.is_dir():
                 _page_dirs.append(ug_dir)
 

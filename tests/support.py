@@ -418,7 +418,7 @@ def homepage_hero(docs: GreatDocs, readme: str | None = None) -> tuple[str, str 
         docs.build_dir,
         metadata=docs._get_package_metadata(),
         package_name=docs._detect_package_name(),
-        pages=docs._page_map(),
+        pages=docs._page_map(discover_user_guide(docs)),
     )
     return html, found.body if html else None
 
