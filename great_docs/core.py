@@ -5,7 +5,6 @@ import re
 import shutil
 import subprocess
 import sys
-from datetime import datetime
 from functools import partial
 from importlib import resources
 from pathlib import Path
@@ -83,6 +82,7 @@ from ._website.navigation import shared_sidebar
 from ._website.project_pages import citation, community, licence, package_info
 from ._website.scripts import script_include, stylesheet_include
 from ._website.seo import description as seo_description
+from ._website.seo import site_files
 from ._website.seo.structured_data import StructuredData
 from ._yaml import YamlMapping, set_front_matter_option, split_front_matter
 from .config import Config, create_default_config
@@ -6624,188 +6624,6 @@ body-classes: "gd-homepage"
         owner, repo, _ = self._get_github_repo_info()
         return page_url.resolve_base_url(self._config, owner, repo)
 
-    def _categorize_page(self, html_path: str) -> str:
-        """
-        Categorize an HTML file by page type for SEO settings.
-
-        Parameters
-        ----------
-        html_path
-            Relative path to the HTML file within _site/.
-
-        Returns
-        -------
-        str
-            Page type: "homepage", "reference", "user_guide", "changelog", or "default".
-        """
-        # Normalize path separators
-        path = html_path.replace("\\", "/")
-
-        if path == "index.html":
-            return "homepage"
-        elif path.startswith("reference/"):
-            return "reference"
-        elif path.startswith("user-guide/"):
-            return "user_guide"
-        elif path == "changelog.html":
-            return "changelog"
-        elif path.startswith("recipes/"):
-            return "user_guide"  # Recipes are similar to user guide
-        else:
-            return "default"
-
-    def _generate_sitemap_xml(self) -> None:
-        """
-        Generate a sitemap.xml file for search engine indexing.
-
-        Creates an XML sitemap at _site/sitemap.xml with proper priorities and change frequencies
-        based on page type.
-        """
-        if not self._config.sitemap_enabled:
-            return  # pragma: no cover
-
-        site_dir = self.layout.site_dir
-        if not site_dir.exists():
-            print("   ⚠️  _site directory not found, skipping sitemap generation")
-            return
-
-        base_url = self._get_canonical_base_url()
-        if not base_url:
-            print("   ⚠️  No base URL configured, skipping sitemap generation")
-            print("      Set seo.canonical.base_url in great-docs.yml or configure a GitHub repo")
-            return
-
-        # Get change frequencies and priorities from config
-        changefreq = self._config.sitemap_changefreq
-        priority = self._config.sitemap_priority
-
-        # Find all HTML files in _site
-        html_files = list(site_dir.rglob("*.html"))
-
-        # Build sitemap entries
-        entries = []
-        for html_file in html_files:
-            rel_path = html_file.relative_to(site_dir).as_posix()
-
-            # Skip internal/system files
-            if rel_path.startswith("_") or rel_path.startswith("."):
-                continue  # pragma: no cover
-
-            # Categorize the page
-            page_type = self._categorize_page(rel_path)
-
-            # Build URL (index.html becomes just the directory)
-            if rel_path == "index.html":
-                loc = base_url
-            elif rel_path.endswith("/index.html"):
-                loc = base_url + rel_path[:-10]  # Remove /index.html  # pragma: no cover
-            else:
-                loc = base_url + rel_path
-
-            # Get the last modified time
-            mtime = html_file.stat().st_mtime
-            lastmod = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
-
-            entry = {
-                "loc": loc,
-                "lastmod": lastmod,
-                "changefreq": changefreq.get(page_type, changefreq["default"]),
-                "priority": priority.get(page_type, priority["default"]),
-            }
-            entries.append(entry)
-
-        # Sort entries by priority (descending) then by path
-        entries.sort(key=lambda x: (-x["priority"], x["loc"]))
-
-        # Generate XML
-        xml_lines = ['<?xml version="1.0" encoding="UTF-8"?>']
-        xml_lines.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
-
-        for entry in entries:
-            xml_lines.append("  <url>")
-            xml_lines.append(f"    <loc>{entry['loc']}</loc>")
-            xml_lines.append(f"    <lastmod>{entry['lastmod']}</lastmod>")
-            xml_lines.append(f"    <changefreq>{entry['changefreq']}</changefreq>")
-            xml_lines.append(f"    <priority>{entry['priority']:.1f}</priority>")
-            xml_lines.append("  </url>")
-
-        xml_lines.append("</urlset>")
-
-        # Write sitemap.xml
-        sitemap_path = site_dir / "sitemap.xml"
-        sitemap_path.write_text("\n".join(xml_lines), encoding="utf-8")
-        print(f"   Generated sitemap.xml with {len(entries)} URLs")
-
-    def _generate_robots_txt(self) -> None:
-        """
-        Generate a robots.txt file for search engine crawlers.
-
-        Creates a robots.txt at _site/robots.txt with configurable rules.
-        """
-        if not self._config.robots_enabled:
-            return  # pragma: no cover
-
-        site_dir = self.layout.site_dir
-        if not site_dir.exists():
-            print("   ⚠️  _site directory not found, skipping robots.txt generation")
-            return
-
-        lines = []
-
-        # Default user-agent rules
-        lines.append("# Robots.txt generated by Great Docs")
-        lines.append("")
-        lines.append("User-agent: *")
-
-        if self._config.robots_allow_all:
-            lines.append("Allow: /")
-        else:
-            lines.append("Disallow: /")  # pragma: no cover
-
-        # Add specific disallow rules
-        for path in self._config.robots_disallow:
-            lines.append(f"Disallow: {path}")
-
-        # Add crawl delay if configured
-        crawl_delay = self._config.robots_crawl_delay
-        if crawl_delay:
-            lines.append(f"Crawl-delay: {crawl_delay}")  # pragma: no cover
-
-        lines.append("")
-
-        # Add extra rules (e.g., for AI crawlers)
-        extra_rules = self._config.robots_extra_rules
-        if extra_rules:
-            lines.append("# Additional rules")
-            for rule in extra_rules:
-                lines.append(rule)
-            lines.append("")
-
-        # Add sitemap reference if sitemap is enabled
-        if self._config.sitemap_enabled:
-            base_url = self._get_canonical_base_url()
-            if base_url:
-                lines.append(f"Sitemap: {base_url}sitemap.xml")
-                lines.append("")
-
-        # Add llms.txt references for AI agent discoverability
-        base_url = self._get_canonical_base_url()
-        if base_url:
-            llms_path = site_dir / "llms.txt"
-            llms_full_path = site_dir / "llms-full.txt"
-            if llms_path.exists() or llms_full_path.exists():
-                lines.append("# AI agent context files")
-                if llms_path.exists():
-                    lines.append(f"Llms-txt: {base_url}llms.txt")
-                if llms_full_path.exists():
-                    lines.append(f"Llms-txt: {base_url}llms-full.txt")
-                lines.append("")
-
-        # Write robots.txt
-        robots_path = site_dir / "robots.txt"
-        robots_path.write_text("\n".join(lines), encoding="utf-8")
-        print("   Generated robots.txt")
-
     def _resolve_social_card_image_url(self) -> str | None:
         """
         Resolve the social card image to an absolute URL.
@@ -6896,19 +6714,6 @@ body-classes: "gd-homepage"
                 f"({done.manifest_bytes / 1024:.0f} KB of player data)"
             )
             self._add_project_resources([f"{term_prerender.OUTPUT_ROOT}/**"], [])
-
-    def _generate_seo_files(self) -> None:
-        """
-        Generate all SEO-related files (sitemap.xml, robots.txt).
-
-        Called after Quarto has built the site.
-        """
-        if not self._config.seo_enabled:
-            return  # pragma: no cover
-
-        print("\n🔍 Generating SEO files...")
-        self._generate_sitemap_xml()
-        self._generate_robots_txt()
 
     def uninstall(self) -> None:
         """
@@ -7807,7 +7612,8 @@ body-classes: "gd-homepage"
         :
             The step's result line.
         """
-        self._generate_seo_files()
+        base_url = self._get_canonical_base_url()
+        site_files.write(self.layout.site_dir, self._config, base_url, report=print)
         return "sitemap.xml + robots.txt"
 
     def _log_build_timing(

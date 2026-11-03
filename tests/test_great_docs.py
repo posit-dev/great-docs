@@ -169,6 +169,7 @@ from great_docs._website.quarto_yml import edit as edit_quarto_yml
 from great_docs._website.quarto_yml import read as read_quarto_yml
 from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
 from great_docs._website.scripts import script_include, stylesheet_include
+from great_docs._website.seo import robots, sitemap
 from great_docs._yaml import split_front_matter
 from great_docs.cli import (
     _detect_optional_dependencies,
@@ -30014,35 +30015,36 @@ seo:
         assert config.seo_default_description == "My package documentation"
 
 
-def test_categorize_page():
-    """Test page categorization for SEO settings."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
+def test_sitemap_page_type():
+    """
+    Classify rendered paths for sitemap settings
+    """
+    # Homepage
+    assert sitemap.page_type("index.html") == "homepage"
 
-        # Homepage
-        assert docs._categorize_page("index.html") == "homepage"
+    # Reference pages
+    assert sitemap.page_type("reference/MyClass.html") == "reference"
+    assert sitemap.page_type("reference/index.html") == "reference"
 
-        # Reference pages
-        assert docs._categorize_page("reference/MyClass.html") == "reference"
-        assert docs._categorize_page("reference/index.html") == "reference"
+    # User guide
+    assert sitemap.page_type("user-guide/intro.html") == "user_guide"
+    assert sitemap.page_type("user-guide/configuration.html") == "user_guide"
 
-        # User guide
-        assert docs._categorize_page("user-guide/intro.html") == "user_guide"
-        assert docs._categorize_page("user-guide/configuration.html") == "user_guide"
+    # Changelog
+    assert sitemap.page_type("changelog.html") == "changelog"
 
-        # Changelog
-        assert docs._categorize_page("changelog.html") == "changelog"
+    # Recipes (treated as user guide)
+    assert sitemap.page_type("recipes/custom-css.html") == "user_guide"
 
-        # Recipes (treated as user guide)
-        assert docs._categorize_page("recipes/custom-css.html") == "user_guide"
-
-        # Default for other pages
-        assert docs._categorize_page("about.html") == "default"
-        assert docs._categorize_page("some/nested/page.html") == "default"
+    # Default for other pages
+    assert sitemap.page_type("about.html") == "default"
+    assert sitemap.page_type("some/nested/page.html") == "default"
 
 
-def test_generate_sitemap_xml():
-    """Test sitemap.xml generation."""
+def test_sitemap_write():
+    """
+    Write sitemap entries with the canonical base URL and homepage priority
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Create a mock site structure
         site_dir = Path(tmp_dir) / "great-docs" / "_site"
@@ -30066,7 +30068,7 @@ seo:
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._generate_sitemap_xml()
+        sitemap.write(site_dir, docs._config, docs._get_canonical_base_url(), report=print)
 
         sitemap_path = site_dir / "sitemap.xml"
 
@@ -30081,8 +30083,10 @@ seo:
         assert "<priority>1.0</priority>" in content  # Homepage priority
 
 
-def test_generate_robots_txt():
-    """Test robots.txt generation."""
+def test_robots_write():
+    """
+    Write default crawler rules, configured restrictions and the sitemap reference
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Create a mock site structure
         site_dir = Path(tmp_dir) / "great-docs" / "_site"
@@ -30105,7 +30109,7 @@ seo:
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._generate_robots_txt()
+        robots.write(site_dir, docs._config, docs._get_canonical_base_url(), report=print)
 
         robots_path = site_dir / "robots.txt"
 
@@ -31442,11 +31446,13 @@ def test_write_skills_page_single_skill_no_switcher():
         assert "Solo" in content
 
 
-# ── _generate_sitemap_xml ────────────────────────────────────────────
+# ── Sitemap generation ──────────────────────────────────────────────────────
 
 
-def test_generate_sitemap_xml_basic():
-    """_generate_sitemap_xml creates a valid sitemap.xml."""
+def test_sitemap_write_basic():
+    """
+    Write sitemap entries for the homepage and reference pages
+    """
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         (project / "great-docs.yml").write_text(
@@ -31461,18 +31467,20 @@ def test_generate_sitemap_xml_basic():
         sub.mkdir()
         (sub / "index.html").write_text("<html></html>")
 
-        gd._generate_sitemap_xml()
+        sitemap.write(gd.layout.site_dir, gd._config, gd._get_canonical_base_url(), report=print)
 
-        sitemap = site_dir / "sitemap.xml"
-        assert sitemap.exists()
-        content = sitemap.read_text()
+        sitemap_path = site_dir / "sitemap.xml"
+        assert sitemap_path.exists()
+        content = sitemap_path.read_text()
         assert '<?xml version="1.0"' in content
         assert "https://example.com/" in content
         assert "<url>" in content
 
 
-def test_generate_sitemap_xml_no_site_dir(capsys):
-    """_generate_sitemap_xml skips when _site doesn't exist."""
+def test_sitemap_write_no_site_dir(capsys):
+    """
+    Report a missing site directory when writing the sitemap
+    """
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         (project / "great-docs.yml").write_text(
@@ -31480,13 +31488,15 @@ def test_generate_sitemap_xml_no_site_dir(capsys):
         )
         gd = GreatDocs(project_path=tmp)
 
-        gd._generate_sitemap_xml()
+        sitemap.write(gd.layout.site_dir, gd._config, gd._get_canonical_base_url(), report=print)
         captured = capsys.readouterr()
         assert "_site" in captured.out
 
 
-def test_generate_sitemap_xml_no_base_url(capsys):
-    """_generate_sitemap_xml skips when no base URL is configured."""
+def test_sitemap_write_no_base_url(capsys):
+    """
+    Report a missing base URL when writing the sitemap
+    """
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         (project / "great-docs.yml").write_text("seo:\n  sitemap: true\n")
@@ -31496,16 +31506,18 @@ def test_generate_sitemap_xml_no_base_url(capsys):
         site_dir.mkdir(parents=True)
         (site_dir / "index.html").write_text("<html></html>")
 
-        gd._generate_sitemap_xml()
+        sitemap.write(gd.layout.site_dir, gd._config, None, report=print)
         captured = capsys.readouterr()
         assert "base URL" in captured.out
 
 
-# ── _generate_robots_txt ─────────────────────────────────────────────
+# ── Crawler rules ───────────────────────────────────────────────────────────
 
 
-def test_generate_robots_txt_basic():
-    """_generate_robots_txt creates a valid robots.txt."""
+def test_robots_write_basic():
+    """
+    Write default crawler rules and the sitemap reference
+    """
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         (project / "great-docs.yml").write_text(
@@ -31516,24 +31528,26 @@ def test_generate_robots_txt_basic():
         site_dir = gd.layout.site_dir
         site_dir.mkdir(parents=True)
 
-        gd._generate_robots_txt()
+        robots.write(gd.layout.site_dir, gd._config, gd._get_canonical_base_url(), report=print)
 
-        robots = site_dir / "robots.txt"
-        assert robots.exists()
-        content = robots.read_text()
+        robots_path = site_dir / "robots.txt"
+        assert robots_path.exists()
+        content = robots_path.read_text()
         assert "User-agent: *" in content
         assert "Allow: /" in content
         assert "Sitemap:" in content
 
 
-def test_generate_robots_txt_no_site_dir(capsys):
-    """_generate_robots_txt skips when _site doesn't exist."""
+def test_robots_write_no_site_dir(capsys):
+    """
+    Report a missing site directory when writing crawler rules
+    """
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         (project / "great-docs.yml").write_text("seo:\n  robots: true\n")
         gd = GreatDocs(project_path=tmp)
 
-        gd._generate_robots_txt()
+        robots.write(gd.layout.site_dir, gd._config, gd._get_canonical_base_url(), report=print)
         captured = capsys.readouterr()
         assert "_site" in captured.out
 

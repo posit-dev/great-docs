@@ -2803,6 +2803,8 @@ def seo(
     import json
     import xml.etree.ElementTree as ET
 
+    from ._website.seo import robots, sitemap
+
     try:
         docs = GreatDocs(project_path=project_path, config_path=config_path)
         site_dir = docs.layout.site_dir
@@ -2828,6 +2830,8 @@ def seo(
         warnings = []
         info = []
 
+        canonical_base = docs._get_canonical_base_url()
+
         # ── Check sitemap.xml ────────────────────────────────────────────
         sitemap_path = site_dir / "sitemap.xml"
         if sitemap_path.exists():
@@ -2846,7 +2850,7 @@ def seo(
         else:
             issues.append("❌ sitemap.xml not found")
             if fix:
-                docs._generate_sitemap_xml()
+                sitemap.write(site_dir, docs._config, canonical_base, report=click.echo)
                 record_generated_file("sitemap.xml")
                 info.append("   → Generated sitemap.xml")
 
@@ -2863,7 +2867,7 @@ def seo(
         else:
             issues.append("❌ robots.txt not found")
             if fix:
-                docs._generate_robots_txt()
+                robots.write(site_dir, docs._config, canonical_base, report=click.echo)
                 record_generated_file("robots.txt")
                 info.append("   → Generated robots.txt")
 
@@ -2875,8 +2879,6 @@ def seo(
         pages_missing_site_name = 0
         pages_with_json_ld = 0
         images_missing_alt = 0
-
-        canonical_base = docs._get_canonical_base_url()
 
         # The audit requires the site name only when a string template contains
         # `{site_name}`. A missing placeholder or non-string value skips this
