@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from great_docs._rust_cli import (
+from great_docs._cliref.rust import (
     RustCliProject,
     _find_binary_targets,
     _parse_clap_flag,
@@ -489,7 +489,7 @@ class TestBuildRustBinary:
             binary_names=["app"],
             uses_clap=False,
         )
-        with patch("great_docs._rust_cli.subprocess.run", side_effect=FileNotFoundError):
+        with patch("great_docs._cliref.rust.subprocess.run", side_effect=FileNotFoundError):
             result = build_rust_binary(rust_project, output_dir=tmp_path)
         assert result is None
 
@@ -503,7 +503,7 @@ class TestBuildRustBinary:
         mock_result = MagicMock()
         mock_result.returncode = 1
         mock_result.stderr = "build error"
-        with patch("great_docs._rust_cli.subprocess.run", return_value=mock_result):
+        with patch("great_docs._cliref.rust.subprocess.run", return_value=mock_result):
             result = build_rust_binary(rust_project, output_dir=tmp_path)
         assert result is None
 
@@ -515,7 +515,7 @@ class TestBuildRustBinary:
             uses_clap=False,
         )
         with patch(
-            "great_docs._rust_cli.subprocess.run",
+            "great_docs._cliref.rust.subprocess.run",
             side_effect=subprocess.TimeoutExpired(cmd="cargo", timeout=300),
         ):
             result = build_rust_binary(rust_project, output_dir=tmp_path)
@@ -535,7 +535,7 @@ class TestBuildRustBinary:
 
         mock_result = MagicMock()
         mock_result.returncode = 0
-        with patch("great_docs._rust_cli.subprocess.run", return_value=mock_result):
+        with patch("great_docs._cliref.rust.subprocess.run", return_value=mock_result):
             result = build_rust_binary(rust_project, output_dir=tmp_path)
         assert result == release_dir / "app"
 
@@ -548,7 +548,7 @@ class TestIntrospectRustCli:
             binary_names=["app"],
             uses_clap=False,
         )
-        with patch("great_docs._rust_cli.build_rust_binary", return_value=None):
+        with patch("great_docs._cliref.rust.build_rust_binary", return_value=None):
             result = introspect_rust_cli(rust_project)
         assert result is None
 
@@ -569,8 +569,8 @@ class TestIntrospectRustCli:
         mock_proc.returncode = 0
 
         with (
-            patch("great_docs._rust_cli.build_rust_binary", return_value=binary),
-            patch("great_docs._rust_cli.subprocess.run", return_value=mock_proc),
+            patch("great_docs._cliref.rust.build_rust_binary", return_value=binary),
+            patch("great_docs._cliref.rust.subprocess.run", return_value=mock_proc),
         ):
             result = introspect_rust_cli(rust_project)
 
@@ -640,7 +640,7 @@ class TestDetectRustCliProjectEdgeCases:
     def test_cargo_text_none_returns_none(self, tmp_path: Path):
         """_read_cargo_toml returning None causes detect to return None."""
         (tmp_path / "Cargo.toml").write_text("irrelevant")
-        with patch("great_docs._rust_cli._read_cargo_toml", return_value=None):
+        with patch("great_docs._cliref.rust._read_cargo_toml", return_value=None):
             assert detect_rust_cli_project(tmp_path) is None
 
     def test_no_package_name_returns_none(self, tmp_path: Path):
@@ -652,7 +652,7 @@ class TestDetectRustCliProjectEdgeCases:
 class TestReadCargoToml:
     def test_oserror_returns_none(self, tmp_path: Path):
         """OSError when reading Cargo.toml returns None."""
-        from great_docs._rust_cli import _read_cargo_toml
+        from great_docs._cliref.rust import _read_cargo_toml
 
         cargo = tmp_path / "Cargo.toml"
         cargo.write_text("dummy")
@@ -715,8 +715,8 @@ class TestIntrospectRustCliEdgeCases:
         fake_binary = tmp_path / "myapp"
         fake_binary.write_text("fake")
         with (
-            patch("great_docs._rust_cli.build_rust_binary", return_value=fake_binary),
-            patch("great_docs._rust_cli._extract_clap_commands", return_value=None),
+            patch("great_docs._cliref.rust.build_rust_binary", return_value=fake_binary),
+            patch("great_docs._cliref.rust._extract_clap_commands", return_value=None),
         ):
             result = introspect_rust_cli(rust_project)
         assert result is None

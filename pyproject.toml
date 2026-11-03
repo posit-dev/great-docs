@@ -223,6 +223,8 @@ exclude = [
     "great_docs/_checks/examples.py",
     "great_docs/_checks/harper.py",
     "great_docs/_checks/lint.py",
+    "great_docs/_cliref/go.py",
+    "great_docs/_cliref/rust.py",
     "great_docs/_mcpref/reference.py",
 ]
 reportMissingImports = true

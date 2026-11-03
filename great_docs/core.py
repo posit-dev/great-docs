@@ -3160,13 +3160,13 @@ class GreatDocs:
             else:
                 package_name = self._detect_package_name()
                 if not package_name and self._config.go_cli_enabled:
-                    from great_docs._go_cli import detect_go_cli_project
+                    from great_docs._cliref.go import detect_go_cli_project
 
                     go_project = detect_go_cli_project(self.layout.package_root)
                     if go_project:
                         package_name = go_project.binary_name
                 if not package_name and self._config.rust_cli_enabled:
-                    from great_docs._rust_cli import detect_rust_cli_project
+                    from great_docs._cliref.rust import detect_rust_cli_project
 
                     rust_project = detect_rust_cli_project(self.layout.package_root)
                     if rust_project:
@@ -4857,7 +4857,7 @@ class GreatDocs:
         """
         if not self._config.go_cli_enabled:
             return Skipped("Go CLI not enabled")
-        from great_docs._go_cli import detect_go_cli_project, introspect_cobra_cli
+        from great_docs._cliref.go import detect_go_cli_project, introspect_cobra_cli
 
         project = detect_go_cli_project(self.layout.package_root)
         if not project:
@@ -4878,7 +4878,7 @@ class GreatDocs:
         """
         if not self._config.rust_cli_enabled:
             return Skipped("Rust CLI not enabled")
-        from great_docs._rust_cli import detect_rust_cli_project, introspect_rust_cli
+        from great_docs._cliref.rust import detect_rust_cli_project, introspect_rust_cli
 
         project = detect_rust_cli_project(self.layout.package_root)
         if not project:
