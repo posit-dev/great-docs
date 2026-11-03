@@ -14,6 +14,7 @@ from ._build import freeze as freeze_cache
 from ._build import from_repo as repository
 from ._build import quarto, serve
 from ._build.steps import BuildError
+from ._content import user_guide
 from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
@@ -1299,9 +1300,13 @@ def _freeze_info(project_root: Path, persist_dir: Path, layout: Layout | None = 
         return text[3:end]
 
     per_page_modes: dict[str, str] = {}
-    source_dirs = ["recipes", "user_guide"]
-    for src_dir in source_dirs:
-        src_path = layout.source_dir / src_dir
+    source_dirs = [layout.source_dir / "recipes"]
+    guide_dir = user_guide.find_dir(
+        cfg, layout, report=lambda message: click.echo(f"  ⚠️  {message}", err=True)
+    )
+    if guide_dir is not None:
+        source_dirs.append(guide_dir)
+    for src_path in source_dirs:
         if not src_path.is_dir():
             continue
         for qmd_file in sorted(src_path.rglob("*.qmd")):
@@ -2577,7 +2582,15 @@ def proofread(
         if files:
             files_to_check = [Path(f) for f in files]
         else:
-            guide_dir = Path(docs_dir) if docs_dir else None
+            guide_dir = (
+                Path(docs_dir)
+                if docs_dir
+                else user_guide.find_dir(
+                    docs._config,
+                    docs.layout,
+                    report=lambda message: click.echo(f"⚠️  {message}", err=True),
+                )
+            )
             files_to_check = proofreading.find_pages(docs.layout, guide_dir)
             if include_docstrings and (package_name := docs._detect_package_name()):
                 module = docs._resolve_importable_name(package_name)

@@ -392,6 +392,15 @@ class TestHandleAddPage:
         assert (tmp_path / "user_guide" / "my-guide.qmd").exists()
         assert "Created page" in result[0].text
 
+    def test_creates_user_guide_page_in_the_configured_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "great-docs.yml").write_text("user_guide: guides\n", encoding="utf-8")
+        (tmp_path / "guides").mkdir()
+        asyncio.run(_handle_add_page({"title": "My Guide"}))
+        assert (tmp_path / "guides" / "my-guide.qmd").exists()
+
     def test_creates_recipes_page(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         asyncio.run(_handle_add_page({"title": "Quick Recipe", "section": "recipes"}))

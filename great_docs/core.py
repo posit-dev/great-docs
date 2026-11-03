@@ -6368,7 +6368,8 @@ class GreatDocs:
             module = self._resolve_importable_name(package_name)
             files += proofread.find_modules(self.project_root, module)
         if include_docs:
-            files += links.find_pages(self.layout)
+            guide_dir = user_guide.find_dir(self._config, self.layout, report=_print_warning)
+            files += links.find_pages(self.layout, guide_dir)
 
         return links.check(
             files,
@@ -6472,7 +6473,10 @@ class GreatDocs:
         """
         from ._checks.harper import HarperError, HarperNotFoundError
 
-        files = proofread.find_pages(self.layout) if include_docs else []
+        files: list[Path] = []
+        if include_docs:
+            guide_dir = user_guide.find_dir(self._config, self.layout, report=_print_warning)
+            files = proofread.find_pages(self.layout, guide_dir)
         if include_docstrings and (package_name := self._detect_package_name()):
             module = self._resolve_importable_name(package_name)
             files += proofread.find_modules(self.project_root, module)

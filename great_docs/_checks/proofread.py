@@ -62,7 +62,7 @@ class CheckedFile:
     """Reason the file could not be checked, or `None` after a successful check"""
 
 
-def find_pages(layout: Layout, guide_dir: Path | None = None) -> list[Path]:
+def find_pages(layout: Layout, guide_dir: Path | None) -> list[Path]:
     """
     Find the documentation pages to proofread
 
@@ -74,7 +74,7 @@ def find_pages(layout: Layout, guide_dir: Path | None = None) -> list[Path]:
     layout
         The project's paths.
     guide_dir
-        The user guide directory. If `None`, use `user_guide/` in the source directory.
+        The user guide's source directory, or `None` when the project has none.
 
     Returns
     -------
@@ -82,11 +82,10 @@ def find_pages(layout: Layout, guide_dir: Path | None = None) -> list[Path]:
         Existing user guide pages, followed by `README.md` and recipe pages.
     """
     pages: list[Path] = []
-    guide_dir = guide_dir or layout.source_dir / "user_guide"
     recipes_dir = layout.source_dir / "recipes"
     readme = layout.package_root / "README.md"
 
-    if guide_dir.exists():
+    if guide_dir is not None and guide_dir.exists():
         pages.extend(guide_dir.rglob("*.qmd"))
         pages.extend(guide_dir.rglob("*.md"))
     if readme.exists():

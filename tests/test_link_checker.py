@@ -1567,3 +1567,23 @@ https://skip2.example.com/
         )
 
         assert result.exit_code == 0
+
+
+@pytest.mark.parametrize(
+    ("settings", "directory"),
+    [("user_guide: guides\n", "guides"), ("", "user-guide")],
+    ids=["configured", "hyphenated"],
+)
+def test_check_links_reads_the_guide_directory_the_build_uses(
+    tmp_path: Path, settings: str, directory: str
+):
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    (tmp_path / "great-docs.yml").write_text(settings)
+    (tmp_path / directory).mkdir()
+    (tmp_path / directory / "page.md").write_text("Visit https://example.com for info")
+
+    results = GreatDocs(project_path=tmp_path).check_links(
+        include_source=False, ignore_patterns=["example.com"]
+    )
+
+    assert results["skipped"] == ["https://example.com"]
