@@ -33,7 +33,7 @@ from great_docs._versions.model import (
     process_version_fences,
     version_url_segment,
 )
-from great_docs._website import prerender
+from great_docs._website import page_status, prerender
 from great_docs._website.navigation import shared_sidebar
 
 if TYPE_CHECKING:
@@ -246,60 +246,26 @@ def _update_page_status_json(dest_dir: Path, upcoming_pages: list[tuple[str, str
     status_path.write_text(json.dumps(data), encoding="utf-8")
 
 
-def _sync_status_inline_script(dest_dir: Path) -> None:
-    """Inject a **separate** `__GD_UPCOMING_DATA__` inline script into `_quarto.yml`.
-
-    Instead of modifying the existing (large, SVG-laden) `__GD_STATUS_DATA__` script (which breaks
-    when round-tripped through yaml12 due to nested quoting issues) we append a tiny new `<script>`
-    that only carries the lightweight `upcoming_pages` map. The page-status-badges JS reads both
-    globals.
-
-    Must be called AFTER `_update_page_status_json` so that the JSON file contains the
-    `upcoming_pages` map.
+def _add_upcoming_status_data(dest_dir: Path) -> None:
     """
+    Add version-specific upcoming badge data to the Quarto configuration
+    """
+    from yaml12 import read_yaml
+
     status_path = dest_dir / "_page_status.json"
-    quarto_yml_path = dest_dir / "_quarto.yml"
-    if not status_path.exists() or not quarto_yml_path.exists():
+    quarto_path = dest_dir / "_quarto.yml"
+    if not status_path.exists() or not quarto_path.exists():
         return
     try:
         data = json.loads(status_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return
-
-    upcoming_map = data.get("upcoming_pages")
-    if not upcoming_map:
+    upcoming = data.get("upcoming_pages")
+    if not upcoming:
         return
-
-    # Build a tiny inline script with just the upcoming data (no SVGs, no
-    # complex escaping).
-    upcoming_json = json.dumps(upcoming_map)
-    inline_script = "<script>window.__GD_UPCOMING_DATA__=" + upcoming_json + ";</script>"
-
-    # Insert directly into the raw YAML text — find the __GD_STATUS_DATA__
-    # line and append the new script entry right after it.
-    yml_content = quarto_yml_path.read_text(encoding="utf-8")
-
-    # Guard: check for the actual injected script tag (not JS references)
-    if "<script>window.__GD_UPCOMING_DATA__=" in yml_content:
-        return  # Already injected
-
-    lines = yml_content.split("\n")
-    insert_after = None
-    for i, line in enumerate(lines):
-        if "<script>window.__GD_STATUS_DATA__=" in line:
-            insert_after = i
-            break
-
-    if insert_after is None:
-        return
-
-    # Match the indentation of the status data line
-    status_line = lines[insert_after]
-    indent = len(status_line) - len(status_line.lstrip())
-    # The upcoming JSON is simple (no quotes to escape in YAML single-quoted)
-    new_line = " " * indent + "- text: '" + inline_script + "'"
-    lines.insert(insert_after + 1, new_line)
-    quarto_yml_path.write_text("\n".join(lines), encoding="utf-8")
+    config = read_yaml(quarto_path) or {}
+    if page_status.add_upcoming(config, upcoming):
+        write_quarto_yml(quarto_path, config)
 
 
 def _prune_cli_pages(dest_dir: Path, snap: object) -> None:
@@ -2091,7 +2057,7 @@ def run_versioned_build(  # pragma: no cover
             prerender.write_page_metadata(ver_dir, config, default_description, structured_data)
         _prune_missing_sidebar_pages(ver_dir)
         _rewrite_quarto_yml_for_version(ver_dir, entry, latest_tag)
-        _sync_status_inline_script(ver_dir)
+        _add_upcoming_status_data(ver_dir)
         # Last, so the trimmed sidebars reflect every change above
         shared_sidebar.prepare(ver_dir)
         pages_by_version[entry.tag] = pages

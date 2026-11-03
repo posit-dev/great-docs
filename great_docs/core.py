@@ -63,6 +63,7 @@ from ._website import (
     inline_data,
     markdown_pages,
     page_dates,
+    page_status,
     page_url,
     prerender,
     quarto_yml,
@@ -109,27 +110,6 @@ _QUARTO_RENDER_GLOBS = [
     "*.rmarkdown",
     "*.ipynb",
 ]
-
-
-def _is_status_script_entry(entry: object) -> bool:
-    """
-    Check whether an `include-after-body` entry loads the page status script
-
-    Recognise file references by `page-status-badges` and inline script
-    content by `renderPageBadge`.
-
-    Parameters
-    ----------
-    entry
-        An `include-after-body` item from `_quarto.yml`.
-
-    Returns
-    -------
-    :
-        Whether the entry is the referenced or the inlined script.
-    """
-    text = str(entry)
-    return "page-status-badges" in text or "renderPageBadge" in text
 
 
 class GreatDocs:
@@ -1191,185 +1171,6 @@ class GreatDocs:
             return repo.owner, repo.name, repo.url
 
         return None, None, None  # pragma: no cover
-
-    # =========================================================================
-    # Page Status Badges Methods
-    # =========================================================================
-
-    def _collect_page_statuses(self) -> dict[str, str]:
-        """
-        Scan all built .qmd files for `status` in frontmatter.
-
-        Returns a mapping of page href (relative to build dir) to the status string (e.g. `"new"`,
-        `"deprecated"`).
-
-        Returns
-        -------
-        dict[str, str]
-            Mapping of page href → status string.
-        """
-        status_map: dict[str, str] = {}
-        valid_statuses = set(self._config.page_status_definitions.keys())
-
-        # Directories to scan (same as tags)
-        scan_dirs: list[Path] = []
-        seen_dirs: set[Path] = set()
-        for subdir in ("user-guide", "recipes", "reference"):
-            d = self.build_dir / subdir
-            if d.is_dir():
-                scan_dirs.append(d)
-                seen_dirs.add(d.resolve())
-        for section_cfg in self._config.sections:
-            section_dir = section_destination(self.layout, section_cfg)
-            if (
-                section_dir is not None
-                and section_dir.is_dir()
-                and section_dir.resolve() not in seen_dirs
-            ):
-                scan_dirs.append(section_dir)
-                seen_dirs.add(section_dir.resolve())
-
-        for scan_dir in scan_dirs:
-            for qmd_file in sorted(scan_dir.rglob("*.qmd")):
-                try:
-                    content = qmd_file.read_text(encoding="utf-8")
-                except (OSError, UnicodeDecodeError):  # pragma: no cover
-                    continue  # pragma: no cover
-
-                fm, _ = split_front_matter(content)
-                status = fm.string("status")
-                if not status:
-                    continue
-                status = status.strip().lower()
-                if status not in valid_statuses:
-                    print(
-                        f"Warning: Unknown page status '{status}' in "
-                        f"{qmd_file.relative_to(self.build_dir)}"
-                    )
-                    continue
-                href = str(qmd_file.relative_to(self.build_dir))
-                status_map[href] = status
-
-        return status_map
-
-    def _generate_status_json(self, status_map: dict[str, str]) -> None:
-        """
-        Write `_page_status.json` for the client-side JS to render badges.
-
-        Parameters
-        ----------
-        status_map
-            Page href → status string mapping from `_collect_page_statuses()`.
-
-        """
-        from ._icons import get_icon_svg
-        from ._translations import get_translation
-
-        lang = self._config.lang
-        builtin_statuses = {"new", "updated", "beta", "deprecated", "experimental", "upcoming"}
-
-        definitions = self._config.page_status_definitions
-        resolved_statuses: dict[str, dict[str, str]] = {}
-        for status_key, status_def in definitions.items():
-            icon_name = status_def.get("icon", "")
-            svg = ""
-            if icon_name:
-                svg = get_icon_svg(icon_name, size=12, css_class="gd-status-icon-svg") or ""
-
-            if status_key in builtin_statuses:
-                label = get_translation(f"status_label_{status_key}", lang)
-                description = get_translation(f"status_desc_{status_key}", lang)
-            else:
-                label = status_def.get("label", status_key.title())  # pragma: no cover
-                description = status_def.get("description", "")  # pragma: no cover
-
-            resolved_statuses[status_key] = {
-                "label": label,
-                "icon": svg,
-                "color": status_def.get("color", "#6b7280"),
-                "description": description,
-            }
-
-        status_json = {
-            "page_statuses": status_map,
-            "definitions": resolved_statuses,
-            "show_in_sidebar": self._config.page_status_show_in_sidebar,
-            "show_on_pages": self._config.page_status_show_on_pages,
-        }
-        status_path = self.build_dir / "_page_status.json"
-        with open(status_path, "w", encoding="utf-8") as f:
-            json.dump(status_json, f)
-
-    def _inject_status_data_inline(self) -> None:
-        """Inject `_page_status.json` data as an inline `<script>` in `_quarto.yml`.
-
-        Ensures `page-status-badges.js` can read status data directly from
-        `window.__GD_STATUS_DATA__`.
-        """
-        status_json_path = self.build_dir / "_page_status.json"
-        if not status_json_path.is_file():
-            return
-
-        if not quarto_yml.path(self.build_dir).is_file():
-            return
-
-        config = quarto_yml.read(self.build_dir)
-
-        if "format" not in config or "html" not in config.get("format", {}):
-            return  # pragma: no cover
-
-        if "include-after-body" not in config["format"]["html"]:
-            config["format"]["html"]["include-after-body"] = []  # pragma: no cover
-        elif isinstance(config["format"]["html"]["include-after-body"], str):
-            config["format"]["html"]["include-after-body"] = [
-                config["format"]["html"]["include-after-body"]
-            ]
-
-        entries = config["format"]["html"]["include-after-body"]
-        # Check if the data assignment (not just a reference) is already injected.
-        # The inlined JS reads from __GD_STATUS_DATA__ but we need the assignment.
-        if any("__GD_STATUS_DATA__=" in str(item) for item in entries):
-            return  # pragma: no cover
-
-        status_json_content = status_json_path.read_text(encoding="utf-8")
-        status_json_content = status_json_content.replace("</", r"<\/")
-        inline_entry = {
-            "text": ("<script>window.__GD_STATUS_DATA__=" + status_json_content + ";</script>")
-        }
-
-        # Insert before the page-status-badges script entry (if present)
-        insert_idx = None
-        for idx, item in enumerate(entries):
-            if _is_status_script_entry(item):
-                insert_idx = idx
-                break
-        if insert_idx is not None:
-            entries.insert(insert_idx, inline_entry)
-        else:
-            entries.append(inline_entry)
-
-        quarto_yml.write(self.build_dir, config, self._config)
-
-    def _process_page_statuses(self) -> bool:
-        """
-        Main entry point for the page status badges feature.
-
-        Collects statuses from frontmatter, writes `_page_status.json`, and injects the inline data
-        script.
-
-        Returns
-        -------
-        bool
-            `True` if any pages with status were found and processed.
-        """
-        status_map = self._collect_page_statuses()
-        if not status_map:
-            return False
-
-        self._generate_status_json(status_map)
-        self._inject_status_data_inline()
-
-        return True
 
     # =========================================================================
     # Custom Sections Methods
@@ -5984,7 +5785,7 @@ body-classes: "gd-homepage"
                 ]
 
             has_page_status = any(  # pragma: no cover
-                _is_status_script_entry(item)
+                page_status.is_script_entry(item)
                 for item in config["format"]["html"]["include-after-body"]
             )
             if not has_page_status:  # pragma: no cover
@@ -8484,7 +8285,7 @@ body-classes: "gd-homepage"
         """
         if not self._config.page_status_enabled:
             return Skipped("page status not enabled")
-        if not self._process_page_statuses():
+        if not page_status.process(self._config, self.layout, self.build_dir):
             return Skipped("no pages with status")
         return "Status badges processed"
 

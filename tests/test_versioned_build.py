@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 
 import pytest
-from yaml12 import parse_yaml
+from yaml12 import parse_yaml, read_yaml
 
 from great_docs._api_diff import ApiSnapshot, ParameterInfo, SymbolInfo
 from great_docs._utils import QUARTO_YML_HEADER, is_great_docs_build_dir
@@ -1014,7 +1014,9 @@ class TestUpdatePageStatusJson:
 
 
 class TestSyncStatusInlineScript:
-    """Tests for _sync_status_inline_script which injects __GD_UPCOMING_DATA__."""
+    """
+    Upcoming page data in versioned Quarto configuration
+    """
 
     def _make_quarto_yml(self, tmp_path, include_js_inline=True):
         """Create a _quarto.yml with __GD_STATUS_DATA__ inline script."""
@@ -1032,19 +1034,19 @@ class TestSyncStatusInlineScript:
             "format:",
             "  html:",
             "    include-after-body:",
-            f'      - text: "{script}"',
+            f"      - text: '{script}'",
         ]
         if include_js_inline:
             # Simulate inlined page-status-badges.js that references __GD_UPCOMING_DATA__
             lines.append(
-                '      - text: "<script>// var upcoming = window.__GD_UPCOMING_DATA__;</script>"'
+                "      - text: '<script>// var upcoming = window.__GD_UPCOMING_DATA__;</script>'"
             )
         (tmp_path / "_quarto.yml").write_text("\n".join(lines))
 
     def test_injects_upcoming_data(self, tmp_path):
         import json
 
-        from great_docs._versions.build import _sync_status_inline_script
+        from great_docs._versions.build import _add_upcoming_status_data
 
         self._make_quarto_yml(tmp_path)
         status_path = tmp_path / "_page_status.json"
@@ -1057,15 +1059,15 @@ class TestSyncStatusInlineScript:
                 }
             )
         )
-        _sync_status_inline_script(tmp_path)
+        _add_upcoming_status_data(tmp_path)
         yml = (tmp_path / "_quarto.yml").read_text()
         assert "<script>window.__GD_UPCOMING_DATA__=" in yml
-        assert '"user-guide/feature.qmd": "0.8"' in yml
+        assert '"user-guide/feature.qmd": "0.8"' in str(read_yaml(tmp_path / "_quarto.yml"))
 
     def test_does_not_double_inject(self, tmp_path):
         import json
 
-        from great_docs._versions.build import _sync_status_inline_script
+        from great_docs._versions.build import _add_upcoming_status_data
 
         self._make_quarto_yml(tmp_path)
         status_path = tmp_path / "_page_status.json"
@@ -1078,36 +1080,36 @@ class TestSyncStatusInlineScript:
                 }
             )
         )
-        _sync_status_inline_script(tmp_path)
-        _sync_status_inline_script(tmp_path)  # second call
+        _add_upcoming_status_data(tmp_path)
+        _add_upcoming_status_data(tmp_path)
         yml = (tmp_path / "_quarto.yml").read_text()
         assert yml.count("<script>window.__GD_UPCOMING_DATA__=") == 1
 
     def test_no_upcoming_pages_skips(self, tmp_path):
         import json
 
-        from great_docs._versions.build import _sync_status_inline_script
+        from great_docs._versions.build import _add_upcoming_status_data
 
         self._make_quarto_yml(tmp_path)
         status_path = tmp_path / "_page_status.json"
         status_path.write_text(json.dumps({"page_statuses": {}, "definitions": {}}))
-        _sync_status_inline_script(tmp_path)
+        _add_upcoming_status_data(tmp_path)
         yml = (tmp_path / "_quarto.yml").read_text()
         assert "__GD_UPCOMING_DATA__=" not in yml
 
     def test_missing_status_json_skips(self, tmp_path):
-        from great_docs._versions.build import _sync_status_inline_script
+        from great_docs._versions.build import _add_upcoming_status_data
 
         self._make_quarto_yml(tmp_path)
         # No _page_status.json
-        _sync_status_inline_script(tmp_path)
+        _add_upcoming_status_data(tmp_path)
         yml = (tmp_path / "_quarto.yml").read_text()
         assert "__GD_UPCOMING_DATA__=" not in yml
 
     def test_no_status_data_script_skips(self, tmp_path):
         import json
 
-        from great_docs._versions.build import _sync_status_inline_script
+        from great_docs._versions.build import _add_upcoming_status_data
 
         # _quarto.yml without __GD_STATUS_DATA__ script tag
         (tmp_path / "_quarto.yml").write_text(
@@ -1122,7 +1124,7 @@ class TestSyncStatusInlineScript:
                 }
             )
         )
-        _sync_status_inline_script(tmp_path)
+        _add_upcoming_status_data(tmp_path)
         yml = (tmp_path / "_quarto.yml").read_text()
         assert "__GD_UPCOMING_DATA__=" not in yml
 
@@ -1130,7 +1132,7 @@ class TestSyncStatusInlineScript:
         """The guard should not be tricked by __GD_UPCOMING_DATA__ in JS comments."""
         import json
 
-        from great_docs._versions.build import _sync_status_inline_script
+        from great_docs._versions.build import _add_upcoming_status_data
 
         self._make_quarto_yml(tmp_path, include_js_inline=True)
         status_path = tmp_path / "_page_status.json"
@@ -1143,7 +1145,7 @@ class TestSyncStatusInlineScript:
                 }
             )
         )
-        _sync_status_inline_script(tmp_path)
+        _add_upcoming_status_data(tmp_path)
         yml = (tmp_path / "_quarto.yml").read_text()
         # Should still inject despite the JS reference existing
         assert "<script>window.__GD_UPCOMING_DATA__=" in yml
@@ -2166,13 +2168,13 @@ class TestUpdatePageStatusJsonEdge:
 
 
 # ---------------------------------------------------------------------------
-# _sync_status_inline_script — detailed injection test
+# _add_upcoming_status_data — detailed injection test
 # ---------------------------------------------------------------------------
 
 
 class TestSyncStatusInlineScriptIndentation:
     def test_matches_indentation_of_status_data_line(self, tmp_path: Path):
-        from great_docs._versions.build import _sync_status_inline_script
+        from great_docs._versions.build import _add_upcoming_status_data
 
         status_data = {"upcoming_pages": {"guide.qmd": "0.4"}}
         (tmp_path / "_page_status.json").write_text(json.dumps(status_data), encoding="utf-8")
@@ -2189,23 +2191,23 @@ class TestSyncStatusInlineScriptIndentation:
         )
         (tmp_path / "_quarto.yml").write_text(yml_content, encoding="utf-8")
 
-        _sync_status_inline_script(tmp_path)
+        _add_upcoming_status_data(tmp_path)
 
         result = (tmp_path / "_quarto.yml").read_text()
         assert "__GD_UPCOMING_DATA__" in result
         # Verify indentation matches — the injected line should start with same indent
         lines = result.split("\n")
-        upcoming_line = [l for l in lines if "__GD_UPCOMING_DATA__" in l]
+        upcoming_line = [line for line in lines if "__GD_UPCOMING_DATA__" in line]
         assert len(upcoming_line) == 1
         assert upcoming_line[0].startswith("      ")
 
     def test_json_decode_error_skips(self, tmp_path: Path):
-        from great_docs._versions.build import _sync_status_inline_script
+        from great_docs._versions.build import _add_upcoming_status_data
 
         (tmp_path / "_page_status.json").write_text("bad json!", encoding="utf-8")
         (tmp_path / "_quarto.yml").write_text("project:\n  type: website\n")
         # Should not raise
-        _sync_status_inline_script(tmp_path)
+        _add_upcoming_status_data(tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -3950,26 +3952,26 @@ class TestPreprocessVersionApiSnapshot:
 
 
 # ---------------------------------------------------------------------------
-# _sync_status_inline_script — no upcoming map scenario
+# _add_upcoming_status_data — no upcoming map scenario
 # ---------------------------------------------------------------------------
 
 
 class TestSyncStatusNoUpcoming:
     def test_no_upcoming_map_returns_early(self, tmp_path: Path):
-        from great_docs._versions.build import _sync_status_inline_script
+        from great_docs._versions.build import _add_upcoming_status_data
 
         # _page_status.json with empty upcoming_pages
         data = {"page_statuses": {"x.qmd": "new"}, "upcoming_pages": {}}
         (tmp_path / "_page_status.json").write_text(json.dumps(data))
         (tmp_path / "_quarto.yml").write_text("project:\n  type: website\n")
 
-        _sync_status_inline_script(tmp_path)
+        _add_upcoming_status_data(tmp_path)
 
         # _quarto.yml should be unchanged
         assert "__GD_UPCOMING_DATA__" not in (tmp_path / "_quarto.yml").read_text()
 
     def test_already_injected_skips(self, tmp_path: Path):
-        from great_docs._versions.build import _sync_status_inline_script
+        from great_docs._versions.build import _add_upcoming_status_data
 
         data = {"upcoming_pages": {"x.qmd": "0.4"}}
         (tmp_path / "_page_status.json").write_text(json.dumps(data))
@@ -3982,21 +3984,21 @@ class TestSyncStatusNoUpcoming:
         )
         (tmp_path / "_quarto.yml").write_text(yml_content)
 
-        _sync_status_inline_script(tmp_path)
+        _add_upcoming_status_data(tmp_path)
 
         # Should not double-inject
         content = (tmp_path / "_quarto.yml").read_text()
         assert content.count("__GD_UPCOMING_DATA__") == 1
 
     def test_no_status_data_line_returns_early(self, tmp_path: Path):
-        from great_docs._versions.build import _sync_status_inline_script
+        from great_docs._versions.build import _add_upcoming_status_data
 
         data = {"upcoming_pages": {"x.qmd": "0.4"}}
         (tmp_path / "_page_status.json").write_text(json.dumps(data))
         # _quarto.yml without __GD_STATUS_DATA__
         (tmp_path / "_quarto.yml").write_text("project:\n  type: website\n")
 
-        _sync_status_inline_script(tmp_path)
+        _add_upcoming_status_data(tmp_path)
         assert "__GD_UPCOMING_DATA__" not in (tmp_path / "_quarto.yml").read_text()
 
 

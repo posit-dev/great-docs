@@ -160,6 +160,7 @@ from great_docs._reference.discovery import (
 )
 from great_docs._reference.probe import detect_docstring_style, detect_dynamic_mode
 from great_docs._utils import QUARTO_YML_HEADER, validate_build_dir
+from great_docs._website import page_status
 from great_docs._website.ai_agents import llms_txt
 from great_docs._website.homepage.readme import Badge, HeroElements
 from great_docs._website.quarto_yml import edit as edit_quarto_yml
@@ -30970,18 +30971,18 @@ def test_keyboard_nav_scss_styles_exist():
     assert ".gd-menu-overlay," in content
 
 
-# ── _inject_status_data_inline ────────────────────────────────────────
+# ── status data injection ────────────────────────────────────────
 
 
-def test_inject_status_data_inline_no_json():
+def test_status_data_injection_no_json():
     """Does nothing when _page_status.json doesn't exist."""
     with tempfile.TemporaryDirectory() as tmp:
         gd = GreatDocs(project_path=tmp)
         gd.build_dir = Path(tmp)
-        gd._inject_status_data_inline()
+        page_status.inject(gd._config, gd.build_dir)
 
 
-def test_inject_status_data_inline_injects():
+def test_status_data_injection_injects():
     """Injects status data as inline script."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
@@ -30993,7 +30994,7 @@ def test_inject_status_data_inline_injects():
         quarto_config = {"format": {"html": {"include-after-body": ["page-status-badges.js"]}}}
         (project / "_quarto.yml").write_text(format_yaml(quarto_config))
 
-        gd._inject_status_data_inline()
+        page_status.inject(gd._config, gd.build_dir)
 
         result = read_yaml(project / "_quarto.yml")
         entries = result["format"]["html"]["include-after-body"]
@@ -31001,7 +31002,7 @@ def test_inject_status_data_inline_injects():
         assert has_status
 
 
-def test_inject_status_data_inline_string_body():
+def test_status_data_injection_string_body():
     """Handles include-after-body as string (converted to list)."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
@@ -31012,7 +31013,7 @@ def test_inject_status_data_inline_string_body():
         quarto_config = {"format": {"html": {"include-after-body": "existing.js"}}}
         (project / "_quarto.yml").write_text(format_yaml(quarto_config))
 
-        gd._inject_status_data_inline()
+        page_status.inject(gd._config, gd.build_dir)
 
         result = read_yaml(project / "_quarto.yml")
         entries = result["format"]["html"]["include-after-body"]
@@ -31029,16 +31030,16 @@ def test_inline_status_data_injection_keeps_generated_header(tmp_path: Path):
         config["format"]["html"]["include-after-body"] = ["page-status-badges.js"]
     (gd.build_dir / "_page_status.json").write_text("{}", encoding="utf-8")
 
-    gd._inject_status_data_inline()
+    page_status.inject(gd._config, gd.build_dir)
 
     assert "_DATA__=" in (gd.build_dir / "_quarto.yml").read_text(encoding="utf-8")
     validate_build_dir(gd.build_dir)
 
 
-# ── _collect_page_statuses ────────────────────────────────────────────
+# ── status collection ────────────────────────────────────────────
 
 
-def test_collect_page_statuses():
+def test_status_collection():
     """Collects page status from frontmatter."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
@@ -31050,12 +31051,12 @@ def test_collect_page_statuses():
         ug.mkdir()
         (ug / "feature.qmd").write_text("---\ntitle: Feature\nstatus: new\n---\nContent.")
 
-        status_map = gd._collect_page_statuses()
+        status_map = page_status.collect(gd._config, gd.layout, gd.build_dir)
         assert "user-guide/feature.qmd" in status_map
         assert status_map["user-guide/feature.qmd"] == "new"
 
 
-def test_collect_page_statuses_ignores_invalid():
+def test_status_collection_ignores_invalid():
     """Ignores files with unknown status values."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
@@ -31067,7 +31068,7 @@ def test_collect_page_statuses_ignores_invalid():
         ug.mkdir()
         (ug / "bad.qmd").write_text("---\ntitle: Bad\nstatus: nonexistent_status\n---\nContent.")
 
-        status_map = gd._collect_page_statuses()
+        status_map = page_status.collect(gd._config, gd.layout, gd.build_dir)
         assert "user-guide/bad.qmd" not in status_map
 
 
@@ -32675,17 +32676,19 @@ def test_find_click_cli_obj_no_commands_returns_none(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _generate_status_json
+# status JSON writing
 # ---------------------------------------------------------------------------
 
 
-def test_generate_status_json_writes_json(tmp_path):
-    """_generate_status_json writes _page_status.json."""
+def test_status_json_writing_writes_json(tmp_path):
+    """
+    Write `_page_status.json` for page badges
+    """
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir(parents=True, exist_ok=True)
 
     status_map = {"user-guide/intro.qmd": "new", "user-guide/old.qmd": "deprecated"}
-    docs._generate_status_json(status_map)
+    page_status.write(docs._config, docs.build_dir, status_map)
 
     status_file = docs.build_dir / "_page_status.json"
 
@@ -32698,12 +32701,14 @@ def test_generate_status_json_writes_json(tmp_path):
     assert "deprecated" in data["definitions"]
 
 
-def test_generate_status_json_builtin_statuses_have_labels(tmp_path):
-    """_generate_status_json resolves labels for all built-in status types."""
+def test_status_json_writing_builtin_statuses_have_labels(tmp_path):
+    """
+    Resolve labels for every built-in status
+    """
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-    docs._generate_status_json({})
+    page_status.write(docs._config, docs.build_dir, {})
     data = json.loads((docs.build_dir / "_page_status.json").read_text())
 
     for key in ("new", "updated", "beta", "deprecated", "experimental", "upcoming"):
@@ -32712,31 +32717,33 @@ def test_generate_status_json_builtin_statuses_have_labels(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _collect_page_statuses
+# status collection
 # ---------------------------------------------------------------------------
 
 
-def test_collect_page_statuses_from_user_guide(tmp_path):
-    """_collect_page_statuses scans user-guide for status frontmatter."""
+def test_status_collection_from_user_guide(tmp_path):
+    """
+    Read status front matter from user guide pages
+    """
     docs = GreatDocs(project_path=str(tmp_path))
     ug_dir = docs.build_dir / "user-guide"
     ug_dir.mkdir(parents=True, exist_ok=True)
     (ug_dir / "page.qmd").write_text("---\nstatus: new\n---\n")
 
-    result = docs._collect_page_statuses()
+    result = page_status.collect(docs._config, docs.layout, docs.build_dir)
 
     assert "user-guide/page.qmd" in result
     assert result["user-guide/page.qmd"] == "new"
 
 
-def test_collect_page_statuses_unknown_status_warns(tmp_path, capsys):
+def test_status_collection_unknown_status_warns(tmp_path, capsys):
     """Unknown status triggers warning and is skipped."""
     docs = GreatDocs(project_path=str(tmp_path))
     ug_dir = docs.build_dir / "user-guide"
     ug_dir.mkdir(parents=True, exist_ok=True)
     (ug_dir / "page.qmd").write_text("---\nstatus: completely-unknown-xyz\n---\n")
 
-    result = docs._collect_page_statuses()
+    result = page_status.collect(docs._config, docs.layout, docs.build_dir)
 
     assert "user-guide/page.qmd" not in result
 
@@ -32745,7 +32752,7 @@ def test_collect_page_statuses_unknown_status_warns(tmp_path, capsys):
     assert "Unknown" in out or "unknown" in out.lower()
 
 
-def test_collect_page_statuses_custom_section(tmp_path):
+def test_status_collection_custom_section(tmp_path):
     """Custom sections are also scanned for status."""
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
     (tmp_path / "great-docs.yml").write_text(
@@ -32757,7 +32764,7 @@ def test_collect_page_statuses_custom_section(tmp_path):
     section_dir.mkdir(parents=True, exist_ok=True)
     (section_dir / "page.qmd").write_text("---\nstatus: beta\n---\n")
 
-    result = docs._collect_page_statuses()
+    result = page_status.collect(docs._config, docs.layout, docs.build_dir)
 
     assert any("tutorials/page.qmd" in k for k in result)
     assert "beta" in result.values()
