@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, NotRequired, TypedDict, cast
 from yaml12 import format_yaml
 
 from .._contribution import NavbarLink
+from .._website.navigation import navbar
 from .._yaml import locate_front_matter, set_front_matter_option
 from . import publish as page_publish
 from .naming import published_path, strip_numeric_prefix, title_from_name
@@ -238,6 +239,7 @@ def read(config: Config, layout: Layout, *, report: Callable[[str], None]) -> li
 def publish(
     section: Section,
     *,
+    config: Config,
     layout: Layout,
     pages: PageMap,
     add_dates: Callable[[str, Path], str],
@@ -252,10 +254,15 @@ def publish(
     `gd-section-no-sidebar` body class only when the page count, including any index,
     is at most one.
 
+    The navbar label is the section's title. A section titled exactly `Recipes` uses
+    the translation of that label in the site's language.
+
     Parameters
     ----------
     section
         The section.
+    config
+        The Great Docs configuration.
     layout
         The project's directories.
     pages
@@ -326,9 +333,30 @@ def publish(
     return Published(
         pages=copied,
         sidebar=section_sidebar,
-        navbar=NavbarLink(text=section.title, href=index_href),
+        navbar=NavbarLink(text=_navbar_label(section.title, config), href=index_href),
         navbar_after=section.navbar_after,
     )
+
+
+def _navbar_label(title: str, config: Config) -> str:
+    """
+    Label a section's navbar link
+
+    Parameters
+    ----------
+    title
+        The section's title.
+    config
+        The Great Docs configuration.
+
+    Returns
+    -------
+    :
+        The title, translated into the site's language only when it is exactly `Recipes`.
+    """
+    if title == navbar.RECIPES.english:
+        return navbar.RECIPES.label(config)
+    return title
 
 
 def copy_pages(

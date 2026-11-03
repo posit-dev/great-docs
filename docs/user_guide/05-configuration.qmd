@@ -785,8 +785,10 @@ navbar_order:
   - Changelog
 ```
 
-Items are matched by their display text. Any navbar items not listed are appended at the end in
-their original order. This is useful when you want a specific item (like the User Guide) to appear
+Items match their display text. Great Docs' own items (User Guide, Recipes, Reference, Changelog
+and Tags) accept either their English or translated label, so the list above works for any
+`site.lang`. `navbar_after` follows the same matching rule. Items not listed follow the listed
+items in their original order. Use `navbar_order` to put a specific item, such as the User Guide,
 first.
 
 ## Reference Section Order

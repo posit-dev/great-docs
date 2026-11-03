@@ -518,8 +518,9 @@ navbar_style: null
 #   dark: "#60a5fa"
 navbar_color: null
 
-# Explicit ordering of navbar items by their display text. Items not listed
-# are appended after the listed ones, preserving their original order.
+# Navbar item order by display text. Great Docs' own items (User Guide, Recipes,
+# Reference, Changelog and Tags) also match their English label on translated
+# sites. Unlisted items follow the listed items in their original order.
 # : null - (default) items appear in the order they are added during build
 # : type(list) - ordered list of navbar labels, e.g.:
 # navbar_order:

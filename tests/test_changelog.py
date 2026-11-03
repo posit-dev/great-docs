@@ -124,6 +124,16 @@ def test_write_page_translates_the_toc_title(tmp_path: Path, lang: str, expected
     assert f'toc-title: "{expected}"' in _page(tmp_path)
 
 
+def test_write_page_labels_the_link_in_the_site_language(tmp_path: Path):
+    config = write_config(tmp_path, {"site": {"lang": "fr"}})
+    remote = StubRemote(releases=[_release("v1.0.0")])
+
+    contribution = changelog.write_page(config, tmp_path, REPO, remote, report=print)
+
+    link = NavbarLink("Journal des modifications", "changelog.qmd")
+    assert contribution == Contribution(navbar=(link,))
+
+
 @pytest.mark.parametrize(("max_releases", "expected"), [(None, 2), (1, 1)])
 def test_write_page_limits_the_releases(tmp_path: Path, max_releases: int | None, expected: int):
     config = write_config(tmp_path, {"changelog": {"max_releases": 2}})

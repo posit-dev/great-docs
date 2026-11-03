@@ -19,6 +19,7 @@ from .._contribution import Contribution, NavbarLink
 from .._icons import get_icon_svg
 from .._translations import get_translation
 from . import page_scan
+from .navigation import navbar
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -325,8 +326,8 @@ def write(config: Config, layout: Layout, *, report: Callable[[str], None]) -> O
     """
     Write the tags index page and the tag pill data
 
-    The index page is written and linked from the navbar when `tags.index_page` is set. The
-    data file is written when `tags.show_on_pages` is set.
+    When `tags.index_page` is set, the index page is written with a navbar link labelled
+    in the site's language. The data file is written when `tags.show_on_pages` is set.
 
     Parameters
     ----------
@@ -355,7 +356,9 @@ def write(config: Config, layout: Layout, *, report: Callable[[str], None]) -> O
         index.parent.mkdir(parents=True, exist_ok=True)
         _ = index.write_text(render_index(groups, config), encoding="utf-8")
         report(f"Created {index.relative_to(build_dir)}")
-        link = NavbarLink(text="Tags", href=INDEX_PAGE, before="reference/index.qmd")
+        link = NavbarLink(
+            text=navbar.TAGS.label(config), href=INDEX_PAGE, before="reference/index.qmd"
+        )
         contribution = Contribution(navbar=(link,))
 
     data = None

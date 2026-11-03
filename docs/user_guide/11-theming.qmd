@@ -778,8 +778,10 @@ nav_icons:
     Configuration: settings
 ```
 
-Each key is the **exact text** of the navigation label as it appears in the rendered site. The value
-is any [Lucide icon name](https://lucide.dev/icons/) (lowercase, hyphenated).
+Each key matches the **exact text** of a navigation label on the rendered site. The value is any
+[Lucide icon name](https://lucide.dev/icons/) (lowercase, hyphenated). Great Docs' own navbar items
+(User Guide, Recipes, Reference, Changelog and Tags) also accept their English label on translated
+sites. For example, with `lang: fr`, the key `Reference` applies its icon to "Référence".
 
 ### Navbar Icons
 

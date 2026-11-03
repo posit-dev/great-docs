@@ -1,8 +1,7 @@
 """
 Read and write a build directory's `_quarto.yml`, and apply a build step's `Contribution` to it
 
-Every write starts with the generated-file header and translates the navbar
-labels that Great Docs generates in English.
+Every write starts with the generated-file header.
 """
 
 from __future__ import annotations
@@ -14,7 +13,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 from yaml12 import parse_yaml
 
-from .._translations import get_translation
 from .._utils import write_quarto_yml
 
 if TYPE_CHECKING:
@@ -22,16 +20,6 @@ if TYPE_CHECKING:
     from ..config import Config
 
 FILENAME = "_quarto.yml"
-
-# Generated navbar labels and their translation keys. A user-authored item
-# with one of these labels is translated too.
-_NAVBAR_LABELS = {
-    "User Guide": "user_guide",
-    "Recipes": "recipes",
-    "Reference": "reference",
-    "Changelog": "changelog",
-    "Tags": "tags",
-}
 
 
 def path(build_dir: Path) -> Path:
@@ -92,23 +80,21 @@ def write(build_dir: Path, quarto_config: dict[str, Any], config: Config) -> Non
     """
     Write a build directory's Quarto configuration
 
-    Translate the generated navbar labels into the site's language and include
-    the header that marks the build directory as generated.
+    The file includes the header that marks the build directory as generated.
 
     Parameters
     ----------
     build_dir
         The Quarto project directory.
     quarto_config
-        The configuration, whose navbar labels are translated in place.
+        The configuration.
     config
-        The Great Docs configuration.
+        The Great Docs configuration. Unused by this operation.
 
     Returns
     -------
     :
     """
-    _translate_navbar_labels(quarto_config, config.lang)
     write_quarto_yml(path(build_dir), quarto_config)
 
 
@@ -195,7 +181,6 @@ def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
     if not navbar or "left" not in navbar:
         return
     items = cast("list[Any]", navbar["left"])
-    # Writing the configuration translates labels, so match links by `href`.
     hrefs = [
         cast("dict[str, Any]", item).get("href") if isinstance(item, dict) else None
         for item in items
@@ -207,31 +192,3 @@ def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
         position = hrefs.index(before) if before is not None and before in hrefs else len(items)
         items.insert(position, {"text": link.text, "href": link.href})
         hrefs.insert(position, link.href)
-
-
-def _translate_navbar_labels(quarto_config: dict[str, Any], lang: str) -> None:
-    """
-    Translate the generated navbar labels in place
-
-    Parameters
-    ----------
-    quarto_config
-        The configuration.
-    lang
-        The site's language code.
-
-    Returns
-    -------
-    :
-    """
-    if lang == "en":
-        return
-    navbar = cast("dict[str, Any]", quarto_config.get("website", {}).get("navbar", {}))
-    for side in ("left", "right"):
-        for item in cast("list[Any]", navbar.get(side, [])):
-            if not isinstance(item, dict):
-                continue
-            entry = cast("dict[str, Any]", item)
-            text = entry.get("text")
-            if isinstance(text, str) and text in _NAVBAR_LABELS:
-                entry["text"] = get_translation(_NAVBAR_LABELS[text], lang)

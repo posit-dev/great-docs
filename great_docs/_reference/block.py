@@ -202,8 +202,7 @@ def configure(
     """
     Add reference settings and navigation to a Quarto mapping
     """
-    # The index title names the API; the navbar label covers API, CLI and MCP
-    # references and is also used to identify the shared navigation entry.
+    # The index title names the API; the navbar label covers API, CLI and MCP references.
     ref_title = site_config.reference_title or "API Reference"
     nav_title = site_config.reference_title or "Reference"
     ref_desc = site_config.reference_desc
