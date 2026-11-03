@@ -1581,7 +1581,7 @@ class TestCanonicalIntegration:
     def test_base_url_falls_back_to_the_github_pages_address(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
         monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("acme", "mypkg", None))
-        assert gd._get_canonical_base_url() == "https://acme.github.io/mypkg/"
+        assert gd._identity().base_url == "https://acme.github.io/mypkg/"
 
     def test_raw_custom_page_gets_a_canonical_link(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
@@ -1589,7 +1589,7 @@ class TestCanonicalIntegration:
         (gd.build_dir / "_quarto.yml").write_text(
             "website:\n  sidebar: []\n  navbar:\n    left: []\n", encoding="utf-8"
         )
-        monkeypatch.setattr(gd, "_get_canonical_base_url", lambda: "https://docs.example.com/pkg/")
+        monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("acme", "mypkg", None))
         custom = tmp_path / "custom"
         custom.mkdir()
         (custom / "widget.html").write_text(
@@ -1600,7 +1600,7 @@ class TestCanonicalIntegration:
 
         page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert (
-            '<link rel="canonical" href="https://docs.example.com/pkg/custom/widget.html">' in page
+            '<link rel="canonical" href="https://acme.github.io/mypkg/custom/widget.html">' in page
         )
 
     def test_raw_custom_reference_page_gets_structured_data(self, tmp_path):
@@ -1635,7 +1635,7 @@ class TestCanonicalIntegration:
         (gd.build_dir / "_quarto.yml").write_text(
             "website:\n  title: Pkg\n  sidebar: []\n  navbar:\n    left: []\n", encoding="utf-8"
         )
-        monkeypatch.setattr(gd, "_get_canonical_base_url", lambda: "https://docs.example.com/pkg/")
+        monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("acme", "mypkg", None))
         custom = tmp_path / "custom"
         custom.mkdir()
         (custom / "widget.html").write_text(
@@ -1649,7 +1649,7 @@ class TestCanonicalIntegration:
         assert page.count('<meta property="og:title" content="Widget Lab">') == 1
         assert '<meta property="og:site_name" content="Pkg">' in page
         assert (
-            '<meta property="og:url" content="https://docs.example.com/pkg/custom/widget.html">'
+            '<meta property="og:url" content="https://acme.github.io/mypkg/custom/widget.html">'
             in page
         )
         assert '<meta name="twitter:card" content="summary">' in page

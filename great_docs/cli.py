@@ -2844,7 +2844,8 @@ def seo(
         warnings = []
         info = []
 
-        canonical_base = docs._get_canonical_base_url()
+        identity = docs._identity()
+        canonical_base = identity.base_url
 
         # ── Check sitemap.xml ────────────────────────────────────────────
         sitemap_path = site_dir / "sitemap.xml"
@@ -2898,7 +2899,7 @@ def seo(
         # `{site_name}`. A missing placeholder or non-string value skips this
         # check.
         title_template = docs._config.seo_title_template
-        site_name = docs._get_site_name()
+        site_name = identity.name
         if not isinstance(title_template, str) or "{site_name}" not in title_template:
             site_name = ""
 

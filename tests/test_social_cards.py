@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from great_docs._layout import Layout
 from great_docs._website import social_cards
 from great_docs.config import Config
 from tests.support import write_config
@@ -180,3 +181,53 @@ class TestAddToRawPage:
     def test_disabled(self, tmp_path: Path):
         page = self.HEAD.format("")
         assert self._add(tmp_path, page, "social_cards: false\n") == page
+
+
+class TestPublishImage:
+    """The default card image, copied to the site root and addressed there"""
+
+    def _publish(
+        self, root: Path, image: str | None, base_url: str | None = None
+    ) -> tuple[str | None, Path, list[str]]:
+        config = write_config(root, {"social_cards": {"image": image}} if image else "")
+        layout = Layout.make(root)
+        warnings: list[str] = []
+        url = social_cards.publish_image(
+            config, layout, layout.build_dir, base_url, report=warnings.append
+        )
+        return url, layout.build_dir, warnings
+
+    def test_without_an_image(self, tmp_path: Path):
+        url, _, warnings = self._publish(tmp_path, None)
+        assert url is None
+        assert warnings == []
+
+    def test_keeps_an_image_url(self, tmp_path: Path):
+        url, build_dir, _ = self._publish(tmp_path, "https://cdn.test/card.png")
+        assert url == "https://cdn.test/card.png"
+        assert not build_dir.exists()
+
+    def test_copies_a_local_image_under_the_base_url(self, tmp_path: Path):
+        (tmp_path / "assets").mkdir()
+        (tmp_path / "assets" / "card.png").write_bytes(b"png")
+
+        url, build_dir, warnings = self._publish(
+            tmp_path, "assets/card.png?v=2", "https://docs.test/pkg/"
+        )
+
+        assert url == "https://docs.test/pkg/card.png?v=2"
+        assert (build_dir / "card.png").read_bytes() == b"png"
+        assert warnings == []
+
+    def test_addresses_a_local_image_from_the_site_root_without_a_base_url(self, tmp_path: Path):
+        (tmp_path / "card.png").write_bytes(b"png")
+
+        url, _, _ = self._publish(tmp_path, "card.png")
+
+        assert url == "card.png"
+
+    def test_warns_about_a_missing_local_image(self, tmp_path: Path):
+        url, _, warnings = self._publish(tmp_path, "assets/missing.png")
+
+        assert url is None
+        assert warnings == ["Social card image not found: assets/missing.png"]
