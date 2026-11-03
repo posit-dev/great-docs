@@ -245,6 +245,8 @@ def _mock_docs() -> MagicMock:
     docs._get_custom_page_sources.return_value = []
     docs.layout.source_dir = Path("/nonexistent/source")
     docs.layout.package_root = Path("/nonexistent/source")
+    # The package documents nothing unless a test lists its documented objects.
+    docs._create_api_sections_with_config.return_value = None
     return docs
 
 
@@ -919,8 +921,11 @@ class TestRunLint:
         # func_b has no docstring -> error
         assert any(i.check == "missing-docstring" and i.symbol == "func_b" for i in result.issues)
 
+    @patch("great_docs._reference.documented.objects")
     @patch("great_docs.core.GreatDocs")
-    def test_ambiguity_check_respects_the_renderer_member_selection(self, mock_gd_cls, tmp_path):
+    def test_ambiguity_check_respects_the_renderer_member_selection(
+        self, mock_gd_cls, mock_documented_objects, tmp_path
+    ):
         """Verify that configured member selection does not make `flush` ambiguous"""
         mock_gd = _mock_docs()
         mock_gd._detect_package_name.return_value = "mypkg"
@@ -929,7 +934,7 @@ class TestRunLint:
         mock_gd._config.__getitem__.return_value = "numpy"
         # The renderer documents NetCache itself but, per its `members: false`
         # config, none of its members — only StoreCache.flush gets a page.
-        mock_gd.documented_objects.return_value = [
+        mock_documented_objects.return_value = [
             _make_documented_item(
                 "mypkg.StoreCache", ("StoreCache",), "A store.\n\nSee [](`flush`)."
             ),
@@ -972,7 +977,6 @@ class TestRunLint:
         mock_gd._resolve_importable_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a"]
         mock_gd._config.__getitem__.return_value = "numpy"
-        mock_gd.documented_objects.return_value = []
         mock_gd_cls.return_value = mock_gd
 
         func_a = _make_griffe_obj(docstring="Docs.\n\n%seealso nope")

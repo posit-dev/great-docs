@@ -24,6 +24,7 @@ from great_docs._reference.discovery import (
 )
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website import quarto_yml as quarto_yml_file
+from great_docs._website.seo import robots
 from tests.support import StubRemote, make_run
 
 
@@ -1526,11 +1527,11 @@ class TestCountCliSidebarItems:
 
 
 # ---------------------------------------------------------------------------
-# _generate_robots_txt – llms.txt and sitemap branches
+# Crawler rules, sitemap references and AI context file references
 # ---------------------------------------------------------------------------
 
 
-class TestGenerateRobotsTxt:
+class TestRobotsWrite:
     def _setup_gd(self, tmp_path, monkeypatch, **config_overrides):
         gd = _make_gd(tmp_path)
         gd.build_dir.mkdir(parents=True, exist_ok=True)
@@ -1548,23 +1549,22 @@ class TestGenerateRobotsTxt:
 
     def test_basic_robots_txt(self, tmp_path, monkeypatch):
         gd, site_dir = self._setup_gd(tmp_path, monkeypatch)
-        monkeypatch.setattr(gd, "_get_canonical_base_url", lambda: None)
-        gd._generate_robots_txt()
+        robots.write(site_dir, gd._config, None, report=print)
         content = (site_dir / "robots.txt").read_text()
         assert "Allow: /" in content
 
     def test_no_site_dir_skips(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
         _patch_cfg(monkeypatch, gd, "robots_enabled", True)
-        gd._generate_robots_txt()
-        assert not (gd.build_dir / "_site" / "robots.txt").exists()
+        site_dir = gd.build_dir / "_site"
+        robots.write(site_dir, gd._config, None, report=print)
+        assert not (site_dir / "robots.txt").exists()
 
     def test_disallow_rules(self, tmp_path, monkeypatch):
         gd, site_dir = self._setup_gd(
             tmp_path, monkeypatch, robots_disallow=["/private/", "/admin/"]
         )
-        monkeypatch.setattr(gd, "_get_canonical_base_url", lambda: None)
-        gd._generate_robots_txt()
+        robots.write(site_dir, gd._config, None, report=print)
         content = (site_dir / "robots.txt").read_text()
         assert "Disallow: /private/" in content
         assert "Disallow: /admin/" in content
@@ -1575,33 +1575,29 @@ class TestGenerateRobotsTxt:
             monkeypatch,
             robots_extra_rules=["User-agent: GPTBot", "Disallow: /"],
         )
-        monkeypatch.setattr(gd, "_get_canonical_base_url", lambda: None)
-        gd._generate_robots_txt()
+        robots.write(site_dir, gd._config, None, report=print)
         content = (site_dir / "robots.txt").read_text()
         assert "User-agent: GPTBot" in content
 
     def test_sitemap_reference(self, tmp_path, monkeypatch):
         gd, site_dir = self._setup_gd(tmp_path, monkeypatch, sitemap_enabled=True)
-        monkeypatch.setattr(gd, "_get_canonical_base_url", lambda: "https://example.com/")
-        gd._generate_robots_txt()
+        robots.write(site_dir, gd._config, "https://example.com/", report=print)
         content = (site_dir / "robots.txt").read_text()
         assert "Sitemap: https://example.com/sitemap.xml" in content
 
     def test_llms_txt_references(self, tmp_path, monkeypatch):
         gd, site_dir = self._setup_gd(tmp_path, monkeypatch)
-        monkeypatch.setattr(gd, "_get_canonical_base_url", lambda: "https://example.com/")
         (site_dir / "llms.txt").write_text("llms content", encoding="utf-8")
         (site_dir / "llms-full.txt").write_text("full content", encoding="utf-8")
-        gd._generate_robots_txt()
+        robots.write(site_dir, gd._config, "https://example.com/", report=print)
         content = (site_dir / "robots.txt").read_text()
         assert "Llms-txt: https://example.com/llms.txt" in content
         assert "Llms-txt: https://example.com/llms-full.txt" in content
 
     def test_llms_txt_only_one(self, tmp_path, monkeypatch):
         gd, site_dir = self._setup_gd(tmp_path, monkeypatch)
-        monkeypatch.setattr(gd, "_get_canonical_base_url", lambda: "https://example.com/")
         (site_dir / "llms.txt").write_text("llms content", encoding="utf-8")
-        gd._generate_robots_txt()
+        robots.write(site_dir, gd._config, "https://example.com/", report=print)
         content = (site_dir / "robots.txt").read_text()
         assert "Llms-txt: https://example.com/llms.txt" in content
         assert "llms-full.txt" not in content

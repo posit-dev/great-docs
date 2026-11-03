@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import great_docs
+from great_docs._website import metadata_partial
 from great_docs.core import GreatDocs
 
 VENDORED = Path(great_docs.__file__).parent / "assets" / "metadata.html"
@@ -141,7 +142,7 @@ def test_title_line_applies_template_only_to_titled_pages(template: str, titled:
     name as `pagetitle`. The conditional therefore excludes surrounding
     template text from those pages.
     """
-    line = GreatDocs._build_title_template_line(None, template)  # type: ignore[arg-type]
+    line = metadata_partial.title_element(template)
 
     assert line == f"<title>$if(title-prefix)${titled}$else$$pagetitle$$endif$</title>"
 
@@ -149,7 +150,7 @@ def test_title_line_applies_template_only_to_titled_pages(template: str, titled:
 @pytest.mark.parametrize("template", ["{site_name}", "$pagetitle$", "{page_title} $ {site_name}"])
 def test_title_line_rejects_missing_page_placeholder_or_dollar(template: str):
     """Reject templates that omit `{page_title}` or contain `$`"""
-    assert GreatDocs._build_title_template_line(None, template) is None  # type: ignore[arg-type]
+    assert metadata_partial.title_element(template) is None
 
 
 @pytest.mark.parametrize("template", [None, False, 42, ["{page_title}"]])
@@ -160,7 +161,7 @@ def test_title_line_rejects_non_string_templates(template: object):
     YAML parses an empty `title_template:` as `None`. Treat every non-string
     value as unsupported so the build keeps Quarto's titles.
     """
-    assert GreatDocs._build_title_template_line(None, template) is None  # type: ignore[arg-type]
+    assert metadata_partial.title_element(template) is None
 
 
 def _write_partial(tmp_path: Path, yaml: str) -> tuple[GreatDocs, dict]:
@@ -183,7 +184,7 @@ def _write_partial(tmp_path: Path, yaml: str) -> tuple[GreatDocs, dict]:
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir(parents=True, exist_ok=True)
     config: dict = {"format": {"html": {}}}
-    docs._write_metadata_partial(config)
+    metadata_partial.write(config, docs._config, docs.build_dir, report=print)
     return docs, config
 
 

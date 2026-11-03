@@ -501,6 +501,8 @@ def preprocess_version(
     section_configs: list[dict] | None = None,
     badge_expiry: "BadgeExpiry | None" = None,
     config: Config | None = None,
+    *,
+    documented_symbols: Callable[[str], list[str]] | None = None,
 ) -> list[str]:
     """
     Prepare the documentation source for one version
@@ -537,6 +539,10 @@ def preprocess_version(
         Project configuration, forwarded to steps 5 and 6 for rebuilding the
         inventory and interlinks index. Skipped for a version that keeps the
         live inventory when omitted.
+    documented_symbols
+        Callable that returns the working tree's documented reference page
+        stems for a project name; used in step 6. If omitted or it returns no
+        stems, a new snapshot contains only the package's top-level exports.
 
     Returns
     -------
@@ -612,7 +618,9 @@ def preprocess_version(
 
     # 4. Strategy B: git-ref introspection with caching
     elif entry.git_ref and project_root:
-        api_pages = _rebuild_api_from_git_ref(dest_dir, project_root, entry, config)
+        api_pages = _rebuild_api_from_git_ref(
+            dest_dir, project_root, entry, config, documented_symbols=documented_symbols
+        )
         included_pages.extend(api_pages)
 
     # 5. Prune CLI pages that don't exist at this version
@@ -1103,19 +1111,33 @@ def _format_param(p) -> str:
 
 
 def _is_valid_ref_name(name: str, valid_symbols: set[str]) -> bool:
-    """Whether a reference page stem names a symbol documented in this version.
+    """
+    Check whether a reference page stem is valid for a version's snapshot
 
-    A *deep* snapshot lists every valid stem explicitly (including method
-    stems like `Class.method` and submodule-qualified names like `sub.Widget`)
-    so exact set membership is sufficient and authoritative.
+    A *deep* snapshot lists every valid stem explicitly, including method
+    stems such as `Class.method` and submodule-qualified names such as
+    `sub.Widget`. Exact set membership determines whether a stem is valid.
 
-    A *shallow* snapshot holds only the package's top-level exports; it is the
-    back-compat fallback used when no documented set can be resolved (e.g.
-    `documented_symbol_names()` returned nothing). Such a snapshot carries no
-    dotted keys, so a `Class.method` page would be wrongly pruned under exact
-    membership. For that case only, fall back to validating a dotted stem by
-    its top-level prefix, matching the pre-deep-snapshot behavior and keeping
-    the failure mode non-destructive.
+    A *shallow* snapshot holds only the package's top-level exports. It is the
+    backwards-compatible fallback when no documented set can be resolved,
+    for example when the reference documents nothing. Such a snapshot has no
+    dotted keys, so exact membership would wrongly prune a `Class.method`
+    page. In that case only, a dotted stem is valid when its top-level prefix
+    is present. This preserves pages that the shallow snapshot cannot rule
+    out and matches the behaviour before deep snapshots were introduced.
+
+    Parameters
+    ----------
+    name
+        Reference page stem to check.
+    valid_symbols
+        Symbol names in the version's snapshot.
+
+    Returns
+    -------
+    :
+        Whether the stem is `index`, is in the snapshot, or has a top-level
+        prefix in a snapshot without dotted keys.
     """
     if name == "index" or name in valid_symbols:
         return True
@@ -1356,31 +1378,38 @@ def _rebuild_api_from_git_ref(
     project_root: Path,
     entry: VersionEntry,
     config: Config | None = None,
+    *,
+    documented_symbols: Callable[[str], list[str]] | None = None,
 ) -> list[str]:
     """
-    Introspect a package at a git tag and generate API reference pages.
+    Generate API reference pages from a package at a Git tag
 
-    Implements Strategy B with caching: if a cached snapshot exists for this git_ref, it is loaded
-    instead of re-introspecting.
+    Strategy B reuses the tag's cached snapshot when available. Otherwise, it
+    introspects the package at the tag and caches the snapshot.
 
     Parameters
     ----------
     dest_dir
         The version's build directory.
     project_root
-        Project root (git repo root).
+        Root of the Git repository.
     entry
         The version entry with `git_ref` set.
     config
-        Optional project configuration. Selects the snapshot cache location
-        and is forwarded to `_rebuild_api_from_snapshot` when rebuilding the
-        inventory and interlinks index. Defaults to
-        `project_root / ".great-docs-cache"` when omitted.
+        Project configuration for the snapshot cache location and for
+        rebuilding the inventory and interlinks index. When omitted, the
+        cache is at `project_root / ".great-docs-cache"`.
+    documented_symbols
+        Callable that returns the working tree's documented reference page
+        stems for a project name. Called on a cache miss after the package
+        name is detected. The new snapshot captures these stems; if the
+        callable is omitted or returns no stems, the snapshot contains only
+        the package's top-level exports.
 
     Returns
     -------
-    list[str]
-        Relative paths of generated API pages (as .html).
+    :
+        Relative paths of generated API pages, with `.html` extensions.
     """
     from great_docs._api_diff import (
         ApiSnapshot,
@@ -1413,12 +1442,7 @@ def _rebuild_api_from_git_ref(
         if not pkg_name:
             return []
 
-        from great_docs.core import GreatDocs
-
-        documented = GreatDocs(
-            project_path=str(project_root),
-            config_path=str(config.config_path) if config is not None else None,
-        ).documented_symbol_names(pkg_name)
+        documented = documented_symbols(pkg_name) if documented_symbols is not None else None
 
         snap = snapshot_at_tag(project_root, git_ref, pkg_name, documented_names=documented or None)
         if snap is None:
@@ -1933,6 +1957,8 @@ def run_versioned_build(  # pragma: no cover
     layout: Layout | None = None,
     default_description: str | None = None,
     structured_data: StructuredData | None = None,
+    *,
+    documented_symbols: Callable[[str], list[str]] | None = None,
 ) -> dict[str, Any]:
     """
     Build and assemble the configured documentation versions
@@ -1970,6 +1996,11 @@ def run_versioned_build(  # pragma: no cover
     structured_data
         The JSON-LD for each version's homepage and reference pages, or
         `None` when structured data is disabled.
+    documented_symbols
+        Callable that returns the working tree's documented reference page
+        stems for a project name. New snapshots for versions built from tags
+        capture these stems. If the callable is omitted or returns no stems,
+        those snapshots contain only the package's top-level exports.
 
     Returns
     -------
@@ -2049,6 +2080,7 @@ def run_versioned_build(  # pragma: no cover
             project_root=project_root,
             badge_expiry=badge_expiry,
             config=config,
+            documented_symbols=documented_symbols,
         )
         # Describe each version's resolved pages before the version's site title is set. The
         # versions share a freeze cache checked against page sources, so card titles must

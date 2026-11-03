@@ -2,13 +2,64 @@ from __future__ import annotations
 
 import sys
 import textwrap
+from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 
 from great_docs import BuildError
+from great_docs._apiref.inventory import InventoryItem
+from great_docs._reference import documented
 from great_docs.core import GreatDocs
+
+
+def _symbol_names(gd: GreatDocs, package_name: str) -> list[str]:
+    """
+    List documented page stems from a project name as the CLI does
+
+    Parameters
+    ----------
+    gd
+        Documentation project whose reference to query.
+    package_name
+        Project name to resolve to the configured import name.
+
+    Returns
+    -------
+    :
+        Documented page stems in first-occurrence order.
+    """
+    return documented.symbol_names(
+        gd._config,
+        importable_name=gd._resolve_importable_name(package_name),
+        search_paths=gd._griffe_search_paths(),
+        create_sections=gd._create_api_sections_with_config,
+    )
+
+
+def _objects(gd: GreatDocs, package_name: str) -> list[InventoryItem]:
+    """
+    List documented objects from a project name as lint does
+
+    Parameters
+    ----------
+    gd
+        Documentation project whose reference to query.
+    package_name
+        Project name to resolve to the configured import name.
+
+    Returns
+    -------
+    :
+        Inventory items for the project's documented objects.
+    """
+    return documented.objects(
+        gd._config,
+        importable_name=gd._resolve_importable_name(package_name),
+        search_paths=gd._griffe_search_paths(),
+        create_sections=gd._create_api_sections_with_config,
+    )
 
 
 def _write_pkg(root: Path) -> None:
@@ -47,20 +98,20 @@ def _write_pkg(root: Path) -> None:
 def test_flattens_config_into_dotted_stems(tmp_path: Path):
     _write_pkg(tmp_path)
     gd = GreatDocs(project_path=str(tmp_path))
-    names = gd.documented_symbol_names("mypkg")
+    names = _symbol_names(gd, "mypkg")
     assert names == ["TopClass", "sub.Widget", "sub.Widget.fit"]
 
 
 def test_documented_objects_returns_the_manifest_items(tmp_path: Path):
     """
-    Read the same objects as `documented_symbol_names`, as items rather than stems
+    Return documented objects as inventory items rather than page stems
 
     Each item carries its full name and the short names it claims.
     """
     _write_pkg(tmp_path)
     gd = GreatDocs(project_path=str(tmp_path))
 
-    by_name = {item.name: item for item in gd.documented_objects("mypkg")}
+    by_name = {item.name: item for item in _objects(gd, "mypkg")}
 
     assert "TopClass" in by_name["mypkg.TopClass"].aliases
     assert "Widget" in by_name["mypkg.sub.Widget"].aliases
@@ -78,7 +129,7 @@ def test_returns_empty_without_reference_config(tmp_path: Path):
     (tmp_path / "emptypkg" / "__init__.py").write_text("__all__ = []\n")
     (tmp_path / "great-docs.yml").write_text("logo: assets/logo.png\n")
     gd = GreatDocs(project_path=str(tmp_path))
-    assert gd.documented_symbol_names("emptypkg") == []
+    assert _symbol_names(gd, "emptypkg") == []
 
 
 def test_resolver_matches_renderer_sections(tmp_path: Path):
@@ -95,7 +146,7 @@ def test_resolver_matches_renderer_sections(tmp_path: Path):
     expected = ["TopClass", "sub.Widget", "sub.Widget.fit"]
 
     # Resolver must match ground truth.
-    assert gd.documented_symbol_names("mypkg") == expected
+    assert _symbol_names(gd, "mypkg") == expected
 
     # Renderer sections, flattened independently, must also match ground truth.
     sections = gd._create_api_sections_with_config("mypkg")
@@ -153,16 +204,16 @@ def _write_pkg_with_nodoc(root: Path) -> None:
     )
 
 
-def test_nodoc_symbol_excluded_from_documented_symbol_names(tmp_path: Path):
-    """A symbol whose docstring contains %nodoc must be absent from the resolver output.
+def test_nodoc_symbol_excluded_from_symbol_names(tmp_path: Path):
+    """
+    Exclude symbols whose docstrings contain `%nodoc` from the documented stems
 
-    This verifies that `documented_symbol_names` honours the same nodoc filter that
-    the dev-build renderer applies, so a tagged versioned build cannot generate a
-    page the dev renderer hides.
+    The query honours the renderer's `%nodoc` filter, so a tagged versioned
+    build cannot generate a page that the development build hides.
     """
     _write_pkg_with_nodoc(tmp_path)
     gd = GreatDocs(project_path=str(tmp_path))
-    names = gd.documented_symbol_names("mypkg")
+    names = _symbol_names(gd, "mypkg")
     assert "VisibleClass" in names
     assert "HiddenClass" not in names
 
@@ -189,26 +240,28 @@ def test_deduplication_preserves_first_occurrence_order(tmp_path: Path):
         )
     )
     gd = GreatDocs(project_path=str(tmp_path))
-    names = gd.documented_symbol_names("mypkg")
+    names = _symbol_names(gd, "mypkg")
     # Duplicates removed; first-occurrence order is: TopClass, sub.Widget, sub.Widget.fit.
     assert names == ["TopClass", "sub.Widget", "sub.Widget.fit"]
     # No duplicates.
     assert len(names) == len(set(names))
 
 
-def test_search_path_failure_preserves_original_error(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_search_path_failure_preserves_original_error(tmp_path: Path):
     _write_pkg(tmp_path)
     gd = GreatDocs(project_path=str(tmp_path))
 
-    def fail_search_paths() -> list[str]:
+    def fail_search_paths() -> Iterator[str]:
         raise RuntimeError("search path failure")
-
-    monkeypatch.setattr(gd, "_griffe_search_paths", fail_search_paths)
+        yield ""
 
     with pytest.raises(RuntimeError, match="search path failure"):
-        gd.documented_symbol_names("mypkg")
+        documented.symbol_names(
+            gd._config,
+            importable_name="mypkg",
+            search_paths=fail_search_paths(),
+            create_sections=gd._create_api_sections_with_config,
+        )
 
 
 def test_missing_configured_name_raises_build_error(
@@ -226,7 +279,7 @@ def test_missing_configured_name_raises_build_error(
     gd = GreatDocs(project_path=str(tmp_path))
 
     with pytest.raises(BuildError, match="`Gone`"):
-        gd.documented_symbol_names("mypkg")
+        _symbol_names(gd, "mypkg")
 
     assert capsys.readouterr().err == ""
 
@@ -241,7 +294,7 @@ def test_restores_cached_package_modules(tmp_path: Path, monkeypatch: pytest.Mon
     monkeypatch.setitem(sys.modules, "mypkg", cached_package)
     monkeypatch.setitem(sys.modules, "mypkg.cached", cached_submodule)
 
-    assert gd.documented_symbol_names("mypkg") == [
+    assert _symbol_names(gd, "mypkg") == [
         "TopClass",
         "sub.Widget",
         "sub.Widget.fit",
@@ -260,7 +313,7 @@ def test_missing_configured_symbol_returns_empty(tmp_path: Path) -> None:
 
     gd = GreatDocs(project_path=str(tmp_path))
 
-    assert gd.documented_symbol_names("mypkg") == []
+    assert _symbol_names(gd, "mypkg") == []
 
 
 def test_dynamic_import_failure_returns_empty(tmp_path: Path) -> None:
@@ -272,7 +325,7 @@ def test_dynamic_import_failure_returns_empty(tmp_path: Path) -> None:
 
     gd = GreatDocs(project_path=str(tmp_path))
 
-    assert gd.documented_symbol_names("mypkg") == []
+    assert _symbol_names(gd, "mypkg") == []
 
 
 def _write_pkg_under_another_name(root: Path) -> None:
@@ -298,8 +351,8 @@ def test_a_project_documents_the_module_it_imports_as(tmp_path: Path) -> None:
     gd = GreatDocs(project_path=str(tmp_path))
 
     # Callers use the distribution name, not the configured import name.
-    assert gd.documented_symbol_names("my-dist") == ["Cache"]
-    assert "actual_module.Cache" in {item.name for item in gd.documented_objects("my-dist")}
+    assert _symbol_names(gd, "my-dist") == ["Cache"]
+    assert "actual_module.Cache" in {item.name for item in _objects(gd, "my-dist")}
 
 
 def _write_large_class_under_another_name(root: Path) -> None:
@@ -328,8 +381,25 @@ def test_a_project_imported_under_another_name_gets_the_build_sections(tmp_path:
     gd = GreatDocs(project_path=str(tmp_path))
     methods = [f"Big.m{i}" for i in range(1, 7)]
 
-    assert gd.documented_symbol_names("my-dist") == ["Big", "Cache", "Cache.get", *methods]
-    pages = {item.name: item.uri for item in gd.documented_objects("my-dist")}
+    assert _symbol_names(gd, "my-dist") == ["Big", "Cache", "Cache.get", *methods]
+    pages = {item.name: item.uri for item in _objects(gd, "my-dist")}
     assert [pages[f"actual_module.{method}"] for method in methods] == [
         f"reference/{method}.html#actual_module.{method}" for method in methods
     ]
+
+
+@pytest.mark.parametrize("setting", ["reference: false", "project_type: go"])
+def test_a_site_without_an_api_reference_documents_nothing(tmp_path: Path, setting: str):
+    """
+    Return empty lists of symbols and objects when the site has no API reference
+
+    The build writes no reference pages with `reference: false` or without a
+    Python component. Snapshots, `api-diff --graph` and lint therefore need an
+    empty documented set.
+    """
+    _write_pkg(tmp_path)
+    (tmp_path / "great-docs.yml").write_text(f"{setting}\n")
+    gd = GreatDocs(project_path=str(tmp_path))
+
+    assert _symbol_names(gd, "mypkg") == []
+    assert _objects(gd, "mypkg") == []

@@ -2803,6 +2803,8 @@ def seo(
     import json
     import xml.etree.ElementTree as ET
 
+    from ._website.seo import robots, sitemap
+
     try:
         docs = GreatDocs(project_path=project_path, config_path=config_path)
         site_dir = docs.layout.site_dir
@@ -2828,6 +2830,8 @@ def seo(
         warnings = []
         info = []
 
+        canonical_base = docs._get_canonical_base_url()
+
         # ── Check sitemap.xml ────────────────────────────────────────────
         sitemap_path = site_dir / "sitemap.xml"
         if sitemap_path.exists():
@@ -2846,7 +2850,7 @@ def seo(
         else:
             issues.append("❌ sitemap.xml not found")
             if fix:
-                docs._generate_sitemap_xml()
+                sitemap.write(site_dir, docs._config, canonical_base, report=click.echo)
                 record_generated_file("sitemap.xml")
                 info.append("   → Generated sitemap.xml")
 
@@ -2863,7 +2867,7 @@ def seo(
         else:
             issues.append("❌ robots.txt not found")
             if fix:
-                docs._generate_robots_txt()
+                robots.write(site_dir, docs._config, canonical_base, report=click.echo)
                 record_generated_file("robots.txt")
                 info.append("   → Generated robots.txt")
 
@@ -2875,8 +2879,6 @@ def seo(
         pages_missing_site_name = 0
         pages_with_json_ld = 0
         images_missing_alt = 0
-
-        canonical_base = docs._get_canonical_base_url()
 
         # The audit requires the site name only when a string template contains
         # `{site_name}`. A missing placeholder or non-string value skips this
@@ -3380,12 +3382,17 @@ def api_diff_cmd(
 
         # --- Graph mode ---
         if graph:
+            from great_docs._reference import documented as documented_reference
             from great_docs.core import GreatDocs
 
+            docs = GreatDocs(project_path=str(project_root), config_path=config_path)
             documented = (
-                GreatDocs(
-                    project_path=str(project_root), config_path=config_path
-                ).documented_symbol_names(result.package_name)
+                documented_reference.symbol_names(
+                    docs._config,
+                    importable_name=docs._resolve_importable_name(result.package_name),
+                    search_paths=docs._griffe_search_paths(),
+                    create_sections=docs._create_api_sections_with_config,
+                )
                 or None
             )
             # Build graph for the new version
@@ -3656,13 +3663,18 @@ def api_snapshot_cmd(
         )
         sys.exit(1)
 
+    from great_docs._reference import documented as documented_reference
     from great_docs.core import GreatDocs
 
     try:
+        docs = GreatDocs(project_path=str(project_root), config_path=config_path)
         documented = (
-            GreatDocs(
-                project_path=str(project_root), config_path=config_path
-            ).documented_symbol_names(pkg_name)
+            documented_reference.symbol_names(
+                docs._config,
+                importable_name=docs._resolve_importable_name(pkg_name),
+                search_paths=docs._griffe_search_paths(),
+                create_sections=docs._create_api_sections_with_config,
+            )
             or None
         )
     except BuildError as e:

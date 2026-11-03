@@ -1,12 +1,10 @@
-import contextlib
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
-from datetime import datetime
-from functools import partial
+from functools import cache, partial
 from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -45,7 +43,7 @@ from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import Layout
 from ._reference import block as reference_block
-from ._reference import discovery, probe
+from ._reference import discovery, documented, probe
 from ._reference import sections as reference_sections
 from ._reference.discovery import Categories
 from ._remote import HttpRemote, Remote
@@ -62,6 +60,7 @@ from ._website import (
     i18n,
     inline_data,
     markdown_pages,
+    metadata_partial,
     page_dates,
     page_status,
     page_url,
@@ -82,18 +81,17 @@ from ._website.navigation import shared_sidebar
 from ._website.project_pages import citation, community, licence, package_info
 from ._website.scripts import script_include, stylesheet_include
 from ._website.seo import description as seo_description
-from ._website.seo import title as seo_title
+from ._website.seo import site_files
 from ._website.seo.structured_data import StructuredData
 from ._yaml import YamlMapping, set_front_matter_option, split_front_matter
 from .config import Config, create_default_config
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Iterable
 
     import click
 
     from ._apiref.api_reference import APIReference
-    from ._apiref.inventory import InventoryItem
     from ._build.log import BuildLog
 
 # Quarto's default input file types, enumerated as render globs. Used to seed
@@ -4070,159 +4068,6 @@ class GreatDocs:
             report=print,
         )
 
-    @contextlib.contextmanager
-    def _resolved_api_reference(self, package_name: str) -> "Iterator[APIReference | None]":
-        """
-        Yield the API reference for a package, or None when it cannot be resolved
-
-        Restores `sys.path` and `sys.modules` on the way out, so a read-only
-        query leaves no trace. In `dynamic`
-        mode resolving the reference performs a real import of the target
-        package.
-
-        Use the import name to discover sections and resolve the reference,
-        matching the build. This name may be configured explicitly and may differ
-        from the project name even after replacing dashes with underscores.
-
-        Parameters
-        ----------
-        package_name
-            The project name, which need not be the module name.
-
-        Yields
-        ------
-        APIReference | None
-            The resolved reference, or None when the package documents nothing.
-        """
-        import io
-        from types import ModuleType
-
-        added_paths: list[str] = []
-        cached_modules: dict[str, ModuleType] = {}
-        modules_evicted = False
-        importable_name = self._resolve_importable_name(package_name)
-
-        try:
-            # Suppress diagnostic prints from the resolution/filtering pipeline — this is a
-            # programmatic query method and its callers own their own output streams.
-            # `APIReference` loads the package through a plain griffe loader (sys.path-based),
-            # unlike `_create_api_sections_with_config`'s own loader, which is handed explicit
-            # search paths. Temporarily extend sys.path so a package that isn't installed (e.g.
-            # a src-layout dev checkout) can still be found, then restore it.
-            added_paths = [str(p) for p in self._griffe_search_paths() if str(p) not in sys.path]
-            sys.path[:0] = added_paths
-            # Drop any cached import of the package (and its submodules) so dynamic
-            # resolution reflects what's on disk *now* — not a stale module object
-            # left in `sys.modules` by an earlier call in this process (e.g. a
-            # different git-tag checkout during a versioned-snapshot loop).
-            module_keys = [
-                k
-                for k in sys.modules
-                if k == importable_name or k.startswith(f"{importable_name}.")
-            ]
-            cached_modules = {key: sys.modules[key] for key in module_keys}
-            for key in module_keys:
-                del sys.modules[key]
-            modules_evicted = True
-            with (
-                contextlib.redirect_stdout(io.StringIO()),
-                contextlib.redirect_stderr(io.StringIO()),
-            ):
-                sections = self._create_api_sections_with_config(importable_name)
-                if not sections:
-                    yield None
-                    return
-                from great_docs._apiref.api_reference import APIReference
-
-                # In `dynamic` mode, reading the yielded reference performs a real
-                # import of the target package (executing its top-level code). The
-                # `sys.modules` eviction above only refreshes the target package's own
-                # modules, not third-party packages it imports — so a same-process loop
-                # over different checkouts can still see third-party global-state
-                # carryover (e.g. module-level caches or singletons).
-                ref = APIReference(
-                    {
-                        "api-reference": {
-                            "package": importable_name,
-                            "sections": sections,
-                            "parser": self._config.parser or "numpy",
-                            "dynamic": self._config.dynamic,
-                        }
-                    }
-                )
-                yield ref
-        finally:
-            if modules_evicted:
-                for key in [
-                    k
-                    for k in sys.modules
-                    if k == importable_name or k.startswith(f"{importable_name}.")
-                ]:
-                    del sys.modules[key]
-                sys.modules.update(cached_modules)
-            for p in added_paths:
-                if p in sys.path:
-                    sys.path.remove(p)
-
-    def documented_symbol_names(self, package_name: str) -> list[str]:
-        """Dotted reference-page stems for the documented public API
-
-        Each stem names one published reference page: a top-level class or
-        function, a submodule-qualified class (`scores.CosineScore`), or a
-        method (`scores.CosineScore.fit`). The set matches the rendered
-        reference — top-level objects and their documented members, `%nodoc`
-        excluded — whether from an explicit `reference:` config or
-        auto-discovery, so a versioned snapshot and the live build describe the
-        same API surface. Empty when the package documents nothing.
-
-        Parameters
-        ----------
-        package_name
-            The package name (may contain dashes).
-
-        Returns
-        -------
-        list[str]
-            Dotted stems, deduplicated, in first-occurrence order.
-        """
-        with self._resolved_api_reference(package_name) as ref:
-            if ref is None:
-                return []
-            from great_docs._apiref.resolve import ObjectNotFoundError
-
-            try:
-                return ref.documented_symbols
-            except (ObjectNotFoundError, ImportError, AttributeError):
-                return []
-
-    def documented_objects(self, package_name: str) -> "list[InventoryItem]":
-        """The objects the reference publishes, each with its page, claims and docstring
-
-        The build indexes exactly these, so a caller reading them sees what the
-        build will do rather than an approximation of it. Empty when the
-        package documents nothing.
-
-        Parameters
-        ----------
-        package_name
-            The package name (may contain dashes).
-
-        Returns
-        -------
-        list[InventoryItem]
-            The documented objects, empty when the reference cannot be
-            resolved.
-        """
-        with self._resolved_api_reference(package_name) as ref:
-            if ref is None:
-                return []
-            from great_docs._apiref.resolve import ObjectNotFoundError
-
-            try:
-                return ref.items
-            except (ObjectNotFoundError, ImportError, AttributeError):
-                return []
-
     def _create_api_sections_with_config(self, package_name: str) -> list | None:
         """
         Build API sections from explicit entries or discovered exports
@@ -6467,7 +6312,7 @@ body-classes: "gd-homepage"
             resources.append(INVENTORY_FILENAME)
 
         # Quarto renders page titles and translation metadata from this partial.
-        self._write_metadata_partial(config)
+        metadata_partial.write(config, self._config, self.build_dir, report=print)
         nav_label.register(config, self._config)
         i18n.register(config, self._config)
 
@@ -6624,188 +6469,6 @@ body-classes: "gd-homepage"
         owner, repo, _ = self._get_github_repo_info()
         return page_url.resolve_base_url(self._config, owner, repo)
 
-    def _categorize_page(self, html_path: str) -> str:
-        """
-        Categorize an HTML file by page type for SEO settings.
-
-        Parameters
-        ----------
-        html_path
-            Relative path to the HTML file within _site/.
-
-        Returns
-        -------
-        str
-            Page type: "homepage", "reference", "user_guide", "changelog", or "default".
-        """
-        # Normalize path separators
-        path = html_path.replace("\\", "/")
-
-        if path == "index.html":
-            return "homepage"
-        elif path.startswith("reference/"):
-            return "reference"
-        elif path.startswith("user-guide/"):
-            return "user_guide"
-        elif path == "changelog.html":
-            return "changelog"
-        elif path.startswith("recipes/"):
-            return "user_guide"  # Recipes are similar to user guide
-        else:
-            return "default"
-
-    def _generate_sitemap_xml(self) -> None:
-        """
-        Generate a sitemap.xml file for search engine indexing.
-
-        Creates an XML sitemap at _site/sitemap.xml with proper priorities and change frequencies
-        based on page type.
-        """
-        if not self._config.sitemap_enabled:
-            return  # pragma: no cover
-
-        site_dir = self.layout.site_dir
-        if not site_dir.exists():
-            print("   ⚠️  _site directory not found, skipping sitemap generation")
-            return
-
-        base_url = self._get_canonical_base_url()
-        if not base_url:
-            print("   ⚠️  No base URL configured, skipping sitemap generation")
-            print("      Set seo.canonical.base_url in great-docs.yml or configure a GitHub repo")
-            return
-
-        # Get change frequencies and priorities from config
-        changefreq = self._config.sitemap_changefreq
-        priority = self._config.sitemap_priority
-
-        # Find all HTML files in _site
-        html_files = list(site_dir.rglob("*.html"))
-
-        # Build sitemap entries
-        entries = []
-        for html_file in html_files:
-            rel_path = html_file.relative_to(site_dir).as_posix()
-
-            # Skip internal/system files
-            if rel_path.startswith("_") or rel_path.startswith("."):
-                continue  # pragma: no cover
-
-            # Categorize the page
-            page_type = self._categorize_page(rel_path)
-
-            # Build URL (index.html becomes just the directory)
-            if rel_path == "index.html":
-                loc = base_url
-            elif rel_path.endswith("/index.html"):
-                loc = base_url + rel_path[:-10]  # Remove /index.html  # pragma: no cover
-            else:
-                loc = base_url + rel_path
-
-            # Get the last modified time
-            mtime = html_file.stat().st_mtime
-            lastmod = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
-
-            entry = {
-                "loc": loc,
-                "lastmod": lastmod,
-                "changefreq": changefreq.get(page_type, changefreq["default"]),
-                "priority": priority.get(page_type, priority["default"]),
-            }
-            entries.append(entry)
-
-        # Sort entries by priority (descending) then by path
-        entries.sort(key=lambda x: (-x["priority"], x["loc"]))
-
-        # Generate XML
-        xml_lines = ['<?xml version="1.0" encoding="UTF-8"?>']
-        xml_lines.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
-
-        for entry in entries:
-            xml_lines.append("  <url>")
-            xml_lines.append(f"    <loc>{entry['loc']}</loc>")
-            xml_lines.append(f"    <lastmod>{entry['lastmod']}</lastmod>")
-            xml_lines.append(f"    <changefreq>{entry['changefreq']}</changefreq>")
-            xml_lines.append(f"    <priority>{entry['priority']:.1f}</priority>")
-            xml_lines.append("  </url>")
-
-        xml_lines.append("</urlset>")
-
-        # Write sitemap.xml
-        sitemap_path = site_dir / "sitemap.xml"
-        sitemap_path.write_text("\n".join(xml_lines), encoding="utf-8")
-        print(f"   Generated sitemap.xml with {len(entries)} URLs")
-
-    def _generate_robots_txt(self) -> None:
-        """
-        Generate a robots.txt file for search engine crawlers.
-
-        Creates a robots.txt at _site/robots.txt with configurable rules.
-        """
-        if not self._config.robots_enabled:
-            return  # pragma: no cover
-
-        site_dir = self.layout.site_dir
-        if not site_dir.exists():
-            print("   ⚠️  _site directory not found, skipping robots.txt generation")
-            return
-
-        lines = []
-
-        # Default user-agent rules
-        lines.append("# Robots.txt generated by Great Docs")
-        lines.append("")
-        lines.append("User-agent: *")
-
-        if self._config.robots_allow_all:
-            lines.append("Allow: /")
-        else:
-            lines.append("Disallow: /")  # pragma: no cover
-
-        # Add specific disallow rules
-        for path in self._config.robots_disallow:
-            lines.append(f"Disallow: {path}")
-
-        # Add crawl delay if configured
-        crawl_delay = self._config.robots_crawl_delay
-        if crawl_delay:
-            lines.append(f"Crawl-delay: {crawl_delay}")  # pragma: no cover
-
-        lines.append("")
-
-        # Add extra rules (e.g., for AI crawlers)
-        extra_rules = self._config.robots_extra_rules
-        if extra_rules:
-            lines.append("# Additional rules")
-            for rule in extra_rules:
-                lines.append(rule)
-            lines.append("")
-
-        # Add sitemap reference if sitemap is enabled
-        if self._config.sitemap_enabled:
-            base_url = self._get_canonical_base_url()
-            if base_url:
-                lines.append(f"Sitemap: {base_url}sitemap.xml")
-                lines.append("")
-
-        # Add llms.txt references for AI agent discoverability
-        base_url = self._get_canonical_base_url()
-        if base_url:
-            llms_path = site_dir / "llms.txt"
-            llms_full_path = site_dir / "llms-full.txt"
-            if llms_path.exists() or llms_full_path.exists():
-                lines.append("# AI agent context files")
-                if llms_path.exists():
-                    lines.append(f"Llms-txt: {base_url}llms.txt")
-                if llms_full_path.exists():
-                    lines.append(f"Llms-txt: {base_url}llms-full.txt")
-                lines.append("")
-
-        # Write robots.txt
-        robots_path = site_dir / "robots.txt"
-        robots_path.write_text("\n".join(lines), encoding="utf-8")
-        print("   Generated robots.txt")
-
     def _resolve_social_card_image_url(self) -> str | None:
         """
         Resolve the social card image to an absolute URL.
@@ -6871,93 +6534,6 @@ body-classes: "gd-homepage"
                     return title
         return self._config.display_name or self._detect_package_name() or ""
 
-    def _build_title_template_line(self, template: object) -> str | None:
-        """
-        Convert the configured page-title template to Pandoc syntax
-
-        Apply the template only to titled pages. For untitled pages, including
-        the home page, Quarto leaves `$title-prefix$` unset and sets
-        `$pagetitle$` to the site name. These pages therefore show only the site
-        name.
-
-        Parameters
-        ----------
-        template
-            Value of `seo.title_template`, written with `{page_title}` and an
-            optional `{site_name}`. Configuration values may have any type, but
-            this method supports only strings.
-
-        Returns
-        -------
-        :
-            The `<title>` element, or `None` unless the template is a string
-            that contains `{page_title}` and excludes `$`.
-        """
-        if not seo_title.is_valid(template):
-            return None
-
-        titled = seo_title.apply(template, "$pagetitle$", "$title-prefix$")
-        return f"<title>$if(title-prefix)${titled}$else$$pagetitle$$endif$</title>"
-
-    def _write_metadata_partial(self, config: dict) -> None:
-        """
-        Write and register the configured HTML metadata partial
-
-        Start with the bundled partial to keep metadata independent of the
-        installed Quarto version. Add the configured SEO title template,
-        translations for languages other than English, and the Open Graph
-        page type for social cards. Include the site build time when
-        `show_dates` is on. Write nothing when the configuration has no HTML
-        mapping.
-
-        Parameters
-        ----------
-        config
-            Contents of `_quarto.yml`, updated in place to register the partial.
-
-        Returns
-        -------
-        :
-            Nothing.
-        """
-        html_config = config.get("format", {}).get("html")
-        if not isinstance(html_config, dict):
-            return
-
-        partial = (self.assets_path / "metadata.html").read_text(encoding="utf-8")
-
-        if self._config.seo_enabled:
-            title_line = self._build_title_template_line(self._config.seo_title_template)
-            if title_line is None:
-                print(
-                    "Warning: seo.title_template must be a string containing "
-                    "{page_title} but no '$'. Using Quarto's default page titles."
-                )
-            else:
-                # Use a callable replacement so backslashes and `$` remain literal.
-                partial = re.sub(r"<title>.*</title>", lambda _match: title_line, partial)
-
-        meta_tag = i18n.meta_tag(self._config)
-        if meta_tag is not None:
-            # Pandoc templates require `$$` to render a literal `$`.
-            partial = partial.rstrip("\n") + "\n" + meta_tag.replace("$", "$$") + "\n"
-
-        if social_cards.applies(config, self._config, self.build_dir):
-            partial = partial.rstrip("\n") + "\n" + social_cards.OG_TYPE_PARTIAL + "\n"
-
-        if self._config.show_dates:
-            date_lines = page_dates.partial_lines(datetime.now().isoformat())
-            partial = partial.rstrip("\n") + "\n" + date_lines + "\n"
-
-        (self.build_dir / "metadata.html").write_text(partial, encoding="utf-8")
-
-        partials = html_config.get("template-partials", [])
-        if isinstance(partials, str):
-            partials = [partials]
-        if "metadata.html" not in partials:
-            partials.append("metadata.html")
-        html_config["template-partials"] = partials
-
     def _prerender_term_player(self, log: "BuildLog") -> None:
         """
         Render the source directory's `.termshow` recordings for the `termshow` shortcode
@@ -6983,19 +6559,6 @@ body-classes: "gd-homepage"
                 f"({done.manifest_bytes / 1024:.0f} KB of player data)"
             )
             self._add_project_resources([f"{term_prerender.OUTPUT_ROOT}/**"], [])
-
-    def _generate_seo_files(self) -> None:
-        """
-        Generate all SEO-related files (sitemap.xml, robots.txt).
-
-        Called after Quarto has built the site.
-        """
-        if not self._config.seo_enabled:
-            return  # pragma: no cover
-
-        print("\n🔍 Generating SEO files...")
-        self._generate_sitemap_xml()
-        self._generate_robots_txt()
 
     def uninstall(self) -> None:
         """
@@ -7842,6 +7405,17 @@ body-classes: "gd-homepage"
             bars.set_total(slot, total)
             bars.update(slot, current)
 
+        # Uncached tag snapshots use the working tree's documented set. Cache the
+        # result so it is resolved at most once per project name per build.
+        @cache
+        def documented_symbols(package_name: str) -> list[str]:
+            return documented.symbol_names(
+                self._config,
+                importable_name=self._resolve_importable_name(package_name),
+                search_paths=self._griffe_search_paths(),
+                create_sections=self._create_api_sections_with_config,
+            )
+
         result = run_versioned_build(
             source_dir=self.build_dir,
             project_root=self.project_root,
@@ -7856,6 +7430,7 @@ body-classes: "gd-homepage"
             layout=self.layout,
             default_description=self._default_description(),
             structured_data=self._structured_data(),
+            documented_symbols=documented_symbols,
         )
 
         for warning in result.get("warnings", []):
@@ -7894,7 +7469,8 @@ body-classes: "gd-homepage"
         :
             The step's result line.
         """
-        self._generate_seo_files()
+        base_url = self._get_canonical_base_url()
+        site_files.write(self.layout.site_dir, self._config, base_url, report=print)
         return "sitemap.xml + robots.txt"
 
     def _log_build_timing(
