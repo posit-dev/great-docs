@@ -1,10 +1,11 @@
 """
 Scripts and stylesheets that Great Docs ships at the site root
 
-`SCRIPTS` lists each file once, in page load order. Each row specifies
-when its file is copied into the build directory, listed in
-`project.resources` and included in every page. Copying, resource listing
-and includes can use different gates.
+`SCRIPTS` lists each file once, in page load order. A file's gate controls
+copying into the build directory, listing in `project.resources` and
+inclusion in every page. The reference switcher is an exception: its gate
+controls copying, but its inclusion depends on the references the build
+generates. It is never listed as a resource.
 
 Every `src` and `href` is root-relative, and Quarto rewrites it relative to
 each page in header includes, after-body includes and raw HTML. Quarto leaves
@@ -46,16 +47,6 @@ _FONT_AWESOME = (
     '<link rel="stylesheet" '
     'href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">'
 )
-
-# These files have different gates for copying, resource listing and includes.
-_ALWAYS_COPIED = {
-    "github-widget.js",
-    "sidebar-filter.js",
-    "dark-mode-toggle.js",
-    "reference-switcher.js",
-}
-_ALWAYS_LISTED = {"github-widget.js", "sidebar-filter.js", "dark-mode-toggle.js"}
-_NEVER_LISTED = {"reference-switcher.js"}
 
 
 def script_tag(name: str, *, defer: bool = False) -> str:
@@ -168,6 +159,9 @@ class Script:
 
     directory: str = ""
     """The directory, relative to the packaged assets, that holds the file"""
+
+    listed: bool = True
+    """Whether `project.resources` lists the file when a site uses it"""
 
     def used(self, config: Config, *, has_repository: bool) -> bool:
         """
@@ -359,7 +353,10 @@ SCRIPTS: tuple[Script, ...] = (
         lambda c: c.page_status_enabled,
         inline="renderPageBadge",
     ),
-    Script("reference-switcher.js", gate=_has_reference_switcher),
+    # The switcher is included only when the build generates a second reference.
+    # Configuration alone cannot determine this, so listing it as a resource
+    # would publish an unused file.
+    Script("reference-switcher.js", gate=_has_reference_switcher, listed=False),
     Script("tooltips.js", _AFTER_BODY),
     Script("color-swatch.js", _AFTER_BODY),
     Script("responsive-tables.js", _AFTER_BODY),
@@ -416,7 +413,7 @@ def copy(config: Config, build_dir: Path, *, has_repository: bool) -> None:
     :
     """
     for script in SCRIPTS:
-        if script.name in _ALWAYS_COPIED or script.used(config, has_repository=has_repository):
+        if script.used(config, has_repository=has_repository):
             source = _ASSETS / script.directory / script.name
             if source.exists():
                 _ = shutil.copy2(source, build_dir / script.name)
@@ -444,10 +441,7 @@ def add_resources(config: Config, quarto_config: dict[str, Any], *, has_reposito
         (
             script.name
             for script in SCRIPTS
-            if script.name not in _NEVER_LISTED
-            and (
-                script.name in _ALWAYS_LISTED or script.used(config, has_repository=has_repository)
-            )
+            if script.listed and script.used(config, has_repository=has_repository)
         ),
     )
 

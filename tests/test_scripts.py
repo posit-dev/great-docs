@@ -150,3 +150,40 @@ def test_include_embeds_the_status_script_staged_in_the_build_directory(
     ]
     assert len(status) == 1
     assert ("function renderPageBadge" in status[0]) == staged
+
+
+@pytest.mark.parametrize(
+    ("settings", "has_repository"),
+    [
+        ({}, True),
+        ({}, False),
+        ({"sidebar_filter": {"enabled": False}, "dark_mode_toggle": False}, True),
+        ({"github_style": "icon", "marimo": {"enabled": True}, "cli": {"enabled": True}}, True),
+    ],
+    ids=["defaults", "no-repository", "opt-outs", "icon-marimo-cli"],
+)
+def test_a_file_is_copied_and_listed_exactly_when_it_is_used(
+    tmp_path: Path, settings: dict[str, Any], has_repository: bool
+):
+    config = write_config(tmp_path, settings)
+    build_dir = tmp_path / "build"
+    build_dir.mkdir()
+    quarto_config: dict[str, Any] = {}
+
+    scripts.copy(config, build_dir, has_repository=has_repository)
+    scripts.add_resources(config, quarto_config, has_repository=has_repository)
+    scripts.include_libraries(config, quarto_config)
+    scripts.include(config, quarto_config, build_dir, has_repository=has_repository)
+
+    copied = {path.name for path in build_dir.iterdir()}
+    listed = set(quarto_config["project"]["resources"])
+    included = " ".join(
+        _includes(quarto_config, "include-in-header")
+        + _includes(quarto_config, "include-after-body")
+    )
+    for script in scripts.SCRIPTS:
+        used = script.used(config, has_repository=has_repository)
+        assert (script.name in copied) == used, script.name
+        assert (script.name in listed) == (used and script.listed), script.name
+        if script.slot is not None:
+            assert (script.name in included) == used, script.name
