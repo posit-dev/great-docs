@@ -10,8 +10,8 @@ from pathlib import Path
 
 import click
 
-from ._layout import Layout
-from ._layout_migration import analyse, select_destination
+from .._layout import Layout
+from .analyse import analyse, select_destination
 
 
 def _migration_command(layout: Layout, destination: Path) -> list[str]:

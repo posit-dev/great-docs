@@ -5,7 +5,7 @@ import pytest
 
 from great_docs._layout import Layout
 from great_docs._layout_migration.model import MigrationError
-from great_docs._layout_notice import layout_notice
+from great_docs._layout_migration.notice import layout_notice
 from great_docs.cli import cli
 
 
@@ -101,7 +101,7 @@ def test_analysis_error_gives_diagnostic_command(
     def fail(_layout: Layout) -> Path:
         raise MigrationError("Cannot inspect ignore policy")
 
-    monkeypatch.setattr("great_docs._layout_notice.select_destination", fail)
+    monkeypatch.setattr("great_docs._layout_migration.notice.select_destination", fail)
     notice = layout_notice(Layout.make(root))
 
     assert notice is not None
@@ -121,7 +121,7 @@ def test_analysis_error_keeps_a_selected_fallback_destination(
     def fail(_layout: Layout, _destination: Path) -> None:
         raise MigrationError("Cannot inspect source")
 
-    monkeypatch.setattr("great_docs._layout_notice.analyse", fail)
+    monkeypatch.setattr("great_docs._layout_migration.notice.analyse", fail)
     notice = layout_notice(Layout.make(root))
 
     assert notice is not None

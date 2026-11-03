@@ -4623,7 +4623,7 @@ class GreatDocs:
         """
         Show the migration route for the selected root-layout documentation
         """
-        from ._layout_notice import layout_notice
+        from ._layout_migration.notice import layout_notice
 
         notice = layout_notice(self.layout)
         if notice is not None:

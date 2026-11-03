@@ -348,7 +348,9 @@ def test_layout_notice_once_per_build_or_preview_session(
         def fail_selection(_layout: object) -> Path:
             raise MigrationError("Cannot inspect ignore policy")
 
-        monkeypatch.setattr("great_docs._layout_notice.select_destination", fail_selection)
+        monkeypatch.setattr(
+            "great_docs._layout_migration.notice.select_destination", fail_selection
+        )
     if mode == "preview":
         docs.layout.site_dir.mkdir(parents=True)
         (docs.layout.site_dir / "index.html").write_text("<html>Existing site</html>")
