@@ -102,8 +102,8 @@ def find_sources(config: Config, layout: Layout, *, report: Callable[[str], None
     layout
         The project's directories.
     report
-        A callback for missing-directory warnings. A missing default `custom/` is silent
-        when the project has no configuration file.
+        A callback for warnings about missing explicitly configured directories.
+        A missing default `custom/` is skipped silently.
 
     Returns
     -------
@@ -124,7 +124,7 @@ def find_sources(config: Config, layout: Layout, *, report: Callable[[str], None
         destination = output_destination(layout, entry["output"])
         source_dir = layout.source_dir / entry["dir"]
         if not source_dir.is_dir():
-            if entry["dir"] != "custom" or config.exists():
+            if not is_default:
                 report(f"Custom pages directory '{entry['dir']}' not found, skipping")
             continue
         # A section takes precedence over the default `custom/`; explicit overlap fails validation.
