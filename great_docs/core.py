@@ -1880,10 +1880,10 @@ class GreatDocs:
         if self._config.homepage != "user_guide" and "navbar" in config["website"]:
             navbar = config["website"]["navbar"]
             if "left" in navbar:
-                # Check if User Guide link already exists
+                href = user_guide.entry(guide)
+                # Labels may already be translated; the target identifies an existing guide link
                 has_user_guide = any(
-                    isinstance(item, dict) and item.get("text") == "User Guide"
-                    for item in navbar["left"]
+                    isinstance(item, dict) and item.get("href") == href for item in navbar["left"]
                 )
                 if not has_user_guide:
                     # Find the position before "Reference"
@@ -1893,21 +1893,7 @@ class GreatDocs:
                             insert_idx = i
                             break
 
-                    # Determine the href for User Guide
-                    if guide.get("has_index"):
-                        user_guide_href = "user-guide/index.qmd"  # pragma: no cover
-                    else:
-                        # The navbar link must use the same path as the published guide page
-                        published = user_guide.published(guide, guide["files"][0])
-                        user_guide_href = f"user-guide/{published}"
-
-                    navbar["left"].insert(
-                        insert_idx,
-                        {
-                            "text": "User Guide",
-                            "href": user_guide_href,
-                        },
-                    )
+                    navbar["left"].insert(insert_idx, {"text": "User Guide", "href": href})
 
         quarto_yml.write(self.build_dir, config, self._config)
 

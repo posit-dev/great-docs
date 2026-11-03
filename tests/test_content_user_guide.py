@@ -9,6 +9,7 @@ import pytest
 
 from great_docs import GreatDocs
 from great_docs._content import user_guide
+from great_docs._layout import Layout
 from tests.support import discover_user_guide, find_user_guide_dir, write_config
 
 
@@ -1947,3 +1948,30 @@ def test_user_guide_file_with_a_list_block_derives_its_title(tmp_path: Path) -> 
 
     assert result is not None
     assert (result["title"], result["section"]) == ("Getting Started", None)
+
+
+@pytest.mark.parametrize(
+    ("pages", "settings", "href"),
+    [
+        (["01-basics/02-setup.qmd", "02-more/intro.qmd"], "", "user-guide/basics/setup.qmd"),
+        (["index.qmd", "01-intro.qmd"], "", "user-guide/index.qmd"),
+        (
+            ["01-intro.qmd", "guides/index.qmd"],
+            "user_guide:\n  - section: Start\n    contents: [01-intro.qmd, guides/index.qmd]\n",
+            "user-guide/01-intro.qmd",
+        ),
+    ],
+    ids=["nested", "root-index", "explicit"],
+)
+def test_entry_links_to_the_first_published_page(
+    tmp_path: Path, pages: list[str], settings: str, href: str
+):
+    for relative in pages:
+        page = tmp_path / "user_guide" / relative
+        page.parent.mkdir(parents=True, exist_ok=True)
+        page.write_text("---\ntitle: Page\n---\n")
+    config = write_config(tmp_path, settings)
+    guide = user_guide.discover(config, Layout.make(tmp_path), report=print)
+    assert guide is not None
+
+    assert user_guide.entry(guide) == href

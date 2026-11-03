@@ -30,6 +30,7 @@ __all__ = [
     "UserGuide",
     "copy_pages",
     "discover",
+    "entry",
     "find_dir",
     "link_homepage",
     "published",
@@ -362,6 +363,24 @@ def published(guide: UserGuide, page: GuidePage) -> Path:
     except ValueError:  # pragma: no cover
         rel_path = Path(page["path"].name)
     return published_path(rel_path, strip_prefix=not guide.get("explicit", False))
+
+
+def entry(guide: UserGuide) -> str:
+    """
+    Find the navbar target for the guide's first published page
+
+    Parameters
+    ----------
+    guide
+        The user guide.
+
+    Returns
+    -------
+    :
+        The first page's path relative to the build directory, such as
+        `"user-guide/basics/setup.qmd"`.
+    """
+    return f"{SIDEBAR_ID}/{published(guide, guide['files'][0])}"
 
 
 def copy_pages(

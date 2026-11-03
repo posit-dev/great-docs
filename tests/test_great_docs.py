@@ -170,6 +170,7 @@ from great_docs._website.ai_agents.skills_page import SkillsPageWriter
 from great_docs._website.homepage.readme import Badge, HeroElements
 from great_docs._website.quarto_yml import edit as edit_quarto_yml
 from great_docs._website.quarto_yml import read as read_quarto_yml
+from great_docs._website.quarto_yml import write as write_quarto_yml
 from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
 from great_docs._website.scripts import script_include, stylesheet_include
 from great_docs._website.seo import robots, sitemap
@@ -8145,6 +8146,48 @@ def test_user_guide_navbar_link_targets_the_copied_first_page(
 
     left = read_quarto_yml(docs.build_dir)["website"]["navbar"]["left"]
     assert {"text": "User Guide", "href": href} in left
+
+
+def test_user_guide_navbar_link_targets_an_explicit_guide_first_page(tmp_path: Path):
+    """Verify that the navbar targets the configured first page before a nested index"""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+    for relative in ("01-intro.qmd", "guides/index.qmd"):
+        page = tmp_path / "user_guide" / relative
+        page.parent.mkdir(parents=True, exist_ok=True)
+        page.write_text("---\ntitle: Page\n---\n")
+    write_config(
+        tmp_path,
+        "user_guide:\n  - section: Start\n    contents: [01-intro.qmd, guides/index.qmd]\n",
+    )
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs.build_dir.mkdir(parents=True)
+    navbar = {"left": [{"text": "Reference", "href": "reference/index.qmd"}]}
+    write_quarto_yml(docs.build_dir, {"website": {"navbar": navbar}}, docs._config)
+    guide = discover_user_guide(docs)
+    assert guide is not None
+
+    docs._update_config_with_user_guide(guide)
+
+    left = read_quarto_yml(docs.build_dir)["website"]["navbar"]["left"]
+    assert left[0] == {"text": "User Guide", "href": "user-guide/01-intro.qmd"}
+
+
+def test_user_guide_navbar_link_is_added_once_in_a_translated_site(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+    (tmp_path / "user_guide").mkdir()
+    (tmp_path / "user_guide" / "intro.qmd").write_text("---\ntitle: Intro\n---\n")
+    write_config(tmp_path, "site:\n  lang: de\n")
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs.build_dir.mkdir(parents=True)
+    write_quarto_yml(docs.build_dir, {"website": {"navbar": {"left": []}}}, docs._config)
+    guide = discover_user_guide(docs)
+    assert guide is not None
+
+    docs._update_config_with_user_guide(guide)
+    docs._update_config_with_user_guide(guide)
+
+    left = read_quarto_yml(docs.build_dir)["website"]["navbar"]["left"]
+    assert [item["href"] for item in left] == ["user-guide/intro.qmd"]
 
 
 def test_update_config_with_user_guide_no_quarto_yml():
