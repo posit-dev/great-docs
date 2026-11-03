@@ -104,6 +104,93 @@ def test_edit_leaves_file_unchanged_when_block_raises(tmp_path: Path):
     assert (tmp_path / "_quarto.yml").read_text(encoding="utf-8") == before
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (None, []),
+        ("tooltips.js", ["tooltips.js"]),
+        ({"file": "head.html"}, [{"file": "head.html"}]),
+        (["a.js", "b.js"], ["a.js", "b.js"]),
+    ],
+    ids=["null", "string", "mapping", "list"],
+)
+def test_entries_stores_a_list_under_the_key(value: Any, expected: list[Any]):
+    mapping = {"resources": value}
+
+    items = quarto_yml.entries(mapping, "resources")
+    items.append("added.js")
+
+    assert mapping["resources"] == [*expected, "added.js"]
+
+
+def test_entries_creates_a_missing_key():
+    mapping: dict[str, Any] = {}
+
+    assert quarto_yml.entries(mapping, "filters") == []
+    assert mapping == {"filters": []}
+
+
+def test_includes_creates_the_html_format():
+    quarto_config: dict[str, Any] = {}
+
+    quarto_yml.includes(quarto_config, "include-after-body").append({"text": "x"})
+
+    assert quarto_config == {"format": {"html": {"include-after-body": [{"text": "x"}]}}}
+
+
+def test_find_returns_the_first_entry_containing_the_marker():
+    items = [{"text": "a.js"}, {"text": "tooltips.js"}, "tooltips.js"]
+
+    assert quarto_yml.find(items, "tooltips") == 1
+    assert quarto_yml.find(items, "missing") is None
+
+
+def test_add_include_skips_an_entry_whose_marker_is_present():
+    quarto_config = {"format": {"html": {"include-after-body": ['<script src="/x.js?v=2">']}}}
+
+    quarto_yml.add_include(quarto_config, "include-after-body", {"text": "x"}, marker="/x.js")
+
+    assert quarto_config["format"]["html"]["include-after-body"] == ['<script src="/x.js?v=2">']
+
+
+def test_add_include_without_a_marker_skips_an_equal_entry():
+    entry = {"text": "<link rel='a'>\n<script src=\"/b.js\"></script>"}
+    quarto_config = {"format": {"html": {"include-in-header": [dict(entry)]}}}
+
+    quarto_yml.add_include(quarto_config, "include-in-header", entry)
+
+    assert quarto_config["format"]["html"]["include-in-header"] == [entry]
+
+
+@pytest.mark.parametrize(
+    ("before", "expected"),
+    [
+        ("b.js", ["a.js", "new", "b.js"]),
+        ("c.js", ["a.js", "b.js", "new"]),
+        (None, ["a.js", "b.js", "new"]),
+    ],
+    ids=["anchor", "missing-anchor", "no-anchor"],
+)
+def test_add_include_inserts_before_its_anchor_or_appends(before: str | None, expected: list[str]):
+    quarto_config = {"format": {"html": {"include-in-header": {"text": "a.js"}}}}
+    quarto_yml.includes(quarto_config, "include-in-header").append({"text": "b.js"})
+
+    quarto_yml.add_include(
+        quarto_config, "include-in-header", {"text": "new"}, marker="new", before=before
+    )
+
+    entries = quarto_yml.includes(quarto_config, "include-in-header")
+    assert [entry["text"] for entry in entries] == expected
+
+
+def test_add_resources_appends_each_missing_name_once():
+    quarto_config = {"project": {"resources": "objects.inv"}}
+
+    quarto_yml.add_resources(quarto_config, ["a.js", "objects.inv", "a.js", "b.js"])
+
+    assert quarto_config["project"]["resources"] == ["objects.inv", "a.js", "b.js"]
+
+
 CHANGELOG = Contribution(navbar=(NavbarLink("Changelog", "changelog.qmd"),))
 
 

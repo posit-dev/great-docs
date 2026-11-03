@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from .._icons import get_icon_svg
 from .._translations import get_translation
-from . import inline_data, page_scan, quarto_yml
+from . import inline_data, page_scan, quarto_yml, scripts
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -19,17 +19,9 @@ if TYPE_CHECKING:
     from .._layout import Layout
     from ..config import Config
 
-__all__ = ["add_upcoming", "collect", "inject", "is_script_entry", "process", "write"]
+__all__ = ["add_upcoming", "collect", "inject", "process", "write"]
 
 _BUILTIN_STATUSES = {"new", "updated", "beta", "deprecated", "experimental", "upcoming"}
-
-
-def is_script_entry(entry: object) -> bool:
-    """
-    Report whether an after-body entry loads the status badge script
-    """
-    text = str(entry)
-    return "page-status-badges" in text or "renderPageBadge" in text
 
 
 def collect(config: Config, layout: Layout, build_dir: Path) -> dict[str, str]:
@@ -111,7 +103,8 @@ def inject(config: Config, build_dir: Path) -> None:
     entries = cast("list[Any]", entries)
     if any("__GD_STATUS_DATA__=" in str(entry) for entry in entries):
         return
-    anchor = next((str(entry) for entry in entries if is_script_entry(entry)), "page-status-badges")
+    script = scripts.named("page-status-badges.js")
+    anchor = next((str(entry) for entry in entries if script.is_entry(entry)), script.name)
     inline_data.add(
         quarto_config,
         "__GD_STATUS_DATA__",

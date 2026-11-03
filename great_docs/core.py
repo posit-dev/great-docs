@@ -63,6 +63,7 @@ from ._website import (
     page_url,
     prerender,
     quarto_yml,
+    scripts,
     social_cards,
     tags,
 )
@@ -76,7 +77,7 @@ from ._website.navigation import navbar as nav_navbar
 from ._website.navigation import release as nav_release
 from ._website.navigation import shared_sidebar
 from ._website.project_pages import citation, licence, package_info
-from ._website.scripts import script_include, stylesheet_include
+from ._website.scripts import script_include
 from ._website.seo import description as seo_description
 from ._website.seo import site_files
 from ._website.seo.structured_data import StructuredData
@@ -383,80 +384,12 @@ class GreatDocs:
                 warn=partial(print, file=sys.stderr),
             )
 
-        # Copy lightbox assets (JS + CSS live with the extension but also need
-        # to be available as top-level resources for the Lua filter's injection)
-        lb_ext = self.assets_path / "_extensions" / "gd-lightbox"
-        for lb_file in (
-            "gd-lightbox.js",
-            "gd-lightbox.css",
-            "gd-lightbox-compare.js",
-            "gd-lightbox-compare.css",
-            "gd-lightbox-annotate.js",
-            "gd-lightbox-annotate.css",
-        ):
-            lb_src = lb_ext / lb_file
-            if lb_src.exists():
-                shutil.copy2(lb_src, self.build_dir / lb_file)
-
-        # Copy JavaScript files
-        js_files = [
-            "github-widget.js",
-            "sidebar-filter.js",
-            "sidebar-wrap.js",
-            "sidebar-float.js",
-            "reference-switcher.js",
-            "dark-mode-toggle.js",
-            "theme-init.js",
-            "copy-code.js",
-            "tooltips.js",
-            "color-swatch.js",
-            "mermaid-renderer.js",
-            "responsive-tables.js",
-            "video-embed.js",
-            "navbar-widgets.js",
-            "details.js",
-        ]
-        if self._config.markdown_pages_widget:
-            js_files.append("copy-page.js")
-        if self._config.announcement:
-            js_files.append("announcement-banner.js")
-        if self._config.navbar_style:
-            js_files.append("navbar-style.js")
-        if self._config.content_style is not None:
-            js_files.append("content-style.js")
-        if self._config.show_dates:
-            js_files.append("page-metadata.js")  # pragma: no cover
-        if self._config.back_to_top:
-            js_files.append("back-to-top.js")
-            js_files.append("on-this-page.js")
-        if self._config.wide_layout_enabled:
-            js_files.append("wide-layout.js")
-        if self._config.keyboard_nav:
-            js_files.append("keyboard-nav.js")
-        if self._config.tags_show_on_pages:
-            js_files.append("page-tags.js")  # pragma: no cover
-        if self._config.page_status_enabled:
-            js_files.append("page-status-badges.js")  # pragma: no cover
-        if self._config.has_versions:
-            js_files.append("version-selector.js")
-        if self._config.hero_starfield:
-            js_files.append("starfield.js")
-        if self._config.skill_skills and len(self._config.skill_skills) > 1:
-            js_files.append("skill-switcher.js")
-        # marimo islands (only when enabled)
-        if self._config.marimo_enabled:
-            js_files.append("marimo-islands.js")
-        for js_file in js_files:
-            js_src = self.assets_path / js_file
-            if js_src.exists():
-                js_dst = self.build_dir / js_file
-                shutil.copy2(js_src, js_dst)
-
-        # Copy marimo CSS when enabled
-        if self._config.marimo_enabled:
-            marimo_css_src = self.assets_path / "marimo-islands.css"
-            if marimo_css_src.exists():
-                shutil.copy2(marimo_css_src, self.build_dir / "marimo-islands.css")
+        # Copy the site's scripts and stylesheets
+        scripts.copy(
+            self._config,
+            self.build_dir,
+            has_repository=self._get_github_repo_info()[0] is not None,
+        )
 
         # Create .gitignore for the great-docs directory
         gitignore_path = self.build_dir / ".gitignore"
@@ -2804,77 +2737,12 @@ class GreatDocs:
                 config["execute"] = {}
             config["execute"]["freeze"] = freeze_mode
 
-        # Add resources to copy static JS files to _site
-        if "resources" not in config["project"]:
-            config["project"]["resources"] = []
-        elif isinstance(config["project"]["resources"], str):
-            config["project"]["resources"] = [config["project"]["resources"]]
-
-        # Resources follow the order in which pages include site-root scripts
-        # and stylesheets.
-        js_resource_files = []
-        if self._config.marimo_enabled:
-            js_resource_files += ["marimo-islands.js", "marimo-islands.css"]
-        js_resource_files += [
-            "gd-lightbox.css",
-            "gd-lightbox.js",
-            "gd-lightbox-compare.css",
-            "gd-lightbox-compare.js",
-            "gd-lightbox-annotate.css",
-            "gd-lightbox-annotate.js",
-            "theme-init.js",
-        ]
-        if self._config.announcement:
-            js_resource_files.append("announcement-banner.js")
-        js_resource_files.append("github-widget.js")
-        if self._config.markdown_pages_widget:
-            js_resource_files.append("copy-page.js")
-        js_resource_files += [
-            "sidebar-wrap.js",
-            "sidebar-float.js",
-            "sidebar-filter.js",
-            "dark-mode-toggle.js",
-        ]
-        if self._config.back_to_top:
-            js_resource_files.append("back-to-top.js")
-            js_resource_files.append("on-this-page.js")
-        if self._config.wide_layout_enabled:
-            js_resource_files.append("wide-layout.js")
-        if self._config.keyboard_nav:
-            js_resource_files.append("keyboard-nav.js")
-        js_resource_files += ["copy-code.js", "details.js", "mermaid-renderer.js"]
-        if self._config.show_dates:
-            js_resource_files.append("page-metadata.js")
-        if self._config.tags_show_on_pages:
-            js_resource_files.append("page-tags.js")
-        if self._config.page_status_enabled:
-            js_resource_files.append("page-status-badges.js")
-        js_resource_files += [
-            "tooltips.js",
-            "color-swatch.js",
-            "responsive-tables.js",
-            "video-embed.js",
-        ]
-        if self._config.has_versions:
-            js_resource_files.append("version-selector.js")
-        js_resource_files.append("navbar-widgets.js")
-        if self._config.navbar_style:
-            js_resource_files.append("navbar-style.js")
-        if self._config.content_style is not None:
-            js_resource_files.append("content-style.js")
-        if self._config.hero_starfield:
-            js_resource_files.append("starfield.js")
-        if self._config.skill_skills and len(self._config.skill_skills) > 1:
-            js_resource_files.append("skill-switcher.js")
-        for js_file in js_resource_files:
-            if js_file not in config["project"]["resources"]:
-                config["project"]["resources"].append(js_file)
+        # List the site's scripts and stylesheets as resources
+        has_repository = self._get_github_repo_info()[0] is not None
+        scripts.add_resources(self._config, config, has_repository=has_repository)
 
         # Add marimo islands resources when enabled
         if self._config.marimo_enabled:
-            for marimo_res in ("marimo-islands.js", "marimo-islands.css"):
-                if marimo_res not in config["project"]["resources"]:
-                    config["project"]["resources"].append(marimo_res)
             # Include notebooks directory so .py files are available to the shortcode
             notebooks_dir = self.build_dir / "notebooks"
             if notebooks_dir.exists() and notebooks_dir.is_dir():
@@ -3061,91 +2929,7 @@ class GreatDocs:
             if entry not in config["format"]["html"]["include-in-header"]:
                 config["format"]["html"]["include-in-header"].append(entry)
 
-        # Add Font Awesome CDN if not already present
-        fa_cdn = '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">'
-        fa_entry = {"text": fa_cdn}
-        if fa_entry not in config["format"]["html"]["include-in-header"]:
-            # Check if any Font Awesome link already exists
-            has_fa = any(
-                "font-awesome" in str(item).lower()
-                for item in config["format"]["html"]["include-in-header"]
-            )
-            if not has_fa:
-                config["format"]["html"]["include-in-header"].append(fa_entry)
-
-        # Add marimo islands runtime (CDN JS/CSS) when enabled
-        if self._config.marimo_enabled:
-            from great_docs._marimo import get_islands_head_html
-
-            marimo_version = self._config.marimo_version
-            marimo_entry = {"text": get_islands_head_html(marimo_version)}
-            if not any(
-                "marimo-team/islands" in str(item)
-                for item in config["format"]["html"]["include-in-header"]
-            ):
-                config["format"]["html"]["include-in-header"].append(marimo_entry)
-
-            # Add marimo-islands.js (lazy-load + copy handler)
-            marimo_js_entry = script_include("marimo-islands.js", defer=True)
-            if not any(
-                "marimo-islands.js" in str(item)
-                for item in config["format"]["html"]["include-in-header"]
-            ):
-                config["format"]["html"]["include-in-header"].append(marimo_js_entry)
-
-            # Add marimo-islands.css
-            marimo_css_entry = stylesheet_include("marimo-islands.css")
-            if not any(
-                "marimo-islands.css" in str(item)
-                for item in config["format"]["html"]["include-in-header"]
-            ):
-                config["format"]["html"]["include-in-header"].append(marimo_css_entry)
-
-        # Add gd-lightbox CSS
-        lb_css_entry = stylesheet_include("gd-lightbox.css")
-        if not any(
-            "gd-lightbox.css" in str(item) for item in config["format"]["html"]["include-in-header"]
-        ):
-            config["format"]["html"]["include-in-header"].append(lb_css_entry)
-
-        # Add gd-lightbox JS (deferred)
-        lb_js_entry = script_include("gd-lightbox.js", defer=True)
-        if not any(
-            "gd-lightbox.js" in str(item) for item in config["format"]["html"]["include-in-header"]
-        ):
-            config["format"]["html"]["include-in-header"].append(lb_js_entry)
-
-        # Add gd-lightbox-compare CSS
-        lb_compare_css_entry = stylesheet_include("gd-lightbox-compare.css")
-        if not any(
-            "gd-lightbox-compare.css" in str(item)
-            for item in config["format"]["html"]["include-in-header"]
-        ):
-            config["format"]["html"]["include-in-header"].append(lb_compare_css_entry)
-
-        # Add gd-lightbox-compare JS (deferred)
-        lb_compare_js_entry = script_include("gd-lightbox-compare.js", defer=True)
-        if not any(
-            "gd-lightbox-compare.js" in str(item)
-            for item in config["format"]["html"]["include-in-header"]
-        ):
-            config["format"]["html"]["include-in-header"].append(lb_compare_js_entry)
-
-        # Add gd-lightbox-annotate CSS
-        lb_annotate_css_entry = stylesheet_include("gd-lightbox-annotate.css")
-        if not any(
-            "gd-lightbox-annotate.css" in str(item)
-            for item in config["format"]["html"]["include-in-header"]
-        ):
-            config["format"]["html"]["include-in-header"].append(lb_annotate_css_entry)
-
-        # Add gd-lightbox-annotate JS (deferred)
-        lb_annotate_js_entry = script_include("gd-lightbox-annotate.js", defer=True)
-        if not any(
-            "gd-lightbox-annotate.js" in str(item)
-            for item in config["format"]["html"]["include-in-header"]
-        ):
-            config["format"]["html"]["include-in-header"].append(lb_annotate_js_entry)
+        scripts.include_libraries(self._config, config)
 
         # Add website navigation if not present
         if "website" not in config:
@@ -3370,308 +3154,11 @@ class GreatDocs:
                                 header_items.append(entry)
                         config["format"]["html"]["include-in-header"] = header_items
 
-        # Add GitHub widget script to page if using widget style
-        if owner and repo and github_style == "widget":
-            if "include-after-body" not in config["format"]["html"]:
-                config["format"]["html"]["include-after-body"] = []
-            elif isinstance(config["format"]["html"]["include-after-body"], str):
-                config["format"]["html"]["include-after-body"] = [
-                    config["format"]["html"]["include-after-body"]
-                ]
-
-            # Add the GitHub widget script
-            gh_script_entry = script_include("github-widget.js")
-            if gh_script_entry not in config["format"]["html"]["include-after-body"]:
-                # Check if github-widget.js is already included
-                has_gh_widget = any(
-                    "github-widget" in str(item)
-                    for item in config["format"]["html"]["include-after-body"]
-                )
-                if not has_gh_widget:
-                    config["format"]["html"]["include-after-body"].append(gh_script_entry)
-
-        # Add copy-page widget script (if markdown_pages widget is enabled)
-        if metadata.get("markdown_pages_widget", True):
-            if "include-after-body" not in config["format"]["html"]:
-                config["format"]["html"]["include-after-body"] = []
-            elif isinstance(config["format"]["html"]["include-after-body"], str):
-                config["format"]["html"]["include-after-body"] = [
-                    config["format"]["html"]["include-after-body"]
-                ]
-
-            copy_page_entry = script_include("copy-page.js")
-            has_copy_page = any(
-                "copy-page" in str(item) for item in config["format"]["html"]["include-after-body"]
-            )
-            if not has_copy_page:
-                config["format"]["html"]["include-after-body"].append(copy_page_entry)
-
-        # Add sidebar smart-wrap script (inserts <wbr> for pretty line breaks)
-        if "include-after-body" not in config["format"]["html"]:
-            config["format"]["html"]["include-after-body"] = []
-        elif isinstance(config["format"]["html"]["include-after-body"], str):
-            config["format"]["html"]["include-after-body"] = [  # pragma: no cover
-                config["format"]["html"]["include-after-body"]
-            ]
-
-        wrap_script_entry = script_include("sidebar-wrap.js")
-        has_wrap = any(
-            "sidebar-wrap" in str(item) for item in config["format"]["html"]["include-after-body"]
-        )
-        if not has_wrap:
-            config["format"]["html"]["include-after-body"].append(wrap_script_entry)
-
-        # Add floating sidebar script (pinned, scrollable sidebar on desktop)
-        float_script_entry = script_include("sidebar-float.js")
-        has_float = any(
-            "sidebar-float" in str(item) for item in config["format"]["html"]["include-after-body"]
-        )
-        if not has_float:
-            config["format"]["html"]["include-after-body"].append(float_script_entry)
-
-        # Add sidebar filter script if enabled
-        if metadata.get("sidebar_filter_enabled", True):
-            if "include-after-body" not in config["format"]["html"]:
-                config["format"]["html"]["include-after-body"] = []  # pragma: no cover
-            elif isinstance(config["format"]["html"]["include-after-body"], str):
-                config["format"]["html"]["include-after-body"] = [  # pragma: no cover
-                    config["format"]["html"]["include-after-body"]
-                ]
-
-            # Add the sidebar filter script
-            filter_script_entry = script_include("sidebar-filter.js")
-            has_filter = any(
-                "sidebar-filter" in str(item)
-                for item in config["format"]["html"]["include-after-body"]
-            )
-            if not has_filter:
-                config["format"]["html"]["include-after-body"].append(filter_script_entry)
-
-            # Add data attributes for configuration (must be before sidebar-filter.js)
-            min_items = metadata.get("sidebar_filter_min_items", 20)
-            if min_items != 20:
-                # Add custom min_items via body data attribute and insert BEFORE the filter script
-                min_items_script = {
-                    "text": f'<script>document.body.dataset.sidebarFilterMinItems = "{min_items}";</script>'
-                }
-                has_min_items = any(
-                    "sidebarFilterMinItems" in str(item)
-                    for item in config["format"]["html"]["include-after-body"]
-                )
-                if not has_min_items:
-                    # Insert before the sidebar-filter.js script
-                    filter_index = next(
-                        (
-                            i
-                            for i, item in enumerate(config["format"]["html"]["include-after-body"])
-                            if "sidebar-filter" in str(item)
-                        ),
-                        len(config["format"]["html"]["include-after-body"]),
-                    )
-                    config["format"]["html"]["include-after-body"].insert(
-                        filter_index, min_items_script
-                    )
-
-        # Add dark mode toggle script (if enabled)
-        dark_mode_enabled = metadata.get("dark_mode_toggle_enabled", True)
-
-        # When dark mode toggle is disabled, add a meta tag so theme-init.js
-        # knows to ignore any stored preference and always use light mode.
-        if not dark_mode_enabled:
-            if "include-in-header" not in config["format"]["html"]:
-                config["format"]["html"]["include-in-header"] = []
-            elif isinstance(config["format"]["html"]["include-in-header"], str):
-                config["format"]["html"]["include-in-header"] = [
-                    config["format"]["html"]["include-in-header"]
-                ]
-            dm_meta = {"text": '<meta name="gd-dark-mode" content="disabled">'}
-            has_dm_meta = any(
-                "gd-dark-mode" in str(item)
-                for item in config["format"]["html"]["include-in-header"]
-            )
-            if not has_dm_meta:
-                config["format"]["html"]["include-in-header"].append(dm_meta)
-
-        if dark_mode_enabled:
-            if "include-after-body" not in config["format"]["html"]:
-                config["format"]["html"]["include-after-body"] = []  # pragma: no cover
-            elif isinstance(config["format"]["html"]["include-after-body"], str):
-                config["format"]["html"]["include-after-body"] = [  # pragma: no cover
-                    config["format"]["html"]["include-after-body"]
-                ]
-
-            dark_mode_script_entry = script_include("dark-mode-toggle.js")
-            has_dark_mode = any(
-                "dark-mode-toggle" in str(item)
-                for item in config["format"]["html"]["include-after-body"]
-            )
-            if not has_dark_mode:
-                config["format"]["html"]["include-after-body"].append(dark_mode_script_entry)
-
-        # Add back-to-top button script (if enabled)
-        if metadata.get("back_to_top_enabled", True):
-            if "include-after-body" not in config["format"]["html"]:
-                config["format"]["html"]["include-after-body"] = []  # pragma: no cover
-            elif isinstance(config["format"]["html"]["include-after-body"], str):
-                config["format"]["html"]["include-after-body"] = [  # pragma: no cover
-                    config["format"]["html"]["include-after-body"]
-                ]
-
-            back_to_top_entry = script_include("back-to-top.js")
-            has_back_to_top = any(
-                "back-to-top.js" in str(item)
-                for item in config["format"]["html"]["include-after-body"]
-            )
-            if not has_back_to_top:
-                config["format"]["html"]["include-after-body"].append(back_to_top_entry)
-
-            on_this_page_entry = script_include("on-this-page.js")
-            has_on_this_page = any(
-                "on-this-page.js" in str(item)
-                for item in config["format"]["html"]["include-after-body"]
-            )
-            if not has_on_this_page:
-                config["format"]["html"]["include-after-body"].append(on_this_page_entry)
+        # Table order preserves the order in which pages load the site's scripts.
+        scripts.include(self._config, config, self.build_dir, has_repository=has_repository)
 
         # Add (or remove) the wide layout toggle
         self._configure_wide_layout(config, metadata.get("wide_layout"))
-
-        # Add keyboard navigation script (if enabled)
-        if metadata.get("keyboard_nav_enabled", True):
-            if "include-after-body" not in config["format"]["html"]:
-                config["format"]["html"]["include-after-body"] = []  # pragma: no cover
-            elif isinstance(config["format"]["html"]["include-after-body"], str):
-                config["format"]["html"]["include-after-body"] = [  # pragma: no cover
-                    config["format"]["html"]["include-after-body"]
-                ]
-
-            keyboard_nav_entry = script_include("keyboard-nav.js")
-            has_keyboard_nav = any(
-                "keyboard-nav.js" in str(item)
-                for item in config["format"]["html"]["include-after-body"]
-            )
-            if not has_keyboard_nav:
-                config["format"]["html"]["include-after-body"].append(keyboard_nav_entry)
-
-        # Add custom copy-code button script (replaces Quarto's native code-copy)
-        if "include-after-body" not in config["format"]["html"]:
-            config["format"]["html"]["include-after-body"] = []  # pragma: no cover
-        elif isinstance(config["format"]["html"]["include-after-body"], str):
-            config["format"]["html"]["include-after-body"] = [  # pragma: no cover
-                config["format"]["html"]["include-after-body"]
-            ]
-
-        copy_code_entry = script_include("copy-code.js")
-        has_copy_code = any(
-            "copy-code.js" in str(item) for item in config["format"]["html"]["include-after-body"]
-        )
-        if not has_copy_code:
-            config["format"]["html"]["include-after-body"].append(copy_code_entry)
-
-        # Add collapsible details script (accordion + smooth animation)
-        details_entry = script_include("details.js")
-        has_details = any(
-            "details.js" in str(item) for item in config["format"]["html"]["include-after-body"]
-        )
-        if not has_details:
-            config["format"]["html"]["include-after-body"].append(details_entry)
-
-        # Add early theme detection script in header to prevent flash of wrong theme
-        if "include-in-header" not in config["format"]["html"]:
-            config["format"]["html"]["include-in-header"] = []  # pragma: no cover
-        elif isinstance(config["format"]["html"]["include-in-header"], str):
-            config["format"]["html"]["include-in-header"] = [  # pragma: no cover
-                config["format"]["html"]["include-in-header"]
-            ]
-
-        # Reference external script file for early theme detection (cleaner YAML)
-        early_theme_script = script_include("theme-init.js")
-        has_early_theme = any(
-            "theme-init" in str(item) for item in config["format"]["html"]["include-in-header"]
-        )
-        if not has_early_theme:
-            config["format"]["html"]["include-in-header"].append(early_theme_script)
-
-        # Add mermaid renderer script (custom mermaid with proper theme support)
-        mermaid_renderer_entry = script_include("mermaid-renderer.js")
-        has_mermaid_renderer = any(
-            "mermaid-renderer.js" in str(item)
-            for item in config["format"]["html"]["include-after-body"]
-        )
-        if not has_mermaid_renderer:
-            config["format"]["html"]["include-after-body"].append(mermaid_renderer_entry)
-
-        # Add page metadata script (if show_dates is enabled)
-        if self._config.show_dates:
-            if "include-after-body" not in config["format"]["html"]:  # pragma: no cover
-                config["format"]["html"]["include-after-body"] = []  # pragma: no cover
-            elif isinstance(
-                config["format"]["html"]["include-after-body"], str
-            ):  # pragma: no cover
-                config["format"]["html"]["include-after-body"] = [  # pragma: no cover
-                    config["format"]["html"]["include-after-body"]
-                ]
-
-            page_metadata_entry = script_include("page-metadata.js")  # pragma: no cover
-            has_page_metadata = any(  # pragma: no cover
-                "page-metadata.js" in str(item)
-                for item in config["format"]["html"]["include-after-body"]
-            )
-            if not has_page_metadata:  # pragma: no cover
-                config["format"]["html"]["include-after-body"].append(
-                    page_metadata_entry
-                )  # pragma: no cover
-
-        # Add page tags script (if tags are enabled with show_on_pages)
-        if self._config.tags_show_on_pages:
-            if "include-after-body" not in config["format"]["html"]:  # pragma: no cover
-                config["format"]["html"]["include-after-body"] = []  # pragma: no cover
-            elif isinstance(
-                config["format"]["html"]["include-after-body"], str
-            ):  # pragma: no cover
-                config["format"]["html"]["include-after-body"] = [  # pragma: no cover
-                    config["format"]["html"]["include-after-body"]
-                ]
-
-            page_tags_entry = script_include("page-tags.js")  # pragma: no cover
-            has_page_tags = any(  # pragma: no cover
-                "page-tags.js" in str(item)
-                for item in config["format"]["html"]["include-after-body"]
-            )
-            if not has_page_tags:  # pragma: no cover
-                config["format"]["html"]["include-after-body"].append(
-                    page_tags_entry
-                )  # pragma: no cover
-
-        # Add page status badges script (if page_status is enabled)
-        if self._config.page_status_enabled:
-            if "include-after-body" not in config["format"]["html"]:  # pragma: no cover
-                config["format"]["html"]["include-after-body"] = []  # pragma: no cover
-            elif isinstance(
-                config["format"]["html"]["include-after-body"], str
-            ):  # pragma: no cover
-                config["format"]["html"]["include-after-body"] = [  # pragma: no cover
-                    config["format"]["html"]["include-after-body"]
-                ]
-
-            has_page_status = any(  # pragma: no cover
-                page_status.is_script_entry(item)
-                for item in config["format"]["html"]["include-after-body"]
-            )
-            if not has_page_status:  # pragma: no cover
-                # Inline the script content so Quarto doesn't need to resolve
-                # relative paths (which fail for file:// and nested pages)
-                status_js_path = self.build_dir / "page-status-badges.js"  # pragma: no cover
-                if status_js_path.is_file():  # pragma: no cover
-                    js_content = status_js_path.read_text(encoding="utf-8")  # pragma: no cover
-                    page_status_entry = {
-                        "text": f"<script>{js_content}</script>"
-                    }  # pragma: no cover
-                else:
-                    page_status_entry = script_include("page-status-badges.js")  # pragma: no cover
-                config["format"]["html"]["include-after-body"].append(
-                    page_status_entry
-                )  # pragma: no cover
 
         # Add reference switcher script (if CLI, Go CLI, or MCP is enabled)
         cli_enabled = metadata.get("cli_enabled", False)
@@ -3754,64 +3241,13 @@ class GreatDocs:
             if not replaced:
                 headers.append(ref_sections_script)
 
-            ref_switcher_script_entry = script_include("reference-switcher.js")
-            has_ref_switcher = any(
-                "reference-switcher" in str(item)
-                for item in config["format"]["html"]["include-after-body"]
+            quarto_yml.add_include(
+                config,
+                "include-after-body",
+                script_include("reference-switcher.js"),
+                marker="reference-switcher",
+                before="tooltips.js",
             )
-            if not has_ref_switcher:
-                config["format"]["html"]["include-after-body"].append(ref_switcher_script_entry)
-
-        # Add tooltips script (always enabled — converts title attributes to styled tooltips)
-        if "include-after-body" not in config["format"]["html"]:
-            config["format"]["html"]["include-after-body"] = []  # pragma: no cover
-        elif isinstance(config["format"]["html"]["include-after-body"], str):
-            config["format"]["html"]["include-after-body"] = [  # pragma: no cover
-                config["format"]["html"]["include-after-body"]
-            ]
-
-        tooltips_script_entry = script_include("tooltips.js")
-        has_tooltips = any(
-            "tooltips.js" in str(item) for item in config["format"]["html"]["include-after-body"]
-        )
-        if not has_tooltips:
-            config["format"]["html"]["include-after-body"].append(tooltips_script_entry)
-
-        # Add color-swatch script (always enabled — loaded after tooltips)
-        color_swatch_entry = script_include("color-swatch.js")
-        has_color_swatch = any(
-            "color-swatch.js" in str(item)
-            for item in config["format"]["html"]["include-after-body"]
-        )
-        if not has_color_swatch:
-            config["format"]["html"]["include-after-body"].append(color_swatch_entry)
-
-        # Add responsive tables script (always enabled — wraps tables in scroll containers)
-        responsive_tables_script_entry = script_include("responsive-tables.js")
-        has_responsive_tables = any(
-            "responsive-tables.js" in str(item)
-            for item in config["format"]["html"]["include-after-body"]
-        )
-        if not has_responsive_tables:
-            config["format"]["html"]["include-after-body"].append(responsive_tables_script_entry)
-
-        # Add video embed script (always enabled — lazy loading + YouTube thumbnails)
-        video_embed_script_entry = script_include("video-embed.js")
-        has_video_embed = any(
-            "video-embed.js" in str(item) for item in config["format"]["html"]["include-after-body"]
-        )
-        if not has_video_embed:
-            config["format"]["html"]["include-after-body"].append(video_embed_script_entry)
-
-        # Add navbar widget collector (always enabled — consolidates dark-mode,
-        # keyboard, search, and GitHub widgets into #gd-navbar-widgets)
-        navbar_widgets_entry = script_include("navbar-widgets.js")
-        has_navbar_widgets = any(
-            "navbar-widgets.js" in str(item)
-            for item in config["format"]["html"]["include-after-body"]
-        )
-        if not has_navbar_widgets:
-            config["format"]["html"]["include-after-body"].append(navbar_widgets_entry)
 
         # Add navigation icons (Lucide SVG) if configured
         if self._config.nav_icons:
@@ -4054,11 +3490,6 @@ class GreatDocs:
                 # Insert at position 0 so the banner script runs first
                 after_body.insert(0, ann_script_entry)
 
-            # Ensure the JS file is in resources
-            resources_list = config["project"].setdefault("resources", [])
-            if "announcement-banner.js" not in resources_list:
-                resources_list.append("announcement-banner.js")
-
         # Add navbar gradient style if configured
         navbar_style = self._config.navbar_style
         if navbar_style:
@@ -4081,10 +3512,6 @@ class GreatDocs:
             nb_script_entry = script_include("navbar-style.js")
             if not any("navbar-style" in str(item) for item in after_body):
                 after_body.append(nb_script_entry)
-
-            resources_list = config["project"].setdefault("resources", [])
-            if "navbar-style.js" not in resources_list:
-                resources_list.append("navbar-style.js")
 
         # Add site-wide accent color if configured
         accent_color = self._config.accent_color
@@ -4278,10 +3705,6 @@ class GreatDocs:
             cs_script_entry = script_include("content-style.js")
             if not any("content-style" in str(item) for item in after_body):
                 after_body.append(cs_script_entry)
-
-            resources_list = config["project"].setdefault("resources", [])
-            if "content-style.js" not in resources_list:
-                resources_list.append("content-style.js")
 
         # Add scale-to-fit selectors if configured
         scale_selectors = self._config.scale_to_fit
