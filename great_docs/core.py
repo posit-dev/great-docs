@@ -2810,27 +2810,31 @@ class GreatDocs:
         elif isinstance(config["project"]["resources"], str):
             config["project"]["resources"] = [config["project"]["resources"]]
 
-        # Ensure JS files are included as resources
-        js_resource_files = [
-            "github-widget.js",
-            "sidebar-filter.js",
-            "sidebar-wrap.js",
-            "sidebar-float.js",
-            "dark-mode-toggle.js",
+        # Resources follow the order in which pages include site-root scripts
+        # and stylesheets.
+        js_resource_files = []
+        if self._config.marimo_enabled:
+            js_resource_files += ["marimo-islands.js", "marimo-islands.css"]
+        js_resource_files += [
+            "gd-lightbox.css",
+            "gd-lightbox.js",
+            "gd-lightbox-compare.css",
+            "gd-lightbox-compare.js",
+            "gd-lightbox-annotate.css",
+            "gd-lightbox-annotate.js",
             "theme-init.js",
-            "copy-code.js",
-            "tooltips.js",
-            "color-swatch.js",
-            "mermaid-renderer.js",
-            "responsive-tables.js",
-            "video-embed.js",
-            "navbar-widgets.js",
-            "details.js",
         ]
+        if self._config.announcement:
+            js_resource_files.append("announcement-banner.js")
+        js_resource_files.append("github-widget.js")
         if self._config.markdown_pages_widget:
             js_resource_files.append("copy-page.js")
-        if self._config.show_dates:
-            js_resource_files.append("page-metadata.js")  # pragma: no cover
+        js_resource_files += [
+            "sidebar-wrap.js",
+            "sidebar-float.js",
+            "sidebar-filter.js",
+            "dark-mode-toggle.js",
+        ]
         if self._config.back_to_top:
             js_resource_files.append("back-to-top.js")
             js_resource_files.append("on-this-page.js")
@@ -2838,10 +2842,26 @@ class GreatDocs:
             js_resource_files.append("wide-layout.js")
         if self._config.keyboard_nav:
             js_resource_files.append("keyboard-nav.js")
+        js_resource_files += ["copy-code.js", "details.js", "mermaid-renderer.js"]
+        if self._config.show_dates:
+            js_resource_files.append("page-metadata.js")
         if self._config.tags_show_on_pages:
-            js_resource_files.append("page-tags.js")  # pragma: no cover
+            js_resource_files.append("page-tags.js")
         if self._config.page_status_enabled:
-            js_resource_files.append("page-status-badges.js")  # pragma: no cover
+            js_resource_files.append("page-status-badges.js")
+        js_resource_files += [
+            "tooltips.js",
+            "color-swatch.js",
+            "responsive-tables.js",
+            "video-embed.js",
+        ]
+        if self._config.has_versions:
+            js_resource_files.append("version-selector.js")
+        js_resource_files.append("navbar-widgets.js")
+        if self._config.navbar_style:
+            js_resource_files.append("navbar-style.js")
+        if self._config.content_style is not None:
+            js_resource_files.append("content-style.js")
         if self._config.hero_starfield:
             js_resource_files.append("starfield.js")
         if self._config.skill_skills and len(self._config.skill_skills) > 1:
@@ -2863,18 +2883,6 @@ class GreatDocs:
             # Include pre-generated island HTML fragments
             if "_marimo_islands/**" not in config["project"]["resources"]:
                 config["project"]["resources"].append("_marimo_islands/**")
-
-        # Add gd-lightbox assets as resources
-        for lb_res in (
-            "gd-lightbox.js",
-            "gd-lightbox.css",
-            "gd-lightbox-compare.js",
-            "gd-lightbox-compare.css",
-            "gd-lightbox-annotate.js",
-            "gd-lightbox-annotate.css",
-        ):
-            if lb_res not in config["project"]["resources"]:
-                config["project"]["resources"].append(lb_res)
 
         # Add all user-guide asset directories to resources so that images
         # referenced only via data attributes (e.g., dark-mode variants) get
