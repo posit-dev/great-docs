@@ -6158,7 +6158,7 @@ class GreatDocs:
         verbose: bool = False,
     ) -> dict:
         """
-        Check all links in source code and documentation for broken links.
+        Check source code and documentation for broken links
 
         ::: {.callout-note}
         In practice, you would normally use the `great-docs check-links` CLI command rather than
@@ -6175,8 +6175,9 @@ class GreatDocs:
         - **Inline code**: URLs inside backticks (`` `...` ``)
         - **Marked URLs**: URLs followed by `{.gd-no-link}` in `.qmd`/`.md` files
 
-        For documentation, the checker scans the source `user_guide/` directory rather than the
-        generated `docs/` directory to avoid checking transient files.
+        For documentation, the checker scans the authored pages that the build publishes: the
+        homepage source and the pages of the user guide, the sections and the custom page
+        directories, plus `README.md` at the package root. Generated pages are not checked.
 
         In `.qmd` files, you can exclude specific URLs from checking by adding `{.gd-no-link}`
         immediately after the URL:
@@ -6201,7 +6202,7 @@ class GreatDocs:
 
         Returns
         -------
-        dict
+        :
             A dictionary containing:
 
             - `total`: total number of unique links checked
@@ -6241,8 +6242,7 @@ class GreatDocs:
             module = self._resolve_importable_name(package_name)
             files += proofread.find_modules(self.layout, module)
         if include_docs:
-            guide_dir = user_guide.find_dir(self._config, self.layout, report=_print_warning)
-            files += links.find_pages(self.layout, guide_dir)
+            files += proofread.find_pages(self._config, self.layout, report=_print_warning)
 
         return links.check(
             files,
@@ -6271,11 +6271,11 @@ class GreatDocs:
         calling this method directly. See the [CLI reference](cli/proofread.qmd) for details.
         :::
 
-        Harper checks `.qmd` and `.md` files recursively in the user guide and recipes
-        directories under the documentation source directory, plus `README.md` at the package
-        root. The checks use the same defaults as `great-docs proofread`: a built-in dictionary
-        of technical terms and a set of ignored rules for technical writing. Front matter and
-        fenced code blocks are excluded from `.qmd` checks.
+        Harper checks the published authored `.qmd` and `.md` pages: the homepage source, user
+        guide, sections and custom page directories, plus `README.md` at the package root.
+        Checks use the same defaults as `great-docs proofread`: a built-in dictionary of
+        technical terms and ignored rules for technical writing. Front matter and fenced code
+        blocks are excluded from `.qmd` checks.
 
         Parameters
         ----------
@@ -6348,8 +6348,7 @@ class GreatDocs:
 
         files: list[Path] = []
         if include_docs:
-            guide_dir = user_guide.find_dir(self._config, self.layout, report=_print_warning)
-            files = proofread.find_pages(self.layout, guide_dir)
+            files = proofread.find_pages(self._config, self.layout, report=_print_warning)
         if include_docstrings and (package_name := self._detect_package_name()):
             module = self._resolve_importable_name(package_name)
             files += proofread.find_modules(self.layout, module)

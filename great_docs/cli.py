@@ -2582,16 +2582,17 @@ def proofread(
         if files:
             files_to_check = [Path(f) for f in files]
         else:
-            guide_dir = (
-                Path(docs_dir)
-                if docs_dir
-                else user_guide.find_dir(
+            if docs_dir:
+                files_to_check = [*Path(docs_dir).rglob("*.qmd"), *Path(docs_dir).rglob("*.md")]
+                readme = docs.project_root / "README.md"
+                if readme.exists():
+                    files_to_check.append(readme)
+            else:
+                files_to_check = proofreading.find_pages(
                     docs._config,
                     docs.layout,
                     report=lambda message: click.echo(f"⚠️  {message}", err=True),
                 )
-            )
-            files_to_check = proofreading.find_pages(docs.layout, guide_dir)
             if include_docstrings and (package_name := docs._detect_package_name()):
                 module = docs._resolve_importable_name(package_name)
                 files_to_check += proofreading.find_modules(docs.layout, module)

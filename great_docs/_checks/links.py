@@ -18,9 +18,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from pathlib import Path
 
-    from .._layout import Layout
 
-__all__ = ["check", "find_pages"]
+__all__ = ["check"]
 
 _URL = re.compile(r'https?://[^\s<>"\')\]}`\\]+', re.IGNORECASE)
 
@@ -50,36 +49,6 @@ class _Probe:
 
     error: str | None = None
     """Why the URL counts as broken"""
-
-
-def find_pages(layout: Layout, guide_dir: Path | None) -> list[Path]:
-    """
-    Find the documentation pages to check
-
-    Parameters
-    ----------
-    layout
-        The project's paths.
-    guide_dir
-        The user guide's source directory, or `None` when the project has none.
-
-    Returns
-    -------
-    :
-        The `.qmd` files followed by the `.md` files under the user guide directory, or under
-        the build directory if the project has no user guide directory. An existing
-        `README.md` in the package root comes last.
-    """
-    pages: list[Path] = []
-    pages_dir = guide_dir if guide_dir is not None else layout.build_dir
-    if pages_dir.exists():
-        pages.extend(pages_dir.rglob("*.qmd"))
-        pages.extend(pages_dir.rglob("*.md"))
-
-    readme = layout.package_root / "README.md"
-    if readme.exists():
-        pages.append(readme)
-    return pages
 
 
 def check(

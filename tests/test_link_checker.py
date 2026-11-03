@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from great_docs import GreatDocs
+from tests.support import AUTHORED_PAGES, write_authored_pages, write_config
 
 # ============================================================================
 # URL Extraction Tests
@@ -1280,24 +1281,6 @@ class TestFileFiltering:
             assert results["total"] == 1
             assert "README.md" in results["by_file"]
 
-    def test_scans_build_directory_without_user_guide(self, tmp_path: Path):
-        """Scan build pages when no source `user_guide/` directory exists"""
-        docs = GreatDocs(project_path=tmp_path)
-        build_dir = docs.layout.build_dir
-        (build_dir / "guide").mkdir(parents=True)
-        (build_dir / "guide" / "page.qmd").write_text("https://qmd.example.com")
-        (build_dir / "notes.md").write_text("https://md.example.com")
-
-        results = docs.check_links(
-            include_source=False, include_docs=True, ignore_patterns=["example.com"]
-        )
-
-        rel_build = build_dir.relative_to(tmp_path)
-        assert results["by_file"] == {
-            str(rel_build / "guide" / "page.qmd"): ["https://qmd.example.com"],
-            str(rel_build / "notes.md"): ["https://md.example.com"],
-        }
-
 
 # ============================================================================
 # Result Structure Tests
@@ -1587,3 +1570,22 @@ def test_check_links_reads_the_guide_directory_the_build_uses(
     )
 
     assert results["skipped"] == ["https://example.com"]
+
+
+def test_check_links_reads_the_authored_pages_the_build_publishes(tmp_path: Path):
+    write_authored_pages(tmp_path)
+
+    results = GreatDocs(project_path=tmp_path).check_links(ignore_patterns=["."])
+
+    assert list(results["by_file"]) == ["src/demo/__init__.py", *AUTHORED_PAGES]
+
+
+def test_check_links_without_a_guide_skips_the_build_directory(tmp_path: Path):
+    write_authored_pages(tmp_path)
+    write_config(tmp_path, "sections:\n  - title: Tutorials\n    dir: tutorials\n")
+
+    results = GreatDocs(project_path=tmp_path).check_links(
+        include_source=False, ignore_patterns=["."]
+    )
+
+    assert list(results["by_file"]) == ["README.md", "tutorials/first.md"]

@@ -14,6 +14,7 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from .._content import authored
 from .._layout import PACKAGE_DIRS
 from . import harper
 
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from .._layout import Layout
+    from ..config import Config
     from .harper import HarperFileResult, HarperLint
 
 __all__ = ["CheckedFile", "Options", "check", "find_modules", "find_pages"]
@@ -63,37 +65,30 @@ class CheckedFile:
     """Reason the file could not be checked, or `None` after a successful check"""
 
 
-def find_pages(layout: Layout, guide_dir: Path | None) -> list[Path]:
+def find_pages(config: Config, layout: Layout, *, report: Callable[[str], None]) -> list[Path]:
     """
-    Find the documentation pages to proofread
-
-    The user guide and recipes are searched recursively for `.qmd` and `.md` files.
-    `README.md` is included from the package root.
+    Find documentation pages for proofreading and link checking
 
     Parameters
     ----------
+    config
+        The project's configuration.
     layout
         The project's paths.
-    guide_dir
-        The user guide's source directory, or `None` when the project has none.
+    report
+        Receives warnings about the user guide and custom page directories.
 
     Returns
     -------
     :
-        Existing user guide pages, followed by `README.md` and recipe pages.
+        The published authored `.qmd` and `.md` pages: the homepage source, followed by
+        pages in the user guide, sections and custom page directories. An existing
+        `README.md` at the package root comes last unless it is already included.
     """
-    pages: list[Path] = []
-    recipes_dir = layout.source_dir / "recipes"
+    pages = authored.find_pages(config, layout, report=report)
     readme = layout.package_root / "README.md"
-
-    if guide_dir is not None and guide_dir.exists():
-        pages.extend(guide_dir.rglob("*.qmd"))
-        pages.extend(guide_dir.rglob("*.md"))
-    if readme.exists():
+    if readme.exists() and readme not in pages:
         pages.append(readme)
-    if recipes_dir.exists():
-        pages.extend(recipes_dir.rglob("*.qmd"))
-        pages.extend(recipes_dir.rglob("*.md"))
     return pages
 
 
