@@ -11967,6 +11967,23 @@ def test_create_index_from_readme_hero_strips_duplicate_h1():
         assert "Features" in content
 
 
+def test_create_index_from_readme_hero_name_true_keeps_title(tmp_path: Path):
+    """
+    Keep the README title when `hero.name` is `True` without raising `AttributeError`
+    """
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "testpkg"\ndescription = "Desc"\n', encoding="utf-8"
+    )
+    (tmp_path / "README.md").write_text("# testpkg\n\nSome text.\n", encoding="utf-8")
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs._config = write_config(tmp_path, "hero:\n  enabled: true\n  name: true\n")
+    docs.build_dir.mkdir(parents=True, exist_ok=True)
+
+    docs._create_index_from_readme(has_api_reference=False, force_rebuild=True)
+
+    assert "## testpkg" in (docs.build_dir / "index.qmd").read_text(encoding="utf-8")
+
+
 def test_refresh_api_reference_config_updates_sections():
     """Test _refresh_api_reference_config updates sections from package exports."""
 

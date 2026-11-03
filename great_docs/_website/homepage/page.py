@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from enum import Enum
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from yaml12 import format_yaml
 
@@ -218,8 +218,8 @@ def write_readme(
         hero_name = config.hero_name
         if hero_name is None:
             hero_name = metadata.get("name") or package_name
-        if hero_name:
-            body = readme.strip_duplicate_title(body, cast("str", hero_name))
+        if isinstance(hero_name, str) and hero_name:
+            body = readme.strip_duplicate_title(body, hero_name)
 
     # Read the README's opening paragraph before the page wrapper adds markup above it.
     if config.seo_enabled and not page_description:
