@@ -3382,12 +3382,17 @@ def api_diff_cmd(
 
         # --- Graph mode ---
         if graph:
+            from great_docs._reference import documented as documented_reference
             from great_docs.core import GreatDocs
 
+            docs = GreatDocs(project_path=str(project_root), config_path=config_path)
             documented = (
-                GreatDocs(
-                    project_path=str(project_root), config_path=config_path
-                ).documented_symbol_names(result.package_name)
+                documented_reference.symbol_names(
+                    docs._config,
+                    importable_name=docs._resolve_importable_name(result.package_name),
+                    search_paths=docs._griffe_search_paths(),
+                    create_sections=docs._create_api_sections_with_config,
+                )
                 or None
             )
             # Build graph for the new version
@@ -3658,13 +3663,18 @@ def api_snapshot_cmd(
         )
         sys.exit(1)
 
+    from great_docs._reference import documented as documented_reference
     from great_docs.core import GreatDocs
 
     try:
+        docs = GreatDocs(project_path=str(project_root), config_path=config_path)
         documented = (
-            GreatDocs(
-                project_path=str(project_root), config_path=config_path
-            ).documented_symbol_names(pkg_name)
+            documented_reference.symbol_names(
+                docs._config,
+                importable_name=docs._resolve_importable_name(pkg_name),
+                search_paths=docs._griffe_search_paths(),
+                create_sections=docs._create_api_sections_with_config,
+            )
             or None
         )
     except BuildError as e:

@@ -213,8 +213,14 @@ def run_lint(
 
     if "cross-refs" in checks:
         from .._apiref.inventory import create_inventory
+        from .._reference import documented as documented_reference
 
-        documented = docs.documented_objects(package_name)
+        documented = documented_reference.objects(
+            docs._config,
+            importable_name=importable_name,
+            search_paths=docs._griffe_search_paths(),
+            create_sections=docs._create_api_sections_with_config,
+        )
         # No documented objects means both checks are no-ops, so skip source
         # loading and any inventory download.
         sources = load_sources(docs._config) if documented else LoadedSources()

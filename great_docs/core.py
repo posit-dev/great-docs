@@ -1,11 +1,10 @@
-import contextlib
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
-from functools import partial
+from functools import cache, partial
 from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -44,7 +43,7 @@ from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import Layout
 from ._reference import block as reference_block
-from ._reference import discovery, probe
+from ._reference import discovery, documented, probe
 from ._reference import sections as reference_sections
 from ._reference.discovery import Categories
 from ._remote import HttpRemote, Remote
@@ -88,12 +87,11 @@ from ._yaml import YamlMapping, set_front_matter_option, split_front_matter
 from .config import Config, create_default_config
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Iterable
 
     import click
 
     from ._apiref.api_reference import APIReference
-    from ._apiref.inventory import InventoryItem
     from ._build.log import BuildLog
 
 # Quarto's default input file types, enumerated as render globs. Used to seed
@@ -4070,159 +4068,6 @@ class GreatDocs:
             report=print,
         )
 
-    @contextlib.contextmanager
-    def _resolved_api_reference(self, package_name: str) -> "Iterator[APIReference | None]":
-        """
-        Yield the API reference for a package, or None when it cannot be resolved
-
-        Restores `sys.path` and `sys.modules` on the way out, so a read-only
-        query leaves no trace. In `dynamic`
-        mode resolving the reference performs a real import of the target
-        package.
-
-        Use the import name to discover sections and resolve the reference,
-        matching the build. This name may be configured explicitly and may differ
-        from the project name even after replacing dashes with underscores.
-
-        Parameters
-        ----------
-        package_name
-            The project name, which need not be the module name.
-
-        Yields
-        ------
-        APIReference | None
-            The resolved reference, or None when the package documents nothing.
-        """
-        import io
-        from types import ModuleType
-
-        added_paths: list[str] = []
-        cached_modules: dict[str, ModuleType] = {}
-        modules_evicted = False
-        importable_name = self._resolve_importable_name(package_name)
-
-        try:
-            # Suppress diagnostic prints from the resolution/filtering pipeline — this is a
-            # programmatic query method and its callers own their own output streams.
-            # `APIReference` loads the package through a plain griffe loader (sys.path-based),
-            # unlike `_create_api_sections_with_config`'s own loader, which is handed explicit
-            # search paths. Temporarily extend sys.path so a package that isn't installed (e.g.
-            # a src-layout dev checkout) can still be found, then restore it.
-            added_paths = [str(p) for p in self._griffe_search_paths() if str(p) not in sys.path]
-            sys.path[:0] = added_paths
-            # Drop any cached import of the package (and its submodules) so dynamic
-            # resolution reflects what's on disk *now* — not a stale module object
-            # left in `sys.modules` by an earlier call in this process (e.g. a
-            # different git-tag checkout during a versioned-snapshot loop).
-            module_keys = [
-                k
-                for k in sys.modules
-                if k == importable_name or k.startswith(f"{importable_name}.")
-            ]
-            cached_modules = {key: sys.modules[key] for key in module_keys}
-            for key in module_keys:
-                del sys.modules[key]
-            modules_evicted = True
-            with (
-                contextlib.redirect_stdout(io.StringIO()),
-                contextlib.redirect_stderr(io.StringIO()),
-            ):
-                sections = self._create_api_sections_with_config(importable_name)
-                if not sections:
-                    yield None
-                    return
-                from great_docs._apiref.api_reference import APIReference
-
-                # In `dynamic` mode, reading the yielded reference performs a real
-                # import of the target package (executing its top-level code). The
-                # `sys.modules` eviction above only refreshes the target package's own
-                # modules, not third-party packages it imports — so a same-process loop
-                # over different checkouts can still see third-party global-state
-                # carryover (e.g. module-level caches or singletons).
-                ref = APIReference(
-                    {
-                        "api-reference": {
-                            "package": importable_name,
-                            "sections": sections,
-                            "parser": self._config.parser or "numpy",
-                            "dynamic": self._config.dynamic,
-                        }
-                    }
-                )
-                yield ref
-        finally:
-            if modules_evicted:
-                for key in [
-                    k
-                    for k in sys.modules
-                    if k == importable_name or k.startswith(f"{importable_name}.")
-                ]:
-                    del sys.modules[key]
-                sys.modules.update(cached_modules)
-            for p in added_paths:
-                if p in sys.path:
-                    sys.path.remove(p)
-
-    def documented_symbol_names(self, package_name: str) -> list[str]:
-        """Dotted reference-page stems for the documented public API
-
-        Each stem names one published reference page: a top-level class or
-        function, a submodule-qualified class (`scores.CosineScore`), or a
-        method (`scores.CosineScore.fit`). The set matches the rendered
-        reference — top-level objects and their documented members, `%nodoc`
-        excluded — whether from an explicit `reference:` config or
-        auto-discovery, so a versioned snapshot and the live build describe the
-        same API surface. Empty when the package documents nothing.
-
-        Parameters
-        ----------
-        package_name
-            The package name (may contain dashes).
-
-        Returns
-        -------
-        list[str]
-            Dotted stems, deduplicated, in first-occurrence order.
-        """
-        with self._resolved_api_reference(package_name) as ref:
-            if ref is None:
-                return []
-            from great_docs._apiref.resolve import ObjectNotFoundError
-
-            try:
-                return ref.documented_symbols
-            except (ObjectNotFoundError, ImportError, AttributeError):
-                return []
-
-    def documented_objects(self, package_name: str) -> "list[InventoryItem]":
-        """The objects the reference publishes, each with its page, claims and docstring
-
-        The build indexes exactly these, so a caller reading them sees what the
-        build will do rather than an approximation of it. Empty when the
-        package documents nothing.
-
-        Parameters
-        ----------
-        package_name
-            The package name (may contain dashes).
-
-        Returns
-        -------
-        list[InventoryItem]
-            The documented objects, empty when the reference cannot be
-            resolved.
-        """
-        with self._resolved_api_reference(package_name) as ref:
-            if ref is None:
-                return []
-            from great_docs._apiref.resolve import ObjectNotFoundError
-
-            try:
-                return ref.items
-            except (ObjectNotFoundError, ImportError, AttributeError):
-                return []
-
     def _create_api_sections_with_config(self, package_name: str) -> list | None:
         """
         Build API sections from explicit entries or discovered exports
@@ -7560,6 +7405,17 @@ body-classes: "gd-homepage"
             bars.set_total(slot, total)
             bars.update(slot, current)
 
+        # Uncached tag snapshots use the working tree's documented set. Cache the
+        # result so it is resolved at most once per project name per build.
+        @cache
+        def documented_symbols(package_name: str) -> list[str]:
+            return documented.symbol_names(
+                self._config,
+                importable_name=self._resolve_importable_name(package_name),
+                search_paths=self._griffe_search_paths(),
+                create_sections=self._create_api_sections_with_config,
+            )
+
         result = run_versioned_build(
             source_dir=self.build_dir,
             project_root=self.project_root,
@@ -7574,6 +7430,7 @@ body-classes: "gd-homepage"
             layout=self.layout,
             default_description=self._default_description(),
             structured_data=self._structured_data(),
+            documented_symbols=documented_symbols,
         )
 
         for warning in result.get("warnings", []):

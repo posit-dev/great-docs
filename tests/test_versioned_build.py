@@ -3167,11 +3167,14 @@ class TestRebuildApiFromGitRefCache:
                 return_value=True,
             ),
             patch("great_docs._api_diff._detect_package_name", return_value="pkg"),
-            patch("great_docs._api_diff.snapshot_at_tag", return_value=mock_snap),
+            patch("great_docs._api_diff.snapshot_at_tag", return_value=mock_snap) as snapshot,
         ):
-            pages = _rebuild_api_from_git_ref(dest, tmp_path, entry)
+            pages = _rebuild_api_from_git_ref(
+                dest, tmp_path, entry, documented_symbols=lambda name: ["func2"]
+            )
 
         assert "reference/func2.html" in pages
+        assert snapshot.call_args.kwargs["documented_names"] == ["func2"]
         # Cache should have been written
         cache_path = tmp_path / ".great-docs-cache" / "snapshots" / "v0.2.0.json"
         assert cache_path.exists()
@@ -4465,9 +4468,23 @@ class TestGitRefRebuildKeepsSubmodulePages:
         (ref / "index.qmd").write_text("---\ntitle: API\n---\n")
 
         entry = VersionEntry(label="0.1.0", tag="0.1.0", git_ref="v0.1.0")
+        from great_docs._reference import documented
         from great_docs._versions.build import _rebuild_api_from_git_ref
+        from great_docs.core import GreatDocs
 
-        pages = _rebuild_api_from_git_ref(tmp_path / "build", tmp_path, entry)
+        docs = GreatDocs(project_path=str(tmp_path))
+
+        def documented_symbols(package_name: str) -> list[str]:
+            return documented.symbol_names(
+                docs._config,
+                importable_name=docs._resolve_importable_name(package_name),
+                search_paths=docs._griffe_search_paths(),
+                create_sections=docs._create_api_sections_with_config,
+            )
+
+        pages = _rebuild_api_from_git_ref(
+            tmp_path / "build", tmp_path, entry, documented_symbols=documented_symbols
+        )
 
         assert (ref / "sub.Widget.qmd").exists()
         assert (ref / "sub.Widget.fit.qmd").exists()

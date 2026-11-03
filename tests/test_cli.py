@@ -627,12 +627,12 @@ def test_failed_build_exits_1_and_reports_once(
 def test_api_snapshot_reports_missing_reference_name(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    from great_docs import GreatDocs
+    from great_docs._reference import documented
 
-    def fail(docs: GreatDocs, package_name: str) -> list[str]:
+    def fail(*args: object, **kwargs: object) -> list[str]:
         raise BuildError("Configured reference item(s) not found in `pkg` v1.0: `gone`")
 
-    monkeypatch.setattr(GreatDocs, "documented_symbol_names", fail)
+    monkeypatch.setattr(documented, "symbol_names", fail)
     result = CliRunner().invoke(
         cli, ["api-snapshot", "--project-path", str(tmp_path), "--package", "pkg"]
     )
@@ -4504,8 +4504,10 @@ class TestApiDiffGraphHead:
         mock_graph.return_value = graph_result
 
         runner = CliRunner()
-        with patch("great_docs.core.GreatDocs") as mock_gd:
-            mock_gd.return_value.documented_symbol_names.return_value = ["A"]
+        with (
+            patch("great_docs.core.GreatDocs"),
+            patch("great_docs._reference.documented.symbol_names", return_value=["A"]),
+        ):
             result = runner.invoke(
                 cli,
                 [
@@ -4519,6 +4521,7 @@ class TestApiDiffGraphHead:
             )
         mock_snap.assert_called_once()
         assert mock_snap.call_args[1]["version"] == "HEAD"
+        assert mock_snap.call_args[1]["documented_names"] == ["A"]
 
 
 class TestSkillInstallAutoDetect:
