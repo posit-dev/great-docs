@@ -26,6 +26,9 @@ from pathlib import Path
 import pytest
 
 from great_docs import GreatDocs
+from great_docs._cliref import click as cli_click
+from great_docs._cliref import render as cli_render
+from great_docs._cliref.model import CliCommand
 from great_docs._content import code_includes
 from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import discover_exports, parse_dunder_all
@@ -90,6 +93,35 @@ def _make_package(pkg_name: str, tmp_path: Path) -> tuple[Path, dict]:
             sys.path.insert(0, str(sub))
 
     return pkg_dir, spec
+
+
+def _discover_cli(docs: GreatDocs, package_name: str) -> CliCommand | None:
+    """
+    Discover a synthetic package's Click CLI as the build does
+
+    Parameters
+    ----------
+    docs
+        The installed project.
+    package_name
+        The detected package name.
+
+    Returns
+    -------
+    :
+        The command tree, or `None` when CLI documentation is disabled in the project metadata
+        or no command is found.
+    """
+    metadata = docs._get_package_metadata()
+    if not metadata.get("cli_enabled", False):
+        return None
+    return cli_click.discover(
+        docs._normalize_package_name(package_name),
+        docs.layout.package_root,
+        cli_module=metadata.get("cli_module"),
+        cli_name=metadata.get("cli_name"),
+        report=print,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -616,10 +648,10 @@ def test_L3_cli_sidebar_flat_paths(pkg_name: str, tmp_path: Path):
     detected_name = docs._detect_package_name()
     assert detected_name is not None
 
-    cli_info = docs._discover_click_cli(detected_name)
+    cli_info = _discover_cli(docs, detected_name)
     assert cli_info is not None
 
-    sidebar_items = docs._generate_cli_reference_pages(cli_info)
+    sidebar_items = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
     assert len(sidebar_items) >= 1, "No sidebar items generated"
 
     # First item should be the labeled index link
@@ -649,10 +681,10 @@ def test_L3_cli_sidebar_nested_structure(pkg_name: str, tmp_path: Path):
     detected_name = docs._detect_package_name()
     assert detected_name is not None
 
-    cli_info = docs._discover_click_cli(detected_name)
+    cli_info = _discover_cli(docs, detected_name)
     assert cli_info is not None
 
-    sidebar_items = docs._generate_cli_reference_pages(cli_info)
+    sidebar_items = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
     assert len(sidebar_items) >= 2, "Too few sidebar items for a grouped CLI"
 
     # First item should be the labeled index link
@@ -697,10 +729,10 @@ def test_L3_cli_sidebar_no_wrong_level_paths(pkg_name: str, tmp_path: Path):
     detected_name = docs._detect_package_name()
     assert detected_name is not None
 
-    cli_info = docs._discover_click_cli(detected_name)
+    cli_info = _discover_cli(docs, detected_name)
     assert cli_info is not None
 
-    sidebar_items = docs._generate_cli_reference_pages(cli_info)
+    sidebar_items = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
 
     # Collect all string paths (including those inside section dicts)
     def _collect_paths(items: list) -> list[str]:
@@ -715,8 +747,7 @@ def test_L3_cli_sidebar_no_wrong_level_paths(pkg_name: str, tmp_path: Path):
     all_paths = _collect_paths(sidebar_items)
 
     # Every path must point to an actual file on disk.
-    # _generate_cli_reference_pages writes files under docs.build_dir
-    # (i.e. <pkg_dir>/great-docs/).
+    # Sidebar paths are relative to the build directory, where the pages are written.
     docs_dir = docs.build_dir
     for path in all_paths:
         full = docs_dir / path
@@ -765,10 +796,10 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
     detected_name = docs._detect_package_name()
     assert detected_name is not None
 
-    cli_info = docs._discover_click_cli(detected_name)
+    cli_info = _discover_cli(docs, detected_name)
     assert cli_info is not None
 
-    cli_files = docs._generate_cli_reference_pages(cli_info)
+    cli_files = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
     assert cli_files, "No CLI files generated"
 
     docs._update_sidebar_with_cli(cli_files)
@@ -818,9 +849,9 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     # Generate CLI docs
     detected_name = docs._detect_package_name()
     assert detected_name is not None
-    cli_info = docs._discover_click_cli(detected_name)
+    cli_info = _discover_cli(docs, detected_name)
     assert cli_info is not None
-    cli_files = docs._generate_cli_reference_pages(cli_info)
+    cli_files = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
     docs._update_sidebar_with_cli(cli_files)
 
     # Process user guide
@@ -886,7 +917,7 @@ def test_L2_cli_discovery(pkg_name: str, tmp_path: Path):
     detected_name = docs._detect_package_name()
     assert detected_name is not None
 
-    cli_info = docs._discover_click_cli(detected_name)
+    cli_info = _discover_cli(docs, detected_name)
     assert cli_info is not None, (
         f"CLI discovery returned None for {detected_name!r}; expected a Click CLI to be found"
     )
@@ -909,7 +940,7 @@ def test_L2_cli_nested_groups(pkg_name: str, tmp_path: Path):
     detected_name = docs._detect_package_name()
     assert detected_name is not None
 
-    cli_info = docs._discover_click_cli(detected_name)
+    cli_info = _discover_cli(docs, detected_name)
     assert cli_info is not None, "CLI discovery returned None for nested groups"
 
     # CLI info should have subcommands

@@ -11,15 +11,13 @@ from great_docs._api_diff import (
     CliOptionInfo,
     ParameterInfo,
     SymbolInfo,
-    _import_cli_from_source,
     compute_version_badges,
     diff_snapshots,
     inject_badges_into_qmd,
     load_snapshots_for_annotations,
     render_badge_html,
-    snapshot_cli_from_click,
 )
-
+from great_docs._cliref.click import extract_snapshot, snapshot_from_source
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -671,11 +669,11 @@ class TestCliDiffing:
 
 
 # ---------------------------------------------------------------------------
-# snapshot_cli_from_click
+# CLI snapshot extraction
 # ---------------------------------------------------------------------------
 
 
-class TestSnapshotCliFromClick:
+class TestExtractSnapshot:
     def test_simple_command(self):
         import click
 
@@ -686,7 +684,7 @@ class TestSnapshotCliFromClick:
         def hello(name, verbose, path):
             """Say hello."""
 
-        result = snapshot_cli_from_click(hello)
+        result = extract_snapshot(hello)
 
         assert result is not None
         assert result.name == "hello"
@@ -718,7 +716,7 @@ class TestSnapshotCliFromClick:
         def serve():
             """Serve."""
 
-        result = snapshot_cli_from_click(cli)
+        result = extract_snapshot(cli)
 
         assert result is not None
         assert result.is_group
@@ -729,17 +727,17 @@ class TestSnapshotCliFromClick:
         assert names == {"build", "serve"}
 
     def test_non_click_returns_none(self):
-        result = snapshot_cli_from_click("not a click object")
+        result = extract_snapshot("not a click object")
 
         assert result is None
 
 
 # ---------------------------------------------------------------------------
-# _import_cli_from_source
+# CLI source imports
 # ---------------------------------------------------------------------------
 
 
-class TestImportCliFromSource:
+class TestSnapshotFromSource:
     def test_import_from_extracted_source(self, tmp_path: Path):
         """Simulate an extracted package with a Click CLI module."""
         pkg_dir = tmp_path / "mypkg"
@@ -758,7 +756,7 @@ class TestImportCliFromSource:
             '    """Build it."""\n'
         )
 
-        result = _import_cli_from_source(tmp_path, "mypkg.cli")
+        result = snapshot_from_source(tmp_path, "mypkg.cli")
 
         assert result is not None
         assert result.name == "cli"
@@ -767,7 +765,7 @@ class TestImportCliFromSource:
         assert result.subcommands[0].name == "build"
 
     def test_import_missing_module(self, tmp_path: Path):
-        result = _import_cli_from_source(tmp_path, "nonexistent.cli")
+        result = snapshot_from_source(tmp_path, "nonexistent.cli")
 
         assert result is None
 
@@ -777,7 +775,7 @@ class TestImportCliFromSource:
         (pkg_dir / "__init__.py").write_text("")
         (pkg_dir / "cli.py").write_text("x = 42\n")
 
-        result = _import_cli_from_source(tmp_path, "noclickcli.cli")
+        result = snapshot_from_source(tmp_path, "noclickcli.cli")
 
         assert result is None
 
@@ -786,7 +784,7 @@ class TestImportCliFromSource:
         import sys
 
         original_path = list(sys.path)
-        _import_cli_from_source(tmp_path, "nonexistent.cli")
+        snapshot_from_source(tmp_path, "nonexistent.cli")
 
         assert str(tmp_path) not in sys.path
         assert len(sys.path) == len(original_path)

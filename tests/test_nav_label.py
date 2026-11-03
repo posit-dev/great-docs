@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from great_docs._cliref import render as cli_render
 from great_docs._mcpref.reference import (
     _generate_mcp_index_page,
     _generate_prompt_page,
@@ -82,11 +83,13 @@ def test_cli_pages_turn_breadcrumbs_off():
     """Verify that CLI index and command pages disable breadcrumbs"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        index = docs._generate_cli_index_page(
+        index = cli_render.index_page(
+            docs._config,
             {"name": "tool", "entry_point_name": "tool", "is_group": True, "commands": []},
             "tool",
         )
-        command = docs._generate_cli_command_page(
+        command = cli_render.command_page(
+            docs._config,
             {
                 "name": "build",
                 "full_path": "tool build",

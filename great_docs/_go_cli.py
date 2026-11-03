@@ -184,10 +184,11 @@ def build_go_binary(
 
 
 def introspect_cobra_cli(go_project: GoCliProject) -> dict | None:
-    """Build and run a Cobra CLI to extract its command structure.
+    """
+    Build and run a Cobra CLI to extract its command structure
 
-    The returned dict mirrors the shape that `_discover_click_cli` produces in `core.py`, making it
-    straightforward to reuse the existing page-generation helpers.
+    The command tree uses the shared CLI page model, so the same renderer can write pages
+    for Click, Go and Rust commands.
 
     Parameters
     ----------
@@ -196,7 +197,7 @@ def introspect_cobra_cli(go_project: GoCliProject) -> dict | None:
 
     Returns
     -------
-    dict | None
+    :
         CLI structure, or `None` if the binary could not be built or run.
     """
     binary_path = build_go_binary(go_project)

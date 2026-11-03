@@ -30,6 +30,9 @@ from ._build.steps import (
 )
 from ._checks import links, proofread
 from ._checks.proofread import CheckedFile
+from ._cliref import click as cli_click
+from ._cliref import render as cli_render
+from ._cliref.model import CliCommand
 from ._content import publish, sections
 from ._content.naming import (
     published_path,
@@ -49,7 +52,6 @@ from ._reference.discovery import Categories
 from ._remote import HttpRemote, Remote
 from ._subprocess import TEXT_MODE_KWARGS
 from ._term_player import prerender as term_prerender
-from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
 from ._utils import (
     GITIGNORE_CONTENT,
     record_site_ownership,
@@ -88,8 +90,6 @@ from .config import Config, create_default_config
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-
-    import click
 
     from ._apiref.api_reference import APIReference
     from ._build.log import BuildLog
@@ -1433,1041 +1433,6 @@ class GreatDocs:
     # CLI Documentation Methods
     # =========================================================================
 
-    def _discover_click_cli(
-        self, package_name: str, display_name: str | None = None
-    ) -> dict | None:
-        """
-        Discover Click CLI commands and groups from a package.
-
-        Attempts to find and import the Click CLI from the package, then extracts
-        command structure, help text, options, and arguments.
-
-        Parameters
-        ----------
-        package_name
-            The importable module name to search for the CLI.
-        display_name
-            The name shown for the CLI entry point when `[project.scripts]` is
-            absent (typically the PyPI project name). Falls back to
-            `package_name` when not provided.
-
-        Returns
-        -------
-        dict | None
-            Dictionary containing CLI structure, or None if no Click CLI found.
-            Structure: {
-                "name": "cli-name",
-                "help": "CLI help text",
-                "commands": [...],  # List of command dicts
-                "options": [...],   # Global options
-            }
-        """
-        metadata = self._get_package_metadata()
-
-        # Check if CLI documentation is enabled
-        if not metadata.get("cli_enabled", False):
-            return None
-
-        try:
-            import click  # noqa: F401  (availability guard; converters handle the rest)
-        except ImportError:  # pragma: no cover
-            print("Click not installed, skipping CLI documentation")  # pragma: no cover
-            return None  # pragma: no cover
-
-        # Normalize to importable module name (hyphens → underscores)
-        importable_name = self._normalize_package_name(package_name)
-
-        # Determine the CLI module to import
-        cli_module_path = metadata.get("cli_module")
-        if not cli_module_path:
-            # Try common CLI module locations
-            common_cli_modules = [
-                f"{importable_name}.cli",
-                f"{importable_name}.__main__",
-                f"{importable_name}.main",
-                f"{importable_name}.console",
-                f"{importable_name}.commands",
-            ]
-            cli_module_path = None
-            for module_path in common_cli_modules:
-                try:
-                    import importlib
-
-                    module = importlib.import_module(module_path)
-                    # Look for a Click command/group or Typer app in the module
-                    for attr_name in dir(module):
-                        attr = getattr(module, attr_name)
-                        if is_cli_command(attr):
-                            cli_module_path = module_path
-                            break
-                    if cli_module_path:
-                        break
-                except ImportError:
-                    continue
-
-        if not cli_module_path:
-            print(f"No Click CLI found in {package_name}")
-            return None
-
-        try:
-            import importlib
-
-            module = importlib.import_module(cli_module_path)
-        except ImportError as e:
-            print(f"Could not import CLI module {cli_module_path}: {e}")
-            return None
-
-        # Find the main Click command/group
-        cli_obj = None
-        cli_name = metadata.get("cli_name")
-
-        # First, look for explicitly named CLI
-        if cli_name:
-            cli_obj = getattr(module, cli_name, None)
-
-        # Otherwise, search for Click commands/groups (or Typer apps)
-        if not cli_obj:
-            for attr_name in ["cli", "main", "app", "command", importable_name]:
-                attr = getattr(module, attr_name, None)
-                if is_cli_command(attr):
-                    cli_obj = attr
-                    cli_name = attr_name
-                    break
-
-        # If still not found, look for any Click command/group or Typer app
-        if not cli_obj:
-            for attr_name in dir(module):
-                if attr_name.startswith("_"):
-                    continue
-                attr = getattr(module, attr_name)
-                if is_cli_command(attr):
-                    cli_obj = attr
-                    cli_name = attr_name
-                    break
-
-        # Normalize to a Click command so the extraction below can introspect
-        # params/subcommands uniformly (Typer apps are converted here).
-        cli_obj = to_click_command(cli_obj)
-
-        if not cli_obj:
-            print(f"No Click command/group found in {cli_module_path}")
-            return None
-
-        print(f"Found Click CLI: {cli_name} in {cli_module_path}")
-
-        # Get the entry point name from pyproject.toml. When [project.scripts]
-        # is absent, fall back to the display name (the project name) rather
-        # than the importable module name, which may differ.
-        entry_point_name = self._get_cli_entry_point_name(package_name)
-        resolved_name = entry_point_name or (display_name or package_name).replace("_", "-")
-
-        # Extract CLI structure
-        cli_info = self._extract_click_command(cli_obj, resolved_name)
-        cli_info["entry_point_name"] = resolved_name
-        return cli_info
-
-    def _find_click_cli_obj(self, package_name: str) -> object | None:
-        """Return the raw Click command object for *package_name*, or *None*."""
-        metadata = self._get_package_metadata()
-        if not metadata.get("cli_enabled", False):
-            return None
-        try:
-            import click  # noqa: F401  (availability guard; converters handle the rest)
-        except ImportError:
-            return None
-
-        importable_name = self._normalize_package_name(package_name)
-        cli_module_path = metadata.get("cli_module")
-        if not cli_module_path:
-            for mod in (
-                f"{importable_name}.cli",
-                f"{importable_name}.__main__",
-                f"{importable_name}.main",
-            ):
-                try:
-                    import importlib
-
-                    m = importlib.import_module(mod)
-                    if any(is_cli_command(getattr(m, a, None)) for a in dir(m)):
-                        cli_module_path = mod
-                        break
-                except ImportError:
-                    continue
-        if not cli_module_path:
-            return None
-        try:
-            import importlib
-
-            module = importlib.import_module(cli_module_path)
-        except ImportError:
-            return None
-
-        cli_name = metadata.get("cli_name")
-        if cli_name:
-            obj = to_click_command(getattr(module, cli_name, None))
-            if obj is not None:
-                return obj
-
-        for attr_name in ["cli", "main", "app", "command", importable_name]:
-            obj = to_click_command(getattr(module, attr_name, None))
-            if obj is not None:
-                return obj
-
-        for attr_name in dir(module):
-            if attr_name.startswith("_"):
-                continue
-            obj = to_click_command(getattr(module, attr_name))
-            if obj is not None:
-                return obj
-        return None
-
-    def _get_cli_entry_point_name(self, package_name: str) -> str | None:
-        """
-        Get the CLI entry point name from `pyproject.toml`.
-
-        Parameters
-        ----------
-        package_name
-            The name of the package.
-
-        Returns
-        -------
-        str | None
-            The entry point name (e.g., `"great-docs"` from `"[project.scripts]"`), or `None` if not
-            found.
-        """
-        package_root = self.layout.package_root
-        pyproject_path = package_root / "pyproject.toml"
-
-        if not pyproject_path.exists():
-            return None
-
-        import tomllib
-
-        try:
-            with open(pyproject_path, "rb") as f:
-                data = tomllib.load(f)
-
-            # Look for [project.scripts]
-            scripts = data.get("project", {}).get("scripts", {})
-            if scripts:
-                # Return the first entry point name
-                return list(scripts.keys())[0]
-
-            # Also check [project.gui-scripts] for GUI apps
-            gui_scripts = data.get("project", {}).get("gui-scripts", {})
-            if gui_scripts:
-                return list(gui_scripts.keys())[0]
-
-        except Exception:  # pragma: no cover
-            pass  # pragma: no cover
-
-        return None
-
-    def _extract_click_command(self, cmd, name: str, parent_path: str = "") -> dict:
-        """
-        Extract information from a Click command or group.
-
-        Parameters
-        ----------
-        cmd
-            The Click Command or Group object.
-        name
-            The command name.
-        parent_path
-            The parent command path for nested commands.
-
-        Returns
-        -------
-        dict
-            Dictionary containing command information including options, arguments, and parsed
-            examples.
-        """
-        full_path = f"{parent_path} {name}".strip() if parent_path else name
-
-        # Get the actual --help output from Click
-        help_text = self._get_click_help_text(cmd, full_path)
-
-        # Extract options and arguments from the params. Parameters are classified
-        # by Click's `param_type_name` rather than `isinstance` so this works
-        # for Typer's vendored-Click parameters too (see `_typer_cli`).
-        options = []
-        arguments = []
-        for param in cmd.params:
-            kind = param_kind(param)
-            if kind == "option":
-                opt_info = self._extract_click_option(param)
-                if opt_info:
-                    options.append(opt_info)
-            elif kind == "argument":
-                arg_info = self._extract_click_argument(param)
-                if arg_info:
-                    arguments.append(arg_info)
-
-        # Parse description and examples from the help text
-        description, examples = self._parse_click_help_parts(cmd.help or "")
-
-        # Extract the short help (Click may auto-derive it, but sometimes it's
-        # empty for subcommands).  Fall back to the first line/sentence of help.
-        short_help = getattr(cmd, "short_help", "") or ""
-        if not short_help and cmd.help:
-            short_help = cmd.get_short_help_str(limit=150)
-
-        info = {
-            "name": name,
-            "full_path": full_path,
-            "help": cmd.help or "",
-            "short_help": short_help,
-            "help_text": help_text,  # The actual --help output
-            "deprecated": getattr(cmd, "deprecated", False),
-            "hidden": getattr(cmd, "hidden", False),
-            "commands": [],
-            "is_group": is_cli_group(cmd),
-            "options": options,
-            "arguments": arguments,
-            "description": description,
-            "examples": examples,
-        }
-
-        # Extract subcommands if this is a group
-        if is_cli_group(cmd):
-            for subcmd_name, subcmd in cmd.commands.items():
-                if not getattr(subcmd, "hidden", False):
-                    subcmd_info = self._extract_click_command(subcmd, subcmd_name, full_path)
-                    info["commands"].append(subcmd_info)
-
-        return info
-
-    @staticmethod
-    def _extract_click_option(param) -> dict | None:
-        """Extract structured info from a Click Option parameter."""
-        # Skip the --help option itself
-        if param.name == "help":
-            return None
-
-        decls = param.opts + param.secondary_opts
-        names = sorted(decls, key=len)  # short first, long second
-
-        type_name = param.type.name if hasattr(param.type, "name") else str(param.type)
-
-        # Normalise the default: Click uses sentinel objects for unset values
-        default = param.default
-        if default is None or (
-            type(default).__name__ in ("Sentinel", "_DEFAULT_SENTINEL")
-            or repr(default).startswith("Sentinel")
-        ):
-            default = None
-
-        # Flags have no meaningful value type. Plain Click reports the type name
-        # "BOOL" for these; Typer's vendored Click reports "boolean" instead, so
-        # suppress the type for any flag rather than relying on the name.
-        opt_type = None if param.is_flag or type_name.upper() == "BOOL" else type_name.upper()
-
-        return {
-            "names": names,
-            "name_display": ", ".join(names),
-            "help": param.help or "",
-            "type": opt_type,
-            "default": default,
-            "required": param.required,
-            "is_flag": param.is_flag,
-            "multiple": param.multiple,
-            "envvar": param.envvar,
-            "show_default": getattr(param, "show_default", False),
-            "is_eager": param.is_eager,
-            "hidden": getattr(param, "hidden", False),
-        }
-
-    @staticmethod
-    def _extract_click_argument(param) -> dict | None:
-        """Extract structured info from a Click Argument parameter."""
-        type_name = param.type.name if hasattr(param.type, "name") else str(param.type)
-
-        return {
-            "name": param.name,
-            "name_display": param.human_readable_name,
-            "type": type_name.upper() if type_name != "TEXT" else None,
-            "required": param.required,
-            "nargs": param.nargs,
-        }
-
-    @staticmethod
-    def _parse_click_help_parts(help_text: str) -> tuple[str, list[str]]:
-        """
-        Parse a Click command's help string into description and examples.
-
-        Parameters
-        ----------
-        help_text
-            The raw help string from `cmd.help`.
-
-        Returns
-        -------
-        tuple[str, list[str]]
-            A (description, examples) pair. `description` is the prose before the examples block;
-            `examples` is a list of example lines (without the `Examples:` header).
-        """
-        if not help_text:
-            return "", []
-
-        lines = help_text.split("\n")
-        desc_lines: list[str] = []
-        example_lines: list[str] = []
-        in_examples = False
-
-        for line in lines:
-            stripped = line.strip()
-
-            # Click uses \x08 (literal backspace) as the "don't rewrap" marker;
-            # skip lines that are just that marker.
-            if stripped in ("\x08", "\\b"):
-                continue
-
-            # Detect the examples block header
-            if stripped.lower() == "examples:" and not in_examples:
-                in_examples = True
-                continue
-
-            if in_examples:
-                # Strip common Click indentation (2 or 4 spaces)
-                dedented = line
-                if line.startswith("    "):
-                    dedented = line[4:]
-                elif line.startswith("  "):
-                    dedented = line[2:]
-                example_lines.append(dedented)
-            else:
-                desc_lines.append(line)
-
-        # Clean up: strip leading/trailing blank lines
-        description = "\n".join(desc_lines).strip()
-        # Remove any remaining \x08 bytes from the description
-        description = description.replace("\x08", "")
-        # Remove literal \b if present
-        description = description.replace("\\b", "")
-        # Collapse runs of blank lines to a single blank line
-        description = re.sub(r"\n{3,}", "\n\n", description)
-
-        # Clean trailing blanks from examples
-        while example_lines and not example_lines[-1].strip():
-            example_lines.pop()
-
-        return description, example_lines
-
-    @staticmethod
-    def _backtick_cli_prose(text: str, option_names: set[str]) -> str:
-        """Wrap CLI option names and single-quoted tokens in backticks.
-
-        Handles two cases:
-
-        1. Known option names (e.g. `--watch`) -> `--watch`
-        2. Single-quoted text (e.g. `'great-docs/'`) -> `great-docs/`
-
-        Only wraps tokens not already inside backticks.  Avoids matching
-        apostrophes in contractions/possessives (e.g. "package's", "hasn't").
-        """
-        if not text:
-            return text
-
-        # 1. Wrap single-quoted text in backticks.
-        # Require the opening quote to be preceded by whitespace or start-of-string
-        # and the content to be at least 2 chars (avoids possessives like package's).
-        text = re.sub(r"(?<=\s)'([^']{2,})'(?=[\s,.\)!?;:]|$)", r"`\1`", text)
-        text = re.sub(r"^'([^']{2,})'(?=[\s,.\)!?;:]|$)", r"`\1`", text)
-
-        # 2. Wrap known option names
-        if option_names:
-            sorted_names = sorted(option_names, key=len, reverse=True)
-            pattern = "|".join(re.escape(n) for n in sorted_names)
-            text = re.sub(
-                rf"(?<!`)({pattern})(?!`)",
-                r"`\1`",
-                text,
-            )
-
-        return text
-
-    def _get_click_help_text(self, cmd: "click.Command", full_path: str) -> str:
-        """
-        Get the formatted `--help` output from a Click command.
-
-        Parameters
-        ----------
-        cmd
-            The Click Command object.
-        full_path
-            The full command path (e.g., `"great-docs build"`).
-
-        Returns
-        -------
-        str
-            The formatted help text as it would appear from `--help`.
-        """
-        # Build the context from the command's own `context_class` so the help
-        # is rendered by the same Click the command belongs to. This matters for
-        # Typer, which vendors its own Click (see `_typer_cli`).
-        ctx = cmd.context_class(cmd, info_name=full_path)
-        return cmd.get_help(ctx)
-
-    def _generate_cli_reference_pages(self, cli_info: dict) -> list[str | dict]:
-        """
-        Generate Quarto reference pages for CLI commands.
-
-        Parameters
-        ----------
-        cli_info
-            Dictionary containing CLI structure from `_discover_click_cli`.
-
-        Returns
-        -------
-        list[str | dict]
-            Sidebar items: plain path strings for leaf commands, or
-            `{"section": ..., "contents": [...]}` dicts for groups.
-        """
-        if not cli_info:
-            return []
-
-        # Explicit `cli.sections` are authoritative, as `reference.sections` are for the API
-        # reference: top-level commands they don't name get no page, sidebar entry or index entry.
-        if self._config.cli_sections:
-            listed = {
-                name
-                for section in self._config.cli_sections
-                for name in section.get("contents", [])
-            }
-            cli_info = {
-                **cli_info,
-                "commands": [c for c in cli_info.get("commands", []) if c["name"] in listed],
-            }
-
-        cli_ref_dir = self.build_dir / "reference" / "cli"
-        cli_ref_dir.mkdir(parents=True, exist_ok=True)
-
-        generated_files: list[str | dict] = []
-        generated_paths: list[str] = []
-
-        entry_name = cli_info.get("entry_point_name") or cli_info["name"]
-        entry_safe = entry_name.replace("-", "_")
-
-        # Generate the CLI index (landing) page — a listing of all commands, modelled on the
-        # API reference index page rather than the root command's own --help dump.
-        index_page = self._generate_cli_index_page(cli_info, entry_safe)
-        index_path = cli_ref_dir / "index.qmd"
-        with open(index_path, "w") as f:
-            f.write(index_page)
-        # Label the index entry explicitly (mirrors the "API Index" link) so it reads distinctly
-        # from the enclosing "CLI Reference" sidebar section title.
-        from ._translations import get_translation
-
-        cli_index_label = get_translation("cli_index", self._config.lang)
-        generated_files.append({"text": cli_index_label, "href": "reference/cli/index.qmd"})
-        generated_paths.append(str(index_path.relative_to(self.build_dir)))
-
-        # Generate the root command page (global options, usage, full --help) on its own page so
-        # the index can stay a pure listing.
-        root_page = self._generate_cli_command_page(cli_info, is_main=True)
-        root_path = cli_ref_dir / f"{entry_safe}.qmd"
-        with open(root_path, "w") as f:
-            f.write(root_page)
-        generated_files.append(f"reference/cli/{entry_safe}.qmd")
-        generated_paths.append(str(root_path.relative_to(self.build_dir)))
-
-        # Generate pages for subcommands
-        subcommand_items = self._generate_subcommand_pages(
-            cli_info, cli_ref_dir, _paths=generated_paths
-        )
-
-        # When explicit sections are configured, order the flat top-level command entries to
-        # match the index sections (group entries keep their relative order at the end).
-        if self._config.cli_sections:  # pragma: no cover
-            subcommand_items = self._order_cli_sidebar_items(  # pragma: no cover
-                subcommand_items, self._config.cli_sections
-            )
-        generated_files.extend(subcommand_items)
-
-        # Print grouped summary
-        if generated_paths:
-            print("Generating CLI reference .qmd files:")
-            for p in generated_paths:
-                print(f"  - {p}")
-
-        return generated_files
-
-    def _generate_cli_index_page(self, cli_info: dict, entry_safe: str) -> str:
-        """
-        Generate the CLI reference index (landing) page.
-
-        Models the API reference index page: an optional intro paragraph followed by one or more
-        `## Section {.doc-group}` blocks, each a definition list of command links with their
-        short help. Sections come from `cli.sections` in great-docs.yml when configured;
-        otherwise commands are auto-grouped (leaf commands first, in code order, then one section
-        per command group).
-
-        Parameters
-        ----------
-        cli_info
-            The root command info dict (from `_extract_click_command`).
-        entry_safe
-            The filesystem-safe name of the entry point (used to link the root command page).
-
-        Returns
-        -------
-        str
-            Quarto markdown content for `reference/cli/index.qmd`.
-        """
-        from ._translations import get_translation
-
-        lang = self._config.lang
-        title = self._config.cli_title or get_translation("cli_reference", lang)
-
-        lines: list[str] = []
-
-        # --- Front matter (mirrors the API reference index) ---
-        lines.append("---")
-        lines.append(f'title: "{title}"')
-        lines.append("body-classes: doc-reference doc-cli-reference")
-        lines.append("sidebar: cli-reference")
-        lines.append("page-navigation: false")
-        lines.append("html-table-processing: none")
-        lines.append("shift-heading-level-by: 0")
-        # Disabling breadcrumbs lets Quarto use the page title in the narrow-screen
-        # navigation bar; CSS adds the prefix for the reference type.
-        lines.append("bread-crumbs: false")
-        lines.append("---")
-        lines.append("")
-
-        # No body `# {title}` heading: the frontmatter title provides the page title block (as on
-        # the API reference index), which keeps the `## {.doc-group}` sections at level 2.
-
-        # --- Intro paragraph ---
-        if self._config.cli_desc:
-            lines.append("::: {.doc-description}")
-            lines.append(self._config.cli_desc.strip())
-            lines.append(":::")
-            lines.append("")
-
-        entry_name = cli_info.get("entry_point_name") or cli_info["name"]
-        top_commands = [c for c in cli_info.get("commands", []) if not c.get("hidden")]
-        by_name = {c["name"]: c for c in top_commands}
-
-        def emit_entry(cmd: dict, href: str) -> None:
-            label = "doc-label-cli-group" if cmd.get("is_group") else "doc-label-cli"
-            # Show the full invocation (e.g. `great-docs init`), as on the command page titles
-            name = cmd.get("full_path") or cmd["name"]
-            short = (cmd.get("short_help") or "").strip()
-            lines.append(f"[{name}]({href}){{.doc-function .doc-label .{label}}}")
-            lines.append(f":   {short}" if short else ":   &nbsp;")
-            lines.append("")
-
-        def emit_section(section_title: str, section_desc: str | None = None) -> None:
-            lines.append(f"## {section_title} {{.doc-group}}")
-            lines.append("")
-            if section_desc:
-                lines.append("::: {.doc-description}")
-                lines.append(section_desc.strip())
-                lines.append(":::")
-                lines.append("")
-
-        # --- Root command link (global options / usage live one click away) ---
-        root_short = (cli_info.get("short_help") or "").strip()
-        lines.append(
-            f"[{entry_name}]({entry_safe}.qmd){{.doc-function .doc-label .doc-label-cli-group}}"
-        )
-        lines.append(f":   {root_short}" if root_short else ":   &nbsp;")
-        lines.append("")
-
-        cli_sections = self._config.cli_sections
-        if cli_sections:
-            # Author-controlled sections: list exactly the named top-level commands, in order.
-            for section in cli_sections:
-                emit_section(section.get("title", ""), section.get("desc"))
-                for cmd_name in section.get("contents", []):
-                    cmd = by_name.get(cmd_name)
-                    if not cmd:  # pragma: no cover
-                        continue  # pragma: no cover
-                    emit_entry(cmd, f"{cmd_name.replace('-', '_')}.qmd")
-        else:
-            # Auto layout: leaf commands first (code order), then one section per group.
-            leaf = [c for c in top_commands if not c.get("is_group")]
-            groups = [c for c in top_commands if c.get("is_group")]
-
-            if leaf:
-                emit_section(get_translation("cli_commands", lang))
-                for cmd in leaf:
-                    emit_entry(cmd, f"{cmd['name'].replace('-', '_')}.qmd")
-
-            for group in groups:
-                gsafe = group["name"].replace("-", "_")
-                emit_section(group["name"], (group.get("short_help") or "").strip() or None)
-                # The group's own overview page, then each subcommand.
-                emit_entry(group, f"{gsafe}.qmd")
-                for sub in group.get("commands", []):
-                    if sub.get("hidden"):  # pragma: no cover
-                        continue  # pragma: no cover
-                    ssafe = sub["name"].replace("-", "_")
-                    emit_entry(sub, f"{gsafe}/{ssafe}.qmd")
-
-        return "\n".join(lines)
-
-    def _generate_subcommand_pages(
-        self,
-        cmd_info: dict,
-        output_dir: Path,
-        rel_prefix: str = "reference/cli",
-        _paths: list[str] | None = None,
-    ) -> list[str | dict]:
-        """
-        Recursively generate pages for subcommands.
-
-        Parameters
-        ----------
-        cmd_info
-            Command information dictionary.
-        output_dir
-            Directory to write pages to.
-        rel_prefix
-            The relative path prefix for sidebar entries (e.g. `reference/cli` or
-            `reference/cli/task` for nested groups).
-
-        Returns
-        -------
-        list[str | dict]
-            Sidebar items: plain path strings for leaf commands, or
-            `{"section": ..., "contents": [...]}` dicts for groups.
-        """
-        sidebar_items: list[str | dict] = []
-
-        for subcmd in cmd_info.get("commands", []):
-            # Generate page for this subcommand
-            page_content = self._generate_cli_command_page(subcmd, is_main=False)
-            safe_name = subcmd["name"].replace("-", "_")
-            page_path = output_dir / f"{safe_name}.qmd"
-
-            with open(page_path, "w") as f:
-                f.write(page_content)
-
-            rel_path = f"{rel_prefix}/{safe_name}.qmd"
-            if _paths is not None:
-                _paths.append(str(page_path.relative_to(self.build_dir)))
-
-            # Recursively generate for nested subcommands
-            if subcmd.get("commands"):
-                subcmd_dir = output_dir / safe_name
-                subcmd_dir.mkdir(exist_ok=True)
-                nested = self._generate_subcommand_pages(
-                    subcmd, subcmd_dir, f"{rel_prefix}/{safe_name}", _paths=_paths
-                )
-                sidebar_items.append({"section": subcmd["name"], "contents": [rel_path] + nested})
-            else:
-                sidebar_items.append(rel_path)
-
-        return sidebar_items
-
-    def _generate_cli_command_page(self, cmd_info: dict, is_main: bool = False) -> str:
-        """
-        Generate a structured Quarto reference page for a CLI command.
-
-        Produces output modelled on the API reference pages: a title with semantic class labels, a
-        short description, a usage/signature block, structured Options / Arguments / Subcommands
-        sections, an examples block, and a collapsible `<details>` containing the raw `--help`
-        output.
-
-        Parameters
-        ----------
-        cmd_info
-            Command information dictionary (from `_extract_click_command`).
-        is_main
-            Whether this is the main CLI entry point.
-
-        Returns
-        -------
-        str
-            Quarto markdown content.
-        """
-        lines: list[str] = []
-
-        title = cmd_info["full_path"] if not is_main else cmd_info["name"]
-        label_class = "doc-label-cli-group" if cmd_info.get("is_group") else "doc-label-cli"
-
-        # --- Front matter ---
-        lines.append("---")
-        lines.append(
-            f'title: "[{title}]{{.doc-object-name .doc-function .doc-label .{label_class}}}"'
-        )
-        lines.append("body-classes: doc-api-page doc-cli-api-page")
-        lines.append("sidebar: cli-reference")
-        lines.append("page-navigation: false")
-        lines.append("html-table-processing: none")
-        # Front matter provides the page's only `h1`; render body sections at
-        # their written levels.
-        lines.append("shift-heading-level-by: 0")
-        # Disabling breadcrumbs lets Quarto use the page title in the narrow-screen
-        # navigation bar; CSS adds the prefix for the reference type.
-        lines.append("bread-crumbs: false")
-        lines.append("---")
-        lines.append("")
-
-        # --- Description ---
-        description = cmd_info.get("description", "") or cmd_info.get("help", "")
-        # Collect option names for auto-backticking in prose
-        option_names = set()
-        for opt in cmd_info.get("options", []):
-            for n in opt.get("names", []):
-                option_names.add(n)
-        if description:
-            # Take first paragraph as the short subject
-            paragraphs = description.split("\n\n")
-            short_desc = paragraphs[0].replace("\n", " ").strip()
-            short_desc = self._backtick_cli_prose(short_desc, option_names)
-            lines.append("::: {.doc-subject}")
-            lines.append(short_desc)
-            lines.append(":::")
-            lines.append("")
-
-        # --- Usage / Signature ---
-        # Build the usage string from the command path + arguments
-        arguments = cmd_info.get("arguments", [])
-        options = cmd_info.get("options", [])
-        usage_parts = [title]
-        if options:
-            usage_parts.append("[OPTIONS]")
-        for arg in arguments:
-            arg_display = arg.get("name_display", arg.get("name", "")).upper()
-            if not arg.get("required", True):
-                arg_display = f"[{arg_display}]"
-            if arg.get("nargs", 1) == -1:
-                arg_display += "..."
-            usage_parts.append(arg_display)
-        if cmd_info.get("is_group") and cmd_info.get("commands"):
-            usage_parts.append("COMMAND [ARGS]...")
-
-        lines.append("::: {.doc-signature .doc-function}")
-        lines.append("```bash")
-        lines.append(" ".join(usage_parts))
-        lines.append("```")
-        lines.append(":::")
-        lines.append("")
-
-        # --- Extended description ---
-        if description:
-            paragraphs = description.split("\n\n")
-            extra = [p.strip() for p in paragraphs[1:] if p.strip()]
-            if extra:
-                lines.append("::: {.doc-text}")
-                for para in extra:
-                    para_lines = para.split("\n")
-                    # Handle bullet lists (Click uses • or - )
-                    if any(
-                        line.strip().startswith(("•", "- ", "* "))
-                        for line in para_lines
-                        if line.strip()
-                    ):
-                        for bline in para_lines:
-                            stripped = bline.strip()
-                            if not stripped:  # pragma: no cover
-                                continue  # pragma: no cover
-                            # Normalise • bullets to markdown -
-                            if stripped.startswith("•"):  # pragma: no cover
-                                stripped = stripped[1:].strip()  # pragma: no cover
-                            elif stripped.startswith(("- ", "* ")):  # pragma: no cover
-                                stripped = stripped[2:].strip()  # pragma: no cover
-                            if stripped:
-                                stripped = self._backtick_cli_prose(stripped, option_names)
-                                lines.append(f"- {stripped}")
-                    # Preserve blocks with indented content (e.g. "Quick start:")
-                    elif any(line.startswith("  ") for line in para_lines):
-                        for bline in para_lines:
-                            bline = self._backtick_cli_prose(bline, option_names)
-                            lines.append(bline)
-                    else:
-                        text = para.replace("\n", " ")
-                        text = self._backtick_cli_prose(text, option_names)
-                        lines.append(text)
-                    lines.append("")
-                lines.append(":::")
-                lines.append("")
-
-        # --- Collapsible --help output ---
-        help_text = cmd_info.get("help_text", "")
-        if help_text:
-            from ._translations import get_translation
-
-            help_summary = get_translation("cli_full_help", self._config.lang)
-            lines.append(f'::: {{.details summary="{help_summary}"}}')
-            lines.append("")
-            lines.append("::: {.cli-manpage}")
-            lines.append("")
-            lines.append("```")
-            lines.append(help_text.rstrip())
-            lines.append("```")
-            lines.append("")
-            lines.append(":::")
-            lines.append("")
-            lines.append(":::")
-            lines.append("")
-
-        # --- Arguments section ---
-        if arguments:
-            lines.append("## Arguments {.doc-parameters}")
-            lines.append("")
-            lines.append("::: {.doc-definition-items}")
-            for arg in arguments:
-                display = arg.get("name_display", arg.get("name", "")).upper()
-                type_str = arg.get("type")
-                if type_str:
-                    lines.append(
-                        f'<code><span class="doc-parameter-name">{display}</span>'
-                        f'<span class="doc-parameter-annotation-sep">:</span>'
-                        f' <span class="doc-parameter-annotation">{type_str}</span></code>'
-                    )
-                else:
-                    lines.append(f'<code><span class="doc-parameter-name">{display}</span></code>')
-                req = "Required." if arg.get("required", True) else "Optional."
-                lines.append(f":   {req}")
-                lines.append("")
-            lines.append(":::")
-            lines.append("")
-
-        # --- Options section ---
-        if options:
-            lines.append("## Options {.doc-parameters}")
-            lines.append("")
-            lines.append("::: {.doc-definition-items}")
-            for opt in options:
-                if opt.get("hidden"):
-                    continue
-                name_display = opt.get("name_display", "")
-                type_str = opt.get("type")
-
-                # Escape double-dashes as HTML entities to prevent Pandoc's smart
-                # extension from converting "--" to an en-dash inside inline HTML.
-                name_display_html = name_display.replace("--", "&#45;&#45;")
-
-                # Build the <code> element with HTML spans
-                code_parts = [f'<span class="doc-parameter-name">{name_display_html}</span>']
-                if type_str and not opt.get("is_flag"):
-                    code_parts.append(
-                        f'<span class="doc-parameter-annotation-sep">:</span>'
-                        f' <span class="doc-parameter-annotation">{type_str}</span>'
-                    )
-                if opt.get("default") is not None and not opt.get("is_flag"):
-                    default_val = opt["default"]
-                    code_parts.append(
-                        f' <span class="doc-parameter-default-sep op">=</span>'
-                        f' <span class="doc-parameter-default">{default_val}</span>'
-                    )
-
-                lines.append(f"<code>{''.join(code_parts)}</code>")
-
-                # Description line — suppress entirely when there is nothing to show
-                help_str = opt.get("help", "")
-                if opt.get("required"):
-                    help_str = f"**Required.** {help_str}" if help_str else "**Required.**"
-                if opt.get("envvar"):
-                    envvar = opt["envvar"]
-                    if isinstance(envvar, (list, tuple)):
-                        envvar = ", ".join(envvar)
-                    help_str += f" Environment variable: `{envvar}`."
-                help_str = self._backtick_cli_prose(help_str.strip(), option_names)
-
-                lines.append(f":   {help_str}" if help_str else ":   &nbsp;")
-                lines.append("")
-
-            lines.append(":::")
-            lines.append("")
-
-        # --- Subcommands section ---
-        commands = cmd_info.get("commands", [])
-        if commands:
-            lines.append("## Commands {.doc-parameters}")
-            lines.append("")
-            lines.append("::: {.doc-definition-items}")
-            for subcmd in commands:
-                subcmd_name = subcmd["name"]
-                safe_name = subcmd_name.replace("-", "_")
-                # Link to the subcommand page
-                short_help = subcmd.get("short_help", "") or ""
-                # For the main page, subcommands are at cli/<name>.qmd
-                # For group pages, subcommands are at <group>/<name>.qmd
-                if is_main:
-                    href = f"{safe_name}.qmd"
-                else:
-                    parent_safe = cmd_info["name"].replace("-", "_")
-                    href = f"{parent_safe}/{safe_name}.qmd"
-                lines.append(f"<code>[{subcmd_name}]{{.doc-parameter-name}}</code>")
-                link_text = f"[{short_help}]({href})" if short_help else f"[{subcmd_name}]({href})"
-                lines.append(f":   {link_text}")
-                lines.append("")
-            lines.append(":::")
-            lines.append("")
-
-        # --- Examples section ---
-        examples = cmd_info.get("examples", [])
-        if examples:
-            lines.append("## Examples {.doc-examples}")
-            lines.append("")
-            lines.append("```bash")
-            for ex in examples:
-                lines.append(ex)
-            lines.append("```")
-            lines.append("")
-
-        return "\n".join(lines)
-
-    @staticmethod
-    def _order_cli_sidebar_items(
-        items: list[str | dict], cli_sections: list[dict]
-    ) -> list[str | dict]:
-        """
-        Reorder flat top-level command entries to match the configured `cli.sections` order.
-
-        String entries (leaf commands) are sorted to follow the order in which their command
-        names appear across the configured sections; commands not mentioned keep their original
-        (code) order after the configured ones. Group `{"section": ...}` dicts retain their
-        relative order and are appended at the end.
-
-        Parameters
-        ----------
-        items
-            The sidebar items produced by `_generate_subcommand_pages`.
-        cli_sections
-            The `cli.sections` config list.
-
-        Returns
-        -------
-        list[str | dict]
-            The reordered sidebar items.
-        """
-        # Build the desired rank for each "reference/cli/<safe>.qmd" path.
-        rank: dict[str, int] = {}
-        for section in cli_sections:
-            for cmd_name in section.get("contents", []):
-                safe = cmd_name.replace("-", "_")
-                rank.setdefault(f"reference/cli/{safe}.qmd", len(rank))
-
-        strings = [i for i in items if isinstance(i, str)]
-        groups = [i for i in items if not isinstance(i, str)]
-
-        # Configured commands first (in section order); unmentioned ones keep their code order.
-        base = len(rank)
-        ordered = sorted(enumerate(strings), key=lambda iv: (rank.get(iv[1], base + iv[0]),))
-        return [path for _, path in ordered] + groups
-
-    @staticmethod
-    def _count_cli_sidebar_items(items: list) -> int:
-        """Count the total number of .qmd pages in a (possibly nested) sidebar list."""
-        count = 0
-        for item in items:
-            if isinstance(item, str):
-                count += 1
-            elif isinstance(item, dict):
-                if item.get("href"):
-                    # A labeled link entry (e.g. the index link) is a single page.
-                    count += 1
-                else:
-                    count += GreatDocs._count_cli_sidebar_items(item.get("contents", []))
-        return count
-
     def _update_sidebar_with_cli(self, cli_files: list[str | dict]) -> None:
         """
         Update the sidebar configuration to include CLI reference.
@@ -2561,9 +1526,7 @@ class GreatDocs:
             config["website"]["navbar"] = navbar
             quarto_yml.write(self.build_dir, config, self._config)
 
-        print(
-            f"Updated sidebar with {self._count_cli_sidebar_items(cli_files)} CLI reference page(s)"
-        )
+        print(f"Updated sidebar with {cli_render.count_pages(cli_files)} CLI reference page(s)")
 
     # =========================================================================
     # MCP Server Documentation Methods
@@ -2623,7 +1586,7 @@ class GreatDocs:
                 sidebar.append(mcp_section)
 
         # Count total tool pages
-        n_pages = self._count_cli_sidebar_items(mcp_files)
+        n_pages = cli_render.count_pages(mcp_files)
         print(f"Updated sidebar with {n_pages} MCP reference page(s)")
 
     def _remove_mcp_from_ref_sections(self) -> None:
@@ -6230,12 +5193,17 @@ class GreatDocs:
         # Include CLI snapshot when CLI documentation is enabled
         if self._config.cli_enabled:
             try:
-                from great_docs._api_diff import snapshot_cli_from_click
-
-                cli_obj = self._find_click_cli_obj(importable_name)
+                metadata = self._get_package_metadata()
+                cli_obj = None
+                if metadata.get("cli_enabled", False):
+                    cli_obj = cli_click.find_command(
+                        importable_name,
+                        cli_module=metadata.get("cli_module"),
+                        cli_name=metadata.get("cli_name"),
+                    )
                 if cli_obj is not None:
-                    snap.cli_commands = snapshot_cli_from_click(cli_obj)
-            except Exception:
+                    snap.cli_commands = cli_click.extract_snapshot(cli_obj)
+            except USER_CODE_ERRORS:
                 pass  # CLI snapshot is best-effort
 
         snap_dir = self.project_root / ".great-docs" / "snapshots"
@@ -6490,8 +5458,13 @@ class GreatDocs:
         package_name = self._detect_package_name() if metadata.get("cli_enabled", False) else None
         if package_name:
             # The importable module name can differ from the PyPI project name.
-            cli = self._discover_click_cli(
-                self._resolve_importable_name(package_name), display_name=package_name
+            cli = cli_click.discover(
+                self._resolve_importable_name(package_name),
+                self.layout.package_root,
+                cli_module=metadata.get("cli_module"),
+                cli_name=metadata.get("cli_name"),
+                display_name=package_name,
+                report=print,
             )
         llms_txt.write_full(
             self.build_dir, cli=cli, user_guide=self._discover_user_guide(), report=print
@@ -6584,13 +5557,21 @@ class GreatDocs:
         :
             The result line or skip reason.
         """
-        if not self._get_package_metadata().get("cli_enabled", False):
+        metadata = self._get_package_metadata()
+        if not metadata.get("cli_enabled", False):
             return Skipped("CLI not enabled")
         if not run.package_name:
             return Skipped("no package detected")
         # The importable module name can differ from the project name.
         module = self._resolve_importable_name(run.package_name)
-        cli_info = self._discover_click_cli(module, display_name=run.package_name)
+        cli_info = cli_click.discover(
+            module,
+            self.layout.package_root,
+            cli_module=metadata.get("cli_module"),
+            cli_name=metadata.get("cli_name"),
+            display_name=run.package_name,
+            report=print,
+        )
         if not cli_info:
             return Skipped("no Click CLI found")
         return self._add_cli_reference(cli_info, "CLI")
@@ -6637,7 +5618,7 @@ class GreatDocs:
             return Skipped("Rust CLI introspection failed (is 'cargo' on PATH?)")
         return self._add_cli_reference(cli_info, "Rust CLI", f" ({project.binary_names[0]})")
 
-    def _add_cli_reference(self, cli_info: dict[str, Any], kind: str, suffix: str = "") -> Outcome:
+    def _add_cli_reference(self, cli_info: CliCommand, kind: str, suffix: str = "") -> Outcome:
         """
         Write command-line reference pages and add them to the reference sidebar
 
@@ -6655,11 +5636,11 @@ class GreatDocs:
         :
             The step's result line.
         """
-        cli_files = self._generate_cli_reference_pages(cli_info)
+        cli_files = cli_render.write_pages(self._config, self.build_dir, cli_info, report=print)
         if not cli_files:
             return f"No {kind} pages generated"  # pragma: no cover
         self._update_sidebar_with_cli(cli_files)
-        n_pages = self._count_cli_sidebar_items(cli_files)
+        n_pages = cli_render.count_pages(cli_files)
         return f"{n_pages} {kind} reference page(s){suffix}"
 
     def _step_mcp_reference(self, run: Run) -> Outcome:

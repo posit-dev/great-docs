@@ -596,14 +596,14 @@ def test_migration_suggested_commands_select_project_from_invocation_directory(
 def test_migration_help_is_directly_available_but_hidden_from_public_reference(
     project: Path,
 ) -> None:
-    from great_docs import GreatDocs
+    from great_docs._cliref import click as cli_click
 
     result = CliRunner().invoke(cli, ["migrate-layout", "--help"])
     assert result.exit_code == 0, result.output
     assert "--config" in result.output and "--dry-run" in result.output
     result = CliRunner().invoke(cli, ["--help"])
     assert "migrate-layout" not in result.output
-    info = GreatDocs(str(project))._extract_click_command(cli, "great-docs")
+    info = cli_click.extract_command(cli, "great-docs")
     assert all(command["name"] != "migrate-layout" for command in info["commands"])
 
 
