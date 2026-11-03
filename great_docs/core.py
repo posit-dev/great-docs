@@ -5216,7 +5216,7 @@ class GreatDocs:
         :
             `None`; the result is a detail line of the previous step.
         """
-        from great_docs._mock_code import process_directory
+        from great_docs._website.mock_code import process_directory
 
         modified = process_directory(self.build_dir)
         if modified:
@@ -5237,7 +5237,7 @@ class GreatDocs:
         :
             `None`; the result is a detail line of the previous step.
         """
-        from great_docs._d2 import process_directory
+        from great_docs._website.d2 import process_directory
 
         modified = process_directory(self.build_dir, cache_dir=self.layout.cache_dir / "d2")
         if modified:

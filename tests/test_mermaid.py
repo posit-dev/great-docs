@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from great_docs._mermaid import (
+from great_docs._website.mermaid import (
     encode_mermaid,
     encode_mermaid_simple,
     extract_mermaid_blocks,
@@ -122,7 +122,7 @@ def test_extract_positions_are_correct():
     assert content[start:end] == full_match
 
 
-@patch("great_docs._mermaid.urllib.request.urlopen")
+@patch("great_docs._website.mermaid.urllib.request.urlopen")
 def test_render_png_default_theme(mock_urlopen):
     """Successful render returns PNG bytes."""
     mock_response = MagicMock()
@@ -135,7 +135,7 @@ def test_render_png_default_theme(mock_urlopen):
     assert result == b"\x89PNG fake data"
 
 
-@patch("great_docs._mermaid.urllib.request.urlopen")
+@patch("great_docs._website.mermaid.urllib.request.urlopen")
 def test_render_png_dark_theme(mock_urlopen):
     """Dark theme render uses dark bgColor."""
     mock_response = MagicMock()
@@ -154,7 +154,7 @@ def test_render_png_dark_theme(mock_urlopen):
     assert "bgColor=!1f2937" in req.full_url
 
 
-@patch("great_docs._mermaid.urllib.request.urlopen")
+@patch("great_docs._website.mermaid.urllib.request.urlopen")
 def test_render_png_url_error(mock_urlopen):
     """URLError returns None."""
     import urllib.error
@@ -164,7 +164,7 @@ def test_render_png_url_error(mock_urlopen):
     assert result is None
 
 
-@patch("great_docs._mermaid.urllib.request.urlopen")
+@patch("great_docs._website.mermaid.urllib.request.urlopen")
 def test_render_png_timeout(mock_urlopen):
     """Timeout returns None."""
     mock_urlopen.side_effect = TimeoutError("Request timed out")
@@ -172,7 +172,7 @@ def test_render_png_timeout(mock_urlopen):
     assert result is None
 
 
-@patch("great_docs._mermaid.urllib.request.urlopen")
+@patch("great_docs._website.mermaid.urllib.request.urlopen")
 def test_render_svg_success(mock_urlopen):
     """Successful render returns SVG string."""
     svg = "<svg><text>diagram</text></svg>"
@@ -186,7 +186,7 @@ def test_render_svg_success(mock_urlopen):
     assert result == svg
 
 
-@patch("great_docs._mermaid.urllib.request.urlopen")
+@patch("great_docs._website.mermaid.urllib.request.urlopen")
 def test_render_svg_error(mock_urlopen):
     """Network error returns None."""
     import urllib.error
@@ -206,7 +206,7 @@ def test_render_page_no_mermaid_blocks():
         assert result == {}
 
 
-@patch("great_docs._mermaid.render_mermaid_to_png")
+@patch("great_docs._website.mermaid.render_mermaid_to_png")
 def test_render_page_light_and_dark(mock_render):
     """Renders both light and dark PNGs."""
     mock_render.side_effect = [b"light-png", b"dark-png"]
@@ -226,7 +226,7 @@ def test_render_page_light_and_dark(mock_render):
         assert dark_path.read_bytes() == b"dark-png"
 
 
-@patch("great_docs._mermaid.render_mermaid_to_png")
+@patch("great_docs._website.mermaid.render_mermaid_to_png")
 def test_render_page_failure_skips(mock_render):
     """When rendering fails, diagram is not in results."""
     mock_render.return_value = None
@@ -240,7 +240,7 @@ def test_render_page_failure_skips(mock_render):
         assert result == {}
 
 
-@patch("great_docs._mermaid.render_mermaid_to_png")
+@patch("great_docs._website.mermaid.render_mermaid_to_png")
 def test_render_page_cache_hit(mock_render):
     """Cached diagrams are loaded from cache dir without rendering."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -277,7 +277,7 @@ def test_process_qmd_no_blocks():
         assert result == content
 
 
-@patch("great_docs._mermaid.render_mermaid_to_png")
+@patch("great_docs._website.mermaid.render_mermaid_to_png")
 def test_process_qmd_replaces_block(mock_render):
     """Mermaid block is replaced with theme-aware image HTML."""
     mock_render.side_effect = [b"light-data", b"dark-data"]
@@ -296,7 +296,7 @@ def test_process_qmd_replaces_block(mock_render):
         assert "```{mermaid}" not in result
 
 
-@patch("great_docs._mermaid.render_mermaid_to_png")
+@patch("great_docs._website.mermaid.render_mermaid_to_png")
 def test_process_qmd_failure_keeps_original(mock_render):
     """When rendering fails, original mermaid block is preserved."""
     mock_render.return_value = None
@@ -311,7 +311,7 @@ def test_process_qmd_failure_keeps_original(mock_render):
         assert "```{mermaid}" in result
 
 
-@patch("great_docs._mermaid.render_mermaid_to_png")
+@patch("great_docs._website.mermaid.render_mermaid_to_png")
 def test_process_qmd_cache_write(mock_render):
     """Rendered diagrams are saved to cache."""
     mock_render.side_effect = [b"light", b"dark"]
@@ -329,7 +329,7 @@ def test_process_qmd_cache_write(mock_render):
         assert (cache / f"mermaid-{diagram_hash}-dark.png").exists()
 
 
-@patch("great_docs._mermaid.render_mermaid_to_png")
+@patch("great_docs._website.mermaid.render_mermaid_to_png")
 def test_process_qmd_cache_read(mock_render):
     """Cached diagrams are used without re-rendering."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -349,7 +349,7 @@ def test_process_qmd_cache_read(mock_render):
         mock_render.assert_not_called()
 
 
-@patch("great_docs._mermaid.render_mermaid_to_png")
+@patch("great_docs._website.mermaid.render_mermaid_to_png")
 def test_process_qmd_multiple_blocks(mock_render):
     """Multiple mermaid blocks are all processed."""
     mock_render.side_effect = [b"l1", b"d1", b"l2", b"d2"]
@@ -367,7 +367,7 @@ def test_process_qmd_multiple_blocks(mock_render):
         assert result.count("mermaid-diagram") == 2
 
 
-@patch("great_docs._mermaid.render_mermaid_to_svg")
+@patch("great_docs._website.mermaid.render_mermaid_to_svg")
 def test_render_string_success(mock_svg):
     """Successful render writes SVG and returns True."""
     mock_svg.return_value = "<svg>ok</svg>"
@@ -380,7 +380,7 @@ def test_render_string_success(mock_svg):
         assert out.read_text() == "<svg>ok</svg>"
 
 
-@patch("great_docs._mermaid.render_mermaid_to_svg")
+@patch("great_docs._website.mermaid.render_mermaid_to_svg")
 def test_render_string_failure(mock_svg):
     """Failed render returns False and doesn't create file."""
     mock_svg.return_value = None
@@ -402,7 +402,7 @@ def _make_qmd(tmp_path: Path, diagram_code: str) -> Path:
 def test_render_diagrams_for_page_cache_hit_skips_render(tmp_path: Path):
     """render_diagrams_for_page reads from cache when both light and dark files exist."""
     diagram_code = "graph TD\n  A --> B"
-    from great_docs._mermaid import get_diagram_hash
+    from great_docs._website.mermaid import get_diagram_hash
 
     h = get_diagram_hash(diagram_code)
     light_fn = f"mermaid-{h}-light.png"
@@ -417,7 +417,7 @@ def test_render_diagrams_for_page_cache_hit_skips_render(tmp_path: Path):
     out_dir.mkdir()
     qmd = _make_qmd(tmp_path, diagram_code)
 
-    with patch("great_docs._mermaid.render_mermaid_to_png") as mock_render:
+    with patch("great_docs._website.mermaid.render_mermaid_to_png") as mock_render:
         results = render_diagrams_for_page(qmd, output_dir=out_dir, cache_dir=cache_dir)
         mock_render.assert_not_called()
 
@@ -428,7 +428,7 @@ def test_render_diagrams_for_page_cache_hit_skips_render(tmp_path: Path):
 def test_render_diagrams_for_page_writes_to_cache_on_success(tmp_path: Path):
     """render_diagrams_for_page saves rendered output to cache_dir."""
     diagram_code = "graph TD\n  A --> B"
-    from great_docs._mermaid import get_diagram_hash
+    from great_docs._website.mermaid import get_diagram_hash
 
     h = get_diagram_hash(diagram_code)
     light_fn = f"mermaid-{h}-light.png"
@@ -440,7 +440,7 @@ def test_render_diagrams_for_page_writes_to_cache_on_success(tmp_path: Path):
     out_dir.mkdir()
     qmd = _make_qmd(tmp_path, diagram_code)
 
-    with patch("great_docs._mermaid.render_mermaid_to_png", side_effect=[b"LPNG", b"DPNG"]):
+    with patch("great_docs._website.mermaid.render_mermaid_to_png", side_effect=[b"LPNG", b"DPNG"]):
         results = render_diagrams_for_page(qmd, output_dir=out_dir, cache_dir=cache_dir)
 
     assert h in results

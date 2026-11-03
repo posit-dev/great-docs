@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from great_docs._mock_code import expand_mock_cells, process_directory, process_qmd_file
+from great_docs._website.mock_code import expand_mock_cells, process_directory, process_qmd_file
 
 
 # ---------------------------------------------------------------------------

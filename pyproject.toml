@@ -225,6 +225,10 @@ exclude = [
     "great_docs/_cliref/go.py",
     "great_docs/_cliref/rust.py",
     "great_docs/_mcpref/reference.py",
+    "great_docs/_website/d2.py",
+    "great_docs/_website/mermaid.py",
+    "great_docs/_website/mock_code.py",
+    "great_docs/_website/spdx.py",
 ]
 reportMissingImports = true
 reportMissingTypeStubs = false

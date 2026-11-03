@@ -17,7 +17,7 @@ from .._content.walk import find_files
 if TYPE_CHECKING:
     from .._layout import Layout
 
-# Reuse the fence/hashpipe regexes from _mock_code
+# Copies of the fence and hashpipe regexes in `_website/mock_code.py`
 _EXEC_FENCE_RE = re.compile(r"^```\{python\}\s*$")
 _CLOSE_FENCE_RE = re.compile(r"^```\s*$")
 _HASHPIPE_RE = re.compile(r"^#\|\s*(\S+?):\s*(.*)$")

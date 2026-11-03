@@ -10,9 +10,9 @@ from __future__ import annotations
 import html
 from typing import TYPE_CHECKING, Any, cast
 
-from ..._license import get_license_info
 from ..._translations import get_translation
 from ..ai_agents import llms_txt
+from ..spdx import get_license_info
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
