@@ -33,14 +33,14 @@ from ._checks.proofread import CheckedFile
 from ._cliref import click as cli_click
 from ._cliref import render as cli_render
 from ._cliref.model import CliCommand
-from ._content import publish, sections
+from ._content import publish, sections, user_guide
 from ._content.naming import (
     published_path,
-    strip_numeric_prefix,
     title_from_name,
 )
 from ._content.pages import PageMap, output_destination, section_destination
 from ._content.sections import source_dirs as section_source_dirs
+from ._content.user_guide import UserGuide
 from ._contribution import NavbarLink
 from ._github import GithubRepo
 from ._install import update_gitignore
@@ -108,6 +108,22 @@ _QUARTO_RENDER_GLOBS = [
     "*.rmarkdown",
     "*.ipynb",
 ]
+
+
+def _print_warning(message: str) -> None:
+    """
+    Print a warning as a detail line in the current build step
+
+    Parameters
+    ----------
+    message
+        The warning's text.
+
+    Returns
+    -------
+    :
+    """
+    print(f"   ⚠️  {message}")
 
 
 class GreatDocs:
@@ -521,10 +537,10 @@ class GreatDocs:
         :
             The page map for the current sources and configuration.
         """
-        guide = self._find_user_guide_dir()
+        guide = user_guide.find_dir(self._config, self.layout, report=_print_warning)
         homepage = homepage_source.find(self.layout)[:1]
         if guide is not None and self._config.homepage == "user_guide":
-            info = self._discover_user_guide()
+            info = user_guide.discover(self._config, self.layout, report=_print_warning)
             if info and info["files"]:
                 homepage.append(info["files"][0]["path"])
         return PageMap.make(self._config, self.layout, guide, homepage)
@@ -1645,345 +1661,27 @@ class GreatDocs:
     # User Guide Methods
     # =========================================================================
 
-    def _find_user_guide_dir(self) -> Path | None:
+    def _publish_user_guide(self, guide: UserGuide) -> list[str]:
         """
-        Find the user guide source directory.
-
-        Resolves the directory in the following order:
-
-        1. If `user_guide` is a string in great-docs.yml, that path is used.
-        2. Otherwise, looks for `user_guide/` then `user-guide/` in the project root,
-           skipping a directory that a `sections` entry publishes.
-
-        Returns
-        -------
-        Path | None
-            Path to the user guide source directory, or `None` if not found.
-        """
-        package_root = self.layout.source_dir
-        configured_dir = self._config.user_guide_dir  # str or None (ignores list)
-
-        if configured_dir is not None:
-            user_guide_dir = package_root / configured_dir
-
-            # Warn if conventional directory also exists but is being ignored
-            conventional_dir = package_root / "user_guide"
-            if conventional_dir.exists() and conventional_dir.is_dir():
-                if user_guide_dir.resolve() != conventional_dir.resolve():
-                    print(
-                        f"   ⚠️  Both 'user_guide' config option ('{configured_dir}') and "
-                        f"'user_guide/' directory exist; using configured path"
-                    )
-
-            if not user_guide_dir.exists() or not user_guide_dir.is_dir():
-                print(
-                    f"   ⚠️  User guide directory '{configured_dir}' "
-                    f"specified in great-docs.yml does not exist"
-                )
-                return None
-
-            return user_guide_dir
-
-        # Fall back to conventional directory names, leaving a section's directory to it
-        claimed = section_source_dirs(self._config, self.layout)
-        for name in ("user_guide", "user-guide"):
-            user_guide_dir = package_root / name
-            if user_guide_dir.is_dir() and user_guide_dir.resolve() not in claimed:
-                return user_guide_dir
-
-        return None
-
-    def _discover_user_guide_explicit(
-        self, user_guide_dir: Path, explicit_config: list[dict]
-    ) -> dict | None:
-        """
-        Build user guide info from explicit section ordering in great-docs.yml.
-
-        When `user_guide` is a list of section dicts in the config, this method
-        resolves the referenced files and builds the user_guide_info structure.
-        Files are referenced by name relative to the user guide source directory
-        (no `user_guide/` prefix needed). Numeric filename prefixes are preserved.
+        Publish the user guide's pages, asset directories and directory metadata
 
         Parameters
         ----------
-        user_guide_dir
-            Path to the user guide source directory.
-        explicit_config
-            The list of section dicts from `user_guide` config.
+        guide
+            The user guide.
 
         Returns
         -------
-        dict | None
-            User guide info structure with `explicit` flag set to True, or `None`
-            if no valid files are found.
+        :
+            The copied page paths relative to the build directory, in reading order.
         """
-        files_info = []
-        sections: dict[str, list] = {}
-        has_index = False
-        seen_files: set[str] = set()
-
-        for section_entry in explicit_config:
-            section_name = section_entry.get("section", "")
-            section_contents = section_entry.get("contents", [])
-
-            if not section_name or not section_contents:
-                continue
-
-            section_files = []
-
-            for item in section_contents:
-                # Each item is either a string (filename) or a dict with text/href
-                if isinstance(item, str):
-                    filename = item
-                    custom_text = None
-                elif isinstance(item, dict):
-                    filename = item.get("href", "")
-                    custom_text = item.get("text")
-                else:
-                    continue  # pragma: no cover
-
-                if not filename or filename in seen_files:
-                    continue
-
-                # Resolve the file in the source directory
-                file_path = user_guide_dir / filename
-                if not file_path.exists():
-                    print(f"   ⚠️  User guide file '{filename}' referenced in config does not exist")
-                    continue
-
-                seen_files.add(filename)
-
-                # Parse the file for title/frontmatter
-                file_info = self._parse_user_guide_file(file_path)
-                if not file_info:
-                    continue  # pragma: no cover
-
-                # Override section from config (not frontmatter)
-                file_info["section"] = section_name
-
-                # Store custom text if provided
-                if custom_text:
-                    file_info["custom_text"] = custom_text
-
-                files_info.append(file_info)
-                section_files.append(file_info)
-
-                if file_path.name == "index.qmd":
-                    has_index = True
-
-            if section_files:
-                sections[section_name] = section_files
-
-        if not files_info:
-            return None
-
-        return {
-            "files": files_info,
-            "sections": sections,
-            "has_index": has_index,
-            "source_dir": user_guide_dir,
-            "explicit": True,
-            "explicit_config": explicit_config,
-        }
-
-    def _discover_user_guide(self) -> dict | None:
-        """
-        Discover user guide content from the user_guide directory.
-
-        Supports two modes:
-
-        1. **Explicit ordering**: When `user_guide` in great-docs.yml is a list of
-           section dicts, files are ordered and grouped exactly as specified.
-        2. **Auto-discovery**: When `user_guide` is a string (directory path) or `None`,
-           files are discovered from the directory and sorted by filename.
-
-        The source directory is resolved by `_find_user_guide_dir()`.
-
-        Returns
-        -------
-        dict | None
-            Dictionary containing user guide structure, or `None` if no user guide found.
-            Structure: {
-                "files": [{"path": Path, "section": str | None, "title": str}, ...],
-                "sections": {"Section Name": [file_info, ...], ...},
-                "has_index": bool,
-                "source_dir": Path,
-                "explicit": bool  (True when using explicit config ordering)
-            }
-        """
-        # Check for explicit section ordering in config
-        user_guide_config = self._config.user_guide
-        if isinstance(user_guide_config, list):
-            user_guide_dir = self._find_user_guide_dir()
-            if not user_guide_dir:
-                return None  # pragma: no cover
-            return self._discover_user_guide_explicit(user_guide_dir, user_guide_config)
-
-        # Auto-discovery mode
-        user_guide_dir = self._find_user_guide_dir()
-        if not user_guide_dir:
-            return None
-
-        # Find all .qmd and .md files (not in subdirectories that are likely asset folders)
-        guide_files = []
-        valid_extensions = {".qmd", ".md"}
-        # Check if directory is completely empty
-        dir_contents = list(user_guide_dir.iterdir())
-        if not dir_contents:
-            print(f"   ⚠️  User guide directory '{user_guide_dir}' is empty")
-            return None
-
-        for item in dir_contents:
-            if item.is_file() and item.suffix in valid_extensions:
-                guide_files.append(item)
-            elif item.is_dir() and not self.layout.is_reserved_directory(item):
-                # Recursively check subdirectories for guide files at any depth
-                for ext in valid_extensions:
-                    for subitem in item.rglob(f"*{ext}"):
-                        if subitem.is_file():
-                            guide_files.append(subitem)
-
-        if not guide_files:
-            print(f"   ⚠️  User guide directory '{user_guide_dir}' contains no .qmd or .md files")
-            return None
-
-        # Sort files by full relative path, with root-level files first
-        # and index.qmd prioritized within each level
-        guide_files.sort(
-            key=lambda p: (
-                p.parent != user_guide_dir,  # Root-level files first
-                p.name != "index.qmd",  # index.qmd first within each level
-                p.relative_to(user_guide_dir),
-            )
-        )
-
-        # Parse each file to extract section and title from frontmatter
-        files_info = []
-        sections: dict[str, list] = {}
-        has_index = False
-
-        for qmd_path in guide_files:
-            file_info = self._parse_user_guide_file(qmd_path)
-            if file_info:
-                files_info.append(file_info)
-
-                # Track if there's a root-level index.qmd (subdir index.qmd files
-                # are used only for section titles, not as the UG landing page)
-                if qmd_path.name == "index.qmd" and qmd_path.parent == user_guide_dir:
-                    has_index = True
-
-                # Group by section
-                section_name = file_info.get("section")
-                if section_name:
-                    if section_name not in sections:
-                        sections[section_name] = []
-                    sections[section_name].append(file_info)
-
-        if not files_info:
-            return None  # pragma: no cover
-
-        return {
-            "files": files_info,
-            "sections": sections,
-            "has_index": has_index,
-            "source_dir": user_guide_dir,
-            "explicit": False,
-        }
-
-    def _parse_user_guide_file(self, qmd_path: Path) -> dict | None:
-        """
-        Parse a user guide .qmd file to extract metadata from frontmatter.
-
-        Parameters
-        ----------
-        qmd_path
-            Path to the .qmd file.
-
-        Returns
-        -------
-        dict | None
-            Dictionary with file info: {"path": Path, "section": str | None, "title": str}
-        """
-        try:
-            with open(qmd_path, "r", encoding="utf-8") as f:
-                content = f.read()
-        except Exception:
-            return None
-
-        frontmatter, _ = split_front_matter(content)
-
-        # Get title from frontmatter or derive from filename
-        title = frontmatter.string("title")
-        if not title:
-            # The title drops the ordering prefix even where the published name keeps it
-            title = title_from_name(strip_numeric_prefix(qmd_path.stem))
-
-        # Get section from frontmatter (use 'guide-section' to avoid conflict with Quarto's 'section')
-        section = frontmatter.string("guide-section")
-
-        return {
-            "path": qmd_path,
-            "section": section,
-            "title": title,
-        }
-
-    def _copy_user_guide_to_docs(self, user_guide_info: dict) -> list[str]:
-        """
-        Copy user guide files from project root to docs directory.
-
-        Add `bread-crumbs: false` only when a page does not set `bread-crumbs`. This hides
-        breadcrumb navigation on user guide pages while preserving authored settings.
-
-        When using explicit ordering (`user_guide` is a list in config), filenames are
-        preserved as-is. In auto-discovery mode, numeric prefixes are stripped for cleaner URLs.
-
-        Parameters
-        ----------
-        user_guide_info
-            User guide structure from `_discover_user_guide`.
-
-        Returns
-        -------
-        list[str]
-            List of copied file paths relative to docs dir.
-        """
-        if not user_guide_info:
-            return []
-
-        source_dir = user_guide_info["source_dir"]
-        target_dir = self.build_dir / "user-guide"
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        is_explicit = user_guide_info.get("explicit", False)
-        copied_files = []
-        pages = self._page_map()
+        source_dir = guide["source_dir"]
+        target_dir = self.build_dir / user_guide.SIDEBAR_ID
+        strip_prefix = not guide.get("explicit", False)
         add_dates = partial(page_dates.add_to_page, config=self._config, authors=self._page_authors)
-
-        for file_info in user_guide_info["files"]:
-            src_path = file_info["path"]
-
-            # Determine relative path from source_dir
-            try:
-                rel_path = src_path.relative_to(source_dir)
-            except ValueError:  # pragma: no cover
-                rel_path = Path(src_path.name)  # pragma: no cover
-
-            # An explicit guide keeps the file names the configuration lists
-            dest_rel_path = published_path(rel_path, strip_prefix=not is_explicit)
-
-            dst_path = target_dir / dest_rel_path
-            # The first guide page moves to the homepage later when `homepage: user_guide`
-            _ = publish.page(
-                src_path,
-                dst_path,
-                layout=self.layout,
-                pages=pages,
-                add_dates=add_dates,
-                strip_prefix=not is_explicit,
-                breadcrumbs=True,
-                published=pages.destination(src_path.resolve()) or dst_path,
-            )
-            copied_files.append(f"user-guide/{dest_rel_path}")
+        copied_files = user_guide.copy_pages(
+            guide, target_dir, layout=self.layout, pages=self._page_map(), add_dates=add_dates
+        )
 
         # Also copy any asset directories (images, data, code snippets, etc.)
         for item in source_dir.iterdir():
@@ -1998,10 +1696,10 @@ class GreatDocs:
                 shutil.copytree(item, dst_dir)
 
         self._copy_directory_metadata(
-            (file_info["path"] for file_info in user_guide_info["files"]),
+            (page["path"] for page in guide["files"]),
             source_dir,
             target_dir,
-            strip_prefix=not is_explicit,
+            strip_prefix=strip_prefix,
         )
 
         return copied_files
@@ -2110,322 +1808,23 @@ class GreatDocs:
             self._get_canonical_base_url(),
         )
 
-    def _generate_user_guide_sidebar(self, user_guide_info: dict) -> dict:
-        """
-        Generate sidebar configuration for the user guide.
-
-        In explicit mode, builds the sidebar directly from the config structure.
-        In auto-discovery mode, builds it from discovered files and frontmatter sections.
-
-        Parameters
-        ----------
-        user_guide_info
-            User guide structure from _discover_user_guide.
-
-        Returns
-        -------
-        dict
-            Sidebar configuration dict for Quarto.
-        """
-        is_explicit = user_guide_info.get("explicit", False)
-
-        if is_explicit:
-            return self._generate_user_guide_sidebar_explicit(user_guide_info)
-
-        return self._generate_user_guide_sidebar_auto(user_guide_info)
-
-    def _generate_user_guide_sidebar_explicit(self, user_guide_info: dict) -> dict:
-        """
-        Generate sidebar from explicit config ordering.
-
-        Builds the sidebar structure directly from the `user_guide` config list,
-        preserving exact section ordering and file ordering as specified by the user.
-        Filenames are used as-is (no numeric prefix stripping).
-
-        Parameters
-        ----------
-        user_guide_info
-            User guide structure from `_discover_user_guide_explicit`.
-
-        Returns
-        -------
-        dict
-            Sidebar configuration dict for Quarto.
-        """
-        explicit_config = user_guide_info["explicit_config"]
-        source_dir = user_guide_info["source_dir"]
-        title_lookup = {
-            fi["path"].relative_to(source_dir).as_posix(): fi["title"]
-            for fi in user_guide_info.get("files", [])
-            if fi.get("title")
-        }
-        contents = []
-
-        for section_entry in explicit_config:
-            section_name = section_entry.get("section", "")
-            section_contents = section_entry.get("contents", [])
-
-            if not section_name or not section_contents:
-                continue  # pragma: no cover
-
-            sidebar_section_contents = []
-
-            for item in section_contents:
-                if isinstance(item, str):
-                    filename = item
-                    custom_text = None
-                elif isinstance(item, dict):
-                    filename = item.get("href", "")
-                    custom_text = item.get("text")
-                else:
-                    continue  # pragma: no cover
-
-                if not filename:
-                    continue  # pragma: no cover
-
-                # Verify the file exists in the source directory
-                file_path = source_dir / filename
-                if not file_path.exists():
-                    continue
-
-                href = f"user-guide/{filename}"
-                text = custom_text or title_lookup.get(filename)
-
-                if text:
-                    sidebar_section_contents.append({"text": text, "href": href})
-                else:
-                    sidebar_section_contents.append(href)
-
-            if sidebar_section_contents:
-                contents.append(
-                    {
-                        "section": section_name,
-                        "contents": sidebar_section_contents,
-                    }
-                )
-
-        return {
-            "id": "user-guide",
-            "title": "User Guide",
-            "contents": contents,
-        }
-
-    def _generate_user_guide_sidebar_auto(self, user_guide_info: dict) -> dict:
-        """
-        Generate sidebar from auto-discovered files.
-
-        Builds the sidebar structure from discovered files and frontmatter sections,
-        stripping numeric prefixes from filenames for cleaner URLs.
-
-        Parameters
-        ----------
-        user_guide_info
-            User guide structure from _discover_user_guide.
-
-        Returns
-        -------
-        dict
-            Sidebar configuration dict for Quarto.
-        """
-        source_dir = user_guide_info["source_dir"]
-        files_info = user_guide_info["files"]
-        sections = user_guide_info["sections"]
-
-        contents = []
-
-        # Helper to get clean href (strips numeric prefixes for cleaner URLs)
-        def get_clean_href(file_info: dict) -> str:
-            rel_path = file_info["path"].relative_to(source_dir)
-            return f"user-guide/{published_path(rel_path, strip_prefix=True)}"
-
-        # If we have sections, organize by section
-        if sections:
-            # Track which files have been assigned to sections
-            assigned_files = set()
-
-            # First, preserve section order based on first file appearance
-            section_order = []
-            for file_info in files_info:
-                section = file_info.get("section")
-                if section and section not in section_order:
-                    section_order.append(section)
-
-            # Build section entries
-            for section_name in section_order:
-                section_files = sections[section_name]
-                section_contents = []
-
-                for file_info in section_files:
-                    href = get_clean_href(file_info)
-                    assigned_files.add(file_info["path"])
-
-                    if file_info.get("title"):
-                        section_contents.append(
-                            {
-                                "text": file_info["title"],
-                                "href": href,
-                            }
-                        )
-                    else:
-                        section_contents.append(href)  # pragma: no cover
-
-                contents.append(
-                    {
-                        "section": section_name,
-                        "contents": section_contents,
-                    }
-                )
-
-            # Add any files without sections at the end
-            unsectioned = []
-            for file_info in files_info:
-                if file_info["path"] not in assigned_files:
-                    href = get_clean_href(file_info)
-                    if file_info.get("title"):
-                        unsectioned.append({"text": file_info["title"], "href": href})
-                    else:
-                        unsectioned.append(href)  # pragma: no cover
-
-            if unsectioned:
-                contents.extend(unsectioned)
-
-        else:
-            # Check if files span multiple subdirectories — if so, group by
-            # parent directory to give the sidebar a logical structure.
-            subdirs = {}
-            root_files = []
-            for file_info in files_info:
-                rel_path = file_info["path"].relative_to(source_dir)
-                parent = rel_path.parent
-                if parent == Path("."):
-                    root_files.append(file_info)
-                else:
-                    parent_str = str(parent)
-                    if parent_str not in subdirs:
-                        subdirs[parent_str] = []
-                    subdirs[parent_str].append(file_info)
-
-            if subdirs:
-                # Root index.qmd is always first; all other root files and subdir
-                # sections are sorted together so numeric prefixes control the order
-                # regardless of whether an item is a file or a directory.
-                root_index_file = next(
-                    (fi for fi in root_files if fi["path"].name == "index.qmd"), None
-                )
-                other_root_files = [fi for fi in root_files if fi["path"].name != "index.qmd"]
-
-                if root_index_file:  # pragma: no cover
-                    href = get_clean_href(root_index_file)  # pragma: no cover
-                    if root_index_file.get("title"):  # pragma: no cover
-                        contents.append(
-                            {"text": root_index_file["title"], "href": href}
-                        )  # pragma: no cover
-                    else:
-                        contents.append(href)  # pragma: no cover
-
-                # Build a combined list keyed by each item's leading name component
-                # so that files and directory sections sort together.
-                nav_items: list = []
-                for file_info in other_root_files:
-                    nav_items.append(("file", file_info["path"].name, file_info))
-                for subdir, dir_files in subdirs.items():
-                    sort_key = Path(subdir).parts[0]
-                    nav_items.append(("section", sort_key, subdir, dir_files))
-                nav_items.sort(key=lambda x: x[1])
-
-                for item in nav_items:
-                    if item[0] == "file":
-                        file_info = item[2]
-                        href = get_clean_href(file_info)
-                        if file_info.get("title"):
-                            contents.append({"text": file_info["title"], "href": href})
-                        else:
-                            contents.append(href)  # pragma: no cover
-                    else:
-                        _, _, subdir, dir_files = item
-                        # Use the index.qmd title as the section title if present,
-                        # otherwise derive from the directory name
-                        section_title = title_from_name(strip_numeric_prefix(subdir))
-                        section_contents = []
-                        for file_info in dir_files:
-                            if file_info["path"].name == "index.qmd":
-                                section_title = file_info["title"]
-                            else:
-                                href = get_clean_href(file_info)
-                                if file_info.get("title"):
-                                    section_contents.append(
-                                        {"text": file_info["title"], "href": href}
-                                    )
-                                else:
-                                    section_contents.append(href)  # pragma: no cover
-
-                        contents.append({"section": section_title, "contents": section_contents})
-            else:
-                # All files at the root level — list in order
-                for file_info in files_info:
-                    href = get_clean_href(file_info)
-                    if file_info.get("title"):
-                        contents.append({"text": file_info["title"], "href": href})
-                    else:
-                        contents.append(href)  # pragma: no cover
-
-        return {
-            "id": "user-guide",
-            "title": "User Guide",
-            "contents": contents,
-        }
-
-    def _rewrite_sidebar_first_entry(self, sidebar_config: dict, blended_first: str) -> None:
-        """
-        Rewrite the first sidebar entry to point to `index.qmd`.
-
-        In blended homepage mode the first UG page lives at the site root as `index.qmd`, so the
-        sidebar must link there instead of to `user-guide/<page>.qmd`.
-
-        Handles both flat and sectioned sidebar layouts by recursively searching for the first href
-        match.
-
-        Parameters
-        ----------
-        sidebar_config
-            The user-guide sidebar dict (modified in place).
-        blended_first
-            The original href that was promoted (e.g. `"user-guide/introduction.qmd"`).
-        """
-        contents = sidebar_config.get("contents", [])
-        self._rewrite_href_recursive(contents, blended_first, "index.qmd")
-
-    def _rewrite_href_recursive(self, items: list, old_href: str, new_href: str) -> bool:
-        """Recursively find and replace the first matching href in sidebar items."""
-        for item in items:
-            if isinstance(item, dict):
-                if item.get("href") == old_href:
-                    item["href"] = new_href
-                    return True
-                # Check nested section contents
-                nested = item.get("contents", [])
-                if nested and self._rewrite_href_recursive(nested, old_href, new_href):
-                    return True
-            elif isinstance(item, str) and item == old_href:
-                # Bare string entry — replace in parent list
-                idx = items.index(item)
-                items[idx] = {"text": "Home", "href": new_href}
-                return True
-        return False
-
     def _update_config_with_user_guide(
-        self, user_guide_info: dict, blended_first_page: str | None = None
+        self, guide: UserGuide, blended_first_page: str | None = None
     ) -> None:
         """
-        Update _quarto.yml with user guide sidebar and navbar.
+        Add the user guide's sidebar and navbar link to `_quarto.yml`
 
         Parameters
         ----------
-        user_guide_info
-            User guide structure from _discover_user_guide.
+        guide
+            The user guide.
         blended_first_page
             The promoted page's former path under `user-guide/`, or `None` when no page was
             promoted.
+
+        Returns
+        -------
+        :
         """
         if not quarto_yml.path(self.build_dir).exists():
             return
@@ -2435,15 +1834,11 @@ class GreatDocs:
         if "website" not in config:
             config["website"] = {}
 
-        # Generate and add/update user guide sidebar
-        sidebar_config = self._generate_user_guide_sidebar(user_guide_info)
+        sidebar_config = user_guide.sidebar(guide)
 
-        # In blended homepage mode, rewrite the first sidebar entry to point
-        # to index.qmd (the promoted first UG page) instead of user-guide/...
+        # Blended homepage mode publishes the first guide page at the site root
         if self._config.homepage == "user_guide" and blended_first_page:
-            self._rewrite_sidebar_first_entry(
-                sidebar_config, blended_first_page
-            )  # pragma: no cover
+            user_guide.link_homepage(sidebar_config, blended_first_page)  # pragma: no cover
 
         if "sidebar" not in config["website"]:
             config["website"]["sidebar"] = []
@@ -2451,7 +1846,9 @@ class GreatDocs:
         sidebar = config["website"]["sidebar"]
 
         # Remove existing user-guide sidebar if present
-        sidebar = [s for s in sidebar if not (isinstance(s, dict) and s.get("id") == "user-guide")]
+        sidebar = [
+            s for s in sidebar if not (isinstance(s, dict) and s.get("id") == user_guide.SIDEBAR_ID)
+        ]
 
         # Add the new user guide sidebar
         sidebar.append(sidebar_config)
@@ -2475,14 +1872,11 @@ class GreatDocs:
                             break
 
                     # Determine the href for User Guide
-                    if user_guide_info.get("has_index"):
+                    if guide.get("has_index"):
                         user_guide_href = "user-guide/index.qmd"  # pragma: no cover
                     else:
                         # The navbar link must use the same path as the published guide page
-                        first_file = user_guide_info["files"][0]
-                        rel_path = first_file["path"].relative_to(user_guide_info["source_dir"])
-                        is_explicit = user_guide_info.get("explicit", False)
-                        published = published_path(rel_path, strip_prefix=not is_explicit)
+                        published = user_guide.published(guide, guide["files"][0])
                         user_guide_href = f"user-guide/{published}"
 
                     navbar["left"].insert(
@@ -2509,9 +1903,8 @@ class GreatDocs:
         bool
             True if user guide was processed, False otherwise.
         """
-        # Discover user guide
-        user_guide_info = self._discover_user_guide()
-        if not user_guide_info:
+        guide = user_guide.discover(self._config, self.layout, report=_print_warning)
+        if not guide:
             # Fallback: if homepage mode is "user_guide" but no UG pages exist,
             # warn and create a normal index from README instead.
             if self._config.homepage == "user_guide":
@@ -2526,35 +1919,28 @@ class GreatDocs:
 
         print("\n📖 Processing User Guide...")
 
-        is_explicit = user_guide_info.get("explicit", False)
-        if is_explicit:
+        if guide.get("explicit", False):
             print("   Using explicit section ordering from great-docs.yml")  # pragma: no cover
 
-        print(f"   Found {len(user_guide_info['files'])} page(s)")
+        print(f"   Found {len(guide['files'])} page(s)")
 
-        # Copy files to docs directory
-        copied_files = self._copy_user_guide_to_docs(user_guide_info)
+        copied_files = self._publish_user_guide(guide)
         print(f"   Copied {len(copied_files)} file(s) to docs/user-guide/")
 
         # In "user_guide" homepage mode, promote the first UG page to index.qmd
         blended_first_page = None
         if self._config.homepage == "user_guide":
-            blended_first_page = self._create_blended_index(
-                user_guide_info, copied_files
-            )  # pragma: no cover
+            blended_first_page = self._create_blended_index(guide, copied_files)  # pragma: no cover
 
-        # Update configuration
-        self._update_config_with_user_guide(user_guide_info, blended_first_page)
+        self._update_config_with_user_guide(guide, blended_first_page)
 
-        # Report sections
-        if user_guide_info["sections"]:
-            section_names = list(user_guide_info["sections"].keys())
-            print(f"   Sections: {', '.join(section_names)}")
+        if guide["sections"]:
+            print(f"   Sections: {', '.join(guide['sections'])}")
 
         print("✅ User Guide configured")
         return True
 
-    def _create_blended_index(self, user_guide_info: dict, copied_files: list[str]) -> str | None:
+    def _create_blended_index(self, guide: UserGuide, copied_files: list[str]) -> str | None:
         """
         Promote the first user guide page to `index.qmd` in blended homepage mode
 
@@ -2562,8 +1948,8 @@ class GreatDocs:
 
         Parameters
         ----------
-        user_guide_info
-            User guide structure from `_discover_user_guide()`.
+        guide
+            The user guide.
         copied_files
             List of copied file paths relative to the docs dir (e.g.
             `["user-guide/introduction.qmd", ...]`).
@@ -2574,21 +1960,11 @@ class GreatDocs:
             The promoted page's former path under `user-guide/`, or `None` when no page was
             promoted.
         """
-        if not user_guide_info["files"]:
+        if not guide["files"]:
             return None
 
-        first_file = user_guide_info["files"][0]
-        is_explicit = user_guide_info.get("explicit", False)
-
-        # Determine the filename of the first page in user-guide/
-        source_dir = user_guide_info["source_dir"]
-        try:
-            rel_path = first_file["path"].relative_to(source_dir)
-        except ValueError:  # pragma: no cover
-            rel_path = Path(first_file["path"].name)  # pragma: no cover
-
-        dest_rel = published_path(rel_path, strip_prefix=not is_explicit)
-        first_ug_path = self.build_dir / "user-guide" / dest_rel
+        dest_rel = user_guide.published(guide, guide["files"][0])
+        first_ug_path = self.build_dir / user_guide.SIDEBAR_ID / dest_rel
 
         if not first_ug_path.exists():
             print(f"   ⚠️  First UG page '{first_ug_path}' not found for blended homepage")
@@ -3262,7 +2638,9 @@ class GreatDocs:
             pages=self._page_map(),
             page_authors=self._page_authors,
             has_api_reference=has_api_reference,
-            has_user_guide=lambda: bool(self._discover_user_guide()),
+            has_user_guide=lambda: bool(
+                user_guide.discover(self._config, self.layout, report=_print_warning)
+            ),
             rebuild=force_rebuild,
             report=print,
         )
@@ -5467,7 +4845,10 @@ class GreatDocs:
                 report=print,
             )
         llms_txt.write_full(
-            self.build_dir, cli=cli, user_guide=self._discover_user_guide(), report=print
+            self.build_dir,
+            cli=cli,
+            user_guide=user_guide.discover(self._config, self.layout, report=_print_warning),
+            report=print,
         )
         return "Created llms.txt + llms-full.txt"
 
@@ -6678,7 +6059,7 @@ class GreatDocs:
             _page_dirs: list[Path] = []
 
             # User guide pages
-            ug_dir = self._find_user_guide_dir()
+            ug_dir = user_guide.find_dir(self._config, self.layout, report=_print_warning)
             if ug_dir and ug_dir.is_dir():
                 _page_dirs.append(ug_dir)
 

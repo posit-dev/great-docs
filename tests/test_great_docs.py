@@ -150,6 +150,7 @@ from great_docs._build.log import BuildLog
 from great_docs._build.steps import Step, count_listed
 from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
+from great_docs._content import user_guide
 from great_docs._content.naming import strip_numeric_prefix
 from great_docs._reference import block as reference_block
 from great_docs._reference import sections as reference_sections
@@ -218,6 +219,8 @@ from great_docs.pandoc.inlines import (
 )
 from tests.support import (
     StubRemote,
+    discover_user_guide,
+    find_user_guide_dir,
     homepage_hero,
     homepage_margin,
     make_run,
@@ -2407,11 +2410,11 @@ guide-section: Getting Started
         docs = GreatDocs(project_path=tmp_dir)
 
         # Process the user guide
-        user_guide_info = docs._discover_user_guide()
+        user_guide_info = discover_user_guide(docs)
 
         assert user_guide_info is not None
 
-        copied_files = docs._copy_user_guide_to_docs(user_guide_info)
+        copied_files = docs._publish_user_guide(user_guide_info)
 
         # Check that files were copied with clean names
         assert "user-guide/introduction.qmd" in copied_files
@@ -2468,7 +2471,7 @@ def test_user_guide_discovers_mixed_extensions_and_nested_files():
         docs = GreatDocs(project_path=tmp_dir)
 
         # Discover user guide
-        user_guide_info = docs._discover_user_guide()
+        user_guide_info = discover_user_guide(docs)
         assert user_guide_info is not None
 
         discovered_names = {f["path"].name for f in user_guide_info["files"]}
@@ -2483,7 +2486,7 @@ def test_user_guide_discovers_mixed_extensions_and_nested_files():
         assert len(user_guide_info["files"]) == 6
 
         # Copy files and verify they end up in the right places
-        copied_files = docs._copy_user_guide_to_docs(user_guide_info)
+        copied_files = docs._publish_user_guide(user_guide_info)
 
         assert len(copied_files) == 6
 
@@ -2522,10 +2525,10 @@ def test_user_guide_copy_expands_code_includes():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        user_guide_info = docs._discover_user_guide()
+        user_guide_info = discover_user_guide(docs)
         assert user_guide_info is not None
 
-        docs._copy_user_guide_to_docs(user_guide_info)
+        docs._publish_user_guide(user_guide_info)
 
         # Verify the expanded content in the build directory
         built_file = docs.build_dir / "user-guide" / "tutorial.qmd"
@@ -2581,10 +2584,10 @@ def test_underscore_dir_copied_as_assets_with_qmd():
         (includes / "example.qmd").write_text("```python\nprint('hello')\n```\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        ug_info = docs._discover_user_guide()
+        ug_info = discover_user_guide(docs)
         assert ug_info is not None
 
-        docs._copy_user_guide_to_docs(ug_info)
+        docs._publish_user_guide(ug_info)
 
         # The _includes dir should be copied as an asset directory
         copied_includes = docs.build_dir / "user-guide" / "_includes"
@@ -2596,67 +2599,6 @@ def test_underscore_dir_copied_as_assets_with_qmd():
         built_content = built.read_text(encoding="utf-8")
         assert "```markdown" in built_content
         assert "print('hello')" in built_content
-
-
-def test_user_guide_sidebar_uses_clean_urls():
-    """Test that the generated sidebar uses clean URLs without numeric prefixes."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        # Create minimal pyproject.toml
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        # Create user_guide directory with numbered files
-        user_guide = project_path / "user_guide"
-        user_guide.mkdir()
-
-        (user_guide / "00-introduction.qmd").write_text("""---
-title: Introduction
-guide-section: Getting Started
----
-# Introduction
-""")
-        (user_guide / "01-installation.qmd").write_text("""---
-title: Installation
-guide-section: Getting Started
----
-# Installation
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Discover and generate sidebar
-        user_guide_info = docs._discover_user_guide()
-        assert user_guide_info is not None
-
-        sidebar_config = docs._generate_user_guide_sidebar(user_guide_info)
-
-        # Check sidebar structure
-        assert sidebar_config["id"] == "user-guide"
-        assert sidebar_config["title"] == "User Guide"
-
-        # Find the contents and verify clean URLs
-        contents = sidebar_config["contents"]
-        assert len(contents) > 0
-
-        # Flatten all hrefs from sections
-        all_hrefs = []
-        for item in contents:
-            if isinstance(item, dict) and "contents" in item:
-                for sub_item in item["contents"]:
-                    if isinstance(sub_item, str):
-                        all_hrefs.append(sub_item)
-                    elif isinstance(sub_item, dict):
-                        all_hrefs.append(sub_item.get("href", ""))
-            elif isinstance(item, str):
-                all_hrefs.append(item)
-
-        # Verify clean URLs (no numeric prefixes)
-        assert "user-guide/introduction.qmd" in all_hrefs
-        assert "user-guide/installation.qmd" in all_hrefs
-        assert "user-guide/00-introduction.qmd" not in all_hrefs
-        assert "user-guide/01-installation.qmd" not in all_hrefs
 
 
 def test_copy_assets_basic():
@@ -2977,157 +2919,6 @@ def test_skill_render_exclusion_uses_enumerated_globs():
         assert "*.md" in render
 
 
-def test_user_guide_config_option_overrides_default_dir():
-    """Test that user_guide config option takes precedence over user_guide/ directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        # Create minimal pyproject.toml
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        # Create conventional user_guide/ directory with a file
-        conventional_dir = project_path / "user_guide"
-        conventional_dir.mkdir()
-        (conventional_dir / "00-from-default.qmd").write_text(
-            "---\ntitle: From Default\n---\n# Default\n"
-        )
-
-        # Create custom directory with a different file
-        custom_dir = project_path / "docs" / "guides"
-        custom_dir.mkdir(parents=True)
-        (custom_dir / "00-from-custom.qmd").write_text("---\ntitle: From Custom\n---\n# Custom\n")
-
-        # Configure great-docs.yml to use the custom path
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("user_guide: docs/guides\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        user_guide_info = docs._discover_user_guide()
-
-        assert user_guide_info is not None
-        assert len(user_guide_info["files"]) == 1
-        assert user_guide_info["files"][0]["title"] == "From Custom"
-        assert user_guide_info["source_dir"] == custom_dir.resolve()
-
-
-def test_user_guide_config_option_custom_directory():
-    """Test that user_guide config option works with a subdirectory path."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        # Create a nested custom directory
-        custom_dir = project_path / "content" / "user-docs"
-        custom_dir.mkdir(parents=True)
-        (custom_dir / "intro.qmd").write_text("---\ntitle: Intro\n---\n# Intro\n")
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("user_guide: content/user-docs\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        user_guide_info = docs._discover_user_guide()
-
-        assert user_guide_info is not None
-        assert len(user_guide_info["files"]) == 1
-        assert user_guide_info["source_dir"] == custom_dir.resolve()
-
-
-def test_user_guide_config_option_nonexistent_dir(capsys):
-    """Test warning when user_guide config points to a nonexistent directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("user_guide: nonexistent/dir\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is None
-
-        captured = capsys.readouterr()
-
-        assert "does not exist" in captured.out
-
-
-def test_user_guide_warns_on_empty_directory(capsys):
-    """Test warning when user guide directory is empty."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        # Create empty user_guide directory
-        empty_dir = project_path / "user_guide"
-        empty_dir.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is None
-
-        captured = capsys.readouterr()
-
-        assert "is empty" in captured.out
-
-
-def test_user_guide_warns_on_no_guide_files(capsys):
-    """Test warning when user guide directory has no .qmd or .md files."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        # Create user_guide directory with only non-guide files
-        ug_dir = project_path / "user_guide"
-        ug_dir.mkdir()
-        (ug_dir / "notes.txt").write_text("just a text file")
-        (ug_dir / "data.csv").write_text("a,b,c")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is None
-
-        captured = capsys.readouterr()
-
-        assert "contains no .qmd or .md files" in captured.out
-
-
-def test_user_guide_discovery_ignores_reserved_build_directory():
-    """Auto-discovery must not sweep the build directory's own leftovers into the guide."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        (project_path / "pyproject.toml").write_text(
-            '[project]\nname = "test"\nversion = "0.1.0"\n'
-        )
-        # A migrated layout: the configuration lives in docs/, so the build directory is
-        # docs/_quarto/default/ and only its grandparent is a child of the guide source.
-        docs_dir = project_path / "docs"
-        docs_dir.mkdir()
-        (docs_dir / "great-docs.yml").write_text("user_guide: .\n")
-        (docs_dir / "guide.qmd").write_text("# Guide\n")
-        leftover = docs_dir / "_quarto/default/reference/other.qmd"
-        leftover.parent.mkdir(parents=True)
-        leftover.write_text("# Leftover\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is not None
-        assert {f["path"].resolve() for f in result["files"]} == {
-            (docs_dir / "guide.qmd").resolve()
-        }
-
-
 def test_user_guide_asset_copy_skips_the_staged_quarto_project() -> None:
     """Keep the staged Quarto project out of copied guide assets"""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -3141,9 +2932,9 @@ def test_user_guide_asset_copy_skips_the_staged_quarto_project() -> None:
         (docs_dir / "guide.qmd").write_text("---\ntitle: Guide\n---\n\n![Chart](images/c.png)\n")
         (docs_dir / "images").mkdir()
         (docs_dir / "images/c.png").write_bytes(b"chart")
-        # A previous build's staged Quarto project sits beside the real content. Its
-        # leading underscore makes `_is_asset_dir` claim it, and the copy destination is
-        # inside it, so copying it would recurse until the path grew too long.
+        # A previous build's staged Quarto project sits beside the source pages. Its leading
+        # underscore makes it look like an asset directory, but copying it into its own
+        # descendant would recurse until the path grew too long.
         stale = docs_dir / "_quarto/default/reference/other.qmd"
         stale.parent.mkdir(parents=True)
         stale.write_text("# Leftover\n")
@@ -3151,256 +2942,26 @@ def test_user_guide_asset_copy_skips_the_staged_quarto_project() -> None:
 
         docs = GreatDocs(project_path=tmp_dir)
         docs._prepare_build_directory(make_run())
-        docs._copy_user_guide_to_docs(docs._discover_user_guide())
+        docs._publish_user_guide(discover_user_guide(docs))
 
         assert (docs.build_dir / "user-guide/images/c.png").read_bytes() == b"chart"
         assert not list(docs.build_dir.rglob("_quarto"))
 
 
-def test_user_guide_config_warns_when_both_exist(capsys):
-    """Test warning when both config option and conventional directory exist."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        # Create conventional user_guide/ directory
-        conventional_dir = project_path / "user_guide"
-        conventional_dir.mkdir()
-        (conventional_dir / "default.qmd").write_text("---\ntitle: Default\n---\n# Default\n")
-
-        # Create custom directory
-        custom_dir = project_path / "my_guides"
-        custom_dir.mkdir()
-        (custom_dir / "custom.qmd").write_text("---\ntitle: Custom\n---\n# Custom\n")
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("user_guide: my_guides\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        user_guide_info = docs._discover_user_guide()
-
-        assert user_guide_info is not None
-
-        # Config option should win
-        assert user_guide_info["source_dir"] == custom_dir.resolve()
-
-        captured = capsys.readouterr()
-
-        assert "using configured path" in captured.out
-
-
-def test_user_guide_fallback_without_config():
-    """Test that default user_guide/ directory is used when no config option is set."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        # Create conventional user_guide/ directory
-        ug_dir = project_path / "user_guide"
-        ug_dir.mkdir()
-        (ug_dir / "intro.qmd").write_text("---\ntitle: Intro\n---\n# Intro\n")
-
-        # No great-docs.yml or one without user_guide key
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("display_name: Test\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        user_guide_info = docs._discover_user_guide()
-
-        assert user_guide_info is not None
-        assert user_guide_info["source_dir"] == ug_dir.resolve()
-
-
-def test_user_guide_config_empty_dir_warns(capsys):
-    """Test warning when user_guide config points to an empty directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        empty_dir = project_path / "empty_guides"
-        empty_dir.mkdir()
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("user_guide: empty_guides\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is None
-
-        captured = capsys.readouterr()
-
-        assert "is empty" in captured.out
-
-
-def test_user_guide_explicit_config_discovery():
-    """Test that explicit user_guide config (list) discovers files correctly."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        # Create user_guide directory with files (no numeric prefixes)
-        user_guide = project_path / "user_guide"
-        user_guide.mkdir()
-
-        (user_guide / "index.qmd").write_text("---\ntitle: Welcome\n---\n# Welcome\n")
-        (user_guide / "quickstart.qmd").write_text("---\ntitle: Quick Start\n---\n# Quick Start\n")
-        (user_guide / "installation.qmd").write_text(
-            "---\ntitle: Installation\n---\n# Installation\n"
-        )
-        (user_guide / "advanced.qmd").write_text("---\ntitle: Advanced Topics\n---\n# Advanced\n")
-
-        # Write config with explicit ordering
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("""user_guide:
-  - section: "Get Started"
-    contents:
-      - text: "Welcome"
-        href: index.qmd
-      - quickstart.qmd
-      - installation.qmd
-  - section: "Advanced"
-    contents:
-      - advanced.qmd
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is not None
-        assert result["explicit"] is True
-        assert len(result["files"]) == 4
-        assert result["has_index"] is True
-        assert "Get Started" in result["sections"]
-        assert "Advanced" in result["sections"]
-        assert len(result["sections"]["Get Started"]) == 3
-        assert len(result["sections"]["Advanced"]) == 1
-
-
-def test_user_guide_explicit_config_preserves_order():
-    """Test that explicit config preserves file ordering as specified."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        user_guide = project_path / "user_guide"
-        user_guide.mkdir()
-
-        # Create files that would sort differently alphabetically
-        (user_guide / "zebra.qmd").write_text("---\ntitle: Zebra\n---\n# Zebra\n")
-        (user_guide / "apple.qmd").write_text("---\ntitle: Apple\n---\n# Apple\n")
-        (user_guide / "mango.qmd").write_text("---\ntitle: Mango\n---\n# Mango\n")
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("""user_guide:
-  - section: "Fruits"
-    contents:
-      - zebra.qmd
-      - apple.qmd
-      - mango.qmd
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        # Files should be in config order, not alphabetical
-        assert result["files"][0]["path"].name == "zebra.qmd"
-        assert result["files"][1]["path"].name == "apple.qmd"
-        assert result["files"][2]["path"].name == "mango.qmd"
-
-
-def test_user_guide_explicit_config_sidebar_generation():
-    """Test sidebar generation from explicit config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        user_guide = project_path / "user_guide"
-        user_guide.mkdir()
-
-        (user_guide / "index.qmd").write_text("---\ntitle: Welcome\n---\n# Welcome\n")
-        (user_guide / "quickstart.qmd").write_text("---\ntitle: Quick Start\n---\n# Quick Start\n")
-        (user_guide / "installation.qmd").write_text(
-            "---\ntitle: Installation\n---\n# Installation\n"
-        )
-        (user_guide / "advanced.qmd").write_text("---\ntitle: Advanced\n---\n# Advanced\n")
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("""user_guide:
-  - section: "Get Started"
-    contents:
-      - text: "Welcome to Package"
-        href: index.qmd
-      - quickstart.qmd
-      - installation.qmd
-  - section: "Advanced"
-    contents:
-      - advanced.qmd
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        user_guide_info = docs._discover_user_guide()
-        sidebar = docs._generate_user_guide_sidebar(user_guide_info)
-
-        assert sidebar["id"] == "user-guide"
-        assert sidebar["title"] == "User Guide"
-        assert len(sidebar["contents"]) == 2
-
-        # Check first section
-        section1 = sidebar["contents"][0]
-
-        assert section1["section"] == "Get Started"
-        assert len(section1["contents"]) == 3
-
-        # First item has custom text
-        assert section1["contents"][0] == {
-            "text": "Welcome to Package",
-            "href": "user-guide/index.qmd",
-        }
-
-        # Other items now also have explicit text/href
-        assert section1["contents"][1] == {
-            "text": "Quick Start",
-            "href": "user-guide/quickstart.qmd",
-        }
-        assert section1["contents"][2] == {
-            "text": "Installation",
-            "href": "user-guide/installation.qmd",
-        }
-
-        # Check second section
-        section2 = sidebar["contents"][1]
-
-        assert section2["section"] == "Advanced"
-        assert section2["contents"] == [{"text": "Advanced", "href": "user-guide/advanced.qmd"}]
-
-
 def test_user_guide_explicit_config_no_prefix_stripping():
-    """Test that explicit config does NOT strip numeric prefixes from filenames."""
+    """Verify that explicit guides preserve numeric file name prefixes"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
 
         pyproject = project_path / "pyproject.toml"
         pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
 
-        user_guide = project_path / "user_guide"
-        user_guide.mkdir()
+        guide_dir = project_path / "user_guide"
+        guide_dir.mkdir()
 
         # Files WITH numeric prefixes (user chose to keep them)
-        (user_guide / "01-intro.qmd").write_text("---\ntitle: Intro\n---\n# Intro\n")
-        (user_guide / "02-setup.qmd").write_text("---\ntitle: Setup\n---\n# Setup\n")
+        (guide_dir / "01-intro.qmd").write_text("---\ntitle: Intro\n---\n# Intro\n")
+        (guide_dir / "02-setup.qmd").write_text("---\ntitle: Setup\n---\n# Setup\n")
 
         config_path = project_path / "great-docs.yml"
         config_path.write_text("""user_guide:
@@ -3411,11 +2972,11 @@ def test_user_guide_explicit_config_no_prefix_stripping():
 """)
 
         docs = GreatDocs(project_path=tmp_dir)
-        user_guide_info = docs._discover_user_guide()
+        user_guide_info = discover_user_guide(docs)
 
         # Copy files - should preserve names
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        copied_files = docs._copy_user_guide_to_docs(user_guide_info)
+        copied_files = docs._publish_user_guide(user_guide_info)
 
         assert "user-guide/01-intro.qmd" in copied_files
         assert "user-guide/02-setup.qmd" in copied_files
@@ -3427,164 +2988,11 @@ def test_user_guide_explicit_config_no_prefix_stripping():
         assert (docs_ug / "02-setup.qmd").exists()
 
         # Sidebar should also use original names
-        sidebar = docs._generate_user_guide_sidebar(user_guide_info)
+        sidebar = user_guide.sidebar(user_guide_info)
         section_contents = sidebar["contents"][0]["contents"]
 
         assert section_contents[0] == {"text": "Intro", "href": "user-guide/01-intro.qmd"}
         assert section_contents[1] == {"text": "Setup", "href": "user-guide/02-setup.qmd"}
-
-
-def test_user_guide_explicit_config_missing_file(capsys):
-    """Test warning when explicit config references a non-existent file."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        user_guide = project_path / "user_guide"
-        user_guide.mkdir()
-
-        (user_guide / "exists.qmd").write_text("---\ntitle: Exists\n---\n# Exists\n")
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("""user_guide:
-  - section: "Docs"
-    contents:
-      - exists.qmd
-      - missing.qmd
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is not None
-
-        # Only the existing file should be included
-        assert len(result["files"]) == 1
-        assert result["files"][0]["path"].name == "exists.qmd"
-
-        captured = capsys.readouterr()
-
-        assert "missing.qmd" in captured.out
-        assert "does not exist" in captured.out
-
-
-def test_user_guide_explicit_config_custom_text():
-    """Test that custom text entries are preserved in file info."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        user_guide = project_path / "user_guide"
-        user_guide.mkdir()
-
-        (user_guide / "index.qmd").write_text("---\ntitle: Home\n---\n# Home\n")
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("""user_guide:
-  - section: "Start"
-    contents:
-      - text: "Welcome to the Package"
-        href: index.qmd
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is not None
-        assert result["files"][0].get("custom_text") == "Welcome to the Package"
-
-
-def test_user_guide_explicit_overrides_frontmatter_sections():
-    """Test that explicit config sections override frontmatter guide-section keys."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        user_guide = project_path / "user_guide"
-        user_guide.mkdir()
-
-        # File has guide-section in frontmatter, but config will override
-        (user_guide / "intro.qmd").write_text(
-            "---\ntitle: Intro\nguide-section: Old Section\n---\n# Intro\n"
-        )
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("""user_guide:
-  - section: "New Section"
-    contents:
-      - intro.qmd
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is not None
-
-        # Section should come from config, not frontmatter
-        assert result["files"][0]["section"] == "New Section"
-        assert "New Section" in result["sections"]
-        assert "Old Section" not in result["sections"]
-
-
-def test_user_guide_explicit_with_conventional_dir():
-    """Test that explicit config works with auto-discovered user_guide/ directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        # Use conventional user_guide/ directory
-        user_guide = project_path / "user_guide"
-        user_guide.mkdir()
-
-        (user_guide / "page.qmd").write_text("---\ntitle: Page\n---\n# Page\n")
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("""user_guide:
-  - section: "Main"
-    contents:
-      - page.qmd
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is not None
-        assert result["explicit"] is True
-        assert result["source_dir"] == user_guide.resolve()
-
-
-def test_user_guide_string_config_still_works():
-    """Test that string user_guide config (directory path) still works as before."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        custom_dir = project_path / "my_guides"
-        custom_dir.mkdir()
-        (custom_dir / "intro.qmd").write_text(
-            "---\ntitle: Intro\nguide-section: Start\n---\n# Intro\n"
-        )
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("user_guide: my_guides\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is not None
-        assert result.get("explicit", False) is False
-        assert result["source_dir"] == custom_dir.resolve()
-        assert len(result["files"]) == 1
 
 
 def test_landing_page_generated_when_no_readme():
@@ -7358,7 +6766,6 @@ def test_an_escaping_custom_page_output_fails_the_custom_pages_step(tmp_path):
 
     run = (
         "_prepare_build_directory",
-        "_find_user_guide_dir",
         "_process_user_guide",
         "_process_custom_pages",
     )
@@ -7517,278 +6924,8 @@ def test_process_custom_pages_adds_raw_navbar_link_with_custom_text():
         assert texts == ["Guide", "Showcase", "Reference"]
 
 
-def test_user_guide_sidebar_auto_strips_numeric_prefix_from_subdirs():
-    """_generate_user_guide_sidebar_auto strips numeric prefixes from subdir section titles."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        src = tmp / "user_guide"
-        src.mkdir()
-        sub1 = src / "01-basics"
-        sub1.mkdir()
-        (sub1 / "intro.qmd").write_text("Intro\n")
-        sub2 = src / "02-advanced-topics"
-        sub2.mkdir()
-        (sub2 / "deep.qmd").write_text("Deep\n")
-
-        guide_info = {
-            "files": [
-                {"path": sub1 / "intro.qmd", "title": "Intro", "section": None},
-                {"path": sub2 / "deep.qmd", "title": "Deep", "section": None},
-            ],
-            "source_dir": src,
-            "sections": {},
-        }
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._generate_user_guide_sidebar_auto(guide_info)
-
-        section_items = [c for c in result["contents"] if isinstance(c, dict) and "section" in c]
-        section_titles = [s["section"] for s in section_items]
-
-        # Numeric prefixes should be stripped
-        assert "Basics" in section_titles
-        assert "Advanced Topics" in section_titles
-        # Raw prefixed names should NOT appear
-        assert "01 Basics" not in section_titles
-        assert "02 Advanced Topics" not in section_titles
-
-
-def test_parse_user_guide_file_with_frontmatter_basic():
-    """_parse_user_guide_file extracts title and section from frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        qmd = tmp / "01-install.qmd"
-        qmd.write_text("---\ntitle: Installation\nguide-section: Getting Started\n---\nBody\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._parse_user_guide_file(qmd)
-
-        assert result is not None
-        assert result["title"] == "Installation"
-        assert result["section"] == "Getting Started"
-
-
-def test_parse_user_guide_file_derives_title():
-    """_parse_user_guide_file derives title from filename when not in frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        qmd = tmp / "03-getting-started.qmd"
-        qmd.write_text("---\nguide-section: Basics\n---\nBody\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._parse_user_guide_file(qmd)
-
-        assert result is not None
-        assert result["title"] == "Getting Started"
-
-
-def test_parse_user_guide_file_no_frontmatter_underscore_prefix():
-    """_parse_user_guide_file derives title from filename without frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        qmd = tmp / "05_advanced-usage.qmd"
-        qmd.write_text("Just body content, no frontmatter\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._parse_user_guide_file(qmd)
-
-        assert result is not None
-        assert result["title"] == "Advanced Usage"
-        assert result["section"] is None
-
-
-def test_parse_user_guide_file_missing_file():
-    """_parse_user_guide_file returns None for missing files."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._parse_user_guide_file(Path(tmp_dir) / "nonexistent.qmd")
-        assert result is None
-
-
-def test_discover_user_guide_auto():
-    """_discover_user_guide auto-discovers files from user_guide directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-        ug = tmp / "user_guide"
-        ug.mkdir()
-        (ug / "01-intro.qmd").write_text("---\ntitle: Intro\n---\nContent\n")
-        (ug / "02-setup.qmd").write_text("---\ntitle: Setup\n---\nContent\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is not None
-        assert result["explicit"] is False
-        assert len(result["files"]) == 2
-
-
-def test_discover_user_guide_empty_dir_full_project():
-    """_discover_user_guide returns None for an empty user_guide directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-        ug = tmp / "user_guide"
-        ug.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is None
-
-
-def test_discover_user_guide_no_dir_full_project():
-    """_discover_user_guide returns None when no user_guide dir exists."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is None
-
-
-def test_discover_user_guide_with_sections():
-    """_discover_user_guide groups files by guide-section frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-        ug = tmp / "user_guide"
-        ug.mkdir()
-        (ug / "01-intro.qmd").write_text("---\ntitle: Intro\nguide-section: Basics\n---\nA\n")
-        (ug / "02-setup.qmd").write_text("---\ntitle: Setup\nguide-section: Basics\n---\nB\n")
-        (ug / "03-api.qmd").write_text("---\ntitle: API\nguide-section: Advanced\n---\nC\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is not None
-        assert "Basics" in result["sections"]
-        assert "Advanced" in result["sections"]
-        assert len(result["sections"]["Basics"]) == 2
-
-
-def test_discover_user_guide_with_subdirectories():
-    """_discover_user_guide discovers files recursively in subdirectories."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-        ug = tmp / "user_guide"
-        ug.mkdir()
-        (ug / "intro.qmd").write_text("---\ntitle: Intro\n---\nA\n")
-        sub = ug / "advanced"
-        sub.mkdir()
-        (sub / "deep.qmd").write_text("---\ntitle: Deep\n---\nB\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is not None
-        assert len(result["files"]) == 2
-
-
-def test_discover_user_guide_explicit():
-    """_discover_user_guide_explicit builds guide from config list."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        ug = tmp / "user_guide"
-        ug.mkdir()
-        (ug / "install.qmd").write_text("---\ntitle: Install\n---\nA\n")
-        (ug / "usage.qmd").write_text("---\ntitle: Usage\n---\nB\n")
-
-        config = [
-            {
-                "section": "Getting Started",
-                "contents": ["install.qmd", "usage.qmd"],
-            }
-        ]
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide_explicit(ug, config)
-
-        assert result is not None
-        assert result["explicit"] is True
-        assert len(result["files"]) == 2
-        assert "Getting Started" in result["sections"]
-
-
-def test_discover_user_guide_explicit_missing_file():
-    """_discover_user_guide_explicit handles missing files gracefully."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        ug = tmp / "user_guide"
-        ug.mkdir()
-        (ug / "real.qmd").write_text("---\ntitle: Real\n---\nA\n")
-
-        config = [
-            {
-                "section": "Section",
-                "contents": ["real.qmd", "missing.qmd"],
-            }
-        ]
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide_explicit(ug, config)
-
-        assert result is not None
-        assert len(result["files"]) == 1
-
-
-def test_discover_user_guide_explicit_dict_items():
-    """_discover_user_guide_explicit handles dict items with text/href."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        ug = tmp / "user_guide"
-        ug.mkdir()
-        (ug / "guide.qmd").write_text("---\ntitle: Guide\n---\nA\n")
-
-        config = [
-            {
-                "section": "Docs",
-                "contents": [{"href": "guide.qmd", "text": "Custom Label"}],
-            }
-        ]
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide_explicit(ug, config)
-
-        assert result is not None
-        assert result["files"][0]["custom_text"] == "Custom Label"
-
-
-def test_discover_user_guide_explicit_empty():
-    """_discover_user_guide_explicit returns None when no valid files found."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        ug = tmp / "user_guide"
-        ug.mkdir()
-
-        config = [{"section": "Empty", "contents": ["missing.qmd"]}]
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide_explicit(ug, config)
-
-        assert result is None
-
-
-def test_discover_user_guide_explicit_skips_duplicates():
-    """_discover_user_guide_explicit skips files already seen."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        ug = tmp / "user_guide"
-        ug.mkdir()
-        (ug / "intro.qmd").write_text("---\ntitle: Intro\n---\nA\n")
-
-        config = [
-            {"section": "S1", "contents": ["intro.qmd"]},
-            {"section": "S2", "contents": ["intro.qmd"]},  # duplicate
-        ]
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide_explicit(ug, config)
-
-        assert result is not None
-        assert len(result["files"]) == 1
-
-
-def test_copy_user_guide_to_docs_auto():
-    """_copy_user_guide_to_docs strips numeric prefixes in auto mode."""
+def test_publish_user_guide_auto():
+    """Verify that automatic guides publish pages without numeric prefixes"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
@@ -7803,15 +6940,15 @@ def test_copy_user_guide_to_docs_auto():
             "source_dir": src,
             "explicit": False,
         }
-        result = docs._copy_user_guide_to_docs(guide_info)
+        result = docs._publish_user_guide(guide_info)
 
         assert len(result) == 1
         assert "intro.qmd" in result[0]
         assert (docs.build_dir / "user-guide" / "intro.qmd").exists()
 
 
-def test_copy_user_guide_to_docs_explicit():
-    """_copy_user_guide_to_docs preserves filenames in explicit mode."""
+def test_publish_user_guide_explicit():
+    """Verify that explicit guides publish pages with their original file names"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
@@ -7826,22 +6963,13 @@ def test_copy_user_guide_to_docs_explicit():
             "source_dir": src,
             "explicit": True,
         }
-        result = docs._copy_user_guide_to_docs(guide_info)
+        result = docs._publish_user_guide(guide_info)
 
         assert "01-intro.qmd" in result[0]
 
 
-def test_copy_user_guide_to_docs_empty():
-    """_copy_user_guide_to_docs returns empty list for falsy input."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._copy_user_guide_to_docs({}) == []
-        assert docs._copy_user_guide_to_docs(None) == []
-
-
-def test_copy_user_guide_to_docs_copies_assets():
-    """_copy_user_guide_to_docs copies asset directories without .qmd files."""
+def test_publish_user_guide_copies_assets():
+    """Verify that guide publication copies asset directories without `.qmd` files"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
@@ -7859,7 +6987,7 @@ def test_copy_user_guide_to_docs_copies_assets():
             "source_dir": src,
             "explicit": True,
         }
-        docs._copy_user_guide_to_docs(guide_info)
+        docs._publish_user_guide(guide_info)
 
         assert (docs.build_dir / "user-guide" / "images" / "logo.png").exists()
 
@@ -7868,7 +6996,7 @@ def test_copy_user_guide_to_docs_copies_assets():
     ("explicit", "subdir"),
     [(False, "advanced"), (True, "02-advanced")],
 )
-def test_copy_user_guide_to_docs_copies_directory_metadata(explicit, subdir):
+def test_publish_user_guide_copies_directory_metadata(explicit, subdir):
     """Directory metadata lands beside its pages, prefix-stripped only in auto mode."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
@@ -7891,7 +7019,7 @@ def test_copy_user_guide_to_docs_copies_directory_metadata(explicit, subdir):
             "source_dir": src,
             "explicit": explicit,
         }
-        docs._copy_user_guide_to_docs(guide_info)
+        docs._publish_user_guide(guide_info)
 
         target = docs.build_dir / "user-guide"
         assert (target / "_metadata.yml").read_text() == "toc: false\n"
@@ -8929,159 +8057,6 @@ def test_discover_missing_package(tmp_path):
     assert result is None
 
 
-def test_rewrite_href_recursive_dict_match():
-    """_rewrite_href_recursive replaces a dict href."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        items = [
-            {"text": "Intro", "href": "user-guide/intro.qmd"},
-            {"text": "Setup", "href": "user-guide/setup.qmd"},
-        ]
-        found = docs._rewrite_href_recursive(items, "user-guide/intro.qmd", "index.qmd")
-
-        assert found is True
-        assert items[0]["href"] == "index.qmd"
-
-
-def test_rewrite_href_recursive_string_match():
-    """_rewrite_href_recursive replaces a bare string entry."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        items = ["user-guide/intro.qmd", "user-guide/setup.qmd"]
-        found = docs._rewrite_href_recursive(items, "user-guide/intro.qmd", "index.qmd")
-
-        assert found is True
-        assert items[0] == {"text": "Home", "href": "index.qmd"}
-
-
-def test_rewrite_href_recursive_nested():
-    """_rewrite_href_recursive searches nested section contents."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        items = [
-            {
-                "section": "Getting Started",
-                "contents": [
-                    {"text": "Intro", "href": "user-guide/intro.qmd"},
-                ],
-            },
-        ]
-        found = docs._rewrite_href_recursive(items, "user-guide/intro.qmd", "index.qmd")
-
-        assert found is True
-        assert items[0]["contents"][0]["href"] == "index.qmd"
-
-
-def test_rewrite_href_recursive_no_match():
-    """_rewrite_href_recursive returns False when no match found."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        items = [{"text": "Other", "href": "other.qmd"}]
-
-        assert docs._rewrite_href_recursive(items, "missing.qmd", "new.qmd") is False
-
-
-def test_rewrite_sidebar_first_entry_exact_check():
-    """_rewrite_sidebar_first_entry rewrites first href to index.qmd."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        sidebar = {
-            "id": "user-guide",
-            "title": "User Guide",
-            "contents": [
-                {"text": "Intro", "href": "user-guide/intro.qmd"},
-                "user-guide/setup.qmd",
-            ],
-        }
-        docs._rewrite_sidebar_first_entry(sidebar, "user-guide/intro.qmd")
-
-        assert sidebar["contents"][0]["href"] == "index.qmd"
-
-
-def test_organize_files_into_sidebar_flat():
-    """_generate_user_guide_sidebar_auto generates flat sidebar from root files."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        src = tmp / "user_guide"
-        src.mkdir()
-        (src / "intro.qmd").write_text("---\ntitle: Intro\n---\n")
-        (src / "setup.qmd").write_text("---\ntitle: Setup\n---\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        guide_info = {
-            "files": [
-                {"path": src / "intro.qmd", "title": "Intro", "section": None},
-                {"path": src / "setup.qmd", "title": "Setup", "section": None},
-            ],
-            "source_dir": src,
-            "sections": {},
-        }
-        result = docs._generate_user_guide_sidebar_auto(guide_info)
-
-        assert result["id"] == "user-guide"
-        assert len(result["contents"]) == 2
-        assert {"text": "Intro", "href": "user-guide/intro.qmd"} in result["contents"]
-
-
-def test_organize_files_into_sidebar_with_sections():
-    """_generate_user_guide_sidebar_auto groups files by section."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        src = tmp / "user_guide"
-        src.mkdir()
-        (src / "a.qmd").write_text("A\n")
-        (src / "b.qmd").write_text("B\n")
-
-        f_a = {"path": src / "a.qmd", "title": "A", "section": "Basics"}
-        f_b = {"path": src / "b.qmd", "title": "B", "section": "Basics"}
-        guide_info = {
-            "files": [f_a, f_b],
-            "source_dir": src,
-            "sections": {"Basics": [f_a, f_b]},
-        }
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._generate_user_guide_sidebar_auto(guide_info)
-
-        assert result["id"] == "user-guide"
-
-        # Should have one section entry
-        section_items = [c for c in result["contents"] if isinstance(c, dict) and "section" in c]
-
-        assert len(section_items) == 1
-        assert section_items[0]["section"] == "Basics"
-
-
-def test_organize_files_into_sidebar_subdirectories():
-    """_generate_user_guide_sidebar_auto groups by subdirectory when no sections."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        src = tmp / "user_guide"
-        src.mkdir()
-        sub = src / "advanced"
-        sub.mkdir()
-        (src / "intro.qmd").write_text("Intro\n")
-        (sub / "deep.qmd").write_text("Deep\n")
-
-        guide_info = {
-            "files": [
-                {"path": src / "intro.qmd", "title": "Intro", "section": None},
-                {"path": sub / "deep.qmd", "title": "Deep", "section": None},
-            ],
-            "source_dir": src,
-            "sections": {},
-        }
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._generate_user_guide_sidebar_auto(guide_info)
-
-        # Should have root file + subdirectory section
-        section_items = [c for c in result["contents"] if isinstance(c, dict) and "section" in c]
-
-        assert len(section_items) == 1
-        assert section_items[0]["section"] == "Advanced"
-
-
 def test_update_config_with_user_guide_adds_sidebar():
     """_update_config_with_user_guide adds sidebar and navbar entry."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -9295,52 +8270,6 @@ def test_process_user_guide_with_sections():
         ]
 
         assert len(section_items) >= 1
-
-
-def test_generate_user_guide_sidebar_explicit():
-    """_generate_user_guide_sidebar_explicit builds sidebar from config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        src = tmp / "user_guide"
-        src.mkdir()
-        (src / "install.qmd").write_text("I\n")
-        (src / "usage.qmd").write_text("U\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        guide_info = {
-            "files": [
-                {
-                    "path": src / "install.qmd",
-                    "title": "Install",
-                    "section": "Getting Started",
-                    "custom_text": None,
-                },
-                {
-                    "path": src / "usage.qmd",
-                    "title": "Usage",
-                    "section": "Getting Started",
-                    "custom_text": None,
-                },
-            ],
-            "source_dir": src,
-            "sections": {
-                "Getting Started": [
-                    {"path": src / "install.qmd", "title": "Install", "section": "Getting Started"},
-                    {"path": src / "usage.qmd", "title": "Usage", "section": "Getting Started"},
-                ]
-            },
-            "explicit": True,
-            "explicit_config": [
-                {"section": "Getting Started", "contents": ["install.qmd", "usage.qmd"]},
-            ],
-        }
-        result = docs._generate_user_guide_sidebar_explicit(guide_info)
-
-        assert result["id"] == "user-guide"
-
-        section_items = [c for c in result["contents"] if isinstance(c, dict) and "section" in c]
-
-        assert len(section_items) == 1
 
 
 def test_strip_numeric_prefix_various():
@@ -13562,26 +12491,6 @@ def test_get_package_metadata_keeps_in_memory_config_without_pyproject(tmp_path:
     assert docs._config.changelog_max_releases == 3
 
 
-def test_discover_user_guide_basic_full_project():
-    """Test _discover_user_guide finds user guide files."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        # Create user_guide directory
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-        (ug_dir / "01-intro.qmd").write_text("---\ntitle: Intro\n---\n\n# Intro\n")
-
-        result = docs._discover_user_guide()
-        # Should find the user guide
-        assert (
-            result is not None or result is None
-        )  # May not find if naming doesn't match convention
-
-
 def test_is_compiled_extension():
     """Test _is_compiled_extension for standard Python package."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -13962,44 +12871,6 @@ def test_get_package_metadata_config_mapping():
         assert "funding" in metadata
 
 
-def test_discover_user_guide_empty_dir():
-    """Test _discover_user_guide returns None when user guide dir is empty."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-        result = docs._discover_user_guide()
-        assert result is None
-
-
-def test_discover_user_guide_no_qmd_files():
-    """Test _discover_user_guide returns None when dir has no .qmd/.md files."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-        (ug_dir / "notes.txt").write_text("not a doc file\n")
-        result = docs._discover_user_guide()
-        assert result is None
-
-
-def test_discover_user_guide_basic():
-    """Test _discover_user_guide discovers .qmd files."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-        (ug_dir / "01-intro.qmd").write_text(
-            "---\ntitle: Intro\n---\n\n# Intro content\n", encoding="utf-8"
-        )
-        (ug_dir / "02-advanced.qmd").write_text(
-            "---\ntitle: Advanced\n---\n\n# Advanced content\n", encoding="utf-8"
-        )
-        result = docs._discover_user_guide()
-        assert result is not None
-        assert len(result["files"]) == 2
-
-
 def test_detect_git_ref_no_git():
     """Test _detect_git_ref returns fallback when not in a git repo."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -14114,8 +12985,8 @@ def test_auto_exclude_set():
     assert "VERSION" in AUTO_EXCLUDE
 
 
-def test_copy_user_guide_to_docs_basic():
-    """Test _copy_user_guide_to_docs copies files to docs directory."""
+def test_publish_user_guide_basic():
+    """Verify that guide pages are copied into the build directory"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -14127,14 +12998,14 @@ def test_copy_user_guide_to_docs_basic():
             "---\ntitle: Intro\n---\n\n# Intro\n", encoding="utf-8"
         )
 
-        guide_info = docs._discover_user_guide()
+        guide_info = discover_user_guide(docs)
         assert guide_info is not None
 
         # Create build dir
         build_dir = Path(tmp_dir) / "great-docs"
         build_dir.mkdir(parents=True, exist_ok=True)
 
-        result = docs._copy_user_guide_to_docs(guide_info)
+        result = docs._publish_user_guide(guide_info)
         assert isinstance(result, list)
 
 
@@ -14171,23 +13042,6 @@ def test_strip_numeric_prefix():
         assert strip_numeric_prefix("01-intro.qmd") == "intro.qmd"
         assert strip_numeric_prefix("10-advanced.qmd") == "advanced.qmd"
         assert strip_numeric_prefix("no-prefix.qmd") == "no-prefix.qmd"
-
-
-def test_rewrite_sidebar_first_entry():
-    """Test _rewrite_sidebar_first_entry rewrites the first sidebar href."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        sidebar_config = {
-            "id": "user-guide",
-            "title": "User Guide",
-            "contents": [
-                "user-guide/intro.qmd",
-                "user-guide/advanced.qmd",
-            ],
-        }
-        docs._rewrite_sidebar_first_entry(sidebar_config, "user-guide/intro.qmd")
-        # Should rewrite the first entry to point to index.qmd
-        assert sidebar_config["contents"][0] != "user-guide/intro.qmd"
 
 
 def test_copy_assets_no_assets():
@@ -14234,21 +13088,6 @@ def test_detect_package_name_not_found():
         assert result is None
 
 
-def test_parse_user_guide_file_with_frontmatter():
-    """Test _parse_user_guide_file extracts title from frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        qmd_file = Path(tmp_dir) / "01-intro.qmd"
-        qmd_file.write_text(
-            "---\ntitle: Introduction\nguide-section: Getting Started\n---\n\n# Intro\n",
-            encoding="utf-8",
-        )
-        result = docs._parse_user_guide_file(qmd_file)
-        assert result is not None
-        assert result["title"] == "Introduction"
-        assert result["section"] == "Getting Started"
-
-
 def test_update_config_with_user_guide():
     """Test _update_config_with_user_guide updates quarto config."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -14273,7 +13112,7 @@ def test_update_config_with_user_guide():
             "---\ntitle: Intro\n---\n\n# Intro\n", encoding="utf-8"
         )
 
-        guide_info = docs._discover_user_guide()
+        guide_info = discover_user_guide(docs)
         assert guide_info is not None
 
         docs._update_config_with_user_guide(guide_info)
@@ -14428,54 +13267,6 @@ def test_get_package_exports_with_fallback():
         assert result is None or isinstance(result, list)
 
 
-def test_find_user_guide_dir_underscore():
-    """Test _find_user_guide_dir finds user_guide directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "user_guide").mkdir()
-        result = docs._find_user_guide_dir()
-        assert result is not None
-        assert result.name == "user_guide"
-
-
-def test_find_user_guide_dir_hyphen():
-    """Test _find_user_guide_dir finds user-guide directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "user-guide").mkdir()
-        result = docs._find_user_guide_dir()
-        assert result is not None
-        assert result.name == "user-guide"
-
-
-def test_find_user_guide_dir_not_found():
-    """Test _find_user_guide_dir returns None when no guide dir."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._find_user_guide_dir()
-        assert result is None
-
-
-def test_find_user_guide_dir_skips_section_directory(tmp_path):
-    (tmp_path / "great-docs.yml").write_text("sections:\n  - title: Guide\n    dir: user_guide\n")
-    (tmp_path / "user_guide").mkdir()
-    docs = GreatDocs(project_path=tmp_path)
-
-    assert docs._find_user_guide_dir() is None
-
-
-def test_find_user_guide_dir_falls_back_past_claimed_directory(tmp_path):
-    (tmp_path / "great-docs.yml").write_text("sections:\n  - title: Guide\n    dir: user_guide\n")
-    (tmp_path / "user_guide").mkdir()
-    (tmp_path / "user-guide").mkdir()
-    docs = GreatDocs(project_path=tmp_path)
-
-    result = docs._find_user_guide_dir()
-
-    assert result is not None
-    assert result.name == "user-guide"
-
-
 def test_custom_page_sources_skip_section_directory(tmp_path):
     (tmp_path / "great-docs.yml").write_text("sections:\n  - title: Pages\n    dir: custom\n")
     (tmp_path / "custom").mkdir()
@@ -14579,34 +13370,6 @@ def test_homepage_margin_with_authors_b9():
         assert isinstance(result, str)
         # Should contain the author name
         assert "Dev One" in result
-
-
-def test_discover_user_guide_explicit_config():
-    """Test _discover_user_guide with explicit user_guide config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-        (ug_dir / "intro.qmd").write_text("---\ntitle: Intro\n---\n\n# Intro\n", encoding="utf-8")
-        (ug_dir / "advanced.qmd").write_text(
-            "---\ntitle: Advanced\n---\n\n# Advanced\n", encoding="utf-8"
-        )
-
-        docs._config = write_config(
-            Path(tmp_dir),
-            "user_guide:\n"
-            "  - section: Getting Started\n"
-            "    contents:\n"
-            "      - intro.qmd\n"
-            "  - section: Expert\n"
-            "    contents:\n"
-            "      - advanced.qmd\n",
-        )
-
-        result = docs._discover_user_guide()
-        assert result is not None
-        assert result["explicit"] is True
-        assert len(result["files"]) == 2
 
 
 def test_entry_point_name_b9():
@@ -14915,42 +13678,6 @@ def test_find_package_init_python_subdir():
         assert result.name == "__init__.py"
 
 
-def test_discover_user_guide_with_subdirectory():
-    """Test _discover_user_guide finds files in subdirectories."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-        (ug_dir / "01-intro.qmd").write_text(
-            "---\ntitle: Intro\n---\n\nIntro text.\n", encoding="utf-8"
-        )
-        sub_dir = ug_dir / "advanced"
-        sub_dir.mkdir()
-        (sub_dir / "deep.qmd").write_text(
-            "---\ntitle: Deep\n---\n\nDeep content.\n", encoding="utf-8"
-        )
-
-        result = docs._discover_user_guide()
-        assert result is not None
-        assert len(result["files"]) == 2
-        assert result["explicit"] is False
-
-
-def test_discover_user_guide_hyphen_dir():
-    """Test _discover_user_guide finds user-guide (hyphen) directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        ug_dir = Path(tmp_dir) / "user-guide"
-        ug_dir.mkdir()
-        (ug_dir / "01-intro.qmd").write_text("---\ntitle: Intro\n---\n\nIntro.\n", encoding="utf-8")
-
-        result = docs._discover_user_guide()
-        assert result is not None
-        assert len(result["files"]) >= 1
-
-
 def test_process_user_guide_homepage_mode():
     """Test _process_user_guide with homepage=user_guide but no guide."""
 
@@ -15107,8 +13834,8 @@ def test_get_package_exports_with_exclude():
             assert "_private" not in result
 
 
-def test_copy_user_guide_to_docs_strips_prefix():
-    """Test _copy_user_guide_to_docs strips numeric prefix from filenames."""
+def test_publish_user_guide_strips_prefix():
+    """Verify that automatic guide publication removes numeric file name prefixes"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
@@ -15127,7 +13854,7 @@ def test_copy_user_guide_to_docs_strips_prefix():
             "explicit": False,
         }
 
-        result = docs._copy_user_guide_to_docs(ug_info)
+        result = docs._publish_user_guide(ug_info)
         assert len(result) == 1
 
         # Check that numeric prefix was stripped
@@ -15135,45 +13862,6 @@ def test_copy_user_guide_to_docs_strips_prefix():
         assert ug_dest.exists()
         dest_files = list(ug_dest.iterdir())
         assert any("intro" in f.name.lower() for f in dest_files)
-
-
-def test_generate_user_guide_sidebar_auto():
-    """Test _generate_user_guide_sidebar in auto mode."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir(parents=True)
-
-        ug_src = Path(tmp_dir) / "user_guide"
-        ug_src.mkdir(exist_ok=True)
-
-        copied_files = [
-            {
-                "path": ug_src / "intro.qmd",
-                "title": "Intro",
-                "section": None,
-                "dest_name": "intro.qmd",
-            },
-            {
-                "path": ug_src / "advanced.qmd",
-                "title": "Advanced",
-                "section": None,
-                "dest_name": "advanced.qmd",
-            },
-        ]
-
-        ug_info = {
-            "files": copied_files,
-            "sections": {},
-            "has_index": False,
-            "explicit": False,
-            "source_dir": ug_src,
-        }
-
-        result = docs._generate_user_guide_sidebar(ug_info)
-        assert isinstance(result, dict)
-        assert "id" in result
-        assert result["id"] == "user-guide"
 
 
 def test_update_quarto_config_with_assets():
@@ -15540,8 +14228,8 @@ def test_quarto_environment():
         assert "QUARTO_PYTHON" in env
 
 
-def test_copy_user_guide_to_docs_with_subdirs():
-    """Test _copy_user_guide_to_docs handles files in subdirectories."""
+def test_publish_user_guide_with_subdirs():
+    """Verify publication of nested guide pages"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         build_dir = Path(tmp_dir) / "great-docs"
@@ -15561,7 +14249,7 @@ def test_copy_user_guide_to_docs_with_subdirs():
             "source_dir": ug_src,
             "explicit": False,
         }
-        copied = docs._copy_user_guide_to_docs(ug_info)
+        copied = docs._publish_user_guide(ug_info)
         assert len(copied) >= 1
 
 
@@ -15649,43 +14337,6 @@ def test_get_github_repo_info_no_url():
         assert url is None
 
 
-def test_parse_user_guide_file_basic():
-    """Test _parse_user_guide_file extracts title from frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        qmd = Path(tmp_dir) / "guide.qmd"
-        qmd.write_text("---\ntitle: My Guide\n---\n\n# Content\n", encoding="utf-8")
-        result = docs._parse_user_guide_file(qmd)
-        assert result is not None
-        assert result["title"] == "My Guide"
-        assert result["path"] == qmd
-
-
-def test_parse_user_guide_file_no_frontmatter():
-    """Test _parse_user_guide_file handles files without frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        qmd = Path(tmp_dir) / "guide.qmd"
-        qmd.write_text("# Just content\n\nNo frontmatter here.\n", encoding="utf-8")
-        result = docs._parse_user_guide_file(qmd)
-        # Should still return something (derives title from filename)
-        assert result is not None
-
-
-def test_parse_user_guide_file_with_section():
-    """Test _parse_user_guide_file extracts section from frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        qmd = Path(tmp_dir) / "guide.qmd"
-        qmd.write_text(
-            "---\ntitle: My Guide\nguide-section: Getting Started\n---\n\n# Content\n",
-            encoding="utf-8",
-        )
-        result = docs._parse_user_guide_file(qmd)
-        assert result is not None
-        assert result["section"] == "Getting Started"
-
-
 def test_detect_module_name_from_maturin():
     """Test _detect_module_name reads from [tool.maturin] module-name."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -15708,8 +14359,8 @@ def test_detect_module_name_from_pyi():
         assert name == "my_ext"
 
 
-def test_copy_user_guide_to_docs_adds_breadcrumbs():
-    """Test _copy_user_guide_to_docs adds bread-crumbs: false."""
+def test_publish_user_guide_adds_breadcrumbs():
+    """Verify that guide publication sets `bread-crumbs: false`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         build_dir = Path(tmp_dir) / "great-docs"
@@ -15727,7 +14378,7 @@ def test_copy_user_guide_to_docs_adds_breadcrumbs():
             "source_dir": ug_src,
             "explicit": False,
         }
-        copied = docs._copy_user_guide_to_docs(ug_info)
+        copied = docs._publish_user_guide(ug_info)
         assert len(copied) == 1
 
         # Check bread-crumbs was added
@@ -15737,8 +14388,8 @@ def test_copy_user_guide_to_docs_adds_breadcrumbs():
         assert "bread-crumbs: false" in content
 
 
-def test_copy_user_guide_to_docs_explicit_mode():
-    """Test _copy_user_guide_to_docs preserves filenames in explicit mode."""
+def test_publish_user_guide_explicit_mode():
+    """Verify that explicit guide publication preserves file names"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         build_dir = Path(tmp_dir) / "great-docs"
@@ -15756,7 +14407,7 @@ def test_copy_user_guide_to_docs_explicit_mode():
             "source_dir": ug_src,
             "explicit": True,
         }
-        copied = docs._copy_user_guide_to_docs(ug_info)
+        copied = docs._publish_user_guide(ug_info)
         # In explicit mode, filename should be preserved (not stripped)
         assert "user-guide/01-guide.qmd" in copied
 
@@ -15941,49 +14592,6 @@ def test_get_package_exports_hyphenated_name():
         exports = docs._get_package_exports("my-pkg")
 
         assert exports is None
-
-
-def test_discover_user_guide_with_files():
-    """Test _discover_user_guide finds files in user_guide directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-        (ug_dir / "01-intro.qmd").write_text(
-            "---\ntitle: Intro\n---\n\n# Introduction\n", encoding="utf-8"
-        )
-        (ug_dir / "02-setup.qmd").write_text(
-            "---\ntitle: Setup\n---\n\n# Setting Up\n", encoding="utf-8"
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is not None
-        assert len(result["files"]) == 2
-        assert result["source_dir"] == ug_dir.resolve()
-
-
-def test_discover_user_guide_no_dir():
-    """Test _discover_user_guide returns None when no directory exists."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is None
-
-
-def test_discover_user_guide_with_subdirs():
-    """Test _discover_user_guide finds files in subdirectories."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-        sub = ug_dir / "advanced"
-        sub.mkdir()
-        (sub / "topic.qmd").write_text("---\ntitle: Topic\n---\n\nContent\n", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is not None
-        assert len(result["files"]) >= 1
 
 
 def _buildable_docs(
@@ -25414,53 +24022,6 @@ def test_detect_module_name_where_string():
         assert name == "mypkg"
 
 
-def test_rewrite_href_recursive_nested_list():
-    """_rewrite_href_recursive rewrites hrefs in nested lists/dicts."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Top-level dict match
-        sidebar = [
-            {"text": "Page 1", "href": "user-guide/intro.qmd"},
-            {
-                "text": "Section",
-                "contents": [
-                    {"text": "Page 2", "href": "user-guide/page2.qmd"},
-                ],
-            },
-        ]
-        found = docs._rewrite_href_recursive(sidebar, "user-guide/intro.qmd", "index.qmd")
-        assert found is True
-        assert sidebar[0]["href"] == "index.qmd"
-
-        # Nested dict match (in-place modification)
-        sidebar2 = [
-            {
-                "text": "Section",
-                "contents": [
-                    {"text": "Deep", "href": "old.qmd"},
-                ],
-            },
-        ]
-        found2 = docs._rewrite_href_recursive(sidebar2, "old.qmd", "new.qmd")
-        assert found2 is True
-        assert sidebar2[0]["contents"][0]["href"] == "new.qmd"
-
-        # Bare string entry match
-        sidebar3 = ["bare-page.qmd", {"text": "Other", "href": "other.qmd"}]
-        found3 = docs._rewrite_href_recursive(sidebar3, "bare-page.qmd", "index.qmd")
-        assert found3 is True
-        assert sidebar3[0] == {"text": "Home", "href": "index.qmd"}
-
-        # No match returns False
-        sidebar4 = [{"text": "A", "href": "a.qmd"}]
-        found4 = docs._rewrite_href_recursive(sidebar4, "nonexistent.qmd", "z.qmd")
-        assert found4 is False
-
-
 def test_type_sections_empty_lists():
     """TypeSections with no items produces empty Blocks output."""
 
@@ -25986,321 +24547,8 @@ class TestUpdateSidebarWithCli:
             assert result["website"]["sidebar"] == []
 
 
-class TestDiscoverUserGuide:
-    """Tests for _discover_user_guide and helper methods."""
-
-    def _make_project(self, tmp_dir, user_guide_files=None, config_text=""):
-        """Create a project with user guide files."""
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
-        if config_text:
-            (tmp / "great-docs.yml").write_text(config_text)
-
-        ug_dir = tmp / "user_guide"
-        ug_dir.mkdir(exist_ok=True)
-
-        if user_guide_files:
-            for name, content in user_guide_files.items():
-                path = ug_dir / name
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(content)
-
-        return GreatDocs(project_path=tmp_dir)
-
-    def test_auto_discover_basic(self):
-        """Discovers user guide files sorted by filename."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = self._make_project(
-                tmp_dir,
-                {
-                    "02-advanced.qmd": "---\ntitle: Advanced\n---\nContent\n",
-                    "01-intro.qmd": "---\ntitle: Introduction\n---\nContent\n",
-                },
-            )
-            info = docs._discover_user_guide()
-            assert info is not None
-            assert len(info["files"]) == 2
-            assert info["files"][0]["title"] == "Introduction"
-            assert info["files"][1]["title"] == "Advanced"
-            assert info["explicit"] is False
-
-    def test_auto_discover_empty_dir(self):
-        """Returns None for completely empty user guide directory."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = self._make_project(tmp_dir, {})
-            # Directory exists but is empty
-            info = docs._discover_user_guide()
-            assert info is None
-
-    def test_auto_discover_with_subdirectories(self):
-        """Discovers files in subdirectories."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = self._make_project(
-                tmp_dir,
-                {
-                    "01-intro.qmd": "---\ntitle: Introduction\n---\nContent\n",
-                    "basics/01-setup.qmd": "---\ntitle: Setup\n---\nContent\n",
-                },
-            )
-            info = docs._discover_user_guide()
-            assert info is not None
-            assert len(info["files"]) == 2
-
-    def test_auto_discover_no_valid_files(self):
-        """Returns None when dir has only non-qmd files."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            (ug_dir / "notes.txt").write_text("not a qmd file")
-            docs = GreatDocs(project_path=tmp_dir)
-            info = docs._discover_user_guide()
-            assert info is None
-
-    def test_auto_discover_with_sections_in_frontmatter(self):
-        """Groups files by section from frontmatter."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = self._make_project(
-                tmp_dir,
-                {
-                    "01-intro.qmd": "---\ntitle: Introduction\nguide-section: Getting Started\n---\nContent\n",
-                    "02-config.qmd": "---\ntitle: Configuration\nguide-section: Getting Started\n---\nContent\n",
-                    "03-deploy.qmd": "---\ntitle: Deployment\nguide-section: Advanced\n---\nContent\n",
-                },
-            )
-            info = docs._discover_user_guide()
-            assert info is not None
-            assert "Getting Started" in info["sections"]
-            assert len(info["sections"]["Getting Started"]) == 2
-            assert "Advanced" in info["sections"]
-
-    def test_auto_discover_has_index(self):
-        """Detects presence of index.qmd."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = self._make_project(
-                tmp_dir,
-                {
-                    "index.qmd": "---\ntitle: User Guide\n---\nOverview\n",
-                    "01-intro.qmd": "---\ntitle: Introduction\n---\nContent\n",
-                },
-            )
-            info = docs._discover_user_guide()
-            assert info is not None
-            assert info["has_index"] is True
-
-    def test_auto_discover_has_index_false_for_subdir_only(self):
-        """Subdir index.qmd files do not set has_index; only a root-level one does."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = self._make_project(
-                tmp_dir,
-                {
-                    "01-overview.qmd": "---\ntitle: Overview\n---\nContent\n",
-                    "02-setup/index.qmd": "---\ntitle: Setup\n---\nSection intro\n",
-                    "02-setup/install.qmd": "---\ntitle: Installation\n---\nContent\n",
-                },
-            )
-            info = docs._discover_user_guide()
-            assert info is not None
-            assert info["has_index"] is False, (
-                "has_index should be False when only subdir index.qmd files exist"
-            )
-
-
-class TestDiscoverUserGuideExplicit:
-    """Tests for _discover_user_guide_explicit."""
-
-    def test_explicit_basic(self):
-        """Explicit config resolves files and sections."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            (ug_dir / "intro.qmd").write_text("---\ntitle: Introduction\n---\nContent\n")
-            (ug_dir / "config.qmd").write_text("---\ntitle: Configuration\n---\nContent\n")
-            docs = GreatDocs(project_path=tmp_dir)
-            config = [
-                {"section": "Getting Started", "contents": ["intro.qmd", "config.qmd"]},
-            ]
-            info = docs._discover_user_guide_explicit(ug_dir, config)
-            assert info is not None
-            assert info["explicit"] is True
-            assert len(info["files"]) == 2
-            assert "Getting Started" in info["sections"]
-
-    def test_explicit_missing_file(self):
-        """Skips files that don't exist."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            (ug_dir / "intro.qmd").write_text("---\ntitle: Introduction\n---\nContent\n")
-            docs = GreatDocs(project_path=tmp_dir)
-            config = [
-                {"section": "Docs", "contents": ["intro.qmd", "missing.qmd"]},
-            ]
-            info = docs._discover_user_guide_explicit(ug_dir, config)
-            assert info is not None
-            assert len(info["files"]) == 1
-
-    def test_explicit_dict_items_with_custom_text(self):
-        """Handles dict items with text/href."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            (ug_dir / "intro.qmd").write_text("---\ntitle: Introduction\n---\nContent\n")
-            docs = GreatDocs(project_path=tmp_dir)
-            config = [
-                {"section": "Docs", "contents": [{"text": "Start Here", "href": "intro.qmd"}]},
-            ]
-            info = docs._discover_user_guide_explicit(ug_dir, config)
-            assert info is not None
-            assert info["files"][0].get("custom_text") == "Start Here"
-
-    def test_explicit_empty_section(self):
-        """Skips sections with empty contents."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            docs = GreatDocs(project_path=tmp_dir)
-            config = [
-                {"section": "Empty", "contents": []},
-            ]
-            info = docs._discover_user_guide_explicit(ug_dir, config)
-            assert info is None
-
-    def test_explicit_deduplicates_files(self):
-        """Does not include the same file twice."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            (ug_dir / "intro.qmd").write_text("---\ntitle: Introduction\n---\nContent\n")
-            docs = GreatDocs(project_path=tmp_dir)
-            config = [
-                {"section": "A", "contents": ["intro.qmd"]},
-                {"section": "B", "contents": ["intro.qmd"]},
-            ]
-            info = docs._discover_user_guide_explicit(ug_dir, config)
-            assert info is not None
-            assert len(info["files"]) == 1
-
-
-class TestGenerateUserGuideSidebarAuto:
-    """Tests for _generate_user_guide_sidebar_auto."""
-
-    def test_flat_files_no_sections(self):
-        """Generates flat sidebar for files without sections."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            docs = GreatDocs(project_path=tmp_dir)
-            user_guide_info = {
-                "files": [
-                    {"path": ug_dir / "01-intro.qmd", "title": "Intro", "section": None},
-                    {"path": ug_dir / "02-config.qmd", "title": "Config", "section": None},
-                ],
-                "sections": {},
-                "has_index": False,
-                "source_dir": ug_dir,
-            }
-            sidebar = docs._generate_user_guide_sidebar_auto(user_guide_info)
-            assert sidebar["id"] == "user-guide"
-            assert len(sidebar["contents"]) == 2
-            assert sidebar["contents"][0] == {"text": "Intro", "href": "user-guide/intro.qmd"}
-
-    def test_with_sections(self):
-        """Generates sectioned sidebar from frontmatter sections."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            docs = GreatDocs(project_path=tmp_dir)
-            file1 = {"path": ug_dir / "01-intro.qmd", "title": "Intro", "section": "Basics"}
-            file2 = {"path": ug_dir / "02-adv.qmd", "title": "Adv", "section": "Basics"}
-            file3 = {"path": ug_dir / "03-deploy.qmd", "title": "Deploy", "section": "Advanced"}
-            user_guide_info = {
-                "files": [file1, file2, file3],
-                "sections": {"Basics": [file1, file2], "Advanced": [file3]},
-                "has_index": False,
-                "source_dir": ug_dir,
-            }
-            sidebar = docs._generate_user_guide_sidebar_auto(user_guide_info)
-            assert sidebar["contents"][0]["section"] == "Basics"
-            assert len(sidebar["contents"][0]["contents"]) == 2
-            assert sidebar["contents"][1]["section"] == "Advanced"
-
-    def test_with_subdirectories(self):
-        """Groups files by subdirectory when no frontmatter sections."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            (ug_dir / "basics").mkdir()
-            docs = GreatDocs(project_path=tmp_dir)
-            root_file = {"path": ug_dir / "01-intro.qmd", "title": "Intro", "section": None}
-            sub_file = {
-                "path": ug_dir / "basics" / "01-setup.qmd",
-                "title": "Setup",
-                "section": None,
-            }
-            user_guide_info = {
-                "files": [root_file, sub_file],
-                "sections": {},
-                "has_index": False,
-                "source_dir": ug_dir,
-            }
-            sidebar = docs._generate_user_guide_sidebar_auto(user_guide_info)
-            # Should have root file + subdirectory section
-            assert len(sidebar["contents"]) == 2
-            # Second item should be a section
-            assert "section" in sidebar["contents"][1]
-
-    def test_mixed_files_and_subdirs_sorted_by_prefix(self):
-        """Numeric prefixes interleave root files and subdir sections in the correct order."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            (ug_dir / "02_concepts").mkdir()
-            docs = GreatDocs(project_path=tmp_dir)
-            file01 = {"path": ug_dir / "01_overview.qmd", "title": "Overview", "section": None}
-            file02 = {
-                "path": ug_dir / "02_concepts" / "details.qmd",
-                "title": "Details",
-                "section": None,
-            }
-            file03 = {"path": ug_dir / "03_quickstart.qmd", "title": "Quickstart", "section": None}
-            user_guide_info = {
-                "files": [file01, file02, file03],
-                "sections": {},
-                "has_index": False,
-                "source_dir": ug_dir,
-            }
-            sidebar = docs._generate_user_guide_sidebar_auto(user_guide_info)
-            contents = sidebar["contents"]
-            # Expected order: 01_overview (plain link), 02_concepts (section), 03_quickstart (plain link)
-            assert len(contents) == 3
-            assert contents[0] == {"text": "Overview", "href": "user-guide/overview.qmd"}
-            assert "section" in contents[1]
-            assert contents[1]["section"] == "Concepts"
-            assert contents[2] == {"text": "Quickstart", "href": "user-guide/quickstart.qmd"}
-
-
 class TestCopyUserGuideToDocs:
-    """Tests for _copy_user_guide_to_docs."""
+    """User guide publication checks"""
 
     def test_strips_numeric_prefixes_in_auto_mode(self):
         """Strips numeric prefixes in auto-discovery mode."""
@@ -26317,7 +24565,7 @@ class TestCopyUserGuideToDocs:
                 "source_dir": ug_dir,
                 "explicit": False,
             }
-            copied = docs._copy_user_guide_to_docs(info)
+            copied = docs._publish_user_guide(info)
             assert "user-guide/intro.qmd" in copied
 
     def test_preserves_filenames_in_explicit_mode(self):
@@ -26335,7 +24583,7 @@ class TestCopyUserGuideToDocs:
                 "source_dir": ug_dir,
                 "explicit": True,
             }
-            copied = docs._copy_user_guide_to_docs(info)
+            copied = docs._publish_user_guide(info)
             assert "user-guide/01-intro.qmd" in copied
 
     def test_copies_asset_directories(self):
@@ -26356,15 +24604,8 @@ class TestCopyUserGuideToDocs:
                 "source_dir": ug_dir,
                 "explicit": False,
             }
-            docs._copy_user_guide_to_docs(info)
+            docs._publish_user_guide(info)
             assert (docs.build_dir / "user-guide" / "images" / "logo.png").exists()
-
-    def test_empty_info_returns_empty(self):
-        """Returns empty list for empty user_guide_info."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            assert docs._copy_user_guide_to_docs({}) == []
-            assert docs._copy_user_guide_to_docs(None) == []
 
 
 class TestBuildSectionsFromReferenceConfig:
@@ -26830,50 +25071,6 @@ class TestProcessSections:
             assert count == 1
             # Blog index should be generated
             assert (docs.build_dir / "blog" / "index.qmd").exists()
-
-
-class TestParseUserGuideFile:
-    """Tests for _parse_user_guide_file."""
-
-    def test_parses_frontmatter_title(self):
-        """Extracts title from YAML frontmatter."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            qmd = tmp / "intro.qmd"
-            qmd.write_text("---\ntitle: Introduction\n---\nContent\n")
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._parse_user_guide_file(qmd)
-            assert result is not None
-            assert result["title"] == "Introduction"
-
-    def test_derives_title_from_filename(self):
-        """Derives title from filename when no frontmatter title."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            qmd = tmp / "01-getting-started.qmd"
-            qmd.write_text("No frontmatter here, just content.\n")
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._parse_user_guide_file(qmd)
-            assert result is not None
-            assert result["title"] == "Getting Started"
-
-    def test_extracts_section_from_frontmatter(self):
-        """Extracts guide-section from frontmatter."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            qmd = tmp / "intro.qmd"
-            qmd.write_text("---\ntitle: Intro\nguide-section: Getting Started\n---\nContent\n")
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._parse_user_guide_file(qmd)
-            assert result is not None
-            assert result["section"] == "Getting Started"
-
-    def test_handles_unreadable_file(self):
-        """Returns None for unreadable files."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._parse_user_guide_file(Path(tmp_dir) / "nonexistent.qmd")
-            assert result is None
 
 
 class TestEmptyCategories:
@@ -27382,114 +25579,6 @@ class TestUpdateSidebarWithCliBatch9:
             # Should not raise
 
 
-class TestGenerateUserGuideSidebarAutoBatch9:
-    """Additional sidebar-auto coverage: subdirectory with index.qmd naming."""
-
-    def test_subdir_index_provides_section_title(self):
-        """Subdirectory index.qmd title is used as section title."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            (ug_dir / "basics").mkdir()
-            docs = GreatDocs(project_path=tmp_dir)
-            root_file = {
-                "path": ug_dir / "01-intro.qmd",
-                "title": "Intro",
-                "section": None,
-            }
-            index_file = {
-                "path": ug_dir / "basics" / "index.qmd",
-                "title": "Basics Overview",
-                "section": None,
-            }
-            sub_file = {
-                "path": ug_dir / "basics" / "01-setup.qmd",
-                "title": "Setup",
-                "section": None,
-            }
-            user_guide_info = {
-                "files": [root_file, index_file, sub_file],
-                "sections": {},
-                "has_index": False,
-                "source_dir": ug_dir,
-            }
-            sidebar = docs._generate_user_guide_sidebar_auto(user_guide_info)
-            # Subdirectory section should use the index.qmd title
-            # ("contents" key distinguishes a real section from a virtual-section page link)
-            section_entry = next(
-                (c for c in sidebar["contents"] if isinstance(c, dict) and "contents" in c),
-                None,
-            )
-            assert section_entry is not None
-            assert section_entry["section"] == "Basics Overview"
-
-    def test_sections_with_index_qmd_in_section(self):
-        """index.qmd within a section gets a text/href entry in sidebar."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            docs = GreatDocs(project_path=tmp_dir)
-            index_file = {
-                "path": ug_dir / "index.qmd",
-                "title": "Overview",
-                "section": "Getting Started",
-            }
-            page_file = {
-                "path": ug_dir / "01-intro.qmd",
-                "title": "Intro",
-                "section": "Getting Started",
-            }
-            user_guide_info = {
-                "files": [index_file, page_file],
-                "sections": {"Getting Started": [index_file, page_file]},
-                "has_index": True,
-                "source_dir": ug_dir,
-            }
-            sidebar = docs._generate_user_guide_sidebar_auto(user_guide_info)
-            # First section should have index.qmd as a text/href dict
-            section = sidebar["contents"][0]
-            assert section["section"] == "Getting Started"
-            index_entry = section["contents"][0]
-            assert isinstance(index_entry, dict)
-            assert index_entry.get("text") == "Overview"
-
-    def test_sections_with_unsectioned_files(self):
-        """Files without sections appended after sectioned files."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            docs = GreatDocs(project_path=tmp_dir)
-            sectioned = {
-                "path": ug_dir / "01-intro.qmd",
-                "title": "Intro",
-                "section": "Getting Started",
-            }
-            unsectioned = {
-                "path": ug_dir / "99-appendix.qmd",
-                "title": "Appendix",
-                "section": None,
-            }
-            user_guide_info = {
-                "files": [sectioned, unsectioned],
-                "sections": {"Getting Started": [sectioned]},
-                "has_index": False,
-                "source_dir": ug_dir,
-            }
-            sidebar = docs._generate_user_guide_sidebar_auto(user_guide_info)
-            # First entry is a section, second is the unsectioned file
-            assert sidebar["contents"][0]["section"] == "Getting Started"
-            assert sidebar["contents"][1] == {
-                "text": "Appendix",
-                "href": "user-guide/appendix.qmd",
-            }
-
-
 class TestHomepageHeroBatch9:
     """Homepage hero logo fallbacks and badge types"""
 
@@ -27798,7 +25887,7 @@ class TestRefreshApiReferenceConfigBatch9:
 
 
 class TestCopyUserGuideToDocsBatch9:
-    """Additional _copy_user_guide_to_docs coverage."""
+    """User guide page copying checks"""
 
     def test_copies_subdirectory_files(self):
         """Correctly copies files from subdirectories."""
@@ -27827,79 +25916,11 @@ class TestCopyUserGuideToDocsBatch9:
                 "source_dir": ug_dir,
                 "explicit": False,
             }
-            result = docs._copy_user_guide_to_docs(user_guide_info)
+            result = docs._publish_user_guide(user_guide_info)
             assert len(result) == 2
             # Check files were copied
             assert (docs.build_dir / "user-guide" / "intro.qmd").exists()
             assert (docs.build_dir / "user-guide" / "basics" / "setup.qmd").exists()
-
-
-class TestGenerateUserGuideSidebarExplicitBatch9:
-    """Additional _generate_user_guide_sidebar_explicit coverage."""
-
-    def test_skips_missing_files(self):
-        """Skips files that don't exist in source directory."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            (ug_dir / "intro.qmd").write_text("---\ntitle: Introduction\n---\nContent\n")
-            docs = GreatDocs(project_path=tmp_dir)
-            user_guide_info = {
-                "source_dir": ug_dir,
-                "explicit_config": [
-                    {
-                        "section": "Basics",
-                        "contents": ["intro.qmd", "missing.qmd"],
-                    },
-                ],
-            }
-            sidebar = docs._generate_user_guide_sidebar_explicit(user_guide_info)
-            # Should only include the existing file
-            section = sidebar["contents"][0]
-            assert len(section["contents"]) == 1
-
-    def test_custom_text_in_sidebar(self):
-        """Dict items with custom text use text/href format."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            (ug_dir / "intro.qmd").write_text("---\ntitle: Introduction\n---\nContent\n")
-            docs = GreatDocs(project_path=tmp_dir)
-            user_guide_info = {
-                "source_dir": ug_dir,
-                "explicit_config": [
-                    {
-                        "section": "Basics",
-                        "contents": [{"href": "intro.qmd", "text": "Start Here"}],
-                    },
-                ],
-            }
-            sidebar = docs._generate_user_guide_sidebar_explicit(user_guide_info)
-            section = sidebar["contents"][0]
-            entry = section["contents"][0]
-            assert isinstance(entry, dict)
-            assert entry["text"] == "Start Here"
-
-    def test_skips_empty_sections(self):
-        """Sections with no valid contents are omitted."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            ug_dir = tmp / "user_guide"
-            ug_dir.mkdir()
-            docs = GreatDocs(project_path=tmp_dir)
-            user_guide_info = {
-                "source_dir": ug_dir,
-                "explicit_config": [
-                    {"section": "Empty", "contents": ["missing.qmd"]},
-                ],
-            }
-            sidebar = docs._generate_user_guide_sidebar_explicit(user_guide_info)
-            assert len(sidebar["contents"]) == 0
 
 
 class TestUpdateQuartoConfigStrNormalizationBatch10:
@@ -28177,64 +26198,6 @@ class TestUpdateConfigWithUserGuideBatch10:
             assert isinstance(cfg["website"]["sidebar"], list)
 
 
-def test_discover_user_guide_sort_prioritizes_root_index():
-    """Root-level index.qmd sorts first, even with numbered files in subdirectories."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-
-        # Root-level index.qmd (should be first)
-        (ug_dir / "index.qmd").write_text("---\ntitle: Welcome\n---\nLanding page.\n")
-
-        # Subdirectory with numbered files that sort before 'index' alphabetically
-        sub = ug_dir / "00-getting-started"
-        sub.mkdir()
-        (sub / "index.qmd").write_text("---\ntitle: Getting Started\n---\nSection index.\n")
-        (sub / "01-quickstart.qmd").write_text("---\ntitle: Quickstart\n---\nQuick.\n")
-
-        # Another subdirectory
-        sub2 = ug_dir / "07-cli"
-        sub2.mkdir()
-        (sub2 / "01-cli-data.qmd").write_text("---\ntitle: CLI Data\n---\nCLI stuff.\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is not None
-        assert len(result["files"]) == 4
-
-        # The first file should be the root-level index.qmd
-        first_path = result["files"][0]["path"]
-        assert first_path.name == "index.qmd"
-        assert first_path.parent == ug_dir.resolve()
-
-
-def test_discover_user_guide_sort_relative_path_ordering():
-    """Files from earlier subdirectories sort before later ones."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-
-        # Create subdirectories with files — 00-* should come before 07-*
-        sub_a = ug_dir / "00-intro"
-        sub_a.mkdir()
-        (sub_a / "01-page.qmd").write_text("---\ntitle: Page A\n---\nA.\n")
-
-        sub_b = ug_dir / "07-cli"
-        sub_b.mkdir()
-        (sub_b / "01-cli-data.qmd").write_text("---\ntitle: CLI Data\n---\nB.\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._discover_user_guide()
-
-        assert result is not None
-        assert len(result["files"]) == 2
-
-        # 00-intro/01-page.qmd should sort before 07-cli/01-cli-data.qmd
-        assert "00-intro" in str(result["files"][0]["path"])
-        assert "07-cli" in str(result["files"][1]["path"])
-
-
 def test_create_blended_index_with_subdirectory_structure():
     """Blended homepage works when first UG page is in a subdirectory."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -28255,7 +26218,7 @@ def test_create_blended_index_with_subdirectory_structure():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        # Set up the user-guide destination as _copy_user_guide_to_docs would
+        # Match the directory used to publish guide pages
         ug_docs = docs.build_dir / "user-guide"
         ug_docs.mkdir(parents=True, exist_ok=True)
         (ug_docs / "index.qmd").write_text(
@@ -28309,7 +26272,7 @@ def test_create_blended_index_subdir_file_first():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        # Set up destination as _copy_user_guide_to_docs would (prefix-stripped)
+        # Match the published guide directory without its numeric prefix
         ug_docs = docs.build_dir / "user-guide"
         sub_dest = ug_docs / "getting-started"
         sub_dest.mkdir(parents=True)
@@ -33015,7 +30978,7 @@ def test_freeze_runs_every_preparation_step_but_the_changelog(tmp_path: Path):
 
 def _write_user_guide(docs: GreatDocs, project: Path) -> None:
     """Copy the project's user guide"""
-    docs._copy_user_guide_to_docs(docs._discover_user_guide())
+    docs._publish_user_guide(discover_user_guide(docs))
 
 
 def _write_sections(docs: GreatDocs, project: Path) -> None:
@@ -33107,9 +31070,9 @@ def test_user_guide_homepage_has_no_dates(tmp_path: Path):
         (tmp_path / name).write_text(content, encoding="utf-8")
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir(parents=True, exist_ok=True)
-    info = docs._discover_user_guide()
+    info = discover_user_guide(docs)
 
-    docs._create_blended_index(info, docs._copy_user_guide_to_docs(info))
+    docs._create_blended_index(info, docs._publish_user_guide(info))
 
     homepage, _ = split_front_matter((docs.build_dir / "index.qmd").read_text())
     second, _ = split_front_matter((docs.build_dir / "user-guide/next.qmd").read_text())
@@ -33120,18 +31083,6 @@ def test_user_guide_homepage_has_no_dates(tmp_path: Path):
 # ---------------------------------------------------------------------------
 # Front matter values of unexpected types
 # ---------------------------------------------------------------------------
-
-
-def test_user_guide_file_with_a_list_block_derives_its_title(tmp_path: Path) -> None:
-    """Verify that front matter that is not a mapping is treated as empty"""
-    qmd = tmp_path / "01-getting-started.qmd"
-    qmd.write_text("---\n- a\n- b\n---\n\n# Content\n")
-    docs = GreatDocs(project_path=str(tmp_path))
-
-    result = docs._parse_user_guide_file(qmd)
-
-    assert result is not None
-    assert (result["title"], result["section"]) == ("Getting Started", None)
 
 
 def test_skills_page_ignores_a_non_string_description(tmp_path: Path) -> None:

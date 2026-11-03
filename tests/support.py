@@ -6,6 +6,8 @@ with empty defaults. `make_run` creates build state for testing build methods di
 `stubbed_build` stubs Quarto and build steps while preserving the build's control flow.
 `StubRemote` supplies GitHub and PyPI data without network requests. `homepage_hero` and
 `homepage_margin` build the homepage hero and sidebar from the project's configuration and metadata.
+`find_user_guide_dir` and `discover_user_guide` find a project's user guide and print its warnings
+as a build does.
 """
 
 from __future__ import annotations
@@ -23,12 +25,14 @@ from yaml12 import format_yaml
 from great_docs import Config, GreatDocs
 from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
+from great_docs._content import user_guide
 from great_docs._website.homepage import hero, margin
 from great_docs._website.project_pages import community
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from great_docs._content.user_guide import UserGuide
     from great_docs._github import GithubRepo
 
 # Keep these methods in the order `GreatDocs.build()` first calls them. Stub the methods
@@ -37,7 +41,6 @@ if TYPE_CHECKING:
 _BUILD_METHODS: tuple[str, ...] = (
     "_detect_package_name",
     "_griffe_search_paths",
-    "_find_user_guide_dir",
     "_prepare_build_directory",
     "_get_package_metadata",
     "_get_github_repo_info",
@@ -445,3 +448,53 @@ def homepage_margin(docs: GreatDocs) -> str:
             docs._config, package_root, docs.build_dir, docs._page_authors
         ),
     )
+
+
+def _print_warning(message: str) -> None:
+    """
+    Print a warning as a build step's detail line
+
+    Parameters
+    ----------
+    message
+        The warning's text.
+
+    Returns
+    -------
+    :
+    """
+    print(f"   ⚠️  {message}")
+
+
+def find_user_guide_dir(docs: GreatDocs) -> Path | None:
+    """
+    Find a project's user guide directory, printing warnings as a build does
+
+    Parameters
+    ----------
+    docs
+        The project.
+
+    Returns
+    -------
+    :
+        The directory, or `None` when the project has none.
+    """
+    return user_guide.find_dir(docs._config, docs.layout, report=_print_warning)
+
+
+def discover_user_guide(docs: GreatDocs) -> UserGuide | None:
+    """
+    Discover a project's user guide, printing warnings as a build does
+
+    Parameters
+    ----------
+    docs
+        The project.
+
+    Returns
+    -------
+    :
+        The guide, or `None` when the project has no guide pages.
+    """
+    return user_guide.discover(docs._config, docs.layout, report=_print_warning)

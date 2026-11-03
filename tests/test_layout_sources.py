@@ -15,7 +15,7 @@ from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._versions.build import assemble_site, run_versioned_build
 from great_docs._versions.model import VersionEntry, build_version_map, parse_versions_config
 from great_docs._website.homepage import source as homepage_source
-from tests.support import make_run
+from tests.support import discover_user_guide, make_run
 
 
 @pytest.fixture(params=[".", "docs", "website"])
@@ -278,7 +278,7 @@ def test_documentation_sources(source_project: tuple[Path, Path], explicit: bool
     gd = make_docs(root, source)
     gd._prepare_build_directory(make_run())
     gd._copy_assets()
-    gd._copy_user_guide_to_docs(gd._discover_user_guide())
+    gd._publish_user_guide(discover_user_guide(gd))
     gd._process_sections()
     gd._process_custom_pages()
     build = gd.build_dir
@@ -360,7 +360,7 @@ def test_nested_sources_and_shared_assets(source_project: tuple[Path, Path]) -> 
     page.write_text(f"---\ntitle: Example\n---\n![Plot]({prefix}../shared/plot.svg#panel)")
     gd = make_docs(root, source)
     gd.build_dir.mkdir(parents=True)
-    gd._copy_user_guide_to_docs(gd._discover_user_guide())
+    gd._publish_user_guide(discover_user_guide(gd))
     generated = gd.build_dir / "user-guide/deep/example.qmd"
     content = generated.read_text()
     asset = "shared/plot.svg" if source == root else "_shared/shared/plot.svg"
@@ -535,8 +535,8 @@ def test_blended_homepage_references_use_final_destination(
     )
     gd = make_docs(root, source)
     gd._prepare_build_directory(make_run())
-    info = gd._discover_user_guide()
-    copied = gd._copy_user_guide_to_docs(info)
+    info = discover_user_guide(gd)
+    copied = gd._publish_user_guide(info)
     gd._create_blended_index(info, copied)
     result = (gd.build_dir / "index.qmd").read_text()
     path = result.split("![Plot](", 1)[1].split(")", 1)[0]
