@@ -1,10 +1,10 @@
 # pyright: reportPrivateUsage=false
-"""Tests for Typer CLI support (`great_docs._typer_cli` and discovery paths).
+"""
+Typer command conversion, discovery and extraction
 
-Typer vendors its own copy of Click, so a `typer.Typer` app converts to a command whose classes are
-*not* instances of the top-level `click` package. These tests exercise the conversion and the
-duck-typed introspection helpers, as well as the discovery/snapshot code paths that document a Typer
-CLI.
+Typer vendors its own copy of Click. Its converted commands are not instances of the
+top-level Click classes, so discovery and extraction must inspect their attributes. These
+tests cover conversion, page extraction and API snapshots.
 """
 
 from __future__ import annotations
@@ -18,14 +18,9 @@ from unittest.mock import patch
 import click
 import pytest
 
-from great_docs import GreatDocs
+from great_docs._cliref import click as cli_click
 
 typer = pytest.importorskip("typer")
-
-
-def _make_gd(tmp_path: Path) -> GreatDocs:
-    (tmp_path / "great-docs.yml").write_text("module: mypkg\n", encoding="utf-8")
-    return GreatDocs(project_path=str(tmp_path))
 
 
 def _sample_app() -> "typer.Typer":
@@ -51,24 +46,24 @@ def _sample_app() -> "typer.Typer":
 
 
 # ---------------------------------------------------------------------------
-# Helpers in _typer_cli
+# Typer helpers
 # ---------------------------------------------------------------------------
 
 
 class TestTyperHelpers:
     def test_is_typer_app_true(self):
-        from great_docs._typer_cli import is_typer_app
+        from great_docs._cliref.click import is_typer_app
 
         assert is_typer_app(typer.Typer()) is True
 
     def test_is_typer_app_false_for_other_objects(self):
-        from great_docs._typer_cli import is_typer_app
+        from great_docs._cliref.click import is_typer_app
 
         assert is_typer_app(click.Command("x")) is False
         assert is_typer_app("not an app") is False
 
     def test_to_click_command_converts_typer_app(self):
-        from great_docs._typer_cli import is_cli_group, to_click_command
+        from great_docs._cliref.click import is_cli_group, to_click_command
 
         cmd = to_click_command(_sample_app())
 
@@ -79,7 +74,7 @@ class TestTyperHelpers:
         assert set(cmd.commands) == {"greet", "version", "db"}
 
     def test_to_click_command_passthrough_for_click(self):
-        from great_docs._typer_cli import to_click_command
+        from great_docs._cliref.click import to_click_command
 
         c = click.Command("x")
 
@@ -90,7 +85,7 @@ class TestTyperHelpers:
         assert to_click_command(g) is g
 
     def test_to_click_command_returns_none_for_non_cli(self):
-        from great_docs._typer_cli import to_click_command
+        from great_docs._cliref.click import to_click_command
 
         assert to_click_command("nope") is None
         assert to_click_command(object()) is None
@@ -98,7 +93,7 @@ class TestTyperHelpers:
 
     def test_is_typer_app_false_when_typer_not_installed(self, monkeypatch):
         """Graceful degradation: no Typer installed -> not a Typer app (no raise)."""
-        from great_docs._typer_cli import is_typer_app
+        from great_docs._cliref.click import is_typer_app
 
         # A None entry in sys.modules makes `import typer` raise ImportError.
         monkeypatch.setitem(sys.modules, "typer", None)
@@ -107,7 +102,7 @@ class TestTyperHelpers:
 
     def test_to_click_command_returns_none_when_typer_not_installed(self, monkeypatch):
         """A non-Click object cannot be coerced when Typer is unavailable."""
-        from great_docs._typer_cli import to_click_command
+        from great_docs._cliref.click import to_click_command
 
         monkeypatch.setitem(sys.modules, "typer", None)
 
@@ -116,14 +111,14 @@ class TestTyperHelpers:
         assert to_click_command(object()) is None
 
     def test_is_cli_command(self):
-        from great_docs._typer_cli import is_cli_command
+        from great_docs._cliref.click import is_cli_command
 
         assert is_cli_command(_sample_app()) is True
         assert is_cli_command(click.Command("x")) is True
         assert is_cli_command(42) is False
 
     def test_is_cli_group_leaf_vs_group(self):
-        from great_docs._typer_cli import is_cli_group, to_click_command
+        from great_docs._cliref.click import is_cli_group, to_click_command
 
         # A single-command Typer app converts to a leaf command (no subcommands).
         leaf_app = typer.Typer()
@@ -141,7 +136,7 @@ class TestTyperHelpers:
         assert is_cli_group(group) is True
 
     def test_param_kind_classifies_typer_params(self):
-        from great_docs._typer_cli import param_kind, to_click_command
+        from great_docs._cliref.click import param_kind, to_click_command
 
         cmd = to_click_command(_sample_app())
         greet = cmd.commands["greet"]
@@ -153,7 +148,7 @@ class TestTyperHelpers:
 
 
 # ---------------------------------------------------------------------------
-# Discovery + extraction through the GreatDocs API
+# Discovery and extraction
 # ---------------------------------------------------------------------------
 
 
@@ -171,17 +166,11 @@ class TestTyperDiscovery:
 
         return fake_mod, mock_import
 
-    def test_find_click_cli_obj_returns_converted_typer(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        monkeypatch.setattr(
-            gd,
-            "_get_package_metadata",
-            lambda: {"cli_enabled": True, "cli_module": "mypkg.cli"},
-        )
+    def test_find_command_returns_converted_typer(self, monkeypatch):
         _fake, mock_import = self._patch_typer_module(monkeypatch)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            obj = gd._find_click_cli_obj("mypkg")
+            obj = cli_click.find_command("mypkg", cli_module="mypkg.cli", cli_name=None)
 
         assert obj is not None
 
@@ -189,19 +178,19 @@ class TestTyperDiscovery:
         assert hasattr(obj, "commands")
         assert set(obj.commands) == {"greet", "version", "db"}
 
-    def test_discover_click_cli_extracts_typer_tree(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        monkeypatch.setattr(
-            gd,
-            "_get_package_metadata",
-            lambda: {"cli_enabled": True, "cli_module": "mypkg.cli"},
-        )
-        # No [project.scripts] in the temp project -> falls back to display name.
-        monkeypatch.setattr(gd, "_get_cli_entry_point_name", lambda _pkg: "mytool")
+    def test_discover_extracts_typer_tree(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(cli_click, "entry_point_name", lambda _root: "mytool")
         _fake, mock_import = self._patch_typer_module(monkeypatch)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            info = gd._discover_click_cli("mypkg", display_name="mypkg")
+            info = cli_click.discover(
+                "mypkg",
+                tmp_path,
+                cli_module="mypkg.cli",
+                cli_name=None,
+                display_name="mypkg",
+                report=print,
+            )
 
         assert info is not None
         assert info["is_group"] is True
@@ -240,10 +229,8 @@ class TestTyperDiscovery:
 
 
 class TestTyperSnapshot:
-    def test_snapshot_cli_from_click_accepts_typer_app(self):
-        from great_docs._api_diff import snapshot_cli_from_click
-
-        snap = snapshot_cli_from_click(_sample_app())
+    def test_extract_snapshot_accepts_typer_app(self):
+        snap = cli_click.extract_snapshot(_sample_app())
 
         assert snap is not None
         assert snap.is_group is True
@@ -257,7 +244,5 @@ class TestTyperSnapshot:
         assert db.is_group is True
         assert {c.name for c in db.subcommands} == {"migrate"}
 
-    def test_snapshot_cli_from_click_rejects_non_cli(self):
-        from great_docs._api_diff import snapshot_cli_from_click
-
-        assert snapshot_cli_from_click("not a cli") is None
+    def test_extract_snapshot_rejects_non_cli(self):
+        assert cli_click.extract_snapshot("not a cli") is None

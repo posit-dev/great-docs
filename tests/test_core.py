@@ -15,6 +15,8 @@ import pytest
 
 from great_docs import GreatDocs
 from great_docs._build import freeze
+from great_docs._cliref import click as cli_click
+from great_docs._cliref import render as cli_render
 from great_docs._mcpref import build as mcp_build
 from great_docs._reference import block as reference_block
 from great_docs._reference.discovery import (
@@ -25,7 +27,7 @@ from great_docs._reference.discovery import (
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website import quarto_yml as quarto_yml_file
 from great_docs._website.seo import robots
-from tests.support import StubRemote, make_run
+from tests.support import StubRemote, make_run, mock_config
 
 
 def _make_gd(tmp_path: Path) -> GreatDocs:
@@ -39,42 +41,15 @@ def _patch_cfg(monkeypatch, gd, name, value):
     monkeypatch.setattr(type(gd._config), name, property(lambda self: value))
 
 
-class TestFindClickCliObj:
-    """Cover all branches of _find_click_cli_obj."""
+class TestFindCommand:
+    """
+    Command discovery with configured names and fallback searches
+    """
 
-    def test_cli_not_enabled_returns_none(self, tmp_path, monkeypatch):
-        """cli_enabled=False returns None."""
-        gd = _make_gd(tmp_path)
-        monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"cli_enabled": False})
-        assert gd._find_click_cli_obj("mypkg") is None
-
-    def test_click_not_installed_returns_none(self, tmp_path, monkeypatch):
-        """ImportError on click returns None."""
-        gd = _make_gd(tmp_path)
-        monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"cli_enabled": True})
-
-        import sys
-
-        click_mod = sys.modules.pop("click", None)
-        click_testing = sys.modules.pop("click.testing", None)
-        click_keys = [k for k in sys.modules if k.startswith("click")]
-        hidden = {k: sys.modules.pop(k) for k in click_keys}
-        try:
-            with patch("builtins.__import__", side_effect=ImportError("no click")):
-                result = gd._find_click_cli_obj("mypkg")
-            assert result is None
-        finally:
-            if click_mod:
-                sys.modules["click"] = click_mod
-            if click_testing:
-                sys.modules["click.testing"] = click_testing
-            sys.modules.update(hidden)
-
-    def test_no_cli_module_auto_discovers(self, tmp_path, monkeypatch):
-        """auto-discovers CLI module from common names."""
-        gd = _make_gd(tmp_path)
-        monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"cli_enabled": True})
-
+    def test_no_cli_module_auto_discovers(self):
+        """
+        Return `None` when no candidate CLI module can be imported
+        """
         real_import = importlib.import_module
 
         def fail_import(name, *args, **kwargs):
@@ -83,14 +58,13 @@ class TestFindClickCliObj:
             return real_import(name, *args, **kwargs)
 
         with patch("importlib.import_module", side_effect=fail_import):
-            result = gd._find_click_cli_obj("mypkg")
+            result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
         assert result is None
 
-    def test_auto_discovers_module_with_click_obj(self, tmp_path, monkeypatch):
-        """finds a module with a Click command."""
-        gd = _make_gd(tmp_path)
-        monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"cli_enabled": True})
-
+    def test_auto_discovers_module_with_click_obj(self):
+        """
+        Find a candidate module containing a Click command
+        """
         fake_mod = types.ModuleType("mypkg.cli")
         fake_cmd = click.Command("test")
         fake_mod.cli = fake_cmd
@@ -103,18 +77,13 @@ class TestFindClickCliObj:
             return real_import(name, *args, **kwargs)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            result = gd._find_click_cli_obj("mypkg")
+            result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
         assert result is fake_cmd
 
-    def test_explicit_cli_module_import_fails(self, tmp_path, monkeypatch):
-        """explicit cli_module can't be imported returns None."""
-        gd = _make_gd(tmp_path)
-        monkeypatch.setattr(
-            gd,
-            "_get_package_metadata",
-            lambda: {"cli_enabled": True, "cli_module": "mypkg.custom_cli"},
-        )
-
+    def test_explicit_cli_module_import_fails(self):
+        """
+        Return `None` when the configured CLI module cannot be imported
+        """
         real_import = importlib.import_module
 
         def mock_import(name, *args, **kwargs):
@@ -123,21 +92,16 @@ class TestFindClickCliObj:
             return real_import(name, *args, **kwargs)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            result = gd._find_click_cli_obj("mypkg")
+            result = cli_click.find_command("mypkg", cli_module="mypkg.custom_cli", cli_name=None)
         assert result is None
 
-    def test_explicit_cli_name_found(self, tmp_path, monkeypatch):
-        """metadata has cli_name and it's found."""
-        gd = _make_gd(tmp_path)
+    def test_explicit_cli_name_found(self):
+        """
+        Find the command named by `cli.name`
+        """
         fake_mod = types.ModuleType("mypkg.custom_cli")
         fake_cmd = click.Command("mycmd")
         fake_mod.mycmd = fake_cmd
-
-        monkeypatch.setattr(
-            gd,
-            "_get_package_metadata",
-            lambda: {"cli_enabled": True, "cli_module": "mypkg.custom_cli", "cli_name": "mycmd"},
-        )
 
         real_import = importlib.import_module
 
@@ -147,22 +111,19 @@ class TestFindClickCliObj:
             return real_import(name, *args, **kwargs)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            result = gd._find_click_cli_obj("mypkg")
+            result = cli_click.find_command(
+                "mypkg", cli_module="mypkg.custom_cli", cli_name="mycmd"
+            )
         assert result is fake_cmd
 
-    def test_common_attr_names_found(self, tmp_path, monkeypatch):
-        """finds click obj via common attr names (cli/main/app)."""
-        gd = _make_gd(tmp_path)
+    def test_common_attr_names_found(self):
+        """
+        Find a command under a conventional attribute name
+        """
         fake_mod = types.ModuleType("mypkg.cli_mod")
         fake_group = click.Group("main")
         fake_mod.main = fake_group
 
-        monkeypatch.setattr(
-            gd,
-            "_get_package_metadata",
-            lambda: {"cli_enabled": True, "cli_module": "mypkg.cli_mod"},
-        )
-
         real_import = importlib.import_module
 
         def mock_import(name, *args, **kwargs):
@@ -171,22 +132,17 @@ class TestFindClickCliObj:
             return real_import(name, *args, **kwargs)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            result = gd._find_click_cli_obj("mypkg")
+            result = cli_click.find_command("mypkg", cli_module="mypkg.cli_mod", cli_name=None)
         assert result is fake_group
 
-    def test_scan_all_attrs_fallback(self, tmp_path, monkeypatch):
-        """scans all module attrs to find click command."""
-        gd = _make_gd(tmp_path)
+    def test_scan_all_attrs_fallback(self):
+        """
+        Find a command under a non-standard public attribute name
+        """
         fake_mod = types.ModuleType("mypkg.cli_mod")
         fake_cmd = click.Command("hidden_cmd")
         fake_mod.my_special_command = fake_cmd
 
-        monkeypatch.setattr(
-            gd,
-            "_get_package_metadata",
-            lambda: {"cli_enabled": True, "cli_module": "mypkg.cli_mod"},
-        )
-
         real_import = importlib.import_module
 
         def mock_import(name, *args, **kwargs):
@@ -195,21 +151,16 @@ class TestFindClickCliObj:
             return real_import(name, *args, **kwargs)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            result = gd._find_click_cli_obj("mypkg")
+            result = cli_click.find_command("mypkg", cli_module="mypkg.cli_mod", cli_name=None)
         assert result is fake_cmd
 
-    def test_no_click_obj_found_returns_none(self, tmp_path, monkeypatch):
-        """no Click object found at all returns None."""
-        gd = _make_gd(tmp_path)
+    def test_no_click_obj_found_returns_none(self):
+        """
+        Return `None` when the module contains no command
+        """
         fake_mod = types.ModuleType("mypkg.cli_mod")
         fake_mod.something = "not a click command"
 
-        monkeypatch.setattr(
-            gd,
-            "_get_package_metadata",
-            lambda: {"cli_enabled": True, "cli_module": "mypkg.cli_mod"},
-        )
-
         real_import = importlib.import_module
 
         def mock_import(name, *args, **kwargs):
@@ -218,7 +169,7 @@ class TestFindClickCliObj:
             return real_import(name, *args, **kwargs)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            result = gd._find_click_cli_obj("mypkg")
+            result = cli_click.find_command("mypkg", cli_module="mypkg.cli_mod", cli_name=None)
         assert result is None
 
 
@@ -1154,18 +1105,18 @@ class TestCategoriseReferences:
 # ---------------------------------------------------------------------------
 
 
-class TestParseClickHelpParts:
+class TestParseHelpParts:
     def test_empty_help(self):
-        desc, examples = GreatDocs._parse_click_help_parts("")
+        desc, examples = cli_click.parse_help_parts("")
         assert desc == ""
         assert examples == []
 
     def test_none_help(self):
-        desc, examples = GreatDocs._parse_click_help_parts(None)
+        desc, examples = cli_click.parse_help_parts(None)
         assert desc == ""
 
     def test_description_only(self):
-        desc, examples = GreatDocs._parse_click_help_parts("Build the docs site.")
+        desc, examples = cli_click.parse_help_parts("Build the docs site.")
         assert desc == "Build the docs site."
         assert examples == []
 
@@ -1173,35 +1124,35 @@ class TestParseClickHelpParts:
         help_text = (
             "Build the site.\n\nExamples:\n    great-docs build\n    great-docs build --watch\n"
         )
-        desc, examples = GreatDocs._parse_click_help_parts(help_text)
+        desc, examples = cli_click.parse_help_parts(help_text)
         assert desc == "Build the site."
         assert "great-docs build" in examples[0]
         assert len(examples) == 2
 
     def test_backspace_marker_stripped(self):
         help_text = "Some text\n\x08\nMore text"
-        desc, examples = GreatDocs._parse_click_help_parts(help_text)
+        desc, examples = cli_click.parse_help_parts(help_text)
         assert "\x08" not in desc
         assert "Some text" in desc
 
     def test_collapses_blank_lines(self):
         help_text = "Line one\n\n\n\nLine two"
-        desc, _ = GreatDocs._parse_click_help_parts(help_text)
+        desc, _ = cli_click.parse_help_parts(help_text)
         assert "\n\n\n" not in desc
 
     def test_examples_dedented_4_spaces(self):
         help_text = "Desc\n\nExamples:\n    cmd --flag\n"
-        _, examples = GreatDocs._parse_click_help_parts(help_text)
+        _, examples = cli_click.parse_help_parts(help_text)
         assert examples[0] == "cmd --flag"
 
     def test_examples_dedented_2_spaces(self):
         help_text = "Desc\n\nExamples:\n  cmd --flag\n"
-        _, examples = GreatDocs._parse_click_help_parts(help_text)
+        _, examples = cli_click.parse_help_parts(help_text)
         assert examples[0] == "cmd --flag"
 
     def test_examples_trailing_blanks_trimmed(self):
         help_text = "Desc\n\nExamples:\n    cmd\n    \n"
-        _, examples = GreatDocs._parse_click_help_parts(help_text)
+        _, examples = cli_click.parse_help_parts(help_text)
         assert not examples[-1].strip() == ""
 
 
@@ -1210,24 +1161,24 @@ class TestParseClickHelpParts:
 # ---------------------------------------------------------------------------
 
 
-class TestBacktickCliProse:
+class TestBacktickProse:
     def test_empty_returns_empty(self):
-        assert GreatDocs._backtick_cli_prose("", set()) == ""
+        assert cli_render.backtick_prose("", set()) == ""
 
     def test_wraps_single_quoted_text(self):
-        result = GreatDocs._backtick_cli_prose("Use 'great-docs/' for output", set())
+        result = cli_render.backtick_prose("Use 'great-docs/' for output", set())
         assert "`great-docs/`" in result
 
     def test_wraps_known_option(self):
-        result = GreatDocs._backtick_cli_prose("Use --watch for live reload", {"--watch"})
+        result = cli_render.backtick_prose("Use --watch for live reload", {"--watch"})
         assert "`--watch`" in result
 
     def test_avoids_possessives(self):
-        result = GreatDocs._backtick_cli_prose("The package's config", set())
+        result = cli_render.backtick_prose("The package's config", set())
         assert "`" not in result
 
     def test_already_backticked_not_doubled(self):
-        result = GreatDocs._backtick_cli_prose("Use `--watch` now", {"--watch"})
+        result = cli_render.backtick_prose("Use `--watch` now", {"--watch"})
         assert result.count("`--watch`") == 1
 
 
@@ -1257,7 +1208,7 @@ class TestEmptyCategories:
 # ---------------------------------------------------------------------------
 
 
-class TestExtractClickOption:
+class TestExtractOption:
     def test_basic_option(self):
         param = MagicMock()
         param.name = "verbose"
@@ -1273,7 +1224,7 @@ class TestExtractClickOption:
         param.is_eager = False
         param.hidden = False
         param.show_default = False
-        result = GreatDocs._extract_click_option(param)
+        result = cli_click.extract_option(param)
         assert result["name_display"] == "-v, --verbose"
         assert result["help"] == "Enable verbose output"
         assert result["is_flag"] is True
@@ -1281,7 +1232,7 @@ class TestExtractClickOption:
     def test_help_option_skipped(self):
         param = MagicMock()
         param.name = "help"
-        assert GreatDocs._extract_click_option(param) is None
+        assert cli_click.extract_option(param) is None
 
     def test_type_name_uppercased(self):
         param = MagicMock()
@@ -1298,7 +1249,7 @@ class TestExtractClickOption:
         param.is_eager = False
         param.hidden = False
         param.show_default = True
-        result = GreatDocs._extract_click_option(param)
+        result = cli_click.extract_option(param)
         assert result["type"] == "INT"
         assert result["default"] == 3000
 
@@ -1318,11 +1269,11 @@ class TestExtractClickOption:
         param.envvar = None
         param.is_eager = False
         param.hidden = False
-        result = GreatDocs._extract_click_option(param)
+        result = cli_click.extract_option(param)
         assert result["default"] is None
 
 
-class TestExtractClickArgument:
+class TestExtractArgument:
     def test_basic_argument(self):
         param = MagicMock()
         param.name = "path"
@@ -1330,7 +1281,7 @@ class TestExtractClickArgument:
         param.type.name = "TEXT"
         param.required = True
         param.nargs = 1
-        result = GreatDocs._extract_click_argument(param)
+        result = cli_click.extract_argument(param)
         assert result["name"] == "path"
         assert result["type"] is None
         assert result["required"] is True
@@ -1342,7 +1293,7 @@ class TestExtractClickArgument:
         param.type.name = "int"
         param.required = False
         param.nargs = -1
-        result = GreatDocs._extract_click_argument(param)
+        result = cli_click.extract_argument(param)
         assert result["type"] == "INT"
         assert result["nargs"] == -1
 
@@ -1390,11 +1341,11 @@ class TestGetPackageExportsCacheHit:
 
 
 # ---------------------------------------------------------------------------
-# _generate_cli_command_page – edge cases (nargs, hidden, bullets, envvar, default)
+# Command pages with variadic arguments, hidden options, environment variables and defaults
 # ---------------------------------------------------------------------------
 
 
-class TestGenerateCliCommandPage:
+class TestCommandPage:
     def _make_cli_info(self, **overrides):
         base = {
             "name": "mycli",
@@ -1407,20 +1358,14 @@ class TestGenerateCliCommandPage:
         base.update(overrides)
         return base
 
-    def test_nargs_minus1_gets_ellipsis(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        _patch_cfg(monkeypatch, gd, "lang", "en")
+    def test_nargs_minus1_gets_ellipsis(self):
         cli_info = self._make_cli_info(
             arguments=[{"name": "FILES", "name_display": "FILES", "required": True, "nargs": -1}]
         )
-        result = gd._generate_cli_command_page(cli_info, is_main=True)
+        result = cli_render.command_page(mock_config(lang="en"), cli_info, is_main=True)
         assert "FILES..." in result
 
-    def test_hidden_option_skipped(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        _patch_cfg(monkeypatch, gd, "lang", "en")
+    def test_hidden_option_skipped(self):
         cli_info = self._make_cli_info(
             options=[
                 {"name": "--verbose", "name_display": "--verbose", "hidden": True, "help": "debug"},
@@ -1432,14 +1377,11 @@ class TestGenerateCliCommandPage:
                 },
             ]
         )
-        result = gd._generate_cli_command_page(cli_info, is_main=True)
+        result = cli_render.command_page(mock_config(lang="en"), cli_info, is_main=True)
         assert "output" in result
         assert "verbose" not in result
 
-    def test_option_with_type_and_default(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        _patch_cfg(monkeypatch, gd, "lang", "en")
+    def test_option_with_type_and_default(self):
         cli_info = self._make_cli_info(
             options=[
                 {
@@ -1452,14 +1394,11 @@ class TestGenerateCliCommandPage:
                 }
             ]
         )
-        result = gd._generate_cli_command_page(cli_info, is_main=True)
+        result = cli_render.command_page(mock_config(lang="en"), cli_info, is_main=True)
         assert "INT" in result
         assert "5" in result
 
-    def test_required_option(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        _patch_cfg(monkeypatch, gd, "lang", "en")
+    def test_required_option(self):
         cli_info = self._make_cli_info(
             options=[
                 {
@@ -1470,13 +1409,10 @@ class TestGenerateCliCommandPage:
                 }
             ]
         )
-        result = gd._generate_cli_command_page(cli_info, is_main=True)
+        result = cli_render.command_page(mock_config(lang="en"), cli_info, is_main=True)
         assert "**Required.**" in result
 
-    def test_envvar_option(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        _patch_cfg(monkeypatch, gd, "lang", "en")
+    def test_envvar_option(self):
         cli_info = self._make_cli_info(
             options=[
                 {
@@ -1487,13 +1423,10 @@ class TestGenerateCliCommandPage:
                 }
             ]
         )
-        result = gd._generate_cli_command_page(cli_info, is_main=True)
+        result = cli_render.command_page(mock_config(lang="en"), cli_info, is_main=True)
         assert "`MY_TOKEN`" in result
 
-    def test_envvar_list_joined(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        _patch_cfg(monkeypatch, gd, "lang", "en")
+    def test_envvar_list_joined(self):
         cli_info = self._make_cli_info(
             options=[
                 {
@@ -1504,26 +1437,26 @@ class TestGenerateCliCommandPage:
                 }
             ]
         )
-        result = gd._generate_cli_command_page(cli_info, is_main=True)
+        result = cli_render.command_page(mock_config(lang="en"), cli_info, is_main=True)
         assert "TOKEN_A, TOKEN_B" in result
 
 
 # ---------------------------------------------------------------------------
-# _count_cli_sidebar_items – dict with href
+# Labelled sidebar links
 # ---------------------------------------------------------------------------
 
 
-class TestCountCliSidebarItems:
+class TestCountPages:
     def test_string_items_counted(self):
-        assert GreatDocs._count_cli_sidebar_items(["a.qmd", "b.qmd"]) == 2
+        assert cli_render.count_pages(["a.qmd", "b.qmd"]) == 2
 
     def test_dict_with_href_counted_as_one(self):
         items = [{"text": "Index", "href": "index.qmd"}]
-        assert GreatDocs._count_cli_sidebar_items(items) == 1
+        assert cli_render.count_pages(items) == 1
 
     def test_nested_contents(self):
         items = [{"contents": ["a.qmd", "b.qmd"]}]
-        assert GreatDocs._count_cli_sidebar_items(items) == 2
+        assert cli_render.count_pages(items) == 2
 
 
 # ---------------------------------------------------------------------------

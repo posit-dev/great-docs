@@ -148,6 +148,8 @@ from great_docs._apiref.write import merge_frontmatter as _merge_frontmatter
 from great_docs._build import freeze, quarto
 from great_docs._build.log import BuildLog
 from great_docs._build.steps import Step, count_listed
+from great_docs._cliref import click as cli_click
+from great_docs._cliref import render as cli_render
 from great_docs._content.naming import strip_numeric_prefix
 from great_docs._reference import block as reference_block
 from great_docs._reference import sections as reference_sections
@@ -6639,11 +6641,19 @@ def test_build_cli_reference_uses_module_name(tmp_path):
         "_resolve_importable_name",
         "_detect_module_name",
     )
-    with stubbed_build(docs, run=run) as stubs:
+    with (
+        stubbed_build(docs, run=run),
+        patch("great_docs._cliref.click.discover", return_value=None) as discover,
+    ):
         docs.build(refresh=False)
 
-    stubs.steps["_discover_click_cli"].assert_called_once_with(
-        "actual_module", display_name="my-dist"
+    discover.assert_called_once_with(
+        "actual_module",
+        docs.layout.package_root,
+        cli_module=None,
+        cli_name=None,
+        display_name="my-dist",
+        report=print,
     )
 
 
@@ -6666,7 +6676,7 @@ def test_auto_save_snapshot_uses_module_name(mock_snapshot):
 LLMS_TXT_QUARTO_YML = "api-reference:\n  package: json\n  sections:\n    - contents: [dumps]\n"
 
 
-@patch.object(GreatDocs, "_discover_click_cli")
+@patch("great_docs._cliref.click.discover")
 def test_cli_help_for_llms_uses_module_name(mock_discover):
     """Regression: llms-full CLI help discovers the Click CLI by importable module
     name, not the PyPI project name, when the two diverge."""
@@ -6681,7 +6691,14 @@ def test_cli_help_for_llms_uses_module_name(mock_discover):
         (docs.build_dir / "_quarto.yml").write_text(LLMS_TXT_QUARTO_YML)
         docs._step_llms_txt()
 
-        mock_discover.assert_called_once_with("actual_module", display_name="my-dist")
+        mock_discover.assert_called_once_with(
+            "actual_module",
+            docs.layout.package_root,
+            cli_module=None,
+            cli_name=None,
+            display_name="my-dist",
+            report=print,
+        )
 
 
 @patch("great_docs._checks.harper.run_harper")
@@ -6866,8 +6883,10 @@ def test_is_compiled_extension_false():
         assert docs._is_compiled_extension() is False
 
 
-def test_get_cli_entry_point_name():
-    """_get_cli_entry_point_name reads first entry point from pyproject.toml."""
+def test_entry_point_name():
+    """
+    Read the first script name from `pyproject.toml`
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         (Path(tmp_dir) / "pyproject.toml").write_text(
             '[project]\nname = "pkg"\n[project.scripts]\nmycli = "pkg.cli:main"\n'
@@ -6875,11 +6894,13 @@ def test_get_cli_entry_point_name():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._get_cli_entry_point_name("pkg") == "mycli"
+        assert cli_click.entry_point_name(docs.layout.package_root) == "mycli"
 
 
-def test_get_cli_entry_point_name_gui_scripts_fallback():
-    """_get_cli_entry_point_name falls back to gui-scripts."""
+def test_entry_point_name_gui_scripts_fallback():
+    """
+    Fall back to `[project.gui-scripts]` when no console scripts are defined
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         (Path(tmp_dir) / "pyproject.toml").write_text(
             '[project]\nname = "pkg"\n[project.gui-scripts]\nmyapp = "pkg.gui:main"\n'
@@ -6887,25 +6908,29 @@ def test_get_cli_entry_point_name_gui_scripts_fallback():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._get_cli_entry_point_name("pkg") == "myapp"
+        assert cli_click.entry_point_name(docs.layout.package_root) == "myapp"
 
 
-def test_get_cli_entry_point_name_no_scripts_returns_none():
-    """_get_cli_entry_point_name returns None when no scripts defined."""
+def test_entry_point_name_no_scripts_returns_none():
+    """
+    Return `None` when no scripts are defined
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._get_cli_entry_point_name("pkg") is None
+        assert cli_click.entry_point_name(docs.layout.package_root) is None
 
 
-def test_get_cli_entry_point_name_no_pyproject_returns_none():
-    """_get_cli_entry_point_name returns None when pyproject.toml missing."""
+def test_entry_point_name_no_pyproject_returns_none():
+    """
+    Return `None` when `pyproject.toml` is missing
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._get_cli_entry_point_name("pkg") is None
+        assert cli_click.entry_point_name(docs.layout.package_root) is None
 
 
 def test_get_package_metadata_setup_cfg_maintainer_basic():
@@ -6993,25 +7018,31 @@ def test_find_package_init_hatch_packages():
         assert result.parent.name == "hatch_mod"
 
 
-def test_count_cli_sidebar_items_flat_inline():
-    """_count_cli_sidebar_items counts simple string entries."""
-    assert GreatDocs._count_cli_sidebar_items(["a.qmd", "b.qmd", "c.qmd"]) == 3
+def test_count_pages_flat_inline():
+    """
+    Count page paths in a flat sidebar
+    """
+    assert cli_render.count_pages(["a.qmd", "b.qmd", "c.qmd"]) == 3
 
 
-def test_count_cli_sidebar_items_nested_three():
-    """_count_cli_sidebar_items counts nested section contents."""
+def test_count_pages_nested_three():
+    """
+    Count page paths within nested sidebar sections
+    """
     items = [
         "top.qmd",
         {"section": "Group", "contents": ["a.qmd", "b.qmd"]},
     ]
 
-    assert GreatDocs._count_cli_sidebar_items(items) == 3
+    assert cli_render.count_pages(items) == 3
 
 
-def test_count_cli_sidebar_items_empty_list():
-    """_count_cli_sidebar_items returns 0 for empty list."""
+def test_count_pages_empty_list():
+    """
+    Return zero for an empty sidebar
+    """
 
-    assert GreatDocs._count_cli_sidebar_items([]) == 0
+    assert cli_render.count_pages([]) == 0
 
 
 def test_process_custom_pages_passthrough_and_raw():
@@ -8202,8 +8233,10 @@ def test_process_sections_finds_the_user_guide_once(tmp_path: Path, capsys):
     assert capsys.readouterr().out.count("'missing_guide'") == 1
 
 
-def test_get_cli_entry_point_name_scripts():
-    """_get_cli_entry_point_name returns first [project.scripts] name."""
+def test_entry_point_name_scripts():
+    """
+    Read the first `[project.scripts]` name
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text(
@@ -8211,11 +8244,13 @@ def test_get_cli_entry_point_name_scripts():
         )
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._get_cli_entry_point_name("mypkg") == "my-tool"
+        assert cli_click.entry_point_name(docs.layout.package_root) == "my-tool"
 
 
-def test_get_cli_entry_point_name_gui_scripts():
-    """_get_cli_entry_point_name falls back to gui-scripts."""
+def test_entry_point_name_gui_scripts():
+    """
+    Fall back to `[project.gui-scripts]` when no console scripts are defined
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text(
@@ -8223,29 +8258,35 @@ def test_get_cli_entry_point_name_gui_scripts():
         )
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._get_cli_entry_point_name("mypkg") == "my-gui"
+        assert cli_click.entry_point_name(docs.layout.package_root) == "my-gui"
 
 
-def test_get_cli_entry_point_name_no_scripts():
-    """_get_cli_entry_point_name returns None when no scripts defined."""
+def test_entry_point_name_no_scripts():
+    """
+    Return `None` when no scripts are defined
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._get_cli_entry_point_name("mypkg") is None
+        assert cli_click.entry_point_name(docs.layout.package_root) is None
 
 
-def test_get_cli_entry_point_name_no_pyproject():
-    """_get_cli_entry_point_name returns None when pyproject.toml missing."""
+def test_entry_point_name_no_pyproject():
+    """
+    Return `None` when `pyproject.toml` is missing
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._get_cli_entry_point_name("mypkg") is None
+        assert cli_click.entry_point_name(docs.layout.package_root) is None
 
 
-def test_extract_click_command_simple():
-    """_extract_click_command extracts info from a simple Click command."""
+def test_extract_command_simple():
+    """
+    Describe a Click command with its options, arguments and help text
+    """
     pytest.importorskip("click")
 
     @click.command()
@@ -8255,7 +8296,7 @@ def test_extract_click_command_simple():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._extract_click_command(hello, "hello")
+        result = cli_click.extract_command(hello, "hello")
 
         assert result["name"] == "hello"
         assert result["full_path"] == "hello"
@@ -8272,8 +8313,10 @@ def test_extract_click_command_simple():
         assert result["examples"] == []
 
 
-def test_extract_click_command_hidden_subcommand():
-    """_extract_click_command skips hidden subcommands."""
+def test_extract_command_hidden_subcommand():
+    """
+    Exclude hidden subcommands from the reference model
+    """
     pytest.importorskip("click")
 
     @click.group()
@@ -8290,7 +8333,7 @@ def test_extract_click_command_hidden_subcommand():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._extract_click_command(cli, "tool")
+        result = cli_click.extract_command(cli, "tool")
 
         names = [c["name"] for c in result["commands"]]
 
@@ -8298,8 +8341,10 @@ def test_extract_click_command_hidden_subcommand():
         assert "secret" not in names
 
 
-def test_extract_click_command_with_parent_path():
-    """_extract_click_command builds full_path from parent_path."""
+def test_extract_command_with_parent_path():
+    """
+    Include the parent invocation in a subcommand's full path
+    """
     pytest.importorskip("click")
 
     @click.command()
@@ -8308,13 +8353,15 @@ def test_extract_click_command_with_parent_path():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._extract_click_command(sub, "sub", parent_path="tool")
+        result = cli_click.extract_command(sub, "sub", parent_path="tool")
 
         assert result["full_path"] == "tool sub"
 
 
-def test_extract_click_option():
-    """_extract_click_option extracts option metadata."""
+def test_extract_option():
+    """
+    Describe Click options for the reference pages
+    """
     pytest.importorskip("click")
 
     @click.command()
@@ -8324,7 +8371,7 @@ def test_extract_click_option():
     def cmd(name, verbose, count):
         pass
 
-    options = [GreatDocs._extract_click_option(p) for p in cmd.params if hasattr(p, "opts")]
+    options = [cli_click.extract_option(p) for p in cmd.params if hasattr(p, "opts")]
     options = [o for o in options if o is not None]
 
     # --name
@@ -8344,8 +8391,10 @@ def test_extract_click_option():
     assert count_opt["type"] == "INTEGER"
 
 
-def test_extract_click_option_skips_help():
-    """_extract_click_option returns None for --help."""
+def test_extract_option_skips_help():
+    """
+    Exclude the `--help` option from the reference model
+    """
     pytest.importorskip("click")
 
     @click.command(add_help_option=True)
@@ -8359,18 +8408,20 @@ def test_extract_click_option_skips_help():
         None,
     )
     if help_param is not None:
-        assert GreatDocs._extract_click_option(help_param) is None
+        assert cli_click.extract_option(help_param) is None
     else:
         # Click version may not expose help as a param; just verify
         # that --name is extracted and help is not in the result
-        options = [GreatDocs._extract_click_option(p) for p in cmd.params if hasattr(p, "opts")]
+        options = [cli_click.extract_option(p) for p in cmd.params if hasattr(p, "opts")]
         options = [o for o in options if o is not None]
         names = [n for o in options for n in o["names"]]
         assert "--help" not in names
 
 
-def test_extract_click_argument():
-    """_extract_click_argument extracts argument metadata."""
+def test_extract_argument():
+    """
+    Describe a Click positional argument for the reference pages
+    """
     pytest.importorskip("click")
 
     @click.command()
@@ -8379,22 +8430,26 @@ def test_extract_click_argument():
         pass
 
     arg_param = next(p for p in cmd.params if isinstance(p, click.Argument))
-    result = GreatDocs._extract_click_argument(arg_param)
+    result = cli_click.extract_argument(arg_param)
 
     assert result["name"] == "source"
     assert result["required"] is False
 
 
-def test_parse_click_help_parts_no_examples():
-    """_parse_click_help_parts with no examples section."""
-    desc, examples = GreatDocs._parse_click_help_parts("Build the documentation site.")
+def test_parse_help_parts_no_examples():
+    """
+    Keep the full description when no examples section is present
+    """
+    desc, examples = cli_click.parse_help_parts("Build the documentation site.")
 
     assert desc == "Build the documentation site."
     assert examples == []
 
 
-def test_parse_click_help_parts_with_examples():
-    """_parse_click_help_parts splits description from examples."""
+def test_parse_help_parts_with_examples():
+    """
+    Split the description from the examples
+    """
     help_text = (
         "Build the documentation site.\n\n"
         "\\b\n"
@@ -8402,7 +8457,7 @@ def test_parse_click_help_parts_with_examples():
         "  great-docs build\n"
         "  great-docs build --watch\n"
     )
-    desc, examples = GreatDocs._parse_click_help_parts(help_text)
+    desc, examples = cli_click.parse_help_parts(help_text)
 
     assert "Build the documentation" in desc
     assert len(examples) == 2
@@ -8410,16 +8465,20 @@ def test_parse_click_help_parts_with_examples():
     assert "--watch" in examples[1]
 
 
-def test_parse_click_help_parts_empty():
-    """_parse_click_help_parts handles empty string."""
-    desc, examples = GreatDocs._parse_click_help_parts("")
+def test_parse_help_parts_empty():
+    """
+    Return an empty description and examples for empty help text
+    """
+    desc, examples = cli_click.parse_help_parts("")
 
     assert desc == ""
     assert examples == []
 
 
-def test_get_click_help_text():
-    """_get_click_help_text returns formatted --help output."""
+def test_help_output():
+    """
+    Render a command's full `--help` output
+    """
     pytest.importorskip("click")
 
     @click.command()
@@ -8429,15 +8488,17 @@ def test_get_click_help_text():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._get_click_help_text(hello, "hello")
+        result = cli_click.help_output(hello, "hello")
 
         assert "Usage:" in result
         assert "--name" in result
         assert "Say hello to someone." in result
 
 
-def test_generate_cli_command_page_main():
-    """_generate_cli_command_page generates structured main CLI page."""
+def test_command_page_main():
+    """
+    Render the root command's reference page
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         cmd_info = {
@@ -8452,7 +8513,7 @@ def test_generate_cli_command_page_main():
             "commands": [],
             "is_group": False,
         }
-        result = docs._generate_cli_command_page(cmd_info, is_main=True)
+        result = cli_render.command_page(docs._config, cmd_info, is_main=True)
 
         assert "my-tool" in result
         assert "sidebar: cli-reference" in result
@@ -8463,8 +8524,10 @@ def test_generate_cli_command_page_main():
         assert ".doc-subject" in result
 
 
-def test_generate_cli_command_page_subcommand():
-    """_generate_cli_command_page uses full_path for subcommand title."""
+def test_command_page_subcommand():
+    """
+    Use the full invocation as a subcommand's page title
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         cmd_info = {
@@ -8494,7 +8557,7 @@ def test_generate_cli_command_page_subcommand():
             "commands": [],
             "is_group": False,
         }
-        result = docs._generate_cli_command_page(cmd_info, is_main=False)
+        result = cli_render.command_page(docs._config, cmd_info, is_main=False)
 
         assert "my-tool build" in result
         # This body class selects the monospaced command-title style.
@@ -8504,8 +8567,10 @@ def test_generate_cli_command_page_subcommand():
         assert "Watch for changes." in result
 
 
-def test_generate_cli_command_page_with_arguments():
-    """_generate_cli_command_page renders arguments section."""
+def test_command_page_with_arguments():
+    """
+    Render positional arguments in the command page
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         cmd_info = {
@@ -8528,7 +8593,7 @@ def test_generate_cli_command_page_with_arguments():
             "commands": [],
             "is_group": False,
         }
-        result = docs._generate_cli_command_page(cmd_info, is_main=False)
+        result = cli_render.command_page(docs._config, cmd_info, is_main=False)
 
         assert "## Arguments" in result
         assert "SOURCE" in result
@@ -8536,8 +8601,10 @@ def test_generate_cli_command_page_with_arguments():
         assert "my-tool install foo" in result
 
 
-def test_generate_cli_command_page_group_with_subcommands():
-    """_generate_cli_command_page renders subcommands section for groups."""
+def test_command_page_group_with_subcommands():
+    """
+    Render a command group's subcommand links
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         cmd_info = {
@@ -8558,7 +8625,7 @@ def test_generate_cli_command_page_group_with_subcommands():
                 },
             ],
         }
-        result = docs._generate_cli_command_page(cmd_info, is_main=True)
+        result = cli_render.command_page(docs._config, cmd_info, is_main=True)
 
         assert "## Commands" in result
         assert "build" in result
@@ -8566,17 +8633,21 @@ def test_generate_cli_command_page_group_with_subcommands():
         assert "cli-group" in result
 
 
-def test_generate_cli_reference_pages_empty():
-    """_generate_cli_reference_pages returns empty list for empty input."""
+def test_write_pages_empty():
+    """
+    Return an empty sidebar when no command tree is supplied
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._generate_cli_reference_pages({}) == []
-        assert docs._generate_cli_reference_pages(None) == []
+        assert cli_render.write_pages(docs._config, docs.build_dir, {}, report=print) == []
+        assert cli_render.write_pages(docs._config, docs.build_dir, None, report=print) == []
 
 
-def test_generate_cli_reference_pages_basic():
-    """_generate_cli_reference_pages generates index and subcommand pages."""
+def test_write_pages_basic():
+    """
+    Write the index, root command and subcommand pages
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
@@ -8594,7 +8665,7 @@ def test_generate_cli_reference_pages_basic():
                 },
             ],
         }
-        result = docs._generate_cli_reference_pages(cli_info)
+        result = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
 
         # The index is now a labeled listing entry (not the root command page).
         assert {"text": "CLI Index", "href": "reference/cli/index.qmd"} in result
@@ -8605,8 +8676,10 @@ def test_generate_cli_reference_pages_basic():
         assert (docs.build_dir / "reference" / "cli" / "build.qmd").exists()
 
 
-def test_generate_cli_reference_pages_sections_omit_unlisted():
-    """Commands not named in cli.sections get no page, sidebar entry, or index entry."""
+def test_write_pages_sections_omit_unlisted():
+    """
+    Omit unlisted commands from pages, the sidebar and the index when `cli.sections` is set
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
@@ -8640,7 +8713,7 @@ def test_generate_cli_reference_pages_sections_omit_unlisted():
                 },
             ],
         }
-        result = docs._generate_cli_reference_pages(cli_info)
+        result = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
         cli_dir = docs.build_dir / "reference" / "cli"
 
         assert "reference/cli/build.qmd" in result
@@ -8653,8 +8726,10 @@ def test_generate_cli_reference_pages_sections_omit_unlisted():
         assert "internal" not in index
 
 
-def test_generate_cli_index_page_auto_layout():
-    """_generate_cli_index_page auto-groups leaf commands then command groups."""
+def test_index_page_auto_layout():
+    """
+    List leaf commands before command groups when no sections are configured
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
@@ -8695,7 +8770,7 @@ def test_generate_cli_index_page_auto_layout():
             ],
         }
 
-        page = docs._generate_cli_index_page(cli_info, "tool")
+        page = cli_render.index_page(docs._config, cli_info, "tool")
 
         # Front matter mirrors the API reference index, plus the CLI scoping class.
         assert "body-classes: doc-reference doc-cli-reference" in page
@@ -8716,8 +8791,10 @@ def test_generate_cli_index_page_auto_layout():
         )
 
 
-def test_generate_cli_index_page_configured_sections():
-    """cli.sections drives index section titles, ordering, and intro."""
+def test_index_page_configured_sections():
+    """
+    Use `cli.sections` for index headings, ordering and descriptions
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         docs._config._config["cli"] = {
@@ -8740,7 +8817,7 @@ def test_generate_cli_index_page_configured_sections():
             ],
         }
 
-        page = docs._generate_cli_index_page(cli_info, "tool")
+        page = cli_render.index_page(docs._config, cli_info, "tool")
 
         assert 'title: "Command Line"' in page
         assert "Drive everything from the terminal." in page
@@ -8751,8 +8828,10 @@ def test_generate_cli_index_page_configured_sections():
         assert page.index("## Building") < page.index("## Setup")
 
 
-def test_order_cli_sidebar_items_honors_sections():
-    """_order_cli_sidebar_items reorders flat entries to match cli.sections."""
+def test_order_sidebar_items_honors_sections():
+    """
+    Order leaf command entries by `cli.sections`
+    """
     items = [
         "reference/cli/init.qmd",
         "reference/cli/build.qmd",
@@ -8763,7 +8842,7 @@ def test_order_cli_sidebar_items_honors_sections():
         {"title": "Building", "contents": ["build"]},
         {"title": "Setup", "contents": ["init"]},
     ]
-    ordered = GreatDocs._order_cli_sidebar_items(items, sections)
+    ordered = cli_render.order_sidebar_items(items, sections)
 
     # build, then init (configured order); scan keeps code order after; group last.
     assert ordered == [
@@ -8774,8 +8853,10 @@ def test_order_cli_sidebar_items_honors_sections():
     ]
 
 
-def test_generate_subcommand_pages_nested():
-    """_generate_subcommand_pages handles nested command groups."""
+def test_write_subcommand_pages_nested():
+    """
+    Write pages and sidebar sections for nested command groups
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
@@ -8799,7 +8880,9 @@ def test_generate_subcommand_pages_nested():
                 },
             ],
         }
-        result = docs._generate_subcommand_pages(cmd_info, cli_dir)
+        result = cli_render._write_subcommand_pages(
+            docs._config, docs.build_dir, cmd_info, cli_dir, "reference/cli", []
+        )
 
         assert len(result) == 1
         assert isinstance(result[0], dict)
@@ -8808,8 +8891,10 @@ def test_generate_subcommand_pages_nested():
         assert (cli_dir / "task" / "run.qmd").exists()
 
 
-def test_generate_subcommand_pages_leaf():
-    """_generate_subcommand_pages returns strings for leaf commands."""
+def test_write_subcommand_pages_leaf():
+    """
+    Return page paths for leaf commands
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
@@ -8826,33 +8911,22 @@ def test_generate_subcommand_pages_leaf():
                 },
             ],
         }
-        result = docs._generate_subcommand_pages(cmd_info, cli_dir)
+        result = cli_render._write_subcommand_pages(
+            docs._config, docs.build_dir, cmd_info, cli_dir, "reference/cli", []
+        )
 
         assert result == ["reference/cli/build.qmd"]
 
 
-def test_discover_click_cli_disabled():
-    """_discover_click_cli returns None when CLI not enabled."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-        docs = GreatDocs(project_path=tmp_dir)
+def test_discover_missing_package(tmp_path):
+    """
+    Return `None` when the package has no CLI module
+    """
+    result = cli_click.discover(
+        "nonexistent_pkg_xyzzy", tmp_path, cli_module=None, cli_name=None, report=print
+    )
 
-        assert docs._discover_click_cli("mypkg") is None
-
-
-def test_discover_click_cli_no_click_missing_pkg():
-    """_discover_click_cli returns None when click is not importable."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-        (tmp / "great-docs.yml").write_text("cli:\n  enabled: true\n")
-        docs = GreatDocs(project_path=tmp_dir)
-        # click IS installed in test env so this would proceed,
-        # but there's no CLI module to find
-        result = docs._discover_click_cli("nonexistent_pkg_xyzzy")
-
-        assert result is None
+    assert result is None
 
 
 def test_rewrite_href_recursive_dict_match():
@@ -9290,8 +9364,10 @@ def test_normalize_package_name_v2():
         assert docs._normalize_package_name("multi-hyphen-name") == "multi_hyphen_name"
 
 
-def test_count_cli_sidebar_items_nested_v2():
-    """_count_cli_sidebar_items counts nested dict items recursively."""
+def test_count_pages_nested_v2():
+    """
+    Count page paths recursively through sidebar sections
+    """
     items = [
         "reference/cli/index.qmd",
         {
@@ -9303,7 +9379,7 @@ def test_count_cli_sidebar_items_nested_v2():
         },
     ]
 
-    assert GreatDocs._count_cli_sidebar_items(items) == 3
+    assert cli_render.count_pages(items) == 3
 
 
 def test_detect_package_name_from_pyproject_v2():
@@ -13501,26 +13577,32 @@ def test_is_compiled_extension():
         assert isinstance(result, bool)
 
 
-def test_count_cli_sidebar_items_flat():
-    """Test _count_cli_sidebar_items with flat list."""
-    result = GreatDocs._count_cli_sidebar_items(["a.qmd", "b.qmd", "c.qmd"])
+def test_count_pages_flat():
+    """
+    Count page paths in a flat sidebar
+    """
+    result = cli_render.count_pages(["a.qmd", "b.qmd", "c.qmd"])
     assert result == 3
 
 
-def test_count_cli_sidebar_items_nested():
-    """Test _count_cli_sidebar_items with nested structure."""
+def test_count_pages_nested():
+    """
+    Count page paths recursively through sidebar sections
+    """
     items = [
         "a.qmd",
         {"section": "Group", "contents": ["b.qmd", "c.qmd"]},
         "d.qmd",
     ]
-    result = GreatDocs._count_cli_sidebar_items(items)
+    result = cli_render.count_pages(items)
     assert result == 4
 
 
-def test_count_cli_sidebar_items_empty():
-    """Test _count_cli_sidebar_items with empty list."""
-    result = GreatDocs._count_cli_sidebar_items([])
+def test_count_pages_empty():
+    """
+    Return zero for an empty sidebar
+    """
+    result = cli_render.count_pages([])
     assert result == 0
 
 
@@ -14510,8 +14592,10 @@ def test_discover_user_guide_explicit_config():
         assert len(result["files"]) == 2
 
 
-def test_get_cli_entry_point_name_b9():
-    """Test _get_cli_entry_point_name reads from pyproject.toml."""
+def test_entry_point_name_b9():
+    """
+    Read the script name from `pyproject.toml`
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -14519,17 +14603,19 @@ def test_get_cli_entry_point_name_b9():
             '[project]\nname = "mypkg"\n[project.scripts]\nmytool = "mypkg.cli:main"\n',
             encoding="utf-8",
         )
-        result = docs._get_cli_entry_point_name("mypkg")
+        result = cli_click.entry_point_name(docs.layout.package_root)
         assert result == "mytool"
 
 
-def test_get_cli_entry_point_name_no_scripts_b9():
-    """Test _get_cli_entry_point_name returns None when no scripts."""
+def test_entry_point_name_no_scripts_b9():
+    """
+    Return `None` when no scripts are defined
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        result = docs._get_cli_entry_point_name("mypkg")
+        result = cli_click.entry_point_name(docs.layout.package_root)
         assert result is None
 
 
@@ -15387,7 +15473,9 @@ def test_detect_module_name_from_setuptools_find():
 
 
 def test_get_cli_entry_point_gui_scripts():
-    """Test _get_cli_entry_point_name reads from gui-scripts."""
+    """
+    Read the GUI script name when no console scripts are defined
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text(
@@ -15395,7 +15483,7 @@ def test_get_cli_entry_point_gui_scripts():
             encoding="utf-8",
         )
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._get_cli_entry_point_name("mypkg")
+        result = cli_click.entry_point_name(docs.layout.package_root)
         assert result == "mygui"
 
 
@@ -15656,8 +15744,10 @@ def test_copy_user_guide_to_docs_explicit_mode():
         assert "user-guide/01-guide.qmd" in copied
 
 
-def test_extract_click_command_basic():
-    """Test _extract_click_command with a simple Click command."""
+def test_extract_command_basic():
+    """
+    Include the command's help text in the reference model
+    """
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -15669,13 +15759,15 @@ def test_extract_click_command_basic():
             """Say hello to someone."""
             pass
 
-        result = docs._extract_click_command(hello, "hello")
+        result = cli_click.extract_command(hello, "hello")
         assert result["name"] == "hello"
         assert "Say hello" in result.get("help_text", "")
 
 
-def test_extract_click_command_group():
-    """Test _extract_click_command with a Click group and subcommands."""
+def test_extract_command_group():
+    """
+    Describe a Click group and its subcommands
+    """
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -15690,7 +15782,7 @@ def test_extract_click_command_group():
             """A subcommand."""
             pass
 
-        result = docs._extract_click_command(cli, "cli")
+        result = cli_click.extract_command(cli, "cli")
 
         assert result["name"] == "cli"
         assert len(result.get("commands", [])) >= 1
@@ -16140,20 +16232,19 @@ def test_build_with_cli_documentation(tmp_path):
     """Test build() generates CLI docs when cli_enabled."""
     docs = _buildable_docs(tmp_path)
     cli_info = {"name": "mycli", "commands": [], "help_text": "Help"}
-    cli_files = [{"path": "cli/index.qmd"}]
+    cli_files = ["reference/cli/index.qmd"]
 
-    with stubbed_build(
-        docs,
-        _detect_package_name="mypkg",
-        _get_package_metadata={"cli_enabled": True},
-        _discover_click_cli=cli_info,
-        _generate_cli_reference_pages=cli_files,
-        _count_cli_sidebar_items=3,
-    ) as stubs:
+    with (
+        stubbed_build(
+            docs, _detect_package_name="mypkg", _get_package_metadata={"cli_enabled": True}
+        ) as stubs,
+        patch("great_docs._cliref.click.discover", return_value=cli_info) as discover,
+        patch("great_docs._cliref.render.write_pages", return_value=cli_files) as write_pages,
+    ):
         docs.build(watch=False, refresh=False)
 
-    stubs.steps["_discover_click_cli"].assert_called_once()
-    stubs.steps["_generate_cli_reference_pages"].assert_called_once()
+    discover.assert_called_once()
+    write_pages.assert_called_once_with(docs._config, docs.build_dir, cli_info, report=print)
     stubs.steps["_update_sidebar_with_cli"].assert_called_once()
 
 
@@ -16226,15 +16317,17 @@ def test_build_cli_error_handled(tmp_path, capsys):
     """
     docs = _buildable_docs(tmp_path)
 
-    with stubbed_build(
-        docs, _detect_package_name="mypkg", _get_package_metadata={"cli_enabled": True}
-    ) as stubs:
-        stubs.steps["_discover_click_cli"].side_effect = ImportError("click")
-
+    with (
+        stubbed_build(
+            docs, _detect_package_name="mypkg", _get_package_metadata={"cli_enabled": True}
+        ) as stubs,
+        patch("great_docs._cliref.click.discover", side_effect=ImportError("click")),
+        patch("great_docs._cliref.render.write_pages") as write_pages,
+    ):
         docs.build(watch=False, refresh=False)
 
     assert "Error generating CLI docs: click" in capsys.readouterr().out
-    stubs.steps["_generate_cli_reference_pages"].assert_not_called()
+    write_pages.assert_not_called()
     stubs.steps["_default_description"].assert_called_once()
 
 
@@ -16275,222 +16368,142 @@ def test_build_log_numbers_every_step(tmp_path, capsys):
     assert "Build complete — 20/20 steps" in out
 
 
-def test_discover_click_cli_not_enabled():
-    """Test _discover_click_cli returns None when cli_enabled is False."""
+def test_discover_with_explicit_cli_module(tmp_path):
+    """
+    Discover the command in the configured CLI module
+    """
+    mock_cli = click.Group(name="test-cli", help="Test CLI")
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        with patch.object(docs, "_get_package_metadata", return_value={"cli_enabled": False}):
-            result = docs._discover_click_cli("mypkg")
-        assert result is None
+    mock_module = types.ModuleType("mypkg.cli")
+    mock_module.cli = mock_cli
 
+    with (
+        patch("importlib.import_module", return_value=mock_module),
+        patch.object(cli_click, "entry_point_name", return_value="my-cli"),
+        patch.object(
+            cli_click,
+            "extract_command",
+            return_value={"name": "my-cli", "commands": []},
+        ),
+    ):
+        result = cli_click.discover(
+            "mypkg", tmp_path, cli_module="mypkg.cli", cli_name=None, report=print
+        )
 
-def test_discover_click_cli_no_click():
-    """Test _discover_click_cli returns None when click not installed."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        with (
-            patch.object(docs, "_get_package_metadata", return_value={"cli_enabled": True}),
-            patch.dict(sys.modules, {"click": None}),
-            patch("builtins.__import__", side_effect=ImportError("click")),
-        ):
-            # We need a more targeted approach: just mock click import to fail
-            pass
-
-        # Simpler approach: mock the import
-        with patch.object(docs, "_get_package_metadata", return_value={"cli_enabled": True}):
-            original_import = (
-                __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__
-            )
-
-            def mock_import(name, *args, **kwargs):
-                if name == "click":
-                    raise ImportError("No module named 'click'")
-                return original_import(name, *args, **kwargs)
-
-            # Use a different approach: patch sys.modules
-            # Actually, click IS installed, so test the found path instead
+    assert result is not None
+    assert result["entry_point_name"] == "my-cli"
 
 
-def test_discover_click_cli_with_explicit_cli_module():
-    """Test _discover_click_cli with explicit cli_module config."""
+def test_discover_auto_discovers_module(tmp_path):
+    """
+    Discover a CLI module in a conventional location
+    """
+    mock_cmd = click.Command(name="tool", callback=lambda: None)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
+    mock_module = types.ModuleType("mypkg.cli")
+    mock_module.tool = mock_cmd
 
-        mock_cli = click.Group(name="test-cli", help="Test CLI")
+    import_calls = []
 
-        mock_module = types.ModuleType("mypkg.cli")
-        mock_module.cli = mock_cli
+    def mock_import(name):
+        import_calls.append(name)
+        if name == "mypkg.cli":
+            return mock_module
+        raise ImportError(f"No module {name}")
 
-        with (
-            patch.object(
-                docs,
-                "_get_package_metadata",
-                return_value={"cli_enabled": True, "cli_module": "mypkg.cli"},
-            ),
-            patch.object(docs, "_normalize_package_name", return_value="mypkg"),
-            patch("importlib.import_module", return_value=mock_module),
-            patch.object(docs, "_get_cli_entry_point_name", return_value="my-cli"),
-            patch.object(
-                docs,
-                "_extract_click_command",
-                return_value={"name": "my-cli", "commands": []},
-            ),
-        ):
-            result = docs._discover_click_cli("mypkg")
+    with (
+        patch("importlib.import_module", side_effect=mock_import),
+        patch.object(cli_click, "entry_point_name", return_value=None),
+        patch.object(
+            cli_click,
+            "extract_command",
+            return_value={"name": "tool", "commands": []},
+        ),
+    ):
+        result = cli_click.discover("mypkg", tmp_path, cli_module=None, cli_name=None, report=print)
 
-        assert result is not None
-        assert result["entry_point_name"] == "my-cli"
-
-
-def test_discover_click_cli_auto_discovers_module():
-    """Test _discover_click_cli auto-discovers CLI module from common locations."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        mock_cmd = click.Command(name="tool", callback=lambda: None)
-
-        mock_module = types.ModuleType("mypkg.cli")
-        mock_module.tool = mock_cmd
-
-        import_calls = []
-
-        def mock_import(name):
-            import_calls.append(name)
-            if name == "mypkg.cli":
-                return mock_module
-            raise ImportError(f"No module {name}")
-
-        with (
-            patch.object(
-                docs,
-                "_get_package_metadata",
-                return_value={"cli_enabled": True},
-            ),
-            patch.object(docs, "_normalize_package_name", return_value="mypkg"),
-            patch("importlib.import_module", side_effect=mock_import),
-            patch.object(docs, "_get_cli_entry_point_name", return_value=None),
-            patch.object(
-                docs,
-                "_extract_click_command",
-                return_value={"name": "tool", "commands": []},
-            ),
-        ):
-            result = docs._discover_click_cli("mypkg")
-
-        assert result is not None
+    assert result is not None
 
 
-def test_discover_click_cli_explicit_cli_name():
-    """Test _discover_click_cli uses explicit cli_name from metadata."""
+def test_discover_explicit_cli_name(tmp_path):
+    """
+    Discover the command named by `cli.name`
+    """
+    mock_app = click.Group(name="myapp", help="My app")
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
+    mock_module = types.ModuleType("pkg.cli")
+    mock_module.myapp = mock_app
 
-        mock_app = click.Group(name="myapp", help="My app")
+    with (
+        patch("importlib.import_module", return_value=mock_module),
+        patch.object(cli_click, "entry_point_name", return_value="my-app"),
+        patch.object(
+            cli_click,
+            "extract_command",
+            return_value={"name": "myapp", "commands": []},
+        ),
+    ):
+        result = cli_click.discover(
+            "pkg", tmp_path, cli_module="pkg.cli", cli_name="myapp", report=print
+        )
 
-        mock_module = types.ModuleType("pkg.cli")
-        mock_module.myapp = mock_app
-
-        with (
-            patch.object(
-                docs,
-                "_get_package_metadata",
-                return_value={"cli_enabled": True, "cli_module": "pkg.cli", "cli_name": "myapp"},
-            ),
-            patch.object(docs, "_normalize_package_name", return_value="pkg"),
-            patch("importlib.import_module", return_value=mock_module),
-            patch.object(docs, "_get_cli_entry_point_name", return_value="my-app"),
-            patch.object(
-                docs,
-                "_extract_click_command",
-                return_value={"name": "myapp", "commands": []},
-            ),
-        ):
-            result = docs._discover_click_cli("pkg")
-
-        assert result is not None
-        assert result["entry_point_name"] == "my-app"
+    assert result is not None
+    assert result["entry_point_name"] == "my-app"
 
 
-def test_discover_click_cli_no_command_found():
-    """Test _discover_click_cli returns None when no Click command found."""
+def test_discover_no_command_found(tmp_path):
+    """
+    Return `None` when the CLI module contains no command
+    """
+    mock_module = types.ModuleType("pkg.cli")
+    mock_module.helper = "not a click command"
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
+    with patch("importlib.import_module", return_value=mock_module):
+        result = cli_click.discover(
+            "pkg", tmp_path, cli_module="pkg.cli", cli_name=None, report=print
+        )
 
-        mock_module = types.ModuleType("pkg.cli")
-        mock_module.helper = "not a click command"
-
-        with (
-            patch.object(
-                docs,
-                "_get_package_metadata",
-                return_value={"cli_enabled": True, "cli_module": "pkg.cli"},
-            ),
-            patch.object(docs, "_normalize_package_name", return_value="pkg"),
-            patch("importlib.import_module", return_value=mock_module),
-        ):
-            result = docs._discover_click_cli("pkg")
-
-        assert result is None
+    assert result is None
 
 
-def test_discover_click_cli_import_failure():
-    """Test _discover_click_cli returns None when CLI module can't be imported."""
+def test_discover_import_failure(tmp_path):
+    """
+    Return `None` when the CLI module cannot be imported
+    """
+    with patch("importlib.import_module", side_effect=ImportError("nope")):
+        result = cli_click.discover(
+            "pkg", tmp_path, cli_module="pkg.cli", cli_name=None, report=print
+        )
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        with (
-            patch.object(
-                docs,
-                "_get_package_metadata",
-                return_value={"cli_enabled": True, "cli_module": "pkg.cli"},
-            ),
-            patch.object(docs, "_normalize_package_name", return_value="pkg"),
-            patch("importlib.import_module", side_effect=ImportError("nope")),
-        ):
-            result = docs._discover_click_cli("pkg")
-
-        assert result is None
+    assert result is None
 
 
-def test_discover_click_cli_fallback_dir_search():
-    """Test _discover_click_cli searches dir() for any Click command."""
+def test_discover_fallback_dir_search(tmp_path):
+    """
+    Find a command under a non-standard public attribute name
+    """
+    # A non-standard attribute name requires the public-attribute fallback.
+    mock_module = types.ModuleType("pkg.cli")
+    mock_module.custom_command = click.Command(name="custom", callback=lambda: None)
+    # Conventional names hold non-commands, so the scan must continue.
+    mock_module.cli = "not a command"
+    mock_module.main = "also not"
+    mock_module.app = 42
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
+    with (
+        patch("importlib.import_module", return_value=mock_module),
+        patch.object(cli_click, "entry_point_name", return_value=None),
+        patch.object(
+            cli_click,
+            "extract_command",
+            return_value={"name": "custom", "commands": []},
+        ),
+    ):
+        result = cli_click.discover(
+            "pkg", tmp_path, cli_module="pkg.cli", cli_name=None, report=print
+        )
 
-        # Create a module with a non-standard Click command name
-        mock_module = types.ModuleType("pkg.cli")
-        mock_module.custom_command = click.Command(name="custom", callback=lambda: None)
-        # Add common names that are NOT click objects
-        mock_module.cli = "not a command"
-        mock_module.main = "also not"
-        mock_module.app = 42
-
-        with (
-            patch.object(
-                docs,
-                "_get_package_metadata",
-                return_value={"cli_enabled": True, "cli_module": "pkg.cli"},
-            ),
-            patch.object(docs, "_normalize_package_name", return_value="pkg"),
-            patch("importlib.import_module", return_value=mock_module),
-            patch.object(docs, "_get_cli_entry_point_name", return_value=None),
-            patch.object(
-                docs,
-                "_extract_click_command",
-                return_value={"name": "custom", "commands": []},
-            ),
-        ):
-            result = docs._discover_click_cli("pkg")
-
-        assert result is not None
+    assert result is not None
 
 
 def test_categorise_exports_basic():
@@ -32366,12 +32379,14 @@ def test_prepare_build_dir_marimo_not_installed(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _generate_cli_command_page — bullet list paragraphs, help_text, arguments
+# Command help blocks, bullet lists and positional arguments
 # ---------------------------------------------------------------------------
 
 
-def test_generate_cli_command_page_with_help_text(tmp_path):
-    """CLI command page with help_text generates collapsible details block."""
+def test_command_page_with_help_text(tmp_path):
+    """
+    Include full help output in a collapsed details block
+    """
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
     docs = GreatDocs(project_path=str(tmp_path))
 
@@ -32386,13 +32401,15 @@ def test_generate_cli_command_page_with_help_text(tmp_path):
         "commands": [],
         "examples": "",
     }
-    result = docs._generate_cli_command_page(cmd_info)
+    result = cli_render.command_page(docs._config, cmd_info)
     assert '.details summary="Full `--help` output"' in result
     assert "Usage: mypkg run" in result
 
 
-def test_generate_cli_command_page_help_summary_translated(tmp_path):
-    """The collapsible help summary follows the site language."""
+def test_command_page_help_summary_translated(tmp_path):
+    """
+    Translate the collapsed help summary into the site language
+    """
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
     (tmp_path / "great-docs.yml").write_text("site:\n  lang: fr\n")
     docs = GreatDocs(project_path=str(tmp_path))
@@ -32408,12 +32425,14 @@ def test_generate_cli_command_page_help_summary_translated(tmp_path):
         "commands": [],
         "examples": "",
     }
-    result = docs._generate_cli_command_page(cmd_info)
+    result = cli_render.command_page(docs._config, cmd_info)
     assert '.details summary="Sortie complète de `--help`"' in result
 
 
-def test_generate_cli_command_page_with_arguments_typed(tmp_path):
-    """CLI command page with typed argument shows type annotation."""
+def test_command_page_with_arguments_typed(tmp_path):
+    """
+    Show type annotations for typed positional arguments
+    """
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
     docs = GreatDocs(project_path=str(tmp_path))
 
@@ -32437,13 +32456,15 @@ def test_generate_cli_command_page_with_arguments_typed(tmp_path):
         "commands": [],
         "examples": "",
     }
-    result = docs._generate_cli_command_page(cmd_info)
+    result = cli_render.command_page(docs._config, cmd_info)
     assert "Arguments" in result
     assert "path" in result.lower()
 
 
-def test_generate_cli_command_page_with_argument_no_type(tmp_path):
-    """CLI command page with untyped argument omits type annotation."""
+def test_command_page_with_argument_no_type(tmp_path):
+    """
+    Omit type annotations for untyped positional arguments
+    """
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
     docs = GreatDocs(project_path=str(tmp_path))
 
@@ -32467,12 +32488,14 @@ def test_generate_cli_command_page_with_argument_no_type(tmp_path):
         "commands": [],
         "examples": "",
     }
-    result = docs._generate_cli_command_page(cmd_info)
+    result = cli_render.command_page(docs._config, cmd_info)
     assert "NAME" in result
 
 
-def test_generate_cli_command_page_bullet_paragraphs(tmp_path):
-    """Multi-paragraph help with bullet list is serialized as Markdown bullets."""
+def test_command_page_bullet_paragraphs(tmp_path):
+    """
+    Serialise help paragraphs with bullet lists as Markdown bullets
+    """
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
     docs = GreatDocs(project_path=str(tmp_path))
 
@@ -32487,12 +32510,14 @@ def test_generate_cli_command_page_bullet_paragraphs(tmp_path):
         "commands": [],
         "examples": "",
     }
-    result = docs._generate_cli_command_page(cmd_info)
+    result = cli_render.command_page(docs._config, cmd_info)
     assert "- Step one" in result or "Step one" in result
 
 
-def test_generate_cli_command_page_indented_paragraph(tmp_path):
-    """Multi-paragraph help with indented block is preserved as-is."""
+def test_command_page_indented_paragraph(tmp_path):
+    """
+    Preserve indented help blocks
+    """
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
     docs = GreatDocs(project_path=str(tmp_path))
 
@@ -32507,12 +32532,14 @@ def test_generate_cli_command_page_indented_paragraph(tmp_path):
         "commands": [],
         "examples": "",
     }
-    result = docs._generate_cli_command_page(cmd_info)
+    result = cli_render.command_page(docs._config, cmd_info)
     assert "Quick start:" in result or "do_thing" in result
 
 
-def test_generate_cli_command_page_prose_paragraph(tmp_path):
-    """Multi-paragraph help with plain prose is joined into one line."""
+def test_command_page_prose_paragraph(tmp_path):
+    """
+    Join plain help paragraphs into single lines
+    """
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
     docs = GreatDocs(project_path=str(tmp_path))
 
@@ -32527,7 +32554,7 @@ def test_generate_cli_command_page_prose_paragraph(tmp_path):
         "commands": [],
         "examples": "",
     }
-    result = docs._generate_cli_command_page(cmd_info)
+    result = cli_render.command_page(docs._config, cmd_info)
     assert "extra context" in result
 
 
@@ -32596,76 +32623,82 @@ def test_detect_module_name_returns_pkg_dir_name_fallback(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _find_click_cli_obj
+# CLI command discovery
 # ---------------------------------------------------------------------------
 
 
-def test_find_click_cli_obj_click_not_importable(tmp_path):
-    """Returns None when click is not importable."""
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-    (tmp_path / "great-docs.yml").write_text("cli:\n  enabled: true\n")
-    docs = GreatDocs(project_path=str(tmp_path))
-
-    with patch.dict(sys.modules, {"click": None}):
-        result = docs._find_click_cli_obj("mypkg")
-
-    assert result is None
-
-
-def test_find_click_cli_obj_cli_module_import_fails(tmp_path):
-    """Returns None when cli_module path cannot be imported."""
+def test_find_command_cli_module_import_fails(tmp_path):
+    """
+    Return `None` when the configured CLI module cannot be imported
+    """
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
     (tmp_path / "great-docs.yml").write_text("cli:\n  enabled: true\n  module: mypkg.cli\n")
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch("importlib.import_module", side_effect=ImportError("not found")):
-        result = docs._find_click_cli_obj("mypkg")
+        result = cli_click.find_command(
+            "mypkg", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
+        )
 
     assert result is None
 
 
-def test_find_click_cli_obj_with_cli_name(tmp_path):
-    """Returns Click object when cli_name matches an attribute in the module."""
+def test_find_command_with_cli_name(tmp_path):
+    """
+    Return the command named by `cli.name`
+    """
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "great_docs"\n')
     (tmp_path / "great-docs.yml").write_text(
         "cli:\n  enabled: true\n  module: great_docs.cli\n  name: cli\n"
     )
     docs = GreatDocs(project_path=str(tmp_path))
 
-    result = docs._find_click_cli_obj("great_docs")
+    result = cli_click.find_command(
+        "great_docs", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
+    )
 
     import click as _click
 
     assert isinstance(result, (_click.Command, _click.Group))
 
 
-def test_find_click_cli_obj_attr_loop(tmp_path):
-    """Returns Click object found via the standard attribute name loop."""
+def test_find_command_attr_loop(tmp_path):
+    """
+    Find a command under a conventional attribute name
+    """
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "great_docs"\n')
     (tmp_path / "great-docs.yml").write_text("cli:\n  enabled: true\n  module: great_docs.cli\n")
     docs = GreatDocs(project_path=str(tmp_path))
 
     # No cli_name set — falls through to the "cli"/"main"/"app" loop
-    result = docs._find_click_cli_obj("great_docs")
+    result = cli_click.find_command(
+        "great_docs", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
+    )
 
     import click as _click
 
     assert isinstance(result, (_click.Command, _click.Group))
 
 
-def test_find_click_cli_obj_no_module_found_returns_none(tmp_path):
-    """Returns None when no CLI module is discovered."""
+def test_find_command_no_module_found_returns_none(tmp_path):
+    """
+    Return `None` when no CLI module is found
+    """
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "nonexistent_pkg_xyzzy"\n')
     (tmp_path / "great-docs.yml").write_text("cli:\n  enabled: true\n")
     docs = GreatDocs(project_path=str(tmp_path))
 
-    result = docs._find_click_cli_obj("nonexistent_pkg_xyzzy")
+    result = cli_click.find_command(
+        "nonexistent_pkg_xyzzy", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
+    )
 
     assert result is None
 
 
-def test_find_click_cli_obj_dir_loop(tmp_path):
-    """Returns Click object found via dir(module) scan when standard names absent."""
+def test_find_command_dir_loop(tmp_path):
+    """
+    Scan public module attributes when conventional names hold no command
+    """
     import types
 
     import click as _click
@@ -32684,13 +32717,17 @@ def test_find_click_cli_obj_dir_loop(tmp_path):
 
     with patch.dict(sys.modules, {"fake_cli_module_xyzzy": fake_module}):
         with patch("importlib.import_module", return_value=fake_module):
-            result = docs._find_click_cli_obj("mypkg")
+            result = cli_click.find_command(
+                "mypkg", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
+            )
 
     assert isinstance(result, (_click.Command, _click.Group))
 
 
-def test_find_click_cli_obj_discovery_loop_finds_module(tmp_path):
-    """Discovery loop sets cli_module_path when a module has click commands."""
+def test_find_command_discovery_loop_finds_module(tmp_path):
+    """
+    Discover a candidate module containing a Click command
+    """
     import types
 
     import click as _click
@@ -32713,13 +32750,17 @@ def test_find_click_cli_obj_discovery_loop_finds_module(tmp_path):
         raise ImportError(f"No module {name}")
 
     with patch("importlib.import_module", side_effect=fake_import):
-        result = docs._find_click_cli_obj("mypkg")
+        result = cli_click.find_command(
+            "mypkg", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
+        )
 
     assert isinstance(result, (_click.Command, _click.Group))
 
 
-def test_find_click_cli_obj_no_commands_returns_none(tmp_path):
-    """Returns None when module has no click commands."""
+def test_find_command_no_commands_returns_none(tmp_path):
+    """
+    Return `None` when the module contains no command
+    """
     import types
 
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
@@ -32734,7 +32775,9 @@ def test_find_click_cli_obj_no_commands_returns_none(tmp_path):
 
     with patch.dict(sys.modules, {"fake_empty_module_xyzzy": fake_module}):
         with patch("importlib.import_module", return_value=fake_module):
-            result = docs._find_click_cli_obj("mypkg")
+            result = cli_click.find_command(
+                "mypkg", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
+            )
 
     assert result is None
 

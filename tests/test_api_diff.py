@@ -28,6 +28,7 @@ from great_docs._api_diff import (
     _augment_params_with_separators,
     _describe_param_change,
     _detect_package_name,
+    _diff_cli_command,
     _diff_parameters,
     _diff_symbol,
     _escape_html,
@@ -36,24 +37,21 @@ from great_docs._api_diff import (
     _extract_package_at_tag,
     _extract_parameters,
     _filter_tag_range,
+    _get_tag_date,
     _mermaid_id,
     _parameter_kind_str,
     _parse_marker_attrs,
     _symbol_change_to_dict,
+    _symbol_info_for_dotted,
     api_diff,
     build_dependency_graph,
     build_timeline,
-    _diff_cli_command,
     diff_snapshots,
     evolution_table,
     evolution_table_html,
     evolution_table_text,
     evolution_table_to_dict,
     format_signature,
-    _get_tag_date,
-    _import_cli_from_source,
-    _read_cli_module_at_tag,
-    _symbol_info_for_dotted,
     list_version_tags,
     process_evolution_markers,
     process_evolution_markers_in_file,
@@ -61,11 +59,11 @@ from great_docs._api_diff import (
     render_evolution_table,
     render_evolution_table_from_dict,
     snapshot_at_tag,
-    snapshot_cli_from_click,
     snapshot_from_griffe,
     symbol_history,
     timeline_to_mermaid,
 )
+from great_docs._cliref.click import extract_snapshot, read_module_at_tag, snapshot_from_source
 
 
 def test_parameter_info_defaults():
@@ -2993,26 +2991,30 @@ def test_extract_package_at_tag_src_layout(mock_mkdtemp, mock_move, mock_run, tm
     assert result is not None or mock_move.called or True  # just verifying no exception
 
 
-# --- _read_cli_module_at_tag pyproject with CLI enabled ---
+# --- CLI module configuration in pyproject.toml ---
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._cliref.click.subprocess.run")
 def test_read_cli_module_pyproject_enabled(mock_run):
-    """_read_cli_module_at_tag returns module when CLI enabled in pyproject.toml."""
+    """
+    Read the CLI module from release metadata when enabled in `pyproject.toml`
+    """
     toml_content = """
 [tool.great-docs.cli]
 enabled = true
 module = "mypkg.cli"
 """
     mock_run.return_value = MagicMock(returncode=0, stdout=toml_content)
-    result = _read_cli_module_at_tag(Path("/project"), "v1.0", "mypkg")
+    result = read_module_at_tag(Path("/project"), "v1.0", "mypkg")
 
     assert result == "mypkg.cli"
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._cliref.click.subprocess.run")
 def test_read_cli_module_pyproject_not_enabled(mock_run):
-    """_read_cli_module_at_tag returns None when CLI not enabled and no fallback found."""
+    """
+    Return `None` when CLI documentation is disabled and no fallback module exists
+    """
     toml_content = '[tool.great-docs.cli]\nenabled = false\nmodule = "mypkg.cli"\n'
 
     def fake_run(cmd, **kwargs):
@@ -3031,17 +3033,19 @@ def test_read_cli_module_pyproject_not_enabled(mock_run):
         return m
 
     mock_run.side_effect = fake_run
-    result = _read_cli_module_at_tag(Path("/project"), "v1.0", "mypkg")
+    result = read_module_at_tag(Path("/project"), "v1.0", "mypkg")
 
     assert result is None
 
 
-# --- _read_cli_module_at_tag yaml path ---
+# --- CLI module configuration in YAML ---
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._cliref.click.subprocess.run")
 def test_read_cli_module_yaml_enabled(mock_run):
-    """_read_cli_module_at_tag returns module from great-docs.yml when CLI enabled."""
+    """
+    Read the CLI module from a release's `great-docs.yml` when enabled
+    """
     yaml_content = "cli:\n  enabled: true\n  module: mypkg.cli\n"
 
     def fake_run(cmd, **kwargs):
@@ -3055,17 +3059,19 @@ def test_read_cli_module_yaml_enabled(mock_run):
         return m
 
     mock_run.side_effect = fake_run
-    result = _read_cli_module_at_tag(Path("/project"), "v1.0", "mypkg")
+    result = read_module_at_tag(Path("/project"), "v1.0", "mypkg")
 
     assert result == "mypkg.cli"
 
 
-# --- _read_cli_module_at_tag fallback cli module check ---
+# --- CLI module fallback ---
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._cliref.click.subprocess.run")
 def test_read_cli_module_fallback_cli(mock_run):
-    """_read_cli_module_at_tag falls back to checking mypkg/cli.py."""
+    """
+    Fall back to the release's `mypkg/cli.py` module
+    """
 
     def fake_run(cmd, **kwargs):
         m = MagicMock()
@@ -3082,27 +3088,31 @@ def test_read_cli_module_fallback_cli(mock_run):
         return m
 
     mock_run.side_effect = fake_run
-    result = _read_cli_module_at_tag(Path("/project"), "v1.0", "mypkg")
+    result = read_module_at_tag(Path("/project"), "v1.0", "mypkg")
 
     assert result == "mypkg.cli"
 
 
-# --- _import_cli_from_source: click ImportError ---
+# --- CLI source import without Click ---
 
 
-def test_import_cli_from_source_no_click(tmp_path):
-    """_import_cli_from_source returns None when click is not available."""
+def test_snapshot_from_source_no_click(tmp_path):
+    """
+    Return `None` when the CLI module cannot be imported without Click
+    """
     with patch.dict("sys.modules", {"click": None}):
-        result = _import_cli_from_source(tmp_path, "some_module")
+        result = snapshot_from_source(tmp_path, "some_module")
 
     assert result is None
 
 
-# --- _import_cli_from_source: fallback attribute search --+
+# --- CLI source attribute fallback ---
 
 
-def test_import_cli_from_source_fallback_attr_search(tmp_path):
-    """_import_cli_from_source finds CLI via fallback attribute scan."""
+def test_snapshot_from_source_fallback_attr_search(tmp_path):
+    """
+    Find a command under a non-standard public attribute name
+    """
     import click
 
     @click.command()
@@ -3126,7 +3136,7 @@ def test_import_cli_from_source_fallback_attr_search(tmp_path):
         patch.object(fake_module, "__dir__", return_value=["my_cmd"]),
     ):
         # We patch import_module directly so we don't need a real module
-        result = _import_cli_from_source(tmp_path, "fake_module")
+        result = snapshot_from_source(tmp_path, "fake_module")
 
     # Should have found my_cmd as the CLI
     assert result is not None
@@ -3135,8 +3145,8 @@ def test_import_cli_from_source_fallback_attr_search(tmp_path):
 # --- snapshot_at_tag: with cli_module ---
 
 
-@patch("great_docs._api_diff._import_cli_from_source")
-@patch("great_docs._api_diff._read_cli_module_at_tag")
+@patch("great_docs._cliref.click.snapshot_from_source")
+@patch("great_docs._cliref.click.read_module_at_tag")
 @patch("great_docs._api_diff.snapshot_from_griffe")
 @patch("great_docs._api_diff._extract_package_at_tag")
 def test_snapshot_at_tag_with_cli_module(mock_extract, mock_griffe, mock_read_cli, mock_import_cli):
@@ -3241,18 +3251,22 @@ def test_diff_cli_command_no_changes():
     assert change is None
 
 
-# --- snapshot_cli_from_click: non-click object returns None ---
+# --- Unsupported snapshot objects ---
 
 
-def test_snapshot_cli_from_click_non_click_object():
-    """snapshot_cli_from_click returns None for non-Click objects."""
-    result = snapshot_cli_from_click("not a click command")
+def test_extract_snapshot_non_click_object():
+    """
+    Return `None` for an object that is neither a Click command nor a Typer app
+    """
+    result = extract_snapshot("not a click command")
 
     assert result is None
 
 
-def test_snapshot_cli_from_click_success():
-    """snapshot_cli_from_click returns CliCommandInfo for a Click command."""
+def test_extract_snapshot_success():
+    """
+    Record a Click command in an API snapshot
+    """
     import click
 
     @click.command()
@@ -3261,7 +3275,7 @@ def test_snapshot_cli_from_click_success():
         """A simple command."""
         pass
 
-    result = snapshot_cli_from_click(my_cmd)
+    result = extract_snapshot(my_cmd)
 
     assert result is not None
     assert result.name is not None
@@ -3526,12 +3540,14 @@ def test_symbol_history_detects_package_name(mock_detect, mock_date, mock_snap, 
     mock_detect.assert_called_once()
 
 
-# --- _read_cli_module_at_tag yaml path: enabled=False ---
+# --- Disabled CLI reference in YAML ---
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._cliref.click.subprocess.run")
 def test_read_cli_module_yaml_not_enabled(mock_run):
-    """_read_cli_module_at_tag returns None when yaml CLI is not enabled."""
+    """
+    Return `None` when YAML disables the CLI reference and no fallback module exists
+    """
     yaml_content = "cli:\n  enabled: false\n  module: mypkg.cli\n"
 
     def fake_run(cmd, **kwargs):
@@ -3551,19 +3567,21 @@ def test_read_cli_module_yaml_not_enabled(mock_run):
         return m
 
     mock_run.side_effect = fake_run
-    result = _read_cli_module_at_tag(Path("/project"), "v1.0", "mypkg")
+    result = read_module_at_tag(Path("/project"), "v1.0", "mypkg")
 
     assert result is None
 
 
-# --- _read_cli_module_at_tag: outer timeout exception ---
+# --- Release file timeouts ---
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._cliref.click.subprocess.run")
 def test_read_cli_module_timeout_exception(mock_run):
-    """_read_cli_module_at_tag handles TimeoutExpired on git show."""
+    """
+    Return `None` when Git times out while reading release files
+    """
     mock_run.side_effect = subprocess.TimeoutExpired(cmd="git", timeout=10)
-    result = _read_cli_module_at_tag(Path("/project"), "v1.0", "mypkg")
+    result = read_module_at_tag(Path("/project"), "v1.0", "mypkg")
 
     # Should handle gracefully and return None
     assert result is None
@@ -3584,11 +3602,13 @@ def test_diff_symbol_module_kind_no_param_diff():
     assert change.parameter_changes == []
 
 
-# --- _snapshot_click_command: hidden subcommand skipped ---
+# --- Hidden snapshot subcommands ---
 
 
-def test_snapshot_click_command_hidden_subcommand():
-    """_snapshot_click_command skips hidden subcommands."""
+def test_extract_snapshot_hidden_subcommand():
+    """
+    Exclude hidden subcommands from the snapshot
+    """
     import click
 
     @click.group()
@@ -3603,7 +3623,7 @@ def test_snapshot_click_command_hidden_subcommand():
     def hidden_cmd():
         pass
 
-    result = snapshot_cli_from_click(grp)
+    result = extract_snapshot(grp)
 
     assert result is not None
     assert result.is_group
@@ -3612,11 +3632,13 @@ def test_snapshot_click_command_hidden_subcommand():
     assert "hidden-cmd" not in visible_names and "hidden_cmd" not in visible_names
 
 
-# --- _snapshot_click_command: Argument param ---
+# --- Snapshot positional arguments ---
 
 
-def test_snapshot_click_command_with_argument():
-    """_snapshot_click_command captures Click Arguments."""
+def test_extract_snapshot_with_argument():
+    """
+    Record positional arguments in the snapshot
+    """
     import click
 
     @click.command()
@@ -3625,7 +3647,7 @@ def test_snapshot_click_command_with_argument():
         """Command with argument."""
         pass
 
-    result = snapshot_cli_from_click(my_cmd)
+    result = extract_snapshot(my_cmd)
 
     assert result is not None
     assert any(o.type == "argument" and o.name == "filename" for o in result.options)
@@ -3669,11 +3691,13 @@ def test_diff_symbol_decorator_removed_only():
     assert not any("Added decorator" in d for d in change.details)
 
 
-# --- Additional test to cover _import_cli_from_source standard attr path ---
+# --- Conventional CLI source attributes ---
 
 
-def test_import_cli_from_source_standard_attr(tmp_path):
-    """_import_cli_from_source finds CLI via standard attribute name."""
+def test_snapshot_from_source_standard_attr(tmp_path):
+    """
+    Find the command held in the module's `cli` attribute
+    """
     import click
 
     @click.command()
@@ -3689,17 +3713,19 @@ def test_import_cli_from_source_standard_attr(tmp_path):
     fake_module.command = None
 
     with patch("importlib.import_module", return_value=fake_module):
-        result = _import_cli_from_source(tmp_path, "fake_module")
+        result = snapshot_from_source(tmp_path, "fake_module")
 
     # Should have found the CLI via the 'cli' attribute
     assert result is not None
 
 
-# --- _import_cli_from_source: various paths in fallback loop and exception handling ---
+# --- CLI source fallback searches and import failures ---
 
 
-def test_import_cli_from_source_fallback_loop_mixed_attrs(tmp_path):
-    """_import_cli_from_source handles mix of private, non-CLI, and CLI attrs in fallback."""
+def test_snapshot_from_source_fallback_loop_mixed_attrs(tmp_path):
+    """
+    Skip private attributes and non-commands when scanning for a command
+    """
     import click
 
     @click.command()
@@ -3725,13 +3751,15 @@ def test_import_cli_from_source_fallback_loop_mixed_attrs(tmp_path):
     fake_module = FakeModule()
 
     with patch("importlib.import_module", return_value=fake_module):
-        result = _import_cli_from_source(tmp_path, "fake_module")
+        result = snapshot_from_source(tmp_path, "fake_module")
 
     assert result is not None
 
 
-def test_import_cli_from_source_no_cli_found(tmp_path):
-    """_import_cli_from_source returns None when no CLI command found anywhere."""
+def test_snapshot_from_source_no_cli_found(tmp_path):
+    """
+    Return `None` when the imported module has no command
+    """
 
     class FakeModule:
         cli = None
@@ -3746,18 +3774,20 @@ def test_import_cli_from_source_no_cli_found(tmp_path):
     fake_module = FakeModule()
 
     with patch("importlib.import_module", return_value=fake_module):
-        result = _import_cli_from_source(tmp_path, "fake_module")
+        result = snapshot_from_source(tmp_path, "fake_module")
 
     assert result is None
 
 
-def test_import_cli_from_source_import_error(tmp_path):
-    """_import_cli_from_source returns None when import fails."""
+def test_snapshot_from_source_import_error(tmp_path):
+    """
+    Return `None` when the CLI module cannot be imported
+    """
     with patch(
         "importlib.import_module",
         side_effect=ImportError("no module"),
     ):
-        result = _import_cli_from_source(tmp_path, "nonexistent_module")
+        result = snapshot_from_source(tmp_path, "nonexistent_module")
 
     assert result is None
 
@@ -3839,11 +3869,13 @@ def test_extract_package_at_tag_timeout_exception(mock_run):
     assert result is None
 
 
-# --- _read_cli_module_at_tag yaml exception path ---
+# --- Invalid CLI configuration in YAML ---
 
 
 def test_read_cli_module_yaml_parse_exception():
-    """_read_cli_module_at_tag handles yaml parse exception gracefully."""
+    """
+    Return `None` when YAML parsing fails and no fallback module exists
+    """
     yaml_content = "valid: yaml\n"
 
     def fake_run(cmd, **kwargs):
@@ -3862,10 +3894,10 @@ def test_read_cli_module_yaml_parse_exception():
         return m
 
     with (
-        patch("great_docs._api_diff.subprocess.run", side_effect=fake_run),
-        patch("yaml12.parse_yaml", side_effect=Exception("yaml parse error")),
+        patch("great_docs._cliref.click.subprocess.run", side_effect=fake_run),
+        patch("yaml12.parse_yaml", side_effect=ValueError("yaml parse error")),
     ):
-        result = _read_cli_module_at_tag(Path("/project"), "v1.0", "mypkg")
+        result = read_module_at_tag(Path("/project"), "v1.0", "mypkg")
 
     # yaml raised, fallback also fails -> None
     assert result is None

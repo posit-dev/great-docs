@@ -1,8 +1,9 @@
-"""Rust CLI project detection and introspection.
+"""
+Rust CLI project detection and command extraction
 
-Handles detection of Rust-based CLI projects (clap, structopt, argh, or custom) and extraction
-of their command structure via the ``--help`` interface. Mirrors the architecture of ``_go_cli.py``
-and produces the same dict shape so the shared ``_generate_cli_reference_pages`` code handles both.
+Projects using clap, structopt, argh or custom command parsers expose their command structure
+through `--help`. Extraction follows the same approach as Go CLI extraction and produces the
+shared page model, so the same renderer can write pages for both.
 """
 
 from __future__ import annotations
@@ -227,11 +228,11 @@ def build_rust_binary(
 
 
 def introspect_rust_cli(rust_project: RustCliProject) -> dict | None:
-    """Build and run a Rust CLI to extract its command structure.
+    """
+    Build and run a Rust CLI to extract its command structure
 
-    The returned dict mirrors the shape that ``_discover_click_cli`` produces in ``core.py`` and
-    that ``introspect_cobra_cli`` returns for Go CLIs, making it straightforward to reuse the
-    existing page-generation helpers.
+    The command tree uses the shared CLI page model, so the same renderer can write pages
+    for Click, Go and Rust commands.
 
     For projects with multiple binaries, the first binary is documented.
 
@@ -242,8 +243,8 @@ def introspect_rust_cli(rust_project: RustCliProject) -> dict | None:
 
     Returns
     -------
-    dict | None
-        CLI structure, or ``None`` if the binary could not be built or run.
+    :
+        CLI structure, or `None` if the binary could not be built or run.
     """
     bin_name = rust_project.binary_names[0]
     binary_path = build_rust_binary(rust_project, bin_name)

@@ -789,132 +789,6 @@ def _extract_package_at_tag(
     return None
 
 
-def _read_cli_module_at_tag(
-    project_root: Path,
-    tag: str,
-    package_name: str,
-) -> str | None:
-    """
-    Read `pyproject.toml` at *tag* and return the `cli.module` setting.
-
-    Falls back to `great-docs.yml` at *tag* if `pyproject.toml` doesn't contain CLI config. Returns
-    `None` if not found.
-    """
-    normalized = package_name.replace("-", "_")
-
-    for cfg_file in ("pyproject.toml", "great-docs.yml"):
-        try:
-            result = subprocess.run(
-                ["git", "show", f"{tag}:{cfg_file}"],
-                cwd=project_root,
-                capture_output=True,
-                **TEXT_MODE_KWARGS,
-                timeout=10,
-            )
-            if result.returncode != 0:
-                continue
-            content = result.stdout
-
-            if cfg_file == "pyproject.toml":
-                # Parse [tool.great-docs.cli] section
-                try:
-                    import tomllib
-                except ImportError:  # pragma: no cover
-                    import tomli as tomllib  # type: ignore[no-redef]  # pragma: no cover
-                data = tomllib.loads(content)
-                cli_cfg = data.get("tool", {}).get("great-docs", {}).get("cli", {})
-                if cli_cfg.get("enabled"):
-                    return cli_cfg.get("module")
-            else:
-                # great-docs.yml — simple yaml parse
-                try:
-                    from yaml12 import parse_yaml
-
-                    data = parse_yaml(content) or {}
-                    cli_cfg = data.get("cli", {})
-                    if cli_cfg.get("enabled"):
-                        return cli_cfg.get("module")
-                except Exception:
-                    pass
-        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-            continue
-
-    # Fallback: check if common CLI module exists at this tag
-    for suffix in ("cli", "__main__"):
-        mod_path = f"{normalized}/{suffix}.py"
-        try:
-            check = subprocess.run(
-                ["git", "cat-file", "-t", f"{tag}:{mod_path}"],
-                cwd=project_root,
-                capture_output=True,
-                **TEXT_MODE_KWARGS,
-                timeout=5,
-            )
-            if check.returncode == 0:
-                return f"{normalized}.{suffix}"
-        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-            continue
-    return None
-
-
-def _import_cli_from_source(
-    tmp_dir: Path,
-    cli_module: str,
-) -> CliCommandInfo | None:
-    """
-    Import a Click CLI from an extracted source tree and snapshot it.
-
-    Temporarily prepends *tmp_dir* to `sys.path`, imports *cli_module*, locates the Click command
-    object, snapshots it, then restores `sys.path`.
-    """
-    import importlib
-    import sys
-
-    from ._typer_cli import to_click_command
-
-    str_dir = str(tmp_dir)
-    sys.path.insert(0, str_dir)
-    try:
-        # Invalidate cached modules that might shadow the extracted source
-        parts = cli_module.split(".")
-        for i in range(len(parts)):
-            prefix = ".".join(parts[: i + 1])
-            sys.modules.pop(prefix, None)
-
-        module = importlib.import_module(cli_module)
-
-        # Find a Click command/group or Typer app
-        cli_obj = None
-        for attr_name in ["cli", "main", "app", "command"]:
-            obj = to_click_command(getattr(module, attr_name, None))
-            if obj is not None:
-                cli_obj = obj
-                break
-
-        if cli_obj is None:
-            for attr_name in dir(module):
-                if attr_name.startswith("_"):
-                    continue
-                obj = to_click_command(getattr(module, attr_name))
-                if obj is not None:
-                    cli_obj = obj
-                    break
-
-        if cli_obj is None:
-            return None
-
-        return snapshot_cli_from_click(cli_obj)
-    except Exception:
-        return None
-    finally:
-        # Restore sys.path and remove imported modules
-        if str_dir in sys.path:
-            sys.path.remove(str_dir)
-        for key in list(sys.modules):
-            if key == cli_module or key.startswith(cli_module + "."):
-                sys.modules.pop(key, None)
-
-
 def snapshot_at_tag(
     project_root: Path,
     tag: str,
@@ -954,9 +828,11 @@ def snapshot_at_tag(
         )
 
         # Attempt CLI introspection from the version-specific source
-        cli_module = _read_cli_module_at_tag(project_root, tag, package_name)
+        from ._cliref import click as cli_click
+
+        cli_module = cli_click.read_module_at_tag(project_root, tag, package_name)
         if cli_module:
-            snap.cli_commands = _import_cli_from_source(tmp_dir, cli_module)
+            snap.cli_commands = cli_click.snapshot_from_source(tmp_dir, cli_module)
 
         return snap
     finally:
@@ -1314,93 +1190,6 @@ def _diff_cli(old: CliCommandInfo | None, new: CliCommandInfo | None) -> list[Cl
             changes.append(change)
 
     return changes
-
-
-# ---------------------------------------------------------------------------
-# CLI snapshot from Click
-# ---------------------------------------------------------------------------
-
-
-def snapshot_cli_from_click(cli_obj: object) -> CliCommandInfo | None:
-    """
-    Build a :class:`CliCommandInfo` tree by introspecting a Click command.
-
-    Parameters
-    ----------
-    cli_obj
-        A `click.BaseCommand` instance (Command or Group), or a `typer.Typer`
-        app (which is converted to its underlying Click command).
-
-    Returns
-    -------
-    CliCommandInfo or None
-        The CLI snapshot, or `None` if `cli_obj` is not a Click command or
-        Typer app.
-    """
-    from ._typer_cli import to_click_command
-
-    cmd = to_click_command(cli_obj)
-    if cmd is None:
-        return None
-
-    return _snapshot_click_command(cmd)
-
-
-def _snapshot_click_command(cmd: object) -> CliCommandInfo:
-    """Recursively snapshot a Click command tree.
-
-    Parameters are classified with duck-typing (`param_type_name` / a dict-like `commands` mapping)
-    rather than `isinstance` so this handles both plain Click commands and Typer's vendored-Click
-    commands.
-    """
-    from ._typer_cli import is_cli_group, param_kind
-
-    name = getattr(cmd, "name", "") or ""
-    help_text = getattr(cmd, "help", "") or ""
-    hidden = getattr(cmd, "hidden", False)
-    deprecated = getattr(cmd, "deprecated", False)
-    is_group = is_cli_group(cmd)
-
-    options: list[CliOptionInfo] = []
-    for param in getattr(cmd, "params", []):
-        kind = param_kind(param)
-        if kind == "option":
-            # Use the longest option name (e.g. --verbose over -v)
-            opt_name = max(param.opts, key=len) if param.opts else param.name or ""
-            options.append(
-                CliOptionInfo(
-                    name=opt_name,
-                    type="option",
-                    is_flag=param.is_flag,
-                    required=param.required,
-                    default=str(param.default) if param.default is not None else None,
-                    help=param.help,
-                )
-            )
-        elif kind == "argument":
-            options.append(
-                CliOptionInfo(
-                    name=param.name or "",
-                    type="argument",
-                    required=param.required,
-                )
-            )
-
-    subcommands: list[CliCommandInfo] = []
-    if is_group:
-        for subcmd_name, subcmd in getattr(cmd, "commands", {}).items():
-            if not getattr(subcmd, "hidden", False):
-                subcommands.append(_snapshot_click_command(subcmd))
-
-    return CliCommandInfo(
-        name=name,
-        help=help_text,
-        options=options,
-        subcommands=subcommands,
-        is_group=is_group,
-        hidden=hidden,
-        deprecated=deprecated,
-    )
 
 
 # ---------------------------------------------------------------------------
