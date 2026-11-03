@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from great_docs._tbl_explorer import (
+from great_docs._tables.explorer import (
     TblExplorer,
     _get_js_source,
     _render_explorer_css,
@@ -176,7 +176,7 @@ class TestGetJsSource:
 
     def test_raises_when_file_missing(self, tmp_path: Path):
         # Patch the asset name to something that doesn't exist in the assets dir
-        with patch("great_docs._tbl_explorer._JS_ASSET_NAME", "does-not-exist-xyz.js"):
+        with patch("great_docs._tables.explorer._JS_ASSET_NAME", "does-not-exist-xyz.js"):
             with pytest.raises(FileNotFoundError, match="does-not-exist-xyz.js"):
                 _get_js_source()
 

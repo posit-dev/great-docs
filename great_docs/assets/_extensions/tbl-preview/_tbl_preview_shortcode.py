@@ -12,23 +12,23 @@ from pathlib import Path
 def _load_tbl_preview():
     """Import tbl_preview without triggering great_docs.__init__."""
     try:
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         return tbl_preview
     except (ImportError, ModuleNotFoundError):
         # Fall back to loading the module directly by file path.
-        # Walk up the directory tree until we find great_docs/_tbl_preview.py.
+        # Walk up the directory tree until we find great_docs/_tables/preview.py.
         here = Path(__file__).resolve().parent
         p = here
         while p != p.parent:
-            candidate = p / "great_docs" / "_tbl_preview.py"
+            candidate = p / "great_docs" / "_tables" / "preview.py"
             if candidate.exists():
                 spec = importlib.util.spec_from_file_location("_tbl_preview", candidate)
                 mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(mod)
                 return mod.tbl_preview
             p = p.parent
-        raise ImportError("Cannot find _tbl_preview.py")
+        raise ImportError("Cannot find great_docs/_tables/preview.py")
 
 
 def main() -> None:

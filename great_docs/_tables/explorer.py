@@ -5,7 +5,7 @@ import secrets
 from pathlib import Path
 from typing import Any
 
-from ._tbl_preview import (
+from .preview import (
     _apply_column_subset,
     _compute_col_widths,
     _detect_alignments,
@@ -806,7 +806,7 @@ _JS_ASSET_NAME = "tbl-explorer.js"
 
 def _get_js_source() -> str:
     """Load the tbl-explorer.js source from the assets directory."""
-    asset_path = Path(__file__).parent / "assets" / _JS_ASSET_NAME
+    asset_path = Path(__file__).parents[1] / "assets" / _JS_ASSET_NAME
     if asset_path.exists():
         return asset_path.read_text(encoding="utf-8")
     raise FileNotFoundError(

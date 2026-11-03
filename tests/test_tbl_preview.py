@@ -47,19 +47,19 @@ class TestTblPreviewResult:
     """Tests for the TblPreview wrapper class."""
 
     def test_repr_html(self):
-        from great_docs._tbl_preview import TblPreview
+        from great_docs._tables.preview import TblPreview
 
         tp = TblPreview("<div>hello</div>")
         assert tp._repr_html_() == "<div>hello</div>"
 
     def test_as_html(self):
-        from great_docs._tbl_preview import TblPreview
+        from great_docs._tables.preview import TblPreview
 
         tp = TblPreview("<p>test</p>")
         assert tp.as_html() == "<p>test</p>"
 
     def test_save(self, tmp_path: Path):
-        from great_docs._tbl_preview import TblPreview
+        from great_docs._tables.preview import TblPreview
 
         tp = TblPreview("<table>data</table>")
         out = tmp_path / "out.html"
@@ -67,7 +67,7 @@ class TestTblPreviewResult:
         assert out.read_text(encoding="utf-8") == "<table>data</table>"
 
     def test_repr(self):
-        from great_docs._tbl_preview import TblPreview
+        from great_docs._tables.preview import TblPreview
 
         tp = TblPreview("abcdef")
         assert "6 chars" in repr(tp)
@@ -82,7 +82,7 @@ class TestNormalizeData:
     """Tests for data normalization from different sources."""
 
     def test_dict_input(self):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         data = {"a": [1, 2, 3], "b": ["x", "y", "z"]}
         names, dtypes, rows, n, tbl_type = _normalize_data(data)
@@ -93,7 +93,7 @@ class TestNormalizeData:
         assert rows[0] == [1, "x"]
 
     def test_list_of_dicts_input(self):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         data = [{"x": 1, "y": "a"}, {"x": 2, "y": "b"}]
         names, dtypes, rows, n, tbl_type = _normalize_data(data)
@@ -102,20 +102,20 @@ class TestNormalizeData:
         assert tbl_type == "dict"
 
     def test_empty_dict(self):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         names, dtypes, rows, n, tbl_type = _normalize_data({})
         assert names == []
         assert n == 0
 
     def test_unsupported_type_raises(self):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         with pytest.raises(TypeError, match="Unsupported data type"):
             _normalize_data(42)
 
     def test_csv_file(self, tmp_path: Path):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         csv = tmp_path / "test.csv"
         csv.write_text("a,b,c\n1,x,3.0\n2,y,4.0\n")
@@ -125,7 +125,7 @@ class TestNormalizeData:
         assert tbl_type == "csv"
 
     def test_csv_path_object(self, tmp_path: Path):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         csv = tmp_path / "test.csv"
         csv.write_text("col1,col2\n10,20\n30,40\n")
@@ -143,7 +143,7 @@ class TestPolarsIntegration:
 
     def test_polars_dataframe(self):
         import polars as pl
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         df = pl.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
         names, dtypes, rows, n, tbl_type = _normalize_data(df)
@@ -163,7 +163,7 @@ class TestPandasIntegration:
 
     def test_pandas_dataframe(self):
         import pandas as pd
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         df = pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
         names, dtypes, rows, n, tbl_type = _normalize_data(df)
@@ -179,7 +179,7 @@ class TestPandasIntegration:
 
 class TestColumnSubset:
     def test_none_returns_all(self):
-        from great_docs._tbl_preview import _apply_column_subset
+        from great_docs._tables.preview import _apply_column_subset
 
         names = ["a", "b", "c"]
         dtypes = ["i64", "str", "f64"]
@@ -188,7 +188,7 @@ class TestColumnSubset:
         assert out_names == names
 
     def test_subset(self):
-        from great_docs._tbl_preview import _apply_column_subset
+        from great_docs._tables.preview import _apply_column_subset
 
         names = ["a", "b", "c"]
         dtypes = ["i64", "str", "f64"]
@@ -198,7 +198,7 @@ class TestColumnSubset:
         assert out_rows[0] == [1.0, 1]
 
     def test_invalid_column_raises(self):
-        from great_docs._tbl_preview import _apply_column_subset
+        from great_docs._tables.preview import _apply_column_subset
 
         with pytest.raises(ValueError, match="not found"):
             _apply_column_subset(["a", "b"], ["i64", "str"], [[1, "x"]], ["z"])
@@ -211,7 +211,7 @@ class TestColumnSubset:
 
 class TestHeadTail:
     def test_small_dataset_full(self):
-        from great_docs._tbl_preview import _compute_head_tail
+        from great_docs._tables.preview import _compute_head_tail
 
         rows = [[i] for i in range(8)]
         display, nums, is_full = _compute_head_tail(rows, 8, 5, 5, False)
@@ -219,7 +219,7 @@ class TestHeadTail:
         assert len(display) == 8
 
     def test_large_dataset_split(self):
-        from great_docs._tbl_preview import _compute_head_tail
+        from great_docs._tables.preview import _compute_head_tail
 
         rows = [[i] for i in range(100)]
         display, nums, is_full = _compute_head_tail(rows, 100, 5, 5, False)
@@ -229,7 +229,7 @@ class TestHeadTail:
         assert nums[5:] == [95, 96, 97, 98, 99]
 
     def test_show_all(self):
-        from great_docs._tbl_preview import _compute_head_tail
+        from great_docs._tables.preview import _compute_head_tail
 
         rows = [[i] for i in range(100)]
         display, nums, is_full = _compute_head_tail(rows, 100, 5, 5, True)
@@ -237,7 +237,7 @@ class TestHeadTail:
         assert len(display) == 100
 
     def test_zero_tail(self):
-        from great_docs._tbl_preview import _compute_head_tail
+        from great_docs._tables.preview import _compute_head_tail
 
         rows = [[i] for i in range(20)]
         display, nums, is_full = _compute_head_tail(rows, 20, 5, 0, False)
@@ -253,46 +253,46 @@ class TestHeadTail:
 
 class TestFormatting:
     def test_format_none(self):
-        from great_docs._tbl_preview import _format_cell
+        from great_docs._tables.preview import _format_cell
 
         assert _format_cell(None) == "None"
 
     def test_format_bool(self):
-        from great_docs._tbl_preview import _format_cell
+        from great_docs._tables.preview import _format_cell
 
         assert _format_cell(True) == "True"
         assert _format_cell(False) == "False"
 
     def test_format_nan(self):
-        from great_docs._tbl_preview import _format_cell
+        from great_docs._tables.preview import _format_cell
 
         assert _format_cell(float("nan")) == "NaN"
 
     def test_format_inf(self):
-        from great_docs._tbl_preview import _format_cell
+        from great_docs._tables.preview import _format_cell
 
         assert _format_cell(float("inf")) == "Inf"
         assert _format_cell(float("-inf")) == "-Inf"
 
     def test_format_float(self):
-        from great_docs._tbl_preview import _format_cell
+        from great_docs._tables.preview import _format_cell
 
         assert _format_cell(3.14) == "3.14"
 
     def test_format_float_precision(self):
-        from great_docs._tbl_preview import _format_cell
+        from great_docs._tables.preview import _format_cell
 
         # IEEE 754 noise should be trimmed
         assert _format_cell(3 * 1.1) == "3.3"
         assert _format_cell(24.200000000000003) == "24.2"
 
     def test_format_string(self):
-        from great_docs._tbl_preview import _format_cell
+        from great_docs._tables.preview import _format_cell
 
         assert _format_cell("hello") == "hello"
 
     def test_escape_html(self):
-        from great_docs._tbl_preview import _escape
+        from great_docs._tables.preview import _escape
 
         assert _escape("<b>bold</b>") == "&lt;b&gt;bold&lt;/b&gt;"
         assert _escape('"quoted"') == "&quot;quoted&quot;"
@@ -305,22 +305,22 @@ class TestFormatting:
 
 class TestMissingDetection:
     def test_none_is_missing(self):
-        from great_docs._tbl_preview import _is_missing
+        from great_docs._tables.preview import _is_missing
 
         assert _is_missing(None) is True
 
     def test_nan_is_missing(self):
-        from great_docs._tbl_preview import _is_missing
+        from great_docs._tables.preview import _is_missing
 
         assert _is_missing(float("nan")) is True
 
     def test_string_not_missing(self):
-        from great_docs._tbl_preview import _is_missing
+        from great_docs._tables.preview import _is_missing
 
         assert _is_missing("hello") is False
 
     def test_zero_not_missing(self):
-        from great_docs._tbl_preview import _is_missing
+        from great_docs._tables.preview import _is_missing
 
         assert _is_missing(0) is False
         assert _is_missing(0.0) is False
@@ -333,19 +333,19 @@ class TestMissingDetection:
 
 class TestAlignments:
     def test_numeric_right(self):
-        from great_docs._tbl_preview import _detect_alignments
+        from great_docs._tables.preview import _detect_alignments
 
         alignments = _detect_alignments(["i64", "f64", "u32"])
         assert all(a == "right" for a in alignments)
 
     def test_string_left(self):
-        from great_docs._tbl_preview import _detect_alignments
+        from great_docs._tables.preview import _detect_alignments
 
         alignments = _detect_alignments(["str", "cat", "bool"])
         assert all(a == "left" for a in alignments)
 
     def test_mixed(self):
-        from great_docs._tbl_preview import _detect_alignments
+        from great_docs._tables.preview import _detect_alignments
 
         alignments = _detect_alignments(["i64", "str", "f64"])
         assert alignments == ["right", "left", "right"]
@@ -358,32 +358,32 @@ class TestAlignments:
 
 class TestDtypeInference:
     def test_int_list(self):
-        from great_docs._tbl_preview import _infer_dtype
+        from great_docs._tables.preview import _infer_dtype
 
         assert _infer_dtype([1, 2, 3]) == "i64"
 
     def test_float_list(self):
-        from great_docs._tbl_preview import _infer_dtype
+        from great_docs._tables.preview import _infer_dtype
 
         assert _infer_dtype([1.0, 2.0]) == "f64"
 
     def test_mixed_int_float(self):
-        from great_docs._tbl_preview import _infer_dtype
+        from great_docs._tables.preview import _infer_dtype
 
         assert _infer_dtype([1, 2.0]) == "f64"
 
     def test_bool_list(self):
-        from great_docs._tbl_preview import _infer_dtype
+        from great_docs._tables.preview import _infer_dtype
 
         assert _infer_dtype([True, False]) == "bool"
 
     def test_string_list(self):
-        from great_docs._tbl_preview import _infer_dtype
+        from great_docs._tables.preview import _infer_dtype
 
         assert _infer_dtype(["a", "b"]) == "str"
 
     def test_none_only(self):
-        from great_docs._tbl_preview import _infer_dtype
+        from great_docs._tables.preview import _infer_dtype
 
         assert _infer_dtype([None, None]) == "null"
 
@@ -395,12 +395,12 @@ class TestDtypeInference:
 
 class TestNumberFormatting:
     def test_small_number(self):
-        from great_docs._tbl_preview import _format_number
+        from great_docs._tables.preview import _format_number
 
         assert _format_number(42) == "42"
 
     def test_thousands(self):
-        from great_docs._tbl_preview import _format_number
+        from great_docs._tables.preview import _format_number
 
         assert _format_number(1234567) == "1,234,567"
 
@@ -414,7 +414,7 @@ class TestTblPreviewFunction:
     """Integration tests for the main tbl_preview() entry point."""
 
     def test_dict_basic(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": [1, 2, 3], "b": ["x", "y", "z"]}
         result = tbl_preview(data)
@@ -424,14 +424,14 @@ class TestTblPreviewFunction:
         assert "gt_col_heading" in html
 
     def test_list_of_dicts(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = [{"x": 1, "y": "a"}, {"x": 2, "y": "b"}]
         result = tbl_preview(data)
         assert "gt_table" in result.as_html()
 
     def test_head_tail_with_large_data(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"val": list(range(100))}
         result = tbl_preview(data, n_head=3, n_tail=2)
@@ -440,7 +440,7 @@ class TestTblPreviewFunction:
         assert "gd-tbl-divider" in html
 
     def test_show_all(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"val": list(range(20))}
         result = tbl_preview(data, show_all=True)
@@ -449,7 +449,7 @@ class TestTblPreviewFunction:
         assert 'class="gd-tbl-divider"' not in html
 
     def test_column_subset(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": [1], "b": [2], "c": [3]}
         result = tbl_preview(data, columns=["c", "a"])
@@ -458,14 +458,14 @@ class TestTblPreviewFunction:
         assert 'id="a"' in html
 
     def test_caption(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": [1]}
         result = tbl_preview(data, caption="My Table")
         assert "My Table" in result.as_html()
 
     def test_no_dimensions(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": [1]}
         result = tbl_preview(data, show_dimensions=False)
@@ -474,7 +474,7 @@ class TestTblPreviewFunction:
         assert 'class="gd-tbl-badge' not in html
 
     def test_no_row_numbers(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": [1, 2]}
         result = tbl_preview(data, show_row_numbers=False)
@@ -482,7 +482,7 @@ class TestTblPreviewFunction:
         assert 'class="gt_row gt_right gd-tbl-rownum"' not in result.as_html()
 
     def test_no_dtypes(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": [1]}
         result = tbl_preview(data, show_dtypes=False)
@@ -490,14 +490,14 @@ class TestTblPreviewFunction:
         assert 'class="gd-tbl-dtype"' not in result.as_html()
 
     def test_highlight_missing(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": [1, None, 3]}
         result = tbl_preview(data, highlight_missing=True)
         assert "gd-tbl-missing" in result.as_html()
 
     def test_no_highlight_missing(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": [1, None, 3]}
         result = tbl_preview(data, highlight_missing=False)
@@ -505,21 +505,21 @@ class TestTblPreviewFunction:
         assert 'gd-tbl-missing"' not in result.as_html()
 
     def test_custom_id(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": [1]}
         result = tbl_preview(data, id="my-table")
         assert 'id="gd-tbl-my-table"' in result.as_html()
 
     def test_limit_exceeded_raises(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": [1]}
         with pytest.raises(ValueError, match="exceeds limit"):
             tbl_preview(data, n_head=30, n_tail=30, limit=50)
 
     def test_html_escaping_in_data(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"col": ["<script>alert(1)</script>"]}
         result = tbl_preview(data)
@@ -528,7 +528,7 @@ class TestTblPreviewFunction:
         assert "&lt;script&gt;" in html
 
     def test_save_roundtrip(self, tmp_path: Path):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": [1, 2]}
         result = tbl_preview(data)
@@ -538,21 +538,21 @@ class TestTblPreviewFunction:
         assert "gt_table" in content
 
     def test_repr_html_integration(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": [1]}
         result = tbl_preview(data)
         assert result._repr_html_() == result.as_html()
 
     def test_dark_mode_css_present(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": [1]}
         html = tbl_preview(data).as_html()
         assert "quarto-dark" in html
 
     def test_quarto_disable_processing(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": [1]}
         html = tbl_preview(data).as_html()
@@ -560,7 +560,7 @@ class TestTblPreviewFunction:
 
     def test_badge_types(self):
         """Verify badge rendering for different table types."""
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         # Dict → shows "Table" badge
         data = {"a": [1]}
@@ -568,7 +568,7 @@ class TestTblPreviewFunction:
         assert "Table" in html
 
     def test_csv_roundtrip(self, tmp_path: Path):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         csv = tmp_path / "data.csv"
         csv.write_text("x,y\n1,a\n2,b\n3,c\n")
@@ -701,7 +701,7 @@ class TestTSVSupport:
     """Tests for TSV/tab-delimited file reading."""
 
     def test_tsv_file(self, tmp_path: Path):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         tsv = tmp_path / "data.tsv"
         tsv.write_text("name\tage\tcity\nAlice\t30\tNYC\nBob\t25\tSF\n")
@@ -711,7 +711,7 @@ class TestTSVSupport:
         assert tbl_type == "tsv"
 
     def test_tsv_path_object(self, tmp_path: Path):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         tsv = tmp_path / "test.tsv"
         tsv.write_text("a\tb\n1\t2\n3\t4\n")
@@ -720,7 +720,7 @@ class TestTSVSupport:
         assert tbl_type == "tsv"
 
     def test_tab_extension(self, tmp_path: Path):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         tab = tmp_path / "data.tab"
         tab.write_text("x\ty\n10\t20\n30\t40\n")
@@ -729,7 +729,7 @@ class TestTSVSupport:
         assert tbl_type == "tsv"
 
     def test_tsv_full_render(self, tmp_path: Path):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         tsv = tmp_path / "render.tsv"
         tsv.write_text("col_a\tcol_b\n1\thello\n2\tworld\n")
@@ -749,7 +749,7 @@ class TestJSONLSupport:
     """Tests for JSONL/NDJSON file reading."""
 
     def test_jsonl_file(self, tmp_path: Path):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         jsonl = tmp_path / "data.jsonl"
         jsonl.write_text('{"a": 1, "b": "x"}\n{"a": 2, "b": "y"}\n')
@@ -760,7 +760,7 @@ class TestJSONLSupport:
         assert tbl_type == "jsonl"
 
     def test_ndjson_extension(self, tmp_path: Path):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         ndjson = tmp_path / "data.ndjson"
         ndjson.write_text('{"x": 10}\n{"x": 20}\n{"x": 30}\n')
@@ -770,7 +770,7 @@ class TestJSONLSupport:
         assert tbl_type == "jsonl"
 
     def test_jsonl_full_render(self, tmp_path: Path):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         jsonl = tmp_path / "test.jsonl"
         jsonl.write_text('{"name": "Alice", "score": 95}\n{"name": "Bob", "score": 88}\n')
@@ -794,7 +794,7 @@ class TestParquetSupport:
 
     def test_parquet_file(self, tmp_path: Path):
         import polars as pl
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         pq = tmp_path / "data.parquet"
         pl.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]}).write_parquet(str(pq))
@@ -805,7 +805,7 @@ class TestParquetSupport:
 
     def test_parquet_full_render(self, tmp_path: Path):
         import polars as pl
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         pq = tmp_path / "data.parquet"
         pl.DataFrame({"id": [1, 2], "value": [3.14, 2.72]}).write_parquet(str(pq))
@@ -829,7 +829,7 @@ class TestFeatherSupport:
 
     def test_feather_file(self, tmp_path: Path):
         import polars as pl
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         feather = tmp_path / "data.feather"
         pl.DataFrame({"x": [10, 20], "y": [30, 40]}).write_ipc(str(feather))
@@ -840,7 +840,7 @@ class TestFeatherSupport:
 
     def test_arrow_ipc_extension(self, tmp_path: Path):
         import polars as pl
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         ipc = tmp_path / "data.ipc"
         pl.DataFrame({"a": [1, 2, 3]}).write_ipc(str(ipc))
@@ -850,7 +850,7 @@ class TestFeatherSupport:
 
     def test_arrow_extension(self, tmp_path: Path):
         import polars as pl
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         arrow_file = tmp_path / "data.arrow"
         pl.DataFrame({"col": [100, 200]}).write_ipc(str(arrow_file))
@@ -860,7 +860,7 @@ class TestFeatherSupport:
 
     def test_feather_full_render(self, tmp_path: Path):
         import polars as pl
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         feather = tmp_path / "data.feather"
         pl.DataFrame({"name": ["a", "b"], "val": [1, 2]}).write_ipc(str(feather))
@@ -883,7 +883,7 @@ class TestArrowTableSupport:
 
     def test_arrow_table(self):
         import pyarrow as pa
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         tbl = pa.table({"a": [1, 2, 3], "b": ["x", "y", "z"]})
         names, dtypes, rows, n, tbl_type = _normalize_data(tbl)
@@ -892,7 +892,7 @@ class TestArrowTableSupport:
         assert tbl_type == "arrow"
 
     def test_arrow_table_dtypes(self):
-        from great_docs._tbl_preview import _arrow_dtype_short
+        from great_docs._tables.preview import _arrow_dtype_short
 
         assert _arrow_dtype_short("int64") == "i64"
         assert _arrow_dtype_short("double") == "f64"
@@ -904,7 +904,7 @@ class TestArrowTableSupport:
 
     def test_arrow_table_full_render(self):
         import pyarrow as pa
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         tbl = pa.table({"id": [1, 2, 3], "name": ["Alice", "Bob", "Eve"]})
         result = tbl_preview(tbl, show_all=True)
@@ -923,7 +923,7 @@ class TestFileExtensionMap:
     """Tests for the file extension → format dispatch."""
 
     def test_extension_map_coverage(self):
-        from great_docs._tbl_preview import _FILE_EXT_MAP
+        from great_docs._tables.preview import _FILE_EXT_MAP
 
         assert _FILE_EXT_MAP[".csv"] == "csv"
         assert _FILE_EXT_MAP[".tsv"] == "tsv"
@@ -937,7 +937,7 @@ class TestFileExtensionMap:
         assert _FILE_EXT_MAP[".ipc"] == "arrow"
 
     def test_badge_styles_for_all_types(self):
-        from great_docs._tbl_preview import _TABLE_TYPE_STYLES
+        from great_docs._tables.preview import _TABLE_TYPE_STYLES
 
         for fmt in (
             "polars",
@@ -1010,7 +1010,7 @@ class TestCrossBackendSnapshots:
     # -- Normalization snapshots (column names, dtypes, rows) ---------------
 
     def test_dict_snapshot(self):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         names, dtypes, rows, n, tbl_type = _normalize_data(_CANONICAL_DATA)
         assert names == _CANONICAL_NAMES
@@ -1020,7 +1020,7 @@ class TestCrossBackendSnapshots:
 
     def test_polars_snapshot(self):
         pl = pytest.importorskip("polars")
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         df = pl.DataFrame(_CANONICAL_DATA)
         names, dtypes, rows, n, tbl_type = _normalize_data(df)
@@ -1032,7 +1032,7 @@ class TestCrossBackendSnapshots:
 
     def test_pandas_snapshot(self):
         pd = pytest.importorskip("pandas")
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         df = pd.DataFrame(_CANONICAL_DATA)
         names, dtypes, rows, n, tbl_type = _normalize_data(df)
@@ -1043,7 +1043,7 @@ class TestCrossBackendSnapshots:
 
     def test_pyarrow_snapshot(self):
         pa = pytest.importorskip("pyarrow")
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         tbl = pa.table(_CANONICAL_DATA)
         names, dtypes, rows, n, tbl_type = _normalize_data(tbl)
@@ -1054,7 +1054,7 @@ class TestCrossBackendSnapshots:
         assert dtypes == ["str", "f64", "i64", "bool"]
 
     def test_csv_snapshot(self, tmp_path: Path):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         csv = tmp_path / "data.csv"
         csv.write_text(
@@ -1072,7 +1072,7 @@ class TestCrossBackendSnapshots:
                 )
 
     def test_tsv_snapshot(self, tmp_path: Path):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         tsv = tmp_path / "data.tsv"
         tsv.write_text(
@@ -1093,7 +1093,7 @@ class TestCrossBackendSnapshots:
 
     def test_jsonl_snapshot(self, tmp_path: Path):
         import json
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         jsonl = tmp_path / "data.jsonl"
         lines = []
@@ -1109,7 +1109,7 @@ class TestCrossBackendSnapshots:
 
     def test_parquet_snapshot(self, tmp_path: Path):
         pl = pytest.importorskip("polars")
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         pq = tmp_path / "data.parquet"
         pl.DataFrame(_CANONICAL_DATA).write_parquet(str(pq))
@@ -1122,7 +1122,7 @@ class TestCrossBackendSnapshots:
 
     def test_feather_snapshot(self, tmp_path: Path):
         pl = pytest.importorskip("polars")
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         feather = tmp_path / "data.feather"
         pl.DataFrame(_CANONICAL_DATA).write_ipc(str(feather))
@@ -1137,7 +1137,7 @@ class TestCrossBackendSnapshots:
 
     def _render_canonical(self, data: Any) -> str:
         """Render canonical data with fixed options and normalize the HTML."""
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         result = tbl_preview(
             data,
@@ -1222,7 +1222,7 @@ class TestCrossBackendSnapshots:
 
     def test_html_has_expected_structure(self):
         """Verify all key HTML elements are present in every render."""
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         result = tbl_preview(_CANONICAL_DATA, show_all=True)
         html = result.as_html()
@@ -1266,7 +1266,7 @@ class TestCrossBackendSnapshots:
 
     def test_html_cell_values_exact(self):
         """Snapshot the exact formatted cell values in each row."""
-        from great_docs._tbl_preview import _format_cell
+        from great_docs._tables.preview import _format_cell
 
         expected = [
             ["Alice", "95.5", "1", "True"],
@@ -1279,7 +1279,7 @@ class TestCrossBackendSnapshots:
 
     def test_head_tail_snapshot(self):
         """Verify head/tail split inserts the divider at the right place."""
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"v": list(range(100))}
         html = tbl_preview(data, n_head=3, n_tail=2).as_html()
@@ -1295,7 +1295,7 @@ class TestCrossBackendSnapshots:
     # -- Missing value snapshot across backends -----------------------------
 
     def test_missing_snapshot_dict(self):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         data = {"a": [1, None, 3], "b": ["x", "y", None]}
         _, _, rows, _, _ = _normalize_data(data)
@@ -1304,7 +1304,7 @@ class TestCrossBackendSnapshots:
 
     def test_missing_snapshot_polars(self):
         pl = pytest.importorskip("polars")
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         df = pl.DataFrame({"a": [1, None, 3], "b": ["x", "y", None]})
         _, _, rows, _, _ = _normalize_data(df)
@@ -1313,7 +1313,7 @@ class TestCrossBackendSnapshots:
 
     def test_missing_snapshot_pandas(self):
         pd = pytest.importorskip("pandas")
-        from great_docs._tbl_preview import _normalize_data, _is_missing
+        from great_docs._tables.preview import _normalize_data, _is_missing
 
         df = pd.DataFrame({"a": [1, None, 3], "b": ["x", "y", None]})
         _, _, rows, _, _ = _normalize_data(df)
@@ -1323,7 +1323,7 @@ class TestCrossBackendSnapshots:
 
     def test_missing_snapshot_pyarrow(self):
         pa = pytest.importorskip("pyarrow")
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         tbl = pa.table({"a": [1, None, 3], "b": ["x", "y", None]})
         _, _, rows, _, _ = _normalize_data(tbl)
@@ -1334,7 +1334,7 @@ class TestCrossBackendSnapshots:
 
     def test_dtype_labels_polars(self):
         pl = pytest.importorskip("polars")
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         df = pl.DataFrame({"i": [1], "f": [1.0], "s": ["a"], "b": [True]})
         _, dtypes, _, _, _ = _normalize_data(df)
@@ -1342,7 +1342,7 @@ class TestCrossBackendSnapshots:
 
     def test_dtype_labels_pandas(self):
         pd = pytest.importorskip("pandas")
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         df = pd.DataFrame(
             {
@@ -1357,7 +1357,7 @@ class TestCrossBackendSnapshots:
 
     def test_dtype_labels_pyarrow(self):
         pa = pytest.importorskip("pyarrow")
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         tbl = pa.table(
             {
@@ -1371,7 +1371,7 @@ class TestCrossBackendSnapshots:
         assert dtypes == ["i64", "f64", "str", "bool"]
 
     def test_dtype_labels_dict_inferred(self):
-        from great_docs._tbl_preview import _normalize_data
+        from great_docs._tables.preview import _normalize_data
 
         data = {"i": [1], "f": [1.0], "s": ["a"], "b": [True]}
         _, dtypes, _, _, _ = _normalize_data(data)
@@ -1455,7 +1455,7 @@ class TestParameterComboSnapshots:
     # -- show_all=True: all rows present -----------------------------------
 
     def test_show_all_cells(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, show_all=True).as_html()
         cells = _extract_data_cells(html)
@@ -1467,7 +1467,7 @@ class TestParameterComboSnapshots:
     # -- n_head / n_tail: head/tail rows -----------------------------------
 
     def test_head3_tail2_cells(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, n_head=3, n_tail=2).as_html()
         cells = _extract_data_cells(html)
@@ -1481,7 +1481,7 @@ class TestParameterComboSnapshots:
         assert cells[4] == ["Jack", "73.7", "C"]
 
     def test_head_only_cells(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, n_head=4, n_tail=0).as_html()
         cells = _extract_data_cells(html)
@@ -1490,7 +1490,7 @@ class TestParameterComboSnapshots:
         assert cells[3][0] == "Diana"
 
     def test_tail_only_cells(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, n_head=0, n_tail=3).as_html()
         cells = _extract_data_cells(html)
@@ -1501,7 +1501,7 @@ class TestParameterComboSnapshots:
     # -- column subset -----------------------------------------------------
 
     def test_column_subset_cells(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, columns=["grade", "name"], show_all=True).as_html()
         headers = _extract_column_headers(html)
@@ -1512,7 +1512,7 @@ class TestParameterComboSnapshots:
         assert cells[5] == ["B+", "Frank"]
 
     def test_single_column_cells(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, columns=["score"], show_all=True).as_html()
         headers = _extract_column_headers(html)
@@ -1524,14 +1524,14 @@ class TestParameterComboSnapshots:
     # -- show_row_numbers --------------------------------------------------
 
     def test_row_numbers_present(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, show_all=True, show_row_numbers=True).as_html()
         nums = _extract_row_numbers(html)
         assert nums == [str(i) for i in range(0, 10)]
 
     def test_row_numbers_absent(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, show_all=True, show_row_numbers=False).as_html()
         nums = _extract_row_numbers(html)
@@ -1541,14 +1541,14 @@ class TestParameterComboSnapshots:
         assert len(cells) == 10
 
     def test_row_numbers_head_tail(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, n_head=2, n_tail=2).as_html()
         nums = _extract_row_numbers(html)
         assert nums == ["0", "1", "8", "9"]
 
     def test_row_index_offset_one(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(
             _PARAM_DATA, show_all=True, show_row_numbers=True, row_index_offset=1
@@ -1557,7 +1557,7 @@ class TestParameterComboSnapshots:
         assert nums == [str(i) for i in range(1, 11)]
 
     def test_row_index_offset_head_tail(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, n_head=2, n_tail=2, row_index_offset=1).as_html()
         nums = _extract_row_numbers(html)
@@ -1566,7 +1566,7 @@ class TestParameterComboSnapshots:
     # -- highlight_missing -------------------------------------------------
 
     def test_missing_highlighted(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA_MISSING, show_all=True, highlight_missing=True).as_html()
         missing_flags = _has_missing_class(html)
@@ -1582,7 +1582,7 @@ class TestParameterComboSnapshots:
         assert missing_flags[2 * n_cols + 2] is False
 
     def test_missing_not_highlighted(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA_MISSING, show_all=True, highlight_missing=False).as_html()
         missing_flags = _has_missing_class(html)
@@ -1596,7 +1596,7 @@ class TestParameterComboSnapshots:
     # -- show_dtypes -------------------------------------------------------
 
     def test_dtypes_shown(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, show_all=True, show_dtypes=True).as_html()
         assert 'class="gd-tbl-dtype">' in html
@@ -1604,7 +1604,7 @@ class TestParameterComboSnapshots:
             assert f"<em>{dt}</em>" in html
 
     def test_dtypes_hidden(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, show_all=True, show_dtypes=False).as_html()
         assert 'class="gd-tbl-dtype">' not in html
@@ -1612,7 +1612,7 @@ class TestParameterComboSnapshots:
     # -- show_dimensions ---------------------------------------------------
 
     def test_dimensions_shown(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, show_all=True, show_dimensions=True).as_html()
         assert "gd-tbl-badge" in html
@@ -1620,7 +1620,7 @@ class TestParameterComboSnapshots:
         assert "Columns" in html
 
     def test_dimensions_hidden(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, show_all=True, show_dimensions=False).as_html()
         assert 'class="gd-tbl-badge' not in html
@@ -1628,13 +1628,13 @@ class TestParameterComboSnapshots:
     # -- caption -----------------------------------------------------------
 
     def test_caption_present(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, show_all=True, caption="Student Scores").as_html()
         assert "Student Scores" in html
 
     def test_caption_absent(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, show_all=True, caption=None).as_html()
         # Caption element should not appear in the table body
@@ -1644,7 +1644,7 @@ class TestParameterComboSnapshots:
 
     def test_minimal_chrome_cells(self):
         """No row numbers, no dtypes, no dimensions — just the data."""
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(
             _PARAM_DATA,
@@ -1664,7 +1664,7 @@ class TestParameterComboSnapshots:
     # -- mixed types and edge values ---------------------------------------
 
     def test_edge_values_cells(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {
             "val": [
@@ -1699,7 +1699,7 @@ class TestParameterComboSnapshots:
     # -- float precision ---------------------------------------------------
 
     def test_float_precision_cells(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"v": [3 * 1.1, 0.1 + 0.2, 24.200000000000003, 1.0, 0.0]}
         html = tbl_preview(data, show_all=True).as_html()
@@ -1709,7 +1709,7 @@ class TestParameterComboSnapshots:
     # -- HTML escaping in cells --------------------------------------------
 
     def test_html_escaping_cells(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"html": ["<b>bold</b>", 'a "quote"', "x&y"]}
         html = tbl_preview(data, show_all=True).as_html()
@@ -1721,7 +1721,7 @@ class TestParameterComboSnapshots:
     # -- head_tail + column subset combo -----------------------------------
 
     def test_head_tail_with_column_subset(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, n_head=2, n_tail=1, columns=["name", "grade"]).as_html()
         headers = _extract_column_headers(html)
@@ -1735,7 +1735,7 @@ class TestParameterComboSnapshots:
     # -- empty and single-row edge cases -----------------------------------
 
     def test_single_row_cells(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": [42], "b": ["only"]}
         html = tbl_preview(data, show_all=True).as_html()
@@ -1743,7 +1743,7 @@ class TestParameterComboSnapshots:
         assert cells == [["42", "only"]]
 
     def test_empty_string_cells(self):
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         data = {"a": ["", "x", ""], "b": [1, 2, 3]}
         html = tbl_preview(data, show_all=True).as_html()
@@ -1762,7 +1762,7 @@ class TestArrowDtypeShortFallback:
 
     def test_parameterized_with_base_in_map(self):
         """A parameterized dtype whose base exists in _ARROW_DTYPE_SHORT."""
-        from great_docs._tbl_preview import _arrow_dtype_short
+        from great_docs._tables.preview import _arrow_dtype_short
 
         # "int64(scale=2)" is not a map key; base "int64" is → "i64"
         result = _arrow_dtype_short("int64(scale=2)")
@@ -1770,14 +1770,14 @@ class TestArrowDtypeShortFallback:
 
     def test_completely_unknown_dtype(self):
         """A dtype with no map entry; returns first 4 chars of the base."""
-        from great_docs._tbl_preview import _arrow_dtype_short
+        from great_docs._tables.preview import _arrow_dtype_short
 
         result = _arrow_dtype_short("unknown_dtype")
         assert result == "unkn"
 
     def test_unknown_parameterized_dtype(self):
         """Unknown base with bracket suffix; base is not in map."""
-        from great_docs._tbl_preview import _arrow_dtype_short
+        from great_docs._tables.preview import _arrow_dtype_short
 
         result = _arrow_dtype_short("custom[param]")
         assert result == "cust"
@@ -1796,7 +1796,7 @@ class TestFromCsvPandasFallback:
         pytest.importorskip("pandas")
 
     def test_csv_falls_back_to_pandas(self, tmp_path: Path):
-        from great_docs._tbl_preview import _from_csv
+        from great_docs._tables.preview import _from_csv
 
         csv = tmp_path / "test.csv"
         csv.write_text("a,b\n1,x\n2,y\n")
@@ -1809,7 +1809,7 @@ class TestFromCsvPandasFallback:
         assert tbl_type == "csv"
 
     def test_csv_both_missing_raises(self, tmp_path: Path):
-        from great_docs._tbl_preview import _from_csv
+        from great_docs._tables.preview import _from_csv
 
         csv = tmp_path / "test.csv"
         csv.write_text("a,b\n1,x\n")
@@ -1827,7 +1827,7 @@ class TestFromTsvPandasFallback:
         pytest.importorskip("pandas")
 
     def test_tsv_falls_back_to_pandas(self, tmp_path: Path):
-        from great_docs._tbl_preview import _from_tsv
+        from great_docs._tables.preview import _from_tsv
 
         tsv = tmp_path / "test.tsv"
         tsv.write_text("a\tb\n1\tx\n2\ty\n")
@@ -1840,7 +1840,7 @@ class TestFromTsvPandasFallback:
         assert tbl_type == "tsv"
 
     def test_tsv_both_missing_raises(self, tmp_path: Path):
-        from great_docs._tbl_preview import _from_tsv
+        from great_docs._tables.preview import _from_tsv
 
         tsv = tmp_path / "test.tsv"
         tsv.write_text("a\tb\n1\tx\n")
@@ -1858,7 +1858,7 @@ class TestFromJsonlPandasFallback:
         pytest.importorskip("pandas")
 
     def test_jsonl_falls_back_to_pandas(self, tmp_path: Path):
-        from great_docs._tbl_preview import _from_jsonl
+        from great_docs._tables.preview import _from_jsonl
 
         jsonl = tmp_path / "test.jsonl"
         jsonl.write_text('{"a": 1, "b": "x"}\n{"a": 2, "b": "y"}\n')
@@ -1871,7 +1871,7 @@ class TestFromJsonlPandasFallback:
         assert tbl_type == "jsonl"
 
     def test_jsonl_both_missing_raises(self, tmp_path: Path):
-        from great_docs._tbl_preview import _from_jsonl
+        from great_docs._tables.preview import _from_jsonl
 
         jsonl = tmp_path / "test.jsonl"
         jsonl.write_text('{"a": 1}\n')
@@ -1892,7 +1892,7 @@ class TestFromParquetPandasFallback:
 
     def test_parquet_falls_back_to_pandas(self, tmp_path: Path):
         import polars as pl
-        from great_docs._tbl_preview import _from_parquet
+        from great_docs._tables.preview import _from_parquet
 
         pq = tmp_path / "test.parquet"
         pl.DataFrame({"a": [1, 2], "b": ["x", "y"]}).write_parquet(str(pq))
@@ -1906,7 +1906,7 @@ class TestFromParquetPandasFallback:
 
     def test_parquet_both_missing_raises(self, tmp_path: Path):
         import polars as pl
-        from great_docs._tbl_preview import _from_parquet
+        from great_docs._tables.preview import _from_parquet
 
         pq = tmp_path / "test.parquet"
         pl.DataFrame({"a": [1]}).write_parquet(str(pq))
@@ -1927,7 +1927,7 @@ class TestFromFeatherPandasFallback:
 
     def test_feather_falls_back_to_pandas(self, tmp_path: Path):
         import polars as pl
-        from great_docs._tbl_preview import _from_feather
+        from great_docs._tables.preview import _from_feather
 
         feather = tmp_path / "test.feather"
         pl.DataFrame({"a": [1, 2], "b": ["x", "y"]}).write_ipc(str(feather))
@@ -1948,7 +1948,7 @@ class TestFromFeatherPandasFallback:
 
     def test_feather_both_missing_raises(self, tmp_path: Path):
         import polars as pl
-        from great_docs._tbl_preview import _from_feather
+        from great_docs._tables.preview import _from_feather
 
         feather = tmp_path / "test.feather"
         pl.DataFrame({"a": [1]}).write_ipc(str(feather))
@@ -1959,7 +1959,7 @@ class TestFromFeatherPandasFallback:
 
     def test_feather_pandas_fallback_via_mock(self, tmp_path: Path):
         """When polars unavailable, falls back to pandas read_feather."""
-        from great_docs._tbl_preview import _from_feather
+        from great_docs._tables.preview import _from_feather
 
         mock_df = MagicMock()
         mock_from_pandas = MagicMock(return_value=(["col1"], ["int64"], [[1]], 1, "feather"))
@@ -1968,7 +1968,7 @@ class TestFromFeatherPandasFallback:
 
         with (
             patch.dict(sys.modules, {"polars": None, "pandas": mock_pd}),
-            patch("great_docs._tbl_preview._from_pandas", mock_from_pandas),
+            patch("great_docs._tables.preview._from_pandas", mock_from_pandas),
         ):
             result = _from_feather(tmp_path / "data.feather")
 
@@ -1985,7 +1985,7 @@ class TestComputeColWidthsNoScaling:
 
     def test_no_scaling_when_min_tbl_width_zero(self):
         """With min_tbl_width=0, the scaling block is always skipped."""
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         # Use a small table; min_tbl_width=0 ensures total > min always
         data = {"a": [1, 2], "b": ["x", "y"]}
@@ -1997,7 +1997,7 @@ class TestComputeColWidthsNoScaling:
 
     def test_wide_table_exceeds_min_width(self):
         """A table with many wide columns naturally exceeds the default 500px min."""
-        from great_docs._tbl_preview import tbl_preview
+        from great_docs._tables.preview import tbl_preview
 
         # Create 10 columns with long content so natural width >> 500px
         data = {f"column_{i}": [f"long_value_entry_{i}_{j}" for j in range(3)] for i in range(10)}

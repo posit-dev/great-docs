@@ -57,7 +57,7 @@ def enable_tbl_preview(**kwargs: Any) -> None:
     except RuntimeError:
         return
 
-    from great_docs._tbl_preview import _is_pandas, _is_polars, tbl_preview
+    from .preview import _is_pandas, _is_polars, tbl_preview
 
     def _tbl_preview_formatter(obj: Any) -> str | None:
         if _is_polars(obj) or _is_pandas(obj):

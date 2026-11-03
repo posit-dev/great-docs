@@ -7,7 +7,7 @@
 --   {{< tbl-explorer file="data.csv" column_toggle="false" downloadable="false" >}}
 --
 -- Calls the companion _tbl_explorer_shortcode.py script, which imports
--- tbl_explorer() from great_docs._tbl_explorer and prints the resulting
+-- tbl_explorer() from great_docs._tables.explorer and prints the resulting
 -- HTML to stdout.
 
 local function kwarg_str(kwargs, key)
