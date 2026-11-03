@@ -32,24 +32,6 @@ from yaml12 import format_yaml as _format_yaml
 from yaml12 import parse_yaml as _parse_yaml
 
 from great_docs import BuildError, Config, GreatDocs, create_default_config, load_config
-from great_docs._build import freeze, quarto
-from great_docs._build.log import BuildLog
-from great_docs._build.steps import Step, count_listed
-from great_docs._content.naming import strip_numeric_prefix
-from great_docs._reference.discovery import (
-    AUTO_EXCLUDE,
-    categorise_references,
-    discover_exports,
-    empty_categories,
-    parse_dunder_all,
-)
-from great_docs._reference.probe import detect_docstring_style, detect_dynamic_mode
-from great_docs._website.ai_agents import llms_txt
-from great_docs._website.homepage.readme import Badge, HeroElements
-from great_docs._website.quarto_yml import edit as edit_quarto_yml
-from great_docs._website.quarto_yml import read as read_quarto_yml
-from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
-from great_docs._website.scripts import script_include, stylesheet_include
 from great_docs._apiref import _globals, content, spec, write
 from great_docs._apiref._docstring_sections import (
     DCDocstringSection,
@@ -163,7 +145,27 @@ from great_docs._apiref.spec import ChildrenStyle, SpecObject, SpecOptions, Spec
 from great_docs._apiref.typing_information import TypeInformation, TypeSections
 from great_docs._apiref.write import _insert_contents
 from great_docs._apiref.write import merge_frontmatter as _merge_frontmatter
+from great_docs._build import freeze, quarto
+from great_docs._build.log import BuildLog
+from great_docs._build.steps import Step, count_listed
+from great_docs._content.naming import strip_numeric_prefix
+from great_docs._reference import block as reference_block
+from great_docs._reference import sections as reference_sections
+from great_docs._reference.discovery import (
+    AUTO_EXCLUDE,
+    categorise_references,
+    discover_exports,
+    empty_categories,
+    parse_dunder_all,
+)
+from great_docs._reference.probe import detect_docstring_style, detect_dynamic_mode
 from great_docs._utils import QUARTO_YML_HEADER, validate_build_dir
+from great_docs._website.ai_agents import llms_txt
+from great_docs._website.homepage.readme import Badge, HeroElements
+from great_docs._website.quarto_yml import edit as edit_quarto_yml
+from great_docs._website.quarto_yml import read as read_quarto_yml
+from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
+from great_docs._website.scripts import script_include, stylesheet_include
 from great_docs._yaml import split_front_matter
 from great_docs.cli import (
     _detect_optional_dependencies,
@@ -364,7 +366,7 @@ def test_parse_dunder_all_real_project():
 def test_create_api_sections():
     """Test auto-generation of API reference sections."""
     docs = GreatDocs()
-    sections = docs._create_api_sections("great_docs")
+    sections = docs._create_api_sections_with_config("great_docs")
 
     assert sections is not None
     assert len(sections) > 0
@@ -457,7 +459,7 @@ def some_function():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            sections = docs._create_api_sections("testpkg")
+            sections = docs._create_api_sections_with_config("testpkg")
 
             assert sections is not None
 
@@ -1748,7 +1750,7 @@ def test_build_sections_from_reference_config():
             }
         ]
 
-        sections = docs._build_sections_from_reference_config(reference_config)
+        sections = reference_sections.from_reference_config(reference_config)
 
         assert sections is not None
         assert len(sections) == 1
@@ -1773,7 +1775,7 @@ def test_build_sections_from_reference_config_with_members():
             }
         ]
 
-        sections = docs._build_sections_from_reference_config(reference_config)
+        sections = reference_sections.from_reference_config(reference_config)
 
         assert sections is not None
         assert len(sections) == 1
@@ -1797,7 +1799,7 @@ def test_build_sections_from_reference_config_explicit_members_list():
             }
         ]
 
-        sections = docs._build_sections_from_reference_config(reference_config)
+        sections = reference_sections.from_reference_config(reference_config)
 
         assert sections is not None
         assert len(sections) == 1
@@ -1820,7 +1822,7 @@ def test_build_sections_from_reference_config_include_inherited():
             }
         ]
 
-        sections = docs._build_sections_from_reference_config(reference_config)
+        sections = reference_sections.from_reference_config(reference_config)
 
         assert sections is not None
         contents = sections[0]["contents"]
@@ -1833,8 +1835,8 @@ def test_build_sections_from_reference_config_empty_and_none():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._build_sections_from_reference_config([]) is None
-        assert docs._build_sections_from_reference_config(None) is None
+        assert reference_sections.from_reference_config([]) is None
+        assert reference_sections.from_reference_config(None) is None
 
 
 def test_explicit_reference_config_applied_when_discovery_fails():
@@ -1869,7 +1871,7 @@ reference:
             assert docs._config.reference[0]["title"] == "Functions"
 
             # Build sections from config should work
-            sections = docs._build_sections_from_reference_config(docs._config.reference)
+            sections = reference_sections.from_reference_config(docs._config.reference)
 
             assert sections is not None
             assert len(sections) == 1
@@ -4913,7 +4915,7 @@ def test_module_big_class_splitting():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            sections = docs._create_api_sections("splitpkg")
+            sections = docs._create_api_sections_with_config("splitpkg")
 
             assert sections is not None
 
@@ -10150,7 +10152,7 @@ def test_build_sections_from_reference_config_basic_functions():
             {"title": "Functions", "desc": "Utils", "contents": ["func_a", "func_b"]},
             {"title": "Classes", "desc": "Types", "contents": ["MyClass"]},
         ]
-        result = docs._build_sections_from_reference_config(reference_config)
+        result = reference_sections.from_reference_config(reference_config)
 
         assert len(result) == 2
         assert result[0]["title"] == "Functions"
@@ -10172,7 +10174,7 @@ def test_build_sections_from_reference_config_dict_items_simple():
                 ],
             }
         ]
-        result = docs._build_sections_from_reference_config(reference_config)
+        result = reference_sections.from_reference_config(reference_config)
 
         assert len(result) == 1
 
@@ -10188,8 +10190,8 @@ def test_build_sections_from_reference_config_empty_v2():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._build_sections_from_reference_config([]) is None
-        assert docs._build_sections_from_reference_config(None) is None
+        assert reference_sections.from_reference_config([]) is None
+        assert reference_sections.from_reference_config(None) is None
 
 
 def test_build_sections_from_reference_config_skips_string_entry():
@@ -10200,7 +10202,7 @@ def test_build_sections_from_reference_config_skips_string_entry():
             "not-a-dict",
             {"title": "Valid", "contents": ["func_a"]},
         ]
-        result = docs._build_sections_from_reference_config(reference_config)
+        result = reference_sections.from_reference_config(reference_config)
 
         assert len(result) == 1
 
@@ -10212,7 +10214,7 @@ def test_build_sections_from_reference_config_dict_no_name_returns_none():
         reference_config = [
             {"title": "Test", "contents": [{"members": False}]},
         ]
-        result = docs._build_sections_from_reference_config(reference_config)
+        result = reference_sections.from_reference_config(reference_config)
 
         # Section has no valid contents, so it should be skipped
         assert result is None
@@ -10930,7 +10932,7 @@ def test_update_sidebar_from_sections_basic():
         with open(quarto_yml, "w") as f:
             write_yaml(config, f)
 
-        docs._update_sidebar_from_sections()
+        reference_sections.update_sidebar(docs._config, docs.build_dir)
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10983,7 +10985,7 @@ def test_update_sidebar_from_sections_dict_items():
         with open(quarto_yml, "w") as f:
             write_yaml(config, f)
 
-        docs._update_sidebar_from_sections()
+        reference_sections.update_sidebar(docs._config, docs.build_dir)
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -11022,7 +11024,7 @@ def test_update_sidebar_from_sections_sanitizes_colons():
         with open(quarto_yml, "w") as f:
             write_yaml(config, f)
 
-        docs._update_sidebar_from_sections()
+        reference_sections.update_sidebar(docs._config, docs.build_dir)
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -11049,7 +11051,7 @@ def test_update_sidebar_no_api_reference():
             write_yaml(config, f)
 
         # Should not raise
-        docs._update_sidebar_from_sections()
+        reference_sections.update_sidebar(docs._config, docs.build_dir)
 
 
 def test_update_quarto_config_navbar_color_light_dark():
@@ -11990,7 +11992,9 @@ def test_refresh_api_reference_config_updates_sections():
 
         new_sections = [{"title": "New", "desc": "", "contents": ["NewClass", "new_func"]}]
         with patch.object(docs, "_create_api_sections_with_config", return_value=new_sections):
-            docs._refresh_api_reference_config()
+            reference_block.refresh(
+                docs._config, docs.build_dir, docs._create_api_sections_with_config
+            )
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -12140,10 +12144,11 @@ def test_create_api_sections_with_config_uses_explicit():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
+        docs._config = mock_config(reference=[{"title": "Explicit", "contents": ["A"]}])
 
         fake_config_sections = [{"title": "Explicit", "contents": ["A"]}]
         with patch.object(
-            docs, "_create_api_sections_from_config", return_value=fake_config_sections
+            reference_sections, "from_explicit_config", return_value=fake_config_sections
         ):
             result = docs._create_api_sections_with_config("mypkg")
 
@@ -12157,9 +12162,12 @@ def test_create_api_sections_with_config_falls_back():
         docs = GreatDocs(project_path=tmp_dir)
 
         fake_auto_sections = [{"title": "Auto", "contents": ["B"]}]
-        with patch.object(docs, "_create_api_sections_from_config", return_value=None):
-            with patch.object(docs, "_create_api_sections", return_value=fake_auto_sections):
-                result = docs._create_api_sections_with_config("mypkg")
+        with (
+            patch.object(docs, "_get_package_exports", return_value=["B"]),
+            patch.object(docs, "_categorise_exports", return_value={}),
+            patch.object(reference_sections, "from_categories", return_value=fake_auto_sections),
+        ):
+            result = docs._create_api_sections_with_config("mypkg")
 
         assert result == fake_auto_sections
 
@@ -12178,7 +12186,7 @@ def test_prepare_build_directory_creates_structure():
 
         # Mock _add_api_reference_config to avoid needing actual package
         with patch.object(docs, "_add_api_reference_config"):
-            with patch.object(docs, "_update_sidebar_from_sections"):
+            with patch.object(reference_sections, "update_sidebar"):
                 docs._prepare_build_directory(make_run())
 
         # Check directory structure
@@ -12218,7 +12226,7 @@ def test_prepare_build_directory_can_retry_after_missing_header_include(tmp_path
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch.object(docs, "_add_api_reference_config"):
-        with patch.object(docs, "_update_sidebar_from_sections"):
+        with patch.object(reference_sections, "update_sidebar"):
             with pytest.raises(FileNotFoundError, match="Header include file not found"):
                 docs._prepare_build_directory(make_run())
 
@@ -12236,7 +12244,7 @@ def test_prepare_build_directory_writes_website_project(tmp_path):
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch.object(docs, "_add_api_reference_config"):
-        with patch.object(docs, "_update_sidebar_from_sections"):
+        with patch.object(reference_sections, "update_sidebar"):
             docs._prepare_build_directory(make_run())
 
     config = read_yaml(docs.build_dir / "_quarto.yml")
@@ -12287,7 +12295,7 @@ def test_prepare_build_directory_copies_js_files():
         readme.write_text("# My Pkg\n", encoding="utf-8")
 
         with patch.object(docs, "_add_api_reference_config"):
-            with patch.object(docs, "_update_sidebar_from_sections"):
+            with patch.object(reference_sections, "update_sidebar"):
                 docs._prepare_build_directory(make_run())
 
         # Core JS files should be present
@@ -12350,7 +12358,7 @@ def test_prepare_build_directory_copies_bibliography():
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch.object(docs, "_add_api_reference_config"):
-            with patch.object(docs, "_update_sidebar_from_sections"):
+            with patch.object(reference_sections, "update_sidebar"):
                 docs._prepare_build_directory(make_run())
 
         # .bib copied into build dir by basename
@@ -12385,7 +12393,7 @@ def test_prepare_build_directory_copies_multiple_bib_and_csl():
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch.object(docs, "_add_api_reference_config"):
-            with patch.object(docs, "_update_sidebar_from_sections"):
+            with patch.object(reference_sections, "update_sidebar"):
                 docs._prepare_build_directory(make_run())
 
         assert (docs.build_dir / "refs.bib").exists()
@@ -12414,7 +12422,7 @@ def test_prepare_build_directory_bibliography_missing_warns(capsys):
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch.object(docs, "_add_api_reference_config"):
-            with patch.object(docs, "_update_sidebar_from_sections"):
+            with patch.object(reference_sections, "update_sidebar"):
                 docs._prepare_build_directory(make_run())
 
         out = capsys.readouterr().out
@@ -12446,7 +12454,7 @@ def test_bibliography_does_not_set_reference_section_title():
 
         docs = GreatDocs(project_path=tmp_dir)
         with patch.object(docs, "_add_api_reference_config"):
-            with patch.object(docs, "_update_sidebar_from_sections"):
+            with patch.object(reference_sections, "update_sidebar"):
                 docs._prepare_build_directory(make_run())
 
         with open(docs.build_dir / "_quarto.yml", encoding="utf-8") as f:
@@ -12473,7 +12481,7 @@ def _prepared_quarto_config(lang: str) -> dict:
 
         docs = GreatDocs(project_path=tmp_dir)
         with patch.object(docs, "_add_api_reference_config"):
-            with patch.object(docs, "_update_sidebar_from_sections"):
+            with patch.object(reference_sections, "update_sidebar"):
                 docs._prepare_build_directory(make_run())
 
         with open(docs.build_dir / "_quarto.yml", encoding="utf-8") as f:
@@ -12522,7 +12530,7 @@ def test_prepare_build_directory_optional_js_copy_page():
         readme.write_text("# My Pkg\n", encoding="utf-8")
 
         with patch.object(docs, "_add_api_reference_config"):
-            with patch.object(docs, "_update_sidebar_from_sections"):
+            with patch.object(reference_sections, "update_sidebar"):
                 docs._prepare_build_directory(make_run())
 
         assert (docs.build_dir / "copy-page.js").exists()
@@ -12547,7 +12555,7 @@ def test_prepare_build_directory_cleans_existing():
         stale_file.write_text("old content")
 
         with patch.object(docs, "_add_api_reference_config"):
-            with patch.object(docs, "_update_sidebar_from_sections"):
+            with patch.object(reference_sections, "update_sidebar"):
                 docs._prepare_build_directory(make_run())
 
         # Stale file should be gone
@@ -12813,7 +12821,7 @@ def test_build_sections_from_reference_config_skips_empty_sections():
             {"title": "Empty", "contents": []},
             {"title": "Valid", "contents": ["Foo"]},
         ]
-        result = docs._build_sections_from_reference_config(ref_config)
+        result = reference_sections.from_reference_config(ref_config)
         assert result is not None
         assert len(result) == 1
         assert result[0]["title"] == "Valid"
@@ -12827,7 +12835,7 @@ def test_build_sections_from_reference_config_dict_no_name():
         ref_config = [
             {"title": "Test", "contents": [{"members": True}, {"name": "Valid"}]},
         ]
-        result = docs._build_sections_from_reference_config(ref_config)
+        result = reference_sections.from_reference_config(ref_config)
         assert result is not None
         assert len(result[0]["contents"]) == 1
         assert result[0]["contents"][0] == "Valid"
@@ -12918,7 +12926,7 @@ def test_categorise_references_missing_item_raises(capsys: pytest.CaptureFixture
             # Mock importlib.metadata.version to simulate an installed package
             with patch("importlib.metadata.version", return_value="1.0.0"):
                 with pytest.raises(BuildError) as exc_info:
-                    docs._create_api_sections_from_config("mypkg")
+                    docs._create_api_sections_with_config("mypkg")
 
             error_msg = str(exc_info.value)
             assert "nonexistent_item" in error_msg
@@ -12984,7 +12992,7 @@ def test_create_api_sections_basic():
             docs, "_get_package_exports", return_value=["Widget", "create_widget", "destroy_widget"]
         ):
             with patch.object(docs, "_categorise_exports", return_value=categories):
-                result = docs._create_api_sections("mypkg")
+                result = docs._create_api_sections_with_config("mypkg")
 
         assert result is not None
         titles = [s["title"] for s in result]
@@ -13008,7 +13016,7 @@ def test_create_api_sections_large_class():
 
         with patch.object(docs, "_get_package_exports", return_value=["BigClass"]):
             with patch.object(docs, "_categorise_exports", return_value=categories):
-                result = docs._create_api_sections("mypkg")
+                result = docs._create_api_sections_with_config("mypkg")
 
         assert result is not None
         titles = [s["title"] for s in result]
@@ -13025,7 +13033,7 @@ def test_create_api_sections_no_exports():
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch.object(docs, "_get_package_exports", return_value=None):
-            result = docs._create_api_sections("mypkg")
+            result = docs._create_api_sections_with_config("mypkg")
 
         assert result is None
 
@@ -13072,7 +13080,7 @@ def test_create_api_sections_all_types():
 
         with patch.object(docs, "_get_package_exports", return_value=all_exports):
             with patch.object(docs, "_categorise_exports", return_value=categories):
-                result = docs._create_api_sections("mypkg")
+                result = docs._create_api_sections_with_config("mypkg")
 
         assert result is not None
         titles = [s["title"] for s in result]
@@ -14910,7 +14918,7 @@ def test_refresh_api_reference_config_no_api_reference():
         quarto_yml = build_dir / "_quarto.yml"
         quarto_yml.write_text("website:\n  title: Test\n", encoding="utf-8")
 
-        docs._refresh_api_reference_config()
+        reference_block.refresh(docs._config, docs.build_dir, docs._create_api_sections_with_config)
         # Should not crash
 
 
@@ -14926,7 +14934,7 @@ def test_refresh_api_reference_config_no_package():
             encoding="utf-8",
         )
 
-        docs._refresh_api_reference_config()
+        reference_block.refresh(docs._config, docs.build_dir, docs._create_api_sections_with_config)
         # Should not crash
 
 
@@ -15184,7 +15192,7 @@ def test_build_sections_from_reference_config_dict_items():
                 ],
             }
         ]
-        result = docs._build_sections_from_reference_config(ref_config)
+        result = reference_sections.from_reference_config(ref_config)
         assert result is not None
         assert len(result) == 1
         contents = result[0]["contents"]
@@ -15201,7 +15209,7 @@ def test_build_sections_from_reference_config_skips_non_dict():
             "not_a_dict",
             {"title": "Valid", "contents": ["func"]},
         ]
-        result = docs._build_sections_from_reference_config(ref_config)
+        result = reference_sections.from_reference_config(ref_config)
         assert result is not None
         assert len(result) == 1
         assert result[0]["title"] == "Valid"
@@ -15215,7 +15223,7 @@ def test_build_sections_from_reference_config_skips_empty_contents():
             {"title": "Empty", "contents": []},
             {"title": "Valid", "contents": ["func"]},
         ]
-        result = docs._build_sections_from_reference_config(ref_config)
+        result = reference_sections.from_reference_config(ref_config)
         assert result is not None
         assert len(result) == 1
         assert result[0]["title"] == "Valid"
@@ -15228,7 +15236,7 @@ def test_build_sections_from_reference_config_skips_nameless_dict():
         ref_config = [
             {"title": "Mixed", "contents": [{"members": True}, {"name": "good"}]},
         ]
-        result = docs._build_sections_from_reference_config(ref_config)
+        result = reference_sections.from_reference_config(ref_config)
         assert result is not None
         assert result[0]["contents"] == ["good"]
 
@@ -17086,15 +17094,18 @@ def test_detect_dynamic_mode_no_exports():
             sys.path.remove(tmp_dir)
 
 
-def test_create_api_sections_from_config_no_reference():
-    """Test _create_api_sections_from_config returns None when no reference config."""
+def test_create_api_sections_without_reference_or_exports():
+    """
+    Return no sections when configuration and exports are both empty
+    """
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        with patch.object(
-            type(docs._config), "reference", new_callable=lambda: property(lambda self: None)
+        with (
+            patch.object(type(docs._config), "reference", property(lambda self: None)),
+            patch.object(docs, "_get_package_exports", return_value=[]),
         ):
-            result = docs._create_api_sections_from_config("mypkg")
+            result = docs._create_api_sections_with_config("mypkg")
         assert result is None
 
 
@@ -17136,7 +17147,7 @@ def test_create_api_sections_from_config_basic():
                     return_value=["ClassA", "func_b"],
                 ),
             ):
-                result = docs._create_api_sections_from_config("secpkg")
+                result = docs._create_api_sections_with_config("secpkg")
 
             assert result is not None
             assert len(result) >= 2
@@ -17177,7 +17188,7 @@ def test_create_api_sections_from_config_large_class():
             with (
                 patch.object(docs, "_get_package_exports", return_value=["BigClass"]),
             ):
-                result = docs._create_api_sections_from_config("lgpkg")
+                result = docs._create_api_sections_with_config("lgpkg")
 
             assert result is not None
 
@@ -17221,7 +17232,7 @@ def test_create_api_sections_from_config_dict_items():
             with (
                 patch.object(docs, "_get_package_exports", return_value=["MyClass"]),
             ):
-                result = docs._create_api_sections_from_config("dictpkg")
+                result = docs._create_api_sections_with_config("dictpkg")
 
             assert result is not None
             section = result[0]
@@ -17273,7 +17284,7 @@ def test_create_api_sections_from_config_explicit_members_passthrough():
             with (
                 patch.object(docs, "_get_package_exports", return_value=["Child"]),
             ):
-                result = docs._create_api_sections_from_config("inhpkg")
+                result = docs._create_api_sections_with_config("inhpkg")
 
             assert result is not None
             section = result[0]
@@ -17325,7 +17336,7 @@ def test_create_api_sections_from_config_include_inherited():
             with (
                 patch.object(docs, "_get_package_exports", return_value=["Derived"]),
             ):
-                result = docs._create_api_sections_from_config("inhpkg2")
+                result = docs._create_api_sections_with_config("inhpkg2")
 
             assert result is not None
             section = result[0]
@@ -17354,7 +17365,7 @@ def test_build_sections_from_reference_config_explicit_members():
                 ],
             },
         ]
-        result = docs._build_sections_from_reference_config(config)
+        result = reference_sections.from_reference_config(config)
 
         assert result is not None
         contents = result[0]["contents"]
@@ -17373,8 +17384,8 @@ def test_build_sections_from_reference_config_empty():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        assert docs._build_sections_from_reference_config([]) is None
-        assert docs._build_sections_from_reference_config(None) is None
+        assert reference_sections.from_reference_config([]) is None
+        assert reference_sections.from_reference_config(None) is None
 
 
 def test_build_sections_from_reference_config_basic():
@@ -17396,7 +17407,7 @@ def test_build_sections_from_reference_config_basic():
                 ],
             },
         ]
-        result = docs._build_sections_from_reference_config(config)
+        result = reference_sections.from_reference_config(config)
 
         assert result is not None
         assert len(result) == 2
@@ -18042,7 +18053,7 @@ def test_refresh_api_reference_config_no_quarto_yml():
         docs.build_dir.mkdir()
 
         # No _quarto.yml — should return early
-        docs._refresh_api_reference_config()
+        reference_block.refresh(docs._config, docs.build_dir, docs._create_api_sections_with_config)
 
 
 def test_refresh_api_reference_config_no_api_ref():
@@ -18054,7 +18065,7 @@ def test_refresh_api_reference_config_no_api_ref():
         docs.build_dir.mkdir()
         (docs.build_dir / "_quarto.yml").write_text(format_yaml({"project": {}}), encoding="utf-8")
 
-        docs._refresh_api_reference_config()
+        reference_block.refresh(docs._config, docs.build_dir, docs._create_api_sections_with_config)
 
 
 def test_refresh_api_reference_config_fallback_to_explicit():
@@ -18082,13 +18093,15 @@ def test_refresh_api_reference_config_fallback_to_explicit():
         with (
             patch.object(docs, "_create_api_sections_with_config", return_value=None),
             patch.object(
-                docs,
-                "_build_sections_from_reference_config",
+                reference_sections,
+                "from_reference_config",
                 return_value=user_sections,
             ),
-            patch.object(docs, "_update_sidebar_from_sections"),
+            patch.object(reference_sections, "update_sidebar"),
         ):
-            docs._refresh_api_reference_config()
+            reference_block.refresh(
+                docs._config, docs.build_dir, docs._create_api_sections_with_config
+            )
 
         written = read_yaml(docs.build_dir / "_quarto.yml")
         assert written["api-reference"]["sections"] == user_sections
@@ -26330,7 +26343,7 @@ class TestBuildSectionsFromReferenceConfig:
             config = [
                 {"title": "Classes", "desc": "Main classes", "contents": ["MyClass", "OtherClass"]},
             ]
-            result = docs._build_sections_from_reference_config(config)
+            result = reference_sections.from_reference_config(config)
             assert result is not None
             assert len(result) == 1
             assert result[0]["title"] == "Classes"
@@ -26343,7 +26356,7 @@ class TestBuildSectionsFromReferenceConfig:
             config = [
                 {"title": "Classes", "contents": [{"name": "MyClass", "members": False}]},
             ]
-            result = docs._build_sections_from_reference_config(config)
+            result = reference_sections.from_reference_config(config)
             assert result is not None
             assert result[0]["contents"][0] == {"name": "MyClass", "members": []}
 
@@ -26354,7 +26367,7 @@ class TestBuildSectionsFromReferenceConfig:
             config = [
                 {"title": "Classes", "contents": [{"name": "MyClass", "members": True}]},
             ]
-            result = docs._build_sections_from_reference_config(config)
+            result = reference_sections.from_reference_config(config)
             assert result is not None
             assert result[0]["contents"][0] == "MyClass"
 
@@ -26362,8 +26375,8 @@ class TestBuildSectionsFromReferenceConfig:
         """Returns None for empty config."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            assert docs._build_sections_from_reference_config([]) is None
-            assert docs._build_sections_from_reference_config(None) is None
+            assert reference_sections.from_reference_config([]) is None
+            assert reference_sections.from_reference_config(None) is None
 
     def test_skips_non_dict_entries(self):
         """Skips entries that aren't dicts."""
@@ -26373,7 +26386,7 @@ class TestBuildSectionsFromReferenceConfig:
                 "not a dict",
                 {"title": "Functions", "contents": ["func_a"]},
             ]
-            result = docs._build_sections_from_reference_config(config)
+            result = reference_sections.from_reference_config(config)
             assert result is not None
             assert len(result) == 1
 
@@ -26385,7 +26398,7 @@ class TestBuildSectionsFromReferenceConfig:
                 {"title": "Empty", "contents": []},
                 {"title": "Real", "contents": ["func_a"]},
             ]
-            result = docs._build_sections_from_reference_config(config)
+            result = reference_sections.from_reference_config(config)
             assert result is not None
             assert len(result) == 1
             assert result[0]["title"] == "Real"
@@ -26397,7 +26410,7 @@ class TestBuildSectionsFromReferenceConfig:
             config = [
                 {"title": "Classes", "contents": [{"members": False}]},
             ]
-            result = docs._build_sections_from_reference_config(config)
+            result = reference_sections.from_reference_config(config)
             # No valid contents, so the section is skipped
             assert result is None
 
@@ -26935,7 +26948,7 @@ class TestUpdateSidebarFromSections:
                 {"title": "Functions", "contents": ["func_a"]},
             ]
             docs = self._make_docs(tmp_dir, sections)
-            docs._update_sidebar_from_sections()
+            reference_sections.update_sidebar(docs._config, docs.build_dir)
             with open(docs.build_dir / "_quarto.yml") as f:
                 config = read_yaml(f)
             sidebar = config["website"]["sidebar"]
@@ -26956,7 +26969,7 @@ class TestUpdateSidebarFromSections:
                 {"title": "Classes", "contents": [{"name": "Graph", "members": []}]},
             ]
             docs = self._make_docs(tmp_dir, sections)
-            docs._update_sidebar_from_sections()
+            reference_sections.update_sidebar(docs._config, docs.build_dir)
             with open(docs.build_dir / "_quarto.yml") as f:
                 config = read_yaml(f)
             contents = config["website"]["sidebar"][0]["contents"]
@@ -26973,7 +26986,7 @@ class TestUpdateSidebarFromSections:
             config = {"website": {"sidebar": [{"id": "reference", "contents": []}]}}
             with open(quarto_yml, "w") as f:
                 write_yaml(config, f)
-            docs._update_sidebar_from_sections()
+            reference_sections.update_sidebar(docs._config, docs.build_dir)
             with open(quarto_yml) as f:
                 result = read_yaml(f)
             # Sidebar unchanged
@@ -27133,7 +27146,7 @@ class TestCreateApiSectionsFromConfig:
             old_path = sys.path[:]
             sys.path.insert(0, tmp_dir)
             try:
-                result = docs._create_api_sections_from_config("mypkg")
+                result = docs._create_api_sections_with_config("mypkg")
             finally:
                 sys.path[:] = old_path
             if result is not None:
@@ -27149,7 +27162,7 @@ class TestCreateApiSectionsFromConfig:
             pkg.mkdir()
             (pkg / "__init__.py").write_text("")
             docs = GreatDocs(project_path=tmp_dir)
-            result = docs._create_api_sections_from_config("mypkg")
+            result = docs._create_api_sections_with_config("mypkg")
             assert result is None
 
 
@@ -27550,7 +27563,7 @@ class TestBuildSectionsFromReferenceConfigBatch9:
                     "contents": [{"name": "MyClass", "members": False}],
                 },
             ]
-            result = docs._build_sections_from_reference_config(config)
+            result = reference_sections.from_reference_config(config)
             assert result is not None
             classes_section = result[0]
             assert classes_section["contents"][0] == {"name": "MyClass", "members": []}
@@ -27565,7 +27578,7 @@ class TestBuildSectionsFromReferenceConfigBatch9:
                     "contents": [{"name": "MyClass", "members": True}],
                 },
             ]
-            result = docs._build_sections_from_reference_config(config)
+            result = reference_sections.from_reference_config(config)
             assert result is not None
             assert result[0]["contents"][0] == "MyClass"
 
@@ -27574,7 +27587,7 @@ class TestBuildSectionsFromReferenceConfigBatch9:
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
             config = ["not_a_dict", {"title": "Funcs", "contents": ["func_a"]}]
-            result = docs._build_sections_from_reference_config(config)
+            result = reference_sections.from_reference_config(config)
             assert result is not None
             assert len(result) == 1
             assert result[0]["title"] == "Funcs"
@@ -27583,7 +27596,7 @@ class TestBuildSectionsFromReferenceConfigBatch9:
         """Returns None for empty config."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            result = docs._build_sections_from_reference_config([])
+            result = reference_sections.from_reference_config([])
             assert result is None
 
     def test_dict_item_without_name(self):
@@ -27596,7 +27609,7 @@ class TestBuildSectionsFromReferenceConfigBatch9:
                     "contents": [{"members": True}],
                 },
             ]
-            result = docs._build_sections_from_reference_config(config)
+            result = reference_sections.from_reference_config(config)
             # Section should be empty (no valid contents) so result is None
             assert result is None
 
@@ -27635,7 +27648,7 @@ class TestCreateApiSectionsFromConfigBatch9:
                 del sys.modules[k]
             sys.path.insert(0, tmp_dir)
             try:
-                result = docs._create_api_sections_from_config(pkg_name)
+                result = docs._create_api_sections_with_config(pkg_name)
             finally:
                 sys.path[:] = old_path
                 for k in list(sys.modules):
@@ -27673,7 +27686,7 @@ class TestCreateApiSectionsFromConfigBatch9:
             old_path = sys.path[:]
             sys.path.insert(0, tmp_dir)
             try:
-                result = docs._create_api_sections_from_config("mypkg")
+                result = docs._create_api_sections_with_config("mypkg")
             finally:
                 sys.path[:] = old_path
             if result is not None:
@@ -27715,7 +27728,9 @@ class TestRefreshApiReferenceConfigBatch9:
                 write_yaml(config, f)
             # Module doesn't exist, so auto-discovery will fail.
             # Method should fall back to explicit config.
-            docs._refresh_api_reference_config()
+            reference_block.refresh(
+                docs._config, docs.build_dir, docs._create_api_sections_with_config
+            )
             with open(quarto_yml) as f:
                 result = read_yaml(f)
             sections = result.get("api-reference", {}).get("sections", [])
@@ -27742,7 +27757,9 @@ class TestRefreshApiReferenceConfigBatch9:
             }
             with open(quarto_yml, "w") as f:
                 write_yaml(config, f)
-            docs._refresh_api_reference_config()
+            reference_block.refresh(
+                docs._config, docs.build_dir, docs._create_api_sections_with_config
+            )
             # Should not crash — just warn and keep config unchanged
 
 
@@ -29669,7 +29686,7 @@ def test_prepare_build_directory_copies_video_embed_js():
         readme.write_text("# My Pkg\n", encoding="utf-8")
 
         with patch.object(docs, "_add_api_reference_config"):
-            with patch.object(docs, "_update_sidebar_from_sections"):
+            with patch.object(reference_sections, "update_sidebar"):
                 docs._prepare_build_directory(make_run())
 
         assert (docs.build_dir / "video-embed.js").exists()
@@ -31650,7 +31667,7 @@ def test_create_api_sections_from_config_inline_methods_true_never_splits():
             with (
                 patch.object(docs, "_get_package_exports", return_value=["BigClass"]),
             ):
-                result = docs._create_api_sections_from_config("inlinepkg")
+                result = docs._create_api_sections_with_config("inlinepkg")
 
             assert result is not None
             titles = [s["title"] for s in result]
@@ -31716,7 +31733,7 @@ def test_create_api_sections_from_config_inline_methods_false_always_splits():
             with (
                 patch.object(docs, "_get_package_exports", return_value=["SmallClass"]),
             ):
-                result = docs._create_api_sections_from_config("splitforcepkg")
+                result = docs._create_api_sections_with_config("splitforcepkg")
 
             assert result is not None
             titles = [s["title"] for s in result]
@@ -31756,7 +31773,7 @@ def test_create_api_sections_from_config_inline_methods_custom_threshold():
             with (
                 patch.object(docs, "_get_package_exports", return_value=["MediumClass"]),
             ):
-                result = docs._create_api_sections_from_config("threshpkg")
+                result = docs._create_api_sections_with_config("threshpkg")
 
             assert result is not None
             titles = [s["title"] for s in result]
@@ -31904,7 +31921,7 @@ def test_build_reference_yaml_classes_and_functions():
             "class_methods": {"Alpha": 0, "Beta": 0},
             "class_method_names": {},
         }
-        result = docs._build_reference_yaml(categories)
+        result = reference_block.reference_yaml(docs._config, categories)
         assert result.startswith("reference:")
         assert "  - title: Classes" in result
         assert "      - Alpha" in result  # sorted
@@ -31920,7 +31937,7 @@ def test_build_reference_yaml_large_class_split():
             "class_methods": {"Big": 42},
             "class_method_names": {"Big": ["a", "b"]},
         }
-        result = docs._build_reference_yaml(categories)
+        result = reference_block.reference_yaml(docs._config, categories)
         assert "members: false" in result
         assert "  - title: Big Methods" in result
         assert "      - Big.a" in result
@@ -31929,7 +31946,7 @@ def test_build_reference_yaml_large_class_split():
 def test_build_reference_yaml_empty():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        assert docs._build_reference_yaml({}) == "reference:"
+        assert reference_block.reference_yaml(docs._config, {}) == "reference:"
 
 
 class TestSaveFreezeCacheVersioned:
@@ -32159,7 +32176,7 @@ def test_prepare_build_dir_pre_render_script_exists(tmp_path):
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch.object(docs, "_add_api_reference_config"):
-        with patch.object(docs, "_update_sidebar_from_sections"):
+        with patch.object(reference_sections, "update_sidebar"):
             docs._prepare_build_directory(make_run())
 
     # Script should be copied to scripts/ in the build dir
@@ -32178,7 +32195,7 @@ def test_prepare_build_dir_css_file_warning(tmp_path):
     out = io.StringIO()
     with redirect_stdout(out):
         with patch.object(docs, "_add_api_reference_config"):
-            with patch.object(docs, "_update_sidebar_from_sections"):
+            with patch.object(reference_sections, "update_sidebar"):
                 docs._prepare_build_directory(make_run())
 
     assert "CSS" in out.getvalue() or "css" in out.getvalue().lower()
@@ -32192,7 +32209,7 @@ def test_prepare_build_dir_css_file_exists(tmp_path):
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch.object(docs, "_add_api_reference_config"):
-        with patch.object(docs, "_update_sidebar_from_sections"):
+        with patch.object(reference_sections, "update_sidebar"):
             docs._prepare_build_directory(make_run())
 
     # CSS file should be in the build dir

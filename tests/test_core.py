@@ -15,6 +15,7 @@ import pytest
 
 from great_docs import GreatDocs
 from great_docs._build import freeze
+from great_docs._reference import block as reference_block
 from great_docs._reference.discovery import (
     categorise_references,
     discover_exports,
@@ -710,7 +711,7 @@ class TestCategoriseReferences:
         monkeypatch.setattr(
             gd, "_get_griffe_package", lambda name: (_ for _ in ()).throw(ImportError("fail"))
         )
-        result = gd._create_api_sections_from_config("mypkg")
+        result = gd._create_api_sections_with_config("mypkg")
         assert result == [{"title": "API", "desc": "", "contents": ["Foo"]}]
 
     def test_non_dict_section_skipped(self, tmp_path, monkeypatch):
@@ -1978,7 +1979,7 @@ class TestCreateApiSectionsFromConfig:
     def test_no_reference_returns_none(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
         _patch_cfg(monkeypatch, gd, "reference", None)
-        assert gd._create_api_sections_from_config("mypkg") is None
+        assert gd._create_api_sections_with_config("mypkg") is None
 
     def test_include_inherited_on_explicit_members(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
@@ -2000,7 +2001,7 @@ class TestCreateApiSectionsFromConfig:
             "great_docs.core.discovery.categorise_references",
             lambda package, reference: empty_categories(),
         )
-        result = gd._create_api_sections_from_config("mypkg")
+        result = gd._create_api_sections_with_config("mypkg")
         assert result is not None
         found = False
         for section in result:
@@ -2030,7 +2031,7 @@ class TestCreateApiSectionsFromConfig:
             "great_docs.core.discovery.categorise_references",
             lambda package, reference: empty_categories(),
         )
-        result = gd._create_api_sections_from_config("mypkg")
+        result = gd._create_api_sections_with_config("mypkg")
         found = False
         for section in result:
             for item in section.get("contents", []):
@@ -2058,7 +2059,7 @@ class TestCreateApiSectionsFromConfig:
             "great_docs.core.discovery.categorise_references",
             lambda package, reference: empty_categories(),
         )
-        result = gd._create_api_sections_from_config("mypkg")
+        result = gd._create_api_sections_with_config("mypkg")
         for section in result:
             for item in section.get("contents", []):
                 if item == "my_func":
@@ -2074,6 +2075,6 @@ class TestCreateApiSectionsFromConfig:
 class TestStepApiReferenceConfig:
     def test_skips_discovery_when_already_done(self, tmp_path):
         gd = _make_gd(tmp_path)
-        with patch.object(gd, "_refresh_api_reference_config") as refresh:
+        with patch.object(reference_block, "refresh") as refresh:
             gd._step_api_reference_config(make_run(api_discovery_done=True), refresh=True)
         refresh.assert_not_called()
