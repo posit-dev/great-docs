@@ -14,6 +14,7 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from .._layout import PACKAGE_DIRS
 from . import harper
 
 if TYPE_CHECKING:
@@ -23,9 +24,6 @@ if TYPE_CHECKING:
     from .harper import HarperFileResult, HarperLint
 
 __all__ = ["CheckedFile", "Options", "check", "find_modules", "find_pages"]
-
-# Package directories searched by the build, relative to the package root
-_PACKAGE_DIRS = ("src", "python", "lib")
 
 
 @dataclass(frozen=True)
@@ -118,7 +116,7 @@ def find_modules(layout: Layout, module: str) -> list[Path]:
         empty list if no directory matches. The search starts at the package root, then
         tries its `src/`, `python/` and `lib/` directories, as the build does.
     """
-    for root in (layout.package_root, *(layout.package_root / name for name in _PACKAGE_DIRS)):
+    for root in (layout.package_root, *(layout.package_root / name for name in PACKAGE_DIRS)):
         module_dir = root.joinpath(*module.split("."))
         if module_dir.is_dir():
             return list(module_dir.rglob("*.py"))

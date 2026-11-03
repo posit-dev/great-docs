@@ -39,7 +39,7 @@ from ._content.pages import PageMap, section_destination
 from ._content.user_guide import UserGuide
 from ._github import GithubRepo
 from ._install import update_gitignore
-from ._layout import Layout
+from ._layout import PACKAGE_DIRS, Layout
 from ._reference import block as reference_block
 from ._reference import discovery, documented, probe
 from ._reference import sections as reference_sections
@@ -885,7 +885,7 @@ class GreatDocs:
         """
         package_root = self.layout.package_root
         extra: list[str | Path] = [package_root]
-        for subdir in ("src", "python", "lib"):
+        for subdir in PACKAGE_DIRS:
             candidate = package_root / subdir
             if candidate.is_dir():
                 extra.append(candidate)
