@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 from typing import Literal
 
+from ._website.ai_agents.well_known import INDEX_FILE, SKILL_FILE, WELL_KNOWN_ROOT
 from ._yaml import split_front_matter
 
 # ---------------------------------------------------------------------------
@@ -117,7 +118,7 @@ def _find_skill_from_url(url: str) -> list[tuple[str, str]] | None:
     base = url.rstrip("/")
 
     # Try the agent-skills discovery protocol
-    index_url = f"{base}/.well-known/agent-skills/index.json"
+    index_url = f"{base}/{WELL_KNOWN_ROOT}/{INDEX_FILE}"
     try:
         with urllib.request.urlopen(index_url, timeout=10) as resp:  # noqa: S310
             index_data = json.loads(resp.read().decode("utf-8"))
@@ -127,7 +128,7 @@ def _find_skill_from_url(url: str) -> list[tuple[str, str]] | None:
             results: list[tuple[str, str]] = []
             for skill_entry in skills:
                 name = skill_entry.get("name", "default")
-                skill_url = f"{base}/.well-known/agent-skills/{name}/SKILL.md"
+                skill_url = f"{base}/{WELL_KNOWN_ROOT}/{name}/{SKILL_FILE}"
                 try:
                     with urllib.request.urlopen(skill_url, timeout=10) as resp:  # noqa: S310
                         content = resp.read().decode("utf-8")
@@ -564,7 +565,7 @@ def list_skills(
         import urllib.error
         import urllib.request
 
-        index_url = f"{base}/.well-known/agent-skills/index.json"
+        index_url = f"{base}/{WELL_KNOWN_ROOT}/{INDEX_FILE}"
         try:
             with urllib.request.urlopen(index_url, timeout=10) as resp:  # noqa: S310
                 index_data = json.loads(resp.read().decode("utf-8"))

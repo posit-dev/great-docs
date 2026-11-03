@@ -39,7 +39,6 @@ _BUILD_METHODS: tuple[str, ...] = (
     "_griffe_search_paths",
     "_find_user_guide_dir",
     "_prepare_build_directory",
-    "_generate_skill_md",
     "_get_package_metadata",
     "_get_github_repo_info",
     "_resolve_importable_name",
@@ -222,6 +221,9 @@ def stubbed_build(
         raise AttributeError(f"GreatDocs has no {missing}; update the method list in {__name__}")
 
     with ExitStack() as stack:
+        stack.enter_context(
+            patch("great_docs._website.ai_agents.skills.SkillsWriter.write", autospec=True)
+        )
         stack.enter_context(patch("great_docs._build.quarto.ensure_installed", autospec=True))
         stack.enter_context(
             patch("great_docs._build.quarto.environment", autospec=True, return_value={})

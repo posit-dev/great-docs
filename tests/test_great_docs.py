@@ -162,6 +162,8 @@ from great_docs._reference.probe import detect_docstring_style, detect_dynamic_m
 from great_docs._utils import QUARTO_YML_HEADER, validate_build_dir
 from great_docs._website import page_status
 from great_docs._website.ai_agents import llms_txt
+from great_docs._website.ai_agents.skills import SkillsWriter
+from great_docs._website.ai_agents.skills_page import SkillsPageWriter
 from great_docs._website.homepage.readme import Badge, HeroElements
 from great_docs._website.quarto_yml import edit as edit_quarto_yml
 from great_docs._website.quarto_yml import read as read_quarto_yml
@@ -28388,7 +28390,27 @@ class TestProcessSectionsFallbackHrefBatch10:
 # ---------------------------------------------------------------------------
 
 
-def test_generate_skill_md_basic():
+def _skills_writer(docs: GreatDocs) -> SkillsWriter:
+    return SkillsWriter(
+        docs._config,
+        docs.layout,
+        docs.build_dir,
+        docs._detect_package_name(),
+        docs._get_package_metadata(),
+    )
+
+
+def _skills_page_writer(docs: GreatDocs) -> SkillsPageWriter:
+    return SkillsPageWriter(
+        docs._config,
+        docs.layout,
+        docs.build_dir,
+        docs._detect_package_name(),
+        docs._get_package_metadata(),
+    )
+
+
+def test_write_skill_basic():
     """Test basic SKILL.md generation with API sections."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -28422,7 +28444,7 @@ api-reference:
 """
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         skill_md = great_docs_dir / "skill.md"
         assert skill_md.exists()
@@ -28452,7 +28474,27 @@ api-reference:
         assert "[llms-full.txt](llms-full.txt)" in content
 
 
-def test_generate_skill_md_well_known():
+def test_generated_skill_front_matter_quotes_punctuation(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\ndescription = "Tools: data and docs"\nlicense = "Custom: MIT"\n'
+    )
+    build_dir = tmp_path / "great-docs"
+    build_dir.mkdir()
+    (build_dir / "_quarto.yml").write_text(
+        "api-reference:\n  package: os\n  sections:\n    - title: Core\n      contents: [path]\n"
+    )
+    docs = GreatDocs(project_path=tmp_path)
+
+    _skills_writer(docs).write()
+
+    front_matter, _ = split_front_matter((build_dir / "skill.md").read_text())
+    assert front_matter.string("description").strip() == (
+        "Tools: data and docs. Use when writing Python code that uses the os package."
+    )
+    assert front_matter.string("license") == "Custom: MIT"
+
+
+def test_write_skill_well_known():
     """Test that SKILL.md is copied to .well-known/ directories with index.json."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -28480,7 +28522,7 @@ api-reference:
 """
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         # Check legacy .well-known/skills/default placement
         well_known = great_docs_dir / ".well-known" / "skills" / "default" / "SKILL.md"
@@ -28507,7 +28549,7 @@ api-reference:
         assert "SKILL.md" in index_data["skills"][0]["files"]
 
 
-def test_generate_skill_md_disabled():
+def test_write_skill_disabled():
     """Test that SKILL.md is not generated when skill.enabled is false."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Create great-docs.yml with skill disabled
@@ -28519,13 +28561,13 @@ def test_generate_skill_md_disabled():
         great_docs_dir = Path(tmp_dir) / "great-docs"
         great_docs_dir.mkdir()
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         skill_md = great_docs_dir / "skill.md"
         assert not skill_md.exists()
 
 
-def test_generate_skill_md_well_known_disabled():
+def test_write_skill_well_known_disabled():
     """Test that .well-known is skipped when skill.well_known is false."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         config_path = Path(tmp_dir) / "great-docs.yml"
@@ -28556,14 +28598,14 @@ api-reference:
 """
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         # skill.md should exist but .well-known should not
         assert (great_docs_dir / "skill.md").exists()
         assert not (great_docs_dir / ".well-known").exists()
 
 
-def test_generate_skill_md_user_override():
+def test_write_skill_user_override():
     """Test that a user-provided SKILL.md is copied verbatim."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Create great-docs.yml pointing to a custom file
@@ -28579,7 +28621,7 @@ def test_generate_skill_md_user_override():
         great_docs_dir = Path(tmp_dir) / "great-docs"
         great_docs_dir.mkdir()
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         skill_md = great_docs_dir / "skill.md"
         assert skill_md.exists()
@@ -28590,7 +28632,7 @@ def test_generate_skill_md_user_override():
         assert well_known.exists()
 
 
-def test_generate_skill_md_user_override_missing():
+def test_write_skill_user_override_missing():
     """Test fallback to generation when user-provided SKILL.md doesn't exist."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         config_path = Path(tmp_dir) / "great-docs.yml"
@@ -28621,7 +28663,7 @@ api-reference:
 """
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         # Should still generate a skill.md (fallback)
         skill_md = great_docs_dir / "skill.md"
@@ -28629,7 +28671,7 @@ api-reference:
         assert "name: test-package" in skill_md.read_text()
 
 
-def test_generate_skill_md_gotchas_and_best_practices():
+def test_write_skill_gotchas_and_best_practices():
     """Test that gotchas and best_practices from config appear in SKILL.md."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         config_path = Path(tmp_dir) / "great-docs.yml"
@@ -28670,7 +28712,7 @@ api-reference:
 """
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         content = (great_docs_dir / "skill.md").read_text()
 
@@ -28682,7 +28724,7 @@ api-reference:
         assert "- Prefer keyword arguments" in content
 
 
-def test_generate_skill_md_decision_table():
+def test_write_skill_decision_table():
     """Test that manual decision table rows appear in SKILL.md."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         config_path = Path(tmp_dir) / "great-docs.yml"
@@ -28722,7 +28764,7 @@ api-reference:
 """
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         content = (great_docs_dir / "skill.md").read_text()
 
@@ -28732,7 +28774,7 @@ api-reference:
         assert "| Format output | `fmt()` |" in content
 
 
-def test_generate_skill_md_extra_body():
+def test_write_skill_extra_body():
     """Test that extra_body content is appended to SKILL.md."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         config_path = Path(tmp_dir) / "great-docs.yml"
@@ -28767,22 +28809,24 @@ api-reference:
 """
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         content = (great_docs_dir / "skill.md").read_text()
         assert "## Custom Section" in content
         assert "Extra content here." in content
 
 
-def test_generate_skill_md_no_quarto_yml():
-    """Test _generate_skill_md returns early when no _quarto.yml."""
+def test_write_skill_no_quarto_yml():
+    """
+    Skip skill writing when there is no Quarto configuration
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
         assert not (docs.build_dir / "skill.md").exists()
 
 
-def test_generate_skill_md_with_site_url():
+def test_write_skill_with_site_url():
     """Test that site URL is included in the Resources section."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -28814,7 +28858,7 @@ api-reference:
 """
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         content = (great_docs_dir / "skill.md").read_text()
         assert "[Full documentation](https://example.com/docs/)" in content
@@ -28864,7 +28908,7 @@ skill:
         assert config.skill_extra_body == "extra.md"
 
 
-def test_generate_skill_md_uses_curated_skill():
+def test_write_skill_uses_curated_skill():
     """Test that a curated skills/<pkg>/SKILL.md is used instead of auto-generating."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -28900,7 +28944,7 @@ api-reference:
 """
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         skill_md = great_docs_dir / "skill.md"
         assert skill_md.exists()
@@ -28915,7 +28959,7 @@ api-reference:
         assert "# Curated" in well_known.read_text()
 
 
-def test_generate_skill_md_curated_with_underscore_name():
+def test_write_skill_curated_with_underscore_name():
     """Test curated skill discovery with underscore package names."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -28951,13 +28995,13 @@ api-reference:
 """
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         content = (great_docs_dir / "skill.md").read_text()
         assert "# Hyphenated" in content
 
 
-def test_generate_skill_md_install_uses_distribution_name():
+def test_write_skill_install_uses_distribution_name():
     """Install command uses pyproject.toml distribution name, not the importable module name.
 
     Example: import name is 'toast', distribution name is 'toast-analytics'. The generated skill
@@ -28991,7 +29035,7 @@ api-reference:
 """
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         content = (great_docs_dir / "skill.md").read_text()
 
@@ -28999,7 +29043,7 @@ api-reference:
         assert "pip install toast\n" not in content
 
 
-def test_generate_skills_page_basic():
+def test_write_skills_page_basic():
     """Test that skills.qmd is generated alongside skill.md."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -29019,7 +29063,7 @@ def test_generate_skills_page_basic():
             "        - foo\n"
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         skills_qmd = great_docs_dir / "skills.qmd"
         assert skills_qmd.exists()
@@ -29048,7 +29092,7 @@ def test_generate_skills_page_basic():
         ]
 
 
-def test_generate_skills_page_omits_robots_tag_without_seo() -> None:
+def test_write_skills_page_omits_robots_tag_without_seo() -> None:
     """Omit robots metadata from `skills.qmd` when SEO is disabled"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         config_path = Path(tmp_dir) / "great-docs.yml"
@@ -29071,14 +29115,14 @@ def test_generate_skills_page_omits_robots_tag_without_seo() -> None:
             "        - foo\n"
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         content = (great_docs_dir / "skills.qmd").read_text()
         assert "gd-head-tags" not in content
         assert "robots" not in content
 
 
-def test_generate_skills_page_github_repo_detection():
+def test_write_skills_page_github_repo_detection():
     """Test that GitHub owner/repo is auto-detected for install instructions."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -29105,7 +29149,7 @@ def test_generate_skills_page_github_repo_detection():
             "        - foo\n"
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         content = (great_docs_dir / "skills.qmd").read_text()
 
@@ -29116,7 +29160,7 @@ def test_generate_skills_page_github_repo_detection():
         assert "github.com/myorg/test-package" in content
 
 
-def test_generate_skills_page_site_url():
+def test_write_skills_page_site_url():
     """Test that site URL is used when no GitHub repo is available."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -29143,7 +29187,7 @@ def test_generate_skills_page_site_url():
             "        - foo\n"
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         content = (great_docs_dir / "skills.qmd").read_text()
 
@@ -29154,7 +29198,7 @@ def test_generate_skills_page_site_url():
         assert "example.com/docs/skill.md" in content
 
 
-def test_generate_skills_page_frontmatter_display():
+def test_write_skills_page_frontmatter_display():
     """Test that SKILL.md frontmatter is displayed as YAML, not Quarto FM."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -29180,7 +29224,7 @@ def test_generate_skills_page_frontmatter_display():
             "        - foo\n"
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         content = (great_docs_dir / "skills.qmd").read_text()
 
@@ -29194,7 +29238,7 @@ def test_generate_skills_page_frontmatter_display():
         assert parse_yaml(content.split("---\n")[1])["title"] == "Skills"
 
 
-def test_generate_skills_page_curated_skill():
+def test_write_skills_page_curated_skill():
     """Test that skills.qmd is generated from a curated skill."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -29222,7 +29266,7 @@ def test_generate_skills_page_curated_skill():
         great_docs_dir = Path(tmp_dir) / "great-docs"
         great_docs_dir.mkdir()
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         skills_qmd = great_docs_dir / "skills.qmd"
         assert skills_qmd.exists()
@@ -29235,7 +29279,7 @@ def test_generate_skills_page_curated_skill():
         assert "gd-skills-raw" in content
 
 
-def test_generate_skills_page_disabled():
+def test_write_skills_page_disabled():
     """Test that skills.qmd is NOT generated when skill is disabled."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         config_path = Path(tmp_dir) / "great-docs.yml"
@@ -29246,12 +29290,12 @@ def test_generate_skills_page_disabled():
         great_docs_dir = Path(tmp_dir) / "great-docs"
         great_docs_dir.mkdir()
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         assert not (great_docs_dir / "skills.qmd").exists()
 
 
-def test_generate_skills_page_well_known_disabled():
+def test_write_skills_page_well_known_disabled():
     """Test skills.qmd doesn't show .well-known link when disabled."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         config_path = Path(tmp_dir) / "great-docs.yml"
@@ -29274,7 +29318,7 @@ def test_generate_skills_page_well_known_disabled():
             "        - foo\n"
         )
 
-        docs._generate_skill_md()
+        _skills_writer(docs).write()
 
         content = (great_docs_dir / "skills.qmd").read_text()
 
@@ -31142,8 +31186,10 @@ def test_homepage_margin_extras():
 # ── _build_skill_page (companion files) ──────────────────────────────
 
 
-def test_generate_skills_page_with_companions():
-    """_generate_skills_page renders companion files from subdirectories."""
+def test_write_skills_page_with_companions():
+    """
+    Render companion files from skill subdirectories
+    """
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
@@ -31164,7 +31210,7 @@ def test_generate_skills_page_with_companions():
         refs_dir.mkdir()
         (refs_dir / "api.md").write_text("# API Ref")
 
-        gd._generate_skills_page(skill_md, skill_dir=skill_dir)
+        _skills_page_writer(gd).write(skill_md, skill_dir=skill_dir)
 
         skills_page = project / "skills.qmd"
         assert skills_page.exists()
@@ -31175,8 +31221,10 @@ def test_generate_skills_page_with_companions():
         assert "SKILL LAYOUT" in content
 
 
-def test_generate_skills_page_multi_skill_switcher():
-    """_generate_skills_page renders a sticky switcher bar when multiple skills are provided."""
+def test_write_skills_page_multi_skill_switcher():
+    """
+    Render a switcher when the page contains multiple skills
+    """
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
@@ -31204,7 +31252,7 @@ def test_generate_skills_page_multi_skill_switcher():
             "# Revise Docstrings\n\nHelps fix docstrings."
         )
 
-        gd._generate_skills_page(
+        _skills_page_writer(gd).write(
             skill_md_a,
             skill_dir=skill_dir_a,
             extra_skills=[(skill_md_b, skill_dir_b)],
@@ -31241,7 +31289,7 @@ def test_generate_skills_page_multi_skill_switcher():
         assert "guide-style.md" in content
 
 
-def test_generate_skills_page_multi_skill_install_section():
+def test_write_skills_page_multi_skill_install_section():
     """Multi-skill install section uses 'install all' phrasing and lists per-skill URLs."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
@@ -31264,7 +31312,7 @@ def test_generate_skills_page_multi_skill_install_section():
         skill_md_b = skill_dir_b / "SKILL.md"
         skill_md_b.write_text("---\nname: beta\ndescription: Skill beta\n---\n\n# Beta\n")
 
-        gd._generate_skills_page(
+        _skills_page_writer(gd).write(
             skill_md_a,
             skill_dir=skill_dir_a,
             extra_skills=[(skill_md_b, skill_dir_b)],
@@ -31293,7 +31341,7 @@ def test_generate_skills_page_multi_skill_install_section():
         assert "browse the skill files below" in content
 
 
-def test_generate_skills_page_multi_skill_no_cli_without_package_name():
+def test_write_skills_page_multi_skill_no_cli_without_package_name():
     """Multi-skill install omits CLI line when package name cannot be detected."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
@@ -31312,7 +31360,7 @@ def test_generate_skills_page_multi_skill_no_cli_without_package_name():
         skill_md_b = skill_dir_b / "SKILL.md"
         skill_md_b.write_text("---\nname: beta\ndescription: Skill beta\n---\n\n# Beta\n")
 
-        gd._generate_skills_page(
+        _skills_page_writer(gd).write(
             skill_md_a,
             skill_dir=skill_dir_a,
             extra_skills=[(skill_md_b, skill_dir_b)],
@@ -31328,7 +31376,7 @@ def test_generate_skills_page_multi_skill_no_cli_without_package_name():
         assert ".well-known/agent-skills/alpha/SKILL.md" in content
 
 
-def test_generate_skills_page_single_skill_install_section():
+def test_write_skills_page_single_skill_install_section():
     """Single-skill install section uses singular phrasing and includes Manual/curl."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
@@ -31343,7 +31391,7 @@ def test_generate_skills_page_single_skill_install_section():
         skill_md = skill_dir / "SKILL.md"
         skill_md.write_text("---\nname: solo\ndescription: A solo skill\n---\n\n# Solo\n")
 
-        gd._generate_skills_page(skill_md, skill_dir=skill_dir)
+        _skills_page_writer(gd).write(skill_md, skill_dir=skill_dir)
 
         content = (project / "skills.qmd").read_text()
 
@@ -31366,8 +31414,10 @@ def test_generate_skills_page_single_skill_install_section():
         assert "great-docs skill install" not in content
 
 
-def test_generate_skills_page_single_skill_no_switcher():
-    """_generate_skills_page does NOT render a switcher when only one skill is present."""
+def test_write_skills_page_single_skill_no_switcher():
+    """
+    Omit the switcher when the page contains one skill
+    """
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
@@ -31379,7 +31429,7 @@ def test_generate_skills_page_single_skill_no_switcher():
         skill_md = skill_dir / "SKILL.md"
         skill_md.write_text("---\nname: solo_skill\ndescription: A lone skill\n---\n\n# Solo\n")
 
-        gd._generate_skills_page(skill_md, skill_dir=skill_dir)
+        _skills_page_writer(gd).write(skill_md, skill_dir=skill_dir)
 
         content = (project / "skills.qmd").read_text()
 
@@ -33021,7 +33071,7 @@ def test_skills_page_ignores_a_non_string_description(tmp_path: Path) -> None:
     (tmp_path / "great-docs").mkdir()
     docs = GreatDocs(project_path=str(tmp_path))
 
-    docs._generate_skill_md()
+    _skills_writer(docs).write()
 
     assert "# Skill" in (tmp_path / "great-docs" / "skills.qmd").read_text()
 
