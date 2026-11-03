@@ -62,6 +62,7 @@ from ._website import (
     i18n,
     inline_data,
     markdown_pages,
+    metadata_partial,
     page_dates,
     page_status,
     page_url,
@@ -82,7 +83,6 @@ from ._website.navigation import shared_sidebar
 from ._website.project_pages import citation, community, licence, package_info
 from ._website.scripts import script_include, stylesheet_include
 from ._website.seo import description as seo_description
-from ._website.seo import title as seo_title
 from ._website.seo.structured_data import StructuredData
 from ._yaml import YamlMapping, set_front_matter_option, split_front_matter
 from .config import Config, create_default_config
@@ -6467,7 +6467,7 @@ body-classes: "gd-homepage"
             resources.append(INVENTORY_FILENAME)
 
         # Quarto renders page titles and translation metadata from this partial.
-        self._write_metadata_partial(config)
+        metadata_partial.write(config, self._config, self.build_dir, report=print)
         nav_label.register(config, self._config)
         i18n.register(config, self._config)
 
@@ -6870,93 +6870,6 @@ body-classes: "gd-homepage"
                 if isinstance(title, str) and title:
                     return title
         return self._config.display_name or self._detect_package_name() or ""
-
-    def _build_title_template_line(self, template: object) -> str | None:
-        """
-        Convert the configured page-title template to Pandoc syntax
-
-        Apply the template only to titled pages. For untitled pages, including
-        the home page, Quarto leaves `$title-prefix$` unset and sets
-        `$pagetitle$` to the site name. These pages therefore show only the site
-        name.
-
-        Parameters
-        ----------
-        template
-            Value of `seo.title_template`, written with `{page_title}` and an
-            optional `{site_name}`. Configuration values may have any type, but
-            this method supports only strings.
-
-        Returns
-        -------
-        :
-            The `<title>` element, or `None` unless the template is a string
-            that contains `{page_title}` and excludes `$`.
-        """
-        if not seo_title.is_valid(template):
-            return None
-
-        titled = seo_title.apply(template, "$pagetitle$", "$title-prefix$")
-        return f"<title>$if(title-prefix)${titled}$else$$pagetitle$$endif$</title>"
-
-    def _write_metadata_partial(self, config: dict) -> None:
-        """
-        Write and register the configured HTML metadata partial
-
-        Start with the bundled partial to keep metadata independent of the
-        installed Quarto version. Add the configured SEO title template,
-        translations for languages other than English, and the Open Graph
-        page type for social cards. Include the site build time when
-        `show_dates` is on. Write nothing when the configuration has no HTML
-        mapping.
-
-        Parameters
-        ----------
-        config
-            Contents of `_quarto.yml`, updated in place to register the partial.
-
-        Returns
-        -------
-        :
-            Nothing.
-        """
-        html_config = config.get("format", {}).get("html")
-        if not isinstance(html_config, dict):
-            return
-
-        partial = (self.assets_path / "metadata.html").read_text(encoding="utf-8")
-
-        if self._config.seo_enabled:
-            title_line = self._build_title_template_line(self._config.seo_title_template)
-            if title_line is None:
-                print(
-                    "Warning: seo.title_template must be a string containing "
-                    "{page_title} but no '$'. Using Quarto's default page titles."
-                )
-            else:
-                # Use a callable replacement so backslashes and `$` remain literal.
-                partial = re.sub(r"<title>.*</title>", lambda _match: title_line, partial)
-
-        meta_tag = i18n.meta_tag(self._config)
-        if meta_tag is not None:
-            # Pandoc templates require `$$` to render a literal `$`.
-            partial = partial.rstrip("\n") + "\n" + meta_tag.replace("$", "$$") + "\n"
-
-        if social_cards.applies(config, self._config, self.build_dir):
-            partial = partial.rstrip("\n") + "\n" + social_cards.OG_TYPE_PARTIAL + "\n"
-
-        if self._config.show_dates:
-            date_lines = page_dates.partial_lines(datetime.now().isoformat())
-            partial = partial.rstrip("\n") + "\n" + date_lines + "\n"
-
-        (self.build_dir / "metadata.html").write_text(partial, encoding="utf-8")
-
-        partials = html_config.get("template-partials", [])
-        if isinstance(partials, str):
-            partials = [partials]
-        if "metadata.html" not in partials:
-            partials.append("metadata.html")
-        html_config["template-partials"] = partials
 
     def _prerender_term_player(self, log: "BuildLog") -> None:
         """
