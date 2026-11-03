@@ -386,3 +386,20 @@ def test_a_project_imported_under_another_name_gets_the_build_sections(tmp_path:
     assert [pages[f"actual_module.{method}"] for method in methods] == [
         f"reference/{method}.html#actual_module.{method}" for method in methods
     ]
+
+
+@pytest.mark.parametrize("setting", ["reference: false", "project_type: go"])
+def test_a_site_without_an_api_reference_documents_nothing(tmp_path: Path, setting: str):
+    """
+    Return empty lists of symbols and objects when the site has no API reference
+
+    The build writes no reference pages with `reference: false` or without a
+    Python component. Snapshots, `api-diff --graph` and lint therefore need an
+    empty documented set.
+    """
+    _write_pkg(tmp_path)
+    (tmp_path / "great-docs.yml").write_text(f"{setting}\n")
+    gd = GreatDocs(project_path=str(tmp_path))
+
+    assert _symbol_names(gd, "mypkg") == []
+    assert _objects(gd, "mypkg") == []

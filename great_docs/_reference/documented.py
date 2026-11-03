@@ -53,7 +53,8 @@ def symbol_names(
     -------
     :
         Dotted stems, deduplicated and in first-occurrence order. Empty when the
-        package documents nothing or cannot be resolved.
+        site has no API reference, the package documents nothing, or the package
+        cannot be resolved.
 
     Raises
     ------
@@ -101,8 +102,8 @@ def objects(
     Returns
     -------
     :
-        The documented objects. Empty when the package documents nothing or
-        cannot be resolved.
+        The documented objects. Empty when the site has no API reference, the
+        package documents nothing, or the package cannot be resolved.
 
     Raises
     ------
@@ -153,8 +154,15 @@ def _resolved_reference(
     Yields
     ------
     :
-        The reference, or `None` when the package documents nothing.
+        The reference, or `None` when the package documents nothing or the site
+        has no API reference (`reference: false` or a project without a Python
+        component).
     """
+    # These projects publish no API reference, so their documented set is empty.
+    if not config.reference_enabled or not config.is_python_project:
+        yield None
+        return
+
     added_paths: list[str] = []
     cached_modules: dict[str, ModuleType] = {}
     modules_evicted = False
