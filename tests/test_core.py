@@ -15,6 +15,7 @@ import pytest
 
 from great_docs import GreatDocs
 from great_docs._build import freeze
+from great_docs._mcpref import build as mcp_build
 from great_docs._reference import block as reference_block
 from great_docs._reference.discovery import (
     categorise_references,
@@ -344,7 +345,7 @@ class TestDiscoverMcpServer:
                 "great_docs._mcpref.reference.discover_mcp_server", return_value=server_info
             ) as discover,
         ):
-            result = gd._discover_mcp_server("mypkgxyz")
+            result = mcp_build.discover_server(gd._config, "mypkgxyz")
 
         assert result == server_info
         discover.assert_called_once_with(module_path=f"mypkgxyz.{module}", server_var=None)
@@ -361,7 +362,7 @@ class TestDiscoverMcpServer:
                 "great_docs._mcpref.reference.discover_mcp_server", return_value=None
             ) as discover,
         ):
-            gd._discover_mcp_server("mypkgxyz")
+            mcp_build.discover_server(gd._config, "mypkgxyz")
 
         discover.assert_called_once_with(module_path="elsewhere.tools", server_var=None)
 
@@ -370,7 +371,7 @@ class TestDiscoverMcpServer:
         gd = _make_root_project(tmp_path)
 
         with patch("great_docs._mcpref.reference.discover_mcp_server") as discover:
-            result = gd._discover_mcp_server(None)
+            result = mcp_build.discover_server(gd._config, None)
 
         assert result is None
         discover.assert_not_called()
@@ -412,6 +413,20 @@ class TestUpdateSidebarWithMcp:
         mcp_section = next(s for s in sidebar if s.get("id") == "mcp-reference")
         assert "MCP Reference" in mcp_section["title"]
 
+    def test_sidebar_uses_site_language(self, tmp_path: Path):
+        (tmp_path / "great-docs.yml").write_text(
+            "module: mypkg\nsite:\n  lang: fr\n", encoding="utf-8"
+        )
+        gd = GreatDocs(project_path=str(tmp_path))
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        (gd.build_dir / "_quarto.yml").write_text("website:\n  sidebar: []\n", encoding="utf-8")
+
+        gd._update_sidebar_with_mcp(["reference/mcp/tool.qmd"])
+
+        sections = quarto_yml_file.read(gd.build_dir)["website"]["sidebar"]
+        section = next(item for item in sections if item.get("id") == "mcp-reference")
+        assert section["title"] == "Référence MCP"
+
     def test_updates_existing_mcp_section(self, tmp_path, monkeypatch):
         """existing mcp-reference section gets updated."""
         gd = _make_gd(tmp_path)
@@ -441,33 +456,35 @@ class TestUpdateSidebarWithMcp:
         assert "sidebar" in quarto_yml_file.read(gd.build_dir)["website"]
 
 
-class TestGenerateMcpManifest:
-    """Cover _generate_mcp_manifest orchestration."""
-
-    def test_calls_generate_mcp_manifest(self, tmp_path, monkeypatch):
-        """Gathers metadata and calls generate_mcp_manifest."""
+class TestBuildMcpReference:
+    def test_passes_metadata_and_language(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         gd = _make_gd(tmp_path)
-        monkeypatch.setattr(gd, "_detect_package_name", lambda: "mypkg")
-        monkeypatch.setattr(
-            gd,
-            "_get_github_repo_info",
-            lambda: ("posit-dev", "mypkg", "https://github.com/posit-dev/mypkg"),
+        gd._config._config["site"]["lang"] = "fr"
+        gd._config._config["site_url"] = "https://example.org"
+        pages: dict[str, object] = {}
+        manifest: dict[str, object] = {}
+
+        def fake_pages(**kwargs):
+            pages.update(kwargs)
+            return ["reference/mcp/tool.qmd"]
+
+        def fake_manifest(**kwargs):
+            manifest.update(kwargs)
+
+        monkeypatch.setattr("great_docs._mcpref.reference.generate_mcp_reference_pages", fake_pages)
+        monkeypatch.setattr("great_docs._mcpref.reference.generate_mcp_manifest", fake_manifest)
+        server = {"name": "test", "tools": []}
+
+        files = mcp_build.build_mcp_reference(
+            gd._config, server, gd.build_dir, "mypkg", "https://github.com/owner/repo"
         )
-        gd._config._config["site_url"] = "https://mypkg.readthedocs.io"
 
-        called_with = {}
-
-        def fake_gen(**kwargs):
-            called_with.update(kwargs)
-
-        with patch("great_docs.core.generate_mcp_manifest", create=True):
-            monkeypatch.setattr("great_docs._mcpref.reference.generate_mcp_manifest", fake_gen)
-            gd._generate_mcp_manifest({"name": "test", "tools": []})
-
-        assert called_with["package_name"] == "mypkg"
-        assert called_with["repo_url"] == "https://github.com/posit-dev/mypkg"
-        assert called_with["site_url"] == "https://mypkg.readthedocs.io"
-        assert called_with["server_info"] == {"name": "test", "tools": []}
+        assert files == ["reference/mcp/tool.qmd"]
+        assert pages["language"] == "fr"
+        assert manifest["package_name"] == "mypkg"
+        assert manifest["repo_url"] == "https://github.com/owner/repo"
+        assert manifest["site_url"] == "https://example.org"
+        assert manifest["server_info"] == server
 
 
 class TestRemoveMcpFromRefSections:

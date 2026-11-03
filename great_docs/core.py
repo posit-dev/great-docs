@@ -2770,48 +2770,6 @@ class GreatDocs:
     # MCP Server Documentation Methods
     # =========================================================================
 
-    def _discover_mcp_server(self, package: str | None) -> dict[str, Any] | None:
-        """
-        Introspect the MCP server that the site documents
-
-        Use `mcp.module` when set. Otherwise, try `<package>.mcp`, `<package>.mcp_server` and
-        `<package>.server` in order, selecting the first module that imports successfully.
-        Probing a candidate also imports the documented package. Without a package, try no
-        candidates.
-
-        Parameters
-        ----------
-        package
-            The importable name of the documented package, or `None` when the project has none.
-
-        Returns
-        -------
-        :
-            Server metadata with tools, resources and prompts, or `None` when no server is found.
-        """
-        import importlib
-
-        module_path = self._config.mcp_module
-        if not module_path and package:
-            for candidate in (f"{package}.mcp", f"{package}.mcp_server", f"{package}.server"):
-                try:
-                    importlib.import_module(candidate)
-                except ImportError:
-                    continue
-                module_path = candidate
-                break
-
-        if not module_path:
-            print("No MCP module configured or found")
-            return None
-
-        from ._mcpref.reference import discover_mcp_server
-
-        return discover_mcp_server(
-            module_path=module_path,
-            server_var=self._config.mcp_server_var,
-        )
-
     def _update_sidebar_with_mcp(self, mcp_files: list[str | dict]) -> None:
         """
         Update the sidebar configuration to include MCP reference.
@@ -2823,6 +2781,8 @@ class GreatDocs:
         """
         if not mcp_files:
             return
+
+        from ._translations import get_translation
 
         if not quarto_yml.path(self.build_dir).exists():
             return
@@ -2841,14 +2801,24 @@ class GreatDocs:
             for section in sidebar:
                 if isinstance(section, dict) and section.get("id") == "mcp-reference":
                     mcp_section_exists = True
+                    section["title"] = get_translation("mcp_reference", self._config.lang)
                     section["contents"] = mcp_files
                     break
 
             if not mcp_section_exists:
                 mcp_section = {
                     "id": "mcp-reference",
-                    "title": "MCP Reference",
-                    "contents": [{"text": "MCP Index", "href": "reference/mcp/index.qmd"}]
+                    "title": get_translation("mcp_reference", self._config.lang),
+                    "contents": [
+                        {
+                            "text": (
+                                "MCP Index"
+                                if self._config.lang == "en"
+                                else get_translation("mcp_reference", self._config.lang)
+                            ),
+                            "href": "reference/mcp/index.qmd",
+                        }
+                    ]
                     + mcp_files,
                 }
                 sidebar.append(mcp_section)
@@ -2908,34 +2878,6 @@ class GreatDocs:
 
         if updated:
             quarto_yml.write(self.build_dir, config, self._config)
-
-    def _generate_mcp_manifest(self, mcp_info: dict) -> None:
-        """
-        Generate a .well-known/mcp.json discovery manifest.
-
-        Enables clients and registries to auto-discover the MCP server
-        and its capabilities from the documentation site URL.
-
-        Parameters
-        ----------
-        mcp_info
-            Server metadata from _discover_mcp_server().
-        """
-        from ._mcpref.reference import generate_mcp_manifest
-
-        # Gather project metadata
-        package_name = self._detect_package_name()
-        owner, repo, _ = self._get_github_repo_info()
-        repo_url = f"https://github.com/{owner}/{repo}" if owner and repo else None
-        site_url = self._config["site_url"]
-
-        generate_mcp_manifest(
-            server_info=mcp_info,
-            output_dir=self.build_dir,
-            package_name=package_name,
-            repo_url=repo_url,
-            site_url=site_url,
-        )
 
     # =========================================================================
     # User Guide Methods
@@ -8436,18 +8378,18 @@ body-classes: "gd-homepage"
                 if run.package_name
                 else self._detect_module_name()
             )
-            mcp_info = self._discover_mcp_server(mcp_package)
+            from ._mcpref import build as mcp_build
+
+            mcp_info = mcp_build.discover_server(self._config, mcp_package)
             if not mcp_info:
                 run.mcp_pages_generated = False
                 self._remove_mcp_from_ref_sections()
                 return Skipped("no MCP server found")
-            from ._mcpref.reference import generate_mcp_reference_pages
-
-            mcp_files = generate_mcp_reference_pages(
-                server_info=mcp_info,
-                output_dir=self.build_dir / "reference" / "mcp",
-                categories=self._config.mcp_categories or None,
-                display_name=self._config.mcp_name,
+            package_name = self._detect_package_name()
+            owner, repo, _ = self._get_github_repo_info()
+            repo_url = f"https://github.com/{owner}/{repo}" if owner and repo else None
+            mcp_files = mcp_build.build_mcp_reference(
+                self._config, mcp_info, self.build_dir, package_name, repo_url
             )
             if not mcp_files:
                 run.mcp_pages_generated = False
@@ -8455,7 +8397,6 @@ body-classes: "gd-homepage"
                 return "No MCP pages generated"
             run.mcp_pages_generated = True
             self._update_sidebar_with_mcp(mcp_files)
-            self._generate_mcp_manifest(mcp_info)
         except USER_CODE_ERRORS:
             run.mcp_pages_generated = False
             self._remove_mcp_from_ref_sections()
