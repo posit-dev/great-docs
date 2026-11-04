@@ -23,6 +23,9 @@ if TYPE_CHECKING:
 
 __all__ = ["register"]
 
+_MCP_MANIFEST = ".well-known/mcp.json"
+"""The MCP discovery manifest, relative to the Quarto project directory"""
+
 
 def register(
     quarto_config: dict[str, Any], config: Config, layout: Layout, build_dir: Path
@@ -35,11 +38,12 @@ def register(
 
     With skills enabled, include `skill.md`. Also include `.well-known/` when
     `well_known` is enabled. Exclude both from rendering; Quarto would otherwise
-    render `skill.md` as a page.
+    render `skill.md` as a page. Without `.well-known/`, include the MCP discovery
+    manifest `.well-known/mcp.json` on its own.
 
-    Asset directories, `notebooks/` and `assets/` are listed only when they exist in
-    the build directory, so a call after the user guide, sections and assets are
-    copied finds more of them.
+    Asset directories, `notebooks/`, `assets/` and the MCP manifest are listed only
+    when they exist in the build directory, so a call after the user guide, sections,
+    MCP reference and assets are written finds more of them.
 
     Parameters
     ----------
@@ -68,6 +72,8 @@ def register(
         skill_files = ["skill.md", *([".well-known/**"] if config.skill_well_known else [])]
         resources.extend(skill_files)
         render_excludes.extend(skill_files)
+    if ".well-known/**" not in resources and (build_dir / _MCP_MANIFEST).is_file():
+        resources.append(_MCP_MANIFEST)
     quarto_yml.apply(
         quarto_config,
         Contribution(resources=tuple(resources), render_excludes=tuple(render_excludes)),
