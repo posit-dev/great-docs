@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 from yaml12 import format_yaml
 
 from ..._content import publish
-from ..._yaml import YamlValue, set_front_matter_option
+from ..._yaml import YamlValue, locate_front_matter, set_front_matter_option
 from ..project_pages import community
 from ..seo import description as seo_description
 from . import hero, landing, margin, readme, source
@@ -324,11 +324,10 @@ def write_blended(
     # user guide pages.
     front_matter = ""
     body = content
-    if content.startswith("---"):
-        parts = content.split("---", 2)
-        if len(parts) >= 3:
-            front_matter = f"---{parts[1]}---\n"
-            body = parts[2].lstrip("\n")
+    block = locate_front_matter(content)
+    if block is not None:
+        front_matter = content[: block.end]
+        body = content[block.end :].lstrip("\n")
 
     # The front matter title provides the title block. Remove the first body `#` heading:
     # `shift-heading-level-by: -1` would turn it into a duplicate paragraph.
