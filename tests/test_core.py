@@ -80,7 +80,7 @@ class TestFindCommand:
 
         with patch("importlib.import_module", side_effect=mock_import):
             result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
-        assert result is fake_cmd
+        assert result.command is fake_cmd
 
     def test_explicit_cli_module_import_fails(self):
         """
@@ -116,7 +116,7 @@ class TestFindCommand:
             result = cli_click.find_command(
                 "mypkg", cli_module="mypkg.custom_cli", cli_name="mycmd"
             )
-        assert result is fake_cmd
+        assert result.command is fake_cmd
 
     def test_common_attr_names_found(self):
         """
@@ -135,7 +135,7 @@ class TestFindCommand:
 
         with patch("importlib.import_module", side_effect=mock_import):
             result = cli_click.find_command("mypkg", cli_module="mypkg.cli_mod", cli_name=None)
-        assert result is fake_group
+        assert result.command is fake_group
 
     def test_scan_all_attrs_fallback(self):
         """
@@ -154,7 +154,7 @@ class TestFindCommand:
 
         with patch("importlib.import_module", side_effect=mock_import):
             result = cli_click.find_command("mypkg", cli_module="mypkg.cli_mod", cli_name=None)
-        assert result is fake_cmd
+        assert result.command is fake_cmd
 
     def test_no_click_obj_found_returns_none(self):
         """
@@ -190,7 +190,7 @@ class TestFindCommand:
 
         with patch("importlib.import_module", side_effect=mock_import):
             result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
-        assert result is fake_cmd
+        assert result.command is fake_cmd
 
     def test_candidate_that_exits_on_import_is_skipped(self):
         """
@@ -210,7 +210,7 @@ class TestFindCommand:
 
         with patch("importlib.import_module", side_effect=mock_import):
             result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
-        assert result is fake_cmd
+        assert result.command is fake_cmd
 
     @pytest.mark.parametrize(
         "error",
@@ -1280,6 +1280,18 @@ class TestExtractOption:
         result = cli_click.extract_option(param)
         assert result["default"] is None
 
+    def test_choice_values_extracted(self):
+        param = click.Option(["--format"], type=click.Choice(["json", "yaml"]))
+        result = cli_click.extract_option(param)
+        assert result["choices"] == ["json", "yaml"]
+
+    def test_deprecation_message_extracted(self):
+        param = click.Option(["--old"], help="Old behaviour.", deprecated="Use --new instead.")
+        result = cli_click.extract_option(param)
+        assert result["deprecated"] == "Use --new instead."
+        # Removing Click's appended notice prevents the page from showing it twice.
+        assert result["help"] == "Old behaviour."
+
 
 class TestExtractArgument:
     def test_basic_argument(self):
@@ -1447,6 +1459,41 @@ class TestCommandPage:
         )
         result = cli_render.command_page(mock_config(lang="en"), cli_info, is_main=True)
         assert "TOKEN_A, TOKEN_B" in result
+
+    def test_choice_values_shown_as_type(self):
+        cli_info = self._make_cli_info(
+            options=[
+                {"names": ["--format"], "type": "CHOICE", "choices": ["json", "yaml"]},
+            ]
+        )
+        result = cli_render.command_page(mock_config(lang="en"), cli_info, is_main=True)
+        assert '<span class="doc-parameter-annotation">[json|yaml]</span>' in result
+
+    def test_deprecated_option_marked_with_message(self):
+        cli_info = self._make_cli_info(
+            options=[
+                {
+                    "names": ["--old"],
+                    "name_display": "--old",
+                    "deprecated": "Use --new instead.",
+                    "help": "Old behaviour.",
+                },
+            ]
+        )
+        result = cli_render.command_page(mock_config(lang="en"), cli_info, is_main=True)
+        assert ":   **Deprecated.** Use --new instead.\\\n    Old behaviour." in result
+
+    def test_deprecated_command_gets_warning_callout(self):
+        cli_info = self._make_cli_info(deprecated="Use `mycli run` instead.")
+        result = cli_render.command_page(mock_config(lang="en"), cli_info, is_main=True)
+        assert '::: {.callout-warning title="Deprecated"}\nUse `mycli run` instead.\n:::' in result
+
+    def test_argument_help_rendered(self):
+        cli_info = self._make_cli_info(
+            arguments=[{"name": "input", "required": True, "help": "The file to read."}]
+        )
+        result = cli_render.command_page(mock_config(lang="en"), cli_info, is_main=True)
+        assert ":   Required. The file to read." in result
 
     def test_parameter_markup_characters_escaped(self):
         # A clap option's name carries its value name, as in `--config <PATH>`.

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 from .._contribution import Contribution, NavbarLink, Sidebar, SidebarItem
 from .._translations import get_translation
 from .._website.navigation import navbar
-from .model import CliCommand
+from .model import CliArgument, CliCommand, CliOption
 
 if TYPE_CHECKING:
     from ..config import Config
@@ -325,9 +325,10 @@ def command_page(config: Config, cmd: CliCommand, is_main: bool = False) -> str:
     """
     Render the reference page of a command
 
-    The page has the layout of an API reference page: a labelled title, a short description, a
-    usage block, the extended description, the full `--help` output in a collapsed block, then
-    Arguments, Options, Commands and Examples sections for those the command has.
+    The page follows the API reference layout: a labelled title, a short description and a
+    warning callout for a deprecated command. It then shows usage, the extended description
+    and the full `--help` output in a collapsed block. Arguments, Options, Commands and
+    Examples sections follow when present.
 
     Parameters
     ----------
@@ -377,6 +378,16 @@ def command_page(config: Config, cmd: CliCommand, is_main: bool = False) -> str:
         short_desc = backtick_prose(short_desc, option_names)
         lines.append("::: {.doc-subject}")
         lines.append(short_desc)
+        lines.append(":::")
+        lines.append("")
+
+    deprecated = cmd.get("deprecated")
+    if deprecated:
+        # A warning callout, as API pages render a `deprecated` directive.
+        label = get_translation("status_label_deprecated", config.lang)
+        lines.append(f'::: {{.callout-warning title="{label}"}}')
+        if isinstance(deprecated, str):
+            lines.append(backtick_prose(deprecated.strip(), option_names))
         lines.append(":::")
         lines.append("")
 
@@ -459,7 +470,7 @@ def command_page(config: Config, cmd: CliCommand, is_main: bool = False) -> str:
         lines.append("::: {.doc-definition-items}")
         for arg in arguments:
             display = _html_text(arg.get("name_display", arg.get("name", "")).upper())
-            type_str = arg.get("type")
+            type_str = _type_text(arg)
             if type_str:
                 lines.append(
                     f'<code><span class="doc-parameter-name">{display}</span>'
@@ -468,8 +479,11 @@ def command_page(config: Config, cmd: CliCommand, is_main: bool = False) -> str:
                 )
             else:
                 lines.append(f'<code><span class="doc-parameter-name">{display}</span></code>')
-            req = "Required." if arg.get("required", True) else "Optional."
-            lines.append(f":   {req}")
+            arg_help = "Required." if arg.get("required", True) else "Optional."
+            if arg_text := arg.get("help", "").strip():
+                arg_help += " " + backtick_prose(arg_text, option_names)
+            arg_help = _mark_deprecated(arg_help, arg.get("deprecated"), config, option_names)
+            lines.append(f":   {arg_help}")
             lines.append("")
         lines.append(":::")
         lines.append("")
@@ -482,7 +496,7 @@ def command_page(config: Config, cmd: CliCommand, is_main: bool = False) -> str:
             if opt.get("hidden"):
                 continue
             name_display = opt.get("name_display", "")
-            type_str = opt.get("type")
+            type_str = _type_text(opt)
 
             # Pandoc's smart extension turns `--` into an en dash even inside inline HTML.
             name_display_html = _html_text(name_display).replace("--", "&#45;&#45;")
@@ -511,6 +525,7 @@ def command_page(config: Config, cmd: CliCommand, is_main: bool = False) -> str:
                     envvar = ", ".join(envvar)
                 help_str += f" Environment variable: `{envvar}`."
             help_str = backtick_prose(help_str.strip(), option_names)
+            help_str = _mark_deprecated(help_str, opt.get("deprecated"), config, option_names)
 
             lines.append(f":   {help_str}" if help_str else ":   &nbsp;")
             lines.append("")
@@ -570,6 +585,61 @@ def _html_text(text: str) -> str:
         `<PATH>` shows instead of parsing as a tag.
     """
     return html.escape(text, quote=False)
+
+
+def _type_text(param: CliOption | CliArgument) -> str | None:
+    """
+    Format a parameter's accepted values for display beside its name
+
+    Parameters
+    ----------
+    param
+        An option or argument.
+
+    Returns
+    -------
+    :
+        The choices in Click's usage notation, such as `[json|yaml]`, when choices are
+        non-empty; otherwise the parameter's type label, or `None` if absent.
+    """
+    choices = param.get("choices")
+    if choices:
+        return f"[{'|'.join(choices)}]"
+    return param.get("type")
+
+
+def _mark_deprecated(
+    text: str, deprecated: bool | str | None, config: Config, option_names: set[str]
+) -> str:
+    """
+    Prepend a deprecation notice to a parameter's description
+
+    Parameters
+    ----------
+    text
+        The parameter's formatted description.
+    deprecated
+        The deprecation status or Click's deprecation message.
+    config
+        The site configuration, which selects the notice's language.
+    option_names
+        The command's option flags to format as code in the notice.
+
+    Returns
+    -------
+    :
+        The unchanged description if the parameter is not deprecated. Otherwise, the bold
+        deprecation label in the site's language and any message, followed by the description
+        on a separate line if it is non-empty.
+    """
+    if not deprecated:
+        return text
+    notice = f"**{get_translation('status_label_deprecated', config.lang)}.**"
+    if isinstance(deprecated, str) and deprecated.strip():
+        notice += " " + backtick_prose(deprecated.strip(), option_names)
+    # A hard line break keeps the description separate in a tight definition list, even
+    # when the deprecation message has no final punctuation.
+    return f"{notice}\\\n    {text}" if text else notice
 
 
 def _yaml_string(text: str) -> str:
