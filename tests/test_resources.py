@@ -73,3 +73,19 @@ def test_lists_only_skill_md_without_well_known(tmp_path: Path):
 
     assert project["resources"] == ["logo.png", "_shared/**", "skill.md"]
     assert project["render"] == [*quarto_yml.RENDER_GLOBS, "!skill.md"]
+
+
+def test_lists_the_mcp_manifest_without_the_skill_files(tmp_path: Path):
+    _mkdir(tmp_path / "great-docs" / ".well-known", "mcp.json")
+
+    project = _register(tmp_path, NO_SKILL)
+
+    assert project["resources"] == ["logo.png", "_shared/**", ".well-known/mcp.json"]
+
+
+def test_lists_the_mcp_manifest_only_through_the_skill_glob(tmp_path: Path):
+    _mkdir(tmp_path / "great-docs" / ".well-known", "mcp.json")
+
+    project = _register(tmp_path, {})
+
+    assert project["resources"] == ["logo.png", "_shared/**", "skill.md", ".well-known/**"]
