@@ -7,6 +7,8 @@ for the root command, and one page per subcommand, nested in a directory per gro
 
 from __future__ import annotations
 
+import html
+import json
 import re
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -69,7 +71,7 @@ def write_pages(
     # The index lists every command, as the API reference index lists objects; the root
     # command's own `--help` goes on its own page.
     index_path = cli_ref_dir / "index.qmd"
-    _ = index_path.write_text(index_page(config, cli, entry_safe))
+    _ = index_path.write_text(index_page(config, cli, entry_safe), encoding="utf-8")
     # Label the index entry so it reads apart from the enclosing "CLI Reference" section title,
     # as the "API Index" link does.
     cli_index_label = get_translation("cli_index", config.lang)
@@ -77,7 +79,7 @@ def write_pages(
     generated_paths.append(str(index_path.relative_to(build_dir)))
 
     root_path = cli_ref_dir / f"{entry_safe}.qmd"
-    _ = root_path.write_text(command_page(config, cli, is_main=True))
+    _ = root_path.write_text(command_page(config, cli, is_main=True), encoding="utf-8")
     generated_files.append(f"reference/cli/{entry_safe}.qmd")
     generated_paths.append(str(root_path.relative_to(build_dir)))
 
@@ -163,7 +165,7 @@ def _write_subcommand_pages(
         safe_name = subcmd["name"].replace("-", "_")
         page_path = output_dir / f"{safe_name}.qmd"
 
-        _ = page_path.write_text(command_page(config, subcmd, is_main=False))
+        _ = page_path.write_text(command_page(config, subcmd, is_main=False), encoding="utf-8")
 
         rel_path = f"{rel_prefix}/{safe_name}.qmd"
         paths.append(str(page_path.relative_to(build_dir)))
@@ -209,7 +211,7 @@ def index_page(config: Config, cli: CliCommand, entry_safe: str) -> str:
     lines: list[str] = []
 
     lines.append("---")
-    lines.append(f'title: "{title}"')
+    lines.append(f"title: {_yaml_string(title)}")
     lines.append("body-classes: doc-reference doc-cli-reference")
     lines.append("sidebar: cli-reference")
     lines.append("page-navigation: false")
@@ -348,7 +350,8 @@ def command_page(config: Config, cmd: CliCommand, is_main: bool = False) -> str:
     label_class = "doc-label-cli-group" if cmd.get("is_group") else "doc-label-cli"
 
     lines.append("---")
-    lines.append(f'title: "[{title}]{{.doc-object-name .doc-function .doc-label .{label_class}}}"')
+    title_markup = f"[{title}]{{.doc-object-name .doc-function .doc-label .{label_class}}}"
+    lines.append(f"title: {_yaml_string(title_markup)}")
     lines.append("body-classes: doc-api-page doc-cli-api-page")
     lines.append("sidebar: cli-reference")
     lines.append("page-navigation: false")
@@ -455,13 +458,13 @@ def command_page(config: Config, cmd: CliCommand, is_main: bool = False) -> str:
         lines.append("")
         lines.append("::: {.doc-definition-items}")
         for arg in arguments:
-            display = arg.get("name_display", arg.get("name", "")).upper()
+            display = _html_text(arg.get("name_display", arg.get("name", "")).upper())
             type_str = arg.get("type")
             if type_str:
                 lines.append(
                     f'<code><span class="doc-parameter-name">{display}</span>'
                     f'<span class="doc-parameter-annotation-sep">:</span>'
-                    f' <span class="doc-parameter-annotation">{type_str}</span></code>'
+                    f' <span class="doc-parameter-annotation">{_html_text(type_str)}</span></code>'
                 )
             else:
                 lines.append(f'<code><span class="doc-parameter-name">{display}</span></code>')
@@ -482,19 +485,19 @@ def command_page(config: Config, cmd: CliCommand, is_main: bool = False) -> str:
             type_str = opt.get("type")
 
             # Pandoc's smart extension turns `--` into an en dash even inside inline HTML.
-            name_display_html = name_display.replace("--", "&#45;&#45;")
+            name_display_html = _html_text(name_display).replace("--", "&#45;&#45;")
 
             code_parts = [f'<span class="doc-parameter-name">{name_display_html}</span>']
             if type_str and not opt.get("is_flag"):
                 code_parts.append(
                     f'<span class="doc-parameter-annotation-sep">:</span>'
-                    f' <span class="doc-parameter-annotation">{type_str}</span>'
+                    f' <span class="doc-parameter-annotation">{_html_text(type_str)}</span>'
                 )
             default_val = opt.get("default")
             if default_val is not None and not opt.get("is_flag"):
                 code_parts.append(
                     f' <span class="doc-parameter-default-sep op">=</span>'
-                    f' <span class="doc-parameter-default">{default_val}</span>'
+                    f' <span class="doc-parameter-default">{_html_text(str(default_val))}</span>'
                 )
 
             lines.append(f"<code>{''.join(code_parts)}</code>")
@@ -549,6 +552,43 @@ def command_page(config: Config, cmd: CliCommand, is_main: bool = False) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def _html_text(text: str) -> str:
+    """
+    Escape text for the content of an HTML element
+
+    Parameters
+    ----------
+    text
+        Text from the command line, such as an option name or default.
+
+    Returns
+    -------
+    :
+        The text with `&`, `<` and `>` as character references, so that a value such as
+        `<PATH>` shows instead of parsing as a tag.
+    """
+    return html.escape(text, quote=False)
+
+
+def _yaml_string(text: str) -> str:
+    """
+    Quote text as a YAML scalar
+
+    Parameters
+    ----------
+    text
+        The text.
+
+    Returns
+    -------
+    :
+        A double-quoted scalar that YAML reads back as `text`, whatever quotes or backslashes it
+        holds.
+    """
+    # A JSON string is a valid YAML double-quoted scalar.
+    return json.dumps(text, ensure_ascii=False)
 
 
 def backtick_prose(text: str, option_names: set[str]) -> str:
