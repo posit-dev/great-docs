@@ -631,6 +631,25 @@ homepage: user_guide
 | `index` (default) | Separate homepage from README / `index.qmd`. "User Guide" appears as a navbar link. |
 | `user_guide` | First User Guide page becomes the landing page. Left sidebar shows the UG table of contents. Right sidebar shows project metadata. No separate "User Guide" navbar link. |
 
+### Homepage Front Matter
+
+In `index` mode, the homepage preserves its source file's front matter, including `execute`,
+`page-layout` and `format`. An explicit `toc` setting overrides the default of no table of contents.
+Great Docs adds `gd-homepage` to any `body-classes` the source sets. For example:
+
+```{.yaml filename="docs/index.qmd"}
+---
+title: My Package
+page-layout: full
+execute:
+  echo: false
+body-classes: wide
+---
+```
+
+The homepage uses a full-width layout, hides code and includes both `wide` and `gd-homepage`
+in its body classes.
+
 ### How `user_guide` Mode Works
 
 When `homepage: user_guide` is set:

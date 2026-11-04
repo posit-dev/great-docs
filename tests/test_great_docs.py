@@ -3295,6 +3295,21 @@ def test_index_qmd_keeps_source_description(key):
     assert set(fm) & {"description", "description-meta"} == {key}
 
 
+def test_index_qmd_keeps_source_front_matter():
+    """Check that the homepage retains page options, `toc` and existing body classes"""
+    source = (
+        "---\ntitle: Pkg\nexecute:\n  echo: false\npage-layout: full\ntoc: true\n"
+        "body-classes: wide gd-homepage\n---\n\nHello.\n"
+    )
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        fm = _homepage_from("index.qmd", source, tmp_dir)
+
+    assert fm["execute"] == {"echo": False}
+    assert fm["page-layout"] == "full"
+    assert fm["toc"] is True
+    assert fm["body-classes"] == "wide gd-homepage"
+
+
 def test_index_qmd_describes_itself_with_readme_first_paragraph():
     """The homepage takes its description from the README, not from the wrapper markup."""
     source = "# test\n\nThe `test` package adds numbers *quickly*.\n\n## Usage\n"

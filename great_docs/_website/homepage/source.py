@@ -37,13 +37,20 @@ NAMES = (*INDEX_NAMES, *README_NAMES)
 
 @dataclass(frozen=True, kw_only=True)
 class Source:
-    """The parts of an authored homepage source that the homepage keeps"""
+    """An authored homepage source with its front matter and Markdown body"""
 
     title: str
     """The source's front matter title, or `""` if it has none"""
 
     description: dict[str, YamlValue]
     """The source's search description keys, as they appear in its front matter"""
+
+    options: dict[str, YamlValue]
+    """
+    Page options other than the title and search descriptions
+
+    Keys such as `execute` and `page-layout` retain their source order.
+    """
 
     body: str
     """The Markdown after the front matter, without leading blank lines"""
@@ -72,10 +79,9 @@ def find(layout: Layout) -> list[Path]:
 
 def read(path: Path, *, report: Callable[[str], None]) -> Source:
     """
-    Read a homepage source file
+    Read a homepage source and separate its front matter from its body
 
-    A reStructuredText file is converted to Markdown first. Only the title and search
-    description keys are kept from the front matter.
+    Convert reStructuredText to Markdown before reading its front matter.
 
     Parameters
     ----------
@@ -87,7 +93,7 @@ def read(path: Path, *, report: Callable[[str], None]) -> Source:
     Returns
     -------
     :
-        The source's title, description keys and body.
+        The title, search description keys, remaining front matter entries and Markdown body.
     """
     if path.suffix.lower() == ".rst":
         content = rst_to_markdown(path, report=report)
@@ -98,6 +104,11 @@ def read(path: Path, *, report: Callable[[str], None]) -> Source:
         title=front_matter.string("title") or "",
         description={
             key: front_matter.get(key) for key in description.PAGE_KEYS if key in front_matter
+        },
+        options={
+            key: value
+            for key, value in front_matter.data.items()
+            if isinstance(key, str) and key != "title" and key not in description.PAGE_KEYS
         },
         body=body.lstrip("\n"),
     )
