@@ -36,6 +36,8 @@ _BADGE_HOSTS = (
 # [![alt](img_url)](link_url)
 _MD_BADGE = re.compile(r"\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)")
 _CENTRED_DIV = re.compile(r'^<div\s+align=["\']center["\']', re.IGNORECASE)
+_DIV_OPEN = re.compile(r"<div[\s>]", re.IGNORECASE)
+_DIV_CLOSE = re.compile(r"</div\s*>", re.IGNORECASE)
 _LINKED_IMG = re.compile(
     r'<a\s[^>]*href="([^"]+)"[^>]*>\s*<img\s[^>]*src="([^"]+)"[^>]*/?>\s*</a>',
     re.IGNORECASE,
@@ -99,8 +101,8 @@ def extract_hero_elements(markdown: str) -> HeroElements:
     Extract a README's badges, logo and tagline and remove the badge block
 
     Two layouts are recognised. In the first, a centred `<div>` holds the badges, perhaps with
-    a logo image and an italic tagline; the whole `<div>` is removed, and a `<div>` without
-    a closing `</div>` line is left in place. In the second, lines of
+    a logo image and an italic tagline; the whole `<div>`, up to its matching `</div>`, is
+    removed, and a `<div>` that never closes is left in place. In the second, lines of
     badges follow the first heading; those lines are removed and the heading is kept.
 
     Parameters
@@ -122,12 +124,9 @@ def extract_hero_elements(markdown: str) -> HeroElements:
         logo_url: str | None = None
         tagline: str | None = None
         div_end: int | None = None
+        depth = 1
         for j in range(i + 1, len(lines)):
             sline = lines[j].strip()
-            if sline == "</div>":
-                div_end = j
-                break
-
             for alt, img, url in _MD_BADGE.findall(sline):
                 if _is_badge(img):
                     div_badges.append(Badge(alt=alt, img=img, url=url))
@@ -141,6 +140,12 @@ def extract_hero_elements(markdown: str) -> HeroElements:
 
             if tagline is None and (italic := _ITALIC.match(sline)):
                 tagline = italic.group(1)
+
+            # Nested `<div>`s close before the centred one does
+            depth += len(_DIV_OPEN.findall(sline)) - len(_DIV_CLOSE.findall(sline))
+            if depth <= 0:
+                div_end = j
+                break
 
         if div_badges and div_end is not None:
             body = "\n".join(lines[:i] + lines[div_end + 1 :])
