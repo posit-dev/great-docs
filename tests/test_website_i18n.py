@@ -5,8 +5,13 @@ Translation bundle and text direction for non-English sites
 import html
 import json
 from pathlib import Path
+from typing import Any
 
-from great_docs._translations import get_translations_bundle
+from great_docs._translations import (
+    QUARTO_LANGUAGE_KEYS,
+    get_translation,
+    get_translations_bundle,
+)
 from great_docs._website import i18n
 from great_docs.config import Config
 from tests.support import write_config
@@ -77,3 +82,31 @@ class TestAddToRawPage:
         assert "dir=" not in i18n.add_to_raw_page(
             PAGE, write_config(tmp_path, "site:\n  lang: fr\n")
         )
+
+
+class TestRegisterTocTitle:
+    def test_title_follows_the_language(self, tmp_path: Path):
+        quarto_config = {"format": {"html": {"toc-title": "On this page"}}}
+        i18n.register_toc_title(quarto_config, write_config(tmp_path, "site:\n  lang: fr\n"))
+        assert quarto_config["format"]["html"]["toc-title"] == get_translation("on_this_page", "fr")
+
+    def test_site_title_wins(self, tmp_path: Path):
+        quarto_config = {"format": {"html": {"toc-title": "Contents"}}}
+        config = write_config(tmp_path, "site:\n  lang: fr\n  toc-title: Contents\n")
+        i18n.register_toc_title(quarto_config, config)
+        assert quarto_config["format"]["html"]["toc-title"] == "Contents"
+
+
+class TestRegisterQuartoStrings:
+    def test_untranslated_language_keeps_set_strings(self, tmp_path: Path):
+        quarto_config = {"language": {"ar": {"search-label": "Mine"}, "fr": {}}}
+        i18n.register_quarto_strings(quarto_config, write_config(tmp_path, "site:\n  lang: ar\n"))
+        strings = quarto_config["language"]["ar"]
+        assert strings["search-label"] == "Mine"
+        assert strings.keys() == QUARTO_LANGUAGE_KEYS.keys()
+        assert quarto_config["language"]["fr"] == {}
+
+    def test_translated_language_unchanged(self, tmp_path: Path):
+        quarto_config: dict[str, Any] = {}
+        i18n.register_quarto_strings(quarto_config, write_config(tmp_path, "site:\n  lang: fr\n"))
+        assert quarto_config == {}

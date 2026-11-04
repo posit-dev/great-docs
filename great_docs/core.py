@@ -63,6 +63,7 @@ from ._website import (
     page_status,
     page_url,
     prerender,
+    quarto_defaults,
     quarto_yml,
     scripts,
     social_cards,
@@ -2565,34 +2566,7 @@ class GreatDocs:
         """
         config = quarto_yml.read(self.build_dir)
 
-        config["project"]["output-dir"] = "_site"
-
-        # Build pre-render script list
-        pre_render_entries: list[str] = []
-
-        # Auto-inject restore-freeze when freeze is configured OR _freeze/ exists
-        freeze_mode = self._config.freeze
-        has_freeze_cache = self.layout.freeze_dir.is_dir()
-        if freeze_mode is not None or has_freeze_cache:
-            pre_render_entries.append("scripts/restore-freeze.py")
-
-        # Add user-provided pre-render scripts
-        for s in self._config.pre_render:
-            entry = f"scripts/{Path(s).name}"
-            if entry not in pre_render_entries:
-                pre_render_entries.append(entry)
-
-        if pre_render_entries:
-            if len(pre_render_entries) == 1:
-                config["project"]["pre-render"] = pre_render_entries[0]
-            else:
-                config["project"]["pre-render"] = pre_render_entries
-
-        # Add freeze configuration (execute: freeze:)
-        if freeze_mode is not None:
-            if "execute" not in config:
-                config["execute"] = {}
-            config["execute"]["freeze"] = freeze_mode
+        quarto_defaults.register(config, self._config, self.layout)
 
         # List the site's scripts and stylesheets as resources
         has_repository = self._get_github_repo_info()[0] is not None
@@ -2669,122 +2643,7 @@ class GreatDocs:
                 if "!.well-known/**" not in config["project"]["render"]:
                     config["project"]["render"].append("!.well-known/**")
 
-        # Site settings are a pure Quarto passthrough: the whole subtree
-        # (theme, toc, toc-depth, html-math-method defaults from
-        # great-docs.default.yml, plus any user format.html keys) merges into
-        # format.html. Legacy great-docs keys were normalized to the top level
-        # at load, and css is applied separately below.
-        config["format"]["html"] = Config._merge(config["format"]["html"], self._config.site_quarto)
-
-        # toc-title: use the translated label unless the user overrode it via
-        # site.toc-title. Test the user's `site` rather than the merged result —
-        # a label this method wrote on an earlier pass must be refreshed from the
-        # current language, not treated as an override.
-        if "toc-title" not in self._config.site_quarto:
-            from ._translations import get_translation
-
-            config["format"]["html"]["toc-title"] = get_translation(
-                "on_this_page", self._config.lang
-            )
-
-        # Disable Quarto's native code-copy — we supply our own via copy-code.js
-        config["format"]["html"]["code-copy"] = False
-
-        # Disable Quarto's built-in GLightbox — we supply gd-lightbox instead
-        config["lightbox"] = False
-
-        # Forward project-level bibliography/CSL from great-docs.yml. The files
-        # are copied into the build directory (see _prepare_build_directory), so
-        # the _quarto.yml keys reference them by basename.
-        bib_files = self._config.bibliography
-        if bib_files:
-            bib_names = [Path(b).name for b in bib_files]
-            config["bibliography"] = bib_names[0] if len(bib_names) == 1 else bib_names
-            print(f"Using bibliography: {', '.join(bib_names)}")
-            # Note: the auto-generated references heading is localized by Quarto
-            # itself from `format.html.lang` (`site.lang`), e.g. "Les références"
-            # for French. We deliberately do not set `reference-section-title`:
-            # under our `shift-heading-level-by: -1` it would be demoted to a
-            # stray <p> and duplicated alongside Quarto's appendix heading.
-        csl_path = self._config.csl
-        if csl_path:
-            config["csl"] = Path(csl_path).name
-
-        # Supply Quarto strings missing for the selected language.
-        # Scope these strings to the language selected by `lang` so other
-        # languages retain their own strings.
-        from ._translations import (
-            QUARTO_LANGUAGE_KEYS,
-            QUARTO_UNTRANSLATED_LANGUAGES,
-            get_translation,
-        )
-
-        lang = self._config.lang
-        if lang in QUARTO_UNTRANSLATED_LANGUAGES:
-            language = config.get("language")
-            if language is None:
-                language = config["language"] = {}
-            if isinstance(language, dict):
-                strings = language.setdefault(lang, {})
-                for quarto_key, key in QUARTO_LANGUAGE_KEYS.items():
-                    strings.setdefault(quarto_key, get_translation(key, lang))
-
-        # Disable Quarto's HTML table processing so that GT tables (and other
-        # pre-styled HTML tables) are not affected by Bootstrap striping/styles
-        config["format"]["html"]["html-table-processing"] = "none"
-
-        # Don't let Pandoc derive column widths from the dashes in a pipe
-        # table's separator line (it does so for tables with long lines); the
-        # browser and responsive-tables.js size columns from their content.
-        # Per-table `tbl-colwidths="[...]"` attributes still apply, and a
-        # site-level `tbl-colwidths` setting takes precedence.
-        if "tbl-colwidths" not in self._config.site_quarto:
-            config["format"]["html"]["tbl-colwidths"] = False
-
-        # Configure Mermaid diagrams - use 'default' (light) theme always
-        # We provide a light background container in dark mode via CSS
-        config["format"]["html"]["mermaid"] = {"theme": "default"}
-
-        if "great-docs.scss" not in config["format"]["html"]["theme"]:
-            if isinstance(config["format"]["html"]["theme"], str):
-                config["format"]["html"]["theme"] = [config["format"]["html"]["theme"]]
-            config["format"]["html"]["theme"].append("great-docs.scss")
-
-        # User-defined grammars must keep their order and survive repeated updates.
-        syntax_definitions = config["format"]["html"].get("syntax-definitions") or []
-        if isinstance(syntax_definitions, str):
-            syntax_definitions = [syntax_definitions]
-        if "pythonsignature.xml" not in syntax_definitions:
-            syntax_definitions.append("pythonsignature.xml")
-        config["format"]["html"]["syntax-definitions"] = syntax_definitions
-
-        # Add the custom CSS from site.css
-        css_files = self._config.css
-        if css_files:
-            config["format"]["html"]["css"] = [Path(c).name for c in css_files]
-
-        if "shift-heading-level-by" not in config["format"]["html"]:
-            config["format"]["html"]["shift-heading-level-by"] = -1
-
-        # Add Font Awesome for ORCID icon support
-        if "include-in-header" not in config["format"]["html"]:
-            config["format"]["html"]["include-in-header"] = []
-        elif isinstance(config["format"]["html"]["include-in-header"], str):
-            config["format"]["html"]["include-in-header"] = [
-                config["format"]["html"]["include-in-header"]
-            ]
-
-        # Merge user-provided include-in-header entries from great-docs.yml
-        for entry in self._config.include_in_header:
-            if isinstance(entry, dict) and isinstance(entry.get("file"), str):
-                source = self.layout.source_dir / entry["file"]
-                if not source.is_file():
-                    raise FileNotFoundError(f"Header include file not found: {source}")
-                destination = self.build_dir / "_includes" / source.name
-                publish.copy_asset(self.layout, source, destination)
-                entry = {**entry, "file": destination.relative_to(self.build_dir).as_posix()}
-            if entry not in config["format"]["html"]["include-in-header"]:
-                config["format"]["html"]["include-in-header"].append(entry)
+        quarto_defaults.register_site(config, self._config, self.layout, report=print)
 
         scripts.include_libraries(self._config, config)
 
@@ -3211,29 +3070,7 @@ class GreatDocs:
         # Show the latest GitHub release beside the navbar title
         brand.register_release(config, self._config, run.facts)
 
-        # Register Quarto extension filters (output-title wraps cell
-        # outputs in a titled container when #| output-title: is set)
-        if "filters" not in config:
-            config["filters"] = []
-        if "output-title" not in config["filters"]:
-            config["filters"].append("output-title")
-        if "details" not in config["filters"]:
-            config["filters"].append("details")
-        if "gd-lightbox" not in config["filters"]:
-            config["filters"].append("gd-lightbox")
-        if "interlinks" not in config["filters"]:
-            config["filters"].append("interlinks")
-
-        # Publish the inventory so other projects can link into this site.
-        project = config.setdefault("project", {})
-        resources = project.setdefault("resources", [])
-        if isinstance(resources, str):
-            resources = [resources]
-            project["resources"] = resources
-        from great_docs._interlinks.sphinx_inventory import INVENTORY_FILENAME
-
-        if INVENTORY_FILENAME not in resources:
-            resources.append(INVENTORY_FILENAME)
+        quarto_defaults.register_extensions(config)
 
         # Quarto renders page titles and translation metadata from this partial.
         metadata_partial.write(config, self._config, self.build_dir, report=print)
