@@ -14,6 +14,8 @@ from ..scripts import script_include
 from . import navbar as nav_navbar
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from ...config import Config
     from ..quarto_yml import Slot
 
@@ -28,24 +30,22 @@ _INDEX_PAGES: dict[Section, str] = {
     "mcp": "reference/mcp/index.qmd",
 }
 
+_OTHER_SECTIONS: tuple[Section, ...] = ("cli", "mcp")
+
 _SCRIPT = "reference-switcher.js"
 _SECTIONS_ATTRIBUTE = "data-gd-ref-sections"
 
 
 def register(
-    quarto_config: dict[str, Any],
-    config: Config,
-    *,
-    has_api_reference: bool,
-    has_mcp_reference: bool | None,
+    quarto_config: dict[str, Any], config: Config, build_dir: Path, *, has_api_reference: bool
 ) -> None:
     """
     Add the reference switcher when the site has a CLI or MCP reference
 
-    The switcher offers the API reference when present, the CLI reference when a
-    command-line interface is enabled and the MCP reference when available.
-    `ref_section_order` sets their order. If the first section is not the API reference,
-    the navbar's Reference link opens that section's index page.
+    The switcher offers the API reference when present and the CLI and MCP references
+    whose index pages exist in the build directory. `ref_section_order` sets their order.
+    If the first section is not the API reference, the navbar's Reference link opens that
+    section's index page.
 
     When the site has no CLI or MCP reference, entries added by an earlier call are
     removed.
@@ -56,11 +56,10 @@ def register(
         Contents of `_quarto.yml`, updated in place.
     config
         Project configuration.
+    build_dir
+        The Quarto project directory.
     has_api_reference
         Whether the site has an API reference.
-    has_mcp_reference
-        Whether the build wrote MCP reference pages, or `None` to assume pages will be
-        written when MCP is enabled.
 
     Returns
     -------
@@ -69,12 +68,10 @@ def register(
     available: list[Section] = []
     if has_api_reference:
         available.append("api")
-    if config.cli_enabled or config.go_cli_enabled or config.rust_cli_enabled:
-        available.append("cli")
-    if config.mcp_enabled if has_mcp_reference is None else has_mcp_reference:
-        available.append("mcp")
-
-    if available in ([], ["api"]):
+    available.extend(
+        section for section in _OTHER_SECTIONS if (build_dir / _INDEX_PAGES[section]).is_file()
+    )
+    if all(section == "api" for section in available):
         _remove(quarto_config)
         return
 
@@ -93,10 +90,13 @@ def register(
     }
     headers = quarto_yml.includes(quarto_config, "include-in-header")
     position = quarto_yml.find(headers, _SECTIONS_ATTRIBUTE)
-    if position is None:
-        headers.append(attribute_script)
-    else:
+    if position is not None:
         headers[position] = attribute_script
+    else:
+        # Reference pages are written after the header. Inserting the sections script
+        # after the theme script preserves the load order across configuration writes.
+        theme = quarto_yml.find(headers, "theme-init.js")
+        headers.insert(len(headers) if theme is None else theme + 1, attribute_script)
 
     quarto_yml.add_include(
         quarto_config,

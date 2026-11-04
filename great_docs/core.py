@@ -2757,13 +2757,8 @@ class GreatDocs:
         # Add (or remove) the wide layout toggle
         self._configure_wide_layout(config, metadata.get("wide_layout"))
 
-        # MCP discovery has not run on the first pass. Enabled MCP references are
-        # assumed to have pages.
         reference_switcher.register(
-            config,
-            self._config,
-            has_api_reference=run.has_api_reference,
-            has_mcp_reference=run.mcp_pages_generated,
+            config, self._config, self.build_dir, has_api_reference=run.has_api_reference
         )
 
         # Add navigation icons (Lucide SVG) if configured
@@ -3565,14 +3560,10 @@ class GreatDocs:
         """
         Write reference pages and a discovery manifest for the project's MCP server
 
-        If generation writes no pages or raises a handled exception, the build records
-        that it has no MCP reference.
-
         Parameters
         ----------
         run
-            The current build, which supplies the package name and records whether MCP pages
-            were generated.
+            The current build, which supplies the package name.
 
         Returns
         -------
@@ -3581,34 +3572,27 @@ class GreatDocs:
         """
         if not self._config.mcp_enabled:
             return Skipped("MCP not enabled")
-        try:
-            mcp_package = (
-                self._resolve_importable_name(run.package_name)
-                if run.package_name
-                else self._detect_module_name()
-            )
-            from ._mcpref import build as mcp_build
+        mcp_package = (
+            self._resolve_importable_name(run.package_name)
+            if run.package_name
+            else self._detect_module_name()
+        )
+        from ._mcpref import build as mcp_build
 
-            mcp_info = mcp_build.discover_server(self._config, mcp_package)
-            if not mcp_info:
-                run.mcp_pages_generated = False
-                return Skipped("no MCP server found")
-            package_name = self._detect_package_name()
-            owner, repo, _ = self._get_github_repo_info()
-            repo_url = f"https://github.com/{owner}/{repo}" if owner and repo else None
-            mcp_files = mcp_build.build_mcp_reference(
-                self._config, mcp_info, self.build_dir, package_name, repo_url
-            )
-            if not mcp_files:
-                run.mcp_pages_generated = False
-                return "No MCP pages generated"
-            run.mcp_pages_generated = True
-            with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
-                quarto_yml.apply(quarto_config, mcp_build.contribution(self._config, mcp_files))
-            print(f"Updated sidebar with {cli_render.count_pages(mcp_files)} MCP reference page(s)")
-        except USER_CODE_ERRORS:
-            run.mcp_pages_generated = False
-            raise
+        mcp_info = mcp_build.discover_server(self._config, mcp_package)
+        if not mcp_info:
+            return Skipped("no MCP server found")
+        package_name = self._detect_package_name()
+        owner, repo, _ = self._get_github_repo_info()
+        repo_url = f"https://github.com/{owner}/{repo}" if owner and repo else None
+        mcp_files = mcp_build.build_mcp_reference(
+            self._config, mcp_info, self.build_dir, package_name, repo_url
+        )
+        if not mcp_files:
+            return "No MCP pages generated"
+        with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+            quarto_yml.apply(quarto_config, mcp_build.contribution(self._config, mcp_files))
+        print(f"Updated sidebar with {cli_render.count_pages(mcp_files)} MCP reference page(s)")
         return f"{len(mcp_info.get('tools', []))} MCP tool page(s) + manifest"
 
     def _step_user_guide(self, run: Run) -> Outcome:
