@@ -13,7 +13,13 @@ import json
 import re
 from typing import TYPE_CHECKING, Any, cast
 
-from .._translations import get_translations_bundle, is_rtl
+from .._translations import (
+    QUARTO_LANGUAGE_KEYS,
+    QUARTO_UNTRANSLATED_LANGUAGES,
+    get_translation,
+    get_translations_bundle,
+    is_rtl,
+)
 from . import head
 
 if TYPE_CHECKING:
@@ -41,6 +47,61 @@ def register(quarto_config: dict[str, Any], config: Config) -> None:
     html_config = quarto_config.get("format", {}).get("html")
     if isinstance(html_config, dict) and is_rtl(config.lang):
         cast("dict[str, Any]", html_config).setdefault("dir", "rtl")
+
+
+def register_toc_title(quarto_config: dict[str, Any], config: Config) -> None:
+    """
+    Set the table-of-contents title in the site's language
+
+    A title configured in `site.toc-title` takes precedence. Otherwise, each
+    update replaces the title with the translation for the current `lang`.
+
+    Parameters
+    ----------
+    quarto_config
+        Contents of `_quarto.yml`, updated in place. It must have a
+        `format.html` mapping.
+    config
+        Project configuration.
+
+    Returns
+    -------
+    :
+    """
+    if "toc-title" not in config.site_quarto:
+        html_config = cast("dict[str, Any]", quarto_config["format"]["html"])
+        html_config["toc-title"] = get_translation("on_this_page", config.lang)
+
+
+def register_quarto_strings(quarto_config: dict[str, Any], config: Config) -> None:
+    """
+    Supply interface strings for languages Quarto does not translate
+
+    For a language without a Quarto translation, Great Docs' strings fill
+    missing entries under `language.<lang>`. Existing entries and other
+    languages are preserved. A non-mapping `language` value is unchanged.
+
+    Parameters
+    ----------
+    quarto_config
+        Contents of `_quarto.yml`, updated in place.
+    config
+        Project configuration.
+
+    Returns
+    -------
+    :
+    """
+    lang = config.lang
+    if lang not in QUARTO_UNTRANSLATED_LANGUAGES:
+        return
+    language = quarto_config.get("language")
+    if language is None:
+        language = quarto_config["language"] = {}
+    if isinstance(language, dict):
+        strings = cast("dict[str, Any]", language).setdefault(lang, {})
+        for quarto_key, key in QUARTO_LANGUAGE_KEYS.items():
+            strings.setdefault(quarto_key, get_translation(key, lang))
 
 
 def meta_tag(config: Config) -> str | None:
