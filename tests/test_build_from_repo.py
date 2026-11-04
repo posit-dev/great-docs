@@ -9,6 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from great_docs._build import from_repo, serve
+from great_docs._layout import Layout
 from great_docs.cli import cli
 from great_docs.core import GreatDocs
 
@@ -160,6 +161,52 @@ def test_clone_without_branch():
         clone_call = mock_run.call_args_list[0]
         cmd = clone_call[0][0]
         assert "--branch" not in cmd
+
+
+@pytest.fixture
+def stub_remote_build(monkeypatch):
+    """
+    Replace the clone, installation and inner build with a site holding one page
+
+    The page's text is the value of `pages[0]` when the inner build runs, so a test can tell
+    one build's site from another's.
+    """
+    pages = ["first"]
+
+    def clone(repo_url, checkout, **kwargs):
+        checkout.mkdir(parents=True)
+        layout = Layout.make(checkout, None)
+        layout.site_dir.mkdir(parents=True)
+        (layout.site_dir / "index.html").write_text(pages[0])
+        return layout
+
+    monkeypatch.setattr(from_repo, "_clone", clone)
+    monkeypatch.setattr(from_repo, "_install", lambda checkout, env, report: env / "bin")
+    monkeypatch.setattr(subprocess, "run", MagicMock(return_value=MagicMock(returncode=0)))
+    return pages
+
+
+def test_build_refuses_to_replace_a_directory_it_did_not_write(tmp_path, stub_remote_build):
+    """Refuse an existing directory of the user's files before building, and keep the files"""
+    (tmp_path / "pyproject.toml").write_text("[project]\n")
+
+    with pytest.raises(ValueError, match="not Great Docs-generated output"):
+        from_repo.build("https://github.com/x/y.git", output_dir=str(tmp_path), report=print)
+
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["pyproject.toml"]
+    assert not subprocess.run.called
+
+
+def test_build_replaces_its_own_earlier_output(tmp_path, stub_remote_build):
+    """Fill an empty directory, then replace that site on the next build"""
+    output = tmp_path / "site"
+    output.mkdir()
+    from_repo.build("https://github.com/x/y.git", output_dir=str(output), report=print)
+    stub_remote_build[0] = "second"
+
+    from_repo.build("https://github.com/x/y.git", output_dir=str(output), report=print)
+
+    assert (output / "index.html").read_text() == "second"
 
 
 def test_from_repo_cli_passes_flags():
