@@ -91,6 +91,10 @@ def register_site(
     user's `include_in_header` entries. The user's `site.tbl-colwidths` and
     any existing heading shift take precedence over the corresponding defaults.
 
+    The Great Docs theme is inserted before the first user stylesheet, or
+    after all built-in themes if there are no stylesheets. An existing Great
+    Docs theme entry keeps its position.
+
     Parameters
     ----------
     quarto_config
@@ -151,10 +155,13 @@ def register_site(
     # Dark mode puts diagrams on a light background, so one theme serves both.
     html["mermaid"] = {"theme": "default"}
 
+    # Later Quarto theme entries take precedence. User styles override Great
+    # Docs, which overrides preceding built-in themes.
     theme = cast("str | list[Any]", html["theme"])
     if "great-docs.scss" not in theme:
-        themes = [theme] if isinstance(theme, str) else theme
-        themes.append("great-docs.scss")
+        themes = [theme] if isinstance(theme, str) else list(theme)
+        files = (i for i, entry in enumerate(themes) if _is_style_file(entry))
+        themes.insert(next(files, len(themes)), "great-docs.scss")
         html["theme"] = themes
 
     grammars = cast("str | list[Any]", html.get("syntax-definitions") or [])
@@ -253,3 +260,20 @@ def _site_includes(config: Config) -> dict[str, list[Any]]:
         if value is not None:
             includes[key] = list(cast("list[Any]", value)) if isinstance(value, list) else [value]
     return includes
+
+
+def _is_style_file(theme: object) -> bool:
+    """
+    Check whether a theme entry names a `.scss` or `.css` file
+
+    Parameters
+    ----------
+    theme
+        One entry of `format.html.theme`.
+
+    Returns
+    -------
+    :
+        `True` for a string with a `.scss` or `.css` suffix; `False` otherwise.
+    """
+    return isinstance(theme, str) and Path(theme).suffix in (".scss", ".css")

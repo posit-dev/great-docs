@@ -77,6 +77,25 @@ class TestRegisterSite:
         assert html["shift-heading-level-by"] == -1
         assert reports == []
 
+    @pytest.mark.parametrize(
+        ("themes", "expected"),
+        [
+            ("[cosmo, custom.scss]", ["cosmo", "great-docs.scss", "custom.scss"]),
+            ("[custom.scss]", ["great-docs.scss", "custom.scss"]),
+            ("[cosmo, a.scss, b.css]", ["cosmo", "great-docs.scss", "a.scss", "b.css"]),
+            ("[cosmo, great-docs.scss, custom.scss]", ["cosmo", "great-docs.scss", "custom.scss"]),
+        ],
+    )
+    def test_users_style_files_follow_great_docs_theme(
+        self, tmp_path: Path, themes: str, expected: list[str]
+    ):
+        config = write_config(tmp_path, f"site:\n  theme: {themes}\n")
+        layout = Layout.make(tmp_path)
+        quarto_config = _initial()
+        for _ in range(2):
+            quarto_defaults.register_site(quarto_config, config, layout, report=print)
+            assert quarto_config["format"]["html"]["theme"] == expected
+
     def test_site_table_widths_win(self, tmp_path: Path):
         quarto_config, _ = _register_site(tmp_path, "site:\n  tbl-colwidths: auto\n")
         assert quarto_config["format"]["html"]["tbl-colwidths"] == "auto"
