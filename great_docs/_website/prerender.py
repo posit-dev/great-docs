@@ -9,6 +9,9 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from yaml12 import format_yaml
+
+from .._yaml import YamlMapping, locate_front_matter
 from . import page_metadata, quarto_yml
 
 if TYPE_CHECKING:
@@ -18,7 +21,10 @@ if TYPE_CHECKING:
     from .seo.structured_data import StructuredData
 
 # Only column 0 matches, so nested `freeze:` keys remain unchanged.
-_FREEZE_KEY_RE = re.compile(r"^freeze:\s+(.+)$", re.MULTILINE)
+_FREEZE_LINE_RE = re.compile(r"^freeze:.*\n", re.MULTILINE)
+_EXECUTE_LINE_RE = re.compile(r"^execute:[ \t]*(.*)$", re.MULTILINE)
+# The indentation of the first entry after a line, skipping blank and comment lines
+_ENTRY_INDENT_RE = re.compile(r"\n(?:[ \t]*(?:#.*)?\n)*([ \t]+)\S")
 
 
 def expand_freeze_shorthand(project_dir: Path) -> list[str]:
@@ -26,8 +32,10 @@ def expand_freeze_shorthand(project_dir: Path) -> list[str]:
     Rewrite each page's top-level `freeze:` key as `execute: freeze:`
 
     Great Docs accepts `freeze: auto` and `freeze: true` in page front matter. Quarto reads
-    the setting only under `execute:`. Add the setting after an existing standalone
-    `execute:` line, or create a new block if there is no such line.
+    the setting only under `execute:`. The setting joins an existing `execute:` mapping in
+    either block or flow style, or a new block when the page has none. A page whose
+    `execute:` already sets `freeze` keeps that value and loses the shorthand. The rest of
+    the page keeps its text.
 
     Parameters
     ----------
@@ -42,36 +50,64 @@ def expand_freeze_shorthand(project_dir: Path) -> list[str]:
     modified: list[str] = []
     for qmd in project_dir.rglob("*.qmd"):
         content = qmd.read_text(encoding="utf-8")
-        if not content.startswith("---"):
+        block = locate_front_matter(content)
+        if block is None or "freeze" not in block.mapping:
             continue
 
-        parts = content.split("---", 2)
-        if len(parts) < 3:
+        front_matter = _nest_freeze(content[: block.end], block.mapping)
+        if front_matter is None:
             continue
 
-        frontmatter = parts[1]
-        m = _FREEZE_KEY_RE.search(frontmatter)
-        if not m:
-            continue
-
-        freeze_value = m.group(1).strip()
-        new_frontmatter = frontmatter[: m.start()] + frontmatter[m.end() :]
-
-        exec_match = re.search(r"^execute:\s*$", new_frontmatter, re.MULTILINE)
-        if exec_match:
-            insert_pos = exec_match.end()
-            new_frontmatter = (
-                new_frontmatter[:insert_pos]
-                + f"\n  freeze: {freeze_value}"
-                + new_frontmatter[insert_pos:]
-            )
-        else:
-            new_frontmatter = new_frontmatter.rstrip() + f"\nexecute:\n  freeze: {freeze_value}\n"
-
-        _ = qmd.write_text(f"---{new_frontmatter}---{parts[2]}", encoding="utf-8")
+        _ = qmd.write_text(front_matter + content[block.end :], encoding="utf-8")
         modified.append(str(qmd.relative_to(project_dir)))
 
     return modified
+
+
+def _nest_freeze(front_matter: str, mapping: YamlMapping) -> str | None:
+    """
+    Move a top-level `freeze` setting under `execute`
+
+    Parameters
+    ----------
+    front_matter
+        The page's front matter, from the opening `---` line to the end of the closing one.
+    mapping
+        The parsed front matter, which has a top-level `freeze` key.
+
+    Returns
+    -------
+    :
+        The rewritten front matter, or `None` when the `freeze` line cannot be found or
+        `execute` holds something other than a mapping.
+    """
+    freeze = format_yaml(mapping.get("freeze"))
+    text, count = _FREEZE_LINE_RE.subn("", front_matter, count=1)
+    if count == 0:
+        return None
+
+    if "execute" not in mapping:
+        closing = text.rindex("\n---") + 1
+        return f"{text[:closing]}execute:\n  freeze: {freeze}\n{text[closing:]}"
+
+    execute = mapping.get("execute")
+    if isinstance(execute, dict) and "freeze" in execute:
+        return text
+    line = _EXECUTE_LINE_RE.search(text)
+    if line is None or not (execute is None or isinstance(execute, dict)):
+        return None
+
+    value = line.group(1)
+    if value.startswith("{"):
+        brace = line.start(1) + 1
+        separator = ", " if execute else ""
+        return f"{text[:brace]}freeze: {freeze}{separator}{text[brace:]}"
+    if value and not value.startswith("#"):
+        return None
+
+    indent = _ENTRY_INDENT_RE.match(text, line.end()) if execute else None
+    entry = f"\n{indent.group(1) if indent else '  '}freeze: {freeze}"
+    return text[: line.end()] + entry + text[line.end() :]
 
 
 def write_page_metadata(

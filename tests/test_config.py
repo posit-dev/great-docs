@@ -1007,22 +1007,44 @@ class TestExpandFreezeShorthand:
         assert modified == []
         assert qmd.read_text() == original
 
-    def test_existing_execute_block_gets_freeze_added(self, tmp_path: Path):
+    @pytest.mark.parametrize(
+        ("execute", "expected"),
+        [
+            pytest.param(
+                "execute:\n  echo: false\n",
+                "execute:\n  freeze: auto\n  echo: false\n",
+                id="block",
+            ),
+            pytest.param(
+                "execute:\n    echo: false\n",
+                "execute:\n    freeze: auto\n    echo: false\n",
+                id="block-four-spaces",
+            ),
+            pytest.param(
+                "execute: {echo: false}\n",
+                "execute: {freeze: auto, echo: false}\n",
+                id="flow",
+            ),
+            pytest.param("execute: {}\n", "execute: {freeze: auto}\n", id="empty-flow"),
+        ],
+    )
+    def test_existing_execute_gains_freeze(self, tmp_path: Path, execute: str, expected: str):
         qmd = tmp_path / "page.qmd"
-        qmd.write_text("---\ntitle: Test\nexecute:\n  echo: false\nfreeze: auto\n---\n\n# Hi\n")
+        qmd.write_text(f"---\ntitle: Test\n{execute}freeze: auto\n---\n\n# Hi\n")
 
         modified = prerender.expand_freeze_shorthand(tmp_path)
 
-        assert len(modified) == 1
-        result = qmd.read_text()
-        # `freeze: auto` joins the existing `execute:` block, which keeps its settings
-        assert "execute:" in result
-        assert "  freeze: auto" in result
-        assert "  echo: false" in result
-        # The top-level `freeze:` line is gone
-        lines = result.split("---")[1].strip().split("\n")
-        top_level_freeze = [line for line in lines if line == "freeze: auto"]
-        assert top_level_freeze == []
+        assert modified == ["page.qmd"]
+        assert qmd.read_text() == f"---\ntitle: Test\n{expected}---\n\n# Hi\n"
+
+    def test_existing_execute_freeze_wins(self, tmp_path: Path):
+        qmd = tmp_path / "page.qmd"
+        qmd.write_text("---\nfreeze: auto\nexecute: {freeze: false}\n---\n\n# Hi\n")
+
+        modified = prerender.expand_freeze_shorthand(tmp_path)
+
+        assert modified == ["page.qmd"]
+        assert qmd.read_text() == "---\nexecute: {freeze: false}\n---\n\n# Hi\n"
 
     def test_multiple_files(self, tmp_path: Path):
         subdir = tmp_path / "user-guide"
