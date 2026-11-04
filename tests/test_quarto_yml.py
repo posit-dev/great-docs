@@ -21,23 +21,13 @@ def test_write_adds_generated_header(tmp_path: Path):
     assert parse_yaml(text) == {"project": {"type": "website"}}
 
 
-def test_write_translates_generated_navbar_labels(tmp_path: Path):
+def test_write_keeps_navbar_labels_on_a_translated_site(tmp_path: Path):
+    """Leave a user's English label as written; Great Docs translates its own when it makes them"""
     config = write_config(tmp_path, {"site": {"lang": "de"}})
     navbar = {
-        "left": [{"text": "User Guide", "href": "user-guide/"}, {"text": "Blog", "href": "blog/"}],
+        "left": [{"text": "Reference", "href": "https://example.com/api"}],
         "right": [{"text": "Changelog", "href": "changelog.qmd"}],
     }
-
-    quarto_yml.write(tmp_path, {"website": {"navbar": navbar}}, config)
-
-    written = quarto_yml.read(tmp_path)["website"]["navbar"]
-    assert [item["text"] for item in written["left"]] == ["Benutzerhandbuch", "Blog"]
-    assert [item["text"] for item in written["right"]] == ["Änderungsprotokoll"]
-
-
-def test_write_keeps_english_labels(tmp_path: Path):
-    config = write_config(tmp_path)
-    navbar = {"left": [{"text": "Reference", "href": "reference/"}]}
 
     quarto_yml.write(tmp_path, {"website": {"navbar": navbar}}, config)
 

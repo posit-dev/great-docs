@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from .._contribution import Contribution, NavbarLink
 from .._translations import get_translation
 from . import page_dates
+from .navigation import navbar
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -70,8 +71,8 @@ def write_page(
     Returns
     -------
     :
-        A contribution containing the page's navbar link, or `None` if the repository has
-        no releases. No page is written in that case.
+        A contribution with a navbar link labelled in the site's language, or `None`
+        if the repository has no releases. No page is written in that case.
     """
     if max_releases is None:
         max_releases = config.changelog_max_releases
@@ -105,7 +106,7 @@ def write_page(
     page = build_dir / FILENAME
     _ = page.write_text("\n".join(lines), encoding="utf-8")
     report(f"Created {page}")
-    return Contribution(navbar=(NavbarLink(text="Changelog", href=FILENAME),))
+    return Contribution(navbar=(NavbarLink(text=navbar.CHANGELOG.label(config), href=FILENAME),))
 
 
 def _release_lines(release: Mapping[str, Any], repo: GithubRepo) -> list[str]:

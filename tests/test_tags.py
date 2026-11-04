@@ -718,10 +718,7 @@ class TestStepTags:
         _ = docs._step_tags()
 
         left = quarto_yml.read(docs.build_dir)["website"]["navbar"]["left"]
-        assert left == [
-            {"text": "Étiquettes", "href": "tags/index.qmd"},
-            {"text": "Référence", "href": "reference/index.qmd"},
-        ]
+        assert left == [{"text": "Étiquettes", "href": "tags/index.qmd"}, REFERENCE]
 
     def test_skips_without_tagged_pages(self, tmp_path: Path):
         """Report a skipped step when the project has no tagged pages"""

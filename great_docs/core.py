@@ -1157,7 +1157,7 @@ class GreatDocs:
                     shutil.copytree(item, destination)
 
             published = sections.publish(
-                section, layout=self.layout, pages=pages, add_dates=add_dates
+                section, config=self._config, layout=self.layout, pages=pages, add_dates=add_dates
             )
             if not section.blog:
                 self._copy_directory_metadata(
@@ -1176,7 +1176,9 @@ class GreatDocs:
                     ),
                     published.sidebar,
                 ]
-            if nav_navbar.add_link(quarto_config, published.navbar, after=published.navbar_after):
+            if nav_navbar.add_link(
+                quarto_config, published.navbar, self._config, after=published.navbar_after
+            ):
                 changed = True
             if changed:
                 quarto_yml.write(self.build_dir, quarto_config, self._config)
@@ -1263,10 +1265,9 @@ class GreatDocs:
             report=report,
         )
         # A page's `navbar_after` names a label, which a `Contribution` cannot express.
-        # Each link is written before the next is placed, as the write translates labels.
         for link, after in published.navbar:
             quarto_config = quarto_yml.read(self.build_dir, seed_website=True)
-            if nav_navbar.add_link(quarto_config, link, after=after):
+            if nav_navbar.add_link(quarto_config, link, self._config, after=after):
                 quarto_yml.write(self.build_dir, quarto_config, self._config)
         self._add_project_resources(published.resources, published.render_excludes)
         return published.pages
@@ -1355,15 +1356,15 @@ class GreatDocs:
         navbar = config.get("website", {}).get("navbar", {})
         left = navbar.get("left", [])
         has_ref = any(
-            isinstance(item, dict)
-            and (
-                item.get("text") in ("Reference", "CLI Reference")
-                or (item.get("href") or "").startswith("reference/")
-            )
-            for item in left
+            isinstance(item, dict) and nav_navbar.REFERENCE.owns(item.get("href")) for item in left
         )
         if not has_ref:
-            left.append({"text": "Reference", "href": "reference/cli/index.qmd"})
+            left.append(
+                {
+                    "text": nav_navbar.REFERENCE.label(self._config),
+                    "href": "reference/cli/index.qmd",
+                }
+            )
             navbar["left"] = left
             config["website"]["navbar"] = navbar
             quarto_yml.write(self.build_dir, config, self._config)
@@ -1690,14 +1691,20 @@ class GreatDocs:
                     isinstance(item, dict) and item.get("href") == href for item in navbar["left"]
                 )
                 if not has_user_guide:
-                    # Find the position before "Reference"
-                    insert_idx = 0  # Default: beginning of navbar
-                    for i, item in enumerate(navbar["left"]):
-                        if isinstance(item, dict) and item.get("text") == "Reference":
-                            insert_idx = i
-                            break
-
-                    navbar["left"].insert(insert_idx, {"text": "User Guide", "href": href})
+                    # The User Guide link precedes Reference, or goes first if Reference is absent.
+                    insert_idx = next(
+                        (
+                            i
+                            for i, item in enumerate(navbar["left"])
+                            if isinstance(item, dict)
+                            and nav_navbar.REFERENCE.owns(item.get("href"))
+                        ),
+                        0,
+                    )
+                    navbar["left"].insert(
+                        insert_idx,
+                        {"text": nav_navbar.USER_GUIDE.label(self._config), "href": href},
+                    )
 
         quarto_yml.write(self.build_dir, config, self._config)
 
@@ -2578,6 +2585,9 @@ class GreatDocs:
             mapping = nav_icons.get(scope, {})  # pragma: no cover
             if not mapping:  # pragma: no cover
                 continue  # pragma: no cover
+            if scope == "navbar":
+                # Icon lookup uses the displayed label, so translated labels need keys too.
+                mapping = nav_navbar.icon_labels(mapping, self._config)
             scope_resolved: dict[str, str] = {}  # pragma: no cover
             for label, icon_name in mapping.items():  # pragma: no cover
                 svg = get_icon_svg(icon_name)  # pragma: no cover
