@@ -200,6 +200,7 @@ include = [
     "great_docs/_subprocess.py",
     "great_docs/_term_player/prerender.py",
     "great_docs/_translations.py",
+    "great_docs/_versions/selector.py",
     "great_docs/_website",
     "great_docs/_yaml.py",
     "great_docs/config.py",

@@ -51,6 +51,7 @@ from ._utils import (
     GITIGNORE_CONTENT,
     record_site_ownership,
 )
+from ._versions import selector as version_selector
 from ._website import (
     branding,
     changelog,
@@ -3796,74 +3797,13 @@ class GreatDocs:
         # Apply explicit navbar ordering from config (if set)
         nav_navbar.reorder(config, self._config)
 
+        if self._config.has_versions:
+            version_selector.register(config, self._config)
+
         # Write back to file
         quarto_yml.write(self.build_dir, config, self._config)
 
-        # Inject version selector widget if multi-version is enabled
-        if self._config.has_versions:
-            self._inject_version_selector()
-
         print(f"Updated {quarto_yml.path(self.build_dir)} with great-docs configuration")
-
-    def _inject_version_selector(self) -> None:
-        """
-        Add the version selector widget to the Quarto configuration
-
-        Include `version-selector.js` and a `<meta name="gd-version-map">` tag with
-        the serialised `_version_map.json` data so the widget can resolve versions
-        in the browser.
-        """
-        import html as html_mod
-
-        from great_docs._versions.model import build_version_map, parse_versions_config
-
-        with quarto_yml.edit(self.build_dir, self._config) as config:
-            versions = parse_versions_config(self._config.versions)
-
-            # Page lists are populated later in the build.
-            version_map = build_version_map(versions, {v.tag: [] for v in versions})
-
-            # Serialise the version map as a meta tag in the header.
-            version_map_json = html_mod.escape(json.dumps(version_map, separators=(",", ":")))
-            version_meta = f'<meta name="gd-version-map" content="{version_map_json}">'
-
-            header_list = config["format"]["html"].setdefault("include-in-header", [])
-            if isinstance(header_list, str):
-                header_list = [header_list]
-                config["format"]["html"]["include-in-header"] = header_list
-            # Replace version map metadata from the previous build.
-            header_list[:] = [h for h in header_list if "gd-version-map" not in str(h)]
-            header_list.append({"text": version_meta})
-
-            # Record when the version warning banner is disabled.
-            if not self._config.version_warning_banner:
-                banner_meta = '<meta name="gd-version-warning-banner" content="false">'
-                header_list[:] = [
-                    h for h in header_list if "gd-version-warning-banner" not in str(h)
-                ]
-                header_list.append({"text": banner_meta})
-
-            # Load `version-selector.js` before `navbar-widgets.js` so the widget
-            # element exists when the collector runs.
-            after_body = config["format"]["html"].setdefault("include-after-body", [])
-            if isinstance(after_body, str):
-                after_body = [after_body]
-                config["format"]["html"]["include-after-body"] = after_body
-            vs_script_entry = script_include("version-selector.js")
-            if not any("version-selector" in str(item) for item in after_body):
-                nw_idx = next(
-                    (i for i, item in enumerate(after_body) if "navbar-widgets" in str(item)),
-                    None,
-                )
-                if nw_idx is not None:
-                    after_body.insert(nw_idx, vs_script_entry)
-                else:
-                    after_body.append(vs_script_entry)
-
-            # Include `version-selector.js` in the project resources.
-            resources_list = config["project"].setdefault("resources", [])
-            if "version-selector.js" not in resources_list:
-                resources_list.append("version-selector.js")
 
     def _auto_save_snapshot(self) -> None:
         """
