@@ -52,35 +52,25 @@ from ._utils import (
     GITIGNORE_CONTENT,
     record_site_ownership,
 )
-from ._versions import selector as version_selector
 from ._website import (
-    appearance,
+    assembly,
     changelog,
-    footer,
-    i18n,
     inline_data,
-    markdown_pages,
-    metadata_partial,
     page_dates,
     page_status,
-    page_url,
     prerender,
-    quarto_defaults,
     quarto_yml,
     scripts,
     social_cards,
     tags,
 )
-from ._website import resources as project_resources
 from ._website.ai_agents import llms_txt
 from ._website.ai_agents.skills import SkillsWriter
 from ._website.homepage import page as homepage_page
 from ._website.homepage import source as homepage_source
 from ._website.identity import Identity
-from ._website.navigation import brand, reference_switcher, shared_sidebar
-from ._website.navigation import icons as nav_icons
-from ._website.navigation import label as nav_label
 from ._website.navigation import navbar as nav_navbar
+from ._website.navigation import shared_sidebar
 from ._website.project_pages import citation, licence, package_info
 from ._website.seo import description as seo_description
 from ._website.seo import site_files
@@ -291,7 +281,7 @@ class GreatDocs:
 
         # Create the great-docs directory
         self.build_dir.mkdir(parents=True, exist_ok=True)
-        quarto_yml.write_initial(self.build_dir, self._config)
+        quarto_yml.write_initial(self.build_dir)
 
         # Create necessary subdirectories
         scripts_dir = self.build_dir / "scripts"
@@ -1170,7 +1160,7 @@ class GreatDocs:
             ):
                 changed = True
             if changed:
-                quarto_yml.write(self.build_dir, quarto_config, self._config)
+                quarto_yml.write(self.build_dir, quarto_config)
 
             label = "📰" if section.blog else "📂"
             print(f"   {label} {section.title}: {len(published.pages)} post(s) from {section.dir}/")
@@ -1229,13 +1219,13 @@ class GreatDocs:
         for link, after in published.navbar:
             quarto_config = quarto_yml.read(self.build_dir, seed_website=True)
             if nav_navbar.add_link(quarto_config, link, self._config, after=after):
-                quarto_yml.write(self.build_dir, quarto_config, self._config)
+                quarto_yml.write(self.build_dir, quarto_config)
         if published.resources or published.render_excludes:
             contribution = Contribution(
                 resources=tuple(published.resources),
                 render_excludes=tuple(published.render_excludes),
             )
-            with quarto_yml.edit(self.build_dir, self._config, seed_website=True) as quarto_config:
+            with quarto_yml.edit(self.build_dir, seed_website=True) as quarto_config:
                 quarto_yml.apply(quarto_config, contribution)
         return published.pages
 
@@ -1441,7 +1431,7 @@ class GreatDocs:
                         {"text": nav_navbar.USER_GUIDE.label(self._config), "href": href},
                     )
 
-        quarto_yml.write(self.build_dir, config, self._config)
+        quarto_yml.write(self.build_dir, config)
 
     def _process_user_guide(self, guide: UserGuide | None, has_api_reference: bool) -> bool:
         """
@@ -2294,118 +2284,63 @@ class GreatDocs:
         reference_block.configure(self._config, config, importable_name, sections)
 
         # Write back to file
-        quarto_yml.write(self.build_dir, config, self._config)
+        quarto_yml.write(self.build_dir, config)
 
         print(f"Added API reference configuration to {quarto_yml.path(self.build_dir)}")
 
     def _update_quarto_config(self, run: Run) -> None:
         """
-        Merge Great Docs settings into the build directory's _quarto.yml
+        Merge Great Docs settings into the build directory's `_quarto.yml`
 
         The file must already exist; build preparation creates it with the website
-        project type. The merge adds the render scripts, theme, resources, and site
-        navigation while preserving the rest of the config, so running it again
-        after later build steps refreshes the settings those steps affect.
+        project type. Add render scripts, theme settings, resources and site
+        navigation while preserving unrelated configuration. Repeated calls after
+        later build steps refresh the settings those steps affect. The settings
+        come from `great-docs.yml`, package metadata and the project's GitHub repository.
 
         Parameters
         ----------
         run
-            The build state, including the API and MCP reference outcomes that determine
-            the reference sections.
+            The build state. Its API reference outcome determines whether the reference
+            switcher offers an API reference. The first call fetches the repository's
+            star and fork counts and latest release into it, and later calls reuse them.
+
+        Returns
+        -------
+        :
 
         Raises
         ------
         FileNotFoundError
-            If the build directory has no `_quarto.yml`.
+            If the build directory has no `_quarto.yml`, or a header include file
+            does not exist.
+        KeyError
+            If `_quarto.yml` lacks a `project` or `format.html` mapping. An empty file
+            lacks both.
         """
-        config = quarto_yml.read(self.build_dir)
+        quarto_config = quarto_yml.read(self.build_dir)
 
-        quarto_defaults.register(config, self._config, self.layout)
-
-        # List the site's scripts and stylesheets as resources
-        has_repository = self._get_github_repo_info()[0] is not None
-        scripts.add_resources(self._config, config, has_repository=has_repository)
-
-        project_resources.register(config, self._config, self.layout, self.build_dir)
-
-        quarto_defaults.register_site(config, self._config, self.layout, report=print)
-
-        scripts.include_libraries(self._config, config)
-
-        # Show the site's title or logo, its favicons and the GitHub entry
         owner, repo_name, _ = self._get_github_repo_info()
         repo = GithubRepo(owner, repo_name) if owner and repo_name else None
         if run.facts is None:
             run.facts = Facts.make(self._config, repo, self._remote)
-        metadata = self._get_package_metadata()
-        brand.register(
-            config,
+
+        assembly.assemble(
+            quarto_config,
             self._config,
             self.layout,
             self.build_dir,
-            identity=self._identity(),
-            package_name=self._detect_package_name(),
             repo=repo,
             facts=run.facts,
-            documentation_url=metadata.get("urls", {}).get("Documentation"),
+            identity=self._identity(),
+            package_name=self._detect_package_name(),
+            metadata=self._get_package_metadata(),
+            has_api_reference=run.has_api_reference,
             report=print,
+            warn=_print_warning,
         )
 
-        # Table order preserves the order in which pages load the site's scripts.
-        scripts.include(self._config, config, self.build_dir, has_repository=has_repository)
-
-        appearance.register_wide_layout(config, self._config)
-
-        reference_switcher.register(
-            config, self._config, self.build_dir, has_api_reference=run.has_api_reference
-        )
-
-        nav_icons.register(config, self._config, report=print)
-
-        # Add sidebar navigation (reference sidebar added later by
-        # _add_api_reference_config if exports are discovered)
-        if "sidebar" not in config["website"]:
-            config["website"]["sidebar"] = []
-
-        footer.register(config, self._config, metadata)
-
-        appearance.register(config, self._config)
-
-        # Show the latest GitHub release beside the navbar title
-        brand.register_release(config, self._config, run.facts)
-
-        quarto_defaults.register_extensions(config)
-
-        # Quarto renders page titles and translation metadata from this partial.
-        metadata_partial.write(config, self._config, self.build_dir, report=print)
-        nav_label.register(config, self._config)
-        i18n.register(config, self._config)
-
-        # Canonical links and social cards share the preferred page address.
-        base_url = self._identity().base_url
-        page_url.register(
-            config,
-            self._config,
-            base_url,
-            self.build_dir,
-            og_url=social_cards.applies(config, self._config, self.build_dir),
-        )
-        card_image_url = social_cards.publish_image(
-            self._config, self.layout, self.build_dir, base_url, report=_print_warning
-        )
-        social_cards.register(config, self._config, card_image_url, self.build_dir)
-        markdown_pages.register(config, self._config)
-
-        # Apply explicit navbar ordering from config (if set)
-        nav_navbar.reorder(config, self._config)
-
-        if self._config.has_versions:
-            version_selector.register(config, self._config)
-
-        quarto_defaults.register_site_includes(config, self._config)
-
-        # Write back to file
-        quarto_yml.write(self.build_dir, config, self._config)
+        quarto_yml.write(self.build_dir, quarto_config)
 
         print(f"Updated {quarto_yml.path(self.build_dir)} with great-docs configuration")
 
@@ -2505,7 +2440,7 @@ class GreatDocs:
                 f"Pre-rendered {done.count} terminal recording(s) "
                 f"({done.manifest_bytes / 1024:.0f} KB of player data)"
             )
-            with quarto_yml.edit(self.build_dir, self._config, seed_website=True) as quarto_config:
+            with quarto_yml.edit(self.build_dir, seed_website=True) as quarto_config:
                 quarto_yml.apply(quarto_config, done.contribution)
 
     def uninstall(self) -> None:
@@ -2735,7 +2670,7 @@ class GreatDocs:
         )
         if contribution is None:
             return "No releases found; skipped"
-        with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+        with quarto_yml.edit(self.build_dir) as quarto_config:
             quarto_yml.apply(quarto_config, contribution)
         return "Changelog from GitHub Releases"
 
@@ -2835,7 +2770,7 @@ class GreatDocs:
         cli_files = cli_render.write_pages(self._config, self.build_dir, cli_info, report=print)
         if not cli_files:
             return f"No {kind} pages generated"  # pragma: no cover
-        with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+        with quarto_yml.edit(self.build_dir) as quarto_config:
             quarto_yml.apply(quarto_config, cli_render.contribution(self._config, cli_files))
         n_pages = cli_render.count_pages(cli_files)
         print(f"Updated sidebar with {n_pages} CLI reference page(s)")
@@ -2875,7 +2810,7 @@ class GreatDocs:
         )
         if not mcp_files:
             return "No MCP pages generated"
-        with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+        with quarto_yml.edit(self.build_dir) as quarto_config:
             quarto_yml.apply(quarto_config, mcp_build.contribution(self._config, mcp_files))
         print(f"Updated sidebar with {cli_render.count_pages(mcp_files)} MCP reference page(s)")
         return f"{len(mcp_info.get('tools', []))} MCP tool page(s) + manifest"
@@ -2952,7 +2887,7 @@ class GreatDocs:
         output = tags.write(self._config, self.layout, report=print)
         if output is None:
             return Skipped("no tagged pages found")
-        with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+        with quarto_yml.edit(self.build_dir) as quarto_config:
             if output.page_data is not None:
                 inline_data.add(
                     quarto_config, "__GD_TAGS_DATA__", output.page_data, before="page-tags.js"
@@ -3049,7 +2984,7 @@ class GreatDocs:
                 "Dynamic introspection failed for a resolved item, retrying with static analysis..."
             )
             log.detail(str(e))
-            with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+            with quarto_yml.edit(self.build_dir) as quarto_config:
                 if "api-reference" in quarto_config:
                     quarto_config["api-reference"]["dynamic"] = False
         try:

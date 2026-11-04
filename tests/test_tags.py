@@ -689,8 +689,8 @@ def _docs(tmp_path: Path, yaml_text: str = "tags: true\n") -> GreatDocs:
     (tmp_path / "great-docs.yml").write_text(yaml_text, encoding="utf-8")
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir()
-    quarto_yml.write_initial(docs.build_dir, docs._config)
-    with quarto_yml.edit(docs.build_dir, docs._config) as quarto_config:
+    quarto_yml.write_initial(docs.build_dir)
+    with quarto_yml.edit(docs.build_dir) as quarto_config:
         quarto_config["format"]["html"]["include-after-body"] = ["page-tags.js"]
         quarto_config["website"] = {"navbar": {"left": [REFERENCE]}}
     return docs

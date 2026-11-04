@@ -1396,7 +1396,7 @@ def _quarto_config_for(tmp_path: Path, gd_yaml: str) -> dict:
     (tmp_path / "great-docs.yml").write_text(gd_yaml, encoding="utf-8")
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir(parents=True, exist_ok=True)
-    quarto_yml.write_initial(docs.build_dir, docs._config)
+    quarto_yml.write_initial(docs.build_dir)
     docs._update_quarto_config(make_run())
     return quarto_yml.read(docs.build_dir)
 

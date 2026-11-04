@@ -8,34 +8,18 @@ from yaml12 import parse_yaml
 from great_docs._contribution import Contribution, NavbarLink, Sidebar
 from great_docs._utils import QUARTO_YML_HEADER, validate_build_dir
 from great_docs._website import quarto_yml
-from tests.support import write_config
 
 
 def test_write_adds_generated_header(tmp_path: Path):
-    config = write_config(tmp_path)
-
-    quarto_yml.write(tmp_path, {"project": {"type": "website"}}, config)
+    quarto_yml.write(tmp_path, {"project": {"type": "website"}})
 
     text = (tmp_path / "_quarto.yml").read_text(encoding="utf-8")
     assert text.startswith(QUARTO_YML_HEADER)
     assert parse_yaml(text) == {"project": {"type": "website"}}
 
 
-def test_write_keeps_navbar_labels_on_a_translated_site(tmp_path: Path):
-    """Leave a user's English label as written; Great Docs translates its own when it makes them"""
-    config = write_config(tmp_path, {"site": {"lang": "de"}})
-    navbar = {
-        "left": [{"text": "Reference", "href": "https://example.com/api"}],
-        "right": [{"text": "Changelog", "href": "changelog.qmd"}],
-    }
-
-    quarto_yml.write(tmp_path, {"website": {"navbar": navbar}}, config)
-
-    assert quarto_yml.read(tmp_path)["website"]["navbar"] == navbar
-
-
 def test_write_initial_marks_build_directory_as_generated(tmp_path: Path):
-    quarto_yml.write_initial(tmp_path, write_config(tmp_path))
+    quarto_yml.write_initial(tmp_path)
 
     assert quarto_yml.read(tmp_path) == {
         "project": {"type": "website"},
@@ -73,21 +57,19 @@ def test_read_seeds_only_absent_website_keys(tmp_path: Path):
 
 
 def test_edit_writes_on_clean_exit(tmp_path: Path):
-    config = write_config(tmp_path)
-    quarto_yml.write_initial(tmp_path, config)
+    quarto_yml.write_initial(tmp_path)
 
-    with quarto_yml.edit(tmp_path, config) as quarto_config:
+    with quarto_yml.edit(tmp_path) as quarto_config:
         quarto_config["project"]["output-dir"] = "_site"
 
     assert quarto_yml.read(tmp_path)["project"]["output-dir"] == "_site"
 
 
 def test_edit_leaves_file_unchanged_when_block_raises(tmp_path: Path):
-    config = write_config(tmp_path)
-    quarto_yml.write_initial(tmp_path, config)
+    quarto_yml.write_initial(tmp_path)
     before = (tmp_path / "_quarto.yml").read_text(encoding="utf-8")
 
-    with pytest.raises(KeyError), quarto_yml.edit(tmp_path, config) as quarto_config:
+    with pytest.raises(KeyError), quarto_yml.edit(tmp_path) as quarto_config:
         quarto_config["project"]["output-dir"] = "_site"
         raise KeyError("stop")
 

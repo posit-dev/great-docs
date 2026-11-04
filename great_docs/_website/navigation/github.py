@@ -74,9 +74,13 @@ def set_navbar_item(navbar: dict[str, Any], item: dict[str, str]) -> None:
         The `website.navbar` mapping of the Quarto configuration, modified
         in place.
     item
-        The entry from `navbar_item`. It replaces every GitHub icon or widget
-        entry already on the right, including one left by an earlier build,
-        or is appended after the other entries when there is none.
+        The repository entry to use in place of every existing GitHub icon or
+        widget on the right, including entries from an earlier configuration pass
+        in the same build. Append it after the other entries if none exists.
+
+    Returns
+    -------
+    :
     """
     right: list[Any] = navbar.setdefault("right", [])
     found = False
