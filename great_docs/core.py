@@ -35,7 +35,7 @@ from ._content import custom_pages, publish, sections, user_guide, walk
 from ._content.naming import (
     published_path,
 )
-from ._content.pages import PageMap, section_destination
+from ._content.pages import PageMap
 from ._content.user_guide import UserGuide
 from ._contribution import Contribution
 from ._github import GithubRepo
@@ -70,6 +70,7 @@ from ._website import (
     social_cards,
     tags,
 )
+from ._website import resources as project_resources
 from ._website.ai_agents import llms_txt
 from ._website.ai_agents.skills import SkillsWriter
 from ._website.homepage import page as homepage_page
@@ -2457,76 +2458,7 @@ class GreatDocs:
         has_repository = self._get_github_repo_info()[0] is not None
         scripts.add_resources(self._config, config, has_repository=has_repository)
 
-        # Add marimo islands resources when enabled
-        if self._config.marimo_enabled:
-            # Include notebooks directory so .py files are available to the shortcode
-            notebooks_dir = self.build_dir / "notebooks"
-            if notebooks_dir.exists() and notebooks_dir.is_dir():
-                if "notebooks/**" not in config["project"]["resources"]:
-                    config["project"]["resources"].append("notebooks/**")
-            # Include pre-generated island HTML fragments
-            if "_marimo_islands/**" not in config["project"]["resources"]:
-                config["project"]["resources"].append("_marimo_islands/**")
-
-        # Add all user-guide asset directories to resources so that images
-        # referenced only via data attributes (e.g., dark-mode variants) get
-        # copied to _site
-        ug_dir = self.build_dir / "user-guide"
-        if ug_dir.exists() and ug_dir.is_dir():
-            for item in ug_dir.iterdir():
-                if item.is_dir() and walk.is_asset_dir(item):
-                    res_glob = f"user-guide/{item.name}/**"
-                    if res_glob not in config["project"]["resources"]:
-                        config["project"]["resources"].append(res_glob)
-
-        # Add assets directory to resources if it exists
-        assets_dir = self.build_dir / "assets"
-        if assets_dir.exists() and assets_dir.is_dir():
-            if "assets/**" not in config["project"]["resources"]:
-                config["project"]["resources"].append("assets/**")
-        if "_shared/**" not in config["project"]["resources"]:
-            config["project"]["resources"].append("_shared/**")
-
-        # Add custom section asset directories to resources
-        sections_config = self._config.sections
-        if sections_config and isinstance(sections_config, list):
-            for section_cfg in sections_config:
-                if not isinstance(section_cfg, dict):
-                    continue
-                src_dir = section_cfg.get("dir")
-                if not src_dir:
-                    continue
-                section_build_dir = section_destination(self.layout, section_cfg)
-                if section_build_dir is None:
-                    continue
-                slug = section_build_dir.relative_to(self.build_dir).as_posix()
-                if section_build_dir.exists() and section_build_dir.is_dir():
-                    for item in section_build_dir.iterdir():
-                        if item.is_dir() and walk.is_asset_dir(item):
-                            res_glob = f"{slug}/{item.name}/**"
-                            if res_glob not in config["project"]["resources"]:
-                                config["project"]["resources"].append(res_glob)
-
-        # Add skill.md and .well-known to resources (so Quarto copies them to _site)
-        # Also exclude them from rendering so Quarto doesn't convert them to HTML
-        if self._config.skill_enabled:
-            if "skill.md" not in config["project"]["resources"]:
-                config["project"]["resources"].append("skill.md")
-
-            # Exclude skill.md from rendering (Quarto renders .md by default).
-            # The render list enumerates Quarto's default input globs before the
-            # exclusions; a recursive `**` would overpower the `!skill.md`
-            # negation and render skill.md anyway (see issue #228).
-            if "render" not in config["project"]:
-                config["project"]["render"] = list(quarto_yml.RENDER_GLOBS)
-            if "!skill.md" not in config["project"]["render"]:
-                config["project"]["render"].append("!skill.md")
-
-            if self._config.skill_well_known:
-                if ".well-known/**" not in config["project"]["resources"]:
-                    config["project"]["resources"].append(".well-known/**")
-                if "!.well-known/**" not in config["project"]["render"]:
-                    config["project"]["render"].append("!.well-known/**")
+        project_resources.register(config, self._config, self.layout, self.build_dir)
 
         quarto_defaults.register_site(config, self._config, self.layout, report=print)
 

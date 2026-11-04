@@ -70,7 +70,7 @@ def test_a_broken_recording_is_reported_and_the_rest_render(tmp_path):
     assert reported[0].startswith("termshow: failed to render broken.termshow: ")
 
 
-def test_build_step_registers_the_output_as_a_resource(tmp_path):
+def test_build_step_registers_the_output_as_a_resource(tmp_path: Path):
     (tmp_path / "great-docs.yml").write_text("{}\n", encoding="utf-8")
     _write(tmp_path / "demos")
     docs = GreatDocs(project_path=str(tmp_path))
