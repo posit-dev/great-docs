@@ -192,6 +192,45 @@ class TestFindCommand:
             result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
         assert result is fake_cmd
 
+    def test_candidate_that_exits_on_import_is_skipped(self):
+        """
+        Skip a `__main__` that runs its command on import and search the next candidate
+        """
+        fake_mod = types.ModuleType("mypkg.main")
+        fake_cmd = click.Command("tool")
+        fake_mod.cli = fake_cmd
+
+        def mock_import(name, *args, **kwargs):
+            if name == "mypkg.__main__":
+                # An unguarded `cli()` makes Click parse the build's argv and exit.
+                raise SystemExit(2)
+            if name == "mypkg.main":
+                return fake_mod
+            raise ImportError(f"no module {name}")
+
+        with patch("importlib.import_module", side_effect=mock_import):
+            result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
+        assert result is fake_cmd
+
+    def test_configured_module_that_exits_on_import_finds_none(self):
+        """
+        Report a configured CLI module that exits on import instead of ending the build
+        """
+        lines: list[str] = []
+
+        def mock_import(name, *args, **kwargs):
+            raise SystemExit(2)
+
+        with patch("importlib.import_module", side_effect=mock_import):
+            result = cli_click.find_command(
+                "mypkg", cli_module="mypkg.__main__", cli_name=None, report=lines.append
+            )
+        assert result is None
+        assert lines == [
+            "Could not import CLI module mypkg.__main__: "
+            "importing mypkg.__main__ exited with status 2"
+        ]
+
     def test_cli_name_naming_a_non_command_finds_none(self):
         """
         Return no command when `cli.name` names a non-command despite another command in the module
