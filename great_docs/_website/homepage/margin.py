@@ -129,7 +129,7 @@ def _links(
             pypi_url = f"https://pypi.org/project/{package_name}/" if package_name else None
         if pypi_url:
             label = get_translation("view_on_pypi", lang)
-            items.append(f'<a href="{pypi_url}">{label}{_EXTERNAL_ARROW}</a><br>')
+            items.append(f'<a href="{html.escape(pypi_url)}">{label}{_EXTERNAL_ARROW}</a><br>')
 
     labels = {
         "homepage": None,
@@ -141,7 +141,10 @@ def _links(
     for name, url in urls.items():
         label = labels.get(name.lower().replace(" ", "_"), name.replace("_", " ").title())
         if label:
-            items.append(f'<a href="{url}">{label}{_EXTERNAL_ARROW}</a><br>')
+            items.append(
+                f'<a href="{html.escape(url)}">'
+                f"{html.escape(label, quote=False)}{_EXTERNAL_ARROW}</a><br>"
+            )
 
     if not items:
         return []
@@ -274,23 +277,30 @@ def _author_card(author: dict[str, Any], repository_owner: str | None) -> str:
     if affiliation := author.get("affiliation", ""):
         parts.append(
             '<span><p><small style="margin-top: -0.15em; display: block;">'
-            f"{affiliation}</small></p></span>"
+            f"{html.escape(affiliation, quote=False)}</small></p></span>"
         )
 
     icons: list[str] = []
     if email := author.get("email", ""):
         icons.append(
-            f'<a href="mailto:{email}" title="Email"><i class="bi bi-envelope-fill"></i></a>'
+            f'<a href="mailto:{html.escape(email)}" title="Email">'
+            '<i class="bi bi-envelope-fill"></i></a>'
         )
     if github := author.get("github", "") or repository_owner:
         icons.append(
-            f'<a href="https://github.com/{github}" title="GitHub"><i class="bi bi-github"></i></a>'
+            f'<a href="https://github.com/{html.escape(github)}" title="GitHub">'
+            '<i class="bi bi-github"></i></a>'
         )
     if homepage := author.get("homepage", "") or author.get("url", ""):
-        icons.append(f'<a href="{homepage}" title="Website"><i class="bi bi-globe"></i></a>')
+        icons.append(
+            f'<a href="{html.escape(homepage)}" title="Website"><i class="bi bi-globe"></i></a>'
+        )
     if orcid := author.get("orcid", ""):
         orcid_url = orcid if orcid.startswith("http") else f"https://orcid.org/{orcid}"
-        icons.append(f'<a href="{orcid_url}" title="ORCID"><i class="fa-brands fa-orcid"></i></a>')
+        icons.append(
+            f'<a href="{html.escape(orcid_url)}" title="ORCID">'
+            '<i class="fa-brands fa-orcid"></i></a>'
+        )
     if icons:
         parts.append(_icon_row(icons))
     return "".join(parts)
@@ -316,9 +326,14 @@ def _funder_card(funding: dict[str, Any]) -> str:
 
     icons: list[str] = []
     if homepage := funding.get("homepage", ""):
-        icons.append(f'<a href="{homepage}" title="Website"><i class="bi bi-globe"></i></a>')
+        icons.append(
+            f'<a href="{html.escape(homepage)}" title="Website"><i class="bi bi-globe"></i></a>'
+        )
     if ror_url := funding.get("ror", ""):
-        icons.append(f'<a href="{ror_url}" title="Research Organization Registry">{_ROR_ICON}</a>')
+        icons.append(
+            f'<a href="{html.escape(ror_url)}" title="Research Organization Registry">'
+            f"{_ROR_ICON}</a>"
+        )
     if icons:
         parts.append(_icon_row(icons))
     return "".join(parts)
@@ -338,6 +353,7 @@ def _card_name(name: str) -> str:
     :
         The name in bold.
     """
+    name = html.escape(name, quote=False)
     return f'<span><p><strong style="padding-bottom: 4px;">{name}</strong></p></span>'
 
 
@@ -355,6 +371,7 @@ def _card_detail(text: str) -> str:
     :
         The text in a block-level `<span>`.
     """
+    text = html.escape(text, quote=False)
     return f'<span style="margin-top: -0.15em; display: block;"><p><small>{text}</small></p></span>'
 
 
