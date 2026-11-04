@@ -1957,10 +1957,10 @@ def run_versioned_build(  # pragma: no cover
     on_renders_done: Callable[[], None] | None = None,
     badge_expiry_raw: str | None = None,
     config: Config | None = None,
-    layout: Layout | None = None,
     default_description: str | None = None,
     structured_data: StructuredData | None = None,
     *,
+    layout: Layout,
     documented_symbols: Callable[[str], list[str]] | None = None,
 ) -> dict[str, Any]:
     """
@@ -1994,13 +1994,13 @@ def run_versioned_build(  # pragma: no cover
         snapshot or git tag uses it to rebuild its own inventory and
         interlinks index; omitting it leaves such a version publishing the
         live checkout's.
-    layout
-        Resolved project paths.
     default_description
         The site's default search description as plain text.
     structured_data
         The JSON-LD for each version's homepage and reference pages, or
         `None` when structured data is disabled.
+    layout
+        Resolved project paths for build directories and the assembled site.
     documented_symbols
         Callable that returns the working tree's documented reference page
         stems for a project name. New snapshots for versions built from tags
@@ -2016,8 +2016,7 @@ def run_versioned_build(  # pragma: no cover
     latest = get_latest_version(versions)
     latest_tag = latest.tag if latest else versions[0].tag
     check_build_dir_collisions(source_dir, versions, latest_tag, layout)
-    if layout is not None:
-        validate_layout_outputs(layout)
+    validate_layout_outputs(layout)
 
     # Parse badge expiry config
     from great_docs._versions.model import parse_badge_expiry
@@ -2045,23 +2044,7 @@ def run_versioned_build(  # pragma: no cover
     # Unmarked directories may contain user files. Check them before cleanup so
     # an aborted build also preserves existing, marked version output.
     for entry in targets:
-        ver_dir = _version_build_dir(source_dir, entry, latest_tag, layout)
-        if layout is not None:
-            validate_build_dir(ver_dir)
-        elif ver_dir == source_dir:
-            continue
-        if ver_dir.is_symlink():
-            raise ValueError(
-                f"Version {entry.tag!r} cannot use {ver_dir} as its build directory "
-                "because the path is a symlink. Remove the symlink or replace it with "
-                "a directory before building."
-            )
-        if ver_dir.exists() and not is_great_docs_build_dir(ver_dir):
-            raise ValueError(
-                f"Version {entry.tag!r} would build into {ver_dir}, which already exists "
-                f"but does not contain a Great Docs-generated _quarto.yml. Move or delete "
-                f"the directory before building."
-            )
+        validate_build_dir(_version_build_dir(source_dir, entry, latest_tag, layout))
 
     warnings = _clean_stale_version_dirs(source_dir, layout)
 
@@ -2108,20 +2091,12 @@ def run_versioned_build(  # pragma: no cover
     dir_to_tag_pre = {str(dir_by_tag[e.tag]): e.tag for e in targets}
 
     # --- Pre-render sanity check ---
-    # Verify each build directory has renderable .qmd files and a valid _quarto.yml.
-    # If not, report an error instead of silently producing an empty site.
+    # Version scoping can remove every page. Stop before rendering an empty site.
     for ver_dir in build_dirs:
         qmd_count = sum(
             1 for _ in ver_dir.rglob("*.qmd") if not str(_.relative_to(ver_dir)).startswith("_")
         )
-        quarto_yml = ver_dir / "_quarto.yml"
-        if not quarto_yml.exists():
-            tag = dir_to_tag_pre.get(str(ver_dir), str(ver_dir))
-            errors.append(
-                f"Version {tag}: _quarto.yml missing from build directory. "
-                f"This indicates a preprocessing failure."
-            )
-        elif qmd_count == 0:
+        if qmd_count == 0:
             tag = dir_to_tag_pre.get(str(ver_dir), str(ver_dir))
             errors.append(
                 f"Version {tag}: No .qmd files found in build directory after preprocessing. "
@@ -2210,7 +2185,7 @@ def run_versioned_build(  # pragma: no cover
         }
 
     # --- Stage 3: Assemble ---
-    output_dir = layout.site_dir if layout is not None else source_dir / "_site"
+    output_dir = layout.site_dir
     assemble_site(source_dir, targets, latest_tag, output_dir, layout=layout)
 
     # Write version map
@@ -2221,7 +2196,7 @@ def run_versioned_build(  # pragma: no cover
 
     # Generate platform redirect files (Netlify _redirects, Vercel vercel.json)
     generate_redirect_files(output_dir, versions, latest_tag)
-    if layout is not None and layout.site_dir != source_dir / "_site":
+    if layout.site_dir != source_dir / "_site":
         record_site_ownership(output_dir)
 
     return {

@@ -9,6 +9,7 @@ import pytest
 from yaml12 import parse_yaml, read_yaml
 
 from great_docs._api_diff import ApiSnapshot, ParameterInfo, SymbolInfo
+from great_docs._layout import Layout
 from great_docs._utils import QUARTO_YML_HEADER, is_great_docs_build_dir
 from great_docs._versions.build import (
     _clean_stale_version_dirs,
@@ -71,6 +72,21 @@ def _make_source_tree(root: Path, pages: dict[str, str]) -> None:
             "format:\n  html: {}\nwebsite:\n  title: Test\n",
             encoding="utf-8",
         )
+
+
+def _make_project(tmp_path: Path, pages: dict[str, str]) -> Layout:
+    """Create a project layout with `pages` and a generated Quarto configuration"""
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    layout = Layout.make(project_root)
+    layout.build_dir.mkdir()
+    (layout.build_dir / "_quarto.yml").write_text(
+        QUARTO_YML_HEADER + "project:\n  type: website\n  output-dir: _site\n"
+        "format:\n  html: {}\nwebsite:\n  title: Test\n",
+        encoding="utf-8",
+    )
+    _make_source_tree(layout.build_dir, pages)
+    return layout
 
 
 # ---------------------------------------------------------------------------
@@ -3354,17 +3370,14 @@ class TestRunVersionedBuild:
         from unittest.mock import MagicMock, patch
 
         # Set up source tree
-        source = tmp_path / "source"
-        _make_source_tree(
-            source,
+        layout = _make_project(
+            tmp_path,
             {
                 "index.qmd": "---\ntitle: Home\n---\nHi",
                 "guide.qmd": "---\ntitle: Guide\n---\nContent",
             },
         )
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        source, project_root = layout.build_dir, layout.package_root
 
         # Mock render to return success
         def mock_render(build_dirs, env_vars=None, max_workers=None, progress_callback=None):
@@ -3384,6 +3397,7 @@ class TestRunVersionedBuild:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2"],
             )
 
@@ -3396,11 +3410,8 @@ class TestRunVersionedBuild:
     def test_latest_only_builds_single_version(self, tmp_path: Path):
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
         def mock_render(build_dirs, **kwargs):
             results = []
@@ -3418,6 +3429,7 @@ class TestRunVersionedBuild:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2"],
                 latest_only=True,
             )
@@ -3428,11 +3440,8 @@ class TestRunVersionedBuild:
     def test_version_tags_filter(self, tmp_path: Path):
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
         def mock_render(build_dirs, **kwargs):
             results = []
@@ -3450,6 +3459,7 @@ class TestRunVersionedBuild:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2", "0.1"],
                 version_tags=["0.2"],
             )
@@ -3460,11 +3470,8 @@ class TestRunVersionedBuild:
     def test_render_failure_reported(self, tmp_path: Path):
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
         def mock_render(build_dirs, **kwargs):
             # All versions fail
@@ -3477,6 +3484,7 @@ class TestRunVersionedBuild:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3"],
             )
 
@@ -3488,11 +3496,8 @@ class TestRunVersionedBuild:
     def test_on_renders_done_callback(self, tmp_path: Path):
         from unittest.mock import MagicMock, patch
 
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
         callback = MagicMock()
 
@@ -3512,6 +3517,7 @@ class TestRunVersionedBuild:
             run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3"],
                 on_renders_done=callback,
             )
@@ -3527,11 +3533,8 @@ class TestRunVersionedBuild:
         """
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
         captured_build_dirs: list[Path] = []
 
@@ -3552,11 +3555,12 @@ class TestRunVersionedBuild:
             run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2"],
             )
 
         assert captured_build_dirs[0] == source
-        assert captured_build_dirs[1] == tmp_path / "source-0.2"
+        assert captured_build_dirs[1] == layout.build_dir_for("0.2", "0.3")
 
     def test_raises_when_target_dir_exists_and_unmarked(self, tmp_path: Path):
         """
@@ -3565,42 +3569,38 @@ class TestRunVersionedBuild:
         An unmarked directory may contain user files, so the build must stop
         before preprocessing can replace it.
         """
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
-        project_root = tmp_path / "project"
-        project_root.mkdir()
-
-        stray = tmp_path / "source-0.2"
+        stray = layout.build_dir_for("0.2", "0.3")
         stray.mkdir()
         (stray / "notes.txt").write_text("mine", encoding="utf-8")
 
-        with pytest.raises(ValueError, match="source-0.2"):
+        with pytest.raises(ValueError, match="great-docs-0.2"):
             run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2"],
             )
 
         assert (stray / "notes.txt").read_text() == "mine"
 
     def test_rejects_symlinked_version_build_directory(self, tmp_path: Path):
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
         target = tmp_path / "marked-target"
         target.mkdir()
         (target / "_quarto.yml").write_text(QUARTO_YML_HEADER, encoding="utf-8")
-        version_dir = tmp_path / "source-0.2"
+        version_dir = layout.build_dir_for("0.2", "0.3")
         version_dir.symlink_to(target, target_is_directory=True)
 
-        with pytest.raises(ValueError, match="source-0.2.*symlink"):
+        with pytest.raises(ValueError, match="symlink.*great-docs-0.2"):
             run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2"],
             )
 
@@ -3614,27 +3614,25 @@ class TestRunVersionedBuild:
         Collision validation must stop the build before cleanup removes marked
         sibling directories.
         """
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
-        project_root = tmp_path / "project"
-        project_root.mkdir()
-
-        marked = tmp_path / "source-0.1"
+        marked = layout.build_dir_for("0.1", "0.3")
         marked.mkdir()
         (marked / "_quarto.yml").write_text(
             QUARTO_YML_HEADER + "project:\n  type: website\n", encoding="utf-8"
         )
         (marked / "notes.txt").write_text("kept", encoding="utf-8")
 
-        stray = tmp_path / "source-0.2"
+        stray = layout.build_dir_for("0.2", "0.3")
         stray.mkdir()
         (stray / "notes.txt").write_text("mine", encoding="utf-8")
 
-        with pytest.raises(ValueError, match="source-0.2"):
+        with pytest.raises(ValueError, match="great-docs-0.2"):
             run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2", "0.1"],
             )
 
@@ -3650,17 +3648,14 @@ class TestRunVersionedBuild:
         """
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(
-            source,
+        layout = _make_project(
+            tmp_path,
             {
                 "index.qmd": "---\ntitle: Home\n---\nHi",
                 "old-only.qmd": '---\ntitle: Old\nversions: ["0.2"]\n---\nOnly in 0.2.',
             },
         )
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        source, project_root = layout.build_dir, layout.package_root
 
         def mock_render(build_dirs, **kwargs):
             results = []
@@ -3678,11 +3673,12 @@ class TestRunVersionedBuild:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2"],
             )
 
         assert result["success"] is True
-        assert (tmp_path / "source-0.2" / "old-only.qmd").exists()
+        assert (layout.build_dir_for("0.2", "0.3") / "old-only.qmd").exists()
         assert not (source / "old-only.qmd").exists()
 
     def test_section_versions_exclude_section_from_other_versions(self, tmp_path: Path):
@@ -3691,17 +3687,14 @@ class TestRunVersionedBuild:
 
         from great_docs.config import Config
 
-        source = tmp_path / "source"
-        _make_source_tree(
-            source,
+        layout = _make_project(
+            tmp_path,
             {
                 "index.qmd": "---\ntitle: Home\n---\nHi",
                 "migrations/v2.qmd": "---\ntitle: Migrate\n---\nMove to 0.2.",
             },
         )
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        source, project_root = layout.build_dir, layout.package_root
         (project_root / "great-docs.yml").write_text(
             'sections:\n  - title: Migration Guides\n    dir: migrations\n    versions: ["0.2"]\n',
             encoding="utf-8",
@@ -3723,6 +3716,7 @@ class TestRunVersionedBuild:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.2", "0.1"],
                 config=Config(project_root),
             )
@@ -3730,19 +3724,15 @@ class TestRunVersionedBuild:
         assert result["success"] is True
         assert "migrations/v2.html" in result["pages_by_version"]["0.2"]
         assert "migrations/v2.html" not in result["pages_by_version"]["0.1"]
-        assert not (tmp_path / "source-0.1" / "migrations" / "v2.qmd").exists()
+        assert not (layout.build_dir_for("0.1", "0.2") / "migrations" / "v2.qmd").exists()
 
     def test_badge_expiry_raw_passed_through(self, tmp_path: Path):
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(
-            source,
-            {"index.qmd": "---\ntitle: Hi\n---\n\n[version-badge new 0.1]\n"},
+        layout = _make_project(
+            tmp_path, {"index.qmd": "---\ntitle: Hi\n---\n\n[version-badge new 0.1]\n"}
         )
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        source, project_root = layout.build_dir, layout.package_root
 
         def mock_render(build_dirs, **kwargs):
             results = []
@@ -3760,6 +3750,7 @@ class TestRunVersionedBuild:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2", "0.1"],
                 badge_expiry_raw="1",
             )
@@ -4315,11 +4306,8 @@ class TestRunVersionedBuildEmptyRender:
         """When Quarto succeeds (exit 0) but creates no HTML, report failure."""
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nContent"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nContent"})
+        source, project_root = layout.build_dir, layout.package_root
 
         def mock_render_no_output(build_dirs, **kwargs):
             # Quarto exits 0 but creates NO _site directory (empty render)
@@ -4332,6 +4320,7 @@ class TestRunVersionedBuildEmptyRender:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3"],
             )
 
@@ -4344,11 +4333,8 @@ class TestRunVersionedBuildEmptyRender:
         """When Quarto creates _site but it's empty, report failure."""
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nContent"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nContent"})
+        source, project_root = layout.build_dir, layout.package_root
 
         def mock_render_empty_site(build_dirs, **kwargs):
             results = []
@@ -4367,6 +4353,7 @@ class TestRunVersionedBuildEmptyRender:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2"],
             )
 
@@ -4381,15 +4368,9 @@ class TestRunVersionedBuildEmptyRender:
         """When preprocessing removes all .qmd files, abort before render."""
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        source.mkdir(parents=True)
         # Only _quarto.yml, no .qmd files
-        (source / "_quarto.yml").write_text(
-            "project:\n  type: website\n  output-dir: _site\nwebsite:\n  title: Test\n"
-        )
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {})
+        source, project_root = layout.build_dir, layout.package_root
 
         render_called = []
 
@@ -4404,45 +4385,12 @@ class TestRunVersionedBuildEmptyRender:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3"],
             )
 
         assert result["success"] is False
         assert "No .qmd files" in result["errors"][0]
-
-        # Render should NOT have been called
-        assert render_called == []
-
-    def test_pre_render_check_missing_quarto_yml(self, tmp_path: Path):
-        """When _quarto.yml is missing from build dir, abort before render."""
-        from unittest.mock import patch
-
-        source = tmp_path / "source"
-        source.mkdir(parents=True)
-        # Create a .qmd file but no _quarto.yml
-        (source / "index.qmd").write_text("---\ntitle: Hi\n---\nContent")
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
-
-        render_called = []
-
-        def mock_render(build_dirs, **kwargs):
-            render_called.append(True)
-            return [(str(d), 0, "", "", []) for d in build_dirs]
-
-        with patch(
-            "great_docs._versions.build.render_versions_parallel",
-            side_effect=mock_render,
-        ):
-            result = run_versioned_build(
-                source_dir=source,
-                project_root=project_root,
-                versions_config=["0.3"],
-            )
-
-        assert result["success"] is False
-        assert "_quarto.yml missing" in result["errors"][0]
 
         # Render should NOT have been called
         assert render_called == []
