@@ -7112,42 +7112,6 @@ def test_update_sidebar_with_cli_empty():
         assert result["website"]["sidebar"] == []
 
 
-def test_update_sidebar_with_cli_adds_api_link():
-    """_update_sidebar_with_cli adds API link to reference sidebar if missing."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        config = {
-            "website": {
-                "sidebar": [
-                    {
-                        "id": "reference",
-                        "title": "Reference",
-                        "contents": ["reference/some.qmd"],
-                    }
-                ]
-            }
-        }
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
-
-        docs._update_sidebar_with_cli(["cli/cmd.qmd"])
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        ref = next(
-            s
-            for s in result["website"]["sidebar"]
-            if isinstance(s, dict) and s.get("id") == "reference"
-        )
-
-        assert ref["contents"][0]["text"] == "API Index"
-
-
 def test_detect_git_ref_configured():
     """_detect_git_ref returns configured source branch."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -24608,28 +24572,6 @@ class TestUpdateSidebarWithCli:
                 s for s in result["website"]["sidebar"] if s.get("id") == "cli-reference"
             )
             assert cli_section["contents"] == ["new.qmd"]
-
-    def test_adds_api_link_to_reference_sidebar(self):
-        """Adds API link at top of reference sidebar if missing."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.build_dir / "_quarto.yml"
-            config = {
-                "website": {
-                    "sidebar": [
-                        {"id": "reference", "contents": ["reference/MyClass.qmd"]},
-                    ]
-                }
-            }
-            with open(quarto_yml, "w") as f:
-                write_yaml(config, f)
-            docs._update_sidebar_with_cli(["cli.qmd"])
-            result = read_yaml(open(quarto_yml))
-            ref_section = next(
-                s for s in result["website"]["sidebar"] if s.get("id") == "reference"
-            )
-            assert ref_section["contents"][0]["text"] == "API Index"
 
     def test_empty_cli_files_returns_early(self):
         """Returns early for empty cli_files list."""

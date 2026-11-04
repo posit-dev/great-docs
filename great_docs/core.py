@@ -1332,27 +1332,6 @@ class GreatDocs:
             }
             sidebar.append(cli_section)
 
-        # Ensure the reference sidebar has an API link at the top
-        for section in sidebar:
-            if isinstance(section, dict) and section.get("id") == "reference":
-                contents = section.get("contents", [])
-                # Check if API link already exists at the top
-                has_api_link = False
-                if contents and isinstance(contents[0], dict):
-                    if contents[0].get("text") in ("API", "API Index") or contents[0].get(
-                        "href", ""
-                    ).endswith("reference/index.qmd"):
-                        has_api_link = True
-                if not has_api_link:
-                    # Add API link at the top
-                    from ._translations import get_translation
-
-                    api_index_label = get_translation("api_index", self._config.lang)
-                    section["contents"] = [
-                        {"text": api_index_label, "href": "reference/index.qmd"},
-                    ] + contents
-                break
-
         quarto_yml.write(self.build_dir, config, self._config)
 
         # Ensure there's a "Reference" navbar entry so users can reach the CLI
