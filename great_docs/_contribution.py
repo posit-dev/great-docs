@@ -5,8 +5,9 @@ Additions to the site's Quarto configuration from a build step
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, TypeAlias
 
-__all__ = ["Contribution", "NavbarLink"]
+__all__ = ["Contribution", "NavbarLink", "Sidebar", "SidebarItem"]
 
 
 @dataclass(frozen=True)
@@ -23,9 +24,30 @@ class NavbarLink:
     """The `href` of the item the link goes in front of; the link goes last without one"""
 
 
+SidebarItem: TypeAlias = str | dict[str, Any]
+"""A sidebar entry: a page path, a labelled link, or a section with its own contents"""
+
+
+@dataclass(frozen=True)
+class Sidebar:
+    """A sidebar selected by its `id` in a page's `sidebar` front matter"""
+
+    id: str
+    """The name pages use to select the sidebar, unique among the site's sidebars"""
+
+    title: str
+    """The heading above the entries"""
+
+    contents: tuple[SidebarItem, ...]
+    """The entries, in order"""
+
+
 @dataclass(frozen=True)
 class Contribution:
     """The navigation that a build step adds to the site"""
 
     navbar: tuple[NavbarLink, ...] = ()
     """Links for the left side of the navbar, in order"""
+
+    sidebars: tuple[Sidebar, ...] = ()
+    """Sidebars that replace those with the same `id` or follow the existing sidebars"""

@@ -5,9 +5,12 @@ Select an MCP server and publish its reference pages and discovery manifest
 from __future__ import annotations
 
 import importlib
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from .._contribution import Contribution, Sidebar, SidebarItem
+from .._translations import get_translation
 from ..config import Config
 from . import reference
 
@@ -56,7 +59,7 @@ def build_mcp_reference(
     build_dir: Path,
     package_name: str | None,
     repo_url: str | None,
-) -> list[str | dict[str, Any]]:
+) -> list[SidebarItem]:
     """
     Write MCP reference pages and publish a manifest when pages exist
 
@@ -94,3 +97,29 @@ def build_mcp_reference(
             site_url=config.site_url,
         )
     return files
+
+
+def contribution(config: Config, items: Sequence[SidebarItem]) -> Contribution:
+    """
+    Build the navigation contribution for the MCP reference pages
+
+    Parameters
+    ----------
+    config
+        The documentation configuration, for `lang`.
+    items
+        The sidebar entries for the generated pages.
+
+    Returns
+    -------
+    :
+        The `mcp-reference` sidebar, titled "MCP Reference" in the site's language.
+        Its first entry links to the index page. The link is labelled "MCP Index" on
+        an English site and uses the sidebar's title otherwise.
+    """
+    title = get_translation("mcp_reference", config.lang)
+    index_label = "MCP Index" if config.lang == "en" else title
+    index: SidebarItem = {"text": index_label, "href": "reference/mcp/index.qmd"}
+    return Contribution(
+        sidebars=(Sidebar(id="mcp-reference", title=title, contents=(index, *items)),)
+    )

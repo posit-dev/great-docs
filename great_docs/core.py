@@ -1279,164 +1279,8 @@ class GreatDocs:
         return published.pages
 
     # =========================================================================
-    # CLI Documentation Methods
-    # =========================================================================
-
-    def _update_sidebar_with_cli(self, cli_files: list[str | dict]) -> None:
-        """
-        Update the sidebar configuration to include CLI reference.
-
-        Parameters
-        ----------
-        cli_files
-            Sidebar items — plain path strings for leaf commands, or
-            `{"section": ..., "contents": [...]}` dicts for groups.
-        """
-        if not cli_files:
-            return
-
-        if not quarto_yml.path(self.build_dir).exists():
-            return
-
-        config = quarto_yml.read(self.build_dir)
-
-        if "website" not in config:
-            config["website"] = {}
-
-        # Ensure sidebar exists
-        if "sidebar" not in config["website"]:
-            config["website"]["sidebar"] = []
-
-        # Check if CLI section already exists
-        sidebar = config["website"]["sidebar"]
-        cli_section_exists = False
-
-        for section in sidebar:
-            if isinstance(section, dict) and section.get("id") == "cli-reference":
-                cli_section_exists = True
-                # Update contents
-                section["contents"] = cli_files
-                break
-
-        if not cli_section_exists:
-            from ._translations import get_translation
-
-            cli_section_title = self._config.cli_title or get_translation(
-                "cli_reference", self._config.lang
-            )
-            # Add CLI section
-            cli_section = {
-                "id": "cli-reference",
-                "title": cli_section_title,
-                "contents": cli_files,
-            }
-            sidebar.append(cli_section)
-
-        # Ensure the reference sidebar has an API link at the top
-        for section in sidebar:
-            if isinstance(section, dict) and section.get("id") == "reference":
-                contents = section.get("contents", [])
-                # Check if API link already exists at the top
-                has_api_link = False
-                if contents and isinstance(contents[0], dict):
-                    if contents[0].get("text") in ("API", "API Index") or contents[0].get(
-                        "href", ""
-                    ).endswith("reference/index.qmd"):
-                        has_api_link = True
-                if not has_api_link:
-                    # Add API link at the top
-                    from ._translations import get_translation
-
-                    api_index_label = get_translation("api_index", self._config.lang)
-                    section["contents"] = [
-                        {"text": api_index_label, "href": "reference/index.qmd"},
-                    ] + contents
-                break
-
-        quarto_yml.write(self.build_dir, config, self._config)
-
-        # Ensure there's a "Reference" navbar entry so users can reach the CLI
-        # reference pages.  If a Python API reference already added the entry,
-        # that link (reference/index.qmd) takes precedence; otherwise we add one
-        # pointing directly to the CLI index.
-        navbar = config.get("website", {}).get("navbar", {})
-        left = navbar.get("left", [])
-        has_ref = any(
-            isinstance(item, dict) and nav_navbar.REFERENCE.owns(item.get("href")) for item in left
-        )
-        if not has_ref:
-            left.append(
-                {
-                    "text": nav_navbar.REFERENCE.label(self._config),
-                    "href": "reference/cli/index.qmd",
-                }
-            )
-            navbar["left"] = left
-            config["website"]["navbar"] = navbar
-            quarto_yml.write(self.build_dir, config, self._config)
-
-        print(f"Updated sidebar with {cli_render.count_pages(cli_files)} CLI reference page(s)")
-
-    # =========================================================================
     # MCP Server Documentation Methods
     # =========================================================================
-
-    def _update_sidebar_with_mcp(self, mcp_files: list[str | dict]) -> None:
-        """
-        Update the sidebar configuration to include MCP reference.
-
-        Parameters
-        ----------
-        mcp_files
-            Sidebar items for MCP reference pages.
-        """
-        if not mcp_files:
-            return
-
-        from ._translations import get_translation
-
-        if not quarto_yml.path(self.build_dir).exists():
-            return
-
-        with quarto_yml.edit(self.build_dir, self._config) as config:
-            if "website" not in config:
-                config["website"] = {}
-
-            # Ensure sidebar exists
-            if "sidebar" not in config["website"]:
-                config["website"]["sidebar"] = []
-
-            sidebar = config["website"]["sidebar"]
-            mcp_section_exists = False
-
-            for section in sidebar:
-                if isinstance(section, dict) and section.get("id") == "mcp-reference":
-                    mcp_section_exists = True
-                    section["title"] = get_translation("mcp_reference", self._config.lang)
-                    section["contents"] = mcp_files
-                    break
-
-            if not mcp_section_exists:
-                mcp_section = {
-                    "id": "mcp-reference",
-                    "title": get_translation("mcp_reference", self._config.lang),
-                    "contents": [
-                        {
-                            "text": (
-                                "MCP Index"
-                                if self._config.lang == "en"
-                                else get_translation("mcp_reference", self._config.lang)
-                            ),
-                            "href": "reference/mcp/index.qmd",
-                        }
-                    ]
-                    + mcp_files,
-                }
-                sidebar.append(mcp_section)
-
-        # Count total tool pages
-        n_pages = cli_render.count_pages(mcp_files)
-        print(f"Updated sidebar with {n_pages} MCP reference page(s)")
 
     def _remove_mcp_from_ref_sections(self) -> None:
         """
@@ -4271,7 +4115,7 @@ class GreatDocs:
 
     def _add_cli_reference(self, cli_info: CliCommand, kind: str, suffix: str = "") -> Outcome:
         """
-        Write command-line reference pages and add them to the reference sidebar
+        Write CLI reference pages and add their sidebar and Reference navbar link
 
         Parameters
         ----------
@@ -4290,8 +4134,10 @@ class GreatDocs:
         cli_files = cli_render.write_pages(self._config, self.build_dir, cli_info, report=print)
         if not cli_files:
             return f"No {kind} pages generated"  # pragma: no cover
-        self._update_sidebar_with_cli(cli_files)
+        with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+            quarto_yml.apply(quarto_config, cli_render.contribution(self._config, cli_files))
         n_pages = cli_render.count_pages(cli_files)
+        print(f"Updated sidebar with {n_pages} CLI reference page(s)")
         return f"{n_pages} {kind} reference page(s){suffix}"
 
     def _step_mcp_reference(self, run: Run) -> Outcome:
@@ -4338,7 +4184,9 @@ class GreatDocs:
                 self._remove_mcp_from_ref_sections()
                 return "No MCP pages generated"
             run.mcp_pages_generated = True
-            self._update_sidebar_with_mcp(mcp_files)
+            with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+                quarto_yml.apply(quarto_config, mcp_build.contribution(self._config, mcp_files))
+            print(f"Updated sidebar with {cli_render.count_pages(mcp_files)} MCP reference page(s)")
         except USER_CODE_ERRORS:
             run.mcp_pages_generated = False
             self._remove_mcp_from_ref_sections()

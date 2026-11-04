@@ -17,6 +17,7 @@ from great_docs import GreatDocs
 from great_docs._build import freeze
 from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
+from great_docs._contribution import Contribution, NavbarLink, Sidebar
 from great_docs._mcpref import build as mcp_build
 from great_docs._reference import block as reference_block
 from great_docs._reference.discovery import (
@@ -368,85 +369,6 @@ class TestDiscoverMcpServer:
         discover.assert_not_called()
 
 
-class TestUpdateSidebarWithMcp:
-    """Cover _update_sidebar_with_mcp branching."""
-
-    def test_empty_mcp_files_returns_early(self, tmp_path):
-        """empty list returns immediately."""
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        quarto_yml = gd.build_dir / "_quarto.yml"
-        quarto_yml.write_text("website:\n  sidebar: []\n", encoding="utf-8")
-        gd._update_sidebar_with_mcp([])
-        content = quarto_yml.read_text()
-        assert "mcp-reference" not in content
-
-    def test_no_quarto_yml_returns_early(self, tmp_path):
-        """no _quarto.yml returns."""
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        gd._update_sidebar_with_mcp(["reference/mcp/tools.qmd"])
-
-    def test_adds_mcp_section_to_sidebar(self, tmp_path, monkeypatch):
-        """creates MCP section in sidebar and writes."""
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        quarto_yml = gd.build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "website:\n  sidebar:\n    - id: api-reference\n      contents: []\n",
-            encoding="utf-8",
-        )
-
-        mcp_files = ["reference/mcp/tools.qmd", "reference/mcp/resources.qmd"]
-        gd._update_sidebar_with_mcp(mcp_files)
-
-        sidebar = quarto_yml_file.read(gd.build_dir)["website"]["sidebar"]
-        mcp_section = next(s for s in sidebar if s.get("id") == "mcp-reference")
-        assert "MCP Reference" in mcp_section["title"]
-
-    def test_sidebar_uses_site_language(self, tmp_path: Path):
-        (tmp_path / "great-docs.yml").write_text(
-            "module: mypkg\nsite:\n  lang: fr\n", encoding="utf-8"
-        )
-        gd = GreatDocs(project_path=str(tmp_path))
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        (gd.build_dir / "_quarto.yml").write_text("website:\n  sidebar: []\n", encoding="utf-8")
-
-        gd._update_sidebar_with_mcp(["reference/mcp/tool.qmd"])
-
-        sections = quarto_yml_file.read(gd.build_dir)["website"]["sidebar"]
-        section = next(item for item in sections if item.get("id") == "mcp-reference")
-        assert section["title"] == "Référence MCP"
-
-    def test_updates_existing_mcp_section(self, tmp_path, monkeypatch):
-        """existing mcp-reference section gets updated."""
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        quarto_yml = gd.build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "website:\n  sidebar:\n    - id: mcp-reference\n      title: MCP Reference\n      contents:\n        - old.qmd\n",
-            encoding="utf-8",
-        )
-
-        new_files = ["new-tools.qmd"]
-        gd._update_sidebar_with_mcp(new_files)
-
-        sidebar = quarto_yml_file.read(gd.build_dir)["website"]["sidebar"]
-        mcp_section = next(s for s in sidebar if s.get("id") == "mcp-reference")
-        assert mcp_section["contents"] == new_files
-
-    def test_creates_website_and_sidebar_keys(self, tmp_path, monkeypatch):
-        """creates website.sidebar when absent."""
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        quarto_yml = gd.build_dir / "_quarto.yml"
-        quarto_yml.write_text("project:\n  type: website\n", encoding="utf-8")
-
-        gd._update_sidebar_with_mcp(["tool.qmd"])
-
-        assert "sidebar" in quarto_yml_file.read(gd.build_dir)["website"]
-
-
 class TestBuildMcpReference:
     def test_passes_metadata_and_language(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         gd = _make_gd(tmp_path)
@@ -476,6 +398,49 @@ class TestBuildMcpReference:
         assert manifest["repo_url"] == "https://github.com/owner/repo"
         assert manifest["site_url"] == "https://example.org"
         assert manifest["server_info"] == server
+
+
+class TestMcpContribution:
+    def test_index_link_precedes_the_pages(self):
+        contribution = mcp_build.contribution(mock_config(lang="en"), ["reference/mcp/tool.qmd"])
+
+        assert contribution == Contribution(
+            sidebars=(
+                Sidebar(
+                    id="mcp-reference",
+                    title="MCP Reference",
+                    contents=(
+                        {"text": "MCP Index", "href": "reference/mcp/index.qmd"},
+                        "reference/mcp/tool.qmd",
+                    ),
+                ),
+            )
+        )
+
+    def test_translated_site_labels_the_index_with_the_title(self):
+        (sidebar,) = mcp_build.contribution(mock_config(lang="fr"), []).sidebars
+
+        assert sidebar.title == "Référence MCP"
+        assert sidebar.contents == ({"text": "Référence MCP", "href": "reference/mcp/index.qmd"},)
+
+
+class TestCliContribution:
+    def test_sidebar_and_reference_link(self):
+        items = [{"text": "CLI Index", "href": "reference/cli/index.qmd"}, "reference/cli/app.qmd"]
+
+        contribution = cli_render.contribution(mock_config(lang="en"), items)
+
+        assert contribution == Contribution(
+            navbar=(NavbarLink("Reference", "reference/cli/index.qmd"),),
+            sidebars=(Sidebar("cli-reference", "CLI Reference", tuple(items)),),
+        )
+
+    def test_configured_title_names_the_sidebar(self):
+        config = mock_config(lang="fr", cli_title="Commandes")
+
+        (sidebar,) = cli_render.contribution(config, ["reference/cli/app.qmd"]).sidebars
+
+        assert sidebar.title == "Commandes"
 
 
 class TestRemoveMcpFromRefSections:
