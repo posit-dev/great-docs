@@ -297,6 +297,50 @@ def test_proofread_compact_output(tmp_path, monkeypatch):
         assert "README.md:" in result.output
 
 
+@pytest.fixture
+def stub_harper(monkeypatch):
+    """Report one spelling issue on the first line of any text, without `harper-cli`"""
+
+    def run_harper_on_text(text, **kwargs):
+        return [HarperLint("SpellCheck", "Spelling", 1, 1, "Misspelled", "tset")]
+
+    monkeypatch.setattr(
+        "great_docs._checks.harper.check_harper_available", lambda: (True, "harper-cli 1.0")
+    )
+    monkeypatch.setattr("great_docs._checks.harper.run_harper_on_text", run_harper_on_text)
+
+
+@pytest.mark.parametrize(
+    ("args", "page"),
+    [
+        (["user_guide/a.qmd"], "user_guide/a.qmd"),
+        (["--docs-dir", "user_guide"], "user_guide/a.qmd"),
+    ],
+    ids=["explicit-file", "docs-dir"],
+)
+def test_proofread_relative_qmd_page(tmp_path, monkeypatch, stub_harper, args, page):
+    """Report a `.qmd` page reached by a relative path relative to the project root"""
+    (tmp_path / "user_guide").mkdir()
+    (tmp_path / "user_guide" / "a.qmd").write_text("This is a tset.\n")
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(cli, ["proofread", *args, "--project-path", ".", "--json-output"])
+
+    assert [issue["file"] for issue in json.loads(result.stdout)["issues"]] == [page]
+
+
+def test_check_qmd_page_outside_project_root(tmp_path, stub_harper):
+    """Report a `.qmd` page outside the project root by the path given"""
+    root = tmp_path / "project"
+    root.mkdir()
+    page = tmp_path / "elsewhere.qmd"
+    page.write_text("This is a tset.\n")
+
+    results = proofreading.check([page], root, proofreading.Options(), report=lambda _line: None)
+
+    assert [r.file for r in results] == [str(page)]
+
+
 def test_extract_prose_plain_text():
     """Plain text with no code blocks or frontmatter passes through."""
     content = "Hello world.\nSecond line."

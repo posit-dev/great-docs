@@ -56,7 +56,7 @@ class CheckedFile:
     """The proofreading outcome for one file"""
 
     file: str
-    """The file's path, relative to the project root for `.qmd` pages"""
+    """The file's path as given, or relative to the project root for `.qmd` pages inside it"""
 
     issues: Sequence[HarperLint] = ()
     """Issues reported by Harper, with line numbers in the original file"""
@@ -136,7 +136,8 @@ def check(
     files
         The files to check.
     root
-        The project root used for reporting relative `.qmd` paths.
+        The project root used for reporting relative `.qmd` paths. A page outside the root
+        keeps the path given.
     options
         The dictionary and rule settings.
     report
@@ -252,7 +253,7 @@ def _check_page(
     Parameters
     ----------
     page
-        The `.qmd` page to check.
+        The `.qmd` page to check, absolute or relative to the working directory.
     root
         The project root used for reporting the page's relative path.
     run_text
@@ -269,7 +270,10 @@ def _check_page(
     great_docs._checks.harper.HarperNotFoundError
         If `harper-cli` is missing. This error stops the run and is not stored per page.
     """
-    path = str(page.relative_to(root))
+    try:
+        path = str(page.resolve().relative_to(root.resolve()))
+    except ValueError:
+        path = str(page)
     try:
         prose, line_map = harper.extract_prose_from_markdown(page.read_text(encoding="utf-8"))
         issues = run_text(prose)
