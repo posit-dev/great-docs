@@ -69,7 +69,7 @@ def test_find_prefers_the_source_directory_to_the_package_root(tmp_path: Path):
     assert found == [tmp_path / "docs/index.md", tmp_path / "README.md"]
 
 
-def test_read_keeps_only_title_and_description(tmp_path: Path):
+def test_read_separates_title_description_and_options(tmp_path: Path):
     page = tmp_path / "index.qmd"
     _ = page.write_text(
         "---\ntitle: Home\ndescription: About it\nexecute:\n  echo: false\n---\n\n\n# Body\n",
@@ -80,6 +80,7 @@ def test_read_keeps_only_title_and_description(tmp_path: Path):
 
     assert authored.title == "Home"
     assert authored.description == {"description": "About it"}
+    assert authored.options == {"execute": {"echo": False}}
     assert authored.body == "# Body\n"
 
 

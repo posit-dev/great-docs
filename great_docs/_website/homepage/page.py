@@ -7,6 +7,7 @@ HTML block, the body and the metadata sidebar. Each mode keeps its own sidebar p
 
 from __future__ import annotations
 
+import json
 import re
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -132,9 +133,10 @@ def write_readme(
     """
     Write the homepage from the project's index page or README
 
-    Use the first available homepage source, or generate a landing page from the package
-    metadata if none exists. Keep only the title and search description keys from the source's
-    front matter, and lower its headings by one level.
+    Use the first available source, or generate a landing page from package metadata if no
+    source exists. Preserve the source's front matter and lower its headings by one level.
+    Honour an explicit `toc` setting; otherwise, disable the table of contents. Add
+    `gd-homepage` to the source's `body-classes`.
 
     Parameters
     ----------
@@ -179,6 +181,7 @@ def write_readme(
     # An empty title keeps "Home" off a generated landing page.
     title = ""
     page_description: dict[str, YamlValue] = {}
+    options: dict[str, YamlValue] = {}
     if not sources:
         report("No index source file found (index.qmd, index.md, README.md, or README.rst)")
         report("Generating landing page from package metadata...")
@@ -197,6 +200,7 @@ def write_readme(
         authored = source.read(source_file, report=report)
         title = authored.title
         page_description = dict(authored.description)
+        options = dict(authored.options)
         body = publish.rebase_references(
             authored.body, source_file, index_qmd, layout=layout, pages=pages
         )
@@ -242,9 +246,23 @@ def write_readme(
         page_authors=page_authors,
     )
 
-    # Escape quotes and colons in authored front matter; keep an empty title as `title: ""`.
-    page_keys = format_yaml({"title": title, **page_description}).rstrip()
-    front_matter = f'---\n{page_keys}\ntoc: false\nbody-classes: "gd-homepage"\n---\n'
+    # An explicit `toc` setting overrides the homepage's default of no table of contents.
+    page_keys: dict[str, YamlValue] = {"title": title, **page_description, **options}
+    _ = page_keys.setdefault("toc", False)
+
+    # Homepage styles require `gd-homepage` alongside any classes the source sets.
+    authored_classes = page_keys.pop("body-classes", None)
+    items = authored_classes if isinstance(authored_classes, list) else [authored_classes]
+    classes = " ".join(item for item in items if isinstance(item, str)).split()
+    if "gd-homepage" not in classes:
+        classes.append("gd-homepage")
+
+    # Preserve quotes and colons in front matter and write an empty title as `title: ""`.
+    # JSON quoting also produces a valid YAML scalar for the body classes.
+    front_matter = (
+        f"---\n{format_yaml(page_keys).rstrip()}\n"
+        f"body-classes: {json.dumps(' '.join(classes))}\n---\n"
+    )
     index_qmd = write(
         build_dir,
         front_matter=front_matter,
