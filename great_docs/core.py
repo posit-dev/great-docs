@@ -3521,9 +3521,19 @@ class GreatDocs:
             Step(
                 "Generate llms.txt / llms-full.txt",
                 lambda: self._step_llms_txt(run),
+                warn=Warn(
+                    USER_CODE_ERRORS, "Error generating llms.txt", "llms.txt generation had issues"
+                ),
                 user_code=True,
             ),
-            Step("Generate SKILL.md", lambda: self._step_skill_md(), user_code=True),
+            Step(
+                "Generate SKILL.md",
+                lambda: self._step_skill_md(),
+                warn=Warn(
+                    USER_CODE_ERRORS, "Error generating SKILL.md", "SKILL.md generation had issues"
+                ),
+                user_code=True,
+            ),
             Step(
                 "Check the site URL",
                 lambda: self._warn_without_site_url(log),

@@ -14902,6 +14902,45 @@ def test_build_cli_error_handled(tmp_path, capsys):
     stubs.steps["_default_description"].assert_called_once()
 
 
+def test_build_llms_txt_error_handled(tmp_path, capsys):
+    """
+    Check that a failure writing `llms.txt` warns and the build continues
+    """
+    docs = _buildable_docs(tmp_path)
+
+    with (
+        stubbed_build(docs) as stubs,
+        patch("great_docs._website.ai_agents.llms_txt.is_planned", return_value=True),
+        patch(
+            "great_docs._website.ai_agents.llms_txt.write_index",
+            side_effect=RuntimeError("no summary"),
+        ),
+    ):
+        docs.build(watch=False, refresh=False)
+
+    assert "Error generating llms.txt: no summary" in capsys.readouterr().out
+    stubs.steps["_default_description"].assert_called_once()
+
+
+def test_build_skill_md_error_handled(tmp_path, capsys):
+    """
+    Check that a failure writing the agent skill files warns and the build continues
+    """
+    docs = _buildable_docs(tmp_path, skill_enabled=True)
+
+    with (
+        stubbed_build(docs) as stubs,
+        patch(
+            "great_docs._website.ai_agents.skills.SkillsWriter.write",
+            side_effect=OSError("read-only"),
+        ),
+    ):
+        docs.build(watch=False, refresh=False)
+
+    assert "Error generating SKILL.md: read-only" in capsys.readouterr().out
+    stubs.steps["_default_description"].assert_called_once()
+
+
 def test_build_log_numbers_every_step(tmp_path, capsys):
     """
     Check that the log numbers all twenty steps in order and reports all twenty as run
