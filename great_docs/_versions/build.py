@@ -26,6 +26,7 @@ from great_docs._utils import (
 from great_docs._versions.model import (
     VersionEntry,
     build_version_map,
+    evaluate_version_expr,
     get_latest_version,
     is_page_upcoming,
     is_page_upcoming_for_version,
@@ -554,7 +555,7 @@ def preprocess_version(
     `.html`.
     """
     # Build a set of directories excluded by section-level version scoping
-    excluded_dirs = _compute_excluded_section_dirs(entry.tag, section_configs, layout)
+    excluded_dirs = _compute_excluded_section_dirs(entry.tag, all_versions, section_configs, layout)
 
     # The latest version uses `source_dir` directly; only historical versions
     # need a copy.
@@ -662,20 +663,24 @@ def preprocess_version(
 
 def _compute_excluded_section_dirs(
     target_tag: str,
+    all_versions: list[VersionEntry],
     section_configs: list[dict] | None,
     layout: Layout,
 ) -> set[Path]:
     """
     Locate section directories excluded from the target version
 
-    Exclude sections whose non-empty `versions` list omits `target_tag`.
-    Resolve their published paths so nested and slugged directory names match
-    the pages in the build tree.
+    Exclude sections whose non-empty `versions` value does not match
+    `target_tag`. As in page front matter, the value can be a tag, a version
+    expression such as `">=0.5"`, or a list of either. Resolve published paths
+    so nested and slugged directories match the pages in the build tree.
 
     Parameters
     ----------
     target_tag
-        Version tag to check against each section's `versions` list.
+        Version tag to check against each section's `versions` value.
+    all_versions
+        Configured versions in display order, used to evaluate version expressions.
     section_configs
         Entries from the `sections` setting.
     layout
@@ -695,7 +700,13 @@ def _compute_excluded_section_dirs(
         if not isinstance(section, dict):
             continue
         section_versions = section.get("versions")
-        if not section_versions or target_tag in section_versions:
+        if not section_versions:
+            continue
+        if not isinstance(section_versions, list):
+            section_versions = [section_versions]
+        # Use the same expression syntax as page front matter.
+        expr = ",".join(str(item) for item in section_versions)
+        if evaluate_version_expr(expr, target_tag, all_versions):
             continue
         destination = section_destination(layout, section)
         if destination is not None:
