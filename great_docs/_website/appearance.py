@@ -35,8 +35,8 @@ def register_wide_layout(quarto_config: dict[str, Any], config: Config) -> None:
     When enabled, add or replace the `gd-wide-layout` meta tag and scale-factor styles
     in the header. Place them before `theme-init.js`, which reads the tag before first paint.
     Keep the `wide-layout.js` loader at its existing position after the body, or append
-    it if missing. Repeated calls preserve script order. When disabled, remove the
-    entries left by an earlier build.
+    it if missing. Repeated calls preserve script order. When disabled, remove
+    entries added by an earlier configuration pass in the same build.
 
     Parameters
     ----------
@@ -89,7 +89,8 @@ def register(quarto_config: dict[str, Any], config: Config) -> None:
 
     Each configured feature adds its entries once. Repeated calls update existing meta
     tags and style blocks in place, preserving their order on the page. Unconfigured
-    features add nothing and leave entries from earlier builds in place.
+    features add nothing and preserve entries added by an earlier configuration pass
+    in the same build.
 
     Parameters
     ----------
