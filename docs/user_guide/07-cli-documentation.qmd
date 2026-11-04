@@ -428,13 +428,19 @@ A generated page contains these sections in order:
 
 1. **Title** with a colored label badge (`cli` or `cli-group`)
 2. **Subject**: the first paragraph of the description (the short description)
-3. **Usage signature**: a `bash` code block showing the invocation pattern
-4. **Extended description**: remaining paragraphs, formatted as prose
-5. **Collapsible `--help` output**: the full raw `--help` text, tucked inside a disclosure widget
-6. **Arguments**: if the command takes positional arguments
-7. **Options**: a definition list with name, type, default, and help text
-8. **Subcommands**: for groups, each subcommand links to its own page
-9. **Examples**: if the help text includes an `Examples:` section
+3. **Deprecation warning**: a callout with Click's deprecation message, if the command is deprecated
+4. **Usage signature**: a `bash` code block showing the invocation pattern
+5. **Extended description**: remaining paragraphs, formatted as prose
+6. **Collapsible `--help` output**: the full raw `--help` text, tucked inside a disclosure widget
+7. **Arguments**: if the command takes positional arguments, a definition list with name, type,
+and help text
+8. **Options**: a definition list with name, type, default, and help text
+9. **Subcommands**: for groups, each subcommand links to its own page
+10. **Examples**: if the help text includes an `Examples:` section
+
+An option or argument of type `click.Choice` shows its accepted values as its type, such as
+`[json|yaml|toml]`. A deprecated option or argument has its help text led by **Deprecated.** and
+Click's deprecation message.
 
 This structured layout gives readers quick access to what they need (usage, options, examples) while
 preserving the full `--help` output for those who want the raw reference.
