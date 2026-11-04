@@ -15251,6 +15251,30 @@ def test_discover_exports_with_all():
             sys.path.remove(tmp_dir)
 
 
+def test_discover_exports_follows_all_order_and_reports_missing_names():
+    """Exports follow `__all__` order, and a listed name the package does not define is reported"""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "orderpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '__all__ = ["second", "first", "lazy_name"]\n'
+            "def first(): pass\n"
+            "def second(): pass\n"
+            "def __getattr__(name): return 42\n",
+            encoding="utf-8",
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        lines: list[str] = []
+        result = discover_exports(
+            docs._get_griffe_package("orderpkg"), docs._config, report=lines.append
+        )
+
+        assert result == ["second", "first"]
+        assert any("lazy_name" in line for line in lines)
+
+
 def test_discover_exports_without_all():
     """Verify that discovery excludes private names when `__all__` is absent"""
 

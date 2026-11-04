@@ -210,7 +210,8 @@ def discover_exports(
     name does not start with an underscore is. The names in `AUTO_EXCLUDE` and in the `exclude`
     setting are dropped. `auto_include` keeps names from `AUTO_EXCLUDE`, and `no_auto_exclude`
     keeps them all. Aliases that cannot be resolved, and aliases to objects outside the
-    package, are dropped too.
+    package, are dropped too, as is a name in `__all__` that the package does not define
+    statically, such as one a module `__getattr__` provides.
 
     Parameters
     ----------
@@ -224,15 +225,14 @@ def discover_exports(
     Returns
     -------
     :
-        The exported names in the order the package defines them, or `None` if `__all__` lists
-        only names the package does not define.
+        The exported names in `__all__` order, or in the order the package defines them if it
+        has no `__all__`. `None` if `__all__` lists only names the package does not define.
     """
-    members = list(package.members)
+    members = package.members
     if package.exports:
-        listed = set(package.exports)
-        candidates = [name for name in members if name in listed]
+        candidates = list(dict.fromkeys(str(name) for name in package.exports))
         report(f"Using __all__ with {len(candidates)} exports")
-        if not candidates:
+        if not any(name in members for name in candidates):
             return None
     else:
         candidates = [name for name in members if not name.startswith("_")]
@@ -266,7 +266,11 @@ def discover_exports(
     for name in candidates:
         if name in auto_exclude or name in exclude:
             continue
-        reason = _undocumentable_reason(package, package.members[name])
+        member = members.get(name)
+        if member is None:
+            reason = "not found by static analysis"
+        else:
+            reason = _undocumentable_reason(package, member)
         if reason is None:
             exports.append(name)
         else:
