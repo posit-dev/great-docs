@@ -228,6 +228,25 @@ def test_extract_takes_the_whole_centred_block():
     assert elements.body == "> Install via pip.\n\nBody text after.\n"
 
 
+def test_extract_takes_a_centred_block_with_a_nested_div():
+    markdown = (
+        '<div align="center">\n'
+        "<div>\n"
+        '<img src="https://example.com/logo.svg">\n'
+        "</div>\n"
+        "[![PyPI](https://img.shields.io/badge/pypi-v1-blue)](https://pypi.org)\n"
+        "</div>\n"
+        "\n"
+        "Body text.\n"
+    )
+
+    elements = readme.extract_hero_elements(markdown)
+
+    assert [badge.alt for badge in elements.badges] == ["PyPI"]
+    assert elements.logo_url == "https://example.com/logo.svg"
+    assert elements.body == "\nBody text.\n"
+
+
 @pytest.mark.parametrize(
     "markdown",
     [
@@ -242,6 +261,26 @@ def test_extract_leaves_a_readme_without_known_badges(markdown: str):
     assert elements.badges == []
     assert elements.body == markdown
     assert elements.logo_url is None
+
+
+def test_extract_leaves_a_centred_block_that_never_closes():
+    markdown = (
+        '<div align="center">\n'
+        '<img src="https://example.com/banner.png">\n'
+        "</div>\n"
+        "\n"
+        "Intro paragraph.\n"
+        "\n"
+        '<div align="center">\n'
+        "[![PyPI](https://img.shields.io/badge/pypi-v1-blue)](https://pypi.org)\n"
+        "\n"
+        "## Usage\n"
+    )
+
+    elements = readme.extract_hero_elements(markdown)
+
+    assert elements.badges == []
+    assert elements.body == markdown
 
 
 def test_bump_heading_levels_outside_code():
