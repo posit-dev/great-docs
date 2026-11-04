@@ -184,6 +184,6 @@ def test_a_file_is_copied_and_listed_exactly_when_it_is_used(
     for script in scripts.SCRIPTS:
         used = script.used(config, has_repository=has_repository)
         assert (script.name in copied) == used, script.name
-        assert (script.name in listed) == (used and script.listed), script.name
+        assert (script.name in listed) == used, script.name
         if script.slot is not None:
             assert (script.name in included) == used, script.name

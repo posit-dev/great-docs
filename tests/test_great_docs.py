@@ -10321,8 +10321,8 @@ def test_update_quarto_config_dark_mode_toggle():
         assert has_theme_init
 
 
-def test_update_quarto_config_cli_enabled_adds_ref_switcher():
-    """Test _update_quarto_config adds reference-switcher when CLI is enabled."""
+def test_update_quarto_config_cli_pages_add_ref_switcher():
+    """Add the reference switcher when CLI pages exist"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -10343,6 +10343,9 @@ def test_update_quarto_config_cli_enabled_adds_ref_switcher():
 
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
+        cli_index = docs.build_dir / "reference" / "cli" / "index.qmd"
+        cli_index.parent.mkdir(parents=True)
+        cli_index.write_text("", encoding="utf-8")
 
         docs._update_quarto_config(make_run())
 
@@ -25178,8 +25181,8 @@ class TestUpdateQuartoConfigScripts:
             assert "Jane" in footer.get("center", "")
             assert "John" in footer.get("center", "")
 
-    def test_reference_switcher_with_cli_enabled(self):
-        """Injects reference-switcher.js when CLI is enabled."""
+    def test_reference_switcher_with_cli_pages(self):
+        """Load `reference-switcher.js` when CLI pages exist"""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = self._make_project(
                 tmp_dir,
@@ -25193,6 +25196,9 @@ class TestUpdateQuartoConfigScripts:
             }
             with open(quarto_yml, "w") as f:
                 write_yaml(config, f)
+            cli_index = docs.build_dir / "reference" / "cli" / "index.qmd"
+            cli_index.parent.mkdir(parents=True)
+            cli_index.write_text("", encoding="utf-8")
             docs._update_quarto_config(make_run())
             with open(quarto_yml) as f:
                 result = read_yaml(f)

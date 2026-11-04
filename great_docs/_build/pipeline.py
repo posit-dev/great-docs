@@ -33,8 +33,6 @@ class Run:
         package has nothing to document.
     api_discovery_done
         Whether this build has already discovered the package's exports.
-    mcp_pages_generated
-        Whether the build wrote MCP reference pages, or `None` before the MCP step decides.
     user_guide
         The user guide discovered during build preparation, or `None` when no guide
         pages were found.
@@ -48,6 +46,5 @@ class Run:
     watch: bool
     has_api_reference: bool = True
     api_discovery_done: bool = False
-    mcp_pages_generated: bool | None = None
     user_guide: UserGuide | None = None
     facts: Facts | None = None
