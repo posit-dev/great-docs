@@ -301,6 +301,7 @@ changelog:
 #     dir: examples              # Source directory (relative to this configuration)
 #     index: true                # Generate card-based index page (default: false)
 #     index_columns: 2           # Columns for image cards: 1 or 2 (default: 2)
+#     index_groups: true         # Group index cards like the sidebar (default: true)
 #     navbar_after: "User Guide" # Place after this navbar item (optional)
 #   - title: Tutorials
 #     dir: tutorials             # No index — navbar links to first page

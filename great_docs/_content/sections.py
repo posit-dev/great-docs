@@ -96,6 +96,9 @@ class Section:
     index_columns: int
     """The number of columns of image cards in a generated index"""
 
+    index_groups: bool
+    """Whether a generated index groups cards the way the sidebar groups pages"""
+
     navbar_after: str | None
     """The label of the navbar item the section's link follows"""
 
@@ -232,6 +235,7 @@ def read(config: Config, layout: Layout, *, report: Callable[[str], None]) -> li
                 slug=destination.relative_to(layout.build_dir).as_posix(),
                 index=bool(options.get("index", False)),
                 index_columns=options.get("index_columns", 2),
+                index_groups=bool(options.get("index_groups", True)),
                 navbar_after=options.get("navbar_after"),
                 dir_titles=options.get("dir_titles") or {},
                 sidebar_groups=options.get("sidebar_groups"),
@@ -314,7 +318,14 @@ def publish(
         )
         content_pages = [page for page in copied if page["filename"] != "index.qmd"]
         if not has_user_index and section.index:
-            index_source = card_index(section.title, copied, columns=section.index_columns)
+            index_source = card_index(
+                section.title,
+                copied,
+                columns=section.index_columns,
+                dir_titles=section.dir_titles,
+                sidebar_groups=section.sidebar_groups,
+                index_groups=section.index_groups,
+            )
             _ = index.write_text(index_source, encoding="utf-8")
         elif not has_user_index and content_pages:
             index_href = f"{section.slug}/{content_pages[0]['filename']}"
@@ -525,12 +536,260 @@ def blog_index(title: str) -> str:
     return "\n".join(lines)
 
 
-def card_index(title: str, pages: Sequence[Page], columns: int = 2) -> str:
+@dataclass(frozen=True)
+class _PageGroup:
+    """Pages the sidebar lists together"""
+
+    title: Any
+    """The sidebar section title, unused when `titled` is false"""
+
+    pages: tuple[Page, ...]
+    """The pages, in the order the sidebar lists them"""
+
+    titled: bool
+    """Whether the sidebar gives these pages a section heading"""
+
+
+def _page_groups(
+    pages: Sequence[Page],
+    *,
+    dir_titles: dict[str, str] | None = None,
+    sidebar_groups: list[dict[str, Any]] | None = None,
+) -> list[_PageGroup]:
+    """
+    Group pages the way the sidebar lists them
+
+    `index.qmd` is the section index, not a listed page. With `sidebar_groups`, each
+    configured group that names a page becomes a titled group, and pages it does not name
+    follow in one untitled group. Otherwise top-level pages form one untitled group and
+    each first-level subdirectory a titled group, in the order its first page appears.
+    A duplicate filename keeps the last page at the first position, matching the sidebar.
+
+    Parameters
+    ----------
+    pages
+        The section's pages.
+    dir_titles
+        Group titles keyed by subdirectory name without its numeric prefix.
+    sidebar_groups
+        Groups, each a `section` title and the published file names of its `contents`.
+
+    Returns
+    -------
+    :
+        The groups. An untitled group has `titled` false.
+    """
+    by_filename = {page["filename"]: page for page in pages if page["filename"] != "index.qmd"}
+    if sidebar_groups:
+        grouped: set[str] = set()
+        groups: list[_PageGroup] = []
+        for group in sidebar_groups:
+            members: list[Page] = []
+            for filename in group.get("contents", []):
+                page = by_filename.get(filename)
+                if page:
+                    members.append(page)
+                    grouped.add(filename)
+            if members:
+                groups.append(
+                    _PageGroup(title=group.get("section", ""), pages=tuple(members), titled=True)
+                )
+        rest = tuple(page for filename, page in by_filename.items() if filename not in grouped)
+        if rest:
+            groups.append(_PageGroup(title=None, pages=rest, titled=False))
+        return groups
+
+    top_level: list[Page] = []
+    subdirectories: dict[str, list[Page]] = {}
+    for page in by_filename.values():
+        parts = PurePosixPath(page["filename"]).parts
+        if len(parts) > 1:
+            subdirectories.setdefault(parts[0], []).append(page)
+        else:
+            top_level.append(page)
+
+    directory_groups: list[_PageGroup] = []
+    if top_level:
+        directory_groups.append(_PageGroup(title=None, pages=tuple(top_level), titled=False))
+    titles = dir_titles or {}
+    # Pages arrive in source order with numeric prefixes intact in that order, so
+    # first appearance follows the author's ordering where a sort by the stripped
+    # names would not.
+    for subdirectory, group_pages in subdirectories.items():
+        name = strip_numeric_prefix(subdirectory)
+        directory_groups.append(
+            _PageGroup(
+                title=titles.get(name, title_from_name(name)),
+                pages=tuple(group_pages),
+                titled=True,
+            )
+        )
+    return directory_groups
+
+
+def _markdown_heading(title: object) -> str:
+    """
+    Return a level-2 heading whose text is `title`
+
+    A newline would end the heading or start another block. `<` would start raw HTML.
+    A hash would close the heading, and a backslash would escape the character after it,
+    including the newline that ends the heading.
+
+    Parameters
+    ----------
+    title
+        The heading text. `None` is an empty heading.
+
+    Returns
+    -------
+    :
+        The heading.
+    """
+    text = "" if title is None else str(title)
+    text = " ".join(text.splitlines())
+    text = html.escape(text, quote=False)
+    text = text.replace("\\", "\\\\").replace("#", "\\#")
+    return f"## {text}"
+
+
+def _column_opener(columns: int) -> str:
+    """
+    Return the opening tag of a card grid with `columns` columns
+
+    Parameters
+    ----------
+    columns
+        The requested column count, clamped to 1 or 2.
+
+    Returns
+    -------
+    :
+        The `<div>` tag.
+    """
+    columns = max(1, min(columns, 2))
+    if columns == 1:
+        col_cls = "section-cards-1col"
+        grid_style = "display: grid; grid-template-columns: 1fr; gap: 1rem; margin-top: 0.5rem;"
+    else:
+        col_cls = "section-cards-2col"
+        grid_style = (
+            "display: grid; "
+            "grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); "
+            "gap: 1rem; "
+            "margin-top: 0.5rem;"
+        )
+    return f'<div class="section-cards {col_cls}" style="{grid_style}">'
+
+
+def _card_grid(entries: Sequence[Page], opener: str, *, image: bool | None) -> str:
+    """
+    Return one HTML block of cards
+
+    The block has no blank lines, so Quarto's Markdown parser does not split it into
+    paragraphs or duplicate anchors. `image` true draws every card's image, false draws
+    none, and `None` draws an image only when the page has one.
+
+    Parameters
+    ----------
+    entries
+        The pages. Empty input is not used.
+    opener
+        The grid's opening `<div>` tag.
+    image
+        Whether to draw card images.
+
+    Returns
+    -------
+    :
+        The grid, closed by `</div>` on the last line.
+    """
+    card_style = (
+        "display: block; "
+        "padding: 1.25rem 1.5rem; "
+        "border: 1px solid #dee2e6; "
+        "border-radius: 0.5rem; "
+        "color: inherit; "
+        "text-decoration: none;"
+    )
+    title_style = "font-size: 1.1rem; font-weight: 600; margin-bottom: 0.35rem; color: #0d6efd;"
+    desc_style = "font-size: 0.9rem; color: #6c757d; line-height: 1.45;"
+    parts = [opener]
+    for entry in entries:
+        parts.append(
+            f'<a href="{html.escape(entry["filename"])}" class="section-card" style="{card_style}">'
+        )
+        show_image = image if image is not None else bool(entry.get("image"))
+        if show_image:
+            parts.append(
+                f'<img src="{html.escape(entry.get("image", ""))}" class="section-card-img" '
+                'style="width: 100%; border-radius: 0.375rem; '
+                'margin-bottom: 0.75rem;" />'
+            )
+        parts.extend(_card_text(entry, title_style, desc_style))
+        parts.append("</a>")
+    parts[-1] = parts[-1] + "</div>"
+    return "\n".join(parts)
+
+
+def _flat_cards(entries: Sequence[Page], columns: int) -> str:
+    """
+    Return the flat index body: image cards, then plain cards
+
+    Parameters
+    ----------
+    entries
+        The pages, excluding `index.qmd`.
+    columns
+        The number of columns of image cards, clamped to 1 or 2.
+
+    Returns
+    -------
+    :
+        The card HTML. A horizontal rule separates the two kinds when both are present.
+    """
+    image_entries = [entry for entry in entries if entry.get("image")]
+    plain_entries = [entry for entry in entries if not entry.get("image")]
+    parts: list[str] = []
+    if image_entries:
+        parts.append(_card_grid(image_entries, _column_opener(columns), image=True))
+    if image_entries and plain_entries:
+        parts.append("<hr>")
+    if plain_entries:
+        parts.append(
+            _card_grid(
+                plain_entries,
+                (
+                    '<div class="section-cards section-cards-list" '
+                    'style="display: grid; grid-template-columns: 1fr; '
+                    'gap: 1rem; margin-top: 0.5rem;">'
+                ),
+                image=False,
+            )
+        )
+    return "\n".join(parts)
+
+
+def card_index(
+    title: str,
+    pages: Sequence[Page],
+    columns: int = 2,
+    *,
+    dir_titles: dict[str, str] | None = None,
+    sidebar_groups: list[dict[str, Any]] | None = None,
+    index_groups: bool = True,
+) -> str:
     """
     Generate a section index with a card for each page
 
-    Pages with an `image` get image cards in a grid; the others follow as a list of
-    plain cards. A horizontal rule separates the two kinds when both are present.
+    When the sidebar groups the pages and `index_groups` is set, the index uses those
+    groups, titles, and order. Each group is one card grid. A titled group follows a
+    Markdown heading, so the page table of contents can list it. A page without an
+    image stays in its group. An untitled group — top-level pages before subdirectory
+    groups, or pages `sidebar_groups` does not name — is a grid with no heading.
+
+    Otherwise pages with an `image` get image cards in a grid and the others follow as
+    a list of plain cards. A horizontal rule separates the two kinds when both are
+    present. A section with no sidebar groups keeps this layout.
 
     Parameters
     ----------
@@ -539,7 +798,14 @@ def card_index(title: str, pages: Sequence[Page], columns: int = 2) -> str:
     pages
         The section's pages; a page named `index.qmd` gets no card.
     columns
-        The number of columns of image cards, clamped to 1 or 2.
+        The number of columns of a card grid, clamped to 1 or 2. The flat layout uses
+        it for image cards only.
+    dir_titles
+        Group titles keyed by subdirectory name without its numeric prefix.
+    sidebar_groups
+        Groups, each a `section` title and the published file names of its `contents`.
+    index_groups
+        When false, keep the flat layout even if the sidebar has groups.
 
     Returns
     -------
@@ -553,75 +819,24 @@ def card_index(title: str, pages: Sequence[Page], columns: int = 2) -> str:
         "---",
         "",
     ]
-    entries = [page for page in pages if page["filename"] != "index.qmd"]
-    if not entries:
-        lines.append("*No pages found.*")
+    groups = (
+        _page_groups(pages, dir_titles=dir_titles, sidebar_groups=sidebar_groups)
+        if index_groups
+        else []
+    )
+    if any(group.titled for group in groups):
+        blocks: list[str] = []
+        for group in groups:
+            if group.titled:
+                blocks.append(_markdown_heading(group.title))
+            blocks.append(_card_grid(group.pages, _column_opener(columns), image=None))
+        lines.append("\n\n".join(blocks))
     else:
-        image_entries = [entry for entry in entries if entry.get("image")]
-        plain_entries = [entry for entry in entries if not entry.get("image")]
-
-        # Inline styles keep the card layout independent of Quarto's page-columns grid
-        card_style = (
-            "display: block; "
-            "padding: 1.25rem 1.5rem; "
-            "border: 1px solid #dee2e6; "
-            "border-radius: 0.5rem; "
-            "color: inherit; "
-            "text-decoration: none;"
-        )
-        title_style = "font-size: 1.1rem; font-weight: 600; margin-bottom: 0.35rem; color: #0d6efd;"
-        desc_style = "font-size: 0.9rem; color: #6c757d; line-height: 1.45;"
-        # Keep the HTML in one block without blank lines so Quarto's Markdown parser
-        # adds no `<p>` or duplicate `<a>` elements.
-        parts: list[str] = []
-
-        if image_entries:
-            columns = max(1, min(columns, 2))
-            if columns == 1:
-                col_cls = "section-cards-1col"
-                grid_style = (
-                    "display: grid; grid-template-columns: 1fr; gap: 1rem; margin-top: 0.5rem;"
-                )
-            else:
-                col_cls = "section-cards-2col"
-                grid_style = (
-                    "display: grid; "
-                    "grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); "
-                    "gap: 1rem; "
-                    "margin-top: 0.5rem;"
-                )
-            parts.append(f'<div class="section-cards {col_cls}" style="{grid_style}">')
-            for entry in image_entries:
-                parts.append(
-                    f'<a href="{html.escape(entry["filename"])}" class="section-card" style="{card_style}">'
-                )
-                parts.append(
-                    f'<img src="{html.escape(entry.get("image", ""))}" class="section-card-img" '
-                    'style="width: 100%; border-radius: 0.375rem; '
-                    'margin-bottom: 0.75rem;" />'
-                )
-                parts.extend(_card_text(entry, title_style, desc_style))
-                parts.append("</a>")
-            parts[-1] = parts[-1] + "</div>"
-
-        if image_entries and plain_entries:
-            parts.append("<hr>")
-
-        if plain_entries:
-            parts.append(
-                '<div class="section-cards section-cards-list" '
-                'style="display: grid; grid-template-columns: 1fr; '
-                'gap: 1rem; margin-top: 0.5rem;">'
-            )
-            for entry in plain_entries:
-                parts.append(
-                    f'<a href="{html.escape(entry["filename"])}" class="section-card" style="{card_style}">'
-                )
-                parts.extend(_card_text(entry, title_style, desc_style))
-                parts.append("</a>")
-            parts[-1] = parts[-1] + "</div>"
-
-        lines.append("\n".join(parts))
+        entries = [page for page in pages if page["filename"] != "index.qmd"]
+        if not entries:
+            lines.append("*No pages found.*")
+        else:
+            lines.append(_flat_cards(entries, columns))
 
     lines.append("")
     return "\n".join(lines)
@@ -686,7 +901,8 @@ def sidebar(
     The sidebar starts with the section's index when it has one. With `sidebar_groups`,
     the grouped pages follow under their group titles and the other pages after them.
     Otherwise top-level pages follow in order, then each subdirectory as a group titled by
-    `dir_titles` or by its name, in the order its first page appears.
+    `dir_titles` or by its name, in the order its first page appears. The generated card
+    index uses this same grouping.
 
     Parameters
     ----------
@@ -722,43 +938,12 @@ def sidebar(
     def link(page: Page) -> dict[str, Any]:
         return {"text": page["title"], "href": f"{slug}/{page['filename']}"}
 
-    if sidebar_groups:
-        grouped: set[str] = set()
-        for group in sidebar_groups:
-            group_contents: list[dict[str, Any]] = []
-            for filename in group.get("contents", []):
-                page = by_filename.get(filename)
-                if page:
-                    group_contents.append(link(page))
-                    grouped.add(filename)
-            if group_contents:
-                contents.append({"section": group.get("section", ""), "contents": group_contents})
-        contents.extend(
-            link(page) for filename, page in by_filename.items() if filename not in grouped
-        )
-    else:
-        top_level: list[Page] = []
-        subdirectories: dict[str, list[Page]] = {}
-        for page in by_filename.values():
-            parts = PurePosixPath(page["filename"]).parts
-            if len(parts) > 1:
-                subdirectories.setdefault(parts[0], []).append(page)
-            else:
-                top_level.append(page)
-
-        contents.extend(link(page) for page in top_level)
-        titles = dir_titles or {}
-        # Pages arrive in source order with numeric prefixes intact in that order, so
-        # first appearance follows the author's ordering where a sort by the stripped
-        # names would not.
-        for subdirectory, group_pages in subdirectories.items():
-            name = strip_numeric_prefix(subdirectory)
-            contents.append(
-                {
-                    "section": titles.get(name, title_from_name(name)),
-                    "contents": [link(page) for page in group_pages],
-                }
-            )
+    for group in _page_groups(pages, dir_titles=dir_titles, sidebar_groups=sidebar_groups):
+        links = [link(page) for page in group.pages]
+        if group.titled:
+            contents.append({"section": group.title, "contents": links})
+        else:
+            contents.extend(links)
 
     return {"id": slug, "title": title, "contents": contents}
 
