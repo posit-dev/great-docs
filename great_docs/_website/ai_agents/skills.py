@@ -100,9 +100,10 @@ class SkillsWriter:
         """
         Publish the named skills in `skill.skills`
 
-        Each entry in `skill.skills` must have `name` and `file` keys. The first skill is also
-        written to `<docs>/skill.md` and used for the skills page. All skills are aggregated into a
-        single `.well-known/agent-skills/index.json` discovery manifest.
+        Each entry in `skill.skills` must have `name` and `file` keys; entries without them, or
+        whose file is missing, are skipped. The first published skill is also written to
+        `<docs>/skill.md` and leads the skills page. All skills are aggregated into a single
+        `.well-known/agent-skills/index.json` discovery manifest.
         """
         skill_entries = self.config.skill_skills
         if not skill_entries:
@@ -122,7 +123,7 @@ class SkillsWriter:
                 print(f"Warning: skill file '{src}' not found, skipping")
                 continue
 
-            if i == 0:
+            if not placed_skills:
                 dest = self.build_dir / "skill.md"
                 _ = shutil.copy2(src, dest)
                 print(f"Copied primary skill '{name}' from {src}")
