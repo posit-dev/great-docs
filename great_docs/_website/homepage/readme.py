@@ -99,7 +99,8 @@ def extract_hero_elements(markdown: str) -> HeroElements:
     Extract a README's badges, logo and tagline and remove the badge block
 
     Two layouts are recognised. In the first, a centred `<div>` holds the badges, perhaps with
-    a logo image and an italic tagline; the whole `<div>` is removed. In the second, lines of
+    a logo image and an italic tagline; the whole `<div>` is removed, and a `<div>` without
+    a closing `</div>` line is left in place. In the second, lines of
     badges follow the first heading; those lines are removed and the heading is kept.
 
     Parameters
@@ -113,7 +114,6 @@ def extract_hero_elements(markdown: str) -> HeroElements:
         The badges, the README without them, and the logo and tagline of a centred `<div>`.
     """
     lines = markdown.split("\n")
-    div_end = None
 
     for i, line in enumerate(lines):
         if not _CENTRED_DIV.match(line.strip()):
@@ -121,6 +121,7 @@ def extract_hero_elements(markdown: str) -> HeroElements:
         div_badges: list[Badge] = []
         logo_url: str | None = None
         tagline: str | None = None
+        div_end: int | None = None
         for j in range(i + 1, len(lines)):
             sline = lines[j].strip()
             if sline == "</div>":

@@ -244,6 +244,26 @@ def test_extract_leaves_a_readme_without_known_badges(markdown: str):
     assert elements.logo_url is None
 
 
+def test_extract_leaves_a_centred_block_that_never_closes():
+    markdown = (
+        '<div align="center">\n'
+        '<img src="https://example.com/banner.png">\n'
+        "</div>\n"
+        "\n"
+        "Intro paragraph.\n"
+        "\n"
+        '<div align="center">\n'
+        "[![PyPI](https://img.shields.io/badge/pypi-v1-blue)](https://pypi.org)\n"
+        "\n"
+        "## Usage\n"
+    )
+
+    elements = readme.extract_hero_elements(markdown)
+
+    assert elements.badges == []
+    assert elements.body == markdown
+
+
 def test_bump_heading_levels_outside_code():
     markdown = (
         "# H1\n## H2\n###### H6\n"
