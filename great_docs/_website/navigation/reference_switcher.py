@@ -1,16 +1,16 @@
 """
 The switcher between a site's API, CLI and MCP references
 
-The page includes load `reference-switcher.js`, which reads the available sections from the
-`data-gd-ref-sections` attribute on `<body>`. Sites with only an API reference have no switcher.
+Sites with a switcher load `reference-switcher.js` on every page. The script reads the
+available sections from the `data-gd-ref-sections` attribute on `<body>`. Sites with only an
+API reference have no switcher and no copy of the script in the build directory.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from .. import quarto_yml
-from ..scripts import script_include
+from .. import quarto_yml, scripts
 from . import navbar as nav_navbar
 
 if TYPE_CHECKING:
@@ -47,8 +47,9 @@ def register(
     If the first section is not the API reference, the navbar's Reference link opens that
     section's index page.
 
-    When the site has no CLI or MCP reference, entries added by an earlier call are
-    removed.
+    For sites with a switcher, the script is copied into the build directory, listed in
+    `project.resources` and loaded on every page. When the site has no CLI or MCP reference,
+    the script, resource listing and include entries added by an earlier call are removed.
 
     Parameters
     ----------
@@ -72,7 +73,7 @@ def register(
         section for section in _OTHER_SECTIONS if (build_dir / _INDEX_PAGES[section]).is_file()
     )
     if all(section == "api" for section in available):
-        _remove(quarto_config)
+        _remove(quarto_config, build_dir)
         return
 
     sections = _order(available, config.ref_section_order)
@@ -98,10 +99,12 @@ def register(
         theme = quarto_yml.find(headers, "theme-init.js")
         headers.insert(len(headers) if theme is None else theme + 1, attribute_script)
 
+    scripts.copy_asset(_SCRIPT, build_dir)
+    quarto_yml.add_resources(quarto_config, [_SCRIPT])
     quarto_yml.add_include(
         quarto_config,
         "include-after-body",
-        script_include(_SCRIPT),
+        scripts.script_include(_SCRIPT),
         marker=_SCRIPT,
         before="tooltips.js",
     )
@@ -152,19 +155,25 @@ def _point_reference_link(quarto_config: dict[str, Any], href: str) -> None:
                 return
 
 
-def _remove(quarto_config: dict[str, Any]) -> None:
+def _remove(quarto_config: dict[str, Any], build_dir: Path) -> None:
     """
-    Remove the switcher's header and after-body includes
+    Remove the switcher's script, resource listing and page includes
 
     Parameters
     ----------
     quarto_config
         Contents of `_quarto.yml`, updated in place.
+    build_dir
+        The Quarto project directory.
 
     Returns
     -------
     :
     """
+    (build_dir / _SCRIPT).unlink(missing_ok=True)
+    resources = quarto_config.get("project", {}).get("resources")
+    if isinstance(resources, list) and _SCRIPT in resources:
+        cast("list[Any]", resources).remove(_SCRIPT)
     html = quarto_config.get("format", {}).get("html", {})
     removals: dict[Slot, str] = {
         "include-in-header": _SECTIONS_ATTRIBUTE,

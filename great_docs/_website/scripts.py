@@ -3,9 +3,7 @@ Scripts and stylesheets that Great Docs ships at the site root
 
 `SCRIPTS` lists each file once, in page load order. A file's gate controls
 copying into the build directory, listing in `project.resources` and
-inclusion in every page. The reference switcher is an exception: its gate
-controls copying, but its inclusion depends on the references the build
-generates. It is never listed as a resource.
+inclusion in every page.
 
 Every `src` and `href` is root-relative, and Quarto rewrites it relative to
 each page in header includes, after-body includes and raw HTML. Quarto leaves
@@ -33,6 +31,7 @@ __all__ = [
     "Script",
     "add_resources",
     "copy",
+    "copy_asset",
     "include",
     "include_libraries",
     "named",
@@ -160,9 +159,6 @@ class Script:
     directory: str = ""
     """The directory, relative to the packaged assets, that holds the file"""
 
-    listed: bool = True
-    """Whether `project.resources` lists the file when a site uses it"""
-
     def used(self, config: Config, *, has_repository: bool) -> bool:
         """
         Check whether the site configuration and repository satisfy the file's gate
@@ -281,25 +277,6 @@ def _dark_mode_disabled(config: Config) -> str | None:
     return '<meta name="gd-dark-mode" content="disabled">'
 
 
-def _has_reference_switcher(config: Config) -> bool:
-    """
-    Check whether the configuration enables a reference in addition to the API reference
-
-    Parameters
-    ----------
-    config
-        The Great Docs configuration.
-
-    Returns
-    -------
-    :
-        Whether a CLI, Go CLI, Rust CLI or MCP reference is enabled.
-    """
-    return (
-        config.cli_enabled or config.go_cli_enabled or config.rust_cli_enabled or config.mcp_enabled
-    )
-
-
 _HEADER: Slot = "include-in-header"
 _AFTER_BODY: Slot = "include-after-body"
 _LIGHTBOX = "_extensions/gd-lightbox"
@@ -353,10 +330,6 @@ SCRIPTS: tuple[Script, ...] = (
         lambda c: c.page_status_enabled,
         inline="renderPageBadge",
     ),
-    # The switcher is included only when the build generates a second reference.
-    # Configuration alone cannot determine this, so listing it as a resource
-    # would publish an unused file.
-    Script("reference-switcher.js", gate=_has_reference_switcher, listed=False),
     Script("tooltips.js", _AFTER_BODY),
     Script("color-swatch.js", _AFTER_BODY),
     Script("responsive-tables.js", _AFTER_BODY),
@@ -419,6 +392,24 @@ def copy(config: Config, build_dir: Path, *, has_repository: bool) -> None:
                 _ = shutil.copy2(source, build_dir / script.name)
 
 
+def copy_asset(name: str, build_dir: Path) -> None:
+    """
+    Copy a packaged script or stylesheet into the build directory
+
+    Parameters
+    ----------
+    name
+        The file name at the site root, such as `reference-switcher.js`.
+    build_dir
+        The Quarto project directory.
+
+    Returns
+    -------
+    :
+    """
+    _ = shutil.copy2(_ASSETS / name, build_dir / name)
+
+
 def add_resources(config: Config, quarto_config: dict[str, Any], *, has_repository: bool) -> None:
     """
     List the files a site uses in `project.resources`, in table order
@@ -438,11 +429,7 @@ def add_resources(config: Config, quarto_config: dict[str, Any], *, has_reposito
     """
     quarto_yml.add_resources(
         quarto_config,
-        (
-            script.name
-            for script in SCRIPTS
-            if script.listed and script.used(config, has_repository=has_repository)
-        ),
+        (script.name for script in SCRIPTS if script.used(config, has_repository=has_repository)),
     )
 
 
