@@ -170,16 +170,17 @@ class TestTyperDiscovery:
         _fake, mock_import = self._patch_typer_module(monkeypatch)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            obj = cli_click.find_command("mypkg", cli_module="mypkg.cli", cli_name=None)
+            found = cli_click.find_command("mypkg", cli_module="mypkg.cli", cli_name=None)
 
-        assert obj is not None
+        assert found is not None
+        obj = found.command
 
         # Converted object is introspectable as a Click-style group.
         assert hasattr(obj, "commands")
         assert set(obj.commands) == {"greet", "version", "db"}
 
     def test_discover_extracts_typer_tree(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(cli_click, "entry_point_name", lambda _root: "mytool")
+        monkeypatch.setattr(cli_click, "entry_point_name", lambda _root, _target: "mytool")
         _fake, mock_import = self._patch_typer_module(monkeypatch)
 
         with patch("importlib.import_module", side_effect=mock_import):

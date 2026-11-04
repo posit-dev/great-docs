@@ -6304,7 +6304,7 @@ def test_entry_point_name():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert cli_click.entry_point_name(docs.layout.package_root) == "mycli"
+        assert cli_click.entry_point_name(docs.layout.package_root, "other:cli") == "mycli"
 
 
 def test_entry_point_name_gui_scripts_fallback():
@@ -6318,7 +6318,7 @@ def test_entry_point_name_gui_scripts_fallback():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert cli_click.entry_point_name(docs.layout.package_root) == "myapp"
+        assert cli_click.entry_point_name(docs.layout.package_root, "other:cli") == "myapp"
 
 
 def test_entry_point_name_no_scripts_returns_none():
@@ -6330,7 +6330,7 @@ def test_entry_point_name_no_scripts_returns_none():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert cli_click.entry_point_name(docs.layout.package_root) is None
+        assert cli_click.entry_point_name(docs.layout.package_root, "other:cli") is None
 
 
 def test_entry_point_name_no_pyproject_returns_none():
@@ -6340,7 +6340,7 @@ def test_entry_point_name_no_pyproject_returns_none():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert cli_click.entry_point_name(docs.layout.package_root) is None
+        assert cli_click.entry_point_name(docs.layout.package_root, "other:cli") is None
 
 
 def test_get_package_metadata_setup_cfg_maintainer_basic():
@@ -7261,7 +7261,7 @@ def test_entry_point_name_scripts():
         )
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert cli_click.entry_point_name(docs.layout.package_root) == "my-tool"
+        assert cli_click.entry_point_name(docs.layout.package_root, "other:cli") == "my-tool"
 
 
 def test_entry_point_name_gui_scripts():
@@ -7275,7 +7275,7 @@ def test_entry_point_name_gui_scripts():
         )
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert cli_click.entry_point_name(docs.layout.package_root) == "my-gui"
+        assert cli_click.entry_point_name(docs.layout.package_root, "other:cli") == "my-gui"
 
 
 def test_entry_point_name_no_scripts():
@@ -7287,7 +7287,7 @@ def test_entry_point_name_no_scripts():
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert cli_click.entry_point_name(docs.layout.package_root) is None
+        assert cli_click.entry_point_name(docs.layout.package_root, "other:cli") is None
 
 
 def test_entry_point_name_no_pyproject():
@@ -7297,7 +7297,7 @@ def test_entry_point_name_no_pyproject():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert cli_click.entry_point_name(docs.layout.package_root) is None
+        assert cli_click.entry_point_name(docs.layout.package_root, "other:cli") is None
 
 
 def test_extract_command_simple():
@@ -13346,7 +13346,7 @@ def test_entry_point_name_b9():
             '[project]\nname = "mypkg"\n[project.scripts]\nmytool = "mypkg.cli:main"\n',
             encoding="utf-8",
         )
-        result = cli_click.entry_point_name(docs.layout.package_root)
+        result = cli_click.entry_point_name(docs.layout.package_root, "other:cli")
         assert result == "mytool"
 
 
@@ -13358,7 +13358,7 @@ def test_entry_point_name_no_scripts_b9():
         docs = GreatDocs(project_path=tmp_dir)
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        result = cli_click.entry_point_name(docs.layout.package_root)
+        result = cli_click.entry_point_name(docs.layout.package_root, "other:cli")
         assert result is None
 
 
@@ -14153,7 +14153,7 @@ def test_get_cli_entry_point_gui_scripts():
             encoding="utf-8",
         )
         docs = GreatDocs(project_path=tmp_dir)
-        result = cli_click.entry_point_name(docs.layout.package_root)
+        result = cli_click.entry_point_name(docs.layout.package_root, "other:cli")
         assert result == "mygui"
 
 
@@ -15079,6 +15079,52 @@ def test_discover_explicit_cli_name(tmp_path):
 
     assert result is not None
     assert result["entry_point_name"] == "my-app"
+
+
+def _typer_app() -> object:
+    """
+    Build a Typer app with one command
+
+    Typer creates a new Click command each time it converts the app.
+    """
+    import typer
+
+    app = typer.Typer()
+    app.command()(lambda: None)
+    return app
+
+
+@pytest.mark.parametrize(
+    ("attribute", "make_command"),
+    [("cli", lambda: click.Group(name="cli")), ("app", _typer_app)],
+    ids=["click", "typer"],
+)
+def test_discover_names_the_script_that_runs_the_command(
+    tmp_path, monkeypatch, attribute, make_command
+):
+    """
+    Use the script whose entry point names the discovered command
+    """
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\n"
+        'name = "pkg"\n'
+        "[project.scripts]\n"
+        'helper = "pkg.tools:main"\n'
+        f'pkg = "pkg.cli:{attribute}"\n'
+    )
+    cli_module = types.ModuleType("pkg.cli")
+    setattr(cli_module, attribute, make_command())
+    tools_module = types.ModuleType("pkg.tools")
+    tools_module.main = click.Command(name="main")
+    monkeypatch.setitem(sys.modules, "pkg.cli", cli_module)
+    monkeypatch.setitem(sys.modules, "pkg.tools", tools_module)
+
+    result = cli_click.discover(
+        "pkg", tmp_path, cli_module=None, cli_name=None, report=lambda _line: None
+    )
+
+    assert result is not None
+    assert result["entry_point_name"] == "pkg"
 
 
 def test_discover_no_command_found(tmp_path):
@@ -30530,7 +30576,7 @@ def test_find_command_with_cli_name(tmp_path):
 
     import click as _click
 
-    assert isinstance(result, (_click.Command, _click.Group))
+    assert isinstance(result.command, (_click.Command, _click.Group))
 
 
 def test_find_command_attr_loop(tmp_path):
@@ -30548,7 +30594,7 @@ def test_find_command_attr_loop(tmp_path):
 
     import click as _click
 
-    assert isinstance(result, (_click.Command, _click.Group))
+    assert isinstance(result.command, (_click.Command, _click.Group))
 
 
 def test_find_command_no_module_found_returns_none(tmp_path):
@@ -30592,7 +30638,7 @@ def test_find_command_dir_loop(tmp_path):
                 "mypkg", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
             )
 
-    assert isinstance(result, (_click.Command, _click.Group))
+    assert isinstance(result.command, (_click.Command, _click.Group))
 
 
 def test_find_command_discovery_loop_finds_module(tmp_path):
@@ -30625,7 +30671,7 @@ def test_find_command_discovery_loop_finds_module(tmp_path):
             "mypkg", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
         )
 
-    assert isinstance(result, (_click.Command, _click.Group))
+    assert isinstance(result.command, (_click.Command, _click.Group))
 
 
 def test_find_command_no_commands_returns_none(tmp_path):

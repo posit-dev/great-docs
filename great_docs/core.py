@@ -2382,15 +2382,15 @@ class GreatDocs:
         if self._config.cli_enabled:
             try:
                 metadata = self._get_package_metadata()
-                cli_obj = None
+                found = None
                 if metadata.get("cli_enabled", False):
-                    cli_obj = cli_click.find_command(
+                    found = cli_click.find_command(
                         importable_name,
                         cli_module=metadata.get("cli_module"),
                         cli_name=metadata.get("cli_name"),
                     )
-                if cli_obj is not None:
-                    snap.cli_commands = cli_click.extract_snapshot(cli_obj)
+                if found is not None:
+                    snap.cli_commands = cli_click.extract_snapshot(found.command)
             except USER_CODE_ERRORS:
                 pass  # CLI snapshot is best-effort
 

@@ -80,7 +80,7 @@ class TestFindCommand:
 
         with patch("importlib.import_module", side_effect=mock_import):
             result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
-        assert result is fake_cmd
+        assert result.command is fake_cmd
 
     def test_explicit_cli_module_import_fails(self):
         """
@@ -116,7 +116,7 @@ class TestFindCommand:
             result = cli_click.find_command(
                 "mypkg", cli_module="mypkg.custom_cli", cli_name="mycmd"
             )
-        assert result is fake_cmd
+        assert result.command is fake_cmd
 
     def test_common_attr_names_found(self):
         """
@@ -135,7 +135,7 @@ class TestFindCommand:
 
         with patch("importlib.import_module", side_effect=mock_import):
             result = cli_click.find_command("mypkg", cli_module="mypkg.cli_mod", cli_name=None)
-        assert result is fake_group
+        assert result.command is fake_group
 
     def test_scan_all_attrs_fallback(self):
         """
@@ -154,7 +154,7 @@ class TestFindCommand:
 
         with patch("importlib.import_module", side_effect=mock_import):
             result = cli_click.find_command("mypkg", cli_module="mypkg.cli_mod", cli_name=None)
-        assert result is fake_cmd
+        assert result.command is fake_cmd
 
     def test_no_click_obj_found_returns_none(self):
         """
@@ -190,7 +190,7 @@ class TestFindCommand:
 
         with patch("importlib.import_module", side_effect=mock_import):
             result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
-        assert result is fake_cmd
+        assert result.command is fake_cmd
 
     def test_candidate_that_exits_on_import_is_skipped(self):
         """
@@ -210,7 +210,7 @@ class TestFindCommand:
 
         with patch("importlib.import_module", side_effect=mock_import):
             result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
-        assert result is fake_cmd
+        assert result.command is fake_cmd
 
     @pytest.mark.parametrize(
         "error",

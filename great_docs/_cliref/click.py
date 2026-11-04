@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tomllib
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -142,6 +143,19 @@ def param_kind(param: Any) -> str:
     return getattr(param, "param_type_name", "") or ""
 
 
+@dataclass(frozen=True)
+class FoundCommand:
+    """
+    A discovered command and the reference to its defining object
+    """
+
+    command: Any
+    """The Click command, converted from a Typer app when needed"""
+
+    target: str
+    """The `module:attribute` reference to the original Click command or Typer app"""
+
+
 def discover(
     module_name: str,
     package_root: Path,
@@ -159,7 +173,7 @@ def discover(
     module_name
         The package's importable name.
     package_root
-        The directory holding `pyproject.toml`, whose first script names the command.
+        The directory holding `pyproject.toml`, which supplies the command's script name.
     cli_module
         The `cli.module` setting: the module that defines the command line.
     cli_name
@@ -176,17 +190,17 @@ def discover(
         The command tree of the command `find_command` finds, with `entry_point_name` set on the
         root, or `None` when the package has no command line.
     """
-    cli_obj = find_command(module_name, cli_module=cli_module, cli_name=cli_name, report=report)
-    if cli_obj is None:
+    found = find_command(module_name, cli_module=cli_module, cli_name=cli_name, report=report)
+    if found is None:
         return None
 
     # When [project.scripts] is absent, fall back to the display name (the
     # project name) rather than the importable module name, which may differ.
-    resolved_name = entry_point_name(package_root) or (display_name or module_name).replace(
-        "_", "-"
-    )
+    resolved_name = entry_point_name(package_root, found.target) or (
+        display_name or module_name
+    ).replace("_", "-")
 
-    cli_info = extract_command(cli_obj, resolved_name)
+    cli_info = extract_command(found.command, resolved_name)
     cli_info["entry_point_name"] = resolved_name
     return cli_info
 
@@ -197,7 +211,7 @@ def find_command(
     cli_module: str | None,
     cli_name: str | None,
     report: Callable[[str], None] = lambda _line: None,
-) -> Any | None:
+) -> FoundCommand | None:
     """
     Find a package's command line as a Click command
 
@@ -221,8 +235,8 @@ def find_command(
     Returns
     -------
     :
-        The Click command, with a Typer app converted, or `None` when the package has no command
-        line.
+        The discovered command and its original `module:attribute` reference, or `None` when
+        the package has no command line. Typer apps are converted to Click commands.
 
     Raises
     ------
@@ -279,7 +293,7 @@ def find_command(
         return None
 
     report(f"Found Click CLI: {cli_name} in {cli_module_path}")
-    return cli_obj
+    return FoundCommand(cli_obj, f"{cli_module_path}:{cli_name}")
 
 
 def _import_candidate(module_path: str) -> ModuleType | None:
@@ -346,20 +360,24 @@ def _import_cli_module(module_path: str) -> ModuleType:
         raise ImportError(f"importing {module_path} exited with status {e.code}") from e
 
 
-def entry_point_name(package_root: Path) -> str | None:
+def entry_point_name(package_root: Path, target: str) -> str | None:
     """
-    Read the name of the package's first script from `pyproject.toml`
+    Read a command's script name from `pyproject.toml`
 
     Parameters
     ----------
     package_root
         The directory holding `pyproject.toml`.
+    target
+        The `module:attribute` reference to the original Click command or Typer app.
 
     Returns
     -------
     :
-        The first `[project.scripts]` name, else the first `[project.gui-scripts]` name, or
-        `None` when there is neither or the file is missing or unreadable.
+        The first script name whose entry point matches `target`, searching `[project.scripts]`
+        before `[project.gui-scripts]`. If none matches, the first name in `[project.scripts]`,
+        or in `[project.gui-scripts]` if there are no console scripts. `None` when neither
+        table lists scripts or the file is missing or unreadable.
     """
     pyproject_path = package_root / "pyproject.toml"
     if not pyproject_path.exists():
@@ -372,15 +390,17 @@ def entry_point_name(package_root: Path) -> str | None:
         return None
 
     project = data.get("project", {})
-    scripts = project.get("scripts", {})
-    if scripts:
-        return next(iter(scripts))
+    tables = [project.get("scripts", {}), project.get("gui-scripts", {})]
+    for table in tables:
+        for name, reference in table.items():
+            # Whitespace and optional extras do not change the command an entry point names.
+            if (
+                isinstance(reference, str)
+                and re.sub(r"\s", "", reference.split("[", 1)[0]) == target
+            ):
+                return name
 
-    gui_scripts = project.get("gui-scripts", {})
-    if gui_scripts:
-        return next(iter(gui_scripts))
-
-    return None
+    return next((name for table in tables for name in table), None)
 
 
 def extract_command(cmd: Any, name: str, parent_path: str = "") -> CliCommand:
