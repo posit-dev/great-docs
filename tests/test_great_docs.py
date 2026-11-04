@@ -16420,8 +16420,8 @@ def test_homepage_hero_auto_badges():
 
         with (
             patch("great_docs._website.homepage.hero.extract_hero_elements", return_value=elements),
-            patch("great_docs.core.branding.detect_hero_logo", return_value=None),
-            patch("great_docs.core.branding.detect_logo", return_value=None),
+            patch("great_docs._website.branding.detect_hero_logo", return_value=None),
+            patch("great_docs._website.branding.detect_logo", return_value=None),
             patch.object(docs, "_get_package_metadata", return_value={}),
         ):
             html, cleaned = homepage_hero(docs, "# My Package\n![badge](url)\n")
@@ -16448,8 +16448,8 @@ def test_homepage_hero_no_content():
         )
 
         with (
-            patch("great_docs.core.branding.detect_hero_logo", return_value=None),
-            patch("great_docs.core.branding.detect_logo", return_value=None),
+            patch("great_docs._website.branding.detect_hero_logo", return_value=None),
+            patch("great_docs._website.branding.detect_logo", return_value=None),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_detect_package_name", return_value=None),
         ):
@@ -17345,7 +17345,7 @@ def test_update_quarto_config_dark_logo():
         )
 
         with patch(
-            "great_docs.core.branding.generate_favicons", return_value={"icon": "favicon.ico"}
+            "great_docs._website.branding.generate_favicons", return_value={"icon": "favicon.ico"}
         ):
             docs._update_quarto_config(make_run())
 
@@ -17372,7 +17372,7 @@ def test_update_quarto_config_logo_name_collision():
         )
 
         with patch(
-            "great_docs.core.branding.generate_favicons", return_value={"icon": "favicon.ico"}
+            "great_docs._website.branding.generate_favicons", return_value={"icon": "favicon.ico"}
         ):
             docs._update_quarto_config(make_run())
 
@@ -17407,7 +17407,7 @@ def test_update_quarto_config_dark_logo_not_found():
         )
 
         with patch(
-            "great_docs.core.branding.generate_favicons", return_value={"icon": "favicon.ico"}
+            "great_docs._website.branding.generate_favicons", return_value={"icon": "favicon.ico"}
         ):
             docs._update_quarto_config(make_run())
 
@@ -17425,7 +17425,7 @@ def test_update_quarto_config_favicon_file():
         )
 
         with patch(
-            "great_docs.core.branding.generate_favicons", return_value={"icon": "favicon.ico"}
+            "great_docs._website.branding.generate_favicons", return_value={"icon": "favicon.ico"}
         ):
             docs._update_quarto_config(make_run())
 
@@ -17446,7 +17446,7 @@ def test_update_quarto_config_favicon_not_found():
             gd_yml_content="logo:\n  light: logo.png\nfavicon:\n  source: nonexistent.ico\n",
         )
 
-        with patch("great_docs.core.branding.generate_favicons", return_value={}):
+        with patch("great_docs._website.branding.generate_favicons", return_value={}):
             docs._update_quarto_config(make_run())
 
 
@@ -17469,7 +17469,7 @@ def test_update_quarto_config_favicon_resources_added():
             "apple-touch-icon": "apple-touch-icon.png",
         }
 
-        with patch("great_docs.core.branding.generate_favicons", return_value=generated):
+        with patch("great_docs._website.branding.generate_favicons", return_value=generated):
             docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
@@ -17511,7 +17511,7 @@ def test_update_quarto_config_favicon_absolute_urls_with_site_url():
             "apple-touch-icon": "apple-touch-icon.png",
         }
 
-        with patch("great_docs.core.branding.generate_favicons", return_value=generated):
+        with patch("great_docs._website.branding.generate_favicons", return_value=generated):
             docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
@@ -17559,7 +17559,7 @@ def test_update_quarto_config_favicon_no_links_without_site_url():
             "apple-touch-icon": "apple-touch-icon.png",
         }
 
-        with patch("great_docs.core.branding.generate_favicons", return_value=generated):
+        with patch("great_docs._website.branding.generate_favicons", return_value=generated):
             docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
@@ -17604,7 +17604,7 @@ def test_update_quarto_config_favicon_absolute_urls_from_pyproject():
             "icon-svg": "favicon.svg",
         }
 
-        with patch("great_docs.core.branding.generate_favicons", return_value=generated):
+        with patch("great_docs._website.branding.generate_favicons", return_value=generated):
             docs._update_quarto_config(make_run())
 
         with open(quarto_yml) as f:
@@ -17804,7 +17804,7 @@ def test_update_quarto_config_logo_href():
         )
 
         with patch(
-            "great_docs.core.branding.generate_favicons", return_value={"icon": "favicon.ico"}
+            "great_docs._website.branding.generate_favicons", return_value={"icon": "favicon.ico"}
         ):
             docs._update_quarto_config(make_run())
 

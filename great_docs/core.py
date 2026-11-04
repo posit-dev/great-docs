@@ -8,10 +8,10 @@ from functools import cache, partial
 from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlsplit
 
 from . import _marimo
 from ._build import freeze, outputs, quarto, serve, timings
+from ._build.facts import Facts
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
@@ -52,7 +52,6 @@ from ._utils import (
     record_site_ownership,
 )
 from ._website import (
-    branding,
     changelog,
     i18n,
     inline_data,
@@ -72,11 +71,9 @@ from ._website.ai_agents.skills import SkillsWriter
 from ._website.homepage import page as homepage_page
 from ._website.homepage import source as homepage_source
 from ._website.identity import Identity
-from ._website.navigation import github as nav_github
+from ._website.navigation import brand, shared_sidebar
 from ._website.navigation import label as nav_label
 from ._website.navigation import navbar as nav_navbar
-from ._website.navigation import release as nav_release
-from ._website.navigation import shared_sidebar
 from ._website.project_pages import citation, licence, package_info
 from ._website.scripts import script_include
 from ._website.seo import description as seo_description
@@ -2789,228 +2786,24 @@ class GreatDocs:
 
         scripts.include_libraries(self._config, config)
 
-        # Add website navigation if not present
-        if "website" not in config:
-            config["website"] = {}
-
-        # Set site-url for subdirectory deployments (from great-docs.yml)
-        if self._config.site_url:
-            config["website"]["site-url"] = self._config.site_url
-
-        # Enable page navigation for TOC
-        if "page-navigation" not in config["website"]:
-            config["website"]["page-navigation"] = True
-
-        # Set title to package name if not already set
-        if "title" not in config["website"]:
-            # Use display_name from config if available, otherwise use package name as-is
-            display_name = self._config.display_name
-            if display_name:
-                config["website"]["title"] = display_name
-            else:
-                package_name = self._detect_package_name()
-                if not package_name and self._config.go_cli_enabled:
-                    from great_docs._cliref.go import detect_go_cli_project
-
-                    go_project = detect_go_cli_project(self.layout.package_root)
-                    if go_project:
-                        package_name = go_project.binary_name
-                if not package_name and self._config.rust_cli_enabled:
-                    from great_docs._cliref.rust import detect_rust_cli_project
-
-                    rust_project = detect_rust_cli_project(self.layout.package_root)
-                    if rust_project:
-                        package_name = rust_project.binary_names[0]
-                if package_name:
-                    config["website"]["title"] = package_name
-
-        # Get GitHub info and style preference
-        owner, repo, repo_url = self._get_github_repo_info()
+        # Show the site's title or logo, its favicons and the GitHub entry
+        owner, repo_name, _ = self._get_github_repo_info()
+        repo = GithubRepo(owner, repo_name) if owner and repo_name else None
+        if run.facts is None:
+            run.facts = Facts.make(self._config, repo, self._remote)
         metadata = self._get_package_metadata()
-        github_style = metadata.get("github_style", "widget")  # "widget" or "icon"
-        github_item = None
-        if repo_url:
-            stats = (
-                self._remote.github_stats(GithubRepo(owner, repo))
-                if owner and repo and github_style == "widget"
-                else None
-            )
-            github_item = nav_github.navbar_item(repo_url, owner, repo, github_style, stats)
-
-        # Add or update navbar
-        if "navbar" not in config["website"]:
-            navbar_config = {
-                "left": [],
-            }
-            if github_item:
-                navbar_config["right"] = [github_item]
-
-            config["website"]["navbar"] = navbar_config
-        else:
-            if github_item:
-                nav_github.set_navbar_item(config["website"]["navbar"], github_item)
-
-            # Remove legacy "Home" link (package name in navbar already links home)
-            if "left" in config["website"]["navbar"]:
-                config["website"]["navbar"]["left"] = [
-                    item
-                    for item in config["website"]["navbar"]["left"]
-                    if not (isinstance(item, dict) and item.get("text") == "Home")
-                ]
-
-        # --- Logo & favicon injection ---
-        logo_config = self._config.logo
-        if logo_config is None:
-            # Auto-detect logo from conventional paths
-            logo_config = branding.detect_logo(self.layout.source_dir, self._detect_package_name())
-
-        if logo_config is not None:
-            navbar = config["website"]["navbar"]
-
-            # Copy logo files into the Quarto project directory
-            light_src = self.layout.source_dir / logo_config["light"]
-            if light_src.is_file():
-                light_dest_name = light_src.name
-                # Avoid name collision: prefix with "logo-light" if needed
-                if logo_config.get("dark") and logo_config["dark"] != logo_config["light"]:
-                    if light_dest_name == Path(logo_config["dark"]).name:
-                        light_dest_name = f"logo-light{light_src.suffix}"
-                publish.copy_asset(self.layout, light_src, self.build_dir / light_dest_name)
-                navbar["logo"] = light_dest_name
-            elif urlsplit(logo_config["light"]).scheme or logo_config["light"].startswith("//"):
-                navbar["logo"] = logo_config["light"]
-            else:
-                print(f"Warning: Logo file not found: {light_src}")
-
-            # Dark variant
-            dark_path = logo_config.get("dark")
-            if dark_path and dark_path != logo_config["light"]:
-                dark_src = self.layout.source_dir / dark_path
-                if dark_src.is_file():
-                    dark_dest_name = dark_src.name
-                    publish.copy_asset(self.layout, dark_src, self.build_dir / dark_dest_name)
-                    navbar["logo-dark"] = dark_dest_name
-
-                    # Ensure the dark logo is included as a resource so Quarto
-                    # copies it to _site (needed for custom dark-mode toggle)
-                    if "resources" not in config["project"]:
-                        config["project"]["resources"] = []  # pragma: no cover
-                    if dark_dest_name not in config["project"]["resources"]:
-                        config["project"]["resources"].append(dark_dest_name)
-
-                    # Inject a meta tag so dark-mode-toggle.js can find the
-                    # dark logo path and fix the navbar <img> src at runtime
-                    dark_logo_meta = {
-                        "text": f'<meta name="gd-logo-dark" content="{dark_dest_name}">'
-                    }
-                    header_list = config["format"]["html"].setdefault("include-in-header", [])
-                    if not any("gd-logo-dark" in str(h) for h in header_list):
-                        header_list.append(dark_logo_meta)
-                else:
-                    print(f"Warning: Dark logo file not found: {dark_src}")
-
-            # Alt text (for accessibility)
-            alt_text = logo_config.get("alt")
-            if not alt_text:
-                # Fall back to display name or package name
-                alt_text = self._config.display_name or self._detect_package_name() or ""
-            if alt_text:
-                navbar["logo-alt"] = alt_text
-
-            # Logo href (defaults to site root)
-            logo_href = logo_config.get("href")
-            if logo_href:
-                navbar["logo-href"] = logo_href
-
-            # Suppress the text title in the navbar unless show_title is True
-            if not self._config.logo_show_title:
-                navbar["title"] = False
-
-            # Favicon: use explicit config, or auto-generate from logo
-            favicon_config = self._config.favicon
-            generated: dict[str, str] = {}
-            if favicon_config is not None:
-                # User supplied explicit favicon — generate raster variants too
-                icon_src_path = favicon_config.get("icon")
-                if icon_src_path:
-                    fav_src = self.layout.source_dir / icon_src_path
-                    if fav_src.is_file():
-                        generated = branding.generate_favicons(
-                            fav_src, self.build_dir, report=print
-                        )
-                        if generated.get("icon"):
-                            config["website"]["favicon"] = generated["icon"]
-                        else:
-                            # Fallback: just copy the file
-                            shutil.copy2(fav_src, self.build_dir / fav_src.name)  # pragma: no cover
-                            config["website"]["favicon"] = fav_src.name  # pragma: no cover
-                    else:
-                        print(f"Warning: Favicon file not found: {fav_src}")  # pragma: no cover
-            elif light_src.is_file():
-                # Auto-generate favicons from the logo
-                generated = branding.generate_favicons(light_src, self.build_dir, report=print)
-                if generated.get("icon"):
-                    config["website"]["favicon"] = generated["icon"]
-
-            # Add generated favicon files to project.resources so Quarto copies
-            # them into _site/ (without this they may be missing from the deployed site)
-            if generated:
-                favicon_files = list(dict.fromkeys(generated.values()))
-                resources_list = config["project"].setdefault("resources", [])
-                if isinstance(resources_list, str):
-                    resources_list = [resources_list]  # pragma: no cover
-                    config["project"]["resources"] = resources_list  # pragma: no cover
-                for fname in favicon_files:
-                    if fname not in resources_list:
-                        resources_list.append(fname)
-
-            # Inject <link> tags for extra favicon assets using absolute URLs.
-            # Bare relative paths (e.g., href="favicon.ico") break on subpages because
-            # Quarto does not rewrite paths inside raw HTML injected via include-in-header.
-            # We derive the base URL from site-url or the Documentation URL in pyproject.toml.
-            if generated:
-                site_url = config.get("website", {}).get("site-url", "")
-                if not site_url:
-                    urls = metadata.get("urls", {})
-                    site_url = urls.get("Documentation", "")
-                if site_url:
-                    # Clean up: strip fragment, ensure trailing slash
-                    if "#" in site_url:
-                        site_url = site_url.split("#")[0]
-                    if not site_url.endswith("/"):
-                        site_url += "/"
-
-                    favicon_links: list[str] = []
-                    if generated.get("icon") and generated["icon"].endswith(".ico"):
-                        favicon_links.append(
-                            f'<link rel="icon" type="image/x-icon" href="{site_url}favicon.ico" sizes="48x48">'
-                        )
-                    if generated.get("icon-svg"):
-                        favicon_links.append(
-                            f'<link rel="icon" type="image/svg+xml" href="{site_url}favicon.svg">'
-                        )
-                    if generated.get("icon-32"):
-                        favicon_links.append(
-                            f'<link rel="icon" type="image/png" sizes="32x32" href="{site_url}favicon-32x32.png">'
-                        )
-                    if generated.get("icon-16"):
-                        favicon_links.append(
-                            f'<link rel="icon" type="image/png" sizes="16x16" href="{site_url}favicon-16x16.png">'
-                        )
-                    if generated.get("apple-touch-icon"):
-                        favicon_links.append(
-                            f'<link rel="apple-touch-icon" sizes="180x180" href="{site_url}apple-touch-icon.png">'
-                        )
-
-                    if favicon_links:
-                        header_items = config["format"]["html"].get("include-in-header", [])
-                        if isinstance(header_items, str):
-                            header_items = [header_items]  # pragma: no cover
-                        for link_tag in favicon_links:
-                            entry = {"text": link_tag}
-                            if not any(link_tag in str(item) for item in header_items):
-                                header_items.append(entry)
-                        config["format"]["html"]["include-in-header"] = header_items
+        brand.register(
+            config,
+            self._config,
+            self.layout,
+            self.build_dir,
+            identity=self._identity(),
+            package_name=self._detect_package_name(),
+            repo=repo,
+            facts=run.facts,
+            documentation_url=metadata.get("urls", {}).get("Documentation"),
+            report=print,
+        )
 
         # Table order preserves the order in which pages load the site's scripts.
         scripts.include(self._config, config, self.build_dir, has_repository=has_repository)
@@ -3587,11 +3380,7 @@ class GreatDocs:
             header_list.append({"text": stf_meta_tag})
 
         # Show the latest GitHub release beside the navbar title
-        release = None
-        if owner and repo:
-            latest = self._remote.github_releases(GithubRepo(owner, repo), max_releases=1)
-            release = nav_release.Release.make(latest[0]) if latest else None
-        nav_release.add_to_navbar(config, release, self._config.lang)
+        brand.register_release(config, self._config, run.facts)
 
         # Register Quarto extension filters (output-title wraps cell
         # outputs in a titled container when #| output-title: is set)

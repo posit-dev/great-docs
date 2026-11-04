@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .._content.user_guide import UserGuide
+    from .facts import Facts
 
 __all__ = ["Run"]
 
@@ -37,6 +38,10 @@ class Run:
     user_guide
         The user guide discovered during build preparation, or `None` when no guide
         pages were found.
+    facts
+        The navbar's GitHub data, fetched when the Quarto configuration is first
+        written and reused on later writes within the build. `None` before the
+        first write.
     """
 
     package_name: str
@@ -45,3 +50,4 @@ class Run:
     api_discovery_done: bool = False
     mcp_pages_generated: bool | None = None
     user_guide: UserGuide | None = None
+    facts: Facts | None = None
