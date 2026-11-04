@@ -6241,6 +6241,26 @@ def test_cli_help_for_llms_display_name_is_project_name():
         assert "## CLI: my-dist" in (docs.build_dir / "llms-full.txt").read_text()
 
 
+def test_llms_full_written_without_cli_when_cli_module_fails_to_import(tmp_path, monkeypatch):
+    """
+    Write `llms-full.txt` without the CLI when a candidate CLI module fails to import
+    """
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "brokencli-pkg"\n')
+    (tmp_path / "great-docs.yml").write_text("module: brokencli_pkg\ncli:\n  enabled: true\n")
+    pkg_dir = tmp_path / "brokencli_pkg"
+    pkg_dir.mkdir()
+    (pkg_dir / "__init__.py").write_text('"""brokencli_pkg."""\n')
+    (pkg_dir / "cli.py").write_text("import brokencli_missing_dependency\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs.build_dir.mkdir()
+    (docs.build_dir / "_quarto.yml").write_text(LLMS_TXT_QUARTO_YML)
+    docs._step_llms_txt(make_run(user_guide=discover_user_guide(docs)))
+
+    assert "## CLI" not in (docs.build_dir / "llms-full.txt").read_text()
+
+
 def test_is_compiled_extension_cargo():
     """_is_compiled_extension returns True when Cargo.toml exists."""
     with tempfile.TemporaryDirectory() as tmp_dir:

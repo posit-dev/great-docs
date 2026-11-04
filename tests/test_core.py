@@ -56,7 +56,7 @@ class TestFindCommand:
 
         def fail_import(name, *args, **kwargs):
             if name in ("mypkg.cli", "mypkg.__main__", "mypkg.main"):
-                raise ImportError(f"no module {name}")
+                raise ModuleNotFoundError(f"No module named {name!r}", name=name)
             return real_import(name, *args, **kwargs)
 
         with patch("importlib.import_module", side_effect=fail_import):
@@ -186,7 +186,7 @@ class TestFindCommand:
         def mock_import(name, *args, **kwargs):
             if name == f"mypkg.{candidate}":
                 return fake_mod
-            raise ImportError(f"no module {name}")
+            raise ModuleNotFoundError(f"No module named {name!r}", name=name)
 
         with patch("importlib.import_module", side_effect=mock_import):
             result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
@@ -206,11 +206,37 @@ class TestFindCommand:
                 raise SystemExit(2)
             if name == "mypkg.main":
                 return fake_mod
-            raise ImportError(f"no module {name}")
+            raise ModuleNotFoundError(f"No module named {name!r}", name=name)
 
         with patch("importlib.import_module", side_effect=mock_import):
             result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
         assert result is fake_cmd
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            ModuleNotFoundError("No module named 'requests'", name="requests"),
+            ImportError("cannot import name 'run' from 'mypkg.core'"),
+            SyntaxError("invalid syntax"),
+        ],
+    )
+    def test_candidate_that_fails_on_import_raises(self, error):
+        """
+        Name the failing candidate in `ImportError` and preserve the original cause
+        """
+        real_import = importlib.import_module
+
+        def mock_import(name, *args, **kwargs):
+            if name == "mypkg.cli":
+                raise error
+            return real_import(name, *args, **kwargs)
+
+        with (
+            patch("importlib.import_module", side_effect=mock_import),
+            pytest.raises(ImportError, match="mypkg.cli") as raised,
+        ):
+            cli_click.find_command("mypkg", cli_module=None, cli_name=None)
+        assert raised.value.__cause__ is error
 
     def test_configured_module_that_exits_on_import_finds_none(self):
         """

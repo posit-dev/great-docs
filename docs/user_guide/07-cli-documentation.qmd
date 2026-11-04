@@ -66,6 +66,9 @@ Great Docs checks these locations automatically, so you rarely need to tell it w
 4. entry point module from `[project.scripts]`
 
 Great Docs tries each location in order and uses the first one that contains a Click command.
+If a module exists but fails to import, for example because a dependency is missing, Great Docs
+stops the search. The build shows a warning with the module's name and the error, and writes no
+CLI pages.
 
 If you have a `[project.scripts]` section:
 
