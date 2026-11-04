@@ -114,7 +114,11 @@ class Published:
     """The pages copied into the build"""
 
     sidebar: dict[str, Any] | None
-    """The section's sidebar, or `None` when it would list one item or none"""
+    """
+    The sidebar, or `None` for a blog or a section with at most one page
+
+    The page count includes the section's index.
+    """
 
     navbar: NavbarLink
     """The link to the section's index or first page"""
@@ -249,10 +253,10 @@ def publish(
 
     A blog's index is the author's root `index.qmd`, given the blog index's layout, or a
     generated listing. A default section's index is the author's `index.qmd`, a generated
-    index of cards when `index` is set, or else its first page. A default section has no
-    sidebar when it would contain at most one top-level item. Its pages gain the
-    `gd-section-no-sidebar` body class only when the page count, including any index,
-    is at most one.
+    index of cards when `index` is set, or else its first page.
+
+    A default section has a sidebar when it has more than one page, including its index.
+    With at most one page, its pages receive the `gd-section-no-sidebar` body class.
 
     The navbar label is the section's title. A section titled exactly `Recipes` uses
     the translation of that label in the site's language.
@@ -324,10 +328,7 @@ def publish(
             dir_titles=section.dir_titles,
             sidebar_groups=section.sidebar_groups,
         )
-        # The sidebar counts subdirectory groups as single items. A section with
-        # multiple pages in one subdirectory can have no sidebar without qualifying
-        # for this class.
-        if (1 if has_index else 0) + len(content_pages) <= 1:
+        if section_sidebar is None:
             add_no_sidebar_class(copied, destination)
 
     return Published(
@@ -705,17 +706,21 @@ def sidebar(
     Returns
     -------
     :
-        The sidebar, with `slug` as its `id`, or `None` when it would list one item or
-        none.
+        The sidebar, with `slug` as its `id`, or `None` if the section has at most one
+        page, including its index.
     """
+    by_filename = {page["filename"]: page for page in pages if page["filename"] != "index.qmd"}
+    # Count pages, including the index: one top-level subdirectory can contain
+    # several pages that need sidebar navigation.
+    if (1 if has_index else 0) + len(by_filename) <= 1:
+        return None
+
     contents: list[dict[str, Any]] = []
     if has_index:
         contents.append({"text": title, "href": f"{slug}/index.qmd"})
 
     def link(page: Page) -> dict[str, Any]:
         return {"text": page["title"], "href": f"{slug}/{page['filename']}"}
-
-    by_filename = {page["filename"]: page for page in pages if page["filename"] != "index.qmd"}
 
     if sidebar_groups:
         grouped: set[str] = set()
@@ -755,9 +760,6 @@ def sidebar(
                 }
             )
 
-    # A lone item gives no navigation; without a sidebar the page takes the full width
-    if len(contents) <= 1:
-        return None
     return {"id": slug, "title": title, "contents": contents}
 
 

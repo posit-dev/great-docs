@@ -445,6 +445,39 @@ def test_sidebar_follows_sidebar_groups_then_lists_ungrouped_pages():
     ]
 
 
+def test_publish_gives_a_sidebar_to_pages_in_one_subdirectory(tmp_path: Path):
+    project = tmp_path.resolve()
+    subdirectory = project / "examples" / "01-basics"
+    subdirectory.mkdir(parents=True)
+    (subdirectory / "first.qmd").write_text("---\ntitle: First\n---\n")
+    (subdirectory / "second.qmd").write_text("---\ntitle: Second\n---\n")
+    config = write_config(project, {"sections": [{"title": "Examples", "dir": "examples"}]})
+    layout = Layout.make(project)
+    [section] = sections.read(config, layout, report=print)
+    section.destination.mkdir(parents=True)
+
+    published = sections.publish(
+        section,
+        config=config,
+        layout=layout,
+        pages=PageMap.make(config, layout, None, []),
+        add_dates=_without_dates,
+    )
+
+    assert published.sidebar is not None
+    assert published.sidebar["contents"] == [
+        {
+            "section": "Basics",
+            "contents": [
+                {"text": "First", "href": "examples/basics/first.qmd"},
+                {"text": "Second", "href": "examples/basics/second.qmd"},
+            ],
+        }
+    ]
+    first = (section.destination / "basics" / "first.qmd").read_text()
+    assert "gd-section-no-sidebar" not in first
+
+
 def _no_sidebar(dest_dir: Path, content: str) -> str:
     (dest_dir / "page.qmd").write_text(content)
     sections.add_no_sidebar_class([_page("page.qmd", "Page")], dest_dir)
