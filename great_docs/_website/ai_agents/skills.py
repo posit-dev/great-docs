@@ -51,8 +51,11 @@ class SkillsWriter:
                 dest = self.build_dir / "skill.md"
                 _ = shutil.copy2(src, dest)
                 print(f"Copied user SKILL.md from {src}")
-                publish(self.build_dir, [(dest, None)], enabled=self.config.skill_well_known)
-                SkillsPageWriter.make(self).write(dest, skill_dir=src.parent)
+                own_dir = self._own_directory(src)
+                publish(self.build_dir, [(dest, own_dir)], enabled=self.config.skill_well_known)
+                SkillsPageWriter.make(self).write(
+                    dest, skill_dir=src.parent, companions=own_dir is not None
+                )
                 return
             else:
                 print(f"Warning: skill.file '{src}' not found, falling back to discovery")
@@ -69,8 +72,11 @@ class SkillsWriter:
                 dest = self.build_dir / "skill.md"
                 _ = shutil.copy2(skills_path, dest)
                 print(f"Using curated skill from {skills_path}")
-                publish(self.build_dir, [(dest, None)], enabled=self.config.skill_well_known)
-                SkillsPageWriter.make(self).write(dest, skill_dir=skills_path.parent)
+                own_dir = self._own_directory(skills_path)
+                publish(self.build_dir, [(dest, own_dir)], enabled=self.config.skill_well_known)
+                SkillsPageWriter.make(self).write(
+                    dest, skill_dir=skills_path.parent, companions=own_dir is not None
+                )
                 return
 
         if not quarto_yml.path(self.build_dir).exists():
@@ -109,7 +115,7 @@ class SkillsWriter:
         if not skill_entries:
             return
 
-        placed_skills: list[tuple["Path", "Path"]] = []
+        placed_skills: list[tuple["Path", "Path | None"]] = []
 
         for i, entry in enumerate(skill_entries):
             name = entry.get("name")
@@ -127,9 +133,9 @@ class SkillsWriter:
                 dest = self.build_dir / "skill.md"
                 _ = shutil.copy2(src, dest)
                 print(f"Copied primary skill '{name}' from {src}")
-                placed_skills.append((dest, src.parent))
+                placed_skills.append((dest, self._own_directory(src)))
             else:
-                placed_skills.append((src, src.parent))
+                placed_skills.append((src, self._own_directory(src)))
 
         if not placed_skills:
             return
@@ -139,3 +145,27 @@ class SkillsWriter:
         primary_path, primary_dir = placed_skills[0]
         extra = placed_skills[1:] if len(placed_skills) > 1 else None
         SkillsPageWriter.make(self).write(primary_path, skill_dir=primary_dir, extra_skills=extra)
+
+    def _own_directory(self, skill_file: Path) -> Path | None:
+        """
+        Return the skill's directory unless it is shared with the project
+
+        Treat the project root, the docs source directory and all ancestors of the
+        docs source directory as shared. Skills in these directories have no companion
+        files.
+
+        Parameters
+        ----------
+        skill_file
+            Path to the skill's `SKILL.md`.
+
+        Returns
+        -------
+        :
+            The skill's parent directory, or `None` for a shared directory.
+        """
+        directory = skill_file.parent.resolve()
+        shared = directory == self.layout.package_root.resolve() or (
+            self.layout.source_dir.resolve().is_relative_to(directory)
+        )
+        return None if shared else skill_file.parent
