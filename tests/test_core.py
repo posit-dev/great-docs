@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib
+import io
 import sys
 import types
 from pathlib import Path
@@ -12,6 +13,7 @@ from unittest.mock import MagicMock, patch
 import click
 import griffe
 import pytest
+import yaml
 
 from great_docs import GreatDocs
 from great_docs._build import freeze
@@ -1380,6 +1382,45 @@ class TestCommandPage:
         )
         result = cli_render.command_page(mock_config(lang="en"), cli_info, is_main=True)
         assert "TOKEN_A, TOKEN_B" in result
+
+    def test_parameter_markup_characters_escaped(self):
+        # A clap option's name carries its value name, as in `--config <PATH>`.
+        cli_info = self._make_cli_info(
+            arguments=[{"name": "src", "name_display": "<src>", "type": "<T>"}],
+            options=[
+                {
+                    "name_display": "-c, --config <PATH>",
+                    "type": "A&B",
+                    "default": "<stdin>",
+                    "is_flag": False,
+                }
+            ],
+        )
+        result = cli_render.command_page(mock_config(lang="en"), cli_info, is_main=True)
+        assert '<span class="doc-parameter-name">&lt;SRC&gt;</span>' in result
+        assert '<span class="doc-parameter-annotation">&lt;T&gt;</span>' in result
+        assert "-c, &#45;&#45;config &lt;PATH&gt;</span>" in result
+        assert '<span class="doc-parameter-annotation">A&amp;B</span>' in result
+        assert '<span class="doc-parameter-default">&lt;stdin&gt;</span>' in result
+
+    def test_index_title_with_quotes_is_valid_yaml(self):
+        config = mock_config(lang="en", cli_title='The "gd" tool')
+        page = cli_render.index_page(config, self._make_cli_info(), "mycli")
+        front_matter = page.split("---\n")[1]
+        assert yaml.safe_load(front_matter)["title"] == 'The "gd" tool'
+
+    def test_pages_written_as_utf8_whatever_the_locale(self, tmp_path, monkeypatch):
+        # Stand in for a locale whose code page lacks `•`, such as cp1252 on Windows.
+        monkeypatch.setattr(io, "text_encoding", lambda encoding, stacklevel=2: encoding or "ascii")
+        sub = self._make_cli_info(
+            name="sub", full_path="mycli sub", short_help="Run • fast.", description="Run • fast."
+        )
+        cli_info = self._make_cli_info(description="Root • tool.", commands=[sub])
+        cli_render.write_pages(mock_config(lang="en"), tmp_path, cli_info, report=lambda _: None)
+        cli_dir = tmp_path / "reference" / "cli"
+        assert "Run • fast." in (cli_dir / "index.qmd").read_text(encoding="utf-8")
+        assert "Root • tool." in (cli_dir / "mycli.qmd").read_text(encoding="utf-8")
+        assert "Run • fast." in (cli_dir / "sub.qmd").read_text(encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
