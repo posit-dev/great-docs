@@ -22,6 +22,7 @@ from yaml12 import read_yaml
 
 from .._layout import Layout, LayoutError
 from .._subprocess import TEXT_MODE_KWARGS
+from .._utils import record_site_ownership, validate_site_dir
 from .._yaml import YamlMapping, YamlValue
 
 if TYPE_CHECKING:
@@ -62,8 +63,9 @@ def build(
     branch
         Branch or tag to check out. If `None`, use the repository's default branch.
     output_dir
-        Directory to copy the built site into, replacing any directory already there. If
-        `None`, use the checkout's deployment path relative to the current working directory.
+        Directory to copy the built site into. If `None`, use the checkout's deployment path
+        relative to the current working directory. An existing directory must be empty or
+        hold only a site an earlier build copied there, which the new site replaces.
     config_path
         Configuration path relative to the checkout.
     refresh
@@ -87,6 +89,9 @@ def build(
     ------
     LayoutError
         If `config_path` is absolute or resolves outside the checkout.
+    ValueError
+        If the output path exists and is neither an empty directory nor a site an earlier
+        build copied there.
     RuntimeError
         If cloning, an installation or the build fails, or the build leaves no site.
     """
@@ -110,6 +115,7 @@ def build(
             if output_dir
             else Path.cwd() / layout.site_dir.relative_to(checkout.resolve())
         )
+        _check_replaceable(output_path)
         scripts = _install(checkout, Path(temporary) / "venv", report=report)
 
         report("🔨 Building documentation...")
@@ -138,9 +144,12 @@ def build(
             raise RuntimeError(f"Build completed but _site/ directory not found at {site_dir}")
         report(f"📂 Copying built site to {output_path}...")
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        # The directory may have changed during the build
+        _check_replaceable(output_path)
         if output_path.exists():
             shutil.rmtree(output_path)
         _ = shutil.copytree(site_dir, output_path)
+        record_site_ownership(output_path)
         report(f"✅ Site built successfully: {output_path}")
     return output_path
 
@@ -209,6 +218,26 @@ def history_needed(
     if settings.mapping("source").get("branch"):
         return "none"
     return "tags"
+
+
+def _check_replaceable(path: Path) -> None:
+    """
+    Refuse an output path whose contents a build did not copy there
+
+    Parameters
+    ----------
+    path
+        The output path.
+
+    Raises
+    ------
+    ValueError
+        If `path` exists and is neither an empty directory nor a site whose ownership
+        manifest lists all of its contents.
+    """
+    if path.is_dir() and not path.is_symlink() and not any(path.iterdir()):
+        return
+    validate_site_dir(path)
 
 
 def _clone(
