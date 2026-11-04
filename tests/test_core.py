@@ -26,7 +26,6 @@ from great_docs._reference.discovery import (
     empty_categories,
 )
 from great_docs._utils import QUARTO_YML_HEADER
-from great_docs._website import quarto_yml as quarto_yml_file
 from great_docs._website.seo import robots
 from tests.support import StubRemote, discover_user_guide, make_run, mock_config
 
@@ -441,68 +440,6 @@ class TestCliContribution:
         (sidebar,) = cli_render.contribution(config, ["reference/cli/app.qmd"]).sidebars
 
         assert sidebar.title == "Commandes"
-
-
-class TestRemoveMcpFromRefSections:
-    """Cover _remove_mcp_from_ref_sections branching."""
-
-    def test_no_quarto_yml_returns_early(self, tmp_path):
-        """No _quarto.yml file returns immediately."""
-        gd = _make_gd(tmp_path)
-        gd.build_dir = tmp_path / "subdir"
-        gd.build_dir.mkdir()
-        gd._remove_mcp_from_ref_sections()
-
-    def test_no_ref_sections_script_no_update(self, tmp_path, monkeypatch):
-        """include-in-header has no data-gd-ref-sections so no write happens."""
-        gd = _make_gd(tmp_path)
-        gd.build_dir = tmp_path
-        quarto_yml = tmp_path / "_quarto.yml"
-        quarto_yml.write_text(
-            "format:\n  html:\n    include-in-header:\n      - text: 'unrelated'\n",
-            encoding="utf-8",
-        )
-        before = quarto_yml.read_text(encoding="utf-8")
-        gd._remove_mcp_from_ref_sections()
-        assert quarto_yml.read_text(encoding="utf-8") == before
-
-    def test_removes_mcp_from_multi_section_list(self, tmp_path, monkeypatch):
-        """Sections 'api,cli,mcp' becomes 'api,cli', script kept."""
-        gd = _make_gd(tmp_path)
-        gd.build_dir = tmp_path
-        quarto_yml = tmp_path / "_quarto.yml"
-        script_text = (
-            "<script>document.body.setAttribute('data-gd-ref-sections','api,cli,mcp')</script>"
-        )
-        quarto_yml.write_text(
-            f'format:\n  html:\n    include-in-header:\n      - text: "{script_text}"\n'
-            f"    include-after-body:\n      - text: 'other.js'\n",
-            encoding="utf-8",
-        )
-        gd._remove_mcp_from_ref_sections()
-        written = quarto_yml_file.read(gd.build_dir)
-        header_items = written["format"]["html"]["include-in-header"]
-        assert "api,cli" in header_items[0]["text"]
-        assert "mcp" not in header_items[0]["text"]
-
-    def test_removes_script_entirely_when_only_api_remains(self, tmp_path, monkeypatch):
-        """Sections 'api,mcp' with only 'api' remaining removes script entirely."""
-        gd = _make_gd(tmp_path)
-        gd.build_dir = tmp_path
-        quarto_yml = tmp_path / "_quarto.yml"
-        ref_script = "<script>document.body.setAttribute('data-gd-ref-sections','api,mcp')</script>"
-        switcher_script = "<script src='reference-switcher.js'></script>"
-        quarto_yml.write_text(
-            f'format:\n  html:\n    include-in-header:\n      - text: "{ref_script}"\n'
-            f'    include-after-body:\n      - text: "{switcher_script}"\n',
-            encoding="utf-8",
-        )
-        gd._remove_mcp_from_ref_sections()
-        written = quarto_yml_file.read(gd.build_dir)
-        header_items = written["format"]["html"]["include-in-header"]
-        assert len(header_items) == 0
-        after_body = written["format"]["html"]["include-after-body"]
-        assert all("reference-switcher" not in e.get("text", "") for e in after_body)
 
 
 class TestDiscoverExportsValidation:

@@ -46,7 +46,6 @@ _BUILD_METHODS: tuple[str, ...] = (
     "_get_github_repo_info",
     "_resolve_importable_name",
     "_detect_module_name",
-    "_remove_mcp_from_ref_sections",
     "_process_user_guide",
     "_process_sections",
     "_process_custom_pages",

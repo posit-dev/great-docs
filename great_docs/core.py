@@ -73,7 +73,7 @@ from ._website.ai_agents.skills import SkillsWriter
 from ._website.homepage import page as homepage_page
 from ._website.homepage import source as homepage_source
 from ._website.identity import Identity
-from ._website.navigation import brand, shared_sidebar
+from ._website.navigation import brand, reference_switcher, shared_sidebar
 from ._website.navigation import label as nav_label
 from ._website.navigation import navbar as nav_navbar
 from ._website.project_pages import citation, licence, package_info
@@ -1276,62 +1276,6 @@ class GreatDocs:
                 quarto_yml.write(self.build_dir, quarto_config, self._config)
         self._add_project_resources(published.resources, published.render_excludes)
         return published.pages
-
-    # =========================================================================
-    # MCP Server Documentation Methods
-    # =========================================================================
-
-    def _remove_mcp_from_ref_sections(self) -> None:
-        """
-        Remove 'mcp' from the reference switcher data attribute in _quarto.yml.
-
-        Called when MCP is enabled in config but no MCP server is discovered
-        or no MCP pages are generated. This prevents a dangling MCP navigation
-        item that would lead to a 404 page.
-        """
-        if not quarto_yml.path(self.build_dir).exists():
-            return
-
-        config = quarto_yml.read(self.build_dir)
-
-        html_config = config.get("format", {}).get("html", {})
-        include_in_header = html_config.get("include-in-header", [])
-        include_after_body = html_config.get("include-after-body", [])
-
-        # Find and update the data-gd-ref-sections script
-        updated = False
-        for i, item in enumerate(include_in_header):
-            if isinstance(item, dict) and "data-gd-ref-sections" in item.get("text", ""):
-                # Extract current sections and remove 'mcp'
-                text = item["text"]
-                # The format is: ...setAttribute('data-gd-ref-sections','api,cli,mcp')...
-                match = re.search(r"'data-gd-ref-sections','([^']*)'", text)
-                if match:
-                    sections = [s for s in match.group(1).split(",") if s != "mcp"]
-                    if len(sections) <= 1:
-                        # Only 'api' remains — remove the ref-sections script entirely
-                        include_in_header.pop(i)
-                        # Also remove the reference-switcher.js script
-                        config["format"]["html"]["include-after-body"] = [
-                            entry
-                            for entry in include_after_body
-                            if not (
-                                isinstance(entry, dict)
-                                and "reference-switcher" in entry.get("text", "")
-                            )
-                        ]
-                    else:
-                        new_sections = ",".join(sections)
-                        item["text"] = re.sub(
-                            r"'data-gd-ref-sections','[^']*'",
-                            f"'data-gd-ref-sections','{new_sections}'",
-                            text,
-                        )
-                    updated = True
-                break
-
-        if updated:
-            quarto_yml.write(self.build_dir, config, self._config)
 
     # =========================================================================
     # User Guide Methods
@@ -2813,94 +2757,14 @@ class GreatDocs:
         # Add (or remove) the wide layout toggle
         self._configure_wide_layout(config, metadata.get("wide_layout"))
 
-        # Add reference switcher script (if CLI, Go CLI, or MCP is enabled)
-        cli_enabled = metadata.get("cli_enabled", False)
-        go_cli_enabled = metadata.get("go_cli_enabled", False)
-        rust_cli_enabled = metadata.get("rust_cli_enabled", False)
-        # Use the runtime flag if MCP discovery has already run; otherwise fall
-        # back to the config value (optimistic, will be patched later if needed)
-        mcp_enabled = (
-            run.mcp_pages_generated
-            if run.mcp_pages_generated is not None
-            else metadata.get("mcp_enabled", False)
+        # MCP discovery has not run on the first pass. Enabled MCP references are
+        # assumed to have pages.
+        reference_switcher.register(
+            config,
+            self._config,
+            has_api_reference=run.has_api_reference,
+            has_mcp_reference=run.mcp_pages_generated,
         )
-        if cli_enabled or go_cli_enabled or rust_cli_enabled or mcp_enabled:
-            if "include-after-body" not in config["format"]["html"]:
-                config["format"]["html"]["include-after-body"] = []  # pragma: no cover
-            elif isinstance(config["format"]["html"]["include-after-body"], str):
-                config["format"]["html"]["include-after-body"] = [  # pragma: no cover
-                    config["format"]["html"]["include-after-body"]
-                ]
-
-            # Build the sections list for the data attribute.
-            # Only include sections that are actually present in this build.
-            available_sections = []
-            if run.has_api_reference:
-                available_sections.append("api")
-            if cli_enabled or go_cli_enabled or rust_cli_enabled:
-                available_sections.append("cli")
-            if mcp_enabled:
-                available_sections.append("mcp")
-
-            custom_order = self._config.ref_section_order
-            if custom_order:
-                ref_sections = [s for s in custom_order if s in available_sections]
-                for s in available_sections:
-                    if s not in ref_sections:
-                        ref_sections.append(s)
-            else:
-                ref_sections = available_sections
-            sections_attr = ",".join(ref_sections)
-
-            # When the first ref section isn't "api", update the navbar
-            # "Reference" link to point to the first section's index page.
-            _SECTION_INDEX = {
-                "api": "reference/index.qmd",
-                "cli": "reference/cli/index.qmd",
-                "mcp": "reference/mcp/index.qmd",
-            }
-            if ref_sections and ref_sections[0] != "api":
-                first_href = _SECTION_INDEX.get(ref_sections[0], "reference/index.qmd")
-                navbar = config.get("website", {}).get("navbar", {})
-                for item in navbar.get("left", []):
-                    if isinstance(item, dict) and (item.get("href") or "").startswith("reference/"):
-                        item["href"] = first_href
-                        break
-
-            # Inject data-gd-ref-sections on <body> via include-in-header script
-            if "include-in-header" not in config["format"]["html"]:
-                config["format"]["html"]["include-in-header"] = []
-            elif isinstance(config["format"]["html"]["include-in-header"], str):
-                config["format"]["html"]["include-in-header"] = [
-                    config["format"]["html"]["include-in-header"]
-                ]
-            ref_sections_script = {
-                "text": (
-                    "<script>"
-                    f"document.addEventListener('DOMContentLoaded',function(){{document.body.setAttribute('data-gd-ref-sections','{sections_attr}');}});"
-                    "</script>"
-                )
-            }
-            # Replace the reference switcher script on every pass. Later steps can
-            # change which references are present after build directory preparation
-            # writes the initial configuration.
-            headers = config["format"]["html"]["include-in-header"]
-            replaced = False
-            for i, item in enumerate(headers):
-                if "data-gd-ref-sections" in str(item):
-                    headers[i] = ref_sections_script
-                    replaced = True
-                    break
-            if not replaced:
-                headers.append(ref_sections_script)
-
-            quarto_yml.add_include(
-                config,
-                "include-after-body",
-                script_include("reference-switcher.js"),
-                marker="reference-switcher",
-                before="tooltips.js",
-            )
 
         # Add navigation icons (Lucide SVG) if configured
         if self._config.nav_icons:
@@ -3701,8 +3565,8 @@ class GreatDocs:
         """
         Write reference pages and a discovery manifest for the project's MCP server
 
-        Remove the MCP section from the reference configuration when no pages are generated,
-        including when generation raises a handled exception.
+        If generation writes no pages or raises a handled exception, the build records
+        that it has no MCP reference.
 
         Parameters
         ----------
@@ -3728,7 +3592,6 @@ class GreatDocs:
             mcp_info = mcp_build.discover_server(self._config, mcp_package)
             if not mcp_info:
                 run.mcp_pages_generated = False
-                self._remove_mcp_from_ref_sections()
                 return Skipped("no MCP server found")
             package_name = self._detect_package_name()
             owner, repo, _ = self._get_github_repo_info()
@@ -3738,7 +3601,6 @@ class GreatDocs:
             )
             if not mcp_files:
                 run.mcp_pages_generated = False
-                self._remove_mcp_from_ref_sections()
                 return "No MCP pages generated"
             run.mcp_pages_generated = True
             with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
@@ -3746,7 +3608,6 @@ class GreatDocs:
             print(f"Updated sidebar with {cli_render.count_pages(mcp_files)} MCP reference page(s)")
         except USER_CODE_ERRORS:
             run.mcp_pages_generated = False
-            self._remove_mcp_from_ref_sections()
             raise
         return f"{len(mcp_info.get('tools', []))} MCP tool page(s) + manifest"
 
