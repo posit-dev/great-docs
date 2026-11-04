@@ -37,6 +37,7 @@ from ._content.naming import (
 )
 from ._content.pages import PageMap, section_destination
 from ._content.user_guide import UserGuide
+from ._contribution import Contribution
 from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import PACKAGE_DIRS, Layout
@@ -89,21 +90,6 @@ if TYPE_CHECKING:
 
     from ._apiref.api_reference import APIReference
     from ._build.log import BuildLog
-
-# Quarto's default input file types, enumerated as render globs. Used to seed
-# `project.render` whenever we also add `!` exclusions. A recursive `**` glob
-# overpowers any negation that follows it (so `!skill.md` would be ignored),
-# whereas these per-extension globs still match recursively while letting the
-# exclusions take effect.
-_QUARTO_RENDER_GLOBS = [
-    "*.qmd",
-    "*.md",
-    "*.markdown",
-    "*.rmd",
-    "*.Rmd",
-    "*.rmarkdown",
-    "*.ipynb",
-]
 
 
 def _print_warning(message: str) -> None:
@@ -1193,39 +1179,6 @@ class GreatDocs:
     # Custom Static Pages Methods
     # =========================================================================
 
-    def _add_project_resources(
-        self,
-        resources_to_add: list[str],
-        render_excludes: list[str] | None = None,
-    ) -> None:
-        """Add resource paths and render exclusions to _quarto.yml."""
-        if not resources_to_add and not render_excludes:
-            return
-
-        with quarto_yml.edit(self.build_dir, self._config, seed_website=True) as config:
-            project = config.setdefault("project", {})
-
-            resources = project.setdefault("resources", [])
-            if isinstance(resources, str):
-                resources = [resources]  # pragma: no cover
-                project["resources"] = resources  # pragma: no cover
-
-            for resource in resources_to_add:
-                if resource not in resources:
-                    resources.append(resource)
-
-            if render_excludes:
-                if "render" not in project:
-                    project["render"] = list(_QUARTO_RENDER_GLOBS)
-                render = project["render"]
-                if isinstance(render, str):
-                    render = [render]  # pragma: no cover
-                    project["render"] = render  # pragma: no cover
-                for path in render_excludes:
-                    exclude = f"!{path}"
-                    if exclude not in render:
-                        render.append(exclude)
-
     def _process_custom_pages(self, guide: UserGuide | None) -> int:
         """
         Publish the configured custom pages
@@ -1275,7 +1228,13 @@ class GreatDocs:
             quarto_config = quarto_yml.read(self.build_dir, seed_website=True)
             if nav_navbar.add_link(quarto_config, link, self._config, after=after):
                 quarto_yml.write(self.build_dir, quarto_config, self._config)
-        self._add_project_resources(published.resources, published.render_excludes)
+        if published.resources or published.render_excludes:
+            contribution = Contribution(
+                resources=tuple(published.resources),
+                render_excludes=tuple(published.render_excludes),
+            )
+            with quarto_yml.edit(self.build_dir, self._config, seed_website=True) as quarto_config:
+                quarto_yml.apply(quarto_config, contribution)
         return published.pages
 
     # =========================================================================
@@ -2577,7 +2536,7 @@ class GreatDocs:
             # exclusions; a recursive `**` would overpower the `!skill.md`
             # negation and render skill.md anyway (see issue #228).
             if "render" not in config["project"]:
-                config["project"]["render"] = list(_QUARTO_RENDER_GLOBS)
+                config["project"]["render"] = list(quarto_yml.RENDER_GLOBS)
             if "!skill.md" not in config["project"]["render"]:
                 config["project"]["render"].append("!skill.md")
 
@@ -3060,7 +3019,8 @@ class GreatDocs:
                 f"Pre-rendered {done.count} terminal recording(s) "
                 f"({done.manifest_bytes / 1024:.0f} KB of player data)"
             )
-            self._add_project_resources([f"{term_prerender.OUTPUT_ROOT}/**"], [])
+            with quarto_yml.edit(self.build_dir, self._config, seed_website=True) as quarto_config:
+                quarto_yml.apply(quarto_config, done.contribution)
 
     def uninstall(self) -> None:
         """

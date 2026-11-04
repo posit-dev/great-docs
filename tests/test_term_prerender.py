@@ -5,8 +5,15 @@ import json
 from pathlib import Path
 
 from great_docs._build.log import BuildLog
-from great_docs._term_player.prerender import load_recording, render_recording, render_recordings
+from great_docs._contribution import Contribution
+from great_docs._term_player.prerender import (
+    Prerendered,
+    load_recording,
+    render_recording,
+    render_recordings,
+)
 from great_docs._term_player.transcript import TRANSCRIPT_FILE
+from great_docs._website import quarto_yml
 from great_docs.core import GreatDocs
 
 # Delays are relative to the previous event: output at 0s, 1s, 2s and 4s
@@ -63,17 +70,19 @@ def test_a_broken_recording_is_reported_and_the_rest_render(tmp_path):
     assert reported[0].startswith("termshow: failed to render broken.termshow: ")
 
 
-def test_build_step_registers_the_output_as_a_resource(tmp_path, monkeypatch):
+def test_build_step_registers_the_output_as_a_resource(tmp_path):
     (tmp_path / "great-docs.yml").write_text("{}\n", encoding="utf-8")
     _write(tmp_path / "demos")
     docs = GreatDocs(project_path=str(tmp_path))
-    added: list[list[str]] = []
-    monkeypatch.setattr(docs, "_add_project_resources", lambda res, excl: added.append(res))
     stream = io.StringIO()
     docs._prerender_term_player(BuildLog(stream=stream))
     assert (docs.build_dir / "termshow" / "demos" / "demo" / "manifest.json").exists()
-    assert added == [["termshow/**"]]
+    assert quarto_yml.read(docs.build_dir)["project"]["resources"] == ["termshow/**"]
     assert "Pre-rendered 1 terminal recording(s)" in stream.getvalue()
+
+
+def test_no_rendered_recording_contributes_nothing():
+    assert Prerendered(count=0, manifest_bytes=0).contribution == Contribution()
 
 
 def test_build_step_leaves_out_recordings_that_are_not_documentation(tmp_path):
