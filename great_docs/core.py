@@ -2586,14 +2586,18 @@ class GreatDocs:
         package_name = self._detect_package_name() if metadata.get("cli_enabled", False) else None
         if package_name:
             # The importable module name can differ from the PyPI project name.
-            cli = cli_click.discover(
-                self._resolve_importable_name(package_name),
-                self.layout.package_root,
-                cli_module=metadata.get("cli_module"),
-                cli_name=metadata.get("cli_name"),
-                display_name=package_name,
-                report=print,
-            )
+            try:
+                cli = cli_click.discover(
+                    self._resolve_importable_name(package_name),
+                    self.layout.package_root,
+                    cli_module=metadata.get("cli_module"),
+                    cli_name=metadata.get("cli_name"),
+                    display_name=package_name,
+                    report=print,
+                )
+            except ImportError:
+                # The CLI reference step warns about this failure. Keep writing without the CLI.
+                pass
         llms_txt.write_full(
             self.build_dir,
             cli=cli,

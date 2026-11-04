@@ -223,18 +223,23 @@ def find_command(
     :
         The Click command, with a Typer app converted, or `None` when the package has no command
         line.
+
+    Raises
+    ------
+    ImportError
+        When a candidate module exists but fails to import, for example because a dependency
+        is missing. The message names the module.
     """
     cli_module_path = cli_module
     if not cli_module_path:
         for candidate in ("cli", "__main__", "main", "console", "commands"):
             module_path = f"{module_name}.{candidate}"
-            try:
-                module = _import_cli_module(module_path)
-                if any(is_cli_command(getattr(module, attr_name)) for attr_name in dir(module)):
-                    cli_module_path = module_path
-                    break
-            except ImportError:
-                continue
+            module = _import_candidate(module_path)
+            if module is not None and any(
+                is_cli_command(getattr(module, attr_name)) for attr_name in dir(module)
+            ):
+                cli_module_path = module_path
+                break
 
     if not cli_module_path:
         report(f"No Click CLI found in {module_name}")
@@ -275,6 +280,43 @@ def find_command(
 
     report(f"Found Click CLI: {cli_name} in {cli_module_path}")
     return cli_obj
+
+
+def _import_candidate(module_path: str) -> ModuleType | None:
+    """
+    Import a candidate module for the package's command line
+
+    Parameters
+    ----------
+    module_path
+        The module's dotted path.
+
+    Returns
+    -------
+    :
+        The imported module, or `None` if the module or a parent package is missing, or the
+        import raises `SystemExit`. An unguarded command call in `__main__` runs on import
+        and causes Click to exit.
+
+    Raises
+    ------
+    ImportError
+        When the module exists but fails to import, for example because a dependency is
+        missing. The message names the module, and the original error is the cause.
+    """
+    try:
+        return importlib.import_module(module_path)
+    except SystemExit:
+        return None
+    except USER_CODE_ERRORS as error:
+        # A missing candidate or parent package means there is no CLI at this location.
+        # A missing dependency also raises `ModuleNotFoundError`, but names the dependency.
+        missing = error.name if isinstance(error, ModuleNotFoundError) else None
+        if missing and (module_path == missing or module_path.startswith(f"{missing}.")):
+            return None
+        raise ImportError(
+            f"importing {module_path} failed: {type(error).__name__}: {error}"
+        ) from error
 
 
 def _import_cli_module(module_path: str) -> ModuleType:
