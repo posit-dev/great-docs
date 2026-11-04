@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -399,7 +402,7 @@ class TestRenderIndex:
 
         text = tags.render_index({"AI/LLM": [_page("p.qmd", "AI/LLM")]}, config)
 
-        child = text.split('<div class="gd-tag-heading gd-tag-indent-1">')[1]
+        child = text.split('class="gd-tag-heading gd-tag-indent-1">')[1]
         assert "gd-tag-pill-segmented" in child
         assert '<span class="gd-tag-pill-segment gd-tag-pill-parent"><span style=' in child
         assert '<div class="gd-tag-pages gd-tag-indent-1">' in text
@@ -410,8 +413,24 @@ class TestRenderIndex:
 
         text = tags.render_index({"AI/LLM": [_page("p.qmd", "AI/LLM")]}, config)
 
-        assert '<div class="gd-tag-heading"><span class="gd-tag-pill">AI</span></div>' in text
+        assert (
+            '<div id="ai" class="gd-tag-heading"><span class="gd-tag-pill">AI</span></div>' in text
+        )
         assert text.count('<div class="gd-tag-pages') == 1
+
+    def test_every_heading_has_its_own_id(self, tmp_path: Path):
+        """Give each heading a unique id, including parents without pages and non-ASCII tags"""
+        config, _ = _project(tmp_path)
+        groups = {name: [_page("p.qmd", name)] for name in ["AI/LLM", r"AI\/LLM", "Données"]}
+
+        text = tags.render_index(groups, config)
+
+        assert re.findall(r'<div id="([^"]*)" class="gd-tag-heading', text) == [
+            "ai",
+            "ai-llm",
+            "ai-llm-2",
+            "données",
+        ]
 
     def test_tag_icon(self, tmp_path: Path):
         """Render the configured icon alongside the tag tooltip"""
@@ -566,6 +585,117 @@ class TestPageData:
         assert list(data["icons"]) == ["Python"]
         assert "gd-tag-icon-svg" in data["icons"]["Python"]
         assert reported == ["Warning: Unknown tag icon 'no-such' for tag 'Bad'"]
+
+
+# ── Pill links ───────────────────────────────────────────────────────────────
+
+_PAGE_TAGS_JS = Path(__file__).resolve().parents[1] / "great_docs" / "assets" / "page-tags.js"
+
+# Runs `page-tags.js` once for each page path with just enough of a DOM to render
+# the pills, and prints the `href` of each pill
+_PILL_HREFS_JS = r"""
+const fs = require('fs');
+const vm = require('vm');
+const [scriptPath, dataJson, pathsJson] = process.argv.slice(1);
+const source = fs.readFileSync(scriptPath, 'utf8');
+const hrefs = {};
+for (const pathname of JSON.parse(pathsJson)) {
+  const pills = [];
+  const element = (tag) => {
+    const el = {
+      classList: { add() {}, contains: () => false },
+      setAttribute() {},
+      appendChild() {},
+    };
+    if (tag === 'a') pills.push(el);
+    return el;
+  };
+  const title = { nextElementSibling: null, nextSibling: null, parentNode: element('div') };
+  const document = {
+    readyState: 'complete',
+    querySelector: (selector) => (selector.includes('h1') ? title : null),
+    createElement: element,
+  };
+  const window = { __GD_TAGS_DATA__: JSON.parse(dataJson), location: { pathname } };
+  vm.runInNewContext(source, { window, document });
+  hrefs[pathname] = pills.map((pill) => pill.href);
+}
+process.stdout.write(JSON.stringify(hrefs));
+"""
+
+
+def _pill_hrefs(data: dict[str, Any], hrefs: list[str]) -> dict[str, list[str]]:
+    """
+    Render the tag pills of pages at the site root with `page-tags.js`
+
+    Parameters
+    ----------
+    data
+        The tag pill data.
+    hrefs
+        The pages' source paths, such as `p.qmd`.
+
+    Returns
+    -------
+    :
+        The link of each pill on each page, by the page's source path.
+    """
+    paths = ["/" + href.removesuffix(".qmd") + ".html" for href in hrefs]
+    result = subprocess.run(
+        ["node", "-e", _PILL_HREFS_JS, str(_PAGE_TAGS_JS), json.dumps(data), json.dumps(paths)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+    by_path: dict[str, list[str]] = json.loads(result.stdout)
+    return {href: by_path[path] for href, path in zip(hrefs, paths, strict=True)}
+
+
+def _listed_pages(index: str) -> dict[str, list[str]]:
+    """
+    Find the pages listed under each heading of the index page
+
+    Parameters
+    ----------
+    index
+        The index page source.
+
+    Returns
+    -------
+    :
+        The link targets of the pages that follow each heading, by the heading's id.
+    """
+    listed: dict[str, list[str]] = {}
+    current: list[str] = []
+    for line in index.splitlines():
+        if "gd-tag-heading" in line:
+            match = re.search(r'\bid="([^"]*)"', line)
+            current = listed.setdefault(match.group(1), []) if match else []
+        elif link := re.search(r'gd-tag-page-link">\[.*\]\(([^)]*)\)', line):
+            current.append(link.group(1))
+    return listed
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+@pytest.mark.parametrize("hierarchical", [True, False])
+def test_pill_links_to_the_heading_that_lists_its_page(tmp_path: Path, hierarchical: bool):
+    """Link each tag pill to the index heading under which its page is listed"""
+    config, _ = _project(
+        tmp_path, f"tags:\n  enabled: true\n  hierarchical: {str(hierarchical).lower()}\n"
+    )
+    names = ["Python", "Python/Advanced", r"AI\/LLM", "AI/LLM", "Données", "日本語", "C++", "C"]
+    pages = [_page(f"p{i}.qmd", name) for i, name in enumerate(names)]
+    data, _ = _data(config, pages)
+    listed = _listed_pages(tags.render_index(tags.group(pages), config))
+
+    pill_hrefs = _pill_hrefs(data, [page.href for page in pages])
+
+    for page in pages:
+        [href] = pill_hrefs[page.href]
+        target, _, fragment = href.partition("#")
+        assert target == "tags/index.html"
+        assert f"../{page.href}" in listed.get(fragment, []), (page.tags, href)
 
 
 # ── Writing ──────────────────────────────────────────────────────────────────

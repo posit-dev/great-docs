@@ -19,15 +19,6 @@
     'l4.18-4.18a2 2 0 0 0 0-2.82Z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>';
 
   /**
-   * Convert a tag name to a URL-friendly slug.
-   * @param {string} tag - Tag name
-   * @returns {string} - Slug
-   */
-  function tagSlug(tag) {
-    return tag.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  }
-
-  /**
    * Resolve the current page's .qmd-relative path from the URL.
    * Returns a short relative path like "user-guide/intro.qmd".
    * Also caches the matched key for depth calculation.
@@ -99,6 +90,7 @@
     var shadow = new Set(tagsData.shadow || []);
     var icons = tagsData.icons || {};
     var tagMeta = tagsData.tag_meta || {};
+    var anchors = tagsData.anchors || {};
     var tt = tagsData.tooltip_templates || {};
 
     // Filter out shadow tags
@@ -117,7 +109,6 @@
       var pill = document.createElement("a");
       pill.className = "gd-tag-pill";
       pill.setAttribute("role", "listitem");
-      var slug = tagSlug(tag);
 
       // Fix relative path: we need to go up to the site root
       // Count how deep we are from the site root using the matched key
@@ -126,7 +117,10 @@
       for (var j = 0; j < depth; j++) {
         prefix += "../";
       }
-      pill.href = prefix + "tags/index.html#" + slug;
+      // The build writes the index page's heading ids into the tag data, so the
+      // fragment always names an existing heading.
+      var anchor = anchors[tag];
+      pill.href = prefix + "tags/index.html" + (anchor ? "#" + anchor : "");
 
       // Icon (if configured) – expects pre-resolved Lucide SVG markup
       // Tag names may contain escaped slashes ("\\/") for literal "/" display;

@@ -215,7 +215,8 @@ def render_index(groups: Mapping[str, Sequence[TaggedPage]], config: Config) -> 
     Render the tags index page
 
     Each tag has a pill heading followed by links to its pages. Hierarchical tags nest
-    under their parents; flat tags are listed alphabetically.
+    under their parents; flat tags are listed alphabetically. Each heading carries the
+    id that the tag pills on pages link to.
 
     Parameters
     ----------
@@ -241,14 +242,15 @@ def render_index(groups: Mapping[str, Sequence[TaggedPage]], config: Config) -> 
         get_translation("tags_intro", lang),
         "",
     ]
+    ids = _heading_ids(groups, config)
     if config.tags_hierarchical:
-        _render_tree(lines, hierarchy(groups, config), config, depth=0, prefix="")
+        _render_tree(lines, hierarchy(groups, config), config, ids, parents=())
     else:
         for tag in sorted(groups, key=str.lower):
             pages = groups[tag]
             icon = _icon_html(tag, config.tags_icons)
             pill = _heading_pill(tag.replace("\\/", "/"), icon, tooltip=_tooltip(pages, lang))
-            lines.extend((f'<div class="gd-tag-heading">{pill}</div>', ""))
+            lines.extend((f'<div id="{ids[(tag,)]}" class="gd-tag-heading">{pill}</div>', ""))
             _render_page_links(lines, pages, indent_class="")
     return "\n".join(lines)
 
@@ -278,8 +280,8 @@ def page_data(
     -------
     :
         The tags of each page, a page count and sections for each tag's tooltip, the
-        translated tooltip templates, the icons as inline SVG, the shadow tags, and the
-        pill placement.
+        id of each tag's heading on the index page, the translated tooltip templates,
+        the icons as inline SVG, the shadow tags, and the pill placement.
     """
     page_tags: dict[str, list[str]] = {}
     for tag, tagged in groups.items():
@@ -294,6 +296,9 @@ def page_data(
         tag: {"count": len(tagged), "sections": sorted({p.section for p in tagged if p.section})}
         for tag, tagged in groups.items()
     }
+    ids = _heading_ids(groups, config)
+    # A hierarchical tag of only slashes has no levels, and so no heading.
+    anchors = {tag: ids[levels] for tag in groups if (levels := _levels(tag, config)) in ids}
 
     lang = config.lang
     tooltip_templates = {
@@ -313,6 +318,7 @@ def page_data(
     return {
         "page_tags": page_tags,
         "tag_meta": tag_meta,
+        "anchors": anchors,
         "tooltip_templates": tooltip_templates,
         "icons": icons,
         "shadow": list(dict.fromkeys(config.tags_shadow)),
@@ -368,7 +374,72 @@ def write(config: Config, layout: Layout, *, report: Callable[[str], None]) -> O
     return Output(page_data=data, contribution=contribution)
 
 
-def _render_tree(lines: list[str], node: TagNode, config: Config, depth: int, prefix: str) -> None:
+def _levels(tag: str, config: Config) -> tuple[str, ...]:
+    """
+    Find the levels of the index heading that shows a tag
+
+    Parameters
+    ----------
+    tag
+        The tag as written in front matter.
+    config
+        The Great Docs configuration. `tags.hierarchical` controls nesting.
+
+    Returns
+    -------
+    :
+        The tag's hierarchy levels when tags are hierarchical, otherwise the tag alone.
+    """
+    return tuple(split_tag(tag)) if config.tags_hierarchical else (tag,)
+
+
+def _heading_ids(
+    groups: Mapping[str, Sequence[TaggedPage]], config: Config
+) -> dict[tuple[str, ...], str]:
+    """
+    Give each heading on the index page a unique id
+
+    An id is the heading's levels joined in lower case, with each run of characters
+    other than letters and digits replaced by `-`. Headings whose ids would coincide
+    take a numeric suffix, such as `c-2`, in the sorted order of their levels.
+
+    Parameters
+    ----------
+    groups
+        The pages for each tag.
+    config
+        The Great Docs configuration.
+
+    Returns
+    -------
+    :
+        The id of each heading, parents without pages included, by its levels.
+    """
+    headings: set[tuple[str, ...]] = set()
+    for tag in groups:
+        levels = _levels(tag, config)
+        headings.update(levels[:depth] for depth in range(1, len(levels) + 1))
+    ids: dict[tuple[str, ...], str] = {}
+    taken: set[str] = set()
+    for levels in sorted(headings):
+        base = re.sub(r"[\W_]+", "-", "-".join(levels).lower()).strip("-") or "tag"
+        heading_id, suffix = base, 1
+        while heading_id in taken:
+            suffix += 1
+            heading_id = f"{base}-{suffix}"
+        taken.add(heading_id)
+        ids[levels] = heading_id
+    return ids
+
+
+def _render_tree(
+    lines: list[str],
+    node: TagNode,
+    config: Config,
+    ids: Mapping[tuple[str, ...], str],
+    *,
+    parents: tuple[str, ...],
+) -> None:
     """
     Append the headings and page links for a node's children and their descendants
 
@@ -383,31 +454,33 @@ def _render_tree(lines: list[str], node: TagNode, config: Config, depth: int, pr
         The node whose children and descendants supply the headings and links.
     config
         The Great Docs configuration.
-    depth
-        The nesting depth of the children, 0 for top-level tags.
-    prefix
-        The path of the node's tag, empty for the root.
+    ids
+        The heading ids, by tag levels.
+    parents
+        The levels of the node's tag, empty for the root.
 
     Returns
     -------
     :
     """
     icons = config.tags_icons
+    depth = len(parents)
     indent_class = f" gd-tag-indent-{min(depth, 2)}" if depth > 0 else ""
+    prefix = "/".join(parents)
     for name, child in sorted(node.children.items(), key=lambda item: item[0].lower()):
-        path = f"{prefix}/{name}" if prefix else name
+        levels = (*parents, name)
         tooltip = _tooltip(child.pages, config.lang)
         if prefix:
             parent_icon = _icon_html(prefix, icons)
             pill = _heading_pill(name, "", parent=prefix, parent_icon=parent_icon, tooltip=tooltip)
         else:
-            icon = _icon_html(path, icons) or _icon_html(name, icons)
-            pill = _heading_pill(name, icon, tooltip=tooltip)
-        lines.extend((f'<div class="gd-tag-heading{indent_class}">{pill}</div>', ""))
+            pill = _heading_pill(name, _icon_html(name, icons), tooltip=tooltip)
+        heading = f'<div id="{ids[levels]}" class="gd-tag-heading{indent_class}">{pill}</div>'
+        lines.extend((heading, ""))
         if child.pages:
             _render_page_links(lines, child.pages, indent_class=indent_class)
         if child.children:
-            _render_tree(lines, child, config, depth + 1, path)
+            _render_tree(lines, child, config, ids, parents=levels)
 
 
 def _render_page_links(lines: list[str], pages: Sequence[TaggedPage], *, indent_class: str) -> None:
