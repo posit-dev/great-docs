@@ -17,12 +17,17 @@ import html
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import unquote, urlsplit, urlunsplit
 
+from .._content import publish
 from . import head
 from .seo import description
 from .seo import title as seo_title
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from .._layout import Layout
     from .._yaml import YamlMapping
     from ..config import Config
 
@@ -120,6 +125,59 @@ def register(
     website = quarto_config.setdefault("website", {})
     website["open-graph"] = open_graph or True
     website["twitter-card"] = twitter_card or True
+
+
+def publish_image(
+    config: Config,
+    layout: Layout,
+    build_dir: Path,
+    base_url: str | None,
+    *,
+    report: Callable[[str], None],
+) -> str | None:
+    """
+    Copy the configured card image into the site and return its address
+
+    A configured image URL is returned unchanged. A local image is resolved
+    relative to the source directory and copied to the build directory's root.
+
+    Parameters
+    ----------
+    config
+        Project configuration, whose `social_cards.image` names the image.
+    layout
+        The project's directories.
+    build_dir
+        The Quarto project directory.
+    base_url
+        The preferred site address with a trailing slash, or `None`.
+    report
+        Receives a warning when the local image does not exist.
+
+    Returns
+    -------
+    :
+        The configured URL or the copied image's address under `base_url`.
+        Without `base_url`, the copied image has a site-relative path. The
+        result is `None` when no image is configured or the local image is
+        missing.
+    """
+    image_path = config.social_cards_image
+    if not image_path:
+        return None
+    if urlsplit(image_path).scheme or image_path.startswith("//"):
+        return image_path
+
+    image_url = urlsplit(image_path)
+    source = layout.source_dir / unquote(image_url.path)
+    if not source.is_file():
+        report(f"Social card image not found: {image_path}")
+        return None
+
+    # The image must be at the site root to match the returned address.
+    _ = publish.copy_asset(layout, source, build_dir / source.name)
+    path = base_url + source.name if base_url else source.name
+    return urlunsplit(("", "", path, image_url.query, image_url.fragment))
 
 
 def page_title(title: str | None, site_name: str | None, config: Config) -> str | None:

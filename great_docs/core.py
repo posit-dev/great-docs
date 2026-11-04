@@ -8,7 +8,7 @@ from functools import cache, partial
 from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from urllib.parse import unquote, urlsplit, urlunsplit
+from urllib.parse import urlsplit
 
 from . import _marimo
 from ._build import freeze, outputs, quarto, serve, timings
@@ -71,6 +71,7 @@ from ._website.ai_agents import llms_txt
 from ._website.ai_agents.skills import SkillsWriter
 from ._website.homepage import page as homepage_page
 from ._website.homepage import source as homepage_source
+from ._website.identity import Identity
 from ._website.navigation import github as nav_github
 from ._website.navigation import label as nav_label
 from ._website.navigation import navbar as nav_navbar
@@ -223,7 +224,7 @@ class GreatDocs:
         self._cached_exports: list | None = None
         self._cached_package_name: str | None = None
         self._page_authors = page_dates.site_authors(
-            self._config, self.layout.source_dir, self._get_canonical_base_url()
+            self._config, self.layout.source_dir, self._identity().base_url
         )
 
         # Set environment variables needed by the qrenderer. The renderer links
@@ -1244,13 +1245,18 @@ class GreatDocs:
         if not sources:
             return 0
 
+        identity = self._identity()
         head = custom_pages.RawPageHead(
-            base_url=self._get_canonical_base_url(),
+            base_url=identity.base_url,
             card_image_url=(
-                self._resolve_social_card_image_url() if self._config.social_cards_enabled else None
+                social_cards.publish_image(
+                    self._config, self.layout, self.build_dir, identity.base_url, report=report
+                )
+                if self._config.social_cards_enabled
+                else None
             ),
             structured_data=self._structured_data(),
-            site_name=self._get_site_name(),
+            site_name=identity.name,
             default_description=self._default_description(),
         )
         published = custom_pages.publish(
@@ -1628,11 +1634,9 @@ class GreatDocs:
         :
             The structured data, or `None` when it is disabled.
         """
+        identity = self._identity()
         return StructuredData.make(
-            self._config,
-            self._get_package_metadata(),
-            self._get_site_name(),
-            self._get_canonical_base_url(),
+            self._config, self._get_package_metadata(), identity.name, identity.base_url
         )
 
     def _update_config_with_user_guide(
@@ -3775,16 +3779,18 @@ class GreatDocs:
         i18n.register(config, self._config)
 
         # Canonical links and social cards share the preferred page address.
+        base_url = self._identity().base_url
         page_url.register(
             config,
             self._config,
-            self._get_canonical_base_url(),
+            base_url,
             self.build_dir,
             og_url=social_cards.applies(config, self._config, self.build_dir),
         )
-        social_cards.register(
-            config, self._config, self._resolve_social_card_image_url(), self.build_dir
+        card_image_url = social_cards.publish_image(
+            self._config, self.layout, self.build_dir, base_url, report=_print_warning
         )
+        social_cards.register(config, self._config, card_image_url, self.build_dir)
         markdown_pages.register(config, self._config)
 
         # Apply explicit navbar ordering from config (if set)
@@ -3916,86 +3922,20 @@ class GreatDocs:
     # SEO GENERATION METHODS
     # ══════════════════════════════════════════════════════════════════════════
 
-    def _get_canonical_base_url(self) -> str | None:
+    def _identity(self) -> Identity:
         """
-        Resolve the preferred site URL for canonical links
+        Resolve the site's name and addresses
 
-        Use `seo.canonical.base_url` if set, otherwise `site_url`, otherwise the
-        GitHub Pages URL. The canonical override can point to a different address
-        from the one serving the site.
-
-        Returns
-        -------
-        str | None
-            The canonical base URL (with trailing slash) or None if not determined.
-        """
-        owner, repo, _ = self._get_github_repo_info()
-        return page_url.resolve_base_url(self._config, owner, repo)
-
-    def _resolve_social_card_image_url(self) -> str | None:
-        """
-        Resolve the social card image to an absolute URL.
-
-        If the configured image is a local file path, copies it to the build directory and returns
-        the site-relative path. If it's already a URL, returns it as-is. If no image is configured,
-        returns `None`.
-
-        Returns
-        -------
-        str | None
-            Absolute URL or site-relative path for the social card image.
-        """
-        image_path = self._config.social_cards_image
-        if not image_path:
-            return None
-
-        # If already a URL, return as-is
-        if urlsplit(image_path).scheme or image_path.startswith("//"):  # pragma: no cover
-            return image_path  # pragma: no cover
-
-        # Resolve relative to project root
-        image_url = urlsplit(image_path)
-        source = self.layout.source_dir / unquote(image_url.path)  # pragma: no cover
-        if not source.is_file():  # pragma: no cover
-            print(f"   ⚠️  Social card image not found: {image_path}")  # pragma: no cover
-            return None  # pragma: no cover
-
-        # Copy to build directory root (so it's served at site root)
-        dest = self.build_dir / source.name  # pragma: no cover
-        publish.copy_asset(self.layout, source, dest)  # pragma: no cover
-
-        # Build absolute URL if canonical base is available
-        base_url = self._get_canonical_base_url()  # pragma: no cover
-        if base_url:  # pragma: no cover
-            return urlunsplit(("", "", base_url + source.name, image_url.query, image_url.fragment))
-
-        # Fallback to site-relative path (works for most crawlers)
-        return urlunsplit(("", "", source.name, image_url.query, image_url.fragment))
-
-    def _get_site_name(self) -> str:
-        """
-        Resolve the site name used in page titles
-
-        Read `website.title` from the generated `_quarto.yml` first because
-        Quarto uses this value. Otherwise, use the configured display name or
-        detected package name.
+        The site title in `_quarto.yml` changes during a build, so each call
+        reads the identity afresh.
 
         Returns
         -------
         :
-            The site name, or an empty string if none is available.
+            The site's identity.
         """
-        if quarto_yml.path(self.build_dir).exists():
-            try:
-                config = quarto_yml.read(self.build_dir)
-            except (OSError, ValueError):
-                config = {}
-            website = config.get("website")
-            if isinstance(website, dict):
-                title = website.get("title")
-                if isinstance(title, str) and title:
-                    return title
-        return self._config.display_name or self._detect_package_name() or ""
+        owner, repo, _ = self._get_github_repo_info()
+        return Identity.make(self._config, self.build_dir, owner, repo, self._detect_package_name())
 
     def _prerender_term_player(self, log: "BuildLog") -> None:
         """
@@ -4963,7 +4903,7 @@ class GreatDocs:
         :
             The step's result line.
         """
-        base_url = self._get_canonical_base_url()
+        base_url = self._identity().base_url
         site_files.write(self.layout.site_dir, self._config, base_url, report=print)
         return "sitemap.xml + robots.txt"
 

@@ -28158,7 +28158,7 @@ seo:
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        sitemap.write(site_dir, docs._config, docs._get_canonical_base_url(), report=print)
+        sitemap.write(site_dir, docs._config, docs._identity().base_url, report=print)
 
         sitemap_path = site_dir / "sitemap.xml"
 
@@ -28199,7 +28199,7 @@ seo:
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        robots.write(site_dir, docs._config, docs._get_canonical_base_url(), report=print)
+        robots.write(site_dir, docs._config, docs._identity().base_url, report=print)
 
         robots_path = site_dir / "robots.txt"
 
@@ -29557,7 +29557,7 @@ def test_sitemap_write_basic():
         sub.mkdir()
         (sub / "index.html").write_text("<html></html>")
 
-        sitemap.write(gd.layout.site_dir, gd._config, gd._get_canonical_base_url(), report=print)
+        sitemap.write(gd.layout.site_dir, gd._config, gd._identity().base_url, report=print)
 
         sitemap_path = site_dir / "sitemap.xml"
         assert sitemap_path.exists()
@@ -29578,7 +29578,7 @@ def test_sitemap_write_no_site_dir(capsys):
         )
         gd = GreatDocs(project_path=tmp)
 
-        sitemap.write(gd.layout.site_dir, gd._config, gd._get_canonical_base_url(), report=print)
+        sitemap.write(gd.layout.site_dir, gd._config, gd._identity().base_url, report=print)
         captured = capsys.readouterr()
         assert "_site" in captured.out
 
@@ -29618,7 +29618,7 @@ def test_robots_write_basic():
         site_dir = gd.layout.site_dir
         site_dir.mkdir(parents=True)
 
-        robots.write(gd.layout.site_dir, gd._config, gd._get_canonical_base_url(), report=print)
+        robots.write(gd.layout.site_dir, gd._config, gd._identity().base_url, report=print)
 
         robots_path = site_dir / "robots.txt"
         assert robots_path.exists()
@@ -29637,7 +29637,7 @@ def test_robots_write_no_site_dir(capsys):
         (project / "great-docs.yml").write_text("seo:\n  robots: true\n")
         gd = GreatDocs(project_path=tmp)
 
-        robots.write(gd.layout.site_dir, gd._config, gd._get_canonical_base_url(), report=print)
+        robots.write(gd.layout.site_dir, gd._config, gd._identity().base_url, report=print)
         captured = capsys.readouterr()
         assert "_site" in captured.out
 
