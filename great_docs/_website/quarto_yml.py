@@ -22,6 +22,9 @@ if TYPE_CHECKING:
 
 FILENAME = "_quarto.yml"
 
+RENDER_GLOBS = ("*.qmd", "*.md", "*.markdown", "*.rmd", "*.Rmd", "*.rmarkdown", "*.ipynb")
+"""Quarto's default input files as per-extension globs, which match at any depth"""
+
 
 def path(build_dir: Path) -> Path:
     """
@@ -298,9 +301,39 @@ def add_resources(quarto_config: dict[str, Any], names: Iterable[str]) -> None:
             resources.append(name)
 
 
+def add_render_excludes(quarto_config: dict[str, Any], names: Iterable[str]) -> None:
+    """
+    Exclude files from rendering by adding `!` patterns to `project.render`
+
+    Patterns are appended in the supplied order, excluding those already listed. A
+    missing render list is first filled with `RENDER_GLOBS`, so Quarto still renders
+    its default inputs. A recursive `**` would not do: it overrides the exclusions that
+    follow it (issue #228).
+
+    Parameters
+    ----------
+    quarto_config
+        The configuration, changed in place.
+    names
+        The file names or globs to exclude, relative to the project directory.
+
+    Returns
+    -------
+    :
+    """
+    project = cast("dict[str, Any]", quarto_config.setdefault("project", {}))
+    if project.get("render") is None:
+        project["render"] = list(RENDER_GLOBS)
+    render = entries(project, "render")
+    for name in names:
+        exclude = f"!{name}"
+        if exclude not in render:
+            render.append(exclude)
+
+
 def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
     """
-    Add a build step's navigation to the Quarto configuration
+    Add a build step's navigation, resources and render exclusions to the Quarto configuration
 
     A link is added to `website.navbar.left` unless an item already has the same `href`
     or, for Great Docs' own items such as Reference, a target in the same directory.
@@ -312,12 +345,15 @@ def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
     its position. A sidebar with no matching entry is appended. The sidebar list is
     created when missing.
 
+    Resources join `project.resources` and render exclusions join `project.render`,
+    each once, as `add_resources` and `add_render_excludes` add them.
+
     Parameters
     ----------
     quarto_config
         The configuration, changed in place.
     contribution
-        The navigation to add.
+        The navigation, resources and render exclusions to add.
 
     Returns
     -------
@@ -326,6 +362,10 @@ def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
     _add_navbar_links(quarto_config, contribution.navbar)
     if contribution.sidebars:
         _add_sidebars(quarto_config, contribution.sidebars)
+    if contribution.resources:
+        add_resources(quarto_config, contribution.resources)
+    if contribution.render_excludes:
+        add_render_excludes(quarto_config, contribution.render_excludes)
 
 
 def _add_navbar_links(quarto_config: dict[str, Any], links: Iterable[NavbarLink]) -> None:

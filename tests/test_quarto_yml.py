@@ -181,6 +181,28 @@ def test_add_resources_appends_each_missing_name_once():
     assert quarto_config["project"]["resources"] == ["objects.inv", "a.js", "b.js"]
 
 
+def test_add_render_excludes_starts_from_the_default_inputs():
+    """A recursive `**` before the exclusions would override them (issue #228)"""
+    quarto_config: dict[str, Any] = {"project": {"type": "website"}}
+
+    quarto_yml.add_render_excludes(quarto_config, ["skill.md", ".well-known/**"])
+
+    assert quarto_config["project"]["render"] == [
+        *quarto_yml.RENDER_GLOBS,
+        "!skill.md",
+        "!.well-known/**",
+    ]
+
+
+def test_add_render_excludes_appends_each_missing_exclusion_once():
+    quarto_config = {"project": {"render": "*.qmd"}}
+
+    quarto_yml.add_render_excludes(quarto_config, ["a.html", "a.html"])
+    quarto_yml.add_render_excludes(quarto_config, ["a.html", "b.html"])
+
+    assert quarto_config["project"]["render"] == ["*.qmd", "!a.html", "!b.html"]
+
+
 CHANGELOG = Contribution(navbar=(NavbarLink("Changelog", "changelog.qmd"),))
 
 
@@ -320,3 +342,22 @@ def test_apply_without_sidebars_leaves_the_sidebar_key_absent():
     quarto_yml.apply(quarto_config, CHANGELOG)
 
     assert "sidebar" not in quarto_config["website"]
+
+
+def test_apply_adds_resources_and_render_excludes_once():
+    contribution = Contribution(resources=("raw.html", "logo.png"), render_excludes=("raw.html",))
+    quarto_config: dict[str, Any] = {"project": {"resources": ["logo.png"]}}
+
+    quarto_yml.apply(quarto_config, contribution)
+    quarto_yml.apply(quarto_config, contribution)
+
+    assert quarto_config["project"]["resources"] == ["logo.png", "raw.html"]
+    assert quarto_config["project"]["render"] == [*quarto_yml.RENDER_GLOBS, "!raw.html"]
+
+
+def test_apply_without_project_files_leaves_the_project_absent():
+    quarto_config: dict[str, Any] = {"website": {"navbar": {"left": []}}}
+
+    quarto_yml.apply(quarto_config, CHANGELOG)
+
+    assert "project" not in quarto_config

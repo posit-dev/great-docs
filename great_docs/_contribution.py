@@ -44,10 +44,16 @@ class Sidebar:
 
 @dataclass(frozen=True)
 class Contribution:
-    """The navigation that a build step adds to the site"""
+    """Navigation, resources and render exclusions supplied by a build step"""
 
     navbar: tuple[NavbarLink, ...] = ()
     """Links for the left side of the navbar, in order"""
 
     sidebars: tuple[Sidebar, ...] = ()
     """Sidebars that replace those with the same `id` or follow the existing sidebars"""
+
+    resources: tuple[str, ...] = ()
+    """Files and globs that Quarto copies into the site as they are, relative to the project"""
+
+    render_excludes: tuple[str, ...] = ()
+    """Files and globs that Quarto must not render, relative to the project"""

@@ -31,12 +31,13 @@ from ._checks.proofread import CheckedFile
 from ._cliref import click as cli_click
 from ._cliref import render as cli_render
 from ._cliref.model import CliCommand
-from ._content import custom_pages, publish, sections, user_guide
+from ._content import custom_pages, publish, sections, user_guide, walk
 from ._content.naming import (
     published_path,
 )
-from ._content.pages import PageMap, section_destination
+from ._content.pages import PageMap
 from ._content.user_guide import UserGuide
+from ._contribution import Contribution
 from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import PACKAGE_DIRS, Layout
@@ -69,6 +70,7 @@ from ._website import (
     social_cards,
     tags,
 )
+from ._website import resources as project_resources
 from ._website.ai_agents import llms_txt
 from ._website.ai_agents.skills import SkillsWriter
 from ._website.homepage import page as homepage_page
@@ -89,21 +91,6 @@ if TYPE_CHECKING:
 
     from ._apiref.api_reference import APIReference
     from ._build.log import BuildLog
-
-# Quarto's default input file types, enumerated as render globs. Used to seed
-# `project.render` whenever we also add `!` exclusions. A recursive `**` glob
-# overpowers any negation that follows it (so `!skill.md` would be ignored),
-# whereas these per-extension globs still match recursively while letting the
-# exclusions take effect.
-_QUARTO_RENDER_GLOBS = [
-    "*.qmd",
-    "*.md",
-    "*.markdown",
-    "*.rmd",
-    "*.Rmd",
-    "*.rmarkdown",
-    "*.ipynb",
-]
 
 
 def _print_warning(message: str) -> None:
@@ -1150,7 +1137,7 @@ class GreatDocs:
                 if (
                     item.is_dir()
                     and not self.layout.is_reserved_directory(item)
-                    and self._is_asset_dir(item)
+                    and walk.is_asset_dir(item)
                 ):
                     destination = section.destination / item.name
                     if destination.exists():
@@ -1192,39 +1179,6 @@ class GreatDocs:
     # =========================================================================
     # Custom Static Pages Methods
     # =========================================================================
-
-    def _add_project_resources(
-        self,
-        resources_to_add: list[str],
-        render_excludes: list[str] | None = None,
-    ) -> None:
-        """Add resource paths and render exclusions to _quarto.yml."""
-        if not resources_to_add and not render_excludes:
-            return
-
-        with quarto_yml.edit(self.build_dir, self._config, seed_website=True) as config:
-            project = config.setdefault("project", {})
-
-            resources = project.setdefault("resources", [])
-            if isinstance(resources, str):
-                resources = [resources]  # pragma: no cover
-                project["resources"] = resources  # pragma: no cover
-
-            for resource in resources_to_add:
-                if resource not in resources:
-                    resources.append(resource)
-
-            if render_excludes:
-                if "render" not in project:
-                    project["render"] = list(_QUARTO_RENDER_GLOBS)
-                render = project["render"]
-                if isinstance(render, str):
-                    render = [render]  # pragma: no cover
-                    project["render"] = render  # pragma: no cover
-                for path in render_excludes:
-                    exclude = f"!{path}"
-                    if exclude not in render:
-                        render.append(exclude)
 
     def _process_custom_pages(self, guide: UserGuide | None) -> int:
         """
@@ -1275,7 +1229,13 @@ class GreatDocs:
             quarto_config = quarto_yml.read(self.build_dir, seed_website=True)
             if nav_navbar.add_link(quarto_config, link, self._config, after=after):
                 quarto_yml.write(self.build_dir, quarto_config, self._config)
-        self._add_project_resources(published.resources, published.render_excludes)
+        if published.resources or published.render_excludes:
+            contribution = Contribution(
+                resources=tuple(published.resources),
+                render_excludes=tuple(published.render_excludes),
+            )
+            with quarto_yml.edit(self.build_dir, self._config, seed_website=True) as quarto_config:
+                quarto_yml.apply(quarto_config, contribution)
         return published.pages
 
     # =========================================================================
@@ -1309,7 +1269,7 @@ class GreatDocs:
             if (
                 item.is_dir()
                 and not self.layout.is_reserved_directory(item)
-                and self._is_asset_dir(item)
+                and walk.is_asset_dir(item)
             ):
                 dst_dir = target_dir / item.name
                 if dst_dir.exists():
@@ -1324,24 +1284,6 @@ class GreatDocs:
         )
 
         return copied_files
-
-    @staticmethod
-    def _is_asset_dir(directory: Path) -> bool:
-        """
-        Determine whether *directory* is an asset directory (images, data, snippets, etc.).
-
-        A directory is considered an asset directory when either:
-
-        - It contains no `.qmd` files at any depth, **or**
-        - Its name starts with `_` (e.g., `_includes/`, `_snippets/`).
-
-        The underscore rule lets authors store `.qmd` snippets intended for
-        `code-include` (or other non-page purposes) alongside images and data
-        files without the directory being mistaken for a content subdirectory.
-        """
-        if directory.name.startswith("_"):
-            return True
-        return not any(f.suffix == ".qmd" for f in directory.rglob("*"))
 
     def _copy_directory_metadata(
         self,
@@ -2516,76 +2458,7 @@ class GreatDocs:
         has_repository = self._get_github_repo_info()[0] is not None
         scripts.add_resources(self._config, config, has_repository=has_repository)
 
-        # Add marimo islands resources when enabled
-        if self._config.marimo_enabled:
-            # Include notebooks directory so .py files are available to the shortcode
-            notebooks_dir = self.build_dir / "notebooks"
-            if notebooks_dir.exists() and notebooks_dir.is_dir():
-                if "notebooks/**" not in config["project"]["resources"]:
-                    config["project"]["resources"].append("notebooks/**")
-            # Include pre-generated island HTML fragments
-            if "_marimo_islands/**" not in config["project"]["resources"]:
-                config["project"]["resources"].append("_marimo_islands/**")
-
-        # Add all user-guide asset directories to resources so that images
-        # referenced only via data attributes (e.g., dark-mode variants) get
-        # copied to _site
-        ug_dir = self.build_dir / "user-guide"
-        if ug_dir.exists() and ug_dir.is_dir():
-            for item in ug_dir.iterdir():
-                if item.is_dir() and self._is_asset_dir(item):
-                    res_glob = f"user-guide/{item.name}/**"
-                    if res_glob not in config["project"]["resources"]:
-                        config["project"]["resources"].append(res_glob)
-
-        # Add assets directory to resources if it exists
-        assets_dir = self.build_dir / "assets"
-        if assets_dir.exists() and assets_dir.is_dir():
-            if "assets/**" not in config["project"]["resources"]:
-                config["project"]["resources"].append("assets/**")
-        if "_shared/**" not in config["project"]["resources"]:
-            config["project"]["resources"].append("_shared/**")
-
-        # Add custom section asset directories to resources
-        sections_config = self._config.sections
-        if sections_config and isinstance(sections_config, list):
-            for section_cfg in sections_config:
-                if not isinstance(section_cfg, dict):
-                    continue
-                src_dir = section_cfg.get("dir")
-                if not src_dir:
-                    continue
-                section_build_dir = section_destination(self.layout, section_cfg)
-                if section_build_dir is None:
-                    continue
-                slug = section_build_dir.relative_to(self.build_dir).as_posix()
-                if section_build_dir.exists() and section_build_dir.is_dir():
-                    for item in section_build_dir.iterdir():
-                        if item.is_dir() and self._is_asset_dir(item):
-                            res_glob = f"{slug}/{item.name}/**"
-                            if res_glob not in config["project"]["resources"]:
-                                config["project"]["resources"].append(res_glob)
-
-        # Add skill.md and .well-known to resources (so Quarto copies them to _site)
-        # Also exclude them from rendering so Quarto doesn't convert them to HTML
-        if self._config.skill_enabled:
-            if "skill.md" not in config["project"]["resources"]:
-                config["project"]["resources"].append("skill.md")
-
-            # Exclude skill.md from rendering (Quarto renders .md by default).
-            # The render list enumerates Quarto's default input globs before the
-            # exclusions; a recursive `**` would overpower the `!skill.md`
-            # negation and render skill.md anyway (see issue #228).
-            if "render" not in config["project"]:
-                config["project"]["render"] = list(_QUARTO_RENDER_GLOBS)
-            if "!skill.md" not in config["project"]["render"]:
-                config["project"]["render"].append("!skill.md")
-
-            if self._config.skill_well_known:
-                if ".well-known/**" not in config["project"]["resources"]:
-                    config["project"]["resources"].append(".well-known/**")
-                if "!.well-known/**" not in config["project"]["render"]:
-                    config["project"]["render"].append("!.well-known/**")
+        project_resources.register(config, self._config, self.layout, self.build_dir)
 
         quarto_defaults.register_site(config, self._config, self.layout, report=print)
 
@@ -3060,7 +2933,8 @@ class GreatDocs:
                 f"Pre-rendered {done.count} terminal recording(s) "
                 f"({done.manifest_bytes / 1024:.0f} KB of player data)"
             )
-            self._add_project_resources([f"{term_prerender.OUTPUT_ROOT}/**"], [])
+            with quarto_yml.edit(self.build_dir, self._config, seed_website=True) as quarto_config:
+                quarto_yml.apply(quarto_config, done.contribution)
 
     def uninstall(self) -> None:
         """

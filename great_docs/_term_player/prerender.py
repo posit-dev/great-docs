@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .._content.walk import find_files
+from .._contribution import Contribution
 from .manifest import Manifest, generate_manifest
 from .parser import Recording, parse_asciicast, parse_termshow
 from .script import Script, apply_script, load_script
@@ -25,6 +26,13 @@ class Prerendered:
 
     manifest_bytes: int
     """Total size of their manifests, which is what the player loads"""
+
+    @property
+    def contribution(self) -> Contribution:
+        """The output directory as a project resource, or nothing when no recording rendered"""
+        if not self.count:
+            return Contribution()
+        return Contribution(resources=(f"{OUTPUT_ROOT}/**",))
 
 
 def load_recording(
