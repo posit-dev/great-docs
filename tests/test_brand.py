@@ -190,6 +190,21 @@ class TestFavicons:
         assert quarto_config["website"]["favicon"] == "favicon.ico"
         assert not any('rel="icon"' in text for text in _headers(quarto_config))
 
+    def test_uses_the_configured_favicon_without_a_logo(self, tmp_path: Path):
+        _write_png(tmp_path / "assets" / "icon.png")
+
+        quarto_config, _ = _register(
+            tmp_path, "favicon: assets/icon.png\n", documentation_url="https://example.org/"
+        )
+
+        assert quarto_config["website"]["favicon"] == "favicon.ico"
+        assert "favicon.ico" in quarto_config["project"]["resources"]
+        assert (
+            '<link rel="icon" type="image/x-icon" href="https://example.org/favicon.ico" '
+            'sizes="48x48">'
+        ) in _headers(quarto_config)
+        assert "logo" not in quarto_config["website"]["navbar"]
+
 
 class TestRelease:
     def test_shows_the_latest_release_beside_the_title(self, tmp_path: Path):

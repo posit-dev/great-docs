@@ -51,8 +51,9 @@ def register(
 
     Show a configured logo, or one found at a conventional path, in place of
     the navbar title unless `logo.show_title` is set. Copy local logo images into
-    `build_dir`. When a logo is present, generate favicons from the configured
-    `favicon` or a local logo image and link them from every page.
+    `build_dir`. Generate favicons from the configured `favicon`, even without
+    a logo, or use a local logo image when no favicon is configured. Link the
+    favicons from every page.
 
     Parameters
     ----------
@@ -102,11 +103,10 @@ def register(
     logo = config.logo
     if logo is None:
         logo = branding.detect_logo(layout.source_dir, package_name)
+    logo_file = None
     if logo is not None:
         logo_file = _add_logo(quarto_config, config, layout, build_dir, logo, package_name, report)
-        _add_favicons(
-            quarto_config, config, layout, build_dir, logo_file, documentation_url, report
-        )
+    _add_favicons(quarto_config, config, layout, build_dir, logo_file, documentation_url, report)
 
 
 def register_release(quarto_config: dict[str, Any], config: Config, facts: Facts) -> None:
