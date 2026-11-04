@@ -65,3 +65,27 @@ def find_files(
         ]
         found.extend(current / name for name in filenames if name.endswith(suffix))
     return sorted(found)
+
+
+def is_asset_dir(directory: Path) -> bool:
+    """
+    Decide whether a directory holds supporting files rather than pages
+
+    Asset directories are copied whole rather than published as pages. A directory
+    qualifies if its name starts with `_` or it contains no `.qmd` files at any depth.
+    The `_` prefix lets authors keep `.qmd` snippets for `code-include` alongside
+    images and data.
+
+    Parameters
+    ----------
+    directory
+        The directory to classify.
+
+    Returns
+    -------
+    :
+        Whether the directory is an asset directory.
+    """
+    if directory.name.startswith("_"):
+        return True
+    return not any(f.suffix == ".qmd" for f in directory.rglob("*"))

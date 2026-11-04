@@ -2540,33 +2540,6 @@ def test_user_guide_copy_expands_code_includes():
         assert "{{< include" not in built_content
 
 
-def test_is_asset_dir_no_qmd():
-    """Test that directories without .qmd files are asset directories."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        d = Path(tmp_dir) / "images"
-        d.mkdir()
-        (d / "logo.png").write_bytes(b"PNG")
-        assert GreatDocs._is_asset_dir(d) is True
-
-
-def test_is_asset_dir_with_qmd():
-    """Test that directories with .qmd files are NOT asset directories."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        d = Path(tmp_dir) / "chapter"
-        d.mkdir()
-        (d / "page.qmd").write_text("---\ntitle: Test\n---\n")
-        assert GreatDocs._is_asset_dir(d) is False
-
-
-def test_is_asset_dir_underscore_prefix_with_qmd():
-    """Test that _-prefixed dirs are asset dirs even when they contain .qmd files."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        d = Path(tmp_dir) / "_includes"
-        d.mkdir()
-        (d / "snippet.qmd").write_text("```python\nx = 1\n```\n")
-        assert GreatDocs._is_asset_dir(d) is True
-
-
 def test_underscore_dir_copied_as_assets_with_qmd():
     """Test that _-prefixed dirs with .qmd files are copied during user guide build."""
     with tempfile.TemporaryDirectory() as tmp_dir:

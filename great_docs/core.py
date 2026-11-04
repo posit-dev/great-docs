@@ -31,7 +31,7 @@ from ._checks.proofread import CheckedFile
 from ._cliref import click as cli_click
 from ._cliref import render as cli_render
 from ._cliref.model import CliCommand
-from ._content import custom_pages, publish, sections, user_guide
+from ._content import custom_pages, publish, sections, user_guide, walk
 from ._content.naming import (
     published_path,
 )
@@ -1136,7 +1136,7 @@ class GreatDocs:
                 if (
                     item.is_dir()
                     and not self.layout.is_reserved_directory(item)
-                    and self._is_asset_dir(item)
+                    and walk.is_asset_dir(item)
                 ):
                     destination = section.destination / item.name
                     if destination.exists():
@@ -1268,7 +1268,7 @@ class GreatDocs:
             if (
                 item.is_dir()
                 and not self.layout.is_reserved_directory(item)
-                and self._is_asset_dir(item)
+                and walk.is_asset_dir(item)
             ):
                 dst_dir = target_dir / item.name
                 if dst_dir.exists():
@@ -1283,24 +1283,6 @@ class GreatDocs:
         )
 
         return copied_files
-
-    @staticmethod
-    def _is_asset_dir(directory: Path) -> bool:
-        """
-        Determine whether *directory* is an asset directory (images, data, snippets, etc.).
-
-        A directory is considered an asset directory when either:
-
-        - It contains no `.qmd` files at any depth, **or**
-        - Its name starts with `_` (e.g., `_includes/`, `_snippets/`).
-
-        The underscore rule lets authors store `.qmd` snippets intended for
-        `code-include` (or other non-page purposes) alongside images and data
-        files without the directory being mistaken for a content subdirectory.
-        """
-        if directory.name.startswith("_"):
-            return True
-        return not any(f.suffix == ".qmd" for f in directory.rglob("*"))
 
     def _copy_directory_metadata(
         self,
@@ -2492,7 +2474,7 @@ class GreatDocs:
         ug_dir = self.build_dir / "user-guide"
         if ug_dir.exists() and ug_dir.is_dir():
             for item in ug_dir.iterdir():
-                if item.is_dir() and self._is_asset_dir(item):
+                if item.is_dir() and walk.is_asset_dir(item):
                     res_glob = f"user-guide/{item.name}/**"
                     if res_glob not in config["project"]["resources"]:
                         config["project"]["resources"].append(res_glob)
@@ -2520,7 +2502,7 @@ class GreatDocs:
                 slug = section_build_dir.relative_to(self.build_dir).as_posix()
                 if section_build_dir.exists() and section_build_dir.is_dir():
                     for item in section_build_dir.iterdir():
-                        if item.is_dir() and self._is_asset_dir(item):
+                        if item.is_dir() and walk.is_asset_dir(item):
                             res_glob = f"{slug}/{item.name}/**"
                             if res_glob not in config["project"]["resources"]:
                                 config["project"]["resources"].append(res_glob)
