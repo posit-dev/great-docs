@@ -19,7 +19,7 @@ from .._apiref.introspect import get_object
 from .._build.steps import BuildError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Iterable, Iterator
     from pathlib import Path
 
     from ..config import Config
@@ -147,23 +147,34 @@ def parse_dunder_all(
     init_file: Path, config: Config, *, report: Callable[[str], None]
 ) -> list[str] | None:
     """
-    Read the names a literal `__all__ = [...]` lists in a package's `__init__.py`
+    Read export names from a package's `__init__.py` without executing it
 
-    Only a list of string literals counts. The names in the `exclude` setting are dropped.
+    Read module-scope assignments to `__all__` in source order, including annotated assignments
+    and `+=` extensions. Traverse compound statements such as `if` and `try` without evaluating
+    conditions or entering function or class bodies.
+
+    Collect string literals from list and tuple literals, including those joined with `+`.
+    Ignore non-string elements and dynamic operands, such as names, attributes, calls and
+    comprehensions. A wholly dynamic value leaves the previously collected names unchanged.
+
+    Apply automatic and configured exclusions, with `auto_include` and `no_auto_exclude`
+    controlling the automatic exclusions.
 
     Parameters
     ----------
     init_file
         The package's `__init__.py`.
     config
-        The configuration whose `exclude` setting applies.
+        The configuration whose `exclude`, `auto_include` and `no_auto_exclude` settings apply.
     report
         A callback that receives progress lines and the reason for a failure.
 
     Returns
     -------
     :
-        The names, or `None` if the file cannot be read or parsed, or lists no names.
+        The remaining names in `__all__` order. Return `None` if the file cannot be read or
+        parsed, or no names are collected before exclusions. Return an empty list if
+        exclusions remove every collected name.
     """
     try:
         tree = ast.parse(init_file.read_text(encoding="utf-8"))
@@ -173,31 +184,150 @@ def parse_dunder_all(
         return None
 
     exports: list[str] | None = None
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.List):
+    for node in _module_statements(tree):
+        if isinstance(node, ast.Assign) and any(map(_is_dunder_all, node.targets)):
+            names = _literal_names(node.value)
+        elif isinstance(node, ast.AnnAssign) and _is_dunder_all(node.target) and node.value:
+            names = _literal_names(node.value)
+        elif (
+            isinstance(node, ast.AugAssign)
+            and isinstance(node.op, ast.Add)
+            and _is_dunder_all(node.target)
+        ):
+            names = _literal_names(node.value)
+            if names is not None:
+                names = [*(exports or []), *names]
+        else:
             continue
-        if any(isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets):
-            exports = [
-                element.value
-                for element in node.value.elts
-                if isinstance(element, ast.Constant) and isinstance(element.value, str)
-            ]
+        if names is not None:
+            exports = names
 
     if not exports:
         report("No __all__ definition found in __init__.py")
         return None
 
     report(f"Successfully parsed __all__ with {len(exports)} exports")
-    exclude = config.exclude
-    if not exclude:
-        return exports
-    kept = [name for name in exports if name not in exclude]
-    if len(kept) < len(exports):
+    return _drop_excluded(exports, config, report=report)
+
+
+def _module_statements(node: ast.AST) -> Iterator[ast.stmt]:
+    """
+    Yield module-scope statements without entering function or class bodies
+
+    Traverse compound statements such as `if` and `try` in source order without evaluating
+    their conditions.
+
+    Parameters
+    ----------
+    node
+        The parsed module, or a node within it.
+
+    Yields
+    ------
+    :
+        Each statement, including function and class definitions but excluding their bodies.
+    """
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, ast.stmt):
+            yield child
+        if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            yield from _module_statements(child)
+
+
+def _is_dunder_all(target: ast.expr) -> bool:
+    """
+    Check whether an assignment target is the name `__all__`
+
+    Parameters
+    ----------
+    target
+        The target of an assignment.
+
+    Returns
+    -------
+    :
+        Whether the target is `__all__`.
+    """
+    return isinstance(target, ast.Name) and target.id == "__all__"
+
+
+def _literal_names(value: ast.expr) -> list[str] | None:
+    """
+    Collect string literals from lists, tuples and `+` expressions
+
+    Ignore non-string elements of list and tuple literals and dynamic operands of `+`.
+
+    Parameters
+    ----------
+    value
+        The value assigned to `__all__`.
+
+    Returns
+    -------
+    :
+        The collected strings in source order. An empty list or tuple literal yields an empty
+        list. Return `None` if no list or tuple literal is recognised.
+    """
+    if isinstance(value, (ast.List, ast.Tuple)):
+        return [
+            element.value
+            for element in value.elts
+            if isinstance(element, ast.Constant) and isinstance(element.value, str)
+        ]
+    if isinstance(value, ast.BinOp) and isinstance(value.op, ast.Add):
+        left = _literal_names(value.left)
+        right = _literal_names(value.right)
+        if left is None and right is None:
+            return None
+        return [*(left or []), *(right or [])]
+    return None
+
+
+def _drop_excluded(names: list[str], config: Config, *, report: Callable[[str], None]) -> list[str]:
+    """
+    Remove exported names covered by automatic or configured exclusions
+
+    Apply automatic exclusions unless `auto_include` keeps individual names or
+    `no_auto_exclude` disables them all. Always remove names in `exclude`, even if they also
+    appear in `auto_include`.
+
+    Parameters
+    ----------
+    names
+        The exported names.
+    config
+        The configuration whose `exclude`, `auto_include` and `no_auto_exclude` settings apply.
+    report
+        A callback that receives exclusion settings and groups of excluded or included names.
+
+    Returns
+    -------
+    :
+        The remaining names, in their original order.
+    """
+    exclude = set(config.exclude)
+    auto_include = set(config.auto_include)
+    if config.no_auto_exclude:
+        auto_exclude: frozenset[str] = frozenset()
+        report("Auto-exclude list bypassed (no_auto_exclude: true)")
+    else:
+        auto_exclude = AUTO_EXCLUDE - auto_include
+        forced = auto_include & AUTO_EXCLUDE
+        if forced:
+            report(
+                f"Force-including {len(forced)} auto-excluded name(s): {', '.join(sorted(forced))}"
+            )
+
+    auto_excluded = [name for name in names if name in auto_exclude]
+    if auto_excluded:
+        report(f"Auto-excluding {len(auto_excluded)} item(s): {', '.join(sorted(auto_excluded))}")
+    user_excluded = [name for name in names if name in exclude and name not in auto_exclude]
+    if user_excluded:
         report(
-            f"Filtered out {len(exports) - len(kept)} item(s) from great-docs.yml exclude: "
-            f"{', '.join(exclude)}"
+            f"Filtered out {len(user_excluded)} item(s) from great-docs.yml exclude: "
+            f"{', '.join(sorted(user_excluded))}"
         )
-    return kept
+    return [name for name in names if name not in auto_exclude and name not in exclude]
 
 
 def discover_exports(
@@ -238,34 +368,9 @@ def discover_exports(
         candidates = [name for name in members if not name.startswith("_")]
         report(f"Discovered {len(candidates)} public names")
 
-    exclude = set(config.exclude)
-    auto_include = set(config.auto_include)
-    if config.no_auto_exclude:
-        auto_exclude: frozenset[str] = frozenset()
-        report("Auto-exclude list bypassed (no_auto_exclude: true)")
-    else:
-        auto_exclude = AUTO_EXCLUDE - auto_include
-        forced = auto_include & AUTO_EXCLUDE
-        if forced:
-            report(
-                f"Force-including {len(forced)} auto-excluded name(s): {', '.join(sorted(forced))}"
-            )
-
-    auto_excluded = [name for name in candidates if name in auto_exclude]
-    if auto_excluded:
-        report(f"Auto-excluding {len(auto_excluded)} item(s): {', '.join(sorted(auto_excluded))}")
-    user_excluded = [name for name in candidates if name in exclude and name not in auto_exclude]
-    if user_excluded:
-        report(
-            f"Filtered out {len(user_excluded)} item(s) from great-docs.yml exclude: "
-            f"{', '.join(sorted(user_excluded))}"
-        )
-
     exports: list[str] = []
     dropped: dict[str, list[str]] = {}
-    for name in candidates:
-        if name in auto_exclude or name in exclude:
-            continue
+    for name in _drop_excluded(candidates, config, report=report):
         member = members.get(name)
         if member is None:
             reason = "not found by static analysis"

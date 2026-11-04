@@ -370,7 +370,7 @@ def test_parse_dunder_all_real_project():
 
     assert exports is not None
     assert "GreatDocs" in exports
-    assert "main" in exports
+    assert "main" not in exports
 
 
 def test_create_api_sections():
@@ -11723,6 +11723,38 @@ def test_parse_dunder_all_no_all_returns_none():
         result = parse_dunder_all(_package_init(docs, "mypkg"), docs._config, report=print)
 
         assert result is None
+
+
+def test_parse_dunder_all_static_forms(tmp_path: Path):
+    """
+    Verify that lists, tuples, `+` and `+=` preserve export order
+    """
+    init_file = tmp_path / "__init__.py"
+    init_file.write_text('__all__ = ("a",) + ["b"]\n__all__ += ["c"]\n__all__ += ("d",)\n')
+
+    result = parse_dunder_all(init_file, write_config(tmp_path), report=print)
+
+    assert result == ["a", "b", "c", "d"]
+
+
+@pytest.mark.parametrize(
+    ("settings", "expected"),
+    [
+        ("", ["Widget"]),
+        ("auto_include:\n  - main\n", ["Widget", "main"]),
+        ("no_auto_exclude: true\n", ["Widget", "main", "logger"]),
+    ],
+)
+def test_parse_dunder_all_auto_exclude(tmp_path: Path, settings: str, expected: list[str]):
+    """
+    Verify that `auto_include` and `no_auto_exclude` override automatic exclusions
+    """
+    init_file = tmp_path / "__init__.py"
+    init_file.write_text('__all__ = ["Widget", "main", "logger"]\n')
+
+    result = parse_dunder_all(init_file, write_config(tmp_path, settings), report=print)
+
+    assert result == expected
 
 
 def test_update_quarto_config_page_footer_three_authors():
