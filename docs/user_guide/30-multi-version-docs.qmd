@@ -238,7 +238,18 @@ sections:
     versions: ["0.2", "0.3", "dev"]
 ```
 
-The `migrations/` section only appears in versions 0.2, 0.3, and dev. It is completely absent from the sidebar and build output for version 0.1. Combined with page-level scoping, this gives you fine-grained control over what each version's readers see.
+The `migrations/` section appears only in versions 0.2, 0.3, and dev. Version 0.1 excludes its pages from the build output and its links from the navbar and sidebar. Use section-level and page-level scoping together to control what readers see in each version.
+
+A section's `versions` setting accepts the same values as page frontmatter: a tag, a [version expression](#version-expressions-in-frontmatter), or a list of either:
+
+```{.yaml filename="docs/great-docs.yml"}
+sections:
+  - title: Tutorials
+    dir: tutorials
+    versions: ">=0.5"
+```
+
+The `tutorials/` section appears in version 0.5 and every newer version.
 
 ## Inline Version Badges
 

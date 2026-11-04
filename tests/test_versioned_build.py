@@ -693,21 +693,24 @@ class TestSectionVersionScoping:
             {"dir": "migrations", "versions": ["0.2", "0.3"]},
             {"dir": "guide"},  # no versions key — always included
         ]
-        excluded = _compute_excluded_section_dirs("0.2", sections, Layout.make(tmp_path))
+        versions = parse_versions_config(["0.3", "0.2"])
+        excluded = _compute_excluded_section_dirs("0.2", versions, sections, Layout.make(tmp_path))
         assert Path("recipes") in excluded  # 0.2 not in ["0.3"]
         assert Path("migrations") not in excluded  # 0.2 in ["0.2", "0.3"]
         assert Path("guide") not in excluded
 
     def test_no_sections_returns_empty(self, tmp_path: Path):
         layout = Layout.make(tmp_path)
-        assert _compute_excluded_section_dirs("0.1", None, layout) == set()
-        assert _compute_excluded_section_dirs("0.1", [], layout) == set()
+        versions = parse_versions_config(["0.1"])
+        assert _compute_excluded_section_dirs("0.1", versions, None, layout) == set()
+        assert _compute_excluded_section_dirs("0.1", versions, [], layout) == set()
 
     def test_malformed_section_entries_are_ignored(self, tmp_path: Path):
         # The section reader reports and skips non-mapping entries; the
         # versioned build must survive the same configuration.
         sections = ["examples", {"dir": "recipes", "versions": ["0.3"]}]
-        excluded = _compute_excluded_section_dirs("0.2", sections, Layout.make(tmp_path))
+        versions = parse_versions_config(["0.3", "0.2"])
+        excluded = _compute_excluded_section_dirs("0.2", versions, sections, Layout.make(tmp_path))
         assert excluded == {Path("recipes")}
 
     def test_in_excluded_section(self):
@@ -756,6 +759,41 @@ class TestSectionVersionScoping:
         assert "recipes/01-basic.html" not in pages2
         assert "guide/intro.html" in pages2
 
+    def test_preprocess_reads_section_versions_as_expressions(self, tmp_path: Path):
+        # Section version scoping must match page front matter whether an
+        # expression is supplied as a string or in a list.
+        source = tmp_path / "source"
+        _make_source_tree(
+            source,
+            {
+                "recipes/basic.qmd": "---\ntitle: Basic\n---\n\nRecipe",
+                "legacy/old.qmd": "---\ntitle: Old\n---\n\nLegacy",
+            },
+        )
+        versions = parse_versions_config(["0.4", "0.3", "0.2"])
+        sections = [
+            {"dir": "recipes", "versions": ">=0.3"},
+            {"dir": "legacy", "versions": ["<0.4"]},
+        ]
+
+        pages = {
+            entry.tag: preprocess_version(
+                source,
+                tmp_path / f"build-{entry.tag}",
+                entry,
+                versions,
+                section_configs=sections,
+                layout=Layout.make(tmp_path),
+            )
+            for entry in versions
+        }
+
+        assert pages == {
+            "0.4": ["recipes/basic.html"],
+            "0.3": ["legacy/old.html", "recipes/basic.html"],
+            "0.2": ["legacy/old.html"],
+        }
+
     def test_preprocess_excludes_sections_by_published_directory(self, tmp_path: Path):
         # Exclusions follow full published paths, including nested and slugged
         # directories. A matching name elsewhere must remain included.
@@ -787,6 +825,62 @@ class TestSectionVersionScoping:
         )
 
         assert sorted(pages) == ["guides/intro.html", "user-guide/recipes/basic.html"]
+
+    def test_preprocess_removes_navbar_links_into_excluded_sections(self, tmp_path: Path):
+        # Navbar links to excluded sections lead to missing pages. Menu links
+        # must also be removed, along with menus emptied by those removals.
+        source = tmp_path / "source"
+        _make_source_tree(
+            source,
+            {
+                "_quarto.yml": (
+                    "project:\n  type: website\n"
+                    "website:\n"
+                    "  navbar:\n"
+                    "    left:\n"
+                    "      - text: Guide\n        href: guide/intro.qmd\n"
+                    "      - text: Recipes\n        href: recipes/index.qmd\n"
+                    "      - text: More\n"
+                    "        menu:\n"
+                    "          - text: Migrations\n            href: migrations/index.qmd\n"
+                    "          - guide/faq.qmd\n"
+                    "      - text: Legacy\n"
+                    "        menu:\n"
+                    "          - migrations/v1.qmd\n"
+                    "    right:\n"
+                    "      - recipes/basic.qmd\n"
+                    "      - icon: github\n        href: https://github.com/org/recipes\n"
+                ),
+                "guide/intro.qmd": "---\ntitle: Intro\n---\n\nGuide",
+                "guide/faq.qmd": "---\ntitle: FAQ\n---\n\nGuide",
+                "recipes/basic.qmd": "---\ntitle: Basic\n---\n\nRecipe",
+                "migrations/v1.qmd": "---\ntitle: V1\n---\n\nMigrate",
+            },
+        )
+        versions = parse_versions_config(["0.3", "0.2"])
+        sections = [
+            {"dir": "recipes", "versions": ["0.3"]},
+            {"dir": "migrations", "versions": ["0.3"]},
+        ]
+        dest = tmp_path / "build-0.2"
+
+        preprocess_version(
+            source,
+            dest,
+            versions[1],
+            versions,
+            section_configs=sections,
+            layout=Layout.make(tmp_path),
+        )
+
+        navbar = read_yaml(dest / "_quarto.yml")["website"]["navbar"]
+        assert navbar == {
+            "left": [
+                {"text": "Guide", "href": "guide/intro.qmd"},
+                {"text": "More", "menu": ["guide/faq.qmd"]},
+            ],
+            "right": [{"icon": "github", "href": "https://github.com/org/recipes"}],
+        }
 
 
 # ---------------------------------------------------------------------------

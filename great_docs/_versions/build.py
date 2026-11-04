@@ -26,6 +26,7 @@ from great_docs._utils import (
 from great_docs._versions.model import (
     VersionEntry,
     build_version_map,
+    evaluate_version_expr,
     get_latest_version,
     is_page_upcoming,
     is_page_upcoming_for_version,
@@ -34,7 +35,7 @@ from great_docs._versions.model import (
     process_version_fences,
     version_url_segment,
 )
-from great_docs._website import page_status, prerender
+from great_docs._website import page_status, prerender, quarto_yml
 from great_docs._website.navigation import shared_sidebar
 
 if TYPE_CHECKING:
@@ -512,7 +513,8 @@ def preprocess_version(
     Copy `source_dir` to `dest_dir` unless they are the same directory. Then:
 
     1. Remove pages whose front matter excludes the version.
-    2. Remove sections whose configuration excludes the version.
+    2. Remove sections whose configuration excludes the version, along with
+       their navbar links.
     3. Process version fences in the remaining `.qmd` files.
     4. Expand version badges and callouts.
     5. Generate API reference pages from a configured snapshot, and rebuild
@@ -554,7 +556,7 @@ def preprocess_version(
     `.html`.
     """
     # Build a set of directories excluded by section-level version scoping
-    excluded_dirs = _compute_excluded_section_dirs(entry.tag, section_configs, layout)
+    excluded_dirs = _compute_excluded_section_dirs(entry.tag, all_versions, section_configs, layout)
 
     # The latest version uses `source_dir` directly; only historical versions
     # need a copy.
@@ -613,6 +615,8 @@ def preprocess_version(
         html_rel = str(rel).replace(".qmd", ".html").replace(".md", ".html")
         included_pages.append(html_rel)
 
+    _prune_excluded_section_navbar(dest_dir, excluded_dirs)
+
     # 3. Strategy A: regenerate API reference from snapshot if configured
     if entry.api_snapshot and project_root:
         snap_path = project_root / entry.api_snapshot
@@ -662,20 +666,24 @@ def preprocess_version(
 
 def _compute_excluded_section_dirs(
     target_tag: str,
+    all_versions: list[VersionEntry],
     section_configs: list[dict] | None,
     layout: Layout,
 ) -> set[Path]:
     """
     Locate section directories excluded from the target version
 
-    Exclude sections whose non-empty `versions` list omits `target_tag`.
-    Resolve their published paths so nested and slugged directory names match
-    the pages in the build tree.
+    Exclude sections whose non-empty `versions` value does not match
+    `target_tag`. As in page front matter, the value can be a tag, a version
+    expression such as `">=0.5"`, or a list of either. Resolve published paths
+    so nested and slugged directories match the pages in the build tree.
 
     Parameters
     ----------
     target_tag
-        Version tag to check against each section's `versions` list.
+        Version tag to check against each section's `versions` value.
+    all_versions
+        Configured versions in display order, used to evaluate version expressions.
     section_configs
         Entries from the `sections` setting.
     layout
@@ -695,7 +703,13 @@ def _compute_excluded_section_dirs(
         if not isinstance(section, dict):
             continue
         section_versions = section.get("versions")
-        if not section_versions or target_tag in section_versions:
+        if not section_versions:
+            continue
+        if not isinstance(section_versions, list):
+            section_versions = [section_versions]
+        # Use the same expression syntax as page front matter.
+        expr = ",".join(str(item) for item in section_versions)
+        if evaluate_version_expr(expr, target_tag, all_versions):
             continue
         destination = section_destination(layout, section)
         if destination is not None:
@@ -711,6 +725,77 @@ def _in_excluded_section(rel_path: Path, excluded_dirs: set[Path]) -> bool:
     Both the file path and section directories are relative to the build directory.
     """
     return any(rel_path.is_relative_to(directory) for directory in excluded_dirs)
+
+
+def _prune_excluded_section_navbar(dest_dir: Path, excluded_dirs: set[Path]) -> None:
+    """
+    Remove navbar links into excluded section directories
+
+    Remove matching links from both sides of the navbar and from nested
+    menus. Remove menus that become empty. Write `_quarto.yml` only when
+    the navbar changes.
+
+    Parameters
+    ----------
+    dest_dir
+        Quarto project directory for the version.
+    excluded_dirs
+        Published section directories relative to `dest_dir`.
+
+    Returns
+    -------
+    :
+    """
+    if not excluded_dirs or not quarto_yml.path(dest_dir).exists():
+        return
+
+    quarto_config = quarto_yml.read(dest_dir)
+    navbar = quarto_config.get("website", {}).get("navbar")
+    if not isinstance(navbar, dict):
+        return
+
+    modified = False
+    for side in ("left", "right"):
+        items = navbar.get(side)
+        if isinstance(items, list):
+            kept = _prune_navbar_items(items, excluded_dirs)
+            if kept != items:
+                navbar[side] = kept
+                modified = True
+
+    if modified:
+        quarto_yml.write(dest_dir, quarto_config)
+
+
+def _prune_navbar_items(items: list[Any], excluded_dirs: set[Path]) -> list[Any]:
+    """
+    Remove navbar items that link into excluded section directories
+
+    Parameters
+    ----------
+    items
+        Navbar items or menu items, each an `href` string or a mapping.
+    excluded_dirs
+        Published section directories relative to the build directory.
+
+    Returns
+    -------
+    :
+        Remaining items, with matching links removed from nested menus.
+        Menus that become empty are omitted.
+    """
+    kept: list[Any] = []
+    for item in items:
+        href = item.get("href") if isinstance(item, dict) else item
+        if isinstance(href, str) and _in_excluded_section(Path(href), excluded_dirs):
+            continue
+        if isinstance(item, dict) and isinstance(item.get("menu"), list) and item["menu"]:
+            menu = _prune_navbar_items(item["menu"], excluded_dirs)
+            if not menu:
+                continue
+            item = {**item, "menu": menu}
+        kept.append(item)
+    return kept
 
 
 def _rebuild_api_from_snapshot(
