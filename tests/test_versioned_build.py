@@ -221,7 +221,9 @@ class TestPreprocessVersion:
 
         versions = self._setup_versions()
         dest = tmp_path / "build"
-        pages = preprocess_version(source, dest, versions[0], versions)
+        pages = preprocess_version(
+            source, dest, versions[0], versions, layout=Layout.make(tmp_path)
+        )
 
         assert "index.html" in pages
         assert "guide.html" in pages
@@ -242,12 +244,16 @@ class TestPreprocessVersion:
 
         # Build for 0.3 — should include new-feature
         dest1 = tmp_path / "build1"
-        pages1 = preprocess_version(source, dest1, versions[0], versions)
+        pages1 = preprocess_version(
+            source, dest1, versions[0], versions, layout=Layout.make(tmp_path)
+        )
         assert "new-feature.html" in pages1
 
         # Build for 0.2 — should exclude new-feature
         dest2 = tmp_path / "build2"
-        pages2 = preprocess_version(source, dest2, versions[1], versions)
+        pages2 = preprocess_version(
+            source, dest2, versions[1], versions, layout=Layout.make(tmp_path)
+        )
         assert "new-feature.html" not in pages2
         assert not (dest2 / "new-feature.qmd").exists()
 
@@ -273,14 +279,14 @@ class TestPreprocessVersion:
 
         # Build for 0.3
         dest1 = tmp_path / "build1"
-        preprocess_version(source, dest1, versions[0], versions)
+        preprocess_version(source, dest1, versions[0], versions, layout=Layout.make(tmp_path))
         content1 = (dest1 / "page.qmd").read_text()
         assert "New in 0.3!" in content1
         assert "Old content." not in content1
 
         # Build for 0.2
         dest2 = tmp_path / "build2"
-        preprocess_version(source, dest2, versions[1], versions)
+        preprocess_version(source, dest2, versions[1], versions, layout=Layout.make(tmp_path))
         content2 = (dest2 / "page.qmd").read_text()
         assert "New in 0.3!" not in content2
         assert "Old content." in content2
@@ -310,7 +316,9 @@ class TestPreprocessVersion:
         descriptions = []
         for i, entry in enumerate(versions[:2]):
             dest = tmp_path / f"build{i}"
-            preprocess_version(source, dest, entry, versions, config=config)
+            preprocess_version(
+                source, dest, entry, versions, config=config, layout=Layout.make(tmp_path)
+            )
             prerender.write_page_metadata(dest, config, None, None)
             front_matter = (dest / "page.qmd").read_text().split("---")[1]
             descriptions.append(parse_yaml(front_matter)["description-meta"])
@@ -332,7 +340,9 @@ class TestPreprocessVersion:
 
         versions = self._setup_versions()
         dest = tmp_path / "build"
-        pages = preprocess_version(source, dest, versions[0], versions)
+        pages = preprocess_version(
+            source, dest, versions[0], versions, layout=Layout.make(tmp_path)
+        )
 
         # _quarto.yml should NOT be in pages (it starts with _)
         assert all(not p.startswith("_") for p in pages)
@@ -385,6 +395,7 @@ class TestPreprocessVersion:
             versions[1],
             versions,
             project_root=tmp_path,
+            layout=Layout.make(tmp_path),
         )
 
         # Should have generated API reference pages
@@ -459,6 +470,7 @@ class TestPreprocessVersion:
             versions[1],
             versions,
             project_root=tmp_path,
+            layout=Layout.make(tmp_path),
         )
 
         assert "reference/MyClass.html" in pages
@@ -498,7 +510,9 @@ class TestPreprocessVersion:
         )
 
         dest = tmp_path / "build"
-        preprocess_version(source, dest, versions[1], versions, project_root=tmp_path)
+        preprocess_version(
+            source, dest, versions[1], versions, project_root=tmp_path, layout=Layout.make(tmp_path)
+        )
 
         assert not (dest / "reference" / "new_func.qmd").exists()
         assert (dest / "reference" / "my_func.qmd").is_file()
@@ -509,7 +523,9 @@ class TestPreprocessVersion:
         _make_source_tree(source, {"index.qmd": "---\ntitle: Home\n---\n\nHome\n"})
         versions = self._setup_versions()
 
-        pages = preprocess_version(source, source, versions[0], versions)
+        pages = preprocess_version(
+            source, source, versions[0], versions, layout=Layout.make(tmp_path)
+        )
 
         assert (source / "index.qmd").is_file()
         assert "index.html" in pages
@@ -671,29 +687,31 @@ class TestWriteVersionMap:
 
 
 class TestSectionVersionScoping:
-    def test_excluded_section_dirs(self):
+    def test_excluded_section_dirs(self, tmp_path: Path):
         sections = [
             {"dir": "recipes", "versions": ["0.3"]},
             {"dir": "migrations", "versions": ["0.2", "0.3"]},
             {"dir": "guide"},  # no versions key — always included
         ]
-        excluded = _compute_excluded_section_dirs("0.2", sections)
-        assert "recipes" in excluded  # 0.2 not in ["0.3"]
-        assert "migrations" not in excluded  # 0.2 in ["0.2", "0.3"]
-        assert "guide" not in excluded
+        excluded = _compute_excluded_section_dirs("0.2", sections, Layout.make(tmp_path))
+        assert Path("recipes") in excluded  # 0.2 not in ["0.3"]
+        assert Path("migrations") not in excluded  # 0.2 in ["0.2", "0.3"]
+        assert Path("guide") not in excluded
 
-    def test_no_sections_returns_empty(self):
-        assert _compute_excluded_section_dirs("0.1", None) == set()
-        assert _compute_excluded_section_dirs("0.1", []) == set()
+    def test_no_sections_returns_empty(self, tmp_path: Path):
+        layout = Layout.make(tmp_path)
+        assert _compute_excluded_section_dirs("0.1", None, layout) == set()
+        assert _compute_excluded_section_dirs("0.1", [], layout) == set()
 
-    def test_malformed_section_entries_are_ignored(self):
+    def test_malformed_section_entries_are_ignored(self, tmp_path: Path):
         # The section reader reports and skips non-mapping entries; the
         # versioned build must survive the same configuration.
         sections = ["examples", {"dir": "recipes", "versions": ["0.3"]}]
-        assert _compute_excluded_section_dirs("0.2", sections) == {"recipes"}
+        excluded = _compute_excluded_section_dirs("0.2", sections, Layout.make(tmp_path))
+        assert excluded == {Path("recipes")}
 
     def test_in_excluded_section(self):
-        excluded = {"recipes", "migrations"}
+        excluded = {Path("recipes"), Path("migrations")}
         assert _in_excluded_section(Path("recipes/01-example.qmd"), excluded)
         assert _in_excluded_section(Path("migrations/v2.qmd"), excluded)
         assert not _in_excluded_section(Path("guide/intro.qmd"), excluded)
@@ -711,6 +729,7 @@ class TestSectionVersionScoping:
         )
         versions = parse_versions_config(["0.3", "0.2"])
         sections = [{"dir": "recipes", "versions": ["0.3"]}]
+        layout = Layout.make(tmp_path)
 
         # Build 0.3 — recipes included
         dest1 = tmp_path / "build1"
@@ -720,6 +739,7 @@ class TestSectionVersionScoping:
             versions[0],
             versions,
             section_configs=sections,
+            layout=layout,
         )
         assert "recipes/01-basic.html" in pages1
 
@@ -731,9 +751,42 @@ class TestSectionVersionScoping:
             versions[1],
             versions,
             section_configs=sections,
+            layout=layout,
         )
         assert "recipes/01-basic.html" not in pages2
         assert "guide/intro.html" in pages2
+
+    def test_preprocess_excludes_sections_by_published_directory(self, tmp_path: Path):
+        # Exclusions follow full published paths, including nested and slugged
+        # directories. A matching name elsewhere must remain included.
+        layout = Layout.make(tmp_path)
+        source = layout.build_dir
+        _make_source_tree(
+            source,
+            {
+                "migration-guides/v2.qmd": "---\ntitle: V2\n---\n\nMigrate",
+                "guides/migrations/v1.qmd": "---\ntitle: V1\n---\n\nMigrate",
+                "guides/intro.qmd": "---\ntitle: Intro\n---\n\nGuide",
+                "user-guide/recipes/basic.qmd": "---\ntitle: Basic\n---\n\nRecipe",
+            },
+        )
+        versions = parse_versions_config(["0.3", "0.2"])
+        sections = [
+            {"dir": "Migration_Guides", "versions": ["0.3"]},
+            {"dir": "guides/migrations", "versions": ["0.3"]},
+            {"dir": "recipes", "versions": ["0.3"]},
+        ]
+
+        pages = preprocess_version(
+            source,
+            tmp_path / "build-0.2",
+            versions[1],
+            versions,
+            section_configs=sections,
+            layout=layout,
+        )
+
+        assert sorted(pages) == ["guides/intro.html", "user-guide/recipes/basic.html"]
 
 
 # ---------------------------------------------------------------------------
@@ -2368,7 +2421,9 @@ class TestPreprocessVersionUpcoming:
         versions = self._setup_versions()
         # Build for 0.4 (the prerelease)
         dest = tmp_path / "build"
-        pages = preprocess_version(source, dest, versions[0], versions)
+        pages = preprocess_version(
+            source, dest, versions[0], versions, layout=Layout.make(tmp_path)
+        )
 
         assert "new-feature.html" in pages
 
@@ -2387,7 +2442,9 @@ class TestPreprocessVersionUpcoming:
 
         # Build for 0.3: future.qmd should be included but flagged as upcoming
         dest = tmp_path / "build"
-        pages = preprocess_version(source, dest, versions[1], versions)
+        pages = preprocess_version(
+            source, dest, versions[1], versions, layout=Layout.make(tmp_path)
+        )
 
         assert "future.html" in pages
 
@@ -2405,7 +2462,7 @@ class TestPreprocessVersionUpcoming:
 
         versions = self._setup_versions()
         dest = tmp_path / "build"
-        preprocess_version(source, dest, versions[1], versions)
+        preprocess_version(source, dest, versions[1], versions, layout=Layout.make(tmp_path))
         content = (dest / "page.qmd").read_text()
 
         # With expiry="1 releases", badge for 0.2 should be expired when building 0.3
@@ -2428,7 +2485,12 @@ class TestPreprocessVersionUpcoming:
         section_configs = [{"dir": "recipes", "versions": ["0.3", "0.4"]}]
         dest = tmp_path / "build"
         pages = preprocess_version(
-            source, dest, versions[2], versions, section_configs=section_configs
+            source,
+            dest,
+            versions[2],
+            versions,
+            section_configs=section_configs,
+            layout=Layout.make(tmp_path),
         )
         assert "recipes/foo.html" not in pages
         assert not (dest / "recipes" / "foo.qmd").exists()
@@ -3970,7 +4032,9 @@ class TestPreprocessVersionApiSnapshot:
         )
 
         dest = tmp_path / "build"
-        pages = preprocess_version(source, dest, entry, versions, project_root=project_root)
+        pages = preprocess_version(
+            source, dest, entry, versions, project_root=project_root, layout=Layout.make(tmp_path)
+        )
 
         assert "reference/my_func.html" in pages
         assert (dest / "reference" / "my_func.qmd").exists()
@@ -3991,7 +4055,9 @@ class TestPreprocessVersionApiSnapshot:
         )
 
         dest = tmp_path / "build"
-        pages = preprocess_version(source, dest, entry, versions, project_root=project_root)
+        pages = preprocess_version(
+            source, dest, entry, versions, project_root=project_root, layout=Layout.make(tmp_path)
+        )
 
         # Should succeed without generating API pages
         assert "index.html" in pages
@@ -4084,7 +4150,14 @@ class TestPreprocessVersionGitRef:
             "great_docs._versions.build._validate_git_ref_is_tag",
             return_value=True,
         ):
-            pages = preprocess_version(source, dest, entry, versions, project_root=project_root)
+            pages = preprocess_version(
+                source,
+                dest,
+                entry,
+                versions,
+                project_root=project_root,
+                layout=Layout.make(tmp_path),
+            )
 
         assert "reference/my_func.html" in pages
 
