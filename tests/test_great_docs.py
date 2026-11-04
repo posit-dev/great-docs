@@ -29230,6 +29230,49 @@ def test_sitemap_write_no_base_url(capsys):
         assert "base URL" in captured.out
 
 
+def test_sitemap_write_excludes_unindexed_pages(tmp_path: Path):
+    """
+    Leave noindex pages, redirect stubs and older versions out of the sitemap
+    """
+    (tmp_path / "great-docs.yml").write_text(
+        "seo:\n  canonical:\n    base_url: https://example.com/\nversions:\n  - '0.2'\n  - '0.1'\n"
+    )
+    gd = GreatDocs(project_path=str(tmp_path))
+    site_dir = gd.layout.site_dir
+    pages = {
+        "index.html": "<html><head></head></html>",
+        "skills.html": '<html><head><meta name="robots" content="noindex, nofollow"></head></html>',
+        "old-intro.html": '<html><head><meta http-equiv="refresh" content="0;URL=\'intro.html\'">',
+        "v/latest/index.html": '<html><head><meta http-equiv="refresh" content="0; url=/">',
+        "v/0.1/index.html": "<html><head></head></html>",
+    }
+    for rel_path, html in pages.items():
+        (site_dir / rel_path).parent.mkdir(parents=True, exist_ok=True)
+        (site_dir / rel_path).write_text(html)
+
+    sitemap.write(site_dir, gd._config, gd._identity().base_url, report=print)
+
+    locs = re.findall(r"<loc>([^<]*)</loc>", (site_dir / "sitemap.xml").read_text())
+    assert locs == ["https://example.com/"]
+
+
+def test_sitemap_write_keeps_v_directory_without_versions(tmp_path: Path):
+    """
+    Keep pages under `v/` in the sitemap of a site without versions
+    """
+    (tmp_path / "great-docs.yml").write_text(
+        "seo:\n  canonical:\n    base_url: https://example.com/\n"
+    )
+    gd = GreatDocs(project_path=str(tmp_path))
+    site_dir = gd.layout.site_dir
+    (site_dir / "v").mkdir(parents=True)
+    (site_dir / "v" / "page.html").write_text("<html><head></head></html>")
+
+    sitemap.write(site_dir, gd._config, gd._identity().base_url, report=print)
+
+    assert "https://example.com/v/page.html" in (site_dir / "sitemap.xml").read_text()
+
+
 # ── Crawler rules ───────────────────────────────────────────────────────────
 
 
