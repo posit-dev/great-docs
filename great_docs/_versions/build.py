@@ -35,7 +35,7 @@ from great_docs._versions.model import (
     process_version_fences,
     version_url_segment,
 )
-from great_docs._website import page_status, prerender
+from great_docs._website import page_status, prerender, quarto_yml
 from great_docs._website.navigation import shared_sidebar
 
 if TYPE_CHECKING:
@@ -513,7 +513,8 @@ def preprocess_version(
     Copy `source_dir` to `dest_dir` unless they are the same directory. Then:
 
     1. Remove pages whose front matter excludes the version.
-    2. Remove sections whose configuration excludes the version.
+    2. Remove sections whose configuration excludes the version, along with
+       their navbar links.
     3. Process version fences in the remaining `.qmd` files.
     4. Expand version badges and callouts.
     5. Generate API reference pages from a configured snapshot, and rebuild
@@ -613,6 +614,8 @@ def preprocess_version(
         # Track included page (convert .qmd → .html for the manifest)
         html_rel = str(rel).replace(".qmd", ".html").replace(".md", ".html")
         included_pages.append(html_rel)
+
+    _prune_excluded_section_navbar(dest_dir, excluded_dirs)
 
     # 3. Strategy A: regenerate API reference from snapshot if configured
     if entry.api_snapshot and project_root:
@@ -722,6 +725,77 @@ def _in_excluded_section(rel_path: Path, excluded_dirs: set[Path]) -> bool:
     Both the file path and section directories are relative to the build directory.
     """
     return any(rel_path.is_relative_to(directory) for directory in excluded_dirs)
+
+
+def _prune_excluded_section_navbar(dest_dir: Path, excluded_dirs: set[Path]) -> None:
+    """
+    Remove navbar links into excluded section directories
+
+    Remove matching links from both sides of the navbar and from nested
+    menus. Remove menus that become empty. Write `_quarto.yml` only when
+    the navbar changes.
+
+    Parameters
+    ----------
+    dest_dir
+        Quarto project directory for the version.
+    excluded_dirs
+        Published section directories relative to `dest_dir`.
+
+    Returns
+    -------
+    :
+    """
+    if not excluded_dirs or not quarto_yml.path(dest_dir).exists():
+        return
+
+    quarto_config = quarto_yml.read(dest_dir)
+    navbar = quarto_config.get("website", {}).get("navbar")
+    if not isinstance(navbar, dict):
+        return
+
+    modified = False
+    for side in ("left", "right"):
+        items = navbar.get(side)
+        if isinstance(items, list):
+            kept = _prune_navbar_items(items, excluded_dirs)
+            if kept != items:
+                navbar[side] = kept
+                modified = True
+
+    if modified:
+        quarto_yml.write(dest_dir, quarto_config)
+
+
+def _prune_navbar_items(items: list[Any], excluded_dirs: set[Path]) -> list[Any]:
+    """
+    Remove navbar items that link into excluded section directories
+
+    Parameters
+    ----------
+    items
+        Navbar items or menu items, each an `href` string or a mapping.
+    excluded_dirs
+        Published section directories relative to the build directory.
+
+    Returns
+    -------
+    :
+        Remaining items, with matching links removed from nested menus.
+        Menus that become empty are omitted.
+    """
+    kept: list[Any] = []
+    for item in items:
+        href = item.get("href") if isinstance(item, dict) else item
+        if isinstance(href, str) and _in_excluded_section(Path(href), excluded_dirs):
+            continue
+        if isinstance(item, dict) and isinstance(item.get("menu"), list) and item["menu"]:
+            menu = _prune_navbar_items(item["menu"], excluded_dirs)
+            if not menu:
+                continue
+            item = {**item, "menu": menu}
+        kept.append(item)
+    return kept
 
 
 def _rebuild_api_from_snapshot(

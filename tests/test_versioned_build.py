@@ -826,6 +826,62 @@ class TestSectionVersionScoping:
 
         assert sorted(pages) == ["guides/intro.html", "user-guide/recipes/basic.html"]
 
+    def test_preprocess_removes_navbar_links_into_excluded_sections(self, tmp_path: Path):
+        # Navbar links to excluded sections lead to missing pages. Menu links
+        # must also be removed, along with menus emptied by those removals.
+        source = tmp_path / "source"
+        _make_source_tree(
+            source,
+            {
+                "_quarto.yml": (
+                    "project:\n  type: website\n"
+                    "website:\n"
+                    "  navbar:\n"
+                    "    left:\n"
+                    "      - text: Guide\n        href: guide/intro.qmd\n"
+                    "      - text: Recipes\n        href: recipes/index.qmd\n"
+                    "      - text: More\n"
+                    "        menu:\n"
+                    "          - text: Migrations\n            href: migrations/index.qmd\n"
+                    "          - guide/faq.qmd\n"
+                    "      - text: Legacy\n"
+                    "        menu:\n"
+                    "          - migrations/v1.qmd\n"
+                    "    right:\n"
+                    "      - recipes/basic.qmd\n"
+                    "      - icon: github\n        href: https://github.com/org/recipes\n"
+                ),
+                "guide/intro.qmd": "---\ntitle: Intro\n---\n\nGuide",
+                "guide/faq.qmd": "---\ntitle: FAQ\n---\n\nGuide",
+                "recipes/basic.qmd": "---\ntitle: Basic\n---\n\nRecipe",
+                "migrations/v1.qmd": "---\ntitle: V1\n---\n\nMigrate",
+            },
+        )
+        versions = parse_versions_config(["0.3", "0.2"])
+        sections = [
+            {"dir": "recipes", "versions": ["0.3"]},
+            {"dir": "migrations", "versions": ["0.3"]},
+        ]
+        dest = tmp_path / "build-0.2"
+
+        preprocess_version(
+            source,
+            dest,
+            versions[1],
+            versions,
+            section_configs=sections,
+            layout=Layout.make(tmp_path),
+        )
+
+        navbar = read_yaml(dest / "_quarto.yml")["website"]["navbar"]
+        assert navbar == {
+            "left": [
+                {"text": "Guide", "href": "guide/intro.qmd"},
+                {"text": "More", "menu": ["guide/faq.qmd"]},
+            ],
+            "right": [{"icon": "github", "href": "https://github.com/org/recipes"}],
+        }
+
 
 # ---------------------------------------------------------------------------
 # Inline version-badge expansion

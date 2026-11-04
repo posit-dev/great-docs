@@ -541,6 +541,16 @@ class TestSectionScoping:
             tmp_path,
             versions_config=["0.3", "0.2", "0.1"],
             pages={
+                "_quarto.yml": (
+                    "project:\n  type: website\n  output-dir: _site\n"
+                    "website:\n"
+                    "  title: Test Site\n"
+                    "  navbar:\n"
+                    "    left:\n"
+                    "      - text: Guide\n        href: user-guide/intro.qmd\n"
+                    "      - text: Recipes\n        href: recipes/01-basic.qmd\n"
+                    "      - text: Migrations\n        href: migrations/v03.qmd\n"
+                ),
                 "index.qmd": "---\ntitle: Home\n---\n\nHello.",
                 "user-guide/intro.qmd": "---\ntitle: Intro\n---\n\nGuide.",
                 "recipes/01-basic.qmd": "---\ntitle: Basic Recipe\n---\n\nRecipe.",
@@ -569,6 +579,18 @@ class TestSectionScoping:
         assert_page_exists(site["output_dir"], "user-guide/intro.html")
         assert_page_exists(site["output_dir"], "user-guide/intro.html", version="0.2")
         assert_page_exists(site["output_dir"], "user-guide/intro.html", version="0.1")
+
+    def test_navbar_links_only_to_included_sections(self, site):
+        def navbar_hrefs(entry: VersionEntry) -> list[str]:
+            build_dir = _version_build_dir(site["source_dir"], entry, site["latest_tag"])
+            quarto_config = read_yaml(build_dir / "_quarto.yml")
+            return [item["href"] for item in quarto_config["website"]["navbar"]["left"]]
+
+        assert {entry.tag: navbar_hrefs(entry) for entry in site["versions"]} == {
+            "0.3": ["user-guide/intro.qmd", "recipes/01-basic.qmd", "migrations/v03.qmd"],
+            "0.2": ["user-guide/intro.qmd", "recipes/01-basic.qmd"],
+            "0.1": ["user-guide/intro.qmd"],
+        }
 
 
 class TestInlineBadgesAndCallouts:
