@@ -87,9 +87,9 @@ def register(quarto_config: dict[str, Any], config: Config) -> None:
     """
     Add the configured announcement banner, colours, styles and scale-to-fit selectors
 
-    Each configured feature adds its entries once. Repeated calls replace existing meta
-    tags and style blocks with the current settings. Unconfigured features add nothing
-    and leave entries from earlier builds in place.
+    Each configured feature adds its entries once. Repeated calls update existing meta
+    tags and style blocks in place, preserving their order on the page. Unconfigured
+    features add nothing and leave entries from earlier builds in place.
 
     Parameters
     ----------
@@ -108,27 +108,6 @@ def register(quarto_config: dict[str, Any], config: Config) -> None:
     _add_navbar_colour(quarto_config, config)
     _add_content_style(quarto_config, config)
     _add_scale_to_fit(quarto_config, config)
-
-
-def _replace(items: list[Any], marker: str, entry: dict[str, str]) -> None:
-    """
-    Remove all entries containing a marker, then append the replacement
-
-    Parameters
-    ----------
-    items
-        The include list to update in place.
-    marker
-        Text that identifies the entries to remove.
-    entry
-        The entry to append.
-
-    Returns
-    -------
-    :
-    """
-    items[:] = [item for item in items if marker not in str(item)]
-    items.append(entry)
 
 
 def _add_announcement(quarto_config: dict[str, Any], config: Config) -> None:
@@ -162,8 +141,8 @@ def _add_announcement(quarto_config: dict[str, Any], config: Config) -> None:
         f' data-style="{html.escape(announcement.get("style") or "")}"'
         f' data-position="{html.escape(announcement.get("position", "above-navbar"))}">'
     )
-    _replace(
-        quarto_yml.includes(quarto_config, "include-in-header"), "gd-announcement", {"text": meta}
+    quarto_yml.set_include(
+        quarto_config, "include-in-header", {"text": meta}, marker="gd-announcement"
     )
 
     after_body = quarto_yml.includes(quarto_config, "include-after-body")
@@ -210,8 +189,8 @@ def _add_navbar_style(quarto_config: dict[str, Any], config: Config) -> None:
     if not preset:
         return
     meta = f'<meta name="gd-navbar-style" data-preset="{html.escape(preset)}">'
-    _replace(
-        quarto_yml.includes(quarto_config, "include-in-header"), "gd-navbar-style", {"text": meta}
+    quarto_yml.set_include(
+        quarto_config, "include-in-header", {"text": meta}, marker="gd-navbar-style"
     )
     quarto_yml.add_include(
         quarto_config,
@@ -250,8 +229,8 @@ def _add_accent_colour(quarto_config: dict[str, Any], config: Config) -> None:
     if not rules:
         return
     style = f"<style>\n/* Great Docs: {_ACCENT_MARKER} */\n" + "\n".join(rules) + "\n</style>"
-    _replace(
-        quarto_yml.includes(quarto_config, "include-after-body"), _ACCENT_MARKER, {"text": style}
+    quarto_yml.set_include(
+        quarto_config, "include-after-body", {"text": style}, marker=_ACCENT_MARKER
     )
 
 
@@ -290,10 +269,8 @@ def _add_navbar_colour(quarto_config: dict[str, Any], config: Config) -> None:
     style = (
         f"<style>\n/* Great Docs: {_NAVBAR_COLOUR_MARKER} */\n" + "\n".join(rules) + "\n</style>"
     )
-    _replace(
-        quarto_yml.includes(quarto_config, "include-after-body"),
-        _NAVBAR_COLOUR_MARKER,
-        {"text": style},
+    quarto_yml.set_include(
+        quarto_config, "include-after-body", {"text": style}, marker=_NAVBAR_COLOUR_MARKER
     )
 
 
@@ -442,8 +419,8 @@ def _add_content_style(quarto_config: dict[str, Any], config: Config) -> None:
         f'<meta name="gd-content-style" data-preset="{html.escape(style["preset"])}"'
         f' data-pages="{html.escape(style["pages"])}">'
     )
-    _replace(
-        quarto_yml.includes(quarto_config, "include-in-header"), "gd-content-style", {"text": meta}
+    quarto_yml.set_include(
+        quarto_config, "include-in-header", {"text": meta}, marker="gd-content-style"
     )
     quarto_yml.add_include(
         quarto_config,
@@ -477,6 +454,6 @@ def _add_scale_to_fit(quarto_config: dict[str, Any], config: Config) -> None:
         f'<meta name="gd-scale-to-fit" data-selectors="{html.escape(json.dumps(selectors))}"'
         f"{min_scale_attr}>"
     )
-    _replace(
-        quarto_yml.includes(quarto_config, "include-in-header"), "gd-scale-to-fit", {"text": meta}
+    quarto_yml.set_include(
+        quarto_config, "include-in-header", {"text": meta}, marker="gd-scale-to-fit"
     )

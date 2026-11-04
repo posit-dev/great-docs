@@ -173,6 +173,24 @@ def test_add_include_inserts_before_its_anchor_or_appends(before: str | None, ex
     assert [entry["text"] for entry in entries] == expected
 
 
+def test_set_include_replaces_the_first_marked_entry_and_drops_the_rest():
+    texts = ["a", "old gd-x 1", "b", "old gd-x 2"]
+    quarto_config = {"format": {"html": {"include-in-header": [{"text": t} for t in texts]}}}
+
+    quarto_yml.set_include(quarto_config, "include-in-header", {"text": "new gd-x"}, marker="gd-x")
+
+    entries = quarto_yml.includes(quarto_config, "include-in-header")
+    assert [entry["text"] for entry in entries] == ["a", "new gd-x", "b"]
+
+
+def test_set_include_appends_an_entry_whose_marker_is_absent():
+    quarto_config = {"format": {"html": {"include-after-body": "a.html"}}}
+
+    quarto_yml.set_include(quarto_config, "include-after-body", {"text": "gd-x"}, marker="gd-x")
+
+    assert quarto_yml.includes(quarto_config, "include-after-body") == ["a.html", {"text": "gd-x"}]
+
+
 def test_add_resources_appends_each_missing_name_once():
     quarto_config = {"project": {"resources": "objects.inv"}}
 
