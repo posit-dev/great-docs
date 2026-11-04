@@ -17,6 +17,34 @@ SKILL_FILE = "SKILL.md"
 LEGACY_DIR = ".well-known/skills/default"
 
 
+def companion_files(skill_dir: Path) -> list[Path]:
+    """
+    List a skill's companion files relative to its directory
+
+    Include files at any depth under `skill_dir`, except files named `SKILL.md`
+    and files with a path component starting with `.`. The Skills page and the
+    published `.well-known` copy include the same companion files.
+
+    Parameters
+    ----------
+    skill_dir
+        Directory containing the skill and its companion files, separate from shared
+        project files.
+
+    Returns
+    -------
+    :
+        Sorted paths relative to `skill_dir`.
+    """
+    files: list[Path] = []
+    for path in skill_dir.rglob("*"):
+        rel = path.relative_to(skill_dir)
+        hidden = any(part.startswith(".") for part in rel.parts)
+        if path.is_file() and path.name != SKILL_FILE and not hidden:
+            files.append(rel)
+    return sorted(files)
+
+
 def publish(
     build_dir: Path, skill_entries: Sequence[tuple[Path, Path | None]], *, enabled: bool
 ) -> None:
@@ -29,8 +57,9 @@ def publish(
     Parameters
     ----------
     skill_entries
-        List of `(skill_path, source_dir)` tuples. `source_dir` may be `None`
-        and is used to copy additional reference files alongside the `SKILL.md`.
+        Skills to publish as `(skill_path, source_dir)` tuples. Copy companion files
+        from `source_dir` alongside `SKILL.md`. Set `source_dir` to `None` when the
+        skill shares its directory with the project or has no companion directory.
     """
     if not enabled:
         return
@@ -48,14 +77,12 @@ def publish(
         _ = shutil.copy2(skill_path, agent_skills_dir / SKILL_FILE)
 
         extra_files = [SKILL_FILE]
-        if source_dir and source_dir.is_dir():
-            for extra in source_dir.rglob("*"):
-                if extra.is_file() and extra.name != SKILL_FILE:
-                    rel = extra.relative_to(source_dir)
-                    dest = agent_skills_dir / rel
-                    dest.parent.mkdir(parents=True, exist_ok=True)
-                    _ = shutil.copy2(extra, dest)
-                    extra_files.append(str(rel))
+        if source_dir:
+            for rel in companion_files(source_dir):
+                dest = agent_skills_dir / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                _ = shutil.copy2(source_dir / rel, dest)
+                extra_files.append(rel.as_posix())
 
         index_skills.append(
             {

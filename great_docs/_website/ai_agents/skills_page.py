@@ -16,6 +16,7 @@ from ...config import Config
 from .. import page_dates, quarto_yml
 from ..scripts import script_tag
 from ..seo import noindex
+from .well_known import companion_files
 
 if TYPE_CHECKING:
     from .skills import SkillsWriter
@@ -59,6 +60,7 @@ class SkillsPageWriter:
         *,
         skill_dir: "Path | None" = None,
         extra_skills: "Sequence[tuple[Path, Path | None]] | None" = None,
+        companions: bool = True,
     ) -> None:
         """
         Write a `skills.qmd` page with raw skill content and installation guidance
@@ -74,6 +76,9 @@ class SkillsPageWriter:
             Directory containing a curated skill and its companion files, when present.
         extra_skills
             Additional `(skill_path, skill_dir)` tuples to display as switchable panels.
+        companions
+            Whether to include companion files from `skill_dir` for the first skill.
+            Use `False` when the skill shares its directory with the project.
         """
         import html
 
@@ -88,7 +93,9 @@ class SkillsPageWriter:
             return
 
         # ── Collect all skills for potential multi-skill rendering ──
-        all_skills: list[tuple["Path", "Path | None"]] = [(skill_path, skill_dir)]
+        all_skills: list[tuple["Path", "Path | None"]] = [
+            (skill_path, skill_dir if companions else None)
+        ]
         if extra_skills:
             all_skills.extend(extra_skills)
         multi_skill = len(all_skills) > 1
@@ -435,47 +442,56 @@ class SkillsPageWriter:
 
         raw_content = _neutralize_executable_cells(raw_content)
 
-        # ── Discover companion files in the skill directory ──
-        companion_files: list[tuple[str, str, str]] = []  # (subdir/name, ext, content)
-        _ALLOWED_SUBDIRS = ("references", "scripts", "assets")
+        # List all companions in the tree; display contents only for supported text formats.
+        companions = companion_files(skill_dir) if skill_dir else []
         _RENDERABLE_EXTS = {".md", ".sh", ".yaml", ".yml", ".py"}
-
-        if skill_dir and skill_dir.is_dir():
-            for subdir_name in _ALLOWED_SUBDIRS:
-                subdir = skill_dir / subdir_name
-                if not subdir.is_dir():
-                    continue
-                for file_path in sorted(subdir.iterdir()):
-                    if file_path.is_file() and file_path.suffix in _RENDERABLE_EXTS:
-                        rel = f"{subdir_name}/{file_path.name}"
-                        content = _neutralize_executable_cells(
-                            file_path.read_text(encoding="utf-8")
-                        )
-                        companion_files.append((rel, file_path.suffix, content))
+        companion_contents: list[tuple[str, str, str]] = []  # (relative path, extension, content)
+        for rel in companions:
+            if skill_dir and rel.suffix in _RENDERABLE_EXTS:
+                content = _neutralize_executable_cells(
+                    (skill_dir / rel).read_text(encoding="utf-8")
+                )
+                companion_contents.append((rel.as_posix(), rel.suffix, content))
+        shown = {rel for rel, _ext, _content in companion_contents}
 
         # Prefix for unique anchor IDs when multiple skills share the page
         anchor_pfx = f"{panel_prefix}-" if panel_prefix else ""
 
+        def _anchor(rel: str) -> str:
+            return f"{anchor_pfx}{rel}".replace("/", "-").replace(".", "-")
+
+        def _tree(node: dict[str, Any], indent: str, parent: str) -> list[str]:
+            """
+            Render a directory tree with links to file contents shown on the page
+
+            `node` maps directory names to nested mappings and file names to `None`.
+            """
+            rows: list[str] = []
+            names = sorted(node)
+            for i, name in enumerate(names):
+                is_last = i == len(names) - 1
+                branch = "\u2514\u2500\u2500" if is_last else "\u251c\u2500\u2500"
+                rel = f"{parent}{name}"
+                child = node[name]
+                if child is None:
+                    label = f'<a href="#{_anchor(rel)}">{name}</a>' if rel in shown else name
+                    rows.append(f"{indent}{branch} {label}")
+                else:
+                    rows.append(f"{indent}{branch} {name}/")
+                    child_indent = indent + ("    " if is_last else "\u2502   ")
+                    rows.extend(_tree(child, child_indent, f"{rel}/"))
+            return rows
+
         # ── Directory tree (only when companion files exist) ──
-        if companion_files:
-            dir_label = skill_dir.name if skill_dir else "skill"
-            tree_lines = [f"{dir_label}/"]
-            tree_lines.append("\u251c\u2500\u2500 SKILL.md")
-            seen_subdirs: dict[str, list[str]] = {}
-            for rel, _ext, _content in companion_files:
-                parts = rel.split("/", 1)
-                seen_subdirs.setdefault(parts[0], []).append(parts[1])
-            subdir_items = list(seen_subdirs.items())
-            for i, (sdir, files) in enumerate(subdir_items):
-                is_last_dir = i == len(subdir_items) - 1
-                branch = "\u2514\u2500\u2500" if is_last_dir else "\u251c\u2500\u2500"
-                tree_lines.append(f"{branch} {sdir}/")
-                for j, fname in enumerate(files):
-                    is_last_file = j == len(files) - 1
-                    prefix = "    " if is_last_dir else "\u2502   "
-                    connector = "\u2514\u2500\u2500" if is_last_file else "\u251c\u2500\u2500"
-                    anchor = f"{anchor_pfx}{sdir}/{fname}".replace("/", "-").replace(".", "-")
-                    tree_lines.append(f'{prefix}{connector} <a href="#{anchor}">{fname}</a>')
+        if companions and skill_dir:
+            root: dict[str, Any] = {}
+            for rel in companions:
+                node = root
+                for part in rel.parts[:-1]:
+                    node = node.setdefault(part, {})
+                node[rel.name] = None
+            tree_lines = [f"{skill_dir.name}/", "\u251c\u2500\u2500 SKILL.md"]
+            tree_lines.extend(_tree(root, "", ""))
 
             lines.append("```{=html}")
             lines.append(
@@ -504,8 +520,8 @@ class SkillsPageWriter:
         lines.append("")
 
         # ── Render each companion file in its own pre block ──
-        for rel, ext, content in companion_files:
-            anchor = f"{anchor_pfx}{rel}".replace("/", "-").replace(".", "-")
+        for rel, ext, content in companion_contents:
+            anchor = _anchor(rel)
             lang_map = {
                 ".md": "markdown",
                 ".sh": "bash",

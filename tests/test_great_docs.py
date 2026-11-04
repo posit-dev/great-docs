@@ -26497,6 +26497,55 @@ def test_write_skill_user_override():
         assert well_known.exists()
 
 
+def test_write_skill_publishes_companions_shown_on_page(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo-pkg"\n')
+    skill_dir = tmp_path / "skills" / "demo-pkg"
+    (skill_dir / "references").mkdir(parents=True)
+    (skill_dir / "assets").mkdir()
+    (skill_dir / "SKILL.md").write_text("---\nname: demo-pkg\ndescription: Demo\n---\n# Demo\n")
+    (skill_dir / "recipes.md").write_text("# Recipes\n")
+    (skill_dir / "references" / "api.md").write_text("# API\n")
+    (skill_dir / "assets" / "logo.png").write_bytes(b"\x89PNG\r\n")
+    (skill_dir / ".DS_Store").write_bytes(b"\x00")
+    docs = GreatDocs(project_path=tmp_path)
+    docs.build_dir.mkdir()
+
+    _skills_writer(docs).write()
+
+    expected = ["SKILL.md", "assets/logo.png", "recipes.md", "references/api.md"]
+    published = docs.build_dir / ".well-known" / "agent-skills" / "demo-pkg"
+    files = [p.relative_to(published).as_posix() for p in published.rglob("*") if p.is_file()]
+    assert sorted(files) == expected
+    index = json.loads((published.parent / "index.json").read_text())
+    assert index["skills"][0]["files"] == expected
+
+    page = (docs.build_dir / "skills.qmd").read_text()
+    tree = page.split('<pre class="gd-skills-tree">')[1].split("</pre>")[0]
+    for name in ["logo.png", "recipes.md", "api.md"]:
+        assert name in tree
+    assert ".DS_Store" not in page
+    assert ">recipes.md</h3>" in page
+    assert ">references/api.md</h3>" in page
+    assert ">assets/logo.png</h3>" not in page
+
+
+def test_write_skill_at_project_root_has_no_companions(tmp_path: Path):
+    (tmp_path / "great-docs.yml").write_text("skill:\n  file: SKILL.md\n")
+    (tmp_path / "SKILL.md").write_text("---\nname: demo-pkg\ndescription: Demo\n---\n# Demo\n")
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "assets" / "helper.py").write_text("print('project asset')\n")
+    docs = GreatDocs(project_path=tmp_path)
+    docs.build_dir.mkdir()
+
+    _skills_writer(docs).write()
+
+    published = docs.build_dir / ".well-known" / "agent-skills" / "demo-pkg"
+    assert [p.name for p in published.iterdir()] == ["SKILL.md"]
+    page = (docs.build_dir / "skills.qmd").read_text()
+    assert "helper.py" not in page
+    assert "gd-skills-tree" not in page
+
+
 def test_write_skill_user_override_missing():
     """Test fallback to generation when user-provided SKILL.md doesn't exist."""
     with tempfile.TemporaryDirectory() as tmp_dir:
