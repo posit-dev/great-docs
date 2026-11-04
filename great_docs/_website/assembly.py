@@ -1,0 +1,174 @@
+"""
+Ordered assembly of Great Docs' site-wide Quarto settings
+
+The merge order determines the load order of scripts, stylesheets and filters.
+Later settings also depend on entries added by earlier settings.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping
+from typing import TYPE_CHECKING, Any, cast
+
+from .._versions import selector as version_selector
+from . import (
+    appearance,
+    footer,
+    i18n,
+    markdown_pages,
+    metadata_partial,
+    page_url,
+    quarto_defaults,
+    scripts,
+    social_cards,
+)
+from . import resources as project_resources
+from .navigation import brand, reference_switcher
+from .navigation import icons as nav_icons
+from .navigation import label as nav_label
+from .navigation import navbar as nav_navbar
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from .._build.facts import Facts
+    from .._github import GithubRepo
+    from .._layout import Layout
+    from ..config import Config
+    from .identity import Identity
+
+__all__ = ["assemble"]
+
+
+def assemble(
+    quarto_config: dict[str, Any],
+    config: Config,
+    layout: Layout,
+    build_dir: Path,
+    *,
+    repo: GithubRepo | None,
+    facts: Facts,
+    identity: Identity,
+    package_name: str | None,
+    metadata: Mapping[str, Any],
+    has_api_reference: bool,
+    report: Callable[[str], None],
+    warn: Callable[[str], None],
+) -> None:
+    """
+    Merge Great Docs' site-wide settings into a Quarto configuration
+
+    Add the pre-render scripts, theme, resources, page scripts and stylesheets,
+    site navigation, footer, canonical links and social cards while preserving
+    unrelated configuration. Repeated calls refresh these settings without
+    duplicating entries. Copy referenced files, such as logos, header includes,
+    the metadata partial and the social card image, into the build directory.
+
+    Parameters
+    ----------
+    quarto_config
+        Contents of `_quarto.yml`, updated in place. It must have a `project`
+        mapping and a `format.html` mapping.
+    config
+        Project configuration.
+    layout
+        Project directories.
+    build_dir
+        The Quarto project directory.
+    repo
+        The project's GitHub repository, if it has one.
+    facts
+        The repository's star and fork counts and its latest release.
+    identity
+        The site's name and addresses.
+    package_name
+        The detected package name, if any.
+    metadata
+        The project's package metadata, including its authors, maintainers and URLs.
+    has_api_reference
+        Whether the site has an API reference.
+    report
+        Callback for messages about the settings, such as the bibliography files
+        used and unknown icon names.
+    warn
+        Callback for warnings about the social card image.
+
+    Returns
+    -------
+    :
+
+    Raises
+    ------
+    KeyError
+        If `quarto_config` lacks a `project` or `format.html` mapping.
+    FileNotFoundError
+        If a header include file does not exist.
+    """
+    has_repository = repo is not None
+
+    quarto_defaults.register(quarto_config, config, layout)
+    scripts.add_resources(config, quarto_config, has_repository=has_repository)
+    project_resources.register(quarto_config, config, layout, build_dir)
+    quarto_defaults.register_site(quarto_config, config, layout, report=report)
+    scripts.include_libraries(config, quarto_config)
+
+    urls = cast("Mapping[str, Any]", metadata.get("urls", {}))
+    brand.register(
+        quarto_config,
+        config,
+        layout,
+        build_dir,
+        identity=identity,
+        package_name=package_name,
+        repo=repo,
+        facts=facts,
+        documentation_url=urls.get("Documentation"),
+        report=report,
+    )
+
+    # Table order preserves the order in which pages load the site's scripts.
+    scripts.include(config, quarto_config, build_dir, has_repository=has_repository)
+
+    appearance.register_wide_layout(quarto_config, config)
+    reference_switcher.register(
+        quarto_config, config, build_dir, has_api_reference=has_api_reference
+    )
+    nav_icons.register(quarto_config, config, report=report)
+
+    # The API reference step adds the reference sidebar later, when it finds exports.
+    website = cast("dict[str, Any]", quarto_config["website"])
+    if "sidebar" not in website:
+        website["sidebar"] = []
+
+    footer.register(quarto_config, config, metadata)
+    appearance.register(quarto_config, config)
+    brand.register_release(quarto_config, config, facts)
+    quarto_defaults.register_extensions(quarto_config)
+
+    # Quarto renders page titles and translation metadata from this partial.
+    metadata_partial.write(quarto_config, config, build_dir, report=report)
+    nav_label.register(quarto_config, config)
+    i18n.register(quarto_config, config)
+
+    # The user's header includes must be present before these checks to avoid
+    # duplicate canonical links and Open Graph tags. Both use the preferred page address.
+    page_url.register(
+        quarto_config,
+        config,
+        identity.base_url,
+        build_dir,
+        og_url=social_cards.applies(quarto_config, config, build_dir),
+    )
+    card_image_url = social_cards.publish_image(
+        config, layout, build_dir, identity.base_url, report=warn
+    )
+    social_cards.register(quarto_config, config, card_image_url, build_dir)
+    markdown_pages.register(quarto_config, config)
+
+    # Reorder after every step above that adds a navbar item.
+    nav_navbar.reorder(quarto_config, config)
+
+    if config.has_versions:
+        version_selector.register(quarto_config, config)
+
+    quarto_defaults.register_site_includes(quarto_config, config)
