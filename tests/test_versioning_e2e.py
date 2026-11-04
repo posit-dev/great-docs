@@ -275,6 +275,7 @@ def run_mock_versioned_build(
 
     pages_by_version: dict[str, list[str]] = {}
     build_dirs: list[Path] = []
+    layout = Layout.make(project_root)
 
     for entry in ordered_targets:
         ver_dir = _version_build_dir(source_dir, entry, latest_tag)
@@ -285,6 +286,7 @@ def run_mock_versioned_build(
             versions,
             project_root=project_root,
             section_configs=section_configs,
+            layout=layout,
         )
         pages_by_version[entry.tag] = pp_pages
         build_dirs.append(ver_dir)
@@ -2139,7 +2141,14 @@ class TestVersionTitleSuffix:
 
         for entry in versions:
             ver_dir = _version_build_dir(source_dir, entry, latest_tag)
-            preprocess_version(source_dir, ver_dir, entry, versions, project_root=project_root)
+            preprocess_version(
+                source_dir,
+                ver_dir,
+                entry,
+                versions,
+                project_root=project_root,
+                layout=Layout.make(project_root),
+            )
             _rewrite_quarto_yml_for_version(ver_dir, entry, latest_tag)
 
         return {
@@ -2354,7 +2363,7 @@ class TestOverlappingSectionDirs:
             },
             section_configs=[
                 {"dir": "api", "versions": ["0.3", "0.2", "0.1"]},  # All versions
-                {"dir": "experimental", "versions": ["0.3"]},  # Only 0.3
+                {"dir": "api/experimental", "versions": ["0.3"]},  # Only 0.3
             ],
         )
 
@@ -2364,12 +2373,7 @@ class TestOverlappingSectionDirs:
         assert_page_exists(site["output_dir"], "api/core.html", version="0.1")
 
     def test_experimental_exclusion(self, site):
-        """
-        experimental/ is a subdir of api/ — the 'experimental' section config
-        should match its path component.
-        """
-        # The _in_excluded_section checks each path component, so
-        # api/experimental/new.qmd has "experimental" as a component
+        """Exclude the nested section from older versions that include its parent"""
         assert_page_exists(site["output_dir"], "api/experimental/new.html")
         assert_page_missing(site["output_dir"], "api/experimental/new.html", version="0.2")
         assert_page_missing(site["output_dir"], "api/experimental/new.html", version="0.1")

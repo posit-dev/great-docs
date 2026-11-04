@@ -9,6 +9,7 @@ import pytest
 from yaml12 import parse_yaml, read_yaml
 
 from great_docs._api_diff import ApiSnapshot, ParameterInfo, SymbolInfo
+from great_docs._layout import Layout
 from great_docs._utils import QUARTO_YML_HEADER, is_great_docs_build_dir
 from great_docs._versions.build import (
     _clean_stale_version_dirs,
@@ -71,6 +72,21 @@ def _make_source_tree(root: Path, pages: dict[str, str]) -> None:
             "format:\n  html: {}\nwebsite:\n  title: Test\n",
             encoding="utf-8",
         )
+
+
+def _make_project(tmp_path: Path, pages: dict[str, str]) -> Layout:
+    """Create a project layout with `pages` and a generated Quarto configuration"""
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    layout = Layout.make(project_root)
+    layout.build_dir.mkdir()
+    (layout.build_dir / "_quarto.yml").write_text(
+        QUARTO_YML_HEADER + "project:\n  type: website\n  output-dir: _site\n"
+        "format:\n  html: {}\nwebsite:\n  title: Test\n",
+        encoding="utf-8",
+    )
+    _make_source_tree(layout.build_dir, pages)
+    return layout
 
 
 # ---------------------------------------------------------------------------
@@ -205,7 +221,9 @@ class TestPreprocessVersion:
 
         versions = self._setup_versions()
         dest = tmp_path / "build"
-        pages = preprocess_version(source, dest, versions[0], versions)
+        pages = preprocess_version(
+            source, dest, versions[0], versions, layout=Layout.make(tmp_path)
+        )
 
         assert "index.html" in pages
         assert "guide.html" in pages
@@ -226,12 +244,16 @@ class TestPreprocessVersion:
 
         # Build for 0.3 — should include new-feature
         dest1 = tmp_path / "build1"
-        pages1 = preprocess_version(source, dest1, versions[0], versions)
+        pages1 = preprocess_version(
+            source, dest1, versions[0], versions, layout=Layout.make(tmp_path)
+        )
         assert "new-feature.html" in pages1
 
         # Build for 0.2 — should exclude new-feature
         dest2 = tmp_path / "build2"
-        pages2 = preprocess_version(source, dest2, versions[1], versions)
+        pages2 = preprocess_version(
+            source, dest2, versions[1], versions, layout=Layout.make(tmp_path)
+        )
         assert "new-feature.html" not in pages2
         assert not (dest2 / "new-feature.qmd").exists()
 
@@ -257,14 +279,14 @@ class TestPreprocessVersion:
 
         # Build for 0.3
         dest1 = tmp_path / "build1"
-        preprocess_version(source, dest1, versions[0], versions)
+        preprocess_version(source, dest1, versions[0], versions, layout=Layout.make(tmp_path))
         content1 = (dest1 / "page.qmd").read_text()
         assert "New in 0.3!" in content1
         assert "Old content." not in content1
 
         # Build for 0.2
         dest2 = tmp_path / "build2"
-        preprocess_version(source, dest2, versions[1], versions)
+        preprocess_version(source, dest2, versions[1], versions, layout=Layout.make(tmp_path))
         content2 = (dest2 / "page.qmd").read_text()
         assert "New in 0.3!" not in content2
         assert "Old content." in content2
@@ -294,7 +316,9 @@ class TestPreprocessVersion:
         descriptions = []
         for i, entry in enumerate(versions[:2]):
             dest = tmp_path / f"build{i}"
-            preprocess_version(source, dest, entry, versions, config=config)
+            preprocess_version(
+                source, dest, entry, versions, config=config, layout=Layout.make(tmp_path)
+            )
             prerender.write_page_metadata(dest, config, None, None)
             front_matter = (dest / "page.qmd").read_text().split("---")[1]
             descriptions.append(parse_yaml(front_matter)["description-meta"])
@@ -316,7 +340,9 @@ class TestPreprocessVersion:
 
         versions = self._setup_versions()
         dest = tmp_path / "build"
-        pages = preprocess_version(source, dest, versions[0], versions)
+        pages = preprocess_version(
+            source, dest, versions[0], versions, layout=Layout.make(tmp_path)
+        )
 
         # _quarto.yml should NOT be in pages (it starts with _)
         assert all(not p.startswith("_") for p in pages)
@@ -369,6 +395,7 @@ class TestPreprocessVersion:
             versions[1],
             versions,
             project_root=tmp_path,
+            layout=Layout.make(tmp_path),
         )
 
         # Should have generated API reference pages
@@ -443,6 +470,7 @@ class TestPreprocessVersion:
             versions[1],
             versions,
             project_root=tmp_path,
+            layout=Layout.make(tmp_path),
         )
 
         assert "reference/MyClass.html" in pages
@@ -482,7 +510,9 @@ class TestPreprocessVersion:
         )
 
         dest = tmp_path / "build"
-        preprocess_version(source, dest, versions[1], versions, project_root=tmp_path)
+        preprocess_version(
+            source, dest, versions[1], versions, project_root=tmp_path, layout=Layout.make(tmp_path)
+        )
 
         assert not (dest / "reference" / "new_func.qmd").exists()
         assert (dest / "reference" / "my_func.qmd").is_file()
@@ -493,7 +523,9 @@ class TestPreprocessVersion:
         _make_source_tree(source, {"index.qmd": "---\ntitle: Home\n---\n\nHome\n"})
         versions = self._setup_versions()
 
-        pages = preprocess_version(source, source, versions[0], versions)
+        pages = preprocess_version(
+            source, source, versions[0], versions, layout=Layout.make(tmp_path)
+        )
 
         assert (source / "index.qmd").is_file()
         assert "index.html" in pages
@@ -655,29 +687,31 @@ class TestWriteVersionMap:
 
 
 class TestSectionVersionScoping:
-    def test_excluded_section_dirs(self):
+    def test_excluded_section_dirs(self, tmp_path: Path):
         sections = [
             {"dir": "recipes", "versions": ["0.3"]},
             {"dir": "migrations", "versions": ["0.2", "0.3"]},
             {"dir": "guide"},  # no versions key — always included
         ]
-        excluded = _compute_excluded_section_dirs("0.2", sections)
-        assert "recipes" in excluded  # 0.2 not in ["0.3"]
-        assert "migrations" not in excluded  # 0.2 in ["0.2", "0.3"]
-        assert "guide" not in excluded
+        excluded = _compute_excluded_section_dirs("0.2", sections, Layout.make(tmp_path))
+        assert Path("recipes") in excluded  # 0.2 not in ["0.3"]
+        assert Path("migrations") not in excluded  # 0.2 in ["0.2", "0.3"]
+        assert Path("guide") not in excluded
 
-    def test_no_sections_returns_empty(self):
-        assert _compute_excluded_section_dirs("0.1", None) == set()
-        assert _compute_excluded_section_dirs("0.1", []) == set()
+    def test_no_sections_returns_empty(self, tmp_path: Path):
+        layout = Layout.make(tmp_path)
+        assert _compute_excluded_section_dirs("0.1", None, layout) == set()
+        assert _compute_excluded_section_dirs("0.1", [], layout) == set()
 
-    def test_malformed_section_entries_are_ignored(self):
+    def test_malformed_section_entries_are_ignored(self, tmp_path: Path):
         # The section reader reports and skips non-mapping entries; the
         # versioned build must survive the same configuration.
         sections = ["examples", {"dir": "recipes", "versions": ["0.3"]}]
-        assert _compute_excluded_section_dirs("0.2", sections) == {"recipes"}
+        excluded = _compute_excluded_section_dirs("0.2", sections, Layout.make(tmp_path))
+        assert excluded == {Path("recipes")}
 
     def test_in_excluded_section(self):
-        excluded = {"recipes", "migrations"}
+        excluded = {Path("recipes"), Path("migrations")}
         assert _in_excluded_section(Path("recipes/01-example.qmd"), excluded)
         assert _in_excluded_section(Path("migrations/v2.qmd"), excluded)
         assert not _in_excluded_section(Path("guide/intro.qmd"), excluded)
@@ -695,6 +729,7 @@ class TestSectionVersionScoping:
         )
         versions = parse_versions_config(["0.3", "0.2"])
         sections = [{"dir": "recipes", "versions": ["0.3"]}]
+        layout = Layout.make(tmp_path)
 
         # Build 0.3 — recipes included
         dest1 = tmp_path / "build1"
@@ -704,6 +739,7 @@ class TestSectionVersionScoping:
             versions[0],
             versions,
             section_configs=sections,
+            layout=layout,
         )
         assert "recipes/01-basic.html" in pages1
 
@@ -715,9 +751,42 @@ class TestSectionVersionScoping:
             versions[1],
             versions,
             section_configs=sections,
+            layout=layout,
         )
         assert "recipes/01-basic.html" not in pages2
         assert "guide/intro.html" in pages2
+
+    def test_preprocess_excludes_sections_by_published_directory(self, tmp_path: Path):
+        # Exclusions follow full published paths, including nested and slugged
+        # directories. A matching name elsewhere must remain included.
+        layout = Layout.make(tmp_path)
+        source = layout.build_dir
+        _make_source_tree(
+            source,
+            {
+                "migration-guides/v2.qmd": "---\ntitle: V2\n---\n\nMigrate",
+                "guides/migrations/v1.qmd": "---\ntitle: V1\n---\n\nMigrate",
+                "guides/intro.qmd": "---\ntitle: Intro\n---\n\nGuide",
+                "user-guide/recipes/basic.qmd": "---\ntitle: Basic\n---\n\nRecipe",
+            },
+        )
+        versions = parse_versions_config(["0.3", "0.2"])
+        sections = [
+            {"dir": "Migration_Guides", "versions": ["0.3"]},
+            {"dir": "guides/migrations", "versions": ["0.3"]},
+            {"dir": "recipes", "versions": ["0.3"]},
+        ]
+
+        pages = preprocess_version(
+            source,
+            tmp_path / "build-0.2",
+            versions[1],
+            versions,
+            section_configs=sections,
+            layout=layout,
+        )
+
+        assert sorted(pages) == ["guides/intro.html", "user-guide/recipes/basic.html"]
 
 
 # ---------------------------------------------------------------------------
@@ -2352,7 +2421,9 @@ class TestPreprocessVersionUpcoming:
         versions = self._setup_versions()
         # Build for 0.4 (the prerelease)
         dest = tmp_path / "build"
-        pages = preprocess_version(source, dest, versions[0], versions)
+        pages = preprocess_version(
+            source, dest, versions[0], versions, layout=Layout.make(tmp_path)
+        )
 
         assert "new-feature.html" in pages
 
@@ -2371,7 +2442,9 @@ class TestPreprocessVersionUpcoming:
 
         # Build for 0.3: future.qmd should be included but flagged as upcoming
         dest = tmp_path / "build"
-        pages = preprocess_version(source, dest, versions[1], versions)
+        pages = preprocess_version(
+            source, dest, versions[1], versions, layout=Layout.make(tmp_path)
+        )
 
         assert "future.html" in pages
 
@@ -2389,7 +2462,7 @@ class TestPreprocessVersionUpcoming:
 
         versions = self._setup_versions()
         dest = tmp_path / "build"
-        preprocess_version(source, dest, versions[1], versions)
+        preprocess_version(source, dest, versions[1], versions, layout=Layout.make(tmp_path))
         content = (dest / "page.qmd").read_text()
 
         # With expiry="1 releases", badge for 0.2 should be expired when building 0.3
@@ -2412,7 +2485,12 @@ class TestPreprocessVersionUpcoming:
         section_configs = [{"dir": "recipes", "versions": ["0.3", "0.4"]}]
         dest = tmp_path / "build"
         pages = preprocess_version(
-            source, dest, versions[2], versions, section_configs=section_configs
+            source,
+            dest,
+            versions[2],
+            versions,
+            section_configs=section_configs,
+            layout=Layout.make(tmp_path),
         )
         assert "recipes/foo.html" not in pages
         assert not (dest / "recipes" / "foo.qmd").exists()
@@ -3354,17 +3432,14 @@ class TestRunVersionedBuild:
         from unittest.mock import MagicMock, patch
 
         # Set up source tree
-        source = tmp_path / "source"
-        _make_source_tree(
-            source,
+        layout = _make_project(
+            tmp_path,
             {
                 "index.qmd": "---\ntitle: Home\n---\nHi",
                 "guide.qmd": "---\ntitle: Guide\n---\nContent",
             },
         )
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        source, project_root = layout.build_dir, layout.package_root
 
         # Mock render to return success
         def mock_render(build_dirs, env_vars=None, max_workers=None, progress_callback=None):
@@ -3384,6 +3459,7 @@ class TestRunVersionedBuild:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2"],
             )
 
@@ -3396,11 +3472,8 @@ class TestRunVersionedBuild:
     def test_latest_only_builds_single_version(self, tmp_path: Path):
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
         def mock_render(build_dirs, **kwargs):
             results = []
@@ -3418,6 +3491,7 @@ class TestRunVersionedBuild:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2"],
                 latest_only=True,
             )
@@ -3428,11 +3502,8 @@ class TestRunVersionedBuild:
     def test_version_tags_filter(self, tmp_path: Path):
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
         def mock_render(build_dirs, **kwargs):
             results = []
@@ -3450,6 +3521,7 @@ class TestRunVersionedBuild:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2", "0.1"],
                 version_tags=["0.2"],
             )
@@ -3460,11 +3532,8 @@ class TestRunVersionedBuild:
     def test_render_failure_reported(self, tmp_path: Path):
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
         def mock_render(build_dirs, **kwargs):
             # All versions fail
@@ -3477,6 +3546,7 @@ class TestRunVersionedBuild:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3"],
             )
 
@@ -3488,11 +3558,8 @@ class TestRunVersionedBuild:
     def test_on_renders_done_callback(self, tmp_path: Path):
         from unittest.mock import MagicMock, patch
 
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
         callback = MagicMock()
 
@@ -3512,6 +3579,7 @@ class TestRunVersionedBuild:
             run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3"],
                 on_renders_done=callback,
             )
@@ -3527,11 +3595,8 @@ class TestRunVersionedBuild:
         """
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
         captured_build_dirs: list[Path] = []
 
@@ -3552,11 +3617,12 @@ class TestRunVersionedBuild:
             run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2"],
             )
 
         assert captured_build_dirs[0] == source
-        assert captured_build_dirs[1] == tmp_path / "source-0.2"
+        assert captured_build_dirs[1] == layout.build_dir_for("0.2", "0.3")
 
     def test_raises_when_target_dir_exists_and_unmarked(self, tmp_path: Path):
         """
@@ -3565,42 +3631,38 @@ class TestRunVersionedBuild:
         An unmarked directory may contain user files, so the build must stop
         before preprocessing can replace it.
         """
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
-        project_root = tmp_path / "project"
-        project_root.mkdir()
-
-        stray = tmp_path / "source-0.2"
+        stray = layout.build_dir_for("0.2", "0.3")
         stray.mkdir()
         (stray / "notes.txt").write_text("mine", encoding="utf-8")
 
-        with pytest.raises(ValueError, match="source-0.2"):
+        with pytest.raises(ValueError, match="great-docs-0.2"):
             run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2"],
             )
 
         assert (stray / "notes.txt").read_text() == "mine"
 
     def test_rejects_symlinked_version_build_directory(self, tmp_path: Path):
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
         target = tmp_path / "marked-target"
         target.mkdir()
         (target / "_quarto.yml").write_text(QUARTO_YML_HEADER, encoding="utf-8")
-        version_dir = tmp_path / "source-0.2"
+        version_dir = layout.build_dir_for("0.2", "0.3")
         version_dir.symlink_to(target, target_is_directory=True)
 
-        with pytest.raises(ValueError, match="source-0.2.*symlink"):
+        with pytest.raises(ValueError, match="symlink.*great-docs-0.2"):
             run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2"],
             )
 
@@ -3614,27 +3676,25 @@ class TestRunVersionedBuild:
         Collision validation must stop the build before cleanup removes marked
         sibling directories.
         """
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nHi"})
+        source, project_root = layout.build_dir, layout.package_root
 
-        project_root = tmp_path / "project"
-        project_root.mkdir()
-
-        marked = tmp_path / "source-0.1"
+        marked = layout.build_dir_for("0.1", "0.3")
         marked.mkdir()
         (marked / "_quarto.yml").write_text(
             QUARTO_YML_HEADER + "project:\n  type: website\n", encoding="utf-8"
         )
         (marked / "notes.txt").write_text("kept", encoding="utf-8")
 
-        stray = tmp_path / "source-0.2"
+        stray = layout.build_dir_for("0.2", "0.3")
         stray.mkdir()
         (stray / "notes.txt").write_text("mine", encoding="utf-8")
 
-        with pytest.raises(ValueError, match="source-0.2"):
+        with pytest.raises(ValueError, match="great-docs-0.2"):
             run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2", "0.1"],
             )
 
@@ -3650,17 +3710,14 @@ class TestRunVersionedBuild:
         """
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(
-            source,
+        layout = _make_project(
+            tmp_path,
             {
                 "index.qmd": "---\ntitle: Home\n---\nHi",
                 "old-only.qmd": '---\ntitle: Old\nversions: ["0.2"]\n---\nOnly in 0.2.',
             },
         )
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        source, project_root = layout.build_dir, layout.package_root
 
         def mock_render(build_dirs, **kwargs):
             results = []
@@ -3678,11 +3735,12 @@ class TestRunVersionedBuild:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2"],
             )
 
         assert result["success"] is True
-        assert (tmp_path / "source-0.2" / "old-only.qmd").exists()
+        assert (layout.build_dir_for("0.2", "0.3") / "old-only.qmd").exists()
         assert not (source / "old-only.qmd").exists()
 
     def test_section_versions_exclude_section_from_other_versions(self, tmp_path: Path):
@@ -3691,17 +3749,14 @@ class TestRunVersionedBuild:
 
         from great_docs.config import Config
 
-        source = tmp_path / "source"
-        _make_source_tree(
-            source,
+        layout = _make_project(
+            tmp_path,
             {
                 "index.qmd": "---\ntitle: Home\n---\nHi",
                 "migrations/v2.qmd": "---\ntitle: Migrate\n---\nMove to 0.2.",
             },
         )
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        source, project_root = layout.build_dir, layout.package_root
         (project_root / "great-docs.yml").write_text(
             'sections:\n  - title: Migration Guides\n    dir: migrations\n    versions: ["0.2"]\n',
             encoding="utf-8",
@@ -3723,6 +3778,7 @@ class TestRunVersionedBuild:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.2", "0.1"],
                 config=Config(project_root),
             )
@@ -3730,19 +3786,15 @@ class TestRunVersionedBuild:
         assert result["success"] is True
         assert "migrations/v2.html" in result["pages_by_version"]["0.2"]
         assert "migrations/v2.html" not in result["pages_by_version"]["0.1"]
-        assert not (tmp_path / "source-0.1" / "migrations" / "v2.qmd").exists()
+        assert not (layout.build_dir_for("0.1", "0.2") / "migrations" / "v2.qmd").exists()
 
     def test_badge_expiry_raw_passed_through(self, tmp_path: Path):
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(
-            source,
-            {"index.qmd": "---\ntitle: Hi\n---\n\n[version-badge new 0.1]\n"},
+        layout = _make_project(
+            tmp_path, {"index.qmd": "---\ntitle: Hi\n---\n\n[version-badge new 0.1]\n"}
         )
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        source, project_root = layout.build_dir, layout.package_root
 
         def mock_render(build_dirs, **kwargs):
             results = []
@@ -3760,6 +3812,7 @@ class TestRunVersionedBuild:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2", "0.1"],
                 badge_expiry_raw="1",
             )
@@ -3979,7 +4032,9 @@ class TestPreprocessVersionApiSnapshot:
         )
 
         dest = tmp_path / "build"
-        pages = preprocess_version(source, dest, entry, versions, project_root=project_root)
+        pages = preprocess_version(
+            source, dest, entry, versions, project_root=project_root, layout=Layout.make(tmp_path)
+        )
 
         assert "reference/my_func.html" in pages
         assert (dest / "reference" / "my_func.qmd").exists()
@@ -4000,7 +4055,9 @@ class TestPreprocessVersionApiSnapshot:
         )
 
         dest = tmp_path / "build"
-        pages = preprocess_version(source, dest, entry, versions, project_root=project_root)
+        pages = preprocess_version(
+            source, dest, entry, versions, project_root=project_root, layout=Layout.make(tmp_path)
+        )
 
         # Should succeed without generating API pages
         assert "index.html" in pages
@@ -4093,7 +4150,14 @@ class TestPreprocessVersionGitRef:
             "great_docs._versions.build._validate_git_ref_is_tag",
             return_value=True,
         ):
-            pages = preprocess_version(source, dest, entry, versions, project_root=project_root)
+            pages = preprocess_version(
+                source,
+                dest,
+                entry,
+                versions,
+                project_root=project_root,
+                layout=Layout.make(tmp_path),
+            )
 
         assert "reference/my_func.html" in pages
 
@@ -4315,11 +4379,8 @@ class TestRunVersionedBuildEmptyRender:
         """When Quarto succeeds (exit 0) but creates no HTML, report failure."""
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nContent"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nContent"})
+        source, project_root = layout.build_dir, layout.package_root
 
         def mock_render_no_output(build_dirs, **kwargs):
             # Quarto exits 0 but creates NO _site directory (empty render)
@@ -4332,6 +4393,7 @@ class TestRunVersionedBuildEmptyRender:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3"],
             )
 
@@ -4344,11 +4406,8 @@ class TestRunVersionedBuildEmptyRender:
         """When Quarto creates _site but it's empty, report failure."""
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nContent"})
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Hi\n---\nContent"})
+        source, project_root = layout.build_dir, layout.package_root
 
         def mock_render_empty_site(build_dirs, **kwargs):
             results = []
@@ -4367,6 +4426,7 @@ class TestRunVersionedBuildEmptyRender:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3", "0.2"],
             )
 
@@ -4381,15 +4441,9 @@ class TestRunVersionedBuildEmptyRender:
         """When preprocessing removes all .qmd files, abort before render."""
         from unittest.mock import patch
 
-        source = tmp_path / "source"
-        source.mkdir(parents=True)
         # Only _quarto.yml, no .qmd files
-        (source / "_quarto.yml").write_text(
-            "project:\n  type: website\n  output-dir: _site\nwebsite:\n  title: Test\n"
-        )
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
+        layout = _make_project(tmp_path, {})
+        source, project_root = layout.build_dir, layout.package_root
 
         render_called = []
 
@@ -4404,45 +4458,12 @@ class TestRunVersionedBuildEmptyRender:
             result = run_versioned_build(
                 source_dir=source,
                 project_root=project_root,
+                layout=layout,
                 versions_config=["0.3"],
             )
 
         assert result["success"] is False
         assert "No .qmd files" in result["errors"][0]
-
-        # Render should NOT have been called
-        assert render_called == []
-
-    def test_pre_render_check_missing_quarto_yml(self, tmp_path: Path):
-        """When _quarto.yml is missing from build dir, abort before render."""
-        from unittest.mock import patch
-
-        source = tmp_path / "source"
-        source.mkdir(parents=True)
-        # Create a .qmd file but no _quarto.yml
-        (source / "index.qmd").write_text("---\ntitle: Hi\n---\nContent")
-
-        project_root = tmp_path / "project"
-        project_root.mkdir()
-
-        render_called = []
-
-        def mock_render(build_dirs, **kwargs):
-            render_called.append(True)
-            return [(str(d), 0, "", "", []) for d in build_dirs]
-
-        with patch(
-            "great_docs._versions.build.render_versions_parallel",
-            side_effect=mock_render,
-        ):
-            result = run_versioned_build(
-                source_dir=source,
-                project_root=project_root,
-                versions_config=["0.3"],
-            )
-
-        assert result["success"] is False
-        assert "_quarto.yml missing" in result["errors"][0]
 
         # Render should NOT have been called
         assert render_called == []

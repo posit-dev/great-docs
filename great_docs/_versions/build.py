@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from great_docs._build import quarto
+from great_docs._content.pages import section_destination
 from great_docs._subprocess import TEXT_MODE_KWARGS
 from great_docs._utils import (
     is_great_docs_build_dir,
@@ -502,6 +503,7 @@ def preprocess_version(
     badge_expiry: "BadgeExpiry | None" = None,
     config: Config | None = None,
     *,
+    layout: Layout,
     documented_symbols: Callable[[str], list[str]] | None = None,
 ) -> list[str]:
     """
@@ -539,6 +541,8 @@ def preprocess_version(
         Project configuration, forwarded to steps 5 and 6 for rebuilding the
         inventory and interlinks index. Skipped for a version that keeps the
         live inventory when omitted.
+    layout
+        Resolved project paths used to locate sections in the build tree.
     documented_symbols
         Callable that returns the working tree's documented reference page
         stems for a project name; used in step 6. If omitted or it returns no
@@ -550,7 +554,7 @@ def preprocess_version(
     `.html`.
     """
     # Build a set of directories excluded by section-level version scoping
-    excluded_dirs = _compute_excluded_section_dirs(entry.tag, section_configs)
+    excluded_dirs = _compute_excluded_section_dirs(entry.tag, section_configs, layout)
 
     # The latest version uses `source_dir` directly; only historical versions
     # need a copy.
@@ -659,50 +663,54 @@ def preprocess_version(
 def _compute_excluded_section_dirs(
     target_tag: str,
     section_configs: list[dict] | None,
-) -> set[str]:
+    layout: Layout,
+) -> set[Path]:
     """
-    Compute the set of directory names excluded by section-level scoping.
+    Locate section directories excluded from the target version
 
-    A section config with a `"versions"` list that does NOT include *target_tag* means all pages
-    under that section's `"dir"` are excluded.
+    Exclude sections whose non-empty `versions` list omits `target_tag`.
+    Resolve their published paths so nested and slugged directory names match
+    the pages in the build tree.
 
     Parameters
     ----------
     target_tag
-        The version being built.
+        Version tag to check against each section's `versions` list.
     section_configs
-        Section configurations from config, each with `"dir"` and optionally `"versions"` keys.
+        Entries from the `sections` setting.
+    layout
+        Resolved project paths used to locate sections in the build tree.
 
     Returns
     -------
-    set[str]
-        Directory names (not paths) to exclude.
+    :
+        Published section directories relative to the build directory.
     """
     if not section_configs:
         return set()
 
-    excluded: set[str] = set()
+    excluded: set[Path] = set()
     for section in section_configs:
         # The section reader reports and skips entries that are not mappings
         if not isinstance(section, dict):
             continue
-        section_dir = section.get("dir", "")
         section_versions = section.get("versions")
-        if section_dir and section_versions and target_tag not in section_versions:
-            excluded.add(section_dir)
+        if not section_versions or target_tag in section_versions:
+            continue
+        destination = section_destination(layout, section)
+        if destination is not None:
+            excluded.add(destination.relative_to(layout.build_dir.resolve()))
 
     return excluded
 
 
-def _in_excluded_section(rel_path: Path, excluded_dirs: set[str]) -> bool:
-    """Check if a file's relative path falls under an excluded section directory."""
-    if not excluded_dirs:
-        return False
-    # Check if any path component matches an excluded dir
-    for part in rel_path.parts:
-        if part in excluded_dirs:
-            return True
-    return False
+def _in_excluded_section(rel_path: Path, excluded_dirs: set[Path]) -> bool:
+    """
+    Check whether a path lies within an excluded section directory
+
+    Both the file path and section directories are relative to the build directory.
+    """
+    return any(rel_path.is_relative_to(directory) for directory in excluded_dirs)
 
 
 def _rebuild_api_from_snapshot(
@@ -1957,10 +1965,10 @@ def run_versioned_build(  # pragma: no cover
     on_renders_done: Callable[[], None] | None = None,
     badge_expiry_raw: str | None = None,
     config: Config | None = None,
-    layout: Layout | None = None,
     default_description: str | None = None,
     structured_data: StructuredData | None = None,
     *,
+    layout: Layout,
     documented_symbols: Callable[[str], list[str]] | None = None,
 ) -> dict[str, Any]:
     """
@@ -1994,13 +2002,13 @@ def run_versioned_build(  # pragma: no cover
         snapshot or git tag uses it to rebuild its own inventory and
         interlinks index; omitting it leaves such a version publishing the
         live checkout's.
-    layout
-        Resolved project paths.
     default_description
         The site's default search description as plain text.
     structured_data
         The JSON-LD for each version's homepage and reference pages, or
         `None` when structured data is disabled.
+    layout
+        Resolved project paths for build directories and the assembled site.
     documented_symbols
         Callable that returns the working tree's documented reference page
         stems for a project name. New snapshots for versions built from tags
@@ -2016,8 +2024,7 @@ def run_versioned_build(  # pragma: no cover
     latest = get_latest_version(versions)
     latest_tag = latest.tag if latest else versions[0].tag
     check_build_dir_collisions(source_dir, versions, latest_tag, layout)
-    if layout is not None:
-        validate_layout_outputs(layout)
+    validate_layout_outputs(layout)
 
     # Parse badge expiry config
     from great_docs._versions.model import parse_badge_expiry
@@ -2045,23 +2052,7 @@ def run_versioned_build(  # pragma: no cover
     # Unmarked directories may contain user files. Check them before cleanup so
     # an aborted build also preserves existing, marked version output.
     for entry in targets:
-        ver_dir = _version_build_dir(source_dir, entry, latest_tag, layout)
-        if layout is not None:
-            validate_build_dir(ver_dir)
-        elif ver_dir == source_dir:
-            continue
-        if ver_dir.is_symlink():
-            raise ValueError(
-                f"Version {entry.tag!r} cannot use {ver_dir} as its build directory "
-                "because the path is a symlink. Remove the symlink or replace it with "
-                "a directory before building."
-            )
-        if ver_dir.exists() and not is_great_docs_build_dir(ver_dir):
-            raise ValueError(
-                f"Version {entry.tag!r} would build into {ver_dir}, which already exists "
-                f"but does not contain a Great Docs-generated _quarto.yml. Move or delete "
-                f"the directory before building."
-            )
+        validate_build_dir(_version_build_dir(source_dir, entry, latest_tag, layout))
 
     warnings = _clean_stale_version_dirs(source_dir, layout)
 
@@ -2086,6 +2077,7 @@ def run_versioned_build(  # pragma: no cover
             section_configs=config.sections if config is not None else None,
             badge_expiry=badge_expiry,
             config=config,
+            layout=layout,
             documented_symbols=documented_symbols,
         )
         # Describe each version's resolved pages before the version's site title is set. The
@@ -2108,20 +2100,12 @@ def run_versioned_build(  # pragma: no cover
     dir_to_tag_pre = {str(dir_by_tag[e.tag]): e.tag for e in targets}
 
     # --- Pre-render sanity check ---
-    # Verify each build directory has renderable .qmd files and a valid _quarto.yml.
-    # If not, report an error instead of silently producing an empty site.
+    # Version scoping can remove every page. Stop before rendering an empty site.
     for ver_dir in build_dirs:
         qmd_count = sum(
             1 for _ in ver_dir.rglob("*.qmd") if not str(_.relative_to(ver_dir)).startswith("_")
         )
-        quarto_yml = ver_dir / "_quarto.yml"
-        if not quarto_yml.exists():
-            tag = dir_to_tag_pre.get(str(ver_dir), str(ver_dir))
-            errors.append(
-                f"Version {tag}: _quarto.yml missing from build directory. "
-                f"This indicates a preprocessing failure."
-            )
-        elif qmd_count == 0:
+        if qmd_count == 0:
             tag = dir_to_tag_pre.get(str(ver_dir), str(ver_dir))
             errors.append(
                 f"Version {tag}: No .qmd files found in build directory after preprocessing. "
@@ -2210,7 +2194,7 @@ def run_versioned_build(  # pragma: no cover
         }
 
     # --- Stage 3: Assemble ---
-    output_dir = layout.site_dir if layout is not None else source_dir / "_site"
+    output_dir = layout.site_dir
     assemble_site(source_dir, targets, latest_tag, output_dir, layout=layout)
 
     # Write version map
@@ -2221,7 +2205,7 @@ def run_versioned_build(  # pragma: no cover
 
     # Generate platform redirect files (Netlify _redirects, Vercel vercel.json)
     generate_redirect_files(output_dir, versions, latest_tag)
-    if layout is not None and layout.site_dir != source_dir / "_site":
+    if layout.site_dir != source_dir / "_site":
         record_site_ownership(output_dir)
 
     return {
