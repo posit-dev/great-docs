@@ -6,6 +6,7 @@ Each page's type selects its change frequency and priority from `seo.sitemap`.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -16,6 +17,11 @@ if TYPE_CHECKING:
     from ...config import Config
 
 __all__ = ["page_type", "write"]
+
+_NOINDEX = re.compile(
+    r"""<meta\b(?=[^>]*\bname=["']?robots\b)(?=[^>]*\bnoindex\b)[^>]*>""", re.IGNORECASE
+)
+"""A robots `<meta>` element that asks search engines not to index the page"""
 
 
 def page_type(path: str) -> str:
@@ -60,7 +66,9 @@ def write(
     """
     Write `sitemap.xml` for HTML pages in the rendered site
 
-    Exclude site-relative paths that start with `_` or `.`. Sort entries by descending
+    Exclude site-relative paths that start with `_` or `.`, pages with a `noindex` robots
+    directive, and redirect stubs. In a site with versions, also exclude everything under
+    `v/`: the older versions and the version aliases. Sort entries by descending
     priority, then by URL. Use each file's modification time for its page's last modification
     date. Write nothing when the sitemap is disabled, the site directory does not exist, or
     no base URL is known.
@@ -96,6 +104,7 @@ def write(
 
     changefreq = config.sitemap_changefreq
     priority = config.sitemap_priority
+    versioned = config.has_versions
 
     entries: list[tuple[float, str, str, str]] = []
     for html_file in site_dir.rglob("*.html"):
@@ -103,6 +112,15 @@ def write(
 
         # Keep internal site files out of search-engine discovery.
         if rel_path.startswith("_") or rel_path.startswith("."):
+            continue
+
+        # Older versions canonicalise to the latest version, which is the site root.
+        if versioned and rel_path.startswith("v/"):
+            continue
+
+        # `great-docs seo` recognises redirect stubs by the same refresh directive.
+        html = html_file.read_text(encoding="utf-8", errors="ignore")
+        if _NOINDEX.search(html) or 'http-equiv="refresh"' in html:
             continue
 
         kind = page_type(rel_path)
