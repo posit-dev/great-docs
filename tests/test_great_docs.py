@@ -11421,8 +11421,8 @@ def test_prepare_build_directory_copies_js_files():
             with patch.object(reference_sections, "update_sidebar"):
                 docs._prepare_build_directory(make_run())
 
-        # Core JS files should be present
-        assert (docs.build_dir / "github-widget.js").exists()
+        # The GitHub widget needs a repository; the other core scripts do not.
+        assert not (docs.build_dir / "github-widget.js").exists()
         assert (docs.build_dir / "sidebar-filter.js").exists()
         assert (docs.build_dir / "dark-mode-toggle.js").exists()
         assert (docs.build_dir / "theme-init.js").exists()

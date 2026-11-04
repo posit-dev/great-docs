@@ -7,10 +7,10 @@ labels that Great Docs generates in English.
 
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import Generator, Iterable
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from yaml12 import parse_yaml
 
@@ -169,6 +169,146 @@ def edit(
     quarto_config = read(build_dir, seed_website=seed_website)
     yield quarto_config
     write(build_dir, quarto_config, config)
+
+
+Slot = Literal["include-in-header", "include-after-body"]
+"""An HTML format key whose entries Quarto adds to every page"""
+
+
+def entries(mapping: dict[str, Any], key: str) -> list[Any]:
+    """
+    Return a configuration value as a list and store it under its key
+
+    A missing or null value becomes an empty list; a single value becomes a
+    one-item list. An existing list is reused. The returned list is stored
+    under the key, so adding entries to it changes the configuration.
+
+    Parameters
+    ----------
+    mapping
+        The configuration mapping that holds the key, such as `project`.
+    key
+        The key, such as `resources`.
+
+    Returns
+    -------
+    :
+        The list stored under the key.
+    """
+    value = mapping.get(key)
+    if value is None:
+        items: list[Any] = []
+    elif isinstance(value, list):
+        items = cast("list[Any]", value)
+    else:
+        items = [value]
+    mapping[key] = items
+    return items
+
+
+def includes(quarto_config: dict[str, Any], slot: Slot) -> list[Any]:
+    """
+    Return the HTML format's include list for one slot
+
+    Parameters
+    ----------
+    quarto_config
+        The configuration, changed in place to create the `format.html`
+        mapping and include list if missing.
+    slot
+        The key for `include-in-header` or `include-after-body`.
+
+    Returns
+    -------
+    :
+        The list stored in the configuration.
+    """
+    html = cast("dict[str, Any]", quarto_config.setdefault("format", {})).setdefault("html", {})
+    return entries(cast("dict[str, Any]", html), slot)
+
+
+def find(items: list[Any], marker: str) -> int | None:
+    """
+    Find the first entry whose text contains a marker
+
+    Entries are matched against their string representations. Quotes and line
+    breaks may be escaped in those representations, so markers should contain
+    neither.
+
+    Parameters
+    ----------
+    items
+        The entries, such as an include list.
+    marker
+        Text that identifies the entry, such as a script's file name.
+
+    Returns
+    -------
+    :
+        The entry's index, or `None` when no entry contains the marker.
+    """
+    return next((index for index, item in enumerate(items) if marker in str(item)), None)
+
+
+def add_include(
+    quarto_config: dict[str, Any],
+    slot: Slot,
+    entry: dict[str, str],
+    *,
+    marker: str | None = None,
+    before: str | None = None,
+) -> None:
+    """
+    Add an include entry unless it or an equivalent one is present
+
+    Parameters
+    ----------
+    quarto_config
+        The configuration, changed in place.
+    slot
+        The key for `include-in-header` or `include-after-body`.
+    entry
+        The entry to add, such as `{"text": "<script src=...>"}`.
+    marker
+        Text that identifies an equivalent entry, or `None` to look only for an
+        equal entry.
+    before
+        Text that identifies the entry this one must precede. The entry is
+        appended when `before` is `None` or no entry contains it.
+
+    Returns
+    -------
+    :
+    """
+    items = includes(quarto_config, slot)
+    if entry in items or (marker is not None and find(items, marker) is not None):
+        return
+    position = find(items, before) if before is not None else None
+    items.insert(len(items) if position is None else position, entry)
+
+
+def add_resources(quarto_config: dict[str, Any], names: Iterable[str]) -> None:
+    """
+    List files in `project.resources` for Quarto to copy into the site
+
+    Names are appended in the supplied order, excluding those already listed.
+
+    Parameters
+    ----------
+    quarto_config
+        The configuration, changed in place.
+    names
+        The file names or globs, relative to the project directory.
+
+    Returns
+    -------
+    :
+    """
+    project = cast("dict[str, Any]", quarto_config.setdefault("project", {}))
+    resources = entries(project, "resources")
+    for name in names:
+        if name not in resources:
+            resources.append(name)
 
 
 def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
