@@ -3106,6 +3106,18 @@ def test_snapshot_from_source_no_click(tmp_path):
     assert result is None
 
 
+def test_snapshot_from_source_module_exiting_on_import(tmp_path):
+    """
+    Return `None` when the CLI module at a release exits on import
+    """
+    pkg = tmp_path / "exitpkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "__main__.py").write_text("raise SystemExit(2)\n")
+
+    assert snapshot_from_source(tmp_path, "exitpkg.__main__") is None
+
+
 # --- CLI source attribute fallback ---
 
 

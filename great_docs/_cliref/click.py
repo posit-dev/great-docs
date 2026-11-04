@@ -20,6 +20,7 @@ import sys
 import tomllib
 from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 from .._api_diff import CliCommandInfo, CliOptionInfo
@@ -228,7 +229,7 @@ def find_command(
         for candidate in ("cli", "__main__", "main", "console", "commands"):
             module_path = f"{module_name}.{candidate}"
             try:
-                module = importlib.import_module(module_path)
+                module = _import_cli_module(module_path)
                 if any(is_cli_command(getattr(module, attr_name)) for attr_name in dir(module)):
                     cli_module_path = module_path
                     break
@@ -240,7 +241,7 @@ def find_command(
         return None
 
     try:
-        module = importlib.import_module(cli_module_path)
+        module = _import_cli_module(cli_module_path)
     except ImportError as e:
         report(f"Could not import CLI module {cli_module_path}: {e}")
         return None
@@ -274,6 +275,33 @@ def find_command(
 
     report(f"Found Click CLI: {cli_name} in {cli_module_path}")
     return cli_obj
+
+
+def _import_cli_module(module_path: str) -> ModuleType:
+    """
+    Import a module that may define a package's command line
+
+    Parameters
+    ----------
+    module_path
+        The module's dotted path.
+
+    Returns
+    -------
+    :
+        The imported module.
+
+    Raises
+    ------
+    ImportError
+        When the module cannot be imported, or when importing it exits. A `__main__` module that
+        calls its command without an `if __name__ == "__main__":` guard runs the command on
+        import, and Click then exits.
+    """
+    try:
+        return importlib.import_module(module_path)
+    except SystemExit as e:
+        raise ImportError(f"importing {module_path} exited with status {e.code}") from e
 
 
 def entry_point_name(package_root: Path) -> str | None:
@@ -631,7 +659,7 @@ def snapshot_from_source(source_dir: Path, cli_module: str) -> CliCommandInfo | 
             prefix = ".".join(parts[: i + 1])
             _ = sys.modules.pop(prefix, None)
 
-        module = importlib.import_module(cli_module)
+        module = _import_cli_module(cli_module)
 
         cli_obj = None
         for attr_name in ["cli", "main", "app", "command"]:
