@@ -8,9 +8,10 @@ from typing import Any
 
 import pytest
 
+from great_docs import GreatDocs
 from great_docs._layout import Layout
-from great_docs._website import quarto_defaults
-from tests.support import write_config
+from great_docs._website import inline_data, quarto_defaults, quarto_yml
+from tests.support import make_run, write_config
 
 
 def _initial() -> dict[str, Any]:
@@ -111,7 +112,7 @@ class TestRegisterSite:
 
 
 class TestRegisterExtensions:
-    def test_filters_follow_the_users_and_inventory_is_published(self, tmp_path: Path):
+    def test_filters_follow_the_users_and_inventory_is_published(self):
         quarto_config: dict[str, Any] = {
             "project": {"resources": "data.csv"},
             "filters": ["mine", "details"],
@@ -126,3 +127,56 @@ class TestRegisterExtensions:
             "interlinks",
         ]
         assert quarto_config["project"]["resources"] == ["data.csv", "objects.inv"]
+
+
+class TestSiteIncludes:
+    """Site include entries that follow and preserve the build's entries"""
+
+    SETTINGS = (
+        "site:\n"
+        "  include-in-header:\n    - text: <style>mine</style>\n"
+        "  include-after-body: <script>mine()</script>\n"
+    )
+
+    def test_users_entries_follow_great_docs_entries(self, tmp_path: Path):
+        data = {"text": "<script>window.__GD_TAGS_DATA__={};</script>"}
+        reader = {"text": '<script src="page-tags.js"></script>'}
+        quarto_config = _initial()
+        quarto_config["format"]["html"]["include-after-body"] = [data, reader]
+        config = write_config(tmp_path, self.SETTINGS)
+        layout = Layout.make(tmp_path)
+
+        # The build's second update must preserve entries added during the first.
+        for _ in range(2):
+            quarto_defaults.register_site(quarto_config, config, layout, report=print)
+            headers = quarto_config["format"]["html"]["include-in-header"]
+            if {"text": "<style>great-docs</style>"} not in headers:
+                headers.append({"text": "<style>great-docs</style>"})
+            quarto_defaults.register_site_includes(quarto_config, config)
+
+        html = quarto_config["format"]["html"]
+        assert html["include-after-body"] == [data, reader, "<script>mine()</script>"]
+        assert html["include-in-header"] == [
+            {"text": "<style>great-docs</style>"},
+            {"text": "<style>mine</style>"},
+        ]
+
+    def test_data_added_between_updates_survives(self, tmp_path: Path):
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n', encoding="utf-8")
+        config = write_config(tmp_path, "tags:\n  enabled: true\n" + self.SETTINGS)
+        docs = GreatDocs(project_path=str(tmp_path))
+        docs.build_dir.mkdir(parents=True)
+        quarto_yml.write_initial(docs.build_dir, config)
+
+        # The build adds tag data between updates, before the script that reads it.
+        docs._update_quarto_config(make_run())
+        with quarto_yml.edit(docs.build_dir, config) as quarto_config:
+            inline_data.add(quarto_config, "__GD_TAGS_DATA__", {}, before="page-tags.js")
+        docs._update_quarto_config(make_run())
+
+        html = quarto_yml.read(docs.build_dir)["format"]["html"]
+        after_body = [str(entry) for entry in html["include-after-body"]]
+        data = next(i for i, entry in enumerate(after_body) if "__GD_TAGS_DATA__" in entry)
+        assert "page-tags.js" in after_body[data + 1]
+        assert after_body[-1] == "<script>mine()</script>"
+        assert html["include-in-header"][-1] == {"text": "<style>mine</style>"}

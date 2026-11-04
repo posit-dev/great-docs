@@ -5,6 +5,9 @@ Project defaults set the output directory, pre-render scripts and freeze mode.
 HTML defaults merge the user's `site` mapping into `format.html` and add Great
 Docs' theme, signature grammar, stylesheets and header includes. Extension
 settings register Great Docs' Lua filters and publish the interlinks inventory.
+
+Include entries from `site` follow the build's entries. User scripts can read
+Great Docs' globals, and user styles can override Great Docs' styles.
 """
 
 from __future__ import annotations
@@ -24,6 +27,9 @@ if TYPE_CHECKING:
 
 _FILTERS = ("output-title", "details", "gd-lightbox", "interlinks")
 """Great Docs' Lua filters, in the order Quarto runs them"""
+
+_INCLUDES = ("include-in-header", "include-before-body", "include-after-body")
+"""`format.html` keys whose `site` entries join the build's entries"""
 
 
 def register(quarto_config: dict[str, Any], config: Config, layout: Layout) -> None:
@@ -76,7 +82,8 @@ def register_site(
     """
     Merge the `site` settings into `format.html` and add Great Docs' HTML defaults
 
-    The `site` mapping overrides `format.html` key by key.
+    The `site` mapping overrides `format.html` key by key, except that its
+    include entries are appended to the existing include lists.
 
     Great Docs disables Quarto's code-copy button and lightbox in favour of
     its own scripts, and HTML table processing to preserve styled tables.
@@ -107,9 +114,15 @@ def register_site(
         If a header include file does not exist.
     """
     site = config.site_quarto
+    settings = {key: value for key, value in site.items() if key not in _INCLUDES}
     formats = cast("dict[str, Any]", quarto_config["format"])
-    html = Config._merge(formats["html"], site)  # pyright: ignore[reportPrivateUsage]
+    html = Config._merge(formats["html"], settings)  # pyright: ignore[reportPrivateUsage]
     formats["html"] = html
+    for key, user_entries in _site_includes(config).items():
+        entries = quarto_yml.entries(html, key)
+        for entry in user_entries:
+            if entry not in entries:
+                entries.append(entry)
 
     i18n.register_toc_title(quarto_config, config)
 
@@ -192,3 +205,51 @@ def register_extensions(quarto_config: dict[str, Any]) -> None:
         if name not in filters:
             filters.append(name)
     quarto_yml.add_resources(quarto_config, [INVENTORY_FILENAME])
+
+
+def register_site_includes(quarto_config: dict[str, Any], config: Config) -> None:
+    """
+    Place the `site` include entries after the build's entries
+
+    Call this after all other include-list updates. The user's entries retain
+    their order in `site`.
+
+    Parameters
+    ----------
+    quarto_config
+        Contents of `_quarto.yml`, updated in place. It must have a
+        `format.html` mapping.
+    config
+        Project configuration.
+
+    Returns
+    -------
+    :
+    """
+    html = cast("dict[str, Any]", quarto_config["format"]["html"])
+    for key, user_entries in _site_includes(config).items():
+        entries = quarto_yml.entries(html, key)
+        entries[:] = [entry for entry in entries if entry not in user_entries] + user_entries
+
+
+def _site_includes(config: Config) -> dict[str, list[Any]]:
+    """
+    Return the non-null include settings from `site` as lists
+
+    Parameters
+    ----------
+    config
+        Project configuration.
+
+    Returns
+    -------
+    :
+        Each include key with a non-null value in `site`, mapped to a list of
+        its entries.
+    """
+    includes: dict[str, list[Any]] = {}
+    for key in _INCLUDES:
+        value: Any = config.site_quarto.get(key)
+        if value is not None:
+            includes[key] = list(cast("list[Any]", value)) if isinstance(value, list) else [value]
+    return includes

@@ -3098,6 +3098,8 @@ class GreatDocs:
         if self._config.has_versions:
             version_selector.register(config, self._config)
 
+        quarto_defaults.register_site_includes(config, self._config)
+
         # Write back to file
         quarto_yml.write(self.build_dir, config, self._config)
 
