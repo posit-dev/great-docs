@@ -29267,6 +29267,48 @@ def test_write_skills_page_single_skill_no_switcher():
         assert "Solo" in content
 
 
+def _translated_languages() -> list[str]:
+    from great_docs._translations import UI_TRANSLATIONS
+
+    return sorted({lang for entry in UI_TRANSLATIONS.values() for lang in entry})
+
+
+@pytest.mark.parametrize("lang", _translated_languages())
+def test_skills_page_intro_is_a_whole_translated_paragraph(tmp_path: Path, lang: str):
+    """
+    Verify that all Skills page intros share a translated definition of a skill
+    """
+    (tmp_path / "great-docs.yml").write_text(f"site:\n  lang: {lang}\n")
+    gd = GreatDocs(project_path=str(tmp_path))
+    gd.build_dir = tmp_path
+    skill_dir = tmp_path / "solo"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text("---\nname: solo\ndescription: A skill\n---\n\n# Solo\n")
+    other_md = tmp_path / "OTHER.md"
+    other_md.write_text("---\nname: other\ndescription: Another skill\n---\n\n# Other\n")
+    variants = {
+        "generated": {},
+        "curated": {"skill_dir": skill_dir},
+        "multi": {"skill_dir": skill_dir, "extra_skills": [(other_md, None)]},
+    }
+
+    intros: dict[str, str] = {}
+    for variant, kwargs in variants.items():
+        _skills_page_writer(gd).write(skill_md, **kwargs)
+        body = (tmp_path / "skills.qmd").read_text().split("---\n", 2)[2]
+        intros[variant] = body.strip().split("\n", 1)[0]
+
+    for intro in intros.values():
+        assert "skills_intro" not in intro
+        assert "{" not in intro
+    # A shared opening definition catches intros that start with a sentence
+    # fragment or an untranslated key.
+    first_sentences = {re.sub(r"(?<=[.。।]).*", "", intro) for intro in intros.values()}
+    assert len(first_sentences) == 1
+    assert len(set(intros.values())) == 3
+
+
 # ── Sitemap generation ──────────────────────────────────────────────────────
 
 
