@@ -77,7 +77,10 @@ If you have a `[project.scripts]` section:
 my-cli = "my_package.cli:main"
 ```
 
-Great Docs uses `my-cli` as the command name in documentation.
+Great Docs uses `my-cli` as the command name in documentation. When several scripts are listed,
+it chooses the script whose entry point names the documented command object,
+`my_package.cli:main` in this example. If no entry point names that object, for example when a
+script calls a wrapper function, Great Docs uses the first script.
 
 ### Explicit Configuration
 
