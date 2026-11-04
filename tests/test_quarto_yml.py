@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from yaml12 import parse_yaml
 
-from great_docs._contribution import Contribution, NavbarLink
+from great_docs._contribution import Contribution, NavbarLink, Sidebar
 from great_docs._utils import QUARTO_YML_HEADER, validate_build_dir
 from great_docs._website import quarto_yml
 from tests.support import write_config
@@ -281,3 +281,42 @@ def test_apply_inserts_an_anchored_link_once():
     quarto_yml.apply({"website": {"navbar": {"left": left}}}, TAGS)
 
     assert left == [{"text": "Tags", "href": "tags/index.qmd"}, reference]
+
+
+CLI_SIDEBAR = Sidebar("cli-reference", "CLI Reference", ("reference/cli/app.qmd",))
+CLI_ENTRY = {"id": "cli-reference", "title": "CLI Reference", "contents": ["reference/cli/app.qmd"]}
+
+
+@pytest.mark.parametrize("quarto_config", [{}, {"website": {}}, {"website": {"sidebar": None}}])
+def test_apply_creates_the_sidebar_list(quarto_config: dict[str, Any]):
+    quarto_yml.apply(quarto_config, Contribution(sidebars=(CLI_SIDEBAR,)))
+
+    assert quarto_config["website"]["sidebar"] == [CLI_ENTRY]
+
+
+def test_apply_appends_a_sidebar_after_the_others():
+    reference = {"id": "reference", "contents": ["reference/index.qmd"]}
+    quarto_config = {"website": {"sidebar": [reference]}}
+
+    quarto_yml.apply(quarto_config, Contribution(sidebars=(CLI_SIDEBAR,)))
+
+    assert quarto_config["website"]["sidebar"] == [reference, CLI_ENTRY]
+
+
+def test_apply_replaces_the_sidebar_with_the_same_id_in_place():
+    reference = {"id": "reference", "contents": ["reference/index.qmd"]}
+    old = {"id": "cli-reference", "title": "Old", "contents": ["old.qmd"]}
+    mcp = {"id": "mcp-reference", "contents": ["reference/mcp/index.qmd"]}
+    quarto_config = {"website": {"sidebar": [reference, old, mcp]}}
+
+    quarto_yml.apply(quarto_config, Contribution(sidebars=(CLI_SIDEBAR,)))
+
+    assert quarto_config["website"]["sidebar"] == [reference, CLI_ENTRY, mcp]
+
+
+def test_apply_without_sidebars_leaves_the_sidebar_key_absent():
+    quarto_config: dict[str, Any] = {"website": {"navbar": {"left": []}}}
+
+    quarto_yml.apply(quarto_config, CHANGELOG)
+
+    assert "sidebar" not in quarto_config["website"]

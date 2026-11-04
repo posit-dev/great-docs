@@ -10,16 +10,17 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, Any
 
+from .._contribution import Contribution, NavbarLink, Sidebar, SidebarItem
 from .._translations import get_translation
+from .._website.navigation import navbar
 from .model import CliCommand
 
 if TYPE_CHECKING:
     from ..config import Config
 
-SidebarItem: TypeAlias = str | dict[str, Any]
-"""A sidebar entry: a page path, a labelled link, or a section with its own contents."""
+INDEX_PAGE = "reference/cli/index.qmd"
 
 
 def write_pages(
@@ -72,7 +73,7 @@ def write_pages(
     # Label the index entry so it reads apart from the enclosing "CLI Reference" section title,
     # as the "API Index" link does.
     cli_index_label = get_translation("cli_index", config.lang)
-    generated_files.append({"text": cli_index_label, "href": "reference/cli/index.qmd"})
+    generated_files.append({"text": cli_index_label, "href": INDEX_PAGE})
     generated_paths.append(str(index_path.relative_to(build_dir)))
 
     root_path = cli_ref_dir / f"{entry_safe}.qmd"
@@ -96,6 +97,32 @@ def write_pages(
             report(f"  - {p}")
 
     return generated_files
+
+
+def contribution(config: Config, items: Sequence[SidebarItem]) -> Contribution:
+    """
+    Build the navigation contribution for the command-line reference pages
+
+    Parameters
+    ----------
+    config
+        The site configuration, for `cli.title` and `lang`.
+    items
+        The sidebar entries for the generated pages.
+
+    Returns
+    -------
+    :
+        The `cli-reference` sidebar and a Reference navbar link to its index page.
+        The sidebar uses `cli.title` when set; otherwise, it uses "CLI Reference" in the
+        site's language. Applying the contribution does not add the link if the navbar
+        already has a Reference item, such as one for the API reference.
+    """
+    title = config.cli_title or get_translation("cli_reference", config.lang)
+    return Contribution(
+        navbar=(NavbarLink(text=navbar.REFERENCE.label(config), href=INDEX_PAGE),),
+        sidebars=(Sidebar(id="cli-reference", title=title, contents=tuple(items)),),
+    )
 
 
 def _write_subcommand_pages(

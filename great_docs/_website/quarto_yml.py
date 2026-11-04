@@ -17,7 +17,7 @@ from .._utils import write_quarto_yml
 from .navigation import navbar as nav_navbar
 
 if TYPE_CHECKING:
-    from .._contribution import Contribution
+    from .._contribution import Contribution, NavbarLink, Sidebar
     from ..config import Config
 
 FILENAME = "_quarto.yml"
@@ -306,7 +306,11 @@ def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
     or, for Great Docs' own items such as Reference, a target in the same directory.
     The link precedes the first item whose `href` matches its `before` target. It is
     appended when no target is set or found. Repeated contributions add each link only
-    once. Configurations without `website.navbar.left` are unchanged.
+    once. Configurations without `website.navbar.left` get no links.
+
+    Each sidebar replaces the entry with the same `id` in `website.sidebar`, keeping
+    its position. A sidebar with no matching entry is appended. The sidebar list is
+    created when missing.
 
     Parameters
     ----------
@@ -319,11 +323,31 @@ def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
     -------
     :
     """
+    _add_navbar_links(quarto_config, contribution.navbar)
+    if contribution.sidebars:
+        _add_sidebars(quarto_config, contribution.sidebars)
+
+
+def _add_navbar_links(quarto_config: dict[str, Any], links: Iterable[NavbarLink]) -> None:
+    """
+    Add missing links to the navbar's left side
+
+    Parameters
+    ----------
+    quarto_config
+        The configuration, changed in place.
+    links
+        The links, in order.
+
+    Returns
+    -------
+    :
+    """
     navbar = quarto_config.get("website", {}).get("navbar")
     if not navbar or "left" not in navbar:
         return
     items = cast("list[Any]", navbar["left"])
-    for link in contribution.navbar:
+    for link in links:
         if nav_navbar.has_item(items, link.href):
             continue
         hrefs = [
@@ -333,3 +357,32 @@ def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
         before = link.before
         position = hrefs.index(before) if before is not None and before in hrefs else len(items)
         items.insert(position, {"text": link.text, "href": link.href})
+
+
+def _add_sidebars(quarto_config: dict[str, Any], sidebars: Iterable[Sidebar]) -> None:
+    """
+    Replace sidebars with the same `id` or append new sidebars
+
+    Parameters
+    ----------
+    quarto_config
+        The configuration, changed in place.
+    sidebars
+        The sidebars, in order.
+
+    Returns
+    -------
+    :
+    """
+    website = cast("dict[str, Any]", quarto_config.setdefault("website", {}))
+    existing = entries(website, "sidebar")
+    for sidebar in sidebars:
+        entry = {"id": sidebar.id, "title": sidebar.title, "contents": list(sidebar.contents)}
+        ids = [
+            cast("dict[str, Any]", item).get("id") if isinstance(item, dict) else None
+            for item in existing
+        ]
+        if sidebar.id in ids:
+            existing[ids.index(sidebar.id)] = entry
+        else:
+            existing.append(entry)

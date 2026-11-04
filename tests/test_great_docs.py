@@ -7035,83 +7035,6 @@ def test_publish_user_guide_copies_directory_metadata(explicit, subdir):
         assert (target / subdir / "_metadata.yaml").read_text() == "number-sections: true\n"
 
 
-def test_update_sidebar_with_cli_new():
-    """_update_sidebar_with_cli adds CLI section to sidebar."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        config = {"website": {"sidebar": []}}
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
-
-        docs._update_sidebar_with_cli(["reference/cli/cmd1.qmd", "reference/cli/cmd2.qmd"])
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        sidebar = result["website"]["sidebar"]
-        cli = next(s for s in sidebar if isinstance(s, dict) and s.get("id") == "cli-reference")
-
-        assert cli["title"] == "CLI Reference"
-        assert len(cli["contents"]) == 2
-
-
-def test_update_sidebar_with_cli_updates_existing_no_subdir():
-    """_update_sidebar_with_cli updates existing CLI section."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        config = {
-            "website": {
-                "sidebar": [
-                    {"id": "cli-reference", "title": "CLI Reference", "contents": ["old.qmd"]}
-                ]
-            }
-        }
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
-
-        docs._update_sidebar_with_cli(["new1.qmd", "new2.qmd"])
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        cli = next(
-            s
-            for s in result["website"]["sidebar"]
-            if isinstance(s, dict) and s.get("id") == "cli-reference"
-        )
-
-        assert cli["contents"] == ["new1.qmd", "new2.qmd"]
-
-
-def test_update_sidebar_with_cli_empty():
-    """_update_sidebar_with_cli returns early for empty cli_files."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        config = {"website": {"sidebar": []}}
-
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
-
-        docs._update_sidebar_with_cli([])
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        assert result["website"]["sidebar"] == []
-
-
 def test_detect_git_ref_configured():
     """_detect_git_ref returns configured source branch."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -12950,60 +12873,6 @@ def test_process_user_guide_returns_false_no_guide():
         assert result is False
 
 
-def test_update_sidebar_with_cli_no_files():
-    """Test _update_sidebar_with_cli does nothing with empty cli_files."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_sidebar_with_cli([])
-        # No crash is success
-
-
-def test_update_sidebar_with_cli_no_quarto_yml():
-    """Test _update_sidebar_with_cli does nothing when no _quarto.yml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._update_sidebar_with_cli(["reference/cli.qmd"])
-        # No crash is success
-
-
-def test_update_sidebar_with_cli_creates_section():
-    """Test _update_sidebar_with_cli adds CLI section to sidebar."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = Path(tmp_dir) / "great-docs" / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-        config = {
-            "website": {"sidebar": [{"id": "reference", "title": "API Reference", "contents": []}]}
-        }
-        quarto_yml.write_text(_format_yaml(config), encoding="utf-8")
-        docs._update_sidebar_with_cli(["reference/cli-main.qmd"])
-        content = _parse_yaml(quarto_yml.read_text(encoding="utf-8"))
-        sidebar_ids = [s.get("id") for s in content["website"]["sidebar"] if isinstance(s, dict)]
-        assert "cli-reference" in sidebar_ids
-
-
-def test_update_sidebar_with_cli_updates_existing():
-    """Test _update_sidebar_with_cli updates existing CLI section."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = Path(tmp_dir) / "great-docs" / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-        config = {
-            "website": {
-                "sidebar": [
-                    {"id": "cli-reference", "title": "CLI Reference", "contents": ["old.qmd"]}
-                ]
-            }
-        }
-        quarto_yml.write_text(_format_yaml(config), encoding="utf-8")
-        docs._update_sidebar_with_cli(["new-cli.qmd"])
-        content = _parse_yaml(quarto_yml.read_text(encoding="utf-8"))
-        cli_section = next(
-            s for s in content["website"]["sidebar"] if s.get("id") == "cli-reference"
-        )
-        assert cli_section["contents"] == ["new-cli.qmd"]
-
-
 def test_detect_module_name_from_pyproject():
     """Test _detect_module_name finds module from pyproject.toml packages."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -14923,7 +14792,7 @@ def test_build_with_cli_documentation(tmp_path):
     with (
         stubbed_build(
             docs, _detect_package_name="mypkg", _get_package_metadata={"cli_enabled": True}
-        ) as stubs,
+        ),
         patch("great_docs._cliref.click.discover", return_value=cli_info) as discover,
         patch("great_docs._cliref.render.write_pages", return_value=cli_files) as write_pages,
     ):
@@ -14931,7 +14800,8 @@ def test_build_with_cli_documentation(tmp_path):
 
     discover.assert_called_once()
     write_pages.assert_called_once_with(docs._config, docs.build_dir, cli_info, report=print)
-    stubs.steps["_update_sidebar_with_cli"].assert_called_once()
+    sidebars = read_quarto_yml(docs.build_dir)["website"]["sidebar"]
+    assert [s["contents"] for s in sidebars if s["id"] == "cli-reference"] == [cli_files]
 
 
 def test_build_with_sections(tmp_path):
@@ -24525,67 +24395,6 @@ def test_type_information_write_extends_builder_items():
         assert mock_builder.items[0].name == "mypkg.types.T"
 
 
-class TestUpdateSidebarWithCli:
-    """Tests for _update_sidebar_with_cli."""
-
-    def test_adds_cli_sidebar_section(self):
-        """Creates cli-reference sidebar section with contents."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.build_dir / "_quarto.yml"
-            config = {
-                "website": {
-                    "sidebar": [
-                        {"id": "reference", "contents": ["reference/MyClass.qmd"]},
-                    ]
-                }
-            }
-            with open(quarto_yml, "w") as f:
-                write_yaml(config, f)
-            docs._update_sidebar_with_cli(["reference/cli/hello.qmd", "reference/cli/world.qmd"])
-            result = read_yaml(open(quarto_yml))
-            sidebar = result["website"]["sidebar"]
-            cli_section = next(
-                s for s in sidebar if isinstance(s, dict) and s.get("id") == "cli-reference"
-            )
-            assert cli_section["contents"] == ["reference/cli/hello.qmd", "reference/cli/world.qmd"]
-
-    def test_updates_existing_cli_section(self):
-        """Updates contents of an existing cli-reference section."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.build_dir / "_quarto.yml"
-            config = {
-                "website": {
-                    "sidebar": [
-                        {"id": "cli-reference", "title": "CLI Reference", "contents": ["old.qmd"]},
-                    ]
-                }
-            }
-            with open(quarto_yml, "w") as f:
-                write_yaml(config, f)
-            docs._update_sidebar_with_cli(["new.qmd"])
-            result = read_yaml(open(quarto_yml))
-            cli_section = next(
-                s for s in result["website"]["sidebar"] if s.get("id") == "cli-reference"
-            )
-            assert cli_section["contents"] == ["new.qmd"]
-
-    def test_empty_cli_files_returns_early(self):
-        """Returns early for empty cli_files list."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.build_dir / "_quarto.yml"
-            with open(quarto_yml, "w") as f:
-                write_yaml({"website": {"sidebar": []}}, f)
-            docs._update_sidebar_with_cli([])
-            result = read_yaml(open(quarto_yml))
-            assert result["website"]["sidebar"] == []
-
-
 class TestCopyUserGuideToDocs:
     """User guide publication checks"""
 
@@ -25558,64 +25367,6 @@ class TestProcessSectionsBatch9:
             (tmp / "recipes" / "notes.txt").write_text("not qmd")
             docs = GreatDocs(project_path=tmp_dir)
             assert docs._process_sections(discover_user_guide(docs)) == 0
-
-
-class TestUpdateSidebarWithCliBatch9:
-    """Additional _update_sidebar_with_cli coverage: API link already present."""
-
-    def test_skips_api_link_when_already_present(self):
-        """Does not duplicate API link if reference sidebar already has one."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.build_dir / "_quarto.yml"
-            config = {
-                "website": {
-                    "sidebar": [
-                        {
-                            "id": "reference",
-                            "contents": [
-                                {"text": "API", "href": "reference/index.qmd"},
-                                "reference/MyClass.qmd",
-                            ],
-                        },
-                    ]
-                }
-            }
-            with open(quarto_yml, "w") as f:
-                write_yaml(config, f)
-            docs._update_sidebar_with_cli(["cli.qmd"])
-            result = read_yaml(open(quarto_yml))
-            ref_section = next(
-                s for s in result["website"]["sidebar"] if s.get("id") == "reference"
-            )
-            # Should still have just one API link
-            api_count = sum(
-                1 for c in ref_section["contents"] if isinstance(c, dict) and c.get("text") == "API"
-            )
-            assert api_count == 1
-
-    def test_no_website_key(self):
-        """Handles missing website key in config."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.build_dir / "_quarto.yml"
-            with open(quarto_yml, "w") as f:
-                write_yaml({"project": {"type": "website"}}, f)
-            # Should not raise
-            docs._update_sidebar_with_cli(["cli.qmd"])
-            result = read_yaml(open(quarto_yml))
-            assert "cli-reference" in str(result)
-
-    def test_no_quarto_yml(self):
-        """Returns early if _quarto.yml doesn't exist."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            # No _quarto.yml created
-            docs._update_sidebar_with_cli(["cli.qmd"])
-            # Should not raise
 
 
 class TestHomepageHeroBatch9:

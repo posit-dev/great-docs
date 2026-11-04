@@ -33,6 +33,7 @@ from great_docs._content import code_includes
 from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import discover_exports, parse_dunder_all
 from great_docs._reference.probe import detect_docstring_style
+from great_docs._website import quarto_yml as quarto_yml_file
 from tests.support import discover_user_guide, make_run, write_config
 
 # ── Setup: make test-packages/synthetic importable ───────────────────────────
@@ -802,7 +803,8 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
     cli_files = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
     assert cli_files, "No CLI files generated"
 
-    docs._update_sidebar_with_cli(cli_files)
+    with quarto_yml_file.edit(docs.build_dir, docs._config) as quarto_config:
+        quarto_yml_file.apply(quarto_config, cli_render.contribution(docs._config, cli_files))
 
     quarto_yml = docs.build_dir / "_quarto.yml"
     assert quarto_yml.exists(), "_quarto.yml was not created"
@@ -852,7 +854,8 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     cli_info = _discover_cli(docs, detected_name)
     assert cli_info is not None
     cli_files = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
-    docs._update_sidebar_with_cli(cli_files)
+    with quarto_yml_file.edit(docs.build_dir, docs._config) as quarto_config:
+        quarto_yml_file.apply(quarto_config, cli_render.contribution(docs._config, cli_files))
 
     # Process user guide
     docs._process_user_guide(run.user_guide, run.has_api_reference)

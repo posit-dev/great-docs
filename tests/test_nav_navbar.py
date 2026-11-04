@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 
 from great_docs import GreatDocs
+from great_docs._cliref import render as cli_render
 from great_docs._contribution import NavbarLink
 from great_docs._website import quarto_yml
 from great_docs._website.navigation import navbar
@@ -245,7 +246,9 @@ def test_user_guide_link_precedes_the_translated_reference(tmp_path: Path):
 def test_cli_reference_link_is_labelled_in_the_site_language(tmp_path: Path):
     docs = _french_site(tmp_path, "", BLOG)
 
-    docs._update_sidebar_with_cli(["reference/cli/index.qmd"])
+    contribution = cli_render.contribution(docs._config, ["reference/cli/index.qmd"])
+    with quarto_yml.edit(docs.build_dir, docs._config) as quarto_config:
+        quarto_yml.apply(quarto_config, contribution)
 
     assert _built_labels(docs) == ["Blog", "Référence"]
 
