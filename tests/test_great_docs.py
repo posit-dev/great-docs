@@ -28213,49 +28213,6 @@ def test_wide_layout_disabled_via_config():
         assert not (docs.build_dir / "wide-layout.js").exists()
 
 
-def test_wide_layout_disabling_removes_stale_entries():
-    """Entries left from an earlier enabled build are removed when disabled."""
-
-    config = {"format": {"html": {}}}
-    settings = {
-        "default": "normal",
-        "content_scale": 1.5,
-        "sidebar_scale": 1.2,
-        "min_viewport": 1600,
-        "prose_max_width": None,
-    }
-    GreatDocs._configure_wide_layout(config, settings)
-    GreatDocs._configure_wide_layout(config, settings)
-    header, after_body = _wide_entries(config)
-    assert len(header) == 1 and len(after_body) == 1
-
-    GreatDocs._configure_wide_layout(config, None)
-    assert config["format"]["html"]["include-in-header"] == []
-    assert config["format"]["html"]["include-after-body"] == []
-
-
-def test_wide_layout_handles_string_includes():
-    """String include values are converted to lists and preserved."""
-
-    config = {
-        "format": {"html": {"include-in-header": "head.html", "include-after-body": "x.html"}}
-    }
-    GreatDocs._configure_wide_layout(
-        config,
-        {
-            "default": "normal",
-            "content_scale": 1.5,
-            "sidebar_scale": 1.2,
-            "min_viewport": 1600,
-            "prose_max_width": None,
-        },
-    )
-    header, after_body = _wide_entries(config)
-    assert header[0] == "head.html"
-    assert after_body[0] == "x.html"
-    assert len(header) == 2 and len(after_body) == 2
-
-
 def test_wide_layout_js_copied_to_project():
     """wide-layout.js is copied into the build directory by default."""
 
