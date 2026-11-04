@@ -670,6 +670,12 @@ class TestSectionVersionScoping:
         assert _compute_excluded_section_dirs("0.1", None) == set()
         assert _compute_excluded_section_dirs("0.1", []) == set()
 
+    def test_malformed_section_entries_are_ignored(self):
+        # The section reader reports and skips non-mapping entries; the
+        # versioned build must survive the same configuration.
+        sections = ["examples", {"dir": "recipes", "versions": ["0.3"]}]
+        assert _compute_excluded_section_dirs("0.2", sections) == {"recipes"}
+
     def test_in_excluded_section(self):
         excluded = {"recipes", "migrations"}
         assert _in_excluded_section(Path("recipes/01-example.qmd"), excluded)
@@ -3678,6 +3684,53 @@ class TestRunVersionedBuild:
         assert result["success"] is True
         assert (tmp_path / "source-0.2" / "old-only.qmd").exists()
         assert not (source / "old-only.qmd").exists()
+
+    def test_section_versions_exclude_section_from_other_versions(self, tmp_path: Path):
+        """Omit a section from every version its `versions` list leaves out"""
+        from unittest.mock import patch
+
+        from great_docs.config import Config
+
+        source = tmp_path / "source"
+        _make_source_tree(
+            source,
+            {
+                "index.qmd": "---\ntitle: Home\n---\nHi",
+                "migrations/v2.qmd": "---\ntitle: Migrate\n---\nMove to 0.2.",
+            },
+        )
+
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+        (project_root / "great-docs.yml").write_text(
+            'sections:\n  - title: Migration Guides\n    dir: migrations\n    versions: ["0.2"]\n',
+            encoding="utf-8",
+        )
+
+        def mock_render(build_dirs, **kwargs):
+            results = []
+            for d in build_dirs:
+                site_dir = d / "_site"
+                site_dir.mkdir(parents=True, exist_ok=True)
+                (site_dir / "index.html").write_text("<html/>")
+                results.append((str(d), 0, "", "", []))
+            return results
+
+        with patch(
+            "great_docs._versions.build.render_versions_parallel",
+            side_effect=mock_render,
+        ):
+            result = run_versioned_build(
+                source_dir=source,
+                project_root=project_root,
+                versions_config=["0.2", "0.1"],
+                config=Config(project_root),
+            )
+
+        assert result["success"] is True
+        assert "migrations/v2.html" in result["pages_by_version"]["0.2"]
+        assert "migrations/v2.html" not in result["pages_by_version"]["0.1"]
+        assert not (tmp_path / "source-0.1" / "migrations" / "v2.qmd").exists()
 
     def test_badge_expiry_raw_passed_through(self, tmp_path: Path):
         from unittest.mock import patch
