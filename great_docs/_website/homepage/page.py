@@ -214,7 +214,9 @@ def write_readme(
     if without_badges is not None:
         body = without_badges
 
-    if hero_html and config.hero_enabled:
+    # Test that the hero rendered, not `hero.enabled`: a logo-hero file or a README hero
+    # block also turns the hero on.
+    if hero_html:
         hero_name = config.hero_name
         if hero_name is None:
             hero_name = metadata.get("name") or package_name

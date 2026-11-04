@@ -10931,6 +10931,45 @@ def test_create_index_from_readme_hero_strips_duplicate_h1():
         assert "Features" in content
 
 
+@pytest.mark.parametrize(
+    ("logo_file", "readme_hero"),
+    [
+        pytest.param("logo-hero.svg", "", id="logo-hero-file"),
+        pytest.param(
+            None,
+            '<div align="center">\n'
+            "_A tagline_\n"
+            "[![PyPI](https://img.shields.io/badge/pypi-v1-blue)](https://pypi.org)\n"
+            "</div>\n\n",
+            id="readme-hero",
+        ),
+    ],
+)
+def test_create_index_from_readme_auto_hero_strips_duplicate_h1(
+    tmp_path: Path, logo_file: str | None, readme_hero: str
+):
+    """
+    Remove the README title that repeats the hero name when the hero is not configured
+    """
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "testpkg"\ndescription = "Desc"\n', encoding="utf-8"
+    )
+    (tmp_path / "README.md").write_text(f"# testpkg\n\n{readme_hero}Some text.\n", encoding="utf-8")
+    if logo_file:
+        (tmp_path / logo_file).write_text("<svg/>", encoding="utf-8")
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs._config = write_config(tmp_path)
+    docs.build_dir.mkdir(parents=True, exist_ok=True)
+
+    docs._create_index_from_readme(
+        discover_user_guide(docs), has_api_reference=False, force_rebuild=True
+    )
+
+    content = (docs.build_dir / "index.qmd").read_text(encoding="utf-8")
+    assert "gd-hero-name" in content
+    assert "## testpkg" not in content
+
+
 def test_create_index_from_readme_hero_name_true_keeps_title(tmp_path: Path):
     """
     Keep the README title when `hero.name` is `True` without raising `AttributeError`
