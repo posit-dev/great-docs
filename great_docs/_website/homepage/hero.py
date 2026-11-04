@@ -8,6 +8,7 @@ when the project has a hero logo file or its README has a centred block with a l
 from __future__ import annotations
 
 from dataclasses import dataclass
+from html import escape
 from typing import TYPE_CHECKING, Any
 
 from ..._content import publish
@@ -167,18 +168,16 @@ def render(
         if isinstance(logo, dict):
             light = logo.get("light")
             dark = logo.get("dark")
-            alt = logo.get("alt", "Logo")
+            alt = escape(logo.get("alt", "Logo"))
             if light and dark and light != dark:
                 logo_html = (
-                    f'<img src="{light}" alt="{alt}" class="gd-hero-logo gd-only-light" style="max-height:{height}" />\n'
-                    f'<img src="{dark}" alt="{alt}" class="gd-hero-logo gd-only-dark" style="max-height:{height}" />'
+                    f'<img src="{escape(light)}" alt="{alt}" class="gd-hero-logo gd-only-light" style="max-height:{height}" />\n'
+                    f'<img src="{escape(dark)}" alt="{alt}" class="gd-hero-logo gd-only-dark" style="max-height:{height}" />'
                 )
             elif light:
-                logo_html = f'<img src="{light}" alt="{alt}" class="gd-hero-logo" style="max-height:{height}" />'
+                logo_html = f'<img src="{escape(light)}" alt="{alt}" class="gd-hero-logo" style="max-height:{height}" />'
         elif isinstance(logo, str):
-            logo_html = (
-                f'<img src="{logo}" alt="Logo" class="gd-hero-logo" style="max-height:{height}" />'
-            )
+            logo_html = f'<img src="{escape(logo)}" alt="Logo" class="gd-hero-logo" style="max-height:{height}" />'
         logo_html = publish.rebase_references(
             logo_html, layout.config_path, build_dir / "index.qmd", layout=layout, pages=pages
         )
@@ -186,21 +185,21 @@ def render(
     name = config.hero_name
     if name is None:
         name = metadata.get("name") or package_name
-    name_html = f'<p class="gd-hero-name">{name}</p>' if name else ""
+    name_html = f'<p class="gd-hero-name">{escape(str(name), quote=False)}</p>' if name else ""
 
     tagline = config.hero_tagline
     if tagline is None:
         tagline = hero.tagline or metadata.get("description", "")
-    tagline_html = f'<p class="gd-hero-tagline">{tagline}</p>' if tagline else ""
+    tagline_html = (
+        f'<p class="gd-hero-tagline">{escape(tagline, quote=False)}</p>' if tagline else ""
+    )
 
     badges_html = ""
     if hero.badges:
-        items = [
-            f'<a href="{badge.url}"><img alt="{badge.alt}" src="{badge.img}" /></a>'
-            if badge.url
-            else f'<img alt="{badge.alt}" src="{badge.img}" />'
-            for badge in hero.badges
-        ]
+        items: list[str] = []
+        for badge in hero.badges:
+            image = f'<img alt="{escape(badge.alt)}" src="{escape(badge.img)}" />'
+            items.append(f'<a href="{escape(badge.url)}">{image}</a>' if badge.url else image)
         badges_html = '<div class="gd-hero-badges">\n' + "\n".join(items) + "\n</div>"
 
     parts = [part for part in (logo_html, name_html, tagline_html, badges_html) if part]

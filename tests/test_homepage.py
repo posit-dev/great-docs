@@ -1,14 +1,17 @@
 import shutil
 import subprocess
 from collections.abc import Callable
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import NoReturn
 
 import pytest
 
+from great_docs import GreatDocs
 from great_docs._layout import Layout
 from great_docs._website.homepage import landing, readme, source
 from great_docs._website.homepage.readme import Badge
+from tests.support import homepage_hero, homepage_margin, write_config
 
 
 def _write(root: Path, *names: str) -> None:
@@ -310,3 +313,60 @@ def test_bump_heading_levels_outside_code():
 )
 def test_strip_duplicate_title(markdown: str, expected: str):
     assert readme.strip_duplicate_title(markdown, " MyPkg ") == expected
+
+
+class _Markup(HTMLParser):
+    """The text and start-tag attributes of an HTML fragment, with references decoded"""
+
+    def __init__(self, fragment: str) -> None:
+        super().__init__()
+        self.texts: list[str] = []
+        self.attrs: list[dict[str, str | None]] = []
+        self.feed(fragment)
+        self.close()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.attrs.append(dict(attrs))
+
+    def handle_data(self, data: str) -> None:
+        self.texts.append(data)
+
+
+def test_hero_shows_markup_characters_as_written(tmp_path: Path):
+    _ = (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n', encoding="utf-8")
+    logo = {"light": "https://cdn.example/logo.svg?a=1&b=2", "alt": 'The "Logo"'}
+    badge = {
+        "alt": 'say "hi"',
+        "img": "https://img.example/b.svg?a=1&b=2",
+        "url": 'https://example.com/?q="x"&r=<y>',
+    }
+    hero = {"name": 'Tom & "Jerry"', "tagline": "x < y & z", "logo": logo, "badges": [badge]}
+    _ = write_config(tmp_path, {"hero": hero})
+
+    html, _ = homepage_hero(GreatDocs(project_path=tmp_path))
+    markup = _Markup(html)
+
+    assert {'Tom & "Jerry"', "x < y & z"} <= set(markup.texts)
+    assert any(attrs.get("src") == logo["light"] for attrs in markup.attrs)
+    assert any(attrs.get("alt") == logo["alt"] for attrs in markup.attrs)
+    assert {"href": badge["url"]} in markup.attrs
+    assert {"alt": badge["alt"], "src": badge["img"]} in markup.attrs
+
+
+def test_sidebar_shows_markup_characters_as_written(tmp_path: Path):
+    _ = (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n', encoding="utf-8")
+    author = {
+        "name": "Ada <Lovelace>",
+        "role": 'R&D "lead"',
+        "affiliation": "Lab <1>",
+        "homepage": 'https://ada.example/?a="b"&c=<d>',
+    }
+    funding = {"name": "Fund & <Co>", "roles": ["<Sponsor>"], "ror": 'https://ror.org/"x"'}
+    _ = write_config(tmp_path, {"authors": [author], "funding": funding})
+
+    markup = _Markup(homepage_margin(GreatDocs(project_path=tmp_path)))
+
+    texts = {author["name"], author["role"], author["affiliation"], funding["name"], "<Sponsor>"}
+    assert texts <= set(markup.texts)
+    assert {"href": author["homepage"], "title": "Website"} in markup.attrs
+    assert {"href": funding["ror"], "title": "Research Organization Registry"} in markup.attrs
