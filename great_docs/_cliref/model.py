@@ -26,6 +26,9 @@ class CliOption(TypedDict, total=False):
     type: str | None
     """The value type in upper case, or `None` for a flag."""
 
+    choices: list[str]
+    """The values a Click `Choice` accepts, as typed on the command line."""
+
     default: object
     """The default value, or `None` when the option has none."""
 
@@ -50,6 +53,9 @@ class CliOption(TypedDict, total=False):
     hidden: bool
     """Whether the option is left out of the reference."""
 
+    deprecated: bool | str
+    """Whether the option is deprecated, or Click's deprecation message for it."""
+
 
 class CliArgument(TypedDict, total=False):
     """A positional argument of a command"""
@@ -66,6 +72,9 @@ class CliArgument(TypedDict, total=False):
     type: str | None
     """The value type in upper case, or `None` for text."""
 
+    choices: list[str]
+    """The values a Click `Choice` accepts, as typed on the command line."""
+
     default: object
     """The default value, or `None` when the argument has none."""
 
@@ -74,6 +83,9 @@ class CliArgument(TypedDict, total=False):
 
     nargs: int
     """The number of values the argument takes; `-1` means any number."""
+
+    deprecated: bool | str
+    """Whether the argument is deprecated, or Click's deprecation message for it."""
 
 
 class CliCommand(TypedDict, total=False):
@@ -100,8 +112,8 @@ class CliCommand(TypedDict, total=False):
     examples: list[str]
     """The lines of the examples block."""
 
-    deprecated: bool
-    """Whether the command is marked deprecated."""
+    deprecated: bool | str
+    """Whether the command is deprecated, or Click's deprecation message for it."""
 
     hidden: bool
     """Whether the command is left out of the reference."""

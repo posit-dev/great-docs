@@ -18,11 +18,12 @@ import re
 import subprocess
 import sys
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, cast
 
 from .._api_diff import CliCommandInfo, CliOptionInfo
 from .._build.steps import USER_CODE_ERRORS
@@ -503,10 +504,17 @@ def extract_option(param: Any) -> CliOption | None:
     # suppress the type for every flag rather than match the name.
     opt_type = None if param.is_flag or type_name.upper() == "BOOL" else type_name.upper()
 
-    return {
+    help_str = param.help or ""
+    deprecated = getattr(param, "deprecated", False)
+    if deprecated:
+        # The page adds its own deprecation notice, so omit Click's appended notice.
+        notice = f"(DEPRECATED: {deprecated})" if isinstance(deprecated, str) else "(DEPRECATED)"
+        help_str = help_str.removesuffix(notice).rstrip()
+
+    info: CliOption = {
         "names": names,
         "name_display": ", ".join(names),
-        "help": param.help or "",
+        "help": help_str,
         "type": opt_type,
         "default": default,
         "required": param.required,
@@ -516,7 +524,12 @@ def extract_option(param: Any) -> CliOption | None:
         "show_default": getattr(param, "show_default", False),
         "is_eager": param.is_eager,
         "hidden": getattr(param, "hidden", False),
+        "deprecated": deprecated,
     }
+    choices = extract_choices(param)
+    if choices is not None:
+        info["choices"] = choices
+    return info
 
 
 def extract_argument(param: Any) -> CliArgument:
@@ -535,13 +548,40 @@ def extract_argument(param: Any) -> CliArgument:
     """
     type_name = param.type.name if hasattr(param.type, "name") else str(param.type)
 
-    return {
+    info: CliArgument = {
         "name": param.name,
         "name_display": param.human_readable_name,
         "type": type_name.upper() if type_name != "TEXT" else None,
         "required": param.required,
         "nargs": param.nargs,
+        "deprecated": getattr(param, "deprecated", False),
     }
+    choices = extract_choices(param)
+    if choices is not None:
+        info["choices"] = choices
+    return info
+
+
+def extract_choices(param: Any) -> list[str] | None:
+    """
+    Extract accepted command-line values from a Click `Choice`
+
+    Parameters
+    ----------
+    param
+        The Click option or argument.
+
+    Returns
+    -------
+    :
+        The accepted values in declaration order, with `Enum` members represented by their
+        names. `None` if the parameter's type does not declare choices.
+    """
+    # Typer vendors Click, so recognise choices without relying on class identity.
+    choices = getattr(param.type, "choices", None)
+    if not isinstance(choices, (list, tuple)):
+        return None
+    return [c.name if isinstance(c, Enum) else str(c) for c in cast(Sequence[object], choices)]
 
 
 def parse_help_parts(help_text: str) -> tuple[str, list[str]]:
