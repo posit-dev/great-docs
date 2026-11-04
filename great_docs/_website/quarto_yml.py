@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from yaml12 import parse_yaml
 
 from .._utils import write_quarto_yml
+from .navigation import navbar as nav_navbar
 
 if TYPE_CHECKING:
     from .._contribution import Contribution
@@ -301,10 +302,11 @@ def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
     """
     Add a build step's navigation to the Quarto configuration
 
-    Each link is added to `website.navbar.left` unless its `href` is already present.
-    It precedes the first item whose `href` matches its `before` target, or is appended
-    when no target is set or found. Repeated contributions add each link only once.
-    Configurations without `website.navbar.left` are unchanged.
+    A link is added to `website.navbar.left` unless an item already has the same `href`
+    or, for Great Docs' own items such as Reference, a target in the same directory.
+    The link precedes the first item whose `href` matches its `before` target. It is
+    appended when no target is set or found. Repeated contributions add each link only
+    once. Configurations without `website.navbar.left` are unchanged.
 
     Parameters
     ----------
@@ -321,14 +323,13 @@ def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
     if not navbar or "left" not in navbar:
         return
     items = cast("list[Any]", navbar["left"])
-    hrefs = [
-        cast("dict[str, Any]", item).get("href") if isinstance(item, dict) else None
-        for item in items
-    ]
     for link in contribution.navbar:
-        if link.href in hrefs:
+        if nav_navbar.has_item(items, link.href):
             continue
+        hrefs = [
+            cast("dict[str, Any]", item).get("href") if isinstance(item, dict) else None
+            for item in items
+        ]
         before = link.before
         position = hrefs.index(before) if before is not None and before in hrefs else len(items)
         items.insert(position, {"text": link.text, "href": link.href})
-        hrefs.insert(position, link.href)

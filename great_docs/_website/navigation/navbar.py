@@ -26,6 +26,7 @@ __all__ = [
     "USER_GUIDE",
     "OwnItem",
     "add_link",
+    "has_item",
     "icon_labels",
     "reorder",
 ]
@@ -134,6 +135,31 @@ def add_link(
         position = len(items) if reference is None else reference
     items.insert(position, {"text": link.text, "href": link.href})
     return True
+
+
+def has_item(items: Sequence[object], href: str) -> bool:
+    """
+    Check whether the navbar's left side already has an item for a target
+
+    Parameters
+    ----------
+    items
+        Entries on the navbar's left side.
+    href
+        The target of a link that may be added.
+
+    Returns
+    -------
+    :
+        Whether an item has the same `href` or, when `href` belongs to one of Great Docs'
+        own items, an `href` that belongs to the same item. A site has one Reference item,
+        whether it opens the API or the command-line reference.
+    """
+    hrefs = [_field(item, "href") for item in items]
+    if href in hrefs:
+        return True
+    own = next((item for item in _OWN_ITEMS if item.owns(href)), None)
+    return own is not None and any(own.owns(existing) for existing in hrefs)
 
 
 def reorder(quarto_config: dict[str, Any], config: Config) -> None:

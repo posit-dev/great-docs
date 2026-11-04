@@ -216,6 +216,26 @@ def test_apply_adds_a_link_whose_text_is_in_the_navbar_with_another_href():
     assert left == [news, {"text": "Changelog", "href": "changelog.qmd"}]
 
 
+def test_apply_skips_a_link_whose_own_item_is_in_the_navbar():
+    """Keep one Reference item, whichever reference page it opens"""
+    left = [{"text": "Référence", "href": "reference/index.qmd"}]
+    cli = Contribution(navbar=(NavbarLink("Référence", "reference/cli/index.qmd"),))
+
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, cli)
+
+    assert left == [{"text": "Référence", "href": "reference/index.qmd"}]
+
+
+def test_apply_adds_a_link_beside_another_own_item():
+    guide = {"text": "User Guide", "href": "user-guide/index.qmd"}
+    left = [guide]
+    cli = Contribution(navbar=(NavbarLink("Reference", "reference/cli/index.qmd"),))
+
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, cli)
+
+    assert left == [guide, {"text": "Reference", "href": "reference/cli/index.qmd"}]
+
+
 @pytest.mark.parametrize(
     "quarto_config",
     [{}, {"website": {}}, {"website": {"navbar": {}}}, {"website": {"navbar": {"right": []}}}],
