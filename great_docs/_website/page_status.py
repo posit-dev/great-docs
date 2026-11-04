@@ -86,9 +86,21 @@ def write(config: Config, build_dir: Path, statuses: Mapping[str, str]) -> None:
     _ = (build_dir / "_page_status.json").write_text(json.dumps(data), encoding="utf-8")
 
 
-def inject(config: Config, build_dir: Path) -> None:
+def inject(build_dir: Path) -> None:
     """
-    Embed status data before the badge script when both files exist
+    Embed page status data before the badge script
+
+    Leave the configuration unchanged if `_quarto.yml` or `_page_status.json`
+    is missing, the HTML format is absent, or status data is already embedded.
+
+    Parameters
+    ----------
+    build_dir
+        The Quarto project directory containing `_quarto.yml` and `_page_status.json`.
+
+    Returns
+    -------
+    :
     """
     status_path = build_dir / "_page_status.json"
     if not status_path.is_file() or not quarto_yml.path(build_dir).is_file():
@@ -111,7 +123,7 @@ def inject(config: Config, build_dir: Path) -> None:
         json.loads(status_path.read_text(encoding="utf-8")),
         before=anchor,
     )
-    quarto_yml.write(build_dir, quarto_config, config)
+    quarto_yml.write(build_dir, quarto_config)
 
 
 def process(config: Config, layout: Layout, build_dir: Path) -> bool:
@@ -124,7 +136,7 @@ def process(config: Config, layout: Layout, build_dir: Path) -> bool:
     if not statuses:
         return False
     write(config, build_dir, statuses)
-    inject(config, build_dir)
+    inject(build_dir)
     return True
 
 

@@ -281,7 +281,7 @@ class GreatDocs:
 
         # Create the great-docs directory
         self.build_dir.mkdir(parents=True, exist_ok=True)
-        quarto_yml.write_initial(self.build_dir, self._config)
+        quarto_yml.write_initial(self.build_dir)
 
         # Create necessary subdirectories
         scripts_dir = self.build_dir / "scripts"
@@ -1160,7 +1160,7 @@ class GreatDocs:
             ):
                 changed = True
             if changed:
-                quarto_yml.write(self.build_dir, quarto_config, self._config)
+                quarto_yml.write(self.build_dir, quarto_config)
 
             label = "📰" if section.blog else "📂"
             print(f"   {label} {section.title}: {len(published.pages)} post(s) from {section.dir}/")
@@ -1219,13 +1219,13 @@ class GreatDocs:
         for link, after in published.navbar:
             quarto_config = quarto_yml.read(self.build_dir, seed_website=True)
             if nav_navbar.add_link(quarto_config, link, self._config, after=after):
-                quarto_yml.write(self.build_dir, quarto_config, self._config)
+                quarto_yml.write(self.build_dir, quarto_config)
         if published.resources or published.render_excludes:
             contribution = Contribution(
                 resources=tuple(published.resources),
                 render_excludes=tuple(published.render_excludes),
             )
-            with quarto_yml.edit(self.build_dir, self._config, seed_website=True) as quarto_config:
+            with quarto_yml.edit(self.build_dir, seed_website=True) as quarto_config:
                 quarto_yml.apply(quarto_config, contribution)
         return published.pages
 
@@ -1431,7 +1431,7 @@ class GreatDocs:
                         {"text": nav_navbar.USER_GUIDE.label(self._config), "href": href},
                     )
 
-        quarto_yml.write(self.build_dir, config, self._config)
+        quarto_yml.write(self.build_dir, config)
 
     def _process_user_guide(self, guide: UserGuide | None, has_api_reference: bool) -> bool:
         """
@@ -2284,7 +2284,7 @@ class GreatDocs:
         reference_block.configure(self._config, config, importable_name, sections)
 
         # Write back to file
-        quarto_yml.write(self.build_dir, config, self._config)
+        quarto_yml.write(self.build_dir, config)
 
         print(f"Added API reference configuration to {quarto_yml.path(self.build_dir)}")
 
@@ -2340,7 +2340,7 @@ class GreatDocs:
             warn=_print_warning,
         )
 
-        quarto_yml.write(self.build_dir, quarto_config, self._config)
+        quarto_yml.write(self.build_dir, quarto_config)
 
         print(f"Updated {quarto_yml.path(self.build_dir)} with great-docs configuration")
 
@@ -2440,7 +2440,7 @@ class GreatDocs:
                 f"Pre-rendered {done.count} terminal recording(s) "
                 f"({done.manifest_bytes / 1024:.0f} KB of player data)"
             )
-            with quarto_yml.edit(self.build_dir, self._config, seed_website=True) as quarto_config:
+            with quarto_yml.edit(self.build_dir, seed_website=True) as quarto_config:
                 quarto_yml.apply(quarto_config, done.contribution)
 
     def uninstall(self) -> None:
@@ -2670,7 +2670,7 @@ class GreatDocs:
         )
         if contribution is None:
             return "No releases found; skipped"
-        with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+        with quarto_yml.edit(self.build_dir) as quarto_config:
             quarto_yml.apply(quarto_config, contribution)
         return "Changelog from GitHub Releases"
 
@@ -2770,7 +2770,7 @@ class GreatDocs:
         cli_files = cli_render.write_pages(self._config, self.build_dir, cli_info, report=print)
         if not cli_files:
             return f"No {kind} pages generated"  # pragma: no cover
-        with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+        with quarto_yml.edit(self.build_dir) as quarto_config:
             quarto_yml.apply(quarto_config, cli_render.contribution(self._config, cli_files))
         n_pages = cli_render.count_pages(cli_files)
         print(f"Updated sidebar with {n_pages} CLI reference page(s)")
@@ -2810,7 +2810,7 @@ class GreatDocs:
         )
         if not mcp_files:
             return "No MCP pages generated"
-        with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+        with quarto_yml.edit(self.build_dir) as quarto_config:
             quarto_yml.apply(quarto_config, mcp_build.contribution(self._config, mcp_files))
         print(f"Updated sidebar with {cli_render.count_pages(mcp_files)} MCP reference page(s)")
         return f"{len(mcp_info.get('tools', []))} MCP tool page(s) + manifest"
@@ -2887,7 +2887,7 @@ class GreatDocs:
         output = tags.write(self._config, self.layout, report=print)
         if output is None:
             return Skipped("no tagged pages found")
-        with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+        with quarto_yml.edit(self.build_dir) as quarto_config:
             if output.page_data is not None:
                 inline_data.add(
                     quarto_config, "__GD_TAGS_DATA__", output.page_data, before="page-tags.js"
@@ -2984,7 +2984,7 @@ class GreatDocs:
                 "Dynamic introspection failed for a resolved item, retrying with static analysis..."
             )
             log.detail(str(e))
-            with quarto_yml.edit(self.build_dir, self._config) as quarto_config:
+            with quarto_yml.edit(self.build_dir) as quarto_config:
                 if "api-reference" in quarto_config:
                     quarto_config["api-reference"]["dynamic"] = False
         try:

@@ -803,7 +803,7 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
     cli_files = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
     assert cli_files, "No CLI files generated"
 
-    with quarto_yml_file.edit(docs.build_dir, docs._config) as quarto_config:
+    with quarto_yml_file.edit(docs.build_dir) as quarto_config:
         quarto_yml_file.apply(quarto_config, cli_render.contribution(docs._config, cli_files))
 
     quarto_yml = docs.build_dir / "_quarto.yml"
@@ -854,7 +854,7 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     cli_info = _discover_cli(docs, detected_name)
     assert cli_info is not None
     cli_files = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
-    with quarto_yml_file.edit(docs.build_dir, docs._config) as quarto_config:
+    with quarto_yml_file.edit(docs.build_dir) as quarto_config:
         quarto_yml_file.apply(quarto_config, cli_render.contribution(docs._config, cli_files))
 
     # Process user guide

@@ -163,7 +163,7 @@ def refresh(
         print(f"Updated API reference config with {len(sections)} section(s)")
 
         # The sidebar reads the saved sections from `_quarto.yml`.
-        quarto_yml.write(build_dir, quarto_config, site_config)
+        quarto_yml.write(build_dir, quarto_config)
 
         reference_sections.update_sidebar(site_config, build_dir)
 
@@ -177,7 +177,7 @@ def refresh(
             user_sections = reference_sections.from_reference_config(reference_config)
             if user_sections:
                 quarto_config["api-reference"]["sections"] = user_sections
-                quarto_yml.write(build_dir, quarto_config, site_config)
+                quarto_yml.write(build_dir, quarto_config)
                 reference_sections.update_sidebar(site_config, build_dir)
                 print(f"✅ Applied {len(user_sections)} section(s) from great-docs.yml")
             else:

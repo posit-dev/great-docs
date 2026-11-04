@@ -424,4 +424,4 @@ def update_sidebar(site_config: Config, build_dir: Path) -> None:
         }
     ]
 
-    quarto_yml.write(build_dir, quarto_config, site_config)
+    quarto_yml.write(build_dir, quarto_config)

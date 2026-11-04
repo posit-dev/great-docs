@@ -182,14 +182,14 @@ class TestSiteIncludes:
 
     def test_data_added_between_updates_survives(self, tmp_path: Path):
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n', encoding="utf-8")
-        config = write_config(tmp_path, "tags:\n  enabled: true\n" + self.SETTINGS)
+        write_config(tmp_path, "tags:\n  enabled: true\n" + self.SETTINGS)
         docs = GreatDocs(project_path=str(tmp_path))
         docs.build_dir.mkdir(parents=True)
-        quarto_yml.write_initial(docs.build_dir, config)
+        quarto_yml.write_initial(docs.build_dir)
 
         # The build adds tag data between updates, before the script that reads it.
         docs._update_quarto_config(make_run())
-        with quarto_yml.edit(docs.build_dir, config) as quarto_config:
+        with quarto_yml.edit(docs.build_dir) as quarto_config:
             inline_data.add(quarto_config, "__GD_TAGS_DATA__", {}, before="page-tags.js")
         docs._update_quarto_config(make_run())
 

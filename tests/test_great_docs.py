@@ -2706,7 +2706,7 @@ def test_assets_added_to_quarto_config():
         docs._copy_assets()
 
         # Update Quarto config
-        write_initial_quarto_yml(docs.build_dir, docs._config)
+        write_initial_quarto_yml(docs.build_dir)
         docs._update_quarto_config(make_run())
 
         # Read the generated _quarto.yml
@@ -2746,7 +2746,7 @@ def test_dark_only_logo_does_not_crash_quarto_config():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        write_initial_quarto_yml(docs.build_dir, docs._config)
+        write_initial_quarto_yml(docs.build_dir)
         docs._update_quarto_config(make_run())
 
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -2772,7 +2772,7 @@ def test_assets_not_added_to_quarto_config_when_missing():
         docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         # Update Quarto config without assets
-        write_initial_quarto_yml(docs.build_dir, docs._config)
+        write_initial_quarto_yml(docs.build_dir)
         docs._update_quarto_config(make_run())
 
         # Read the generated _quarto.yml
@@ -2808,7 +2808,7 @@ def test_assets_added_to_config_after_copy():
 
         # Create great-docs directory and initial config (simulating _prepare_build_directory)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        write_initial_quarto_yml(docs.build_dir, docs._config)
+        write_initial_quarto_yml(docs.build_dir)
         docs._update_quarto_config(make_run())
 
         # Read initial config - should NOT have assets/**
@@ -2848,7 +2848,7 @@ def test_assets_config_update_only_when_copied():
 
         # Create great-docs directory and initial config
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        write_initial_quarto_yml(docs.build_dir, docs._config)
+        write_initial_quarto_yml(docs.build_dir)
         docs._update_quarto_config(make_run())
 
         # Try to copy assets when none exist: should return False
@@ -2879,7 +2879,7 @@ def test_skill_render_exclusion_uses_enumerated_globs():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        write_initial_quarto_yml(docs.build_dir, docs._config)
+        write_initial_quarto_yml(docs.build_dir)
         docs._update_quarto_config(make_run())
 
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -5611,7 +5611,7 @@ class TestFaviconLinkInjection:
         docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         # Run the config build
-        write_initial_quarto_yml(docs.build_dir, docs._config)
+        write_initial_quarto_yml(docs.build_dir)
         docs._update_quarto_config(make_run())
 
         # Read the generated _quarto.yml
@@ -5710,7 +5710,7 @@ def test_config_markdown_pages_disabled():
         assert docs._config.markdown_pages_widget is False
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        write_initial_quarto_yml(docs.build_dir, docs._config)
+        write_initial_quarto_yml(docs.build_dir)
         docs._update_quarto_config(make_run())
 
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -5747,7 +5747,7 @@ def test_config_markdown_pages_widget_disabled():
         assert docs._config.markdown_pages_widget is False
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        write_initial_quarto_yml(docs.build_dir, docs._config)
+        write_initial_quarto_yml(docs.build_dir)
         docs._update_quarto_config(make_run())
 
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -5777,7 +5777,7 @@ def test_config_markdown_pages_default_enabled():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        write_initial_quarto_yml(docs.build_dir, docs._config)
+        write_initial_quarto_yml(docs.build_dir)
         docs._update_quarto_config(make_run())
 
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -5813,7 +5813,7 @@ class TestPositBadgeInjection:
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        write_initial_quarto_yml(docs.build_dir, docs._config)
+        write_initial_quarto_yml(docs.build_dir)
         docs._update_quarto_config(make_run())
 
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -5885,7 +5885,7 @@ class TestPositBadgeInjection:
 
             docs = GreatDocs(project_path=tmp_dir)
             docs.build_dir.mkdir(parents=True, exist_ok=True)
-            write_initial_quarto_yml(docs.build_dir, docs._config)
+            write_initial_quarto_yml(docs.build_dir)
             docs._update_quarto_config(make_run())
             docs._update_quarto_config(make_run())  # second run
 
@@ -8022,7 +8022,7 @@ def test_user_guide_navbar_link_targets_an_explicit_guide_first_page(tmp_path: P
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir(parents=True)
     navbar = {"left": [{"text": "Reference", "href": "reference/index.qmd"}]}
-    write_quarto_yml(docs.build_dir, {"website": {"navbar": navbar}}, docs._config)
+    write_quarto_yml(docs.build_dir, {"website": {"navbar": navbar}})
     guide = discover_user_guide(docs)
     assert guide is not None
 
@@ -8053,7 +8053,7 @@ def test_user_guide_navbar_link_is_added_once_in_a_translated_site(tmp_path: Pat
     write_config(tmp_path, "site:\n  lang: de\n")
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir(parents=True)
-    write_quarto_yml(docs.build_dir, {"website": {"navbar": {"left": []}}}, docs._config)
+    write_quarto_yml(docs.build_dir, {"website": {"navbar": {"left": []}}})
     guide = discover_user_guide(docs)
     assert guide is not None
 
@@ -28746,7 +28746,7 @@ def test_status_data_injection_no_json():
     with tempfile.TemporaryDirectory() as tmp:
         gd = GreatDocs(project_path=tmp)
         gd.build_dir = Path(tmp)
-        page_status.inject(gd._config, gd.build_dir)
+        page_status.inject(gd.build_dir)
 
 
 def test_status_data_injection_injects():
@@ -28761,7 +28761,7 @@ def test_status_data_injection_injects():
         quarto_config = {"format": {"html": {"include-after-body": ["page-status-badges.js"]}}}
         (project / "_quarto.yml").write_text(format_yaml(quarto_config))
 
-        page_status.inject(gd._config, gd.build_dir)
+        page_status.inject(gd.build_dir)
 
         result = read_yaml(project / "_quarto.yml")
         entries = result["format"]["html"]["include-after-body"]
@@ -28780,7 +28780,7 @@ def test_status_data_injection_string_body():
         quarto_config = {"format": {"html": {"include-after-body": "existing.js"}}}
         (project / "_quarto.yml").write_text(format_yaml(quarto_config))
 
-        page_status.inject(gd._config, gd.build_dir)
+        page_status.inject(gd.build_dir)
 
         result = read_yaml(project / "_quarto.yml")
         entries = result["format"]["html"]["include-after-body"]
@@ -28792,12 +28792,12 @@ def test_inline_status_data_injection_keeps_generated_header(tmp_path: Path):
     """Preserve the generated configuration header when embedding status data"""
     gd = GreatDocs(project_path=str(tmp_path))
     gd.build_dir.mkdir()
-    write_initial_quarto_yml(gd.build_dir, gd._config)
-    with edit_quarto_yml(gd.build_dir, gd._config) as config:
+    write_initial_quarto_yml(gd.build_dir)
+    with edit_quarto_yml(gd.build_dir) as config:
         config["format"]["html"]["include-after-body"] = ["page-status-badges.js"]
     (gd.build_dir / "_page_status.json").write_text("{}", encoding="utf-8")
 
-    page_status.inject(gd._config, gd.build_dir)
+    page_status.inject(gd.build_dir)
 
     assert "_DATA__=" in (gd.build_dir / "_quarto.yml").read_text(encoding="utf-8")
     validate_build_dir(gd.build_dir)
@@ -29661,7 +29661,7 @@ def test_announcement_position_in_meta_tag():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        write_initial_quarto_yml(docs.build_dir, docs._config)
+        write_initial_quarto_yml(docs.build_dir)
         docs._update_quarto_config(make_run())
 
         with open(docs.build_dir / "_quarto.yml", "r") as f:
@@ -29683,7 +29683,7 @@ def test_announcement_position_defaults_above_in_meta_tag():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        write_initial_quarto_yml(docs.build_dir, docs._config)
+        write_initial_quarto_yml(docs.build_dir)
         docs._update_quarto_config(make_run())
 
         with open(docs.build_dir / "_quarto.yml", "r") as f:
