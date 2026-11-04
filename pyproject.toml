@@ -116,6 +116,7 @@ addopts = [
 ]
 markers = [
     "dedicated: test targets one or more specific gdtest_* packages (not a generic sweep)",
+    "network: allow external host lookups and socket connections in the test process",
 ]
 
 [tool.coverage.run]

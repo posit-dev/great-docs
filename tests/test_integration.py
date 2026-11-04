@@ -172,6 +172,7 @@ def test_can_list_test_packages():
     print(f"\nTest packages that will be tested: {TEST_PACKAGES}")
 
 
+@pytest.mark.network
 def test_skill_install_from_url_live(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """
     Install a skill from the published Great Docs site

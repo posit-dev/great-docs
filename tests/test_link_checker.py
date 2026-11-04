@@ -1320,11 +1320,12 @@ class TestResultStructure:
             quarto_yml.write_text("project:\n  type: website\n")
 
             docs = GreatDocs(project_path=tmp_dir)
-            results = docs.check_links(
-                include_source=False,
-                include_docs=True,
-                timeout=2.0,
-            )
+            with patch("requests.head", return_value=Mock(status_code=404)):
+                results = docs.check_links(
+                    include_source=False,
+                    include_docs=True,
+                    timeout=2.0,
+                )
 
             if results["broken"]:
                 broken = results["broken"][0]
@@ -1444,7 +1445,8 @@ class TestCLIIntegration:
             "https://this-url-definitely-does-not-exist-xyz123.com/"
         )
 
-        result = runner.invoke(cli, ["check-links", "--docs-only", "--timeout", "2"])
+        with patch("requests.head", return_value=Mock(status_code=404)):
+            result = runner.invoke(cli, ["check-links", "--docs-only", "--timeout", "2"])
 
         # Should exit with error due to broken link
         assert result.exit_code == 1

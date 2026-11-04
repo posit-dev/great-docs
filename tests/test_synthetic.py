@@ -34,7 +34,7 @@ from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import discover_exports, parse_dunder_all
 from great_docs._reference.probe import detect_docstring_style
 from great_docs._website import quarto_yml as quarto_yml_file
-from tests.support import discover_user_guide, make_run, write_config
+from tests.support import StubRemote, discover_user_guide, make_run, write_config
 
 # ── Setup: make test-packages/synthetic importable ───────────────────────────
 
@@ -1001,6 +1001,7 @@ def test_L3_bibliography_wired_into_quarto_config(pkg_name: str, tmp_path: Path)
     from yaml12 import read_yaml
 
     docs = GreatDocs(project_path=str(pkg_dir))
+    docs._remote = StubRemote()
 
     # The generated great-docs.yml already carries the bibliography key, so the
     # build directory prep alone should copy the file and wire the config.

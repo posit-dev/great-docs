@@ -1360,12 +1360,13 @@ Also see https://httpbin.org/status/404 for errors.
         quarto_yml.write_text("project:\n  type: website\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        results = docs.check_links(
-            include_source=False,
-            include_docs=True,
-            timeout=5.0,
-            verbose=False,
-        )
+        with patch("requests.head", return_value=MagicMock(status_code=200)):
+            results = docs.check_links(
+                include_source=False,
+                include_docs=True,
+                timeout=5.0,
+                verbose=False,
+            )
 
         assert results["total"] >= 2
         assert "by_file" in results
@@ -5608,6 +5609,7 @@ class TestFaviconLinkInjection:
             (tmp / "logo.svg").write_text(_MINIMAL_SVG)
 
         docs = GreatDocs(project_path=tmp_dir)
+        docs._remote = StubRemote()
         docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         # Run the config build
@@ -17295,6 +17297,7 @@ def _make_uqc_docs(tmp_dir, gd_yml_content="", pyproject_content=None, quarto_co
 
     docs = GreatDocs(project_path=tmp_dir)
     docs._config = config
+    docs._remote = StubRemote()
 
     quarto_yml = docs.build_dir / "_quarto.yml"
     quarto_yml.parent.mkdir(parents=True, exist_ok=True)
@@ -25806,6 +25809,7 @@ class TestUpdateQuartoConfigStrNormalizationBatch10:
         )
         (tmp / "great-docs.yml").write_text("display_name: My\n")
         docs = GreatDocs(project_path=tmp_dir)
+        docs._remote = StubRemote()
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "w") as f:
