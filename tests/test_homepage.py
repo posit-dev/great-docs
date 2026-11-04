@@ -9,8 +9,9 @@ import pytest
 
 from great_docs import GreatDocs
 from great_docs._layout import Layout
-from great_docs._website.homepage import landing, readme, source
+from great_docs._website.homepage import landing, page, readme, source
 from great_docs._website.homepage.readme import Badge
+from great_docs._yaml import split_front_matter
 from tests.support import homepage_hero, homepage_margin, write_config
 
 
@@ -371,3 +372,26 @@ def test_sidebar_shows_markup_characters_as_written(tmp_path: Path):
     assert texts <= set(markup.texts)
     assert {"href": author["homepage"], "title": "Website"} in markup.attrs
     assert {"href": funding["ror"], "title": "Research Organization Registry"} in markup.attrs
+
+
+def test_blended_homepage_keeps_front_matter_whose_title_contains_three_dashes(tmp_path: Path):
+    """Preserve the front matter and body when a title contains `---`"""
+    _ = (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n', encoding="utf-8")
+    docs = GreatDocs(project_path=tmp_path)
+    docs.build_dir.mkdir()
+    content = "---\ntitle: A---B\ndescription: Guide\n---\n\n# A---B\n\nWelcome.\n"
+
+    index_qmd = page.write_blended(
+        docs._config,
+        docs.layout,
+        docs.build_dir,
+        content,
+        metadata={},
+        package_name="pkg",
+        pages=docs._page_map(None),
+        page_authors=[],
+    )
+
+    front_matter, body = split_front_matter(index_qmd.read_text(encoding="utf-8"))
+    assert front_matter.data == {"title": "A---B", "description": "Guide", "toc": False}
+    assert body.lstrip().startswith("Welcome.")
