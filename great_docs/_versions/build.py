@@ -683,6 +683,9 @@ def _compute_excluded_section_dirs(
 
     excluded: set[str] = set()
     for section in section_configs:
+        # The section reader reports and skips entries that are not mappings
+        if not isinstance(section, dict):
+            continue
         section_dir = section.get("dir", "")
         section_versions = section.get("versions")
         if section_dir and section_versions and target_tag not in section_versions:
@@ -1986,9 +1989,11 @@ def run_versioned_build(  # pragma: no cover
     badge_expiry_raw
         Global `new_is_old` configuration value.
     config
-        Project configuration. A historical version built from a snapshot or
-        git tag uses it to rebuild its own inventory and interlinks index;
-        omitting it leaves such a version publishing the live checkout's.
+        Project configuration. Its sections' `versions` lists decide which
+        versions publish each section. A historical version built from a
+        snapshot or git tag uses it to rebuild its own inventory and
+        interlinks index; omitting it leaves such a version publishing the
+        live checkout's.
     layout
         Resolved project paths.
     default_description
@@ -2078,6 +2083,7 @@ def run_versioned_build(  # pragma: no cover
             entry,
             versions,
             project_root=project_root,
+            section_configs=config.sections if config is not None else None,
             badge_expiry=badge_expiry,
             config=config,
             documented_symbols=documented_symbols,
