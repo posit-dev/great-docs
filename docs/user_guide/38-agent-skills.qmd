@@ -136,8 +136,8 @@ Keep the file under 500 lines. Link out to `llms-full.txt` for anything that nee
 
 ### Extra Reference Files
 
-You can include companion files alongside `SKILL.md` in the same directory. These are copied to
-the `.well-known/agent-skills/<name>/` output and are available for agents to reference:
+Place companion files alongside `SKILL.md` or in subdirectories such as `references/`.
+Great Docs copies them to `.well-known/agent-skills/<name>/` so agents can fetch them:
 
 ```
 skills/
@@ -149,6 +149,15 @@ skills/
 
 These companion files are particularly useful for migration guides, code recipes, or schema
 references that are too detailed for the main `SKILL.md` but valuable when an agent needs them.
+
+The Skills page lists every companion file in a directory tree and displays Markdown, YAML,
+Python and shell files in full. Great Docs excludes files and directories whose names start
+with `.` from both the published files and the page.
+
+Keep each skill and its companion files in a separate directory. Great Docs treats skills in
+the project root, the docs source directory or any ancestor of the docs source directory as
+having no companion files. This prevents unrelated project files from being published with
+the skill.
 
 ### Automatic Generation (Fallback)
 
