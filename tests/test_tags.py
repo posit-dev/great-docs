@@ -781,6 +781,16 @@ class TestInlineData:
             {"text": "<script>window.__GD_X__={};</script>"},
         ]
 
+    def test_inserts_before_an_embedded_reading_script(self):
+        """Insert data before an embedded script identified by a name it defines"""
+        embedded = {"text": "<script>function renderPageBadge() {}</script>"}
+        entries: list[Any] = ["first.html", embedded]
+        quarto_config: dict[str, Any] = {"format": {"html": {"include-after-body": entries}}}
+
+        inline_data.add(quarto_config, "__GD_X__", {}, before="page-status-badges.js")
+
+        assert entries == ["first.html", {"text": "<script>window.__GD_X__={};</script>"}, embedded]
+
     def test_keeps_an_earlier_assignment(self):
         """Keep the first assignment when the same global is added twice"""
         quarto_config: dict[str, Any] = {}

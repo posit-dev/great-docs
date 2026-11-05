@@ -104,7 +104,7 @@ class InlineData:
     """The value, serialisable as JSON"""
 
     before: str
-    """Text that identifies the after-body script entry that reads the global"""
+    """The file name of the Great Docs script that reads the global, such as `page-tags.js`"""
 
 
 @dataclass(frozen=True)

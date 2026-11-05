@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from .._icons import get_icon_svg
 from .._translations import get_translation
-from . import inline_data, page_scan, quarto_yml, scripts
+from . import inline_data, page_scan, quarto_yml
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -115,13 +115,11 @@ def inject(build_dir: Path) -> None:
     entries = cast("list[Any]", entries)
     if any("__GD_STATUS_DATA__=" in str(entry) for entry in entries):
         return
-    script = scripts.named("page-status-badges.js")
-    anchor = next((str(entry) for entry in entries if script.is_entry(entry)), script.name)
     inline_data.add(
         quarto_config,
         "__GD_STATUS_DATA__",
         json.loads(status_path.read_text(encoding="utf-8")),
-        before=anchor,
+        before="page-status-badges.js",
     )
     quarto_yml.write(build_dir, quarto_config)
 
