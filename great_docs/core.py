@@ -75,7 +75,7 @@ class GreatDocs:
 
     def __init__(
         self,
-        project_path: str | None = None,
+        project_path: str | os.PathLike[str] | None = None,
         *,
         config_path: str | None = None,
         create: bool = False,
