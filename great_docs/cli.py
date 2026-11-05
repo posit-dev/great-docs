@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import click
 
-from . import __version__
+from . import __version__, _manifest
 from ._build import freeze as freeze_cache
 from ._build import from_repo as repository
 from ._build import quarto, serve
@@ -18,6 +18,7 @@ from ._content import user_guide
 from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
+from ._manifest import ManifestError
 from ._website import changelog as changelog_page
 from ._website import quarto_yml
 from .config import ConfigError
@@ -132,43 +133,29 @@ def _detect_package_manager(project_root: Path) -> str:
 
 
 def _detect_optional_dependencies(project_root: Path) -> list[str]:
-    """Detect optional dependency groups from pyproject.toml.
-
-    Returns a list of optional dependency group names that are likely
-    related to documentation or development (e.g., 'dev', 'docs', 'test').
-
-    This helps generate appropriate pip install commands like:
-    pip install -e ".[dev,docs]"
     """
-    pyproject_path = project_root / "pyproject.toml"
-    if not pyproject_path.exists():
-        return []
+    Choose the extras a documentation workflow installs
 
+    Parameters
+    ----------
+    project_root
+        The directory holding the packaging files.
+
+    Returns
+    -------
+    :
+        The sorted names of extras related to documentation, development or testing, such
+        as `dev`, `docs` or `test`, for a command like `pip install -e ".[dev,docs]"`. An empty
+        list when there are none or the project's metadata cannot be read.
+    """
     try:
-        try:
-            import tomllib
-        except ImportError:  # pragma: no cover
-            import tomli as tomllib  # pragma: no cover
-
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-
-        optional_deps = data.get("project", {}).get("optional-dependencies", {})
-        if not optional_deps:
-            return []
-
-        # Look for common dev/docs dependency group names
-        doc_related_extras = []
-        for key in optional_deps.keys():
-            key_lower = key.lower()
-            # Include extras that are likely needed for documentation builds
-            if any(term in key_lower for term in ["dev", "doc", "notebook", "test", "all", "full"]):
-                doc_related_extras.append(key)
-
-        return sorted(doc_related_extras)
-
-    except Exception:
+        extras = _manifest.read(project_root)["optional_dependencies"]
+    except ManifestError:
         return []
+
+    # Documentation workflows may also need development, notebook or test dependencies.
+    terms = ["dev", "doc", "notebook", "test", "all", "full"]
+    return sorted(extra for extra in extras if any(term in extra.lower() for term in terms))
 
 
 class OrderedGroup(click.Group):

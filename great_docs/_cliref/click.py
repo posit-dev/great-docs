@@ -25,8 +25,10 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, cast
 
+from .. import _manifest
 from .._api_diff import CliCommandInfo, CliOptionInfo
 from .._build.steps import USER_CODE_ERRORS
+from .._manifest import ManifestError
 from .._subprocess import TEXT_MODE_KWARGS
 from .model import CliArgument, CliCommand, CliOption
 
@@ -378,30 +380,19 @@ def entry_point_name(package_root: Path, target: str) -> str | None:
         The first script name whose entry point matches `target`, searching `[project.scripts]`
         before `[project.gui-scripts]`. If none matches, the first name in `[project.scripts]`,
         or in `[project.gui-scripts]` if there are no console scripts. `None` when neither
-        table lists scripts or the file is missing or unreadable.
+        table lists scripts or a packaging file cannot be read or parsed.
     """
-    pyproject_path = package_root / "pyproject.toml"
-    if not pyproject_path.exists():
-        return None
-
     try:
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-    except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError):
+        scripts = _manifest.read(package_root)["scripts"]
+    except ManifestError:
         return None
 
-    project = data.get("project", {})
-    tables = [project.get("scripts", {}), project.get("gui-scripts", {})]
-    for table in tables:
-        for name, reference in table.items():
-            # Whitespace and optional extras do not change the command an entry point names.
-            if (
-                isinstance(reference, str)
-                and re.sub(r"\s", "", reference.split("[", 1)[0]) == target
-            ):
-                return name
+    for name, reference in scripts.items():
+        # Whitespace and optional extras do not change the command an entry point names.
+        if re.sub(r"\s", "", reference.split("[", 1)[0]) == target:
+            return name
 
-    return next((name for table in tables for name in table), None)
+    return next(iter(scripts), None)
 
 
 def extract_command(cmd: Any, name: str, parent_path: str = "") -> CliCommand:
