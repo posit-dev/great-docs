@@ -1,10 +1,10 @@
 """
-Build API reference configuration and navigation
+Build API reference configuration
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..config import Config
@@ -110,7 +110,7 @@ def configure(
     sections: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """
-    Add reference settings and navigation to a Quarto mapping
+    Add the API reference settings to a Quarto mapping
 
     Parameters
     ----------
@@ -128,16 +128,13 @@ def configure(
     :
         The `api-reference` block added to the Quarto configuration.
     """
-    # The index title names the API; the navbar label covers API, CLI and MCP references.
     ref_title = site_config.reference_title or "API Reference"
-    nav_title = site_config.reference_title or "Reference"
     ref_desc = site_config.reference_desc
 
     if not site_config.reference_title and site_config.lang != "en":
         from .._translations import get_translation
 
         ref_title = get_translation("api_reference", site_config.lang)
-        nav_title = get_translation("reference", site_config.lang)
 
     api_ref_config: dict[str, Any] = {
         "package": importable_name,
@@ -173,26 +170,5 @@ def configure(
     print(f"Auto-generated {len(sections)} section(s) from package exports")
 
     quarto_config["api-reference"] = api_ref_config
-
-    if "website" in quarto_config and "navbar" in quarto_config["website"]:
-        navbar = quarto_config["website"]["navbar"]
-        left = navbar.get("left", [])
-        has_ref = any(
-            isinstance(item, dict)
-            and cast("dict[str, Any]", item).get("href") == "reference/index.qmd"
-            for item in left
-        )
-        if not has_ref:
-            left.append({"text": nav_title, "href": "reference/index.qmd"})
-            navbar["left"] = left
-
-    if "website" in quarto_config and "sidebar" in quarto_config["website"]:
-        sidebars = quarto_config["website"]["sidebar"]
-        has_ref_sidebar = any(
-            isinstance(s, dict) and cast("dict[str, Any]", s).get("id") == "reference"
-            for s in sidebars
-        )
-        if not has_ref_sidebar:
-            sidebars.append({"id": "reference", "contents": "reference/"})
 
     return api_ref_config

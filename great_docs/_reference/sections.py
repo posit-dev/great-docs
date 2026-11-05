@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, cast
 
-from .._contribution import Sidebar
+from .._contribution import Contribution, NavbarLink, Sidebar
 
 if TYPE_CHECKING:
     from ..config import Config
@@ -409,3 +409,30 @@ def sidebar(site_config: Config, api_block: dict[str, Any]) -> Sidebar:
         contents.append({"section": heading, "contents": links})
 
     return Sidebar("reference", None, tuple(contents))
+
+
+def contribution(site_config: Config, api_block: dict[str, Any]) -> Contribution:
+    """
+    Build the API reference sidebar and navbar link
+
+    Parameters
+    ----------
+    site_config
+        The project's configuration, including the navbar label and the language of
+        the navbar and sidebar links.
+    api_block
+        The API reference configuration whose sections the sidebar lists.
+
+    Returns
+    -------
+    :
+        The `reference` sidebar and a navbar link to `reference/index.qmd`. The navbar
+        label is `reference.title` when set, otherwise "Reference" in the site's language.
+    """
+    from .._translations import get_translation
+
+    label = site_config.reference_title or get_translation("reference", site_config.lang)
+    return Contribution(
+        navbar=(NavbarLink(text=label, href="reference/index.qmd"),),
+        sidebars=(sidebar(site_config, api_block),),
+    )

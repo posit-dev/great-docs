@@ -154,6 +154,7 @@ from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
 from great_docs._content import user_guide
 from great_docs._content.naming import strip_numeric_prefix
+from great_docs._contribution import NavbarLink
 from great_docs._github import GithubRepo
 from great_docs._layout import Layout
 from great_docs._project import Project, locate_package_init, read_manifest
@@ -6202,6 +6203,26 @@ def test_reference_sidebar_lists_the_api_sections():
         assert {"text": "my_func", "href": "reference/my_func.qmd"} in contents[2]["contents"]
 
 
+@pytest.mark.parametrize(
+    ("settings", "label"),
+    [
+        ("", "Reference"),
+        ("site:\n  lang: fr\n", "Référence"),
+        ("reference:\n  title: Docs\n", "Docs"),
+    ],
+)
+def test_reference_navigation_links_the_index_from_the_navbar(
+    tmp_path: Path, settings: str, label: str
+):
+    config = write_config(tmp_path, settings)
+    api_block = {"package": "mypkg", "sections": [{"title": "Core", "contents": ["f"]}]}
+
+    contribution = reference_sections.contribution(config, api_block)
+
+    assert contribution.navbar == (NavbarLink(label, "reference/index.qmd"),)
+    assert contribution.sidebars == (reference_sections.sidebar(config, api_block),)
+
+
 def test_reference_sidebar_lists_dict_items():
     """List API reference entries supplied as mappings"""
 
@@ -7358,7 +7379,7 @@ def test_add_api_block_defaults_the_callable_signature_settings():
 
 def test_add_api_block_with_sections():
     """
-    Write API reference sections and their navbar link to `_quarto.yml`
+    Write API reference sections to `_quarto.yml`
     """
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -7370,12 +7391,8 @@ def test_add_api_block_with_sections():
         quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
-        base_config = {
-            "project": {"type": "website"},
-            "website": {"navbar": {"left": []}, "sidebar": []},
-        }
         with open(quarto_yml, "w") as f:
-            write_yaml(base_config, f)
+            write_yaml({"project": {"type": "website"}}, f)
 
         fake_sections = [{"title": "Core", "desc": "", "contents": ["Widget", "helper_fn"]}]
         with patch.object(Exports, "sections", return_value=fake_sections):
@@ -7390,14 +7407,6 @@ def test_add_api_block_with_sections():
         assert "api-reference" in result
         assert result["api-reference"]["package"] == "mypkg"
         assert result["api-reference"]["sections"] == fake_sections
-
-        # Should add Reference link to navbar
-        left = result["website"]["navbar"]["left"]
-        ref_items = [
-            i for i in left if isinstance(i, dict) and i.get("href") == "reference/index.qmd"
-        ]
-
-        assert len(ref_items) == 1
 
 
 def test_prepare_build_directory_creates_structure():
@@ -7416,8 +7425,7 @@ def test_prepare_build_directory_creates_structure():
 
         # This structure check does not require an importable package.
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "sidebar"):
-                prepare_build_directory(docs, make_run(docs))
+            prepare_build_directory(docs, make_run(docs))
 
         # Check directory structure
         assert docs.build_dir.exists()
@@ -7456,12 +7464,11 @@ def test_prepare_build_directory_can_retry_after_missing_header_include(tmp_path
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch("great_docs._build.reference.add_api_block"):
-        with patch.object(reference_sections, "sidebar"):
-            with pytest.raises(FileNotFoundError, match="Header include file not found"):
-                prepare_build_directory(docs, make_run(docs))
-
-            (tmp_path / "header.html").write_text('<meta name="retry">\n')
+        with pytest.raises(FileNotFoundError, match="Header include file not found"):
             prepare_build_directory(docs, make_run(docs))
+
+        (tmp_path / "header.html").write_text('<meta name="retry">\n')
+        prepare_build_directory(docs, make_run(docs))
 
     assert (docs.build_dir / "_quarto.yml").exists()
     assert (docs.build_dir / "_includes" / "header.html").read_text() == ('<meta name="retry">\n')
@@ -7474,8 +7481,7 @@ def test_prepare_build_directory_writes_website_project(tmp_path):
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch("great_docs._build.reference.add_api_block"):
-        with patch.object(reference_sections, "sidebar"):
-            prepare_build_directory(docs, make_run(docs))
+        prepare_build_directory(docs, make_run(docs))
 
     config = read_yaml(docs.build_dir / "_quarto.yml")
     assert config["project"]["type"] == "website"
@@ -7528,8 +7534,7 @@ def test_prepare_build_directory_copies_js_files():
         readme.write_text("# My Pkg\n", encoding="utf-8")
 
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "sidebar"):
-                prepare_build_directory(docs, make_run(docs))
+            prepare_build_directory(docs, make_run(docs))
 
         # The GitHub widget needs a repository; the other core scripts do not.
         assert not (docs.build_dir / "github-widget.js").exists()
@@ -7593,8 +7598,7 @@ def test_prepare_build_directory_copies_bibliography():
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "sidebar"):
-                prepare_build_directory(docs, make_run(docs))
+            prepare_build_directory(docs, make_run(docs))
 
         # .bib copied into build dir by basename
         assert (docs.build_dir / "references.bib").exists()
@@ -7630,8 +7634,7 @@ def test_prepare_build_directory_copies_multiple_bib_and_csl():
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "sidebar"):
-                prepare_build_directory(docs, make_run(docs))
+            prepare_build_directory(docs, make_run(docs))
 
         assert (docs.build_dir / "refs.bib").exists()
         assert (docs.build_dir / "software.bib").exists()
@@ -7659,8 +7662,7 @@ def test_prepare_build_directory_bibliography_missing_warns(capsys):
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "sidebar"):
-                prepare_build_directory(docs, make_run(docs))
+            prepare_build_directory(docs, make_run(docs))
 
         out = capsys.readouterr().out
         assert "Bibliography file not found" in out
@@ -7691,8 +7693,7 @@ def test_bibliography_does_not_set_reference_section_title():
 
         docs = GreatDocs(project_path=tmp_dir)
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "sidebar"):
-                prepare_build_directory(docs, make_run(docs))
+            prepare_build_directory(docs, make_run(docs))
 
         with open(docs.build_dir / "_quarto.yml", encoding="utf-8") as f:
             config = read_yaml(f)
@@ -7718,8 +7719,7 @@ def _prepared_quarto_config(lang: str) -> dict:
 
         docs = GreatDocs(project_path=tmp_dir)
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "sidebar"):
-                prepare_build_directory(docs, make_run(docs))
+            prepare_build_directory(docs, make_run(docs))
 
         with open(docs.build_dir / "_quarto.yml", encoding="utf-8") as f:
             return read_yaml(f)
@@ -7769,8 +7769,7 @@ def test_prepare_build_directory_optional_js_copy_page():
         readme.write_text("# My Pkg\n", encoding="utf-8")
 
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "sidebar"):
-                prepare_build_directory(docs, make_run(docs))
+            prepare_build_directory(docs, make_run(docs))
 
         assert (docs.build_dir / "copy-page.js").exists()
 
@@ -7796,8 +7795,7 @@ def test_prepare_build_directory_cleans_existing():
         stale_file.write_text("old content")
 
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "sidebar"):
-                prepare_build_directory(docs, make_run(docs))
+            prepare_build_directory(docs, make_run(docs))
 
         # Stale file should be gone
         assert not stale_file.exists()
@@ -19770,8 +19768,7 @@ def test_prepare_build_directory_copies_video_embed_js():
         readme.write_text("# My Pkg\n", encoding="utf-8")
 
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "sidebar"):
-                prepare_build_directory(docs, make_run(docs))
+            prepare_build_directory(docs, make_run(docs))
 
         assert (docs.build_dir / "video-embed.js").exists()
 
@@ -21920,8 +21917,7 @@ def test_prepare_build_dir_pre_render_script_exists(tmp_path):
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch("great_docs._build.reference.add_api_block"):
-        with patch.object(reference_sections, "sidebar"):
-            prepare_build_directory(docs, make_run(docs))
+        prepare_build_directory(docs, make_run(docs))
 
     # Script should be copied to scripts/ in the build dir
     assert (docs.build_dir / "scripts" / "prerender.py").exists()
@@ -21939,8 +21935,7 @@ def test_prepare_build_dir_css_file_warning(tmp_path):
     out = io.StringIO()
     with redirect_stdout(out):
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "sidebar"):
-                prepare_build_directory(docs, make_run(docs))
+            prepare_build_directory(docs, make_run(docs))
 
     assert "CSS" in out.getvalue() or "css" in out.getvalue().lower()
 
@@ -21953,8 +21948,7 @@ def test_prepare_build_dir_css_file_exists(tmp_path):
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch("great_docs._build.reference.add_api_block"):
-        with patch.object(reference_sections, "sidebar"):
-            prepare_build_directory(docs, make_run(docs))
+        prepare_build_directory(docs, make_run(docs))
 
     # CSS file should be in the build dir
     assert (docs.build_dir / "custom.css").exists()
