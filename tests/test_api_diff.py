@@ -2620,6 +2620,19 @@ class TestSnapshotAtTagDeep:
         }
         assert set(s1.symbols) != set(s2.symbols)
 
+    def test_tag_read_from_inside_the_project(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """
+        Use tagged source when the working directory contains the same package
+        """
+        _init_two_tag_repo(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        documented = ["sub.Widget", "sub.Gadget"]
+        snap = snapshot_at_tag(tmp_path, "v0.1.0", "mypkg", documented_names=documented)
+
+        assert set(snap.symbols) == {"sub.Widget"}
+
 
 def test_render_evolution_table_callable_via_top_level_import():
     """great_docs.render_evolution_table wraps _api_diff.render_evolution_table."""

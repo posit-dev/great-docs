@@ -611,6 +611,8 @@ def snapshot_from_griffe(
     loader_kwargs: dict = {}
     if search_paths:
         loader_kwargs["search_paths"] = search_paths
+        # A same-named package in the working directory would override these source paths.
+        loader_kwargs["try_relative_path"] = False
 
     pkg = griffe.load(normalized, **loader_kwargs)
 
