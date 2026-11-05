@@ -1711,6 +1711,18 @@ def test_citation_year_from_date_released():
         assert "year = {2023}" in content
 
 
+def test_citation_names_the_package(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "test-package"\nversion = "0.1.0"')
+    citation = {"cff-version": "1.2.0", "title": "Test Package", "authors": []}
+    (tmp_path / "CITATION.cff").write_text(format_yaml(citation))
+    (tmp_path / "great-docs").mkdir()
+
+    write_homepage(GreatDocs(project_path=str(tmp_path)))
+
+    content = (tmp_path / "great-docs" / "citation.qmd").read_text()
+    assert "To cite test-package in publications" in content
+
+
 def test_citation_year_defaults_to_current():
     """Test that citation year defaults to current year when date-released is missing."""
 
