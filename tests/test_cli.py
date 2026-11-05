@@ -3862,6 +3862,10 @@ class TestDetectCurrentPackage:
         (tmp_path / "setup.cfg").write_text("[metadata]\nname = cfg-pkg\n")
         assert _detect_current_package(tmp_path) == "cfg-pkg"
 
+    def test_returns_name_from_poetry(self, tmp_path):
+        (tmp_path / "pyproject.toml").write_text('[tool.poetry]\nname = "poetry-pkg"\n')
+        assert _detect_current_package(tmp_path) == "poetry-pkg"
+
 
 class TestPrintTimingTableVersionedTop:
     def test_top_limits_pages_in_versioned_data(self, capsys):

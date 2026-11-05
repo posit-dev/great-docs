@@ -199,3 +199,52 @@ def test_unreadable_files_raise_naming_the_file(tmp_path: Path, file: str, text:
         path.write_text(text, encoding="utf-8")
     with pytest.raises(ManifestError, match=file):
         _manifest.read(tmp_path)
+
+
+def test_reads_poetry_1_metadata(tmp_path: Path):
+    write(
+        tmp_path,
+        "pyproject.toml",
+        """
+[tool.poetry]
+name = "poetry-pkg"
+description = "From Poetry"
+authors = ["Ada Lovelace <ada@example.com>", "Bob"]
+maintainers = ["Carol <carol@example.com>"]
+repository = "https://github.com/owner/repo"
+homepage = "https://example.com"
+documentation = "https://example.com/docs"
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+""",
+    )
+    manifest = _manifest.read(tmp_path)
+    assert manifest["name"] == "poetry-pkg"
+    assert manifest["description"] == "From Poetry"
+    assert manifest["authors"] == [
+        {"name": "Ada Lovelace", "email": "ada@example.com"},
+        {"name": "Bob"},
+    ]
+    assert manifest["urls"] == {
+        "Repository": "https://github.com/owner/repo",
+        "Homepage": "https://example.com",
+        "Documentation": "https://example.com/docs",
+    }
+    # Poetry 1.x support covers the name, description, authors and URLs only.
+    assert manifest["maintainers"] == []
+    assert manifest["license"] == ""
+    assert manifest["requires_python"] == ""
+    assert manifest["dependencies"] == []
+
+
+def test_project_table_wins_over_poetry(tmp_path: Path):
+    write(
+        tmp_path,
+        "pyproject.toml",
+        '[project]\nname = "pep621"\n\n[tool.poetry]\nname = "poetry"\ndescription = "Poetry"\n',
+    )
+    manifest = _manifest.read(tmp_path)
+    assert manifest["name"] == "pep621"
+    assert manifest["description"] == "Poetry"

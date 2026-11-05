@@ -26,6 +26,9 @@ _T = TypeVar("_T")
 # The word boundary excludes longer names such as `username` from `name = "..."` matches.
 _SETUP_PY_NAME = re.compile(r"\bname\s*=\s*[\"']([^\"']+)[\"']")
 
+# Poetry 1.x authors may combine a name and email as `Name <email>`.
+_POETRY_PERSON = re.compile(r"(.*?)\s*<([^>]*)>\s*")
+
 # SPDX identifiers for recognised OSI-approved licence classifiers.
 _LICENCE_CLASSIFIERS = {
     "MIT License": "MIT",
@@ -130,8 +133,9 @@ def read(root: Path) -> Manifest:
     """
     Read the metadata declared in a project's packaging files
 
-    Use the first declaration of each value: `[project]` in `pyproject.toml`, then `setup.cfg`,
-    then `setup.py`, which supplies only the name.
+    Use the first declaration of each value: `[project]` in `pyproject.toml`, then
+    `[tool.poetry]` for a Poetry 1.x project, then `setup.cfg`, then `setup.py`. Poetry supplies
+    only the name, description, authors and URLs; `setup.py` supplies only the name.
 
     Parameters
     ----------
@@ -152,7 +156,9 @@ def read(root: Path) -> Manifest:
     manifest = _empty()
     pyproject = root / "pyproject.toml"
     if pyproject.is_file():
-        manifest = _first(manifest, _from_pyproject(YamlMapping(_load(pyproject, _parse_toml))))
+        data = YamlMapping(_load(pyproject, _parse_toml))
+        poetry = _from_poetry(data.mapping("tool").mapping("poetry"))
+        manifest = _first(_from_pyproject(data), poetry)
     setup_cfg = root / "setup.cfg"
     if setup_cfg.is_file():
         manifest = _first(manifest, _from_setup_cfg(_load(setup_cfg, _parse_cfg)))
@@ -348,6 +354,41 @@ def _from_pyproject(data: YamlMapping) -> Manifest:
         if include is not None:
             source = package.string("from")
             manifest["declared_packages"].append(f"{source}/{include}" if source else include)
+    return manifest
+
+
+def _from_poetry(poetry: YamlMapping) -> Manifest:
+    """
+    Read the metadata of a Poetry 1.x `[tool.poetry]` table
+
+    Parameters
+    ----------
+    poetry
+        The `[tool.poetry]` table.
+
+    Returns
+    -------
+    :
+        The name, description, authors and the `Repository`, `Homepage` and `Documentation`
+        URLs. An author written as `Name <email>` supplies both parts; any other string
+        supplies only the name.
+    """
+    manifest = _empty()
+    manifest["name"] = poetry.string("name")
+    manifest["description"] = poetry.string("description") or ""
+    for author in _strings(poetry.sequence("authors")):
+        match = _POETRY_PERSON.fullmatch(author)
+        name, email = (match[1], match[2]) if match else (author.strip(), "")
+        person = Person()
+        if name:
+            person["name"] = name
+        if email:
+            person["email"] = email
+        manifest["authors"].append(person)
+    for key in ("repository", "homepage", "documentation"):
+        url = poetry.string(key)
+        if url:
+            manifest["urls"][key.capitalize()] = url
     return manifest
 
 

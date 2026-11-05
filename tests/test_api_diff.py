@@ -2347,6 +2347,13 @@ def test_detect_package_name_from_setup_cfg(tmp_path):
     assert _detect_package_name(tmp_path) == "my_package"
 
 
+def test_detect_package_name_from_poetry(tmp_path):
+    """Reads the package name from a Poetry 1.x `[tool.poetry]` table"""
+    (tmp_path / "pyproject.toml").write_text('[tool.poetry]\nname = "my-package"\n')
+
+    assert _detect_package_name(tmp_path) == "my_package"
+
+
 @patch("great_docs._api_diff.subprocess.run")
 def test_list_version_tags_success(mock_run):
     """Returns sorted version tags."""
