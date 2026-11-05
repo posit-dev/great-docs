@@ -599,8 +599,7 @@ class TestHandleScan:
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
         mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_docs._detect_module_name.return_value = "mypkg"
-        mock_docs._normalize_package_name.return_value = "mypkg"
+        mock_docs._config = mock_config()
         mock_docs._get_package_exports.return_value = []
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             result = asyncio.run(_handle_scan({}))
@@ -610,8 +609,7 @@ class TestHandleScan:
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
         mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_docs._detect_module_name.return_value = "mypkg"
-        mock_docs._normalize_package_name.return_value = "mypkg"
+        mock_docs._config = mock_config()
         mock_docs._get_package_exports.return_value = ["do_thing", "helper"]
         mock_docs._categorise_exports.return_value = {
             "functions": ["do_thing", "helper"],
@@ -627,8 +625,7 @@ class TestHandleScan:
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
         mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_docs._detect_module_name.return_value = "mypkg"
-        mock_docs._normalize_package_name.return_value = "mypkg"
+        mock_docs._config = mock_config()
         mock_docs._get_package_exports.return_value = ["MyClass"]
         mock_docs._categorise_exports.return_value = {
             "classes": ["MyClass"],
@@ -646,8 +643,7 @@ class TestHandleScan:
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
         mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_docs._detect_module_name.return_value = "mypkg"
-        mock_docs._normalize_package_name.return_value = "mypkg"
+        mock_docs._config = mock_config()
         mock_docs._get_package_exports.return_value = ["do_thing"]
         mock_docs._categorise_exports.return_value = {"functions": ["do_thing"]}
         mock_docs._config = mock_config(reference=[{"contents": ["do_thing"]}])
@@ -800,8 +796,7 @@ class TestHandleApiDiff:
     def _patched_docs(self):
         mock_docs = MagicMock()
         mock_docs.layout.package_root = write_pyproject(Path.cwd(), "mypkg")
-        mock_docs._detect_module_name.return_value = "mypkg"
-        mock_docs._normalize_package_name.return_value = "mypkg"
+        mock_docs._config = mock_config()
         return mock_docs
 
     def _mock_snapshot(self, symbols=None):
@@ -1003,8 +998,7 @@ class TestReadResource:
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
         mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_docs._detect_module_name.return_value = "mypkg"
-        mock_docs._normalize_package_name.return_value = "mypkg"
+        mock_docs._config = mock_config()
         mock_docs._get_package_exports.return_value = ["do_thing"]
         mock_docs._categorise_exports.return_value = {"functions": ["do_thing"]}
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
@@ -1186,8 +1180,7 @@ class TestHandleCompletion:
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
         mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_docs._detect_module_name.return_value = "mypkg"
-        mock_docs._normalize_package_name.return_value = "mypkg"
+        mock_docs._config = mock_config()
         mock_docs._get_package_exports.return_value = ["MyClass", "my_func", "other_func"]
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             ref = PromptReference(type="ref/prompt", name="improve-docstrings")
@@ -1213,8 +1206,7 @@ class TestHandleCompletion:
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
         mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_docs._detect_module_name.return_value = "mypkg"
-        mock_docs._normalize_package_name.return_value = "mypkg"
+        mock_docs._config = mock_config()
         mock_docs._get_package_exports.return_value = ["MyClass", "my_func"]
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             ref = ResourceTemplateReference(type="ref/resource", uri="gd://reference/{symbol}")
@@ -1263,8 +1255,7 @@ class TestHandleScanRefConfigDictItem:
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
         mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_docs._detect_module_name.return_value = "mypkg"
-        mock_docs._normalize_package_name.return_value = "mypkg"
+        mock_docs._config = mock_config()
         mock_docs._get_package_exports.return_value = ["do_thing"]
         mock_docs._categorise_exports.return_value = {"functions": ["do_thing"]}
         # Reference config uses dict items, not str items
@@ -1285,8 +1276,7 @@ class TestHandleApiDiffWithSnapshot:
     def _patched_docs(self):
         mock_docs = MagicMock()
         mock_docs.layout.package_root = write_pyproject(Path.cwd(), "mypkg")
-        mock_docs._detect_module_name.return_value = "mypkg"
-        mock_docs._normalize_package_name.return_value = "mypkg"
+        mock_docs._config = mock_config()
         return mock_docs
 
     def _mock_current_snapshot(self):
@@ -1429,8 +1419,7 @@ class TestReadResourceApiSurface:
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
         mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_docs._detect_module_name.return_value = "mypkg"
-        mock_docs._normalize_package_name.return_value = "mypkg"
+        mock_docs._config = mock_config()
         mock_docs._get_package_exports.return_value = []
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             result = asyncio.run(read_resource(self._uri("gd://api-surface")))
@@ -1464,8 +1453,7 @@ class TestReadResourceReference:
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
         mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_docs._detect_module_name.return_value = "mypkg"
-        mock_docs._normalize_package_name.return_value = "mypkg"
+        mock_docs._config = mock_config()
 
         # Build a module-like object that has `my_func` as an attribute
         mock_func = MagicMock()
@@ -1490,8 +1478,7 @@ class TestReadResourceReference:
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
         mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_docs._detect_module_name.return_value = "mypkg"
-        mock_docs._normalize_package_name.return_value = "mypkg"
+        mock_docs._config = mock_config()
 
         mock_mod = MagicMock(spec=[])  # no attributes -> getattr returns None
 

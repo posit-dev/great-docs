@@ -154,6 +154,7 @@ from great_docs._cliref import render as cli_render
 from great_docs._content import user_guide
 from great_docs._content.naming import strip_numeric_prefix
 from great_docs._github import GithubRepo
+from great_docs._project import locate_package_init, read_manifest
 from great_docs._reference import block as reference_block
 from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import (
@@ -362,7 +363,8 @@ def _package_init(docs: GreatDocs, package_name: str) -> Path:
     :
         The file, which must exist.
     """
-    init_file = docs._find_package_init(package_name)
+    package_root = docs.layout.package_root
+    init_file = locate_package_init(package_root, read_manifest(package_root), package_name)
     assert init_file is not None
     return init_file
 
@@ -389,36 +391,6 @@ def test_create_api_sections():
     # Check that we have at least one section with contents
     has_contents = any(section.get("contents") for section in sections)
     assert has_contents
-
-
-def test_find_package_init():
-    """Test finding __init__.py in standard location."""
-    docs = GreatDocs()
-    init_file = docs._find_package_init("great_docs")
-
-    assert init_file is not None
-    assert init_file.exists()
-    assert init_file.name == "__init__.py"
-
-
-def test_find_package_init_with_nested_structure():
-    """Test finding __init__.py in nested directories like python/."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Create a package structure in python/ subdirectory
-        python_dir = Path(tmp_dir) / "python"
-        python_dir.mkdir()
-        package_dir = python_dir / "mypackage"
-        package_dir.mkdir()
-
-        # Create __init__.py with __version__ and __all__
-        init_file = package_dir / "__init__.py"
-        init_file.write_text('__version__ = "1.0.0"\n__all__ = ["MyClass"]')
-
-        docs = GreatDocs(project_path=tmp_dir)
-        found_init = docs._find_package_init("mypackage")
-
-        assert found_init is not None
-        assert found_init == init_file.resolve()
 
 
 def test_cli_import():
@@ -5493,99 +5465,6 @@ class TestPositBadgeInjection:
             assert badge_count == 1
 
 
-def test_normalize_package_name_multiple_formats():
-    """_normalize_package_name replaces hyphens with underscores."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._normalize_package_name("my-cool-package") == "my_cool_package"
-        assert docs._normalize_package_name("already_underscored") == "already_underscored"
-        assert docs._normalize_package_name("simple") == "simple"
-
-
-def test_detect_module_name_from_config():
-    """_detect_module_name uses explicit module setting from config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-        (Path(tmp_dir) / "great-docs.yml").write_text("module: my_custom_module\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._detect_module_name() == "my_custom_module"
-
-
-def test_detect_module_name_from_pyi_stub():
-    """_detect_module_name finds module from .pyi stub file."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-        (Path(tmp_dir) / "my_module.pyi").write_text("def foo() -> int: ...\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._detect_module_name() == "my_module"
-
-
-def test_detect_module_name_from_maturin_minimal():
-    """_detect_module_name reads module-name from [tool.maturin]."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text(
-            '[project]\nname = "pkg"\n[tool.maturin]\nmodule-name = "rust_mod"\n'
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._detect_module_name() == "rust_mod"
-
-
-def test_detect_module_name_from_setuptools_packages_no_dir():
-    """_detect_module_name reads from [tool.setuptools] packages list."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text(
-            '[project]\nname = "pkg"\n[tool.setuptools]\npackages = ["my_lib"]\n'
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._detect_module_name() == "my_lib"
-
-
-def test_detect_module_name_from_hatch_packages():
-    """_detect_module_name reads from [tool.hatch.build.targets.wheel]."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text(
-            '[project]\nname = "pkg"\n'
-            "[tool.hatch.build.targets.wheel]\n"
-            'packages = ["src/hatch_pkg"]\n'
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._detect_module_name() == "hatch_pkg"
-
-
-def test_detect_module_name_falls_back_to_init():
-    """_detect_module_name falls back to _find_package_init when no config found."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "my-pkg"\n')
-        pkg = Path(tmp_dir) / "my_pkg"
-        pkg.mkdir()
-        (pkg / "__init__.py").write_text("__version__ = '1.0'\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._detect_module_name() == "my_pkg"
-
-
-def test_detect_module_name_returns_none():
-    """_detect_module_name returns None when nothing is found."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "mystery"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._detect_module_name() is None
-
-
 def test_build_cli_reference_uses_module_name(tmp_path):
     """Regression: build() discovers the Click CLI in the importable module,
     not the PyPI project name, when the two diverge."""
@@ -5596,9 +5475,8 @@ def test_build_cli_reference_uses_module_name(tmp_path):
     docs.build_dir.mkdir(parents=True)
     (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
-    run = ("_resolve_importable_name", "_detect_module_name")
     with (
-        stubbed_build(docs, run=run),
+        stubbed_build(docs),
         patch("great_docs._cliref.click.discover", return_value=None) as discover,
     ):
         docs.build(refresh=False)
@@ -5856,38 +5734,6 @@ def test_llms_full_written_without_cli_when_cli_module_fails_to_import(tmp_path,
     assert "## CLI" not in (docs.build_dir / "llms-full.txt").read_text()
 
 
-def test_is_compiled_extension_cargo():
-    """_is_compiled_extension returns True when Cargo.toml exists."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-        (Path(tmp_dir) / "Cargo.toml").write_text("[package]\nname = 'mypkg'\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._is_compiled_extension() is True
-
-
-def test_is_compiled_extension_pyi_without_py():
-    """_is_compiled_extension returns True for .pyi without matching .py."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-        (Path(tmp_dir) / "myext.pyi").write_text("def foo() -> int: ...\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._is_compiled_extension() is True
-
-
-def test_is_compiled_extension_false():
-    """_is_compiled_extension returns False for a normal Python package."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._is_compiled_extension() is False
-
-
 def test_entry_point_name():
     """
     Read the first script name from `pyproject.toml`
@@ -5936,60 +5782,6 @@ def test_entry_point_name_no_pyproject_returns_none():
         docs = GreatDocs(project_path=tmp_dir)
 
         assert cli_click.entry_point_name(docs.layout.package_root, "other:cli") is None
-
-
-def test_find_package_init_auto_discovers():
-    """_find_package_init auto-discovers packages with non-matching names."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "completely-different"\n')
-
-        # Create a package with a different name than the project
-        pkg = Path(tmp_dir) / "actual_pkg"
-        pkg.mkdir()
-        (pkg / "__init__.py").write_text("x = 1\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._find_package_init("completely-different")
-
-        assert result is not None
-        assert result.parent.name == "actual_pkg"
-
-
-def test_find_package_init_skips_excluded_dirs():
-    """_find_package_init skips tests/, docs/, .venv/ etc during auto-discovery."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "nonexistent"\n')
-
-        # These should be skipped
-        for d in ["tests", "docs", ".venv", "__pycache__"]:
-            skipped = Path(tmp_dir) / d
-            skipped.mkdir()
-            (skipped / "__init__.py").write_text("")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._find_package_init("nonexistent")
-
-        assert result is None
-
-
-def test_find_package_init_hatch_packages():
-    """_find_package_init uses [tool.hatch.build.targets.wheel.packages]."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text(
-            '[project]\nname = "mypkg"\n'
-            "[tool.hatch.build.targets.wheel]\n"
-            'packages = ["src/hatch_mod"]\n'
-        )
-
-        src = Path(tmp_dir) / "src" / "hatch_mod"
-        src.mkdir(parents=True)
-        (src / "__init__.py").write_text("__all__ = ['x']\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._find_package_init("mypkg")
-
-        assert result is not None
-        assert result.parent.name == "hatch_mod"
 
 
 def test_count_pages_flat_inline():
@@ -7742,16 +7534,6 @@ def test_strip_numeric_prefix_various():
         assert strip_numeric_prefix("001-triple.qmd") == "triple.qmd"
 
 
-def test_normalize_package_name_v2():
-    """_normalize_package_name replaces hyphens with underscores."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._normalize_package_name("my-package") == "my_package"
-        assert docs._normalize_package_name("already_good") == "already_good"
-        assert docs._normalize_package_name("multi-hyphen-name") == "multi_hyphen_name"
-
-
 def test_count_pages_nested_v2():
     """
     Count page paths recursively through sidebar sections
@@ -7874,45 +7656,6 @@ def test_quarto_environment_preserves_existing_pythonpath(monkeypatch):
 
         assert "/existing/path" in env["PYTHONPATH"]
         assert tmp_dir in env["PYTHONPATH"]
-
-
-def test_detect_module_name_from_hatch():
-    """_detect_module_name reads from [tool.hatch.build.targets.wheel.packages]."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "myproj"\n[tool.hatch.build.targets.wheel]\npackages = ["src/hatch_pkg"]\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_module_name()
-
-        assert result == "hatch_pkg"
-
-
-def test_detect_module_name_skips_init_pyi():
-    """_detect_module_name skips __init__.pyi files."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "__init__.pyi").write_text("", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        # Should not return "__init__"
-        result = docs._detect_module_name()
-
-        assert result != "__init__"
-
-
-def test_detect_module_name_fallback_to_package_init():
-    """_detect_module_name falls back to _find_package_init path."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "testpkg"\n', encoding="utf-8")
-        pkg_dir = Path(tmp_dir) / "testpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_module_name()
-
-        assert result == "testpkg"
 
 
 def test_homepage_margin_with_package_name():
@@ -9076,26 +8819,6 @@ def test_create_index_from_readme_citation_two_authors():
 
         assert "Smith" in content
         assert "Jones" in content
-
-
-def test_detect_module_name_no_sources():
-    """_detect_module_name returns None when no clue is found."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_module_name()
-
-        assert result is None
-
-
-def test_detect_module_name_pyproject_parse_error():
-    """_detect_module_name handles malformed pyproject.toml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text("this is not valid toml!!!", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_module_name()
-
-        assert result is None
 
 
 def test_quarto_environment_no_extra_dirs():
@@ -10965,79 +10688,6 @@ def test_prepare_build_directory_cleans_existing():
         assert docs.build_dir.exists()
 
 
-def test_find_package_init_standard_location():
-    """Test _find_package_init finds init in standard location."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        # Create package directory with __init__.py
-        pkg_dir = Path(tmp_dir) / "mypkg"
-        pkg_dir.mkdir()
-        init_file = pkg_dir / "__init__.py"
-        init_file.write_text('__version__ = "1.0"\n')
-
-        result = docs._find_package_init("mypkg")
-
-        assert result is not None
-        assert result.name == "__init__.py"
-
-
-def test_find_package_init_not_found_xyz_pkg():
-    """Test _find_package_init returns None when no package found."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        result = docs._find_package_init("nonexistent_pkg_xyz")
-
-        assert result is None
-
-
-def test_find_package_init_hyphens_to_underscores():
-    """Test _find_package_init normalizes hyphens to underscores."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "my-pkg"\n', encoding="utf-8")
-
-        pkg_dir = Path(tmp_dir) / "my_pkg"
-        pkg_dir.mkdir()
-        init_file = pkg_dir / "__init__.py"
-        init_file.write_text('__version__ = "1.0"\n')
-
-        result = docs._find_package_init("my-pkg")
-
-        assert result is not None
-
-
-def test_find_package_init_pyproject_explicit_packages():
-    """Test _find_package_init uses explicit packages from pyproject.toml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            "[project]\nname = \"mypkg\"\n[tool.setuptools]\npackages = ['custom_pkg']\n",
-            encoding="utf-8",
-        )
-
-        pkg_dir = Path(tmp_dir) / "custom_pkg"
-        pkg_dir.mkdir()
-        init_file = pkg_dir / "__init__.py"
-        init_file.write_text('__version__ = "1.0"\n')
-
-        result = docs._find_package_init("mypkg")
-
-        assert result is not None
-        assert "custom_pkg" in str(result)
-
-
 def test_parse_dunder_all_with_all_simple():
     """Verify that a literal `__all__` list supplies export names"""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -11467,35 +11117,6 @@ def test_create_api_sections_all_types():
         assert "Other" in titles
 
 
-def test_detect_module_name_from_pyproject_loose_check():
-    """Test _detect_module_name finds module from pyproject.toml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            "[project]\nname = \"my-pkg\"\n[tool.great-docs]\nmodule = 'my_pkg'\n",
-            encoding="utf-8",
-        )
-
-        # Create matching package
-        pkg_dir = Path(tmp_dir) / "my_pkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("")
-
-        result = docs._detect_module_name()
-        # Should find my_pkg
-        assert result is not None
-
-
-def test_detect_module_name_no_pyproject():
-    """Test _detect_module_name returns None with no pyproject."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_module_name()
-        assert result is None or isinstance(result, str)
-
-
 def test_generate_initial_config_with_package():
     """Test _generate_initial_config creates config file."""
 
@@ -11535,7 +11156,6 @@ def test_generate_initial_config_is_template_with_detected_values(monkeypatch):
         )
         docs = GreatDocs(project_path=tmp_dir)
 
-        monkeypatch.setattr(docs, "_detect_module_name", lambda: None)
         monkeypatch.setattr(docs, "_get_griffe_package", lambda name: MagicMock())
         monkeypatch.setattr(
             "great_docs.core.probe.detect_docstring_style", lambda package, report: "google"
@@ -11570,6 +11190,27 @@ def test_generate_initial_config_is_template_with_detected_values(monkeypatch):
         assert cfg["parser"] == "google"
         assert cfg["dynamic"] is False
         assert cfg["reference"][0]["title"] == "Classes"
+        assert "module" not in cfg
+
+
+def test_generate_initial_config_records_a_module_named_unlike_the_distribution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    write_pyproject(tmp_path, "py-yaml12")
+    (tmp_path / "yaml12.pyi").write_text("")
+    docs = GreatDocs(project_path=str(tmp_path))
+    monkeypatch.setattr(docs, "_get_griffe_package", lambda name: MagicMock())
+    monkeypatch.setattr(
+        "great_docs.core.probe.detect_docstring_style", lambda package, report: "numpy"
+    )
+    monkeypatch.setattr(
+        "great_docs.core.probe.detect_dynamic_mode", lambda package, exports, report: True
+    )
+    monkeypatch.setattr(docs, "_get_package_exports", lambda name: None)
+
+    assert docs._generate_initial_config(force=True) is True
+
+    assert read_yaml(tmp_path / "great-docs.yml")["module"] == "yaml12"
 
 
 def test_generate_initial_config_no_package_is_non_empty(monkeypatch):
@@ -11727,55 +11368,6 @@ def test_empty_categories_structure():
         assert key in cats
 
 
-def test_detect_module_name_setuptools_packages():
-    """Test _detect_module_name via setuptools.packages in pyproject.toml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            "[project]\nname = \"mypkg\"\n[tool.setuptools]\npackages = ['custom_mod']\n",
-            encoding="utf-8",
-        )
-
-        pkg_dir = Path(tmp_dir) / "custom_mod"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("")
-
-        result = docs._detect_module_name()
-        assert result == "custom_mod"
-
-
-def test_detect_module_name_hatch_packages():
-    """Test _detect_module_name via hatch build config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n'
-            "[tool.hatch.build.targets.wheel]\npackages = ['src/hatch_mod']\n",
-            encoding="utf-8",
-        )
-
-        result = docs._detect_module_name()
-        # The hatch packages setting says 'src/hatch_mod', but the last
-        # segment is the module name
-        assert result is not None or result is None  # May or may not resolve
-
-
-def test_is_compiled_extension():
-    """Test _is_compiled_extension for standard Python package."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        result = docs._is_compiled_extension()
-        assert isinstance(result, bool)
-
-
 def test_count_pages_flat():
     """
     Count page paths in a flat sidebar
@@ -11803,37 +11395,6 @@ def test_count_pages_empty():
     """
     result = cli_render.count_pages([])
     assert result == 0
-
-
-def test_is_compiled_extension_cargo_toml():
-    """Test _is_compiled_extension detects Cargo.toml (Rust/PyO3)."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "Cargo.toml").write_text("[package]\n", encoding="utf-8")
-        result = docs._is_compiled_extension()
-
-        assert result is True
-
-
-def test_is_compiled_extension_pyi_stub():
-    """Test _is_compiled_extension detects .pyi stubs without .py files."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "mymodule.pyi").write_text("def fn() -> int: ...\n")
-        result = docs._is_compiled_extension()
-
-        assert result is True
-
-
-def test_is_compiled_extension_pyi_with_py():
-    """Test _is_compiled_extension returns False when .pyi has matching .py."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        (Path(tmp_dir) / "mymodule.pyi").write_text("def fn() -> int: ...\n")
-        (Path(tmp_dir) / "mymodule.py").write_text("def fn(): return 1\n")
-        result = docs._is_compiled_extension()
-
-        assert result is False
 
 
 def test_process_sections_empty_config():
@@ -11997,40 +11558,6 @@ def test_process_user_guide_returns_false_no_guide():
         assert result is False
 
 
-def test_detect_module_name_from_pyproject():
-    """Test _detect_module_name finds module from pyproject.toml packages."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            "[project]\nname = \"my-pkg\"\n\n[tool.setuptools]\npackages = ['my_pkg']\n",
-            encoding="utf-8",
-        )
-        result = docs._detect_module_name()
-        assert result == "my_pkg"
-
-
-def test_find_package_init_not_found():
-    """Test _find_package_init returns None when package not found."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._find_package_init("nonexistent_pkg_12345")
-        assert result is None
-
-
-def test_find_package_init_basic():
-    """Test _find_package_init finds __init__.py in package dir."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pkg_dir = Path(tmp_dir) / "mypkg"
-        pkg_dir.mkdir()
-        init_file = pkg_dir / "__init__.py"
-        init_file.write_text("# init\n")
-        result = docs._find_package_init("mypkg")
-        assert result is not None
-        assert result.name == "__init__.py"
-
-
 def test_auto_exclude_set():
     """Test AUTO_EXCLUDE contains expected common names."""
     assert "main" in AUTO_EXCLUDE
@@ -12097,15 +11624,6 @@ def test_copy_assets_with_files():
         result = docs._copy_assets()
         # Should have copied
         assert result is True or (build_dir / "assets" / "image.png").exists()
-
-
-def test_normalize_package_name_various():
-    """Test _normalize_package_name handles various name formats."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        assert docs._normalize_package_name("my-package") == "my_package"
-        assert docs._normalize_package_name("my_package") == "my_package"
-        assert docs._normalize_package_name("simple") == "simple"
 
 
 def test_update_config_with_user_guide():
@@ -12602,83 +12120,6 @@ def test_process_sections_empty_dir():
         assert result == 0
 
 
-def test_detect_module_name_hatch_build():
-    """Test _detect_module_name finds module from hatch build config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "my-pkg"\n'
-            "[tool.hatch.build.targets.wheel]\n"
-            'packages = ["src/my_pkg"]\n',
-            encoding="utf-8",
-        )
-        result = docs._detect_module_name()
-        assert result == "my_pkg"
-
-
-def test_detect_module_name_setuptools_find():
-    """Test _detect_module_name finds module from setuptools find config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "my-pkg"\n[tool.setuptools.packages.find]\nwhere = ["src"]\n',
-            encoding="utf-8",
-        )
-        # Create the src/my_pkg directory with __init__.py
-        pkg_dir = Path(tmp_dir) / "src" / "my_pkg"
-        pkg_dir.mkdir(parents=True)
-        (pkg_dir / "__init__.py").write_text("")
-
-        result = docs._detect_module_name()
-        assert result == "my_pkg"
-
-
-def test_detect_module_name_directory_scan():
-    """Test _detect_module_name falls back to directory scan."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        # Create a package directory
-        pkg_dir = Path(tmp_dir) / "mypkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("")
-
-        result = docs._detect_module_name()
-        assert result == "mypkg"
-
-
-def test_find_package_init_src_layout():
-    """Test _find_package_init finds init in src/ layout."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        # Create src/mypkg/__init__.py
-        init_path = Path(tmp_dir) / "src" / "mypkg" / "__init__.py"
-        init_path.parent.mkdir(parents=True)
-        init_path.write_text("")
-
-        result = docs._find_package_init("mypkg")
-        assert result is not None
-        assert result.name == "__init__.py"
-
-
-def test_find_package_init_python_subdir():
-    """Test _find_package_init finds init in python/ subdirectory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        # Create python/mypkg/__init__.py (Rust binding pattern)
-        init_path = Path(tmp_dir) / "python" / "mypkg" / "__init__.py"
-        init_path.parent.mkdir(parents=True)
-        init_path.write_text("")
-
-        result = docs._find_package_init("mypkg")
-        assert result is not None
-        assert result.name == "__init__.py"
-
-
 def test_process_user_guide_homepage_mode():
     """Test _process_user_guide with homepage=user_guide but no guide."""
 
@@ -12917,37 +12358,6 @@ def test_copy_assets_no_directory():
         assert result is False
 
 
-def test_is_compiled_extension_pyo3():
-    """Test _is_compiled_extension detects PyO3 projects via Cargo.toml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # The method detects compiled extensions by Cargo.toml presence
-        (Path(tmp_dir) / "pyproject.toml").write_text(
-            '[build-system]\nrequires = ["maturin>=1.0"]\nbuild-backend = "maturin"\n',
-            encoding="utf-8",
-        )
-        (Path(tmp_dir) / "Cargo.toml").write_text(
-            '[package]\nname = "mypkg"\nversion = "0.1.0"\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._is_compiled_extension()
-        assert result is True
-
-
-def test_is_compiled_extension_normal_package():
-    """Test _is_compiled_extension returns False for normal packages."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"\n',
-            encoding="utf-8",
-        )
-
-        result = docs._is_compiled_extension()
-        assert result is False
-
-
 def test_build_sections_from_reference_config_dict_items():
     """Test _build_sections_from_reference_config with dict items and members."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -13011,37 +12421,6 @@ def test_build_sections_from_reference_config_skips_nameless_dict():
         assert result[0]["contents"] == ["good"]
 
 
-def test_detect_module_name_from_setuptools_packages():
-    """Test _detect_module_name reads from [tool.setuptools.packages]."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "my-pkg"\n[tool.setuptools]\npackages = ["my_pkg"]\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        name = docs._detect_module_name()
-        # Should find "my_pkg" from setuptools packages
-        assert name == "my_pkg"
-
-
-def test_detect_module_name_from_setuptools_find():
-    """Test _detect_module_name reads from [tool.setuptools.packages.find]."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "my-pkg"\n[tool.setuptools.packages.find]\nwhere = ["src"]\n',
-            encoding="utf-8",
-        )
-        # Create src/my_pkg/__init__.py
-        src_pkg = Path(tmp_dir) / "src" / "my_pkg"
-        src_pkg.mkdir(parents=True)
-        (src_pkg / "__init__.py").write_text("")
-        docs = GreatDocs(project_path=tmp_dir)
-        name = docs._detect_module_name()
-        assert name == "my_pkg"
-
-
 def test_get_cli_entry_point_gui_scripts():
     """
     Read the GUI script name when no console scripts are defined
@@ -13055,15 +12434,6 @@ def test_get_cli_entry_point_gui_scripts():
         docs = GreatDocs(project_path=tmp_dir)
         result = cli_click.entry_point_name(docs.layout.package_root, "other:cli")
         assert result == "mygui"
-
-
-def test_normalize_package_name():
-    """Test _normalize_package_name converts hyphens to underscores."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        assert docs._normalize_package_name("my-cool-pkg") == "my_cool_pkg"
-        assert docs._normalize_package_name("simple") == "simple"
-        assert docs._normalize_package_name("already_under") == "already_under"
 
 
 def test_strip_numeric_prefix_basic():
@@ -13152,28 +12522,6 @@ def test_empty_categories():
         assert "class_method_names" in cats
         assert isinstance(cats["classes"], list)
         assert isinstance(cats["class_methods"], dict)
-
-
-def test_detect_module_name_from_maturin():
-    """Test _detect_module_name reads from [tool.maturin] module-name."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "myrust"\n[tool.maturin]\nmodule-name = "my_rust_ext"\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        name = docs._detect_module_name()
-        assert name == "my_rust_ext"
-
-
-def test_detect_module_name_from_pyi():
-    """Test _detect_module_name reads from .pyi stub file."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "my_ext.pyi").write_text("def fn() -> int: ...\n")
-        docs = GreatDocs(project_path=tmp_dir)
-        name = docs._detect_module_name()
-        assert name == "my_ext"
 
 
 def test_publish_user_guide_adds_breadcrumbs():
@@ -13345,7 +12693,7 @@ def test_get_package_exports_hyphenated_name():
         )
         docs = GreatDocs(project_path=tmp_dir)
 
-        # No my_pkg dir exists, so _find_package_init returns None
+        # No `my_pkg` directory exists, so no `__init__.py` is found.
         exports = docs._get_package_exports("my-pkg")
 
         assert exports is None
@@ -14422,121 +13770,6 @@ def test_discover_exports_auto_include_no_overlap():
             sys.path.remove(tmp_dir)
 
 
-def test_find_package_init_with_pyproject_setuptools():
-    """Test _find_package_init finds init via pyproject.toml setuptools packages."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "mypkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '__version__ = "1.0.0"\n__all__ = ["Foo"]\n', encoding="utf-8"
-        )
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n[tool.setuptools]\npackages = ["mypkg"]\n',
-            encoding="utf-8",
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._find_package_init("mypkg")
-
-        assert result is not None
-        assert result.name == "__init__.py"
-
-
-def test_find_package_init_with_hatch_packages():
-    """Test _find_package_init finds init via hatch build config."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        src_dir = Path(tmp_dir) / "src" / "mypkg"
-        src_dir.mkdir(parents=True)
-        (src_dir / "__init__.py").write_text('__version__ = "1.0.0"\n', encoding="utf-8")
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n'
-            '[tool.hatch.build.targets.wheel]\npackages = ["src/mypkg"]\n',
-            encoding="utf-8",
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._find_package_init("mypkg")
-
-        assert result is not None
-        assert "src" in str(result)
-
-
-def test_find_package_init_with_find_where():
-    """Test _find_package_init with setuptools find packages and where."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        src_dir = Path(tmp_dir) / "src" / "mypkg"
-        src_dir.mkdir(parents=True)
-        (src_dir / "__init__.py").write_text('__all__ = ["A"]\n', encoding="utf-8")
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n[tool.setuptools.packages.find]\nwhere = ["src"]\n',
-            encoding="utf-8",
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._find_package_init("mypkg")
-
-        assert result is not None
-
-
-def test_find_package_init_second_pass_no_version():
-    """Test _find_package_init second pass: init without __version__."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "plainpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "# No version or __all__\nprint('hello')\n", encoding="utf-8"
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._find_package_init("plainpkg")
-
-        assert result is not None
-        assert result.name == "__init__.py"
-
-
-def test_find_package_init_auto_discover():
-    """Test _find_package_init auto-discovers packages."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Create a package with a different name than searched
-        pkg_dir = Path(tmp_dir) / "discovered"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("# package\n", encoding="utf-8")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._find_package_init("nonexistent_name")
-
-        # Should find the discovered package via auto-discovery (third pass)
-        assert result is not None
-        assert result.name == "__init__.py"
-
-
-def test_find_package_init_skips_common_dirs():
-    """Test _find_package_init skips tests/, docs/ etc. in auto-discovery."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Only create directories that should be skipped
-        for dirname in ["tests", "docs", ".hidden", "__pycache__"]:
-            d = Path(tmp_dir) / dirname
-            d.mkdir()
-            (d / "__init__.py").write_text("# skip\n", encoding="utf-8")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._find_package_init("unknownpkg")
-
-        assert result is None
-
-
 def test_detect_docstring_style_numpy():
     """Verify that NumPy section headings select the NumPy style"""
 
@@ -14649,17 +13882,13 @@ def test_create_api_sections_from_config_basic():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            docs._config = type(
-                "Config",
-                (),
-                {
-                    "reference": [
-                        {"title": "Classes", "contents": ["ClassA"]},
-                        {"title": "Functions", "contents": ["func_b"]},
-                    ],
-                    "should_split_methods": lambda self, n: n > 5,
-                },
-            )()
+            docs._config = mock_config(
+                reference=[
+                    {"title": "Classes", "contents": ["ClassA"]},
+                    {"title": "Functions", "contents": ["func_b"]},
+                ],
+                should_split_methods=lambda n: n > 5,
+            )
 
             with (
                 patch.object(
@@ -14695,16 +13924,12 @@ def test_create_api_sections_from_config_large_class():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            docs._config = type(
-                "Config",
-                (),
-                {
-                    "reference": [
-                        {"title": "Classes", "contents": ["BigClass"]},
-                    ],
-                    "should_split_methods": lambda self, n: n > 5,
-                },
-            )()
+            docs._config = mock_config(
+                reference=[
+                    {"title": "Classes", "contents": ["BigClass"]},
+                ],
+                should_split_methods=lambda n: n > 5,
+            )
 
             with (
                 patch.object(docs, "_get_package_exports", return_value=["BigClass"]),
@@ -14734,21 +13959,17 @@ def test_create_api_sections_from_config_dict_items():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            docs._config = type(
-                "Config",
-                (),
-                {
-                    "reference": [
-                        {
-                            "title": "API",
-                            "contents": [
-                                {"name": "MyClass", "members": False},
-                            ],
-                        },
-                    ],
-                    "should_split_methods": lambda self, n: n > 5,
-                },
-            )()
+            docs._config = mock_config(
+                reference=[
+                    {
+                        "title": "API",
+                        "contents": [
+                            {"name": "MyClass", "members": False},
+                        ],
+                    },
+                ],
+                should_split_methods=lambda n: n > 5,
+            )
 
             with (
                 patch.object(docs, "_get_package_exports", return_value=["MyClass"]),
@@ -14783,24 +14004,20 @@ def test_create_api_sections_from_config_explicit_members_passthrough():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            docs._config = type(
-                "Config",
-                (),
-                {
-                    "reference": [
-                        {
-                            "title": "API",
-                            "contents": [
-                                {
-                                    "name": "Child",
-                                    "members": ["own", "inherited"],
-                                },
-                            ],
-                        },
-                    ],
-                    "should_split_methods": lambda self, n: n > 5,
-                },
-            )()
+            docs._config = mock_config(
+                reference=[
+                    {
+                        "title": "API",
+                        "contents": [
+                            {
+                                "name": "Child",
+                                "members": ["own", "inherited"],
+                            },
+                        ],
+                    },
+                ],
+                should_split_methods=lambda n: n > 5,
+            )
 
             with (
                 patch.object(docs, "_get_package_exports", return_value=["Child"]),
@@ -14835,24 +14052,20 @@ def test_create_api_sections_from_config_include_inherited():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            docs._config = type(
-                "Config",
-                (),
-                {
-                    "reference": [
-                        {
-                            "title": "API",
-                            "contents": [
-                                {
-                                    "name": "Derived",
-                                    "include_inherited": True,
-                                },
-                            ],
-                        },
-                    ],
-                    "should_split_methods": lambda self, n: n > 5,
-                },
-            )()
+            docs._config = mock_config(
+                reference=[
+                    {
+                        "title": "API",
+                        "contents": [
+                            {
+                                "name": "Derived",
+                                "include_inherited": True,
+                            },
+                        ],
+                    },
+                ],
+                should_split_methods=lambda n: n > 5,
+            )
 
             with (
                 patch.object(docs, "_get_package_exports", return_value=["Derived"]),
@@ -15450,14 +14663,31 @@ def test_add_api_reference_config_no_exports():
         (docs.build_dir / "_quarto.yml").write_text(format_yaml({"website": {}}), encoding="utf-8")
 
         with (
-            patch.object(docs, "_detect_module_name", return_value="mypkg"),
-            patch.object(docs, "_is_compiled_extension", return_value=False),
             patch.object(docs, "_create_api_sections_with_config", return_value=None),
         ):
             run = make_run(docs)
             docs._add_api_reference_config(run)
 
         assert run.has_api_reference is False
+
+
+def test_add_api_reference_config_reports_a_compiled_module_named_unlike_the_distribution(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    write_pyproject(tmp_path, "py-yaml12")
+    # A stub without Python source names the module and marks a compiled extension.
+    (tmp_path / "yaml12.pyi").write_text("")
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs.build_dir.mkdir(parents=True)
+    (docs.build_dir / "_quarto.yml").write_text(format_yaml({"website": {}}), encoding="utf-8")
+
+    with patch.object(docs, "_create_api_sections_with_config", return_value=None) as create:
+        docs._add_api_reference_config(make_run(docs))
+
+    create.assert_called_once_with("yaml12")
+    out = capsys.readouterr().out
+    assert "Detected module name: yaml12" in out
+    assert "Detected compiled extension package" in out
 
 
 def test_add_api_reference_config_success():
@@ -15483,8 +14713,6 @@ def test_add_api_reference_config_success():
         sections = [{"title": "Functions", "contents": ["func_a"]}]
 
         with (
-            patch.object(docs, "_detect_module_name", return_value="mypkg"),
-            patch.object(docs, "_is_compiled_extension", return_value=False),
             patch.object(docs, "_create_api_sections_with_config", return_value=sections),
         ):
             run = make_run(docs)
@@ -15881,59 +15109,6 @@ def test_create_blended_index_creates_index():
         assert index_qmd.exists()
         # The first UG page should be removed
         assert not (ug_dir / "intro.qmd").exists()
-
-
-def test_find_package_init_pyproject_with_find_where_string():
-    """Test _find_package_init handles where as a string (not list)."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        src_dir = Path(tmp_dir) / "src" / "mypkg_find"
-        src_dir.mkdir(parents=True)
-        (src_dir / "__init__.py").write_text('__version__ = "1.0.0"\n', encoding="utf-8")
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg-find"\n[tool.setuptools.packages.find]\nwhere = "src"\n',
-            encoding="utf-8",
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._find_package_init("mypkg-find")
-
-        assert result is not None
-        assert "src" in str(result)
-
-
-@pytest.mark.parametrize(
-    "hatch",
-    ["", '\n[tool.hatch.build.targets.wheel]\npackages = ["other"]\n'],
-    ids=["find", "find and hatch"],
-)
-def test_find_package_init_searches_setuptools_find_where(tmp_path: Path, hatch: str):
-    """A package under a `[tool.setuptools.packages.find]` directory is found by its name"""
-    (tmp_path / "pyproject.toml").write_text(
-        f'[project]\nname = "mypkg"\n\n[tool.setuptools.packages.find]\nwhere = ["code"]\n{hatch}',
-        encoding="utf-8",
-    )
-    init = tmp_path / "code" / "mypkg" / "__init__.py"
-    init.parent.mkdir(parents=True)
-    init.write_text("", encoding="utf-8")
-
-    assert GreatDocs(project_path=str(tmp_path))._find_package_init("mypkg") == init
-
-
-def test_find_package_init_ignores_unparsable_setup_cfg(tmp_path: Path):
-    """A `setup.cfg` that `configparser` rejects leaves the `pyproject.toml` packages in use"""
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "mypkg"\n\n[tool.hatch.build.targets.wheel]\npackages = ["code/mypkg"]\n',
-        encoding="utf-8",
-    )
-    (tmp_path / "setup.cfg").write_text("[flake8]\nignore = E1\nignore = E2\n", encoding="utf-8")
-    init = tmp_path / "code" / "mypkg" / "__init__.py"
-    init.parent.mkdir(parents=True)
-    init.write_text("", encoding="utf-8")
-
-    assert GreatDocs(project_path=str(tmp_path))._find_package_init("mypkg") == init
 
 
 def test_detect_docstring_style_no_indicators():
@@ -18229,8 +17404,7 @@ def test_cli_scan_success():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_package")
-            mock_docs._detect_module_name.return_value = None
-            mock_docs._normalize_package_name.return_value = "my_package"
+            mock_docs._config = mock_config()
             mock_docs._get_package_exports.return_value = ["MyClass", "my_func"]
             mock_docs._categorise_exports.return_value = {
                 "classes": ["MyClass"],
@@ -18265,8 +17439,7 @@ def test_cli_scan_verbose():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
-            mock_docs._detect_module_name.return_value = None
-            mock_docs._normalize_package_name.return_value = "my_pkg"
+            mock_docs._config = mock_config()
             mock_docs._get_package_exports.return_value = ["func"]
             mock_docs._categorise_exports.return_value = {
                 "functions": ["func"],
@@ -18309,8 +17482,7 @@ def test_cli_scan_no_exports():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
-            mock_docs._detect_module_name.return_value = None
-            mock_docs._normalize_package_name.return_value = "my_pkg"
+            mock_docs._config = mock_config()
             mock_docs._get_package_exports.return_value = []
 
             result = runner.invoke(scan, ["--project-path", tmp_dir])
@@ -18327,8 +17499,7 @@ def test_cli_scan_no_reference_config():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
-            mock_docs._detect_module_name.return_value = None
-            mock_docs._normalize_package_name.return_value = "my_pkg"
+            mock_docs._config = mock_config()
             mock_docs._get_package_exports.return_value = ["func"]
             mock_docs._categorise_exports.return_value = {
                 "functions": ["func"],
@@ -18350,8 +17521,7 @@ def test_cli_scan_class_without_members():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
-            mock_docs._detect_module_name.return_value = None
-            mock_docs._normalize_package_name.return_value = "my_pkg"
+            mock_docs._config = mock_config()
             mock_docs._get_package_exports.return_value = ["MyClass"]
             mock_docs._categorise_exports.return_value = {
                 "classes": ["MyClass"],
@@ -18378,8 +17548,7 @@ def test_cli_scan_flat_categories():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
-            mock_docs._detect_module_name.return_value = None
-            mock_docs._normalize_package_name.return_value = "my_pkg"
+            mock_docs._config = mock_config()
             mock_docs._get_package_exports.return_value = [
                 "MyEnum",
                 "MyError",
@@ -18424,8 +17593,7 @@ def test_cli_scan_class_like_categories():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
-            mock_docs._detect_module_name.return_value = None
-            mock_docs._normalize_package_name.return_value = "my_pkg"
+            mock_docs._config = mock_config()
             mock_docs._get_package_exports.return_value = [
                 "MyDC",
                 "MyABC",
@@ -18459,8 +17627,7 @@ def test_cli_scan_string_items_in_reference():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
-            mock_docs._detect_module_name.return_value = None
-            mock_docs._normalize_package_name.return_value = "my_pkg"
+            mock_docs._config = mock_config()
             mock_docs._get_package_exports.return_value = ["my_func"]
             mock_docs._categorise_exports.return_value = {
                 "functions": ["my_func"],
@@ -22677,47 +21844,6 @@ def sub(a, b):
             sys.modules.pop("googlepkg2", None)
 
 
-def test_detect_module_name_where_string():
-    """_detect_module_name handles [tool.setuptools.packages.find] where as a string."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        # Create pyproject.toml with where as a string instead of list
-        (tmp / "pyproject.toml").write_text(
-            '[project]\nname = "mypkg"\n[tool.setuptools.packages.find]\nwhere = "src"\n'
-        )
-        # Create the src/mypkg package structure
-        src = tmp / "src" / "mypkg"
-        src.mkdir(parents=True)
-        (src / "__init__.py").write_text('__version__ = "1.0"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-        name = docs._detect_module_name()
-
-        assert name == "mypkg"
-
-
-def test_detect_module_name_keeps_a_dotted_setuptools_package(tmp_path: Path):
-    """A setuptools `packages` entry is an import name, so a dotted one stays whole"""
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "nspkg-core"\n\n[tool.setuptools]\npackages = ["nspkg.core"]\n',
-        encoding="utf-8",
-    )
-    (tmp_path / "nspkg" / "core").mkdir(parents=True)
-    (tmp_path / "nspkg" / "core" / "__init__.py").write_text("", encoding="utf-8")
-
-    assert GreatDocs(project_path=str(tmp_path))._detect_module_name() == "nspkg.core"
-
-
-def test_detect_module_name_from_poetry_packages(tmp_path: Path):
-    """A Poetry `packages` entry names the module, whatever the distribution is called"""
-    (tmp_path / "pyproject.toml").write_text(
-        '[tool.poetry]\nname = "my-project"\npackages = [{include = "mylib", from = "src"}]\n',
-        encoding="utf-8",
-    )
-
-    assert GreatDocs(project_path=str(tmp_path))._detect_module_name() == "mylib"
-
-
 def test_type_sections_empty_lists():
     """TypeSections with no items produces empty Blocks output."""
 
@@ -23301,122 +22427,6 @@ class TestBuildSectionsFromReferenceConfig:
             result = reference_sections.from_reference_config(config)
             # No valid contents, so the section is skipped
             assert result is None
-
-
-class TestFindPackageInit:
-    """Tests for _find_package_init."""
-
-    def test_finds_init_with_version(self):
-        """Finds __init__.py with __version__."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            pkg_dir = tmp / "mypkg"
-            pkg_dir.mkdir()
-            (pkg_dir / "__init__.py").write_text('__version__ = "1.0"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._find_package_init("mypkg")
-            assert result is not None
-            assert result.name == "__init__.py"
-
-    def test_finds_init_with_all(self):
-        """Finds __init__.py with __all__."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            pkg_dir = tmp / "mypkg"
-            pkg_dir.mkdir()
-            (pkg_dir / "__init__.py").write_text('__all__ = ["foo"]\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._find_package_init("mypkg")
-            assert result is not None
-
-    def test_finds_in_src_layout(self):
-        """Finds __init__.py in src/ layout."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            pkg_dir = tmp / "src" / "mypkg"
-            pkg_dir.mkdir(parents=True)
-            (pkg_dir / "__init__.py").write_text('__version__ = "1.0"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._find_package_init("mypkg")
-            assert result is not None
-
-    def test_finds_with_hatch_config(self):
-        """Finds __init__.py using hatch wheel.packages config."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text(
-                '[project]\nname = "mypkg"\n'
-                '[tool.hatch.build.targets.wheel]\npackages = ["src/mypkg"]\n'
-            )
-            pkg_dir = tmp / "src" / "mypkg"
-            pkg_dir.mkdir(parents=True)
-            (pkg_dir / "__init__.py").write_text('__version__ = "1.0"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._find_package_init("mypkg")
-            assert result is not None
-
-    def test_normalizes_dashes(self):
-        """Normalizes dashes to underscores in package name."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "my-pkg"\n')
-            pkg_dir = tmp / "my_pkg"
-            pkg_dir.mkdir()
-            (pkg_dir / "__init__.py").write_text('__version__ = "1.0"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._find_package_init("my-pkg")
-            assert result is not None
-
-    def test_auto_discovers_package(self):
-        """Auto-discovers package in root when name doesn't match."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "my-project"\n')
-            pkg_dir = tmp / "actual_package"
-            pkg_dir.mkdir()
-            (pkg_dir / "__init__.py").write_text('__version__ = "1.0"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._find_package_init("my-project")
-            assert result is not None
-            assert "actual_package" in str(result)
-
-    def test_returns_none_when_missing(self):
-        """Returns None when no package found."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._find_package_init("nonexistent")
-            assert result is None
-
-    def test_second_pass_without_version(self):
-        """Finds bare __init__.py in second pass (no __version__)."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            pkg_dir = tmp / "mypkg"
-            pkg_dir.mkdir()
-            (pkg_dir / "__init__.py").write_text("# empty init\n")
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._find_package_init("mypkg")
-            assert result is not None
-
-    def test_setuptools_find_where(self):
-        """Uses setuptools.packages.find.where for package search."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text(
-                '[project]\nname = "mypkg"\n[tool.setuptools.packages.find]\nwhere = ["lib"]\n'
-            )
-            pkg_dir = tmp / "lib" / "mypkg"
-            pkg_dir.mkdir(parents=True)
-            (pkg_dir / "__init__.py").write_text('__version__ = "1.0"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._find_package_init("mypkg")
-            assert result is not None
 
 
 class TestCreateBlendedIndex:
@@ -28193,50 +27203,6 @@ def test_robots_write_no_site_dir(capsys):
 # ── Namespace package support ────────────────────────────────────────────────
 
 
-def test_find_package_init_dotted_module_src_layout():
-    """_find_package_init finds __init__.py for a dotted namespace module in src/."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Simulate firebird.base in src/firebird/base/
-        pkg_path = Path(tmp_dir) / "src" / "firebird" / "base"
-        pkg_path.mkdir(parents=True)
-        init_file = pkg_path / "__init__.py"
-        init_file.write_text(
-            '"""Firebird base package."""\n__all__ = ["connect"]\n',
-            encoding="utf-8",
-        )
-        (Path(tmp_dir) / "pyproject.toml").write_text(
-            '[project]\nname = "firebird-base"\n', encoding="utf-8"
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._find_package_init("firebird.base")
-
-        assert result is not None
-        assert result.resolve() == init_file.resolve()
-
-
-def test_find_package_init_dotted_module_flat_layout():
-    """_find_package_init finds __init__.py for a dotted namespace module in flat layout."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Simulate mynamespace.pkg in mynamespace/pkg/
-        pkg_path = Path(tmp_dir) / "mynamespace" / "pkg"
-        pkg_path.mkdir(parents=True)
-        init_file = pkg_path / "__init__.py"
-        init_file.write_text(
-            '"""Package."""\n__version__ = "1.0"\n',
-            encoding="utf-8",
-        )
-        (Path(tmp_dir) / "pyproject.toml").write_text(
-            '[project]\nname = "mynamespace-pkg"\n', encoding="utf-8"
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._find_package_init("mynamespace.pkg")
-
-        assert result is not None
-        assert result.resolve() == init_file.resolve()
-
-
 def test_discover_exports_namespace_src_layout():
     """Verify that literal `__all__` parsing finds exports in a namespace package under `src/`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -28273,24 +27239,8 @@ def test_discover_exports_namespace_src_layout():
         assert "goodbye" in exports
 
 
-def test_griffe_search_paths_includes_src():
-    """_griffe_search_paths includes src/ when it exists."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text(
-            '[project]\nname = "test"\n', encoding="utf-8"
-        )
-        (Path(tmp_dir) / "src").mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-        paths = docs._griffe_search_paths()
-
-        resolved = [str(Path(p).resolve()) for p in paths]
-        assert str((Path(tmp_dir) / "src").resolve()) in resolved
-        assert str(Path(tmp_dir).resolve()) in resolved
-
-
 def test_cli_scan_uses_module_name():
-    """CLI scan uses _detect_module_name when available (namespace package support)."""
+    """Verify that CLI scan uses the detected namespace package"""
     from click.testing import CliRunner
 
     runner = CliRunner()
@@ -28299,15 +27249,13 @@ def test_cli_scan_uses_module_name():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "firebird-base")
-            # Simulate module: firebird.base in great-docs.yml
-            mock_docs._detect_module_name.return_value = "firebird.base"
+            mock_docs._config = mock_config(module="firebird.base")
             mock_docs._get_package_exports.return_value = ["connect", "Config"]
             mock_docs._categorise_exports.return_value = {
                 "classes": ["Config"],
                 "functions": ["connect"],
                 "class_method_names": {},
             }
-            mock_docs._config.reference = []
 
             result = runner.invoke(scan, ["--project-path", tmp_dir])
             assert result.exit_code == 0
@@ -28356,16 +27304,12 @@ def test_create_api_sections_from_config_inline_methods_true_never_splits():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            docs._config = type(
-                "Config",
-                (),
-                {
-                    "reference": [
-                        {"title": "Classes", "contents": ["BigClass"]},
-                    ],
-                    "should_split_methods": lambda self, n: False,  # never split
-                },
-            )()
+            docs._config = mock_config(
+                reference=[
+                    {"title": "Classes", "contents": ["BigClass"]},
+                ],
+                should_split_methods=lambda n: False,  # never split
+            )
 
             with (
                 patch.object(docs, "_get_package_exports", return_value=["BigClass"]),
@@ -28422,16 +27366,12 @@ def test_create_api_sections_from_config_inline_methods_false_always_splits():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            docs._config = type(
-                "Config",
-                (),
-                {
-                    "reference": [
-                        {"title": "Classes", "contents": ["SmallClass"]},
-                    ],
-                    "should_split_methods": lambda self, n: n > 0,  # always split
-                },
-            )()
+            docs._config = mock_config(
+                reference=[
+                    {"title": "Classes", "contents": ["SmallClass"]},
+                ],
+                should_split_methods=lambda n: n > 0,  # always split
+            )
 
             with (
                 patch.object(docs, "_get_package_exports", return_value=["SmallClass"]),
@@ -28462,16 +27402,12 @@ def test_create_api_sections_from_config_inline_methods_custom_threshold():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            docs._config = type(
-                "Config",
-                (),
-                {
-                    "reference": [
-                        {"title": "Classes", "contents": ["MediumClass"]},
-                    ],
-                    "should_split_methods": lambda self, n: n > 10,  # threshold=10
-                },
-            )()
+            docs._config = mock_config(
+                reference=[
+                    {"title": "Classes", "contents": ["MediumClass"]},
+                ],
+                should_split_methods=lambda n: n > 10,  # threshold=10
+            )
 
             with (
                 patch.object(docs, "_get_package_exports", return_value=["MediumClass"]),
@@ -28679,65 +27615,6 @@ class TestSaveFreezeCacheVersioned:
             tmp_path / "_freeze" / "user-guide" / "a" / "execute-results" / "html.json"
         ).read_text(encoding="utf-8")
         assert merged_a == '{"page": "a"}'
-
-
-# ---------------------------------------------------------------------------
-# _detect_module_name — maturin dotted module-name and hatch namespace paths
-# ---------------------------------------------------------------------------
-
-
-def test_detect_module_name_maturin_dotted_path():
-    """_detect_module_name strips suffix from maturin module-name with a dot."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text(
-            '[project]\nname = "ggsql"\n\n[tool.maturin]\nmodule-name = "ggsql._ggsql"\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=str(tmp_dir))
-        result = docs._detect_module_name()
-        assert result == "ggsql"
-
-
-def test_detect_module_name_hatch_namespace_package():
-    """_detect_module_name resolves hatch namespace package to dotted sub-name."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        # Simulate: project "firebird-base", hatch wheel.packages = ["src/firebird"]
-        # firebird/ is a namespace (no __init__.py), firebird/base/ is the real package
-        (tmp / "pyproject.toml").write_text(
-            '[project]\nname = "firebird-base"\n'
-            '[tool.hatch.build.targets.wheel]\npackages = ["src/firebird"]\n',
-            encoding="utf-8",
-        )
-        src_firebird = tmp / "src" / "firebird"
-        src_firebird.mkdir(parents=True)
-        # namespace root: no __init__.py in firebird/
-        base_pkg = src_firebird / "base"
-        base_pkg.mkdir()
-        (base_pkg / "__init__.py").write_text("", encoding="utf-8")
-
-        docs = GreatDocs(project_path=str(tmp_dir))
-        result = docs._detect_module_name()
-        assert result == "firebird.base"
-
-
-def test_detect_module_name_hatch_regular_package():
-    """_detect_module_name returns simple pkg name when hatch package dir has __init__.py."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text(
-            '[project]\nname = "mypkg"\n'
-            '[tool.hatch.build.targets.wheel]\npackages = ["src/mypkg"]\n',
-            encoding="utf-8",
-        )
-        pkg = tmp / "src" / "mypkg"
-        pkg.mkdir(parents=True)
-        (pkg / "__init__.py").write_text("", encoding="utf-8")
-
-        docs = GreatDocs(project_path=str(tmp_dir))
-        result = docs._detect_module_name()
-        assert result == "mypkg"
 
 
 # ---------------------------------------------------------------------------
@@ -29092,39 +27969,6 @@ def test_strip_numeric_prefix_underscore_separator():
 def test_strip_numeric_prefix_preserves_non_numeric():
     docs = GreatDocs()
     assert strip_numeric_prefix("advanced.qmd") == "advanced.qmd"
-
-
-# ---------------------------------------------------------------------------
-# _detect_module_name
-# ---------------------------------------------------------------------------
-
-
-def test_detect_module_name_returns_none_no_package(tmp_path):
-    """_detect_module_name returns None when no package structure is found."""
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-    docs = GreatDocs(project_path=str(tmp_path))
-
-    # No package directory, no stub files, no tool config → returns None
-    result = docs._detect_module_name()
-
-    assert result is None
-
-
-def test_detect_module_name_returns_pkg_dir_name_fallback(tmp_path):
-    """Returns pkg_dir.name when relative path has no parts."""
-    # Create a package dir that IS the package root (relative path would have no parts)
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-    # Create a package __init__.py
-    (tmp_path / "__init__.py").write_text("")
-    docs = GreatDocs(project_path=str(tmp_path))
-
-    # If the package is discovered at the project root, its relative path has
-    # no components, so module discovery falls back to the directory name.
-    result = docs._detect_module_name()
-
-    # Should return the directory name, not None
-    assert result is not None or result is None  # just check it doesn't crash
 
 
 # ---------------------------------------------------------------------------

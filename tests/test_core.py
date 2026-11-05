@@ -1362,7 +1362,10 @@ class TestGetPackageExportsCacheHit:
         monkeypatch.setattr(
             "great_docs.core.discovery.discover_exports", lambda package, config, report: None
         )
-        monkeypatch.setattr(gd, "_find_package_init", lambda name: tmp_path / "__init__.py")
+        monkeypatch.setattr(
+            "great_docs.core.locate_package_init",
+            lambda root, manifest, name: tmp_path / "__init__.py",
+        )
         monkeypatch.setattr(
             "great_docs.core.discovery.parse_dunder_all", lambda init_file, config, report: ["Y"]
         )

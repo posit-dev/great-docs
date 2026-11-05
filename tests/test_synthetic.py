@@ -30,6 +30,7 @@ from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
 from great_docs._cliref.model import CliCommand
 from great_docs._content import code_includes
+from great_docs._project import locate_package_init
 from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import discover_exports, parse_dunder_all
 from great_docs._reference.probe import detect_docstring_style
@@ -119,12 +120,31 @@ def _discover_cli(docs: GreatDocs, config: Config, package_name: str) -> CliComm
     if not config.cli_enabled:
         return None
     return cli_click.discover(
-        docs._normalize_package_name(package_name),
+        package_name.replace("-", "_"),
         docs.layout.package_root,
         cli_module=config.cli_module,
         cli_name=config.cli_name,
         report=print,
     )
+
+
+def _package_init(docs: GreatDocs, name: str) -> Path | None:
+    """
+    Find a package's `__init__.py` in a project
+
+    Parameters
+    ----------
+    docs
+        The project.
+    name
+        The package's distribution or import name.
+
+    Returns
+    -------
+    :
+        The path to `__init__.py`, or `None` if no package is found.
+    """
+    return locate_package_init(docs.layout.package_root, make_project(docs).manifest, name)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -159,7 +179,7 @@ def test_L0_module_name_detection(pkg_name: str, tmp_path: Path):
     module_name = expected["detected_module"]
 
     # Verify the module's __init__.py can be found
-    init_file = docs._find_package_init(module_name)
+    init_file = _package_init(docs, module_name)
     assert init_file is not None, f"Could not find __init__.py for module {module_name!r}"
     assert init_file.exists()
 
@@ -179,7 +199,7 @@ def test_L1_export_discovery(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected.get("detected_module", pkg_name)
-    init_file = docs._find_package_init(module_name)
+    init_file = _package_init(docs, module_name)
     exports = init_file and parse_dunder_all(init_file, docs._config, report=print)
 
     # Packages without __all__ use griffe-based discovery
@@ -309,7 +329,7 @@ def test_L1_docstring_parser_detection(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected.get("detected_module", pkg_name)
-    init_file = docs._find_package_init(module_name)
+    init_file = _package_init(docs, module_name)
     assert init_file is not None
 
     detected = detect_docstring_style(docs._get_griffe_package(module_name), report=print)
@@ -592,7 +612,7 @@ def test_L2_name_module_mismatch(pkg_name: str, tmp_path: Path):
     )
 
     # The module's __init__.py should still be findable
-    init_file = docs._find_package_init(module_name)
+    init_file = _package_init(docs, module_name)
     assert init_file is not None, f"Could not find __init__.py for {module_name!r}"
 
 

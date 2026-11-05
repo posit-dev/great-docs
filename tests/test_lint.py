@@ -898,7 +898,6 @@ class TestRunLint:
     def test_successful_lint_run(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
         mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_gd._resolve_importable_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a", "func_b"]
         mock_gd._config.__getitem__.return_value = "numpy"
         mock_gd_cls.return_value = mock_gd
@@ -927,7 +926,6 @@ class TestRunLint:
         """Verify that configured member selection does not make `flush` ambiguous"""
         mock_gd = _mock_docs()
         mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_gd._resolve_importable_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["StoreCache", "NetCache"]
         mock_gd._config.__getitem__.return_value = "numpy"
         # The renderer documents NetCache itself but, per its `members: false`
@@ -972,7 +970,6 @@ class TestRunLint:
         """
         mock_gd = _mock_docs()
         mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_gd._resolve_importable_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a"]
         mock_gd._config.__getitem__.return_value = "numpy"
         mock_gd_cls.return_value = mock_gd
@@ -991,7 +988,7 @@ class TestRunLint:
         """Verify that lint loads the importable module when its name differs from the project"""
         mock_gd = _mock_docs()
         mock_gd.layout.package_root = write_pyproject(tmp_path, "my-dist")
-        mock_gd._resolve_importable_name.return_value = "actual_module"
+        mock_gd._config = mock_config(seo_enabled=False, sections=[], module="actual_module")
         mock_gd._get_package_exports.return_value = ["func_a"]
         mock_gd._config.__getitem__.return_value = "numpy"
         mock_gd_cls.return_value = mock_gd
@@ -1003,7 +1000,6 @@ class TestRunLint:
 
         result = run_lint(tmp_path)
 
-        mock_gd._resolve_importable_name.assert_called_once_with("my-dist")
         mock_gd._get_griffe_package.assert_called_once_with("actual_module")
         assert result.package_name == "actual_module"
 
@@ -1011,8 +1007,6 @@ class TestRunLint:
     def test_selective_checks(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
         mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_gd._detect_module_name.return_value = None
-        mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a"]
         mock_gd._config.__getitem__.return_value = "numpy"
         mock_gd_cls.return_value = mock_gd
@@ -1039,7 +1033,6 @@ class TestRunLint:
     def test_config_check_runs_alone(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
         mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a"]
         mock_gd._config.__getitem__.return_value = "numpy"
         mock_gd._config.user_settings = {"site": {"language": "fr"}}
@@ -1066,7 +1059,6 @@ class TestRunLint:
     def test_no_exports(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
         mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = None
         mock_gd._config.__getitem__.return_value = "numpy"
         mock_gd_cls.return_value = mock_gd
@@ -1084,7 +1076,6 @@ class TestRunLint:
     def test_griffe_load_failure(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
         mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd_cls.return_value = mock_gd
 
         mock_gd._get_griffe_package.side_effect = ImportError("Module not found")
@@ -1122,7 +1113,6 @@ class TestRunLintQuiet:
     def test_quiet_suppresses_output(self, mock_gd_cls, tmp_path, capsys):
         mock_gd = _mock_docs()
         mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a"]
         mock_gd._config.__getitem__.return_value = "numpy"
         mock_gd_cls.return_value = mock_gd
@@ -1155,7 +1145,6 @@ class TestRunLintQuiet:
     def test_quiet_griffe_load_failure_restores_stdout(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
         mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
-        mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd_cls.return_value = mock_gd
 
         mock_gd._get_griffe_package.side_effect = RuntimeError("Cannot load")

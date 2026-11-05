@@ -1100,20 +1100,11 @@ def scan(
     try:
         docs = GreatDocs(project_path=project_path, config_path=config_path)
 
-        # Detect package name
-        package_name = Project.make(docs._config, docs.layout).name
-        if not package_name:
+        project = Project.make(docs._config, docs.layout)
+        importable_name = project.importable_name
+        if not project.name or not importable_name:
             click.echo("Error: Could not detect package name.", err=True)
             sys.exit(1)
-
-        # Use explicit module name from great-docs.yml (or auto-detection) when
-        # available; this handles namespace packages like "firebird.base" where
-        # the importable module name differs from the PyPI project name.
-        module_name = docs._detect_module_name()
-        if module_name:
-            importable_name = module_name
-        else:
-            importable_name = docs._normalize_package_name(package_name)
 
         # Section 1: Discovery
         click.echo("─" * 50)
@@ -2567,11 +2558,12 @@ def proofread(
                     docs.layout,
                     report=lambda message: click.echo(f"⚠️  {message}", err=True),
                 )
-            if include_docstrings and (
-                package_name := Project.make(docs._config, docs.layout).name
-            ):
-                module = docs._resolve_importable_name(package_name)
-                files_to_check += proofreading.find_modules(docs.layout, module)
+            if include_docstrings:
+                project = Project.make(docs._config, docs.layout)
+                if project.name and project.importable_name:
+                    files_to_check += proofreading.find_modules(
+                        docs.layout, project.importable_name
+                    )
 
         if not files_to_check:
             click.echo("No documentation files found to check.", err=True)
@@ -3377,11 +3369,12 @@ def api_diff_cmd(
             from great_docs.core import GreatDocs
 
             docs = GreatDocs(project_path=str(project_root), config_path=config_path)
+            project = Project.make(docs._config, docs.layout)
             documented = (
                 documented_reference.symbol_names(
                     docs._config,
-                    importable_name=docs._resolve_importable_name(result.package_name),
-                    search_paths=docs._griffe_search_paths(),
+                    importable_name=project.module or result.package_name.replace("-", "_"),
+                    search_paths=project.search_paths(),
                     create_sections=docs._create_api_sections_with_config,
                 )
                 or None
@@ -3659,11 +3652,12 @@ def api_snapshot_cmd(
 
     try:
         docs = GreatDocs(project_path=str(project_root), config_path=config_path)
+        project = Project.make(docs._config, docs.layout)
         documented = (
             documented_reference.symbol_names(
                 docs._config,
-                importable_name=docs._resolve_importable_name(pkg_name),
-                search_paths=docs._griffe_search_paths(),
+                importable_name=project.module or pkg_name.replace("-", "_"),
+                search_paths=project.search_paths(),
                 create_sections=docs._create_api_sections_with_config,
             )
             or None

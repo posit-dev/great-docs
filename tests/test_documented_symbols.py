@@ -12,6 +12,7 @@ from great_docs import BuildError
 from great_docs._apiref.inventory import InventoryItem
 from great_docs._reference import documented
 from great_docs.core import GreatDocs
+from tests.support import make_project
 
 
 def _symbol_names(gd: GreatDocs, package_name: str) -> list[str]:
@@ -30,10 +31,11 @@ def _symbol_names(gd: GreatDocs, package_name: str) -> list[str]:
     :
         Documented page stems in first-occurrence order.
     """
+    project = make_project(gd)
     return documented.symbol_names(
         gd._config,
-        importable_name=gd._resolve_importable_name(package_name),
-        search_paths=gd._griffe_search_paths(),
+        importable_name=project.module or package_name.replace("-", "_"),
+        search_paths=project.search_paths(),
         create_sections=gd._create_api_sections_with_config,
     )
 
@@ -54,10 +56,11 @@ def _objects(gd: GreatDocs, package_name: str) -> list[InventoryItem]:
     :
         Inventory items for the project's documented objects.
     """
+    project = make_project(gd)
     return documented.objects(
         gd._config,
-        importable_name=gd._resolve_importable_name(package_name),
-        search_paths=gd._griffe_search_paths(),
+        importable_name=project.module or package_name.replace("-", "_"),
+        search_paths=project.search_paths(),
         create_sections=gd._create_api_sections_with_config,
     )
 

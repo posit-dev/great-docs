@@ -519,12 +519,10 @@ async def _handle_scan(arguments: dict) -> list[TextContent]:
     verbose = arguments.get("verbose", False)
 
     docs = _get_great_docs(project_path, arguments.get("config_path"))
-    package_name = Project.make(docs._config, docs.layout).name
-    if not package_name:
+    project = Project.make(docs._config, docs.layout)
+    importable_name = project.importable_name
+    if not project.name or not importable_name:
         return [TextContent(type="text", text="Error: Could not detect package name.")]
-
-    module_name = docs._detect_module_name()
-    importable_name = module_name or docs._normalize_package_name(package_name)
 
     exports = docs._get_package_exports(importable_name)
     if not exports:
@@ -769,12 +767,10 @@ async def _handle_api_diff(arguments: dict) -> list[TextContent]:
     head_ref = arguments.get("head")
 
     docs = _get_great_docs(project_path, arguments.get("config_path"))
-    package_name = Project.make(docs._config, docs.layout).name
-    if not package_name:
+    project = Project.make(docs._config, docs.layout)
+    importable_name = project.importable_name
+    if not project.name or not importable_name:
         return [TextContent(type="text", text="Error: Could not detect package name.")]
-
-    module_name = docs._detect_module_name()
-    importable_name = module_name or docs._normalize_package_name(package_name)
 
     # Take current snapshot
     current = ApiSnapshot.from_live(importable_name)
@@ -1178,11 +1174,10 @@ async def read_resource(uri: AnyUrl) -> str:
     elif uri_str == "gd://api-surface":
         try:
             docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
-            package_name = Project.make(docs._config, docs.layout).name
-            if not package_name:
+            project = Project.make(docs._config, docs.layout)
+            importable_name = project.importable_name
+            if not project.name or not importable_name:
                 return "Error: Could not detect package name."
-            module_name = docs._detect_module_name()
-            importable_name = module_name or docs._normalize_package_name(package_name)
             exports = docs._get_package_exports(importable_name)
             if not exports:
                 return f"No exports discovered for {importable_name}."
@@ -1224,11 +1219,9 @@ async def read_resource(uri: AnyUrl) -> str:
         symbol = uri_str.removeprefix("gd://reference/")
         try:
             docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
-            package_name = Project.make(docs._config, docs.layout).name
-            module_name = docs._detect_module_name()
-            if not module_name and not package_name:
+            importable_name = Project.make(docs._config, docs.layout).importable_name
+            if not importable_name:
                 return "Error: Could not detect package name."
-            importable_name = module_name or docs._normalize_package_name(package_name)
             # Try to get docstring for the symbol
             import importlib
 
@@ -1345,11 +1338,9 @@ async def handle_completion(
             # Complete with actual package symbols
             try:
                 docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
-                package_name = Project.make(docs._config, docs.layout).name
-                module_name = docs._detect_module_name()
-                if not module_name and not package_name:
+                importable_name = Project.make(docs._config, docs.layout).importable_name
+                if not importable_name:
                     return Completion(values=[])
-                importable_name = module_name or docs._normalize_package_name(package_name)
                 exports = docs._get_package_exports(importable_name)
                 filtered = [e for e in exports if value.lower() in e.lower()]
                 return Completion(values=filtered[:20], hasMore=len(filtered) > 20)
@@ -1374,11 +1365,9 @@ async def handle_completion(
         if "reference" in str(ref.uri) and argument.name == "symbol":
             try:
                 docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
-                package_name = Project.make(docs._config, docs.layout).name
-                module_name = docs._detect_module_name()
-                if not module_name and not package_name:
+                importable_name = Project.make(docs._config, docs.layout).importable_name
+                if not importable_name:
                     return Completion(values=[])
-                importable_name = module_name or docs._normalize_package_name(package_name)
                 exports = docs._get_package_exports(importable_name)
                 filtered = [e for e in exports if value.lower() in e.lower()]
                 return Completion(values=filtered[:20], hasMore=len(filtered) > 20)

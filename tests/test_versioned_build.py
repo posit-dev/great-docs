@@ -4636,17 +4636,19 @@ class TestGitRefRebuildKeepsSubmodulePages:
         (ref / "index.qmd").write_text("---\ntitle: API\n---\n")
 
         entry = VersionEntry(label="0.1.0", tag="0.1.0", git_ref="v0.1.0")
+        from great_docs._project import Project
         from great_docs._reference import documented
         from great_docs._versions.build import _rebuild_api_from_git_ref
         from great_docs.core import GreatDocs
 
         docs = GreatDocs(project_path=str(tmp_path))
+        project = Project.make(docs._config, docs.layout)
 
         def documented_symbols(package_name: str) -> list[str]:
             return documented.symbol_names(
                 docs._config,
-                importable_name=docs._resolve_importable_name(package_name),
-                search_paths=docs._griffe_search_paths(),
+                importable_name=project.module or package_name.replace("-", "_"),
+                search_paths=project.search_paths(),
                 create_sections=docs._create_api_sections_with_config,
             )
 

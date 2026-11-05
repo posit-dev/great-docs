@@ -148,7 +148,7 @@ def run_lint(
 
     try:
         docs = GreatDocs(project_path=str(project_root), config_path=config_path)
-        package_name = Project.make(docs._config, docs.layout).name
+        project = Project.make(docs._config, docs.layout)
     except Exception:
         if quiet:
             sys.stdout = _saved_stdout
@@ -165,7 +165,8 @@ def run_lint(
             sys.stdout = _saved_stdout
         return result
 
-    if not package_name:
+    importable_name = project.importable_name
+    if not project.name or not importable_name:
         if quiet:
             sys.stdout = _saved_stdout
         result.issues.append(
@@ -178,7 +179,6 @@ def run_lint(
         )
         return result
 
-    importable_name = docs._resolve_importable_name(package_name)
     result.package_name = importable_name
 
     try:
@@ -220,7 +220,7 @@ def run_lint(
         documented = documented_reference.objects(
             docs._config,
             importable_name=importable_name,
-            search_paths=docs._griffe_search_paths(),
+            search_paths=project.search_paths(),
             create_sections=docs._create_api_sections_with_config,
         )
         # No documented objects means both checks are no-ops, so skip source

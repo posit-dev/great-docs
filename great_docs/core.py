@@ -38,9 +38,9 @@ from ._content.pages import PageMap
 from ._content.user_guide import UserGuide
 from ._contribution import Contribution
 from ._install import format_authors_yaml, update_gitignore
-from ._layout import PACKAGE_DIRS, Layout
+from ._layout import Layout
 from ._manifest import Manifest
-from ._project import Project, read_manifest
+from ._project import Project, locate_package_init, read_manifest
 from ._reference import block as reference_block
 from ._reference import discovery, documented, probe
 from ._reference import sections as reference_sections
@@ -254,7 +254,7 @@ class GreatDocs:
         normalized = package_name.replace("-", "_")
         if normalized not in self._griffe_pkg_cache:
             self._griffe_pkg_cache[normalized] = griffe.load(
-                normalized, search_paths=self._griffe_search_paths()
+                normalized, search_paths=Project.make(self._config, self.layout).search_paths()
             )
         return self._griffe_pkg_cache[normalized]
 
@@ -527,174 +527,6 @@ class GreatDocs:
         print("\nOther helpful commands:")
         print("  great-docs scan           # Preview API organization")
         print("  great-docs build --watch  # Watch for changes and rebuild")
-
-    def _normalize_package_name(self, package_name: str) -> str:
-        """
-        Convert a package name to its importable form.
-
-        PyPI package names can use hyphens (e.g., 'great-docs') but Python
-        imports must use underscores (e.g., 'great_docs'). This method handles
-        the conversion.
-
-        Parameters
-        ----------
-        package_name
-            The package name (potentially with hyphens)
-
-        Returns
-        -------
-        str
-            The importable package name (with underscores)
-        """
-        return package_name.replace("-", "_")
-
-    def _resolve_importable_name(self, package_name: str) -> str:
-        """
-        Resolve the importable module name for a project.
-
-        Prefers the module name from `_detect_module_name` (an explicit `module:` in great-docs.yml,
-        build-backend hints, or auto-discovery), falling back to the normalized PyPI project name
-        when detection returns `None`.
-
-        Parameters
-        ----------
-        package_name
-            The PyPI project name to fall back to.
-
-        Returns
-        -------
-        str
-            The importable module name.
-        """
-        module_name = self._detect_module_name()
-        return module_name if module_name else self._normalize_package_name(package_name)
-
-    def _detect_module_name(self) -> str | None:
-        """
-        Detect the importable module to document
-
-        The module name can differ from the distribution name: `py-yaml12` may install
-        `yaml12`. Use the first available module from these sources, in order:
-
-        1. Use the configured `module`.
-        2. Use the first project-root `.pyi` stub other than `__init__.pyi`.
-        3. Use the top-level package of Maturin's compiled module.
-        4. Use the first package found in setuptools discovery directories, excluding names
-           beginning with `.`, `_` or `test`.
-        5. Use the first setuptools `packages` entry. Preserve dotted import names such as
-           `nspkg.core`; for a path, use its last component.
-        6. Use the last component of the first hatch or Poetry package path. If it is a
-           namespace directory without `__init__.py`, prefer its subpackage named by the
-           remaining distribution name when that subpackage has `__init__.py`. For example,
-           select `firebird.base` for distribution `firebird-base`.
-        7. Find a package directory for the distribution name and form its dotted name
-           relative to the first containing `src`, `python`, `lib` or discovery directory,
-           then the project root. Fall back to the package directory's own name.
-
-        Returns
-        -------
-        :
-            The importable module name, or `None` if no source identifies one.
-        """
-        if self._config.module:
-            return self._config.module
-
-        package_root = self.layout.package_root
-
-        for pyi_file in package_root.glob("*.pyi"):
-            if pyi_file.stem != "__init__":
-                return pyi_file.stem
-
-        manifest = read_manifest(package_root)
-        if manifest["extension_module"]:
-            # Document the top-level package rather than its compiled extension submodule.
-            return manifest["extension_module"].split(".", 1)[0]
-
-        for directory in manifest["discovery_dirs"]:
-            base = package_root / directory
-            if not base.is_dir():
-                continue
-            for item in base.iterdir():
-                if (
-                    item.is_dir()
-                    and (item / "__init__.py").exists()
-                    and not item.name.startswith((".", "_", "test"))
-                ):
-                    return item.name
-
-        if manifest["declared_import_names"]:
-            # Preserve dotted import names; path entries identify their last directory.
-            return manifest["declared_import_names"][0].split("/")[-1]
-
-        if manifest["declared_packages"]:
-            declared = manifest["declared_packages"][0]
-            name = declared.split("/")[-1]
-            path = package_root / declared
-            if path.is_dir() and not (path / "__init__.py").exists():
-                distribution = (Project.make(self._config, self.layout).name or "").replace(
-                    "-", "_"
-                )
-                sub_name = distribution.removeprefix(f"{name}_")
-                if (
-                    distribution.startswith(f"{name}_")
-                    and (path / sub_name / "__init__.py").exists()
-                ):
-                    return f"{name}.{sub_name}"
-            return name
-
-        project_name = Project.make(self._config, self.layout).name
-        init_file = self._find_package_init(project_name) if project_name else None
-        if init_file is None:
-            return None
-        package_dir = init_file.parent
-        for layout_dir in (
-            *(package_root / directory for directory in PACKAGE_DIRS),
-            *(package_root / directory for directory in manifest["discovery_dirs"]),
-            package_root,
-        ):
-            if package_dir != layout_dir and package_dir.is_relative_to(layout_dir):
-                return ".".join(package_dir.relative_to(layout_dir).parts)
-        return package_dir.name
-
-    def _is_compiled_extension(self) -> bool:
-        """
-        Check if this is a compiled extension package (PyO3, Cython, etc.).
-
-        Returns
-        -------
-        bool
-            True if this appears to be a compiled extension package.
-        """
-        package_root = self.layout.package_root
-
-        # Check for Cargo.toml (Rust/PyO3)
-        if (package_root / "Cargo.toml").exists():
-            return True
-
-        # Check for .pyi stub files without corresponding .py files
-        pyi_files = list(package_root.glob("*.pyi"))
-        for pyi_file in pyi_files:
-            if pyi_file.stem != "__init__":
-                py_file = pyi_file.with_suffix(".py")
-                if not py_file.exists():
-                    return True
-
-        return False
-
-    def _griffe_search_paths(self) -> list[str | Path]:
-        """Return search paths for griffe so it can find src/python/lib layouts.
-
-        Prepends the package root and common sub-layouts (`src/`, `python/`, `lib/`) in front of
-        `sys.path` so that griffe can locate packages in non-flat layouts while still falling back
-        to the normal import path.
-        """
-        package_root = self.layout.package_root
-        extra: list[str | Path] = [package_root]
-        for subdir in PACKAGE_DIRS:
-            candidate = package_root / subdir
-            if candidate.is_dir():
-                extra.append(candidate)
-        return extra + sys.path
 
     # =========================================================================
     # Custom Sections Methods
@@ -1152,131 +984,6 @@ class GreatDocs:
         print("   📄 Blended homepage: first UG page → index.qmd")
         return f"user-guide/{dest_rel}"
 
-    def _find_package_init(self, package_name: str) -> Path | None:
-        """
-        Find a package's `__init__.py` in declared and common package locations
-
-        Search declared package paths and setuptools discovery directories before common
-        layouts such as `python/`, `src/` and `lib/`. Prefer a matching file containing
-        `__version__` or `__all__`, then any matching file. If neither is found, search
-        common layouts for another package.
-
-        Parameters
-        ----------
-        package_name
-            The name of the package to find.
-
-        Returns
-        -------
-        :
-            The path to `__init__.py`, or `None` if no package is found.
-        """
-        # Package directories may use underscores where distribution names use hyphens.
-        normalized_name = package_name.replace("-", "_")
-
-        package_root = self.layout.package_root
-        manifest = read_manifest(package_root)
-
-        # Declared packages take precedence over candidates in discovery directories.
-        search_paths: list[Path] = []
-        for package in manifest["declared_packages"]:
-            search_paths.append(package_root / package)
-            if "/" not in package:
-                search_paths.append(package_root / "src" / package)
-        for directory in manifest["discovery_dirs"]:
-            search_paths += [
-                package_root / directory / name for name in (package_name, normalized_name)
-            ]
-
-        # Handle dotted module names (namespace packages like "firebird.base")
-        # by converting dots to path separators
-        dotted_path = None
-        if "." in package_name:
-            dotted_path = package_name.replace(".", os.sep)
-            search_paths.extend(
-                [
-                    package_root / dotted_path,
-                    package_root / "src" / dotted_path,
-                    package_root / "python" / dotted_path,
-                    package_root / "lib" / dotted_path,
-                ]
-            )
-
-        # Then add standard locations based on package name
-        search_paths.extend(
-            [
-                package_root / package_name,
-                package_root / normalized_name,
-                package_root / "python" / package_name,
-                package_root / "python" / normalized_name,
-                package_root / "src" / package_name,
-                package_root / "src" / normalized_name,
-                package_root / "lib" / package_name,
-                package_root / "lib" / normalized_name,
-            ]
-        )
-
-        # First pass: look for __init__.py with __version__ or __all__
-        for package_dir in search_paths:
-            if not package_dir.exists() or not package_dir.is_dir():
-                continue
-
-            init_file = package_dir / "__init__.py"
-            if init_file.exists():
-                try:
-                    content = init_file.read_text(encoding="utf-8")
-                except (OSError, UnicodeDecodeError):
-                    continue
-                if "__version__" in content or "__all__" in content:
-                    return init_file
-
-        # Second pass: accept any __init__.py in a matching directory
-        for package_dir in search_paths:
-            if not package_dir.exists() or not package_dir.is_dir():
-                continue
-
-            init_file = package_dir / "__init__.py"
-            if init_file.exists():
-                return init_file
-
-        # Third pass: auto-discover any Python package in common locations
-        # This handles cases where the package name doesn't match the project name
-        auto_discover_dirs = [
-            package_root,
-            package_root / "src",
-            package_root / "python",
-            package_root / "lib",
-        ]
-
-        for base_dir in auto_discover_dirs:
-            if not base_dir.exists():
-                continue
-            for item in base_dir.iterdir():
-                if not item.is_dir():
-                    continue
-                # Skip common non-package directories
-                if item.name.startswith((".", "_")) or item.name in (
-                    "tests",
-                    "test",
-                    "docs",
-                    "doc",
-                    "examples",
-                    "scripts",
-                    "build",
-                    "dist",
-                    "__pycache__",
-                    "venv",
-                    ".venv",
-                    "node_modules",
-                    "site-packages",
-                ):
-                    continue
-                init_file = item / "__init__.py"
-                if init_file.exists():
-                    return init_file
-
-        return None
-
     def _get_package_exports(self, package_name: str) -> list[str] | None:
         """
         Find the names a package exports, and remember them for later calls
@@ -1317,7 +1024,8 @@ class GreatDocs:
 
         if exports is None:
             print("Falling back to __all__ discovery", file=sys.stderr)
-            init_file = self._find_package_init(package_name)
+            package_root = self.layout.package_root
+            init_file = locate_package_init(package_root, read_manifest(package_root), package_name)
             if init_file is None:
                 print(
                     f"Could not locate __init__.py for package '{package_name}'"
@@ -1440,9 +1148,8 @@ class GreatDocs:
 
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Detect package name
-        package_name = Project.make(self._config, self.layout).name
-        if not package_name:
+        project = Project.make(self._config, self.layout)
+        if not project.name or not (importable_name := project.importable_name):
             print("Warning: Could not detect package name, creating minimal config")
             # No importable name to detect from; fall back to the documented
             # parser/dynamic defaults so the emitted config is never empty.
@@ -1453,15 +1160,9 @@ class GreatDocs:
 
         overrides: dict[str, str] = {}
 
-        # Resolve the importable module name.
-        importable_name = self._normalize_package_name(package_name)
-        module_name = self._detect_module_name()
-        if module_name:
-            importable_name = module_name
-        normalized_name = self._normalize_package_name(package_name)
-        explicit_module = module_name if module_name != normalized_name else None
-        if explicit_module:  # pragma: no cover
-            overrides["module"] = f"module: {explicit_module}"  # pragma: no cover
+        # Preserve module names that differ even after hyphens are replaced with underscores.
+        if project.module and project.module != project.name.replace("-", "_"):
+            overrides["module"] = f"module: {project.module}"
 
         # Detect docstring style
         print("Detecting docstring style...")
@@ -1630,29 +1331,19 @@ class GreatDocs:
             print("API reference configuration already exists, skipping")
             return
 
-        package_name = run.project.name
-        if not package_name:
+        project = run.project
+        if not project.name or not (importable_name := project.importable_name):
             _print_warning("Could not detect the package name; skipping the API reference")
             run.has_api_reference = False
             return
 
-        print(f"Adding API reference configuration for package: {package_name}")
+        print(f"Adding API reference configuration for package: {project.name}")
 
-        # Detect actual module name (may differ from project name)
-        # e.g., project 'py-yaml12' might have module 'yaml12'
-        module_name = self._detect_module_name()
-        if module_name:
-            importable_name = module_name
-            if module_name != package_name and module_name != self._normalize_package_name(
-                package_name
-            ):
-                print(f"Detected module name: {module_name}")  # pragma: no cover
-        else:
-            # Fall back to normalizing package name (hyphens -> underscores)
-            importable_name = self._normalize_package_name(package_name)
+        # Report module names that differ even after hyphens are replaced with underscores.
+        if importable_name not in (project.name, project.name.replace("-", "_")):
+            print(f"Detected module name: {importable_name}")
 
-        # Check if this is a compiled extension
-        if self._is_compiled_extension():  # pragma: no cover
+        if project.compiled_extension:
             print("Detected compiled extension package (PyO3/Rust/Cython)")
             print("Note: The package must be installed (`pip install -e .` or `maturin develop`)")
             print("      for API reference generation.")
@@ -1748,13 +1439,11 @@ class GreatDocs:
         """
         from great_docs._api_diff import snapshot_from_griffe
 
-        package_name = project.name
-        if not package_name:
-            return
-
         # griffe loads by importable module name, which can differ from the
         # PyPI project name.
-        importable_name = self._resolve_importable_name(package_name)
+        importable_name = project.importable_name
+        if not project.name or not importable_name:
+            return
 
         try:
             version = exact_tag(self.project_root) or "dev"
@@ -1976,11 +1665,11 @@ class GreatDocs:
 
         cli = None
         package_name = run.project.name if self._config.cli_enabled else None
-        if package_name:
-            # The importable module name can differ from the PyPI project name.
+        module = run.project.importable_name
+        if package_name and module:
             try:
                 cli = cli_click.discover(
-                    self._resolve_importable_name(package_name),
+                    module,
                     self.layout.package_root,
                     cli_module=self._config.cli_module,
                     cli_name=self._config.cli_name,
@@ -2099,10 +1788,9 @@ class GreatDocs:
         if not self._config.cli_enabled:
             return Skipped("CLI not enabled")
         package_name = run.project.name
-        if not package_name:
+        module = run.project.importable_name
+        if not package_name or not module:
             return Skipped("no package detected")
-        # The importable module name can differ from the project name.
-        module = self._resolve_importable_name(package_name)
         cli_info = cli_click.discover(
             module,
             self.layout.package_root,
@@ -2200,12 +1888,7 @@ class GreatDocs:
         """
         if not self._config.mcp_enabled:
             return Skipped("MCP not enabled")
-        package_name = run.project.name
-        mcp_package = (
-            self._resolve_importable_name(package_name)
-            if package_name
-            else self._detect_module_name()
-        )
+        mcp_package = run.project.importable_name
         from ._mcpref import build as mcp_build
 
         mcp_info = mcp_build.discover_server(self._config, mcp_package)
@@ -2213,7 +1896,7 @@ class GreatDocs:
             return Skipped("no MCP server found")
         repo_url = run.project.github.url if run.project.github else None
         mcp_files = mcp_build.build_mcp_reference(
-            self._config, mcp_info, self.build_dir, package_name, repo_url
+            self._config, mcp_info, self.build_dir, run.project.name, repo_url
         )
         if not mcp_files:
             return "No MCP pages generated"
@@ -2731,8 +2414,8 @@ class GreatDocs:
         def documented_symbols(package_name: str) -> list[str]:
             return documented.symbol_names(
                 self._config,
-                importable_name=self._resolve_importable_name(package_name),
-                search_paths=self._griffe_search_paths(),
+                importable_name=run.project.module or package_name.replace("-", "_"),
+                search_paths=run.project.search_paths(),
                 create_sections=self._create_api_sections_with_config,
             )
 
@@ -3187,7 +2870,7 @@ class GreatDocs:
             # Show the location Griffe will actually use for introspection
             # (prioritizes project root / src layout over sys.path)
             _normalized_pkg = package_name.replace("-", "_")
-            for _sp in self._griffe_search_paths():
+            for _sp in run.project.search_paths():
                 _candidate = Path(_sp) / _normalized_pkg
                 if _candidate.is_dir() and (_candidate / "__init__.py").exists():
                     package_location = str(_candidate)
@@ -3523,9 +3206,10 @@ class GreatDocs:
         ```
         """
         files: list[Path] = []
-        if include_source and (package_name := Project.make(self._config, self.layout).name):
-            module = self._resolve_importable_name(package_name)
-            files += proofread.find_modules(self.layout, module)
+        if include_source:
+            project = Project.make(self._config, self.layout)
+            if project.name and project.importable_name:
+                files += proofread.find_modules(self.layout, project.importable_name)
         if include_docs:
             files += proofread.find_pages(self._config, self.layout, report=_print_warning)
 
@@ -3634,9 +3318,10 @@ class GreatDocs:
         files: list[Path] = []
         if include_docs:
             files = proofread.find_pages(self._config, self.layout, report=_print_warning)
-        if include_docstrings and (package_name := Project.make(self._config, self.layout).name):
-            module = self._resolve_importable_name(package_name)
-            files += proofread.find_modules(self.layout, module)
+        if include_docstrings:
+            project = Project.make(self._config, self.layout)
+            if project.name and project.importable_name:
+                files += proofread.find_modules(self.layout, project.importable_name)
 
         options = proofread.Options(
             dialect=dialect,
