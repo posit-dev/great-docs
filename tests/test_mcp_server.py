@@ -1512,3 +1512,70 @@ class TestReadResourceReference:
             result = asyncio.run(read_resource(self._uri("gd://reference/any_sym")))
 
         assert "Error reading reference" in result
+
+
+# ---------------------------------------------------------------------------
+# Projects without a detectable package
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def undetectable_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """
+    Create a project whose package name and module cannot be detected
+
+    Two package directories and no packaging files leave both the distribution name and
+    the module unknown.
+
+    Parameters
+    ----------
+    tmp_path
+        The project directory.
+    monkeypatch
+        The fixture for changing the working directory to the project.
+
+    Returns
+    -------
+    :
+        The project directory, which is also the working directory.
+    """
+    for package in ("first", "second"):
+        (tmp_path / package).mkdir()
+        (tmp_path / package / "__init__.py").write_text("")
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+def test_reference_resource_without_a_package_reports_it(undetectable_project: Path):
+    result = asyncio.run(read_resource(AnyUrl("gd://reference/Foo")))
+    assert result == "Error: Could not detect package name."
+
+
+def test_docstring_symbol_completion_without_a_package_offers_nothing(
+    undetectable_project: Path,
+):
+    from mcp.types import CompletionArgument, PromptReference
+
+    result = asyncio.run(
+        handle_completion(
+            PromptReference(type="ref/prompt", name="improve-docstrings"),
+            CompletionArgument(name="symbol", value=""),
+        )
+    )
+    assert result is not None
+    assert result.values == []
+
+
+def test_reference_symbol_completion_without_a_package_offers_nothing(
+    undetectable_project: Path,
+):
+    from mcp.types import CompletionArgument, ResourceTemplateReference
+
+    result = asyncio.run(
+        handle_completion(
+            ResourceTemplateReference(type="ref/resource", uri="gd://reference/{symbol}"),
+            CompletionArgument(name="symbol", value=""),
+        )
+    )
+    assert result is not None
+    assert result.values == []

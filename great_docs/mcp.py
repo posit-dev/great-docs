@@ -1226,6 +1226,8 @@ async def read_resource(uri: AnyUrl) -> str:
             docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
             package_name = Project.make(docs._config, docs.layout).name
             module_name = docs._detect_module_name()
+            if not module_name and not package_name:
+                return "Error: Could not detect package name."
             importable_name = module_name or docs._normalize_package_name(package_name)
             # Try to get docstring for the symbol
             import importlib
@@ -1345,6 +1347,8 @@ async def handle_completion(
                 docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
                 package_name = Project.make(docs._config, docs.layout).name
                 module_name = docs._detect_module_name()
+                if not module_name and not package_name:
+                    return Completion(values=[])
                 importable_name = module_name or docs._normalize_package_name(package_name)
                 exports = docs._get_package_exports(importable_name)
                 filtered = [e for e in exports if value.lower() in e.lower()]
@@ -1372,6 +1376,8 @@ async def handle_completion(
                 docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
                 package_name = Project.make(docs._config, docs.layout).name
                 module_name = docs._detect_module_name()
+                if not module_name and not package_name:
+                    return Completion(values=[])
                 importable_name = module_name or docs._normalize_package_name(package_name)
                 exports = docs._get_package_exports(importable_name)
                 filtered = [e for e in exports if value.lower() in e.lower()]
