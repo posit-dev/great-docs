@@ -128,6 +128,33 @@ def _read_manifest(root: Path) -> Manifest:
         return _manifest.empty()
 
 
+def _initial_authors(manifest: Manifest) -> list[dict[str, str]]:
+    """
+    List maintainers and authors for a new `great-docs.yml`
+
+    Parameters
+    ----------
+    manifest
+        The project's declared metadata.
+
+    Returns
+    -------
+    :
+        Entries with a `name`, a `role` and an `email` when declared. List named
+        maintainers first with role `Maintainer`, then named authors with role `Author`.
+        Keep only the first entry for each name.
+    """
+    authors: dict[str, dict[str, str]] = {}
+    for people, role in ((manifest["maintainers"], "Maintainer"), (manifest["authors"], "Author")):
+        for person in people:
+            name = person.get("name")
+            if name and name not in authors:
+                authors[name] = {"name": name, "role": role}
+                if email := person.get("email"):
+                    authors[name]["email"] = email
+    return list(authors.values())
+
+
 def _print_warning(message: str) -> None:
     """
     Print a warning as a detail line in the current build step
@@ -544,52 +571,19 @@ class GreatDocs:
 
     def _detect_package_name(self) -> str | None:
         """
-        Detect the Python package name from project structure.
+        Detect the project's distribution name
+
+        Use the name declared in the packaging files. If none is available, use the sole
+        non-hidden package directory at the project root.
 
         Returns
         -------
-        str | None
-            The detected package name, or None if not found.
+        :
+            The declared name or package directory name, or `None` if neither identifies
+            the distribution.
         """
-        # Look for pyproject.toml
-        pyproject_path = self.project_root / "pyproject.toml"
-        if pyproject_path.exists():
-            import tomllib
-
-            with open(pyproject_path, "rb") as f:
-                try:
-                    data = tomllib.load(f)
-                    name = data.get("project", {}).get("name")
-                    if name:
-                        return name
-                except Exception:
-                    pass
-
-        # Look for setup.cfg
-        setup_cfg = self.project_root / "setup.cfg"
-        if setup_cfg.exists():
-            try:
-                import configparser
-
-                cfg = configparser.ConfigParser()
-                cfg.read(setup_cfg, encoding="utf-8")
-                name = cfg.get("metadata", "name", fallback=None)
-                if name:
-                    return name
-            except Exception:  # pragma: no cover
-                pass
-
-        # Look for setup.py
-        setup_py = self.project_root / "setup.py"
-        if setup_py.exists():
-            with open(setup_py, "r") as f:
-                content = f.read()
-                # Require a whole `name` word so `username` cannot supply the package name.
-                match = re.search(r'\bname\s*=\s*["\']([^"\']+)["\']', content)
-                if match:
-                    return match.group(1)
-
-        # Look for a single Python package directory
+        if name := _read_manifest(self.project_root)["name"]:
+            return name
         potential_packages = [
             d
             for d in self.project_root.iterdir()
@@ -597,7 +591,6 @@ class GreatDocs:
         ]
         if len(potential_packages) == 1:
             return potential_packages[0].name
-
         return None
 
     def _normalize_package_name(self, package_name: str) -> str:
@@ -826,194 +819,41 @@ class GreatDocs:
                 extra.append(candidate)
         return extra + sys.path
 
-    def _get_package_metadata(self) -> dict:
+    def _get_package_metadata(self) -> dict[str, Any]:
         """
-        Read project metadata and selected in-memory configuration values
+        Read declared project metadata and selected configuration values
 
-        Read project fields such as the license, authors, URLs and dependencies from
-        `pyproject.toml`. If the description is missing, use `setup.cfg` to fill
-        supported empty fields.
-
-        Use the instance's current configuration without reloading it. When
-        `pyproject.toml` exists, cache the first result and return it on later calls.
-        Otherwise, read the current configuration on each call.
+        Read the description, licence, authors, maintainers, URLs, Python requirement,
+        keywords and dependencies from the packaging files, and use the current
+        configuration without reloading it. When `pyproject.toml` exists, cache the first
+        result for later calls. Otherwise, read the packaging files and current configuration
+        on each call.
 
         Returns
         -------
         :
-            Project fields and configuration values, keyed by name.
+            Project fields and configuration values, keyed by name. Ignore an unreadable
+            or invalid `setup.cfg` beside a readable, valid `pyproject.toml`. Other packaging
+            read or parse errors leave the project fields empty.
         """
         if self._package_metadata_cache is not None:
             return self._package_metadata_cache
 
-        metadata = {}
         package_root = self.layout.package_root
-        pyproject_path = package_root / "pyproject.toml"
-
-        # Read project metadata from pyproject.toml
-        if pyproject_path.exists():
-            import tomllib
-
-            try:
-                with open(pyproject_path, "rb") as f:
-                    data = tomllib.load(f)
-                    project = data.get("project", {})
-
-                    # Extract relevant fields from [project] section
-                    # License can be a string (PEP 639) or a dict with "text"/"file" keys
-                    license_val = project.get("license", "")
-                    classifiers = project.get("classifiers", [])
-
-                    # Try to extract license identifier from classifiers first
-                    # e.g., "License :: OSI Approved :: MIT License" -> "MIT"
-                    license_from_classifiers = ""
-                    for classifier in classifiers:
-                        if classifier.startswith("License :: OSI Approved ::"):
-                            # Extract the license name from the classifier
-                            license_name = classifier.split("::")[-1].strip()
-                            # Map common patterns to SPDX identifiers
-                            license_map = {
-                                "MIT License": "MIT",
-                                "Apache Software License": "Apache-2.0",
-                                "GNU General Public License v3 (GPLv3)": "GPL-3.0",
-                                "GNU General Public License v2 (GPLv2)": "GPL-2.0",
-                                "BSD License": "BSD-3-Clause",
-                                "ISC License (ISCL)": "ISC",
-                                "Mozilla Public License 2.0 (MPL 2.0)": "MPL-2.0",
-                            }
-                            license_from_classifiers = license_map.get(license_name, license_name)
-                            break
-
-                    # Determine the license identifier
-                    if license_from_classifiers:
-                        # Prefer classifier-derived license (cleaner identifier)
-                        metadata["license"] = license_from_classifiers
-                    elif isinstance(license_val, dict):
-                        # If it's a dict with "text", use that; if "file", we need
-                        # to fall back to classifiers or leave as-is
-                        text_val = license_val.get("text", "")
-                        if text_val:
-                            metadata["license"] = text_val
-                        else:
-                            # File reference - not useful for JSON-LD, leave empty
-                            # unless we have a better source
-                            metadata["license"] = ""
-                    else:
-                        metadata["license"] = str(license_val) if license_val else ""
-                    metadata["authors"] = project.get("authors", [])
-                    metadata["maintainers"] = project.get("maintainers", [])
-                    metadata["urls"] = project.get("urls", {})
-                    metadata["requires_python"] = project.get("requires-python", "")
-                    metadata["keywords"] = project.get("keywords", [])
-                    metadata["description"] = project.get("description", "")
-                    metadata["optional_dependencies"] = project.get("optional-dependencies", {})
-
-                    # Parse declared runtime dependencies (PEP 508 specifiers)
-                    raw_deps = project.get("dependencies", [])
-                    parsed_deps = []
-                    if raw_deps:
-                        from packaging.requirements import Requirement
-
-                        for dep_str in raw_deps:
-                            try:
-                                req = Requirement(dep_str)
-                                entry = {"name": req.name, "specifier": str(req.specifier)}
-                                if req.marker:
-                                    entry["marker"] = str(req.marker)
-                                if req.extras:
-                                    entry["extras"] = sorted(req.extras)
-                                parsed_deps.append(entry)
-                            except Exception:
-                                parsed_deps.append({"name": dep_str, "specifier": ""})
-                    metadata["dependencies"] = parsed_deps
-
-                    # Parse full optional dependency contents (not just group names)
-                    opt_deps_full: dict[str, list[dict]] = {}
-                    for group, specs in metadata["optional_dependencies"].items():
-                        group_deps = []
-                        if isinstance(specs, list):
-                            from packaging.requirements import Requirement
-
-                            for dep_str in specs:
-                                try:
-                                    req = Requirement(dep_str)
-                                    entry = {
-                                        "name": req.name,
-                                        "specifier": str(req.specifier),
-                                    }
-                                    if req.marker:
-                                        entry["marker"] = str(req.marker)
-                                    if req.extras:
-                                        entry["extras"] = sorted(req.extras)
-                                    group_deps.append(entry)
-                                except Exception:  # pragma: no cover
-                                    group_deps.append(
-                                        {"name": dep_str, "specifier": ""}
-                                    )  # pragma: no cover
-                        opt_deps_full[group] = group_deps
-                    metadata["optional_dependencies_full"] = opt_deps_full
-
-            except Exception:
-                pass
-
-        # Fall back to setup.cfg if pyproject.toml didn't provide key metadata
-        if not metadata.get("description"):
-            setup_cfg = package_root / "setup.cfg"
-            if setup_cfg.exists():
-                try:
-                    import configparser
-
-                    cfg = configparser.ConfigParser()
-                    cfg.read(setup_cfg, encoding="utf-8")
-
-                    if not metadata.get("description"):
-                        metadata["description"] = cfg.get("metadata", "description", fallback="")
-
-                    if not metadata.get("license"):
-                        metadata["license"] = cfg.get("metadata", "license", fallback="")
-
-                    if not metadata.get("requires_python"):
-                        metadata["requires_python"] = cfg.get(
-                            "options", "python_requires", fallback=""
-                        )
-
-                    if not metadata.get("authors"):
-                        author = cfg.get("metadata", "author", fallback="")
-                        author_email = cfg.get("metadata", "author_email", fallback="")
-                        if author:
-                            entry = {"name": author}
-                            if author_email:
-                                entry["email"] = author_email
-                            metadata["authors"] = [entry]
-
-                    if not metadata.get("maintainers"):
-                        maintainer = cfg.get("metadata", "maintainer", fallback="")
-                        maintainer_email = cfg.get("metadata", "maintainer_email", fallback="")
-                        if maintainer:
-                            entry = {"name": maintainer}
-                            if maintainer_email:
-                                entry["email"] = maintainer_email
-                            metadata["maintainers"] = [entry]
-
-                    if not metadata.get("urls"):
-                        urls = {}
-                        # Main url field
-                        url = cfg.get("metadata", "url", fallback="")
-                        if url:
-                            urls["Repository"] = url
-                        # project_urls is a multi-line value
-                        project_urls_raw = cfg.get("metadata", "project_urls", fallback="")
-                        if project_urls_raw:
-                            for line in project_urls_raw.strip().splitlines():
-                                line = line.strip()
-                                if "=" in line:
-                                    key, val = line.split("=", 1)
-                                    urls[key.strip()] = val.strip()
-                        if urls:
-                            metadata["urls"] = urls
-
-                except Exception:  # pragma: no cover
-                    pass
+        manifest = _read_manifest(package_root)
+        metadata: dict[str, Any] = {
+            "description": manifest["description"],
+            "license": manifest["license"],
+            "authors": manifest["authors"],
+            "maintainers": manifest["maintainers"],
+            "urls": manifest["urls"],
+            "requires_python": manifest["requires_python"],
+            "keywords": manifest["keywords"],
+            "dependencies": manifest["dependencies"],
+            "optional_dependencies": manifest["optional_dependencies"],
+            # The package-information page requires this key for parsed optional dependencies.
+            "optional_dependencies_full": manifest["optional_dependencies"],
+        }
 
         # Map config properties to metadata dict for backward compatibility
         metadata["rich_authors"] = self._config.authors
@@ -1071,7 +911,7 @@ class GreatDocs:
         metadata["logo_show_title"] = self._config.logo_show_title
         metadata["favicon"] = self._config.favicon
 
-        if pyproject_path.exists():
+        if (package_root / "pyproject.toml").exists():
             self._package_metadata_cache = metadata
         return metadata
 
@@ -1800,67 +1640,6 @@ class GreatDocs:
         categories = self._categorise_exports(package_name, exports)
         return reference_sections.from_categories(self._config, categories)
 
-    def _extract_authors_from_pyproject(self) -> list[dict[str, str]]:
-        """
-        Extract author information from pyproject.toml.
-
-        Reads authors and maintainers from pyproject.toml and combines them
-        into a list suitable for the great-docs.yml authors section.
-
-        Returns
-        -------
-        list[dict[str, str]]
-            List of author dictionaries with name, email, and role fields.
-        """
-        package_root = self.layout.package_root
-        pyproject_path = package_root / "pyproject.toml"
-
-        if not pyproject_path.exists():
-            return []
-
-        try:
-            import tomllib
-
-            with open(pyproject_path, "rb") as f:
-                data = tomllib.load(f)
-                project = data.get("project", {})
-
-            authors_list = project.get("authors", [])
-            maintainers_list = project.get("maintainers", [])
-
-            # Track seen names to avoid duplicates
-            seen_names: set[str] = set()
-            result: list[dict[str, str]] = []
-
-            # Process maintainers first (they get "Maintainer" role)
-            for maintainer in maintainers_list:
-                if isinstance(maintainer, dict):
-                    name = maintainer.get("name", "")
-                    email = maintainer.get("email", "")
-                    if name and name not in seen_names:
-                        seen_names.add(name)
-                        author_entry: dict[str, str] = {"name": name, "role": "Maintainer"}
-                        if email:
-                            author_entry["email"] = email
-                        result.append(author_entry)
-
-            # Process authors (they get "Author" role, unless already added as maintainer)
-            for author in authors_list:
-                if isinstance(author, dict):
-                    name = author.get("name", "")
-                    email = author.get("email", "")
-                    if name and name not in seen_names:
-                        seen_names.add(name)
-                        author_entry = {"name": name, "role": "Author"}
-                        if email:
-                            author_entry["email"] = email
-                        result.append(author_entry)
-
-            return result
-
-        except Exception:  # pragma: no cover
-            return []  # pragma: no cover
-
     def _generate_initial_config(self, force: bool = False) -> bool:
         """
         Generate an initial great-docs.yml with discovered exports.
@@ -1927,10 +1706,11 @@ class GreatDocs:
             parser_style = probe.detect_docstring_style(package, report=print)
         overrides["parser"] = f"parser: {parser_style}"
 
-        # Authors from pyproject.toml
-        authors_yaml = format_authors_yaml(self._extract_authors_from_pyproject())
-        if authors_yaml:  # pragma: no cover
-            overrides["authors"] = authors_yaml  # pragma: no cover
+        authors_yaml = format_authors_yaml(
+            _initial_authors(_read_manifest(self.layout.package_root))
+        )
+        if authors_yaml:
+            overrides["authors"] = authors_yaml
 
         # Discover exports
         exports = self._get_package_exports(importable_name)

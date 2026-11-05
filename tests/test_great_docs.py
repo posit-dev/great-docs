@@ -31,7 +31,7 @@ from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
 from yaml12 import format_yaml as _format_yaml
 from yaml12 import parse_yaml as _parse_yaml
 
-from great_docs import BuildError, Config, GreatDocs, create_default_config, load_config
+from great_docs import BuildError, Config, GreatDocs, _manifest, create_default_config, load_config
 from great_docs._apiref import _globals, content, spec, write
 from great_docs._apiref._docstring_sections import (
     DCDocstringSection,
@@ -191,6 +191,7 @@ from great_docs.cli import (
     setup_github_pages,
     uninstall,
 )
+from great_docs.core import _initial_authors
 from great_docs.pandoc.blocks import (
     Block,
     Blocks,
@@ -2222,108 +2223,28 @@ def test_citation_year_handles_invalid_date():
         assert f"year = {{{current_year}}}" in content
 
 
-def test_extract_authors_from_pyproject_with_authors():
-    """Test extracting authors from pyproject.toml with authors field."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
+def test_initial_authors_list_maintainers_then_authors(tmp_path: Path):
+    """Maintainers come first; a person who is both appears once, as a maintainer"""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\n'
+        '[[project.authors]]\nname = "Alice"\nemail = "alice@example.com"\n'
+        '[[project.authors]]\nname = "Bob"\n'
+        '[[project.maintainers]]\nname = "Bob"\nemail = "bob@example.com"\n'
+        '[[project.maintainers]]\nemail = "nameless@example.com"\n',
+        encoding="utf-8",
+    )
 
-        # Create pyproject.toml with authors
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text("""[project]
-name = "test-package"
-version = "0.1.0"
-authors = [
-    {name = "Alice Smith", email = "alice@example.com"},
-    {name = "Bob Jones", email = "bob@example.com"}
-]
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        authors = docs._extract_authors_from_pyproject()
-
-        assert len(authors) == 2
-        assert authors[0]["name"] == "Alice Smith"
-        assert authors[0]["role"] == "Author"
-        assert authors[0]["email"] == "alice@example.com"
-        assert authors[1]["name"] == "Bob Jones"
+    assert _initial_authors(_manifest.read(tmp_path)) == [
+        {"name": "Bob", "role": "Maintainer", "email": "bob@example.com"},
+        {"name": "Alice", "role": "Author", "email": "alice@example.com"},
+    ]
 
 
-def test_extract_authors_from_pyproject_with_maintainers():
-    """Test extracting authors from pyproject.toml with maintainers field."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
+def test_initial_authors_without_people(tmp_path: Path):
+    """A project that declares no people gets no authors"""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n', encoding="utf-8")
 
-        # Create pyproject.toml with maintainers
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text("""[project]
-name = "test-package"
-version = "0.1.0"
-maintainers = [
-    {name = "Carol White", email = "carol@example.com"}
-]
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        authors = docs._extract_authors_from_pyproject()
-
-        assert len(authors) == 1
-        assert authors[0]["name"] == "Carol White"
-        assert authors[0]["role"] == "Maintainer"
-        assert authors[0]["email"] == "carol@example.com"
-
-
-def test_extract_authors_from_pyproject_deduplicates():
-    """Test that authors appearing in both authors and maintainers are deduplicated."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        # Create pyproject.toml with same person as author and maintainer
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text("""[project]
-name = "test-package"
-version = "0.1.0"
-authors = [
-    {name = "Rich Iannone", email = "rich@example.com"}
-]
-maintainers = [
-    {name = "Rich Iannone", email = "rich@example.com"}
-]
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        authors = docs._extract_authors_from_pyproject()
-
-        # Should only have one entry, with Maintainer role (maintainers processed first)
-        assert len(authors) == 1
-        assert authors[0]["name"] == "Rich Iannone"
-        assert authors[0]["role"] == "Maintainer"
-
-
-def test_extract_authors_from_pyproject_no_authors_full_toml():
-    """Test extracting authors when pyproject.toml has no authors."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        # Create pyproject.toml without authors
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text("""[project]
-name = "test-package"
-version = "0.1.0"
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        authors = docs._extract_authors_from_pyproject()
-
-        assert authors == []
-
-
-def test_extract_authors_from_pyproject_no_file():
-    """Test extracting authors when pyproject.toml doesn't exist."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        authors = docs._extract_authors_from_pyproject()
-
-        assert authors == []
+    assert _initial_authors(_manifest.read(tmp_path)) == []
 
 
 def test_strip_numeric_prefix_two_digit():
@@ -8292,17 +8213,6 @@ def test_get_package_exports_missing_package():
         assert result is None
 
 
-def test_extract_authors_from_pyproject_no_authors():
-    """_extract_authors_from_pyproject returns empty list when no authors."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._extract_authors_from_pyproject()
-
-        assert result == []
-
-
 def test_quarto_environment_sets_quarto_python():
     """Set `QUARTO_PYTHON` to a non-empty executable path"""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -11787,49 +11697,6 @@ def test_build_sections_from_reference_config_dict_no_name():
         assert result[0]["contents"][0] == "Valid"
 
 
-def test_extract_authors_from_pyproject_basic():
-    """Test _extract_authors_from_pyproject with authors and maintainers."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n'
-            '[[project.authors]]\nname = "Alice"\nemail = "alice@example.com"\n'
-            '[[project.maintainers]]\nname = "Bob"\n',
-            encoding="utf-8",
-        )
-
-        result = docs._extract_authors_from_pyproject()
-        assert len(result) == 2
-        # Maintainers come first
-        assert result[0]["name"] == "Bob"
-        assert result[0]["role"] == "Maintainer"
-        assert result[1]["name"] == "Alice"
-        assert result[1]["role"] == "Author"
-        assert result[1]["email"] == "alice@example.com"
-
-
-def test_extract_authors_from_pyproject_duplicate_names():
-    """Test _extract_authors_from_pyproject deduplicates author/maintainer names."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n'
-            '[[project.authors]]\nname = "Alice"\n'
-            '[[project.maintainers]]\nname = "Alice"\n',
-            encoding="utf-8",
-        )
-
-        result = docs._extract_authors_from_pyproject()
-        # Alice appears once as Maintainer (processed first)
-        assert len(result) == 1
-        assert result[0]["name"] == "Alice"
-        assert result[0]["role"] == "Maintainer"
-
-
 def test_categorise_references_missing_item_raises(capsys: pytest.CaptureFixture[str]):
     """Report missing configured names and raise `BuildError`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -12212,6 +12079,62 @@ def test_generate_initial_config_unloadable_package(capsys: pytest.CaptureFixtur
         assert "\nparser: numpy\n" in content
         assert "\ndynamic: true\n" in content
         assert "Could not load package for docstring detection" in capsys.readouterr().out
+
+
+_POETRY_1_PYPROJECT = """\
+[tool.poetry]
+name = "poetry-pkg"
+version = "1.0.0"
+description = "A Poetry 1.x package"
+authors = ["Ada Lovelace <ada@example.com>"]
+repository = "https://github.com/owner/repo"
+"""
+
+
+def test_poetry_1_project_facts_reach_the_build(tmp_path: Path):
+    """A Poetry 1.x project supplies the name, description and GitHub repository"""
+    (tmp_path / "pyproject.toml").write_text(_POETRY_1_PYPROJECT, encoding="utf-8")
+    # A second package directory rules out naming the project after a lone directory.
+    for package in ("poetry_pkg", "tests"):
+        (tmp_path / package).mkdir()
+        (tmp_path / package / "__init__.py").write_text("", encoding="utf-8")
+    docs = GreatDocs(project_path=str(tmp_path))
+
+    assert docs._detect_package_name() == "poetry-pkg"
+    assert docs._get_package_metadata()["description"] == "A Poetry 1.x package"
+    assert docs._get_github_repo_info() == ("owner", "repo", "https://github.com/owner/repo")
+
+
+def test_project_facts_survive_an_unparsable_setup_cfg(tmp_path: Path):
+    """A `setup.cfg` that `configparser` rejects leaves the `pyproject.toml` metadata in use"""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\ndescription = "Summary"\n', encoding="utf-8"
+    )
+    (tmp_path / "setup.cfg").write_text("[flake8]\nignore = E1\nignore = E2\n", encoding="utf-8")
+    docs = GreatDocs(project_path=str(tmp_path))
+
+    assert docs._detect_package_name() == "pkg"
+    assert docs._get_package_metadata()["description"] == "Summary"
+
+
+def test_init_lists_poetry_1_authors(tmp_path: Path):
+    """`great-docs init` lists the authors of a Poetry 1.x project"""
+    (tmp_path / "pyproject.toml").write_text(_POETRY_1_PYPROJECT, encoding="utf-8")
+    docs = GreatDocs(project_path=str(tmp_path))
+
+    with (
+        patch.object(docs, "_get_package_exports", return_value=None),
+        patch.object(docs, "_get_griffe_package", return_value=MagicMock()),
+        patch("great_docs.core.probe.detect_docstring_style", return_value="numpy"),
+        patch("great_docs.core.probe.detect_dynamic_mode", return_value=False),
+    ):
+        assert docs._generate_initial_config(force=True) is True
+
+    config = read_yaml(tmp_path / "great-docs.yml")
+    assert isinstance(config, dict)
+    assert config["authors"] == [
+        {"name": "Ada Lovelace", "role": "Author", "email": "ada@example.com"}
+    ]
 
 
 def test_empty_categories_structure():
@@ -14293,40 +14216,6 @@ def test_extract_command_group():
 
         assert result["name"] == "cli"
         assert len(result.get("commands", [])) >= 1
-
-
-def test_extract_authors_from_pyproject():
-    """Test _extract_authors_from_pyproject reads authors and maintainers."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n'
-            '[[project.authors]]\nname = "Alice"\nemail = "alice@example.com"\n'
-            '[[project.maintainers]]\nname = "Bob"\nemail = "bob@example.com"\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        authors = docs._extract_authors_from_pyproject()
-
-        assert len(authors) == 2
-
-        names = [a["name"] for a in authors]
-
-        assert "Bob" in names
-        assert "Alice" in names
-
-        # Bob should be first (maintainer processed first)
-        assert authors[0]["name"] == "Bob"
-        assert authors[0]["role"] == "Maintainer"
-
-
-def test_extract_authors_from_pyproject_no_pyproject():
-    """Test _extract_authors_from_pyproject returns empty without pyproject."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        authors = docs._extract_authors_from_pyproject()
-
-        assert authors == []
 
 
 def test_get_package_exports_with_all():
