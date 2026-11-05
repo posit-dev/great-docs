@@ -4,8 +4,8 @@ Shared configuration and build setup for `GreatDocs` tests
 `write_config` writes and loads `great-docs.yml`. `mock_config` provides a `Config` double
 with empty defaults. `write_pyproject` declares a project's name. `make_project` reads a
 project's facts as a build does, `make_exports` prepares to find its exports, and `make_run`
-creates build state for testing build methods directly. `user_guide_step`, `sections_step`
-and `custom_pages_step` run individual content steps with the build's arguments.
+creates build state for testing build methods directly. `user_guide_step`, `sections_step`,
+`custom_pages_step` and `freeze_cache_step` run individual steps with the build's arguments.
 `stubbed_build` stubs Quarto and build steps while preserving the build's control flow.
 `StubRemote` supplies GitHub and PyPI data without network requests. `homepage_hero` and
 `homepage_margin` build the homepage hero and sidebar from the project's configuration and metadata.
@@ -34,7 +34,7 @@ from great_docs import Config, GreatDocs
 from great_docs._build import content
 from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
-from great_docs._build.steps import Outcome, Skipped
+from great_docs._build.steps import Outcome, Skipped, print_warning
 from great_docs._content import user_guide
 from great_docs._project import Project
 from great_docs._reference.exports import Exports
@@ -55,7 +55,7 @@ _BUILD_METHODS: tuple[str, ...] = (
     "content.custom_pages",
     "content.assets",
     "_update_quarto_config",
-    "_prerender_term_player",
+    "passes.terminal_recordings",
     "_default_description",
     "_structured_data",
     "_print_layout_notice",
@@ -218,7 +218,7 @@ def user_guide_step(docs: GreatDocs, guide: UserGuide | None = None) -> Outcome:
     :
         The step's outcome.
     """
-    return _preparation_step(docs, "Process User Guide", guide)
+    return _preparation_step(docs, "Process User Guide", make_run(docs, user_guide=guide))
 
 
 def sections_step(docs: GreatDocs, guide: UserGuide | None = None) -> Outcome:
@@ -237,7 +237,7 @@ def sections_step(docs: GreatDocs, guide: UserGuide | None = None) -> Outcome:
     :
         The step's outcome.
     """
-    return _preparation_step(docs, "Process custom sections", guide)
+    return _preparation_step(docs, "Process custom sections", make_run(docs, user_guide=guide))
 
 
 def custom_pages_step(docs: GreatDocs, guide: UserGuide | None = None) -> Outcome:
@@ -259,10 +259,31 @@ def custom_pages_step(docs: GreatDocs, guide: UserGuide | None = None) -> Outcom
     :
         The step's outcome.
     """
-    return _preparation_step(docs, "Process custom pages", guide)
+    return _preparation_step(docs, "Process custom pages", make_run(docs, user_guide=guide))
 
 
-def _preparation_step(docs: GreatDocs, title: str, guide: UserGuide | None) -> Outcome:
+def freeze_cache_step(docs: GreatDocs, *, watch: bool = False) -> Outcome:
+    """
+    Run the build's freeze cache step on its own
+
+    Read the site's current name and description when the step runs.
+
+    Parameters
+    ----------
+    docs
+        The project.
+    watch
+        Whether the build watches for changes.
+
+    Returns
+    -------
+    :
+        The step's outcome.
+    """
+    return _preparation_step(docs, "Prepare freeze cache", make_run(docs, watch=watch))
+
+
+def _preparation_step(docs: GreatDocs, title: str, run: Run) -> Outcome:
     """
     Run one preparation step with the build's arguments
 
@@ -272,15 +293,14 @@ def _preparation_step(docs: GreatDocs, title: str, guide: UserGuide | None) -> O
         The project.
     title
         The step's title in the build log.
-    guide
-        The discovered user guide, or `None` when it has no pages.
+    run
+        The current build.
 
     Returns
     -------
     :
         The step's outcome.
     """
-    run = make_run(docs, user_guide=guide)
     steps = docs._preparation_steps(run, BuildLog(stream=io.StringIO()))
     return next(step for step in steps if step.title == title).run()
 
@@ -645,22 +665,6 @@ def homepage_margin(docs: GreatDocs) -> str:
     )
 
 
-def _print_warning(message: str) -> None:
-    """
-    Print a warning as a build step's detail line
-
-    Parameters
-    ----------
-    message
-        The warning's text.
-
-    Returns
-    -------
-    :
-    """
-    print(f"   ⚠️  {message}")
-
-
 def find_user_guide_dir(docs: GreatDocs) -> Path | None:
     """
     Find a project's user guide directory, printing warnings as a build does
@@ -675,7 +679,7 @@ def find_user_guide_dir(docs: GreatDocs) -> Path | None:
     :
         The directory, or `None` when the project has none.
     """
-    return user_guide.find_dir(docs._config, docs.layout, report=_print_warning)
+    return user_guide.find_dir(docs._config, docs.layout, report=print_warning)
 
 
 def discover_user_guide(docs: GreatDocs) -> UserGuide | None:
@@ -692,7 +696,7 @@ def discover_user_guide(docs: GreatDocs) -> UserGuide | None:
     :
         The guide, or `None` when the project has no guide pages.
     """
-    return user_guide.discover(docs._config, docs.layout, report=_print_warning)
+    return user_guide.discover(docs._config, docs.layout, report=print_warning)
 
 
 AUTHORED_PAGES = [

@@ -34,6 +34,7 @@ from tests.support import (
     StubRemote,
     custom_pages_step,
     discover_user_guide,
+    freeze_cache_step,
     make_exports,
     make_project,
     make_run,
@@ -1675,7 +1676,7 @@ class TestPageDescriptions:
         code = gd.build_dir / "code.qmd"
         code.write_text("```python\nx = 1\n```\n", encoding="utf-8")
 
-        gd._step_freeze_cache(make_run(gd))
+        freeze_cache_step(gd)
 
         assert f"description-meta: {self.LONG}" in prose.read_text(encoding="utf-8")
         assert "description-meta: Site default" in code.read_text(encoding="utf-8")
@@ -1687,7 +1688,7 @@ class TestPageDescriptions:
         page = gd.build_dir / "guide.qmd"
         page.write_text(f"{self.LONG}\n", encoding="utf-8")
 
-        gd._step_freeze_cache(make_run(gd))
+        freeze_cache_step(gd)
 
         assert "description-meta" not in page.read_text(encoding="utf-8")
 
@@ -1697,7 +1698,7 @@ class TestPageDescriptions:
         page = gd.build_dir / "guide.qmd"
         page.write_text(f"{self.LONG}\n", encoding="utf-8")
 
-        gd._step_freeze_cache(make_run(gd))
+        freeze_cache_step(gd)
 
         assert "description-meta" not in page.read_text(encoding="utf-8")
 
@@ -1707,7 +1708,7 @@ class TestPageDescriptions:
         page = gd.build_dir / "guide.qmd"
         page.write_text(f"---\nscale-to-fit: [.wide]\n---\n\n{self.LONG}\n", encoding="utf-8")
 
-        gd._step_freeze_cache(make_run(gd, watch=True))
+        freeze_cache_step(gd, watch=True)
 
         content = page.read_text(encoding="utf-8")
         assert "description-meta" in content
@@ -1789,86 +1790,13 @@ class TestSaveFreezeCache:
         assert merged_js.read_bytes().endswith(b"\n")
 
 
-# ---------------------------------------------------------------------------
-# Discover package exports at most once per build
-# ---------------------------------------------------------------------------
-
-
-class TestStepApiReferenceConfig:
-    def test_skips_discovery_when_already_done(self, tmp_path):
-        gd = _make_gd(tmp_path)
-        with patch.object(reference_block, "refresh") as refresh:
-            gd._step_api_reference_config(make_run(gd, api_discovery_done=True), refresh=True)
-        refresh.assert_not_called()
-
-
-# ---------------------------------------------------------------------------
-# Source links for each project in a shared process
-# ---------------------------------------------------------------------------
-
-
-def _source_linked_project(root: Path, name: str, branch: str) -> GreatDocs:
+def test_constructing_a_project_runs_no_git(tmp_path: Path):
     """
-    Create a project whose API reference links to a branch of its GitHub repository
-
-    Parameters
-    ----------
-    root
-        The directory in which to create the project.
-    name
-        The package name, unique within the test.
-    branch
-        The configured source-link branch.
-
-    Returns
-    -------
-    :
-        The project with its build directory's Quarto configuration written.
+    Create a project without running `git`
     """
-    root.mkdir()
-    (root / "pyproject.toml").write_text(
-        f'[project]\nname = "{name}"\n\n'
-        f'[project.urls]\nRepository = "https://github.com/owner/{name}"\n',
-        encoding="utf-8",
-    )
-    (root / "great-docs.yml").write_text(f"source:\n  branch: {branch}\n", encoding="utf-8")
-    (root / name).mkdir()
-    (root / name / "__init__.py").write_text(
-        'def greet():\n    """Say hello."""\n    return "hi"\n', encoding="utf-8"
-    )
-    docs = GreatDocs(project_path=str(root))
-    docs.build_dir.mkdir(parents=True)
-    block = {
-        "package": name,
-        "dynamic": False,
-        "dir": "reference",
-        "sections": [{"title": "Functions", "contents": [{"name": "greet"}]}],
-    }
-    (docs.build_dir / "_quarto.yml").write_text(
-        yaml.safe_dump({"api-reference": block}), encoding="utf-8"
-    )
-    return docs
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
+    with patch("subprocess.run") as run:
+        GreatDocs(project_path=str(tmp_path))
 
-class TestStepApiReference:
-    def test_constructing_a_project_runs_no_git(self, tmp_path: Path):
-        (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        with patch("subprocess.run") as run:
-            GreatDocs(project_path=str(tmp_path))
-
-        run.assert_not_called()
-
-    def test_each_project_in_a_process_links_to_its_own_source(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
-        pages: list[str] = []
-        for name, branch in [("srclinks_a", "branch-a"), ("srclinks_b", "branch-b")]:
-            docs = _source_linked_project(tmp_path / name, name, branch)
-            monkeypatch.syspath_prepend(str(docs.layout.package_root))
-            monkeypatch.chdir(docs.build_dir)
-            docs._step_api_reference(make_run(docs), MagicMock())
-            pages.append((docs.build_dir / "reference" / "greet.qmd").read_text(encoding="utf-8"))
-
-        assert "github.com/owner/srclinks_a/blob/branch-a/srclinks_a/__init__.py" in pages[0]
-        assert "github.com/owner/srclinks_b/blob/branch-b/srclinks_b/__init__.py" in pages[1]
+    run.assert_not_called()

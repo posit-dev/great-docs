@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from . import _marimo
-from ._build import content, finish, outputs, quarto, render, serve
-from ._build.facts import Facts, source_links
+from ._build import content, finish, generated, outputs, passes, quarto, reference, render, serve
+from ._build.facts import Facts
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
@@ -18,18 +18,14 @@ from ._build.steps import (
     USER_CODE_ERRORS,
     BuildError,
     Outcome,
-    Skipped,
     Step,
-    StepError,
     Warn,
     count_listed,
+    print_warning,
     run_steps,
 )
 from ._checks import links, proofread
 from ._checks.proofread import CheckedFile
-from ._cliref import click as cli_click
-from ._cliref import render as cli_render
-from ._cliref.model import CliCommand
 from ._content import publish, user_guide
 from ._content.user_guide import UserGuide
 from ._install import update_gitignore, write_initial_config
@@ -41,21 +37,8 @@ from ._reference import sections as reference_sections
 from ._reference.exports import Exports
 from ._remote import HttpRemote, Remote
 from ._subprocess import TEXT_MODE_KWARGS
-from ._term_player import prerender as term_prerender
 from ._utils import GITIGNORE_CONTENT
-from ._website import (
-    assembly,
-    changelog,
-    inline_data,
-    page_dates,
-    page_status,
-    prerender,
-    quarto_yml,
-    scripts,
-    tags,
-)
-from ._website.ai_agents import llms_txt
-from ._website.ai_agents.skills import SkillsWriter
+from ._website import assembly, page_dates, quarto_yml, scripts
 from ._website.homepage import page as homepage_page
 from ._website.identity import Identity
 from ._website.navigation import shared_sidebar
@@ -67,22 +50,6 @@ from .config import Config
 if TYPE_CHECKING:
     from ._apiref.api_reference import APIReference
     from ._build.log import BuildLog
-
-
-def _print_warning(message: str) -> None:
-    """
-    Print a warning as a detail line in the current build step
-
-    Parameters
-    ----------
-    message
-        The warning's text.
-
-    Returns
-    -------
-    :
-    """
-    print(f"   ⚠️  {message}")
 
 
 class GreatDocs:
@@ -334,7 +301,7 @@ class GreatDocs:
         # Build the homepage after the API reference configuration. Its metadata
         # margin can then include links to `llms.txt` and `llms-full.txt` when the
         # build will generate them.
-        run.user_guide = user_guide.discover(self._config, self.layout, report=_print_warning)
+        run.user_guide = user_guide.discover(self._config, self.layout, report=print_warning)
         self._create_index_from_readme(
             run.project, run.user_guide, run.has_api_reference, force_rebuild=True
         )
@@ -553,7 +520,7 @@ class GreatDocs:
 
         project = run.project
         if not project.name or not (importable_name := project.importable_name):
-            _print_warning("Could not detect the package name; skipping the API reference")
+            print_warning("Could not detect the package name; skipping the API reference")
             run.has_api_reference = False
             return
 
@@ -636,7 +603,7 @@ class GreatDocs:
             metadata=run.project.manifest,
             has_api_reference=run.has_api_reference,
             report=print,
-            warn=_print_warning,
+            warn=print_warning,
         )
 
         quarto_yml.write(self.build_dir, quarto_config)
@@ -668,33 +635,6 @@ class GreatDocs:
             github.name if github else None,
             project.name,
         )
-
-    def _prerender_term_player(self, log: "BuildLog") -> None:
-        """
-        Render the source directory's `.termshow` recordings for the `termshow` shortcode
-
-        Parameters
-        ----------
-        log
-            Build logger for warnings about failed recordings and a summary of
-            successful renders, if any.
-        """
-        source_dir = self.layout.source_dir
-        recordings = term_prerender.find_recordings(
-            source_dir,
-            self.layout.generated_dirs(),
-            prune_non_doc=source_dir == self.layout.package_root,
-        )
-        done = term_prerender.render_recordings(
-            recordings, source_dir, self.build_dir, report=log.warn
-        )
-        if done.count:
-            log.detail(
-                f"Pre-rendered {done.count} terminal recording(s) "
-                f"({done.manifest_bytes / 1024:.0f} KB of player data)"
-            )
-            with quarto_yml.edit(self.build_dir, seed_website=True) as quarto_config:
-                quarto_yml.apply(quarto_config, done.contribution)
 
     def uninstall(self) -> None:
         """
@@ -783,527 +723,6 @@ class GreatDocs:
             log.detail(f"Pre-render script: {script}")
         return None
 
-    def _step_api_reference_config(self, run: Run, refresh: bool) -> Outcome:
-        """
-        Update the API reference configuration from the package's exports
-
-        Skip the discovery when preparing the build directory already discovered the exports.
-
-        Parameters
-        ----------
-        run
-            The current build.
-        refresh
-            Whether to rediscover package exports.
-
-        Returns
-        -------
-        :
-            The result line or skip reason.
-        """
-        if not run.has_api_reference:
-            return Skipped("no API reference")
-        if not refresh:
-            return "Using existing config"
-        if run.api_discovery_done:
-            print("API reference already configured in this build, skipping re-discovery")
-        else:
-            reference_block.refresh(self._config, self.build_dir, run.exports.sections)
-        return "API reference refreshed"
-
-    def _step_llms_txt(self, run: Run) -> Outcome:
-        """
-        Write `llms.txt` and `llms-full.txt`
-
-        `llms-full.txt` includes user guide pages and, when `cli.enabled` is set, Click
-        command-line help.
-
-        Parameters
-        ----------
-        run
-            The current build.
-
-        Returns
-        -------
-        :
-            The result line or skip reason.
-        """
-        if not llms_txt.is_planned(self.build_dir):
-            return Skipped("no API reference")
-        llms_txt.write_index(self.build_dir, run.project.manifest, report=print)
-
-        cli = None
-        package_name = run.project.name if self._config.cli_enabled else None
-        module = run.project.importable_name
-        if package_name and module:
-            try:
-                cli = cli_click.discover(
-                    module,
-                    self.layout.package_root,
-                    cli_module=self._config.cli_module,
-                    cli_name=self._config.cli_name,
-                    display_name=package_name,
-                    report=print,
-                )
-            except ImportError:
-                # The CLI reference step warns about this failure. Keep writing without the CLI.
-                pass
-        llms_txt.write_full(
-            self.build_dir,
-            cli=cli,
-            user_guide=run.user_guide,
-            report=print,
-        )
-        return "Created llms.txt + llms-full.txt"
-
-    def _step_skill_md(self, run: Run) -> Outcome:
-        """
-        Write the agent skill files and the skills page
-
-        Parameters
-        ----------
-        run
-            The current build.
-
-        Returns
-        -------
-        :
-            The result line or skip reason.
-        """
-        if not self._config.skill_enabled:
-            return Skipped("disabled in config")
-        SkillsWriter(
-            self._config,
-            self.layout,
-            self.build_dir,
-            run.project.name,
-            run.project.manifest,
-        ).write()
-        return "Created skill.md"
-
-    def _warn_without_site_url(self, run: Run, log: "BuildLog") -> Outcome:
-        """
-        Warn when the skills page has no site URL for its install instructions
-
-        Parameters
-        ----------
-        run
-            The current build.
-        log
-            The build log.
-
-        Returns
-        -------
-        :
-            `None`; the warning belongs to the previous step.
-        """
-        if not self._config.skill_enabled:
-            return None
-        urls = run.project.manifest["urls"]
-        has_site_url = bool(self._config.site_url or urls.get("Documentation", ""))
-        if not has_site_url and quarto_yml.path(self.build_dir).exists():
-            website = quarto_yml.read(self.build_dir).get("website", {})
-            has_site_url = bool(website.get("site-url", ""))
-        if not has_site_url:
-            log.warn(
-                "No site URL found — skills page will show <site-url> placeholders. "
-                "Set site_url in great-docs.yml or add a Documentation URL to "
-                "[project.urls] in pyproject.toml."
-            )
-        return None
-
-    def _step_changelog(self, run: Run) -> Outcome:
-        """
-        Write the changelog page from GitHub Releases and link it from the navbar
-
-        Parameters
-        ----------
-        run
-            The current build.
-
-        Returns
-        -------
-        :
-            The result line or skip reason.
-        """
-        if not self._config.changelog_enabled:
-            return Skipped("disabled in config")
-        repo = run.project.github
-        if repo is None:
-            return Skipped("no GitHub repo info")
-        contribution = changelog.write_page(
-            self._config, self.build_dir, repo, self._remote, report=print
-        )
-        if contribution is None:
-            return "No releases found; skipped"
-        with quarto_yml.edit(self.build_dir) as quarto_config:
-            quarto_yml.apply(quarto_config, contribution)
-        return "Changelog from GitHub Releases"
-
-    def _step_cli_reference(self, run: Run) -> Outcome:
-        """
-        Write reference pages for the package's Click command-line interface
-
-        Parameters
-        ----------
-        run
-            The current build.
-
-        Returns
-        -------
-        :
-            The result line or skip reason.
-        """
-        if not self._config.cli_enabled:
-            return Skipped("CLI not enabled")
-        package_name = run.project.name
-        module = run.project.importable_name
-        if not package_name or not module:
-            return Skipped("no package detected")
-        cli_info = cli_click.discover(
-            module,
-            self.layout.package_root,
-            cli_module=self._config.cli_module,
-            cli_name=self._config.cli_name,
-            display_name=package_name,
-            report=print,
-        )
-        if not cli_info:
-            return Skipped("no Click CLI found")
-        return self._add_cli_reference(cli_info, "CLI")
-
-    def _step_go_cli_reference(self) -> Outcome:
-        """
-        Write reference pages for the project's Go command-line interface
-
-        Returns
-        -------
-        :
-            The result line or skip reason.
-        """
-        if not self._config.go_cli_enabled:
-            return Skipped("Go CLI not enabled")
-        from great_docs._cliref.go import detect_go_cli_project, introspect_cobra_cli
-
-        project = detect_go_cli_project(self.layout.package_root)
-        if not project:
-            return Skipped("no Go CLI project detected")
-        cli_info = introspect_cobra_cli(project)
-        if not cli_info:
-            return Skipped("Go CLI introspection failed (is 'go' on PATH?)")
-        return self._add_cli_reference(cli_info, "Go CLI", f" ({project.binary_name})")
-
-    def _step_rust_cli_reference(self) -> Outcome:
-        """
-        Write reference pages for the project's Rust command-line interface
-
-        Returns
-        -------
-        :
-            The result line or skip reason.
-        """
-        if not self._config.rust_cli_enabled:
-            return Skipped("Rust CLI not enabled")
-        from great_docs._cliref.rust import detect_rust_cli_project, introspect_rust_cli
-
-        project = detect_rust_cli_project(self.layout.package_root)
-        if not project:
-            return Skipped("no Rust CLI project detected")
-        cli_info = introspect_rust_cli(project)
-        if not cli_info:
-            return Skipped("Rust CLI introspection failed (is 'cargo' on PATH?)")
-        return self._add_cli_reference(cli_info, "Rust CLI", f" ({project.binary_names[0]})")
-
-    def _add_cli_reference(self, cli_info: CliCommand, kind: str, suffix: str = "") -> Outcome:
-        """
-        Write CLI reference pages and add their sidebar and Reference navbar link
-
-        Parameters
-        ----------
-        cli_info
-            The command tree to document.
-        kind
-            The interface label in the result line, such as `"Go CLI"`.
-        suffix
-            Text appended to the result line, such as the binary's name.
-
-        Returns
-        -------
-        :
-            The step's result line.
-        """
-        cli_files = cli_render.write_pages(self._config, self.build_dir, cli_info, report=print)
-        if not cli_files:
-            return f"No {kind} pages generated"  # pragma: no cover
-        with quarto_yml.edit(self.build_dir) as quarto_config:
-            quarto_yml.apply(quarto_config, cli_render.contribution(self._config, cli_files))
-        n_pages = cli_render.count_pages(cli_files)
-        print(f"Updated sidebar with {n_pages} CLI reference page(s)")
-        return f"{n_pages} {kind} reference page(s){suffix}"
-
-    def _step_mcp_reference(self, run: Run) -> Outcome:
-        """
-        Write reference pages and a discovery manifest for the project's MCP server
-
-        Parameters
-        ----------
-        run
-            The current build, which supplies the package name.
-
-        Returns
-        -------
-        :
-            The result line or skip reason.
-        """
-        if not self._config.mcp_enabled:
-            return Skipped("MCP not enabled")
-        mcp_package = run.project.importable_name
-        from ._mcpref import build as mcp_build
-
-        mcp_info = mcp_build.discover_server(self._config, mcp_package)
-        if not mcp_info:
-            return Skipped("no MCP server found")
-        repo_url = run.project.github.url if run.project.github else None
-        mcp_files = mcp_build.build_mcp_reference(
-            self._config, mcp_info, self.build_dir, run.project.name, repo_url
-        )
-        if not mcp_files:
-            return "No MCP pages generated"
-        with quarto_yml.edit(self.build_dir) as quarto_config:
-            quarto_yml.apply(quarto_config, mcp_build.contribution(self._config, mcp_files))
-        print(f"Updated sidebar with {cli_render.count_pages(mcp_files)} MCP reference page(s)")
-        return f"{len(mcp_info.get('tools', []))} MCP tool page(s) + manifest"
-
-    def _step_tags(self) -> Outcome:
-        """
-        Write the tags index, embed tag pill data and add the navbar link
-
-        Returns
-        -------
-        :
-            The result line or skip reason.
-        """
-        if not self._config.tags_enabled:
-            return Skipped("tags not enabled")
-        output = tags.write(self._config, self.layout, report=print)
-        if output is None:
-            return Skipped("no tagged pages found")
-        with quarto_yml.edit(self.build_dir) as quarto_config:
-            if output.page_data is not None:
-                inline_data.add(
-                    quarto_config, "__GD_TAGS_DATA__", output.page_data, before="page-tags.js"
-                )
-            quarto_yml.apply(quarto_config, output.contribution)
-        return "Tags processed"
-
-    def _step_page_statuses(self) -> Outcome:
-        """
-        Write the status badge data for pages that declare a status
-
-        Returns
-        -------
-        :
-            The result line or skip reason.
-        """
-        if not self._config.page_status_enabled:
-            return Skipped("page status not enabled")
-        if not page_status.process(self._config, self.layout, self.build_dir):
-            return Skipped("no pages with status")
-        return "Status badges processed"
-
-    def _step_api_reference(
-        self, run: Run, log: "BuildLog"
-    ) -> "tuple[Outcome, APIReference | None]":
-        """
-        Write the API reference pages and the inventory of documented objects
-
-        When dynamic introspection fails, the step retries once with static analysis.
-
-        Parameters
-        ----------
-        run
-            The current build.
-        log
-            The build log.
-
-        Returns
-        -------
-        :
-            The result line or skip reason, and the API reference if one was generated.
-
-        Raises
-        ------
-        StepError
-            If the API reference cannot be generated.
-        """
-        if not run.has_api_reference:
-            return Skipped("API reference disabled"), None
-
-        from great_docs._apiref.api_reference import APIReference
-
-        build_env = quarto.environment(self._config)
-        for p in build_env.get("PYTHONPATH", "").split(os.pathsep):
-            if p and p not in sys.path:
-                sys.path.insert(0, p)  # pragma: no cover
-
-        from great_docs._apiref.resolve import ObjectNotFoundError
-
-        failures = (*USER_CODE_ERRORS, ObjectNotFoundError)
-        quarto_yml_path = str(quarto_yml.path(self.build_dir))
-        repo_url = run.project.github.url if run.project.github else None
-        links = source_links(self._config, self.layout.package_root, repo_url, warn=_print_warning)
-        try:
-            ref = APIReference(quarto_yml_path, links)
-            ref.build()
-            return "API reference generated", ref
-        except failures as e:
-            if not self._config.dynamic:
-                message = f"API reference build failed: {e}"
-                raise StepError(message, detail=str(e)) from e
-            log.warn(
-                "Dynamic introspection failed for a resolved item, retrying with static analysis..."
-            )
-            log.detail(str(e))
-            with quarto_yml.edit(self.build_dir) as quarto_config:
-                if "api-reference" in quarto_config:
-                    quarto_config["api-reference"]["dynamic"] = False
-        try:
-            ref = APIReference(quarto_yml_path, links)
-            ref.build()
-        except failures as e:
-            raise StepError(f"API reference build failed: {e}") from e
-        return "API reference generated (static analysis)", ref
-
-    def _step_interlinks(self, run: Run, log: "BuildLog", ref: "APIReference | None") -> Outcome:
-        """
-        Write the index that resolves cross-reference links to documented names
-
-        Parameters
-        ----------
-        run
-            The current build.
-        log
-            The build log.
-        ref
-            The project's API reference, if it has one.
-
-        Returns
-        -------
-        :
-            The step's result line.
-        """
-        from great_docs._interlinks import AliasClaims, build_project_index
-
-        index, notes = build_project_index(
-            self.build_dir,
-            self._config,
-            run.project.name or "",
-            AliasClaims.make(ref.items) if ref is not None else AliasClaims(),
-        )
-        for note in notes:
-            log.detail(note)
-        for alias, targets in sorted(index.dropped.items()):
-            log.detail(
-                f"'{alias}' is ambiguous ({', '.join(targets)}); references to it stay unlinked"
-            )
-        return f"Indexed {len(index.names)} name(s)"
-
-    def _step_freeze_cache(self, run: Run) -> "tuple[Outcome, list[str]]":
-        """
-        Expand the pages' freeze shorthand and write their metadata
-
-        Parameters
-        ----------
-        run
-            The current build.
-
-        Returns
-        -------
-        :
-            The result line or skip reason, and the pages whose freeze shorthand was expanded.
-        """
-        frozen_pages = prerender.expand_freeze_shorthand(self.build_dir)
-        # Versioned builds write metadata after resolving each version's content. Watch mode
-        # previews this directory without the per-version pipeline, so it needs metadata here.
-        if not self._config.has_versions or run.watch:
-            prerender.write_page_metadata(
-                self.build_dir,
-                self._config,
-                self._default_description(run.project.manifest),
-                self._structured_data(run.project),
-            )
-        if frozen_pages:
-            return f"Using {len(frozen_pages)} page(s) from the freeze cache", frozen_pages
-        if self.layout.freeze_dir.is_dir():
-            return "Freeze cache will be restored during render", frozen_pages
-        return Skipped("no frozen pages"), frozen_pages
-
-    def _expand_mock_cells(self, log: "BuildLog") -> Outcome:
-        """
-        Expand `source-code: mock` cells before Quarto reads the pages
-
-        Parameters
-        ----------
-        log
-            The build log.
-
-        Returns
-        -------
-        :
-            `None`; the result is a detail line of the previous step.
-        """
-        from great_docs._website.mock_code import process_directory
-
-        modified = process_directory(self.build_dir)
-        if modified:
-            log.detail(f"Expanded {len(modified)} mock-code cell(s): " + ", ".join(modified))
-        return None
-
-    def _render_d2_diagrams(self, log: "BuildLog") -> Outcome:
-        """
-        Render d2 diagrams as light and dark SVG files, which Quarto cannot generate
-
-        Parameters
-        ----------
-        log
-            The build log.
-
-        Returns
-        -------
-        :
-            `None`; the result is a detail line of the previous step.
-        """
-        from great_docs._website.d2 import process_directory
-
-        modified = process_directory(self.build_dir, cache_dir=self.layout.cache_dir / "d2")
-        if modified:
-            log.detail(f"Rendered d2 diagrams in {len(modified)} page(s): " + ", ".join(modified))
-        return None
-
-    def _share_sidebars(self, run: Run, log: "BuildLog") -> Outcome:
-        """
-        Render each long reference sidebar once for reuse across pages
-
-        A versioned build shares the sidebars of each version in its own directory.
-
-        Parameters
-        ----------
-        run
-            The current build.
-        log
-            The build log.
-
-        Returns
-        -------
-        :
-            `None`; the result is a detail line of the previous step.
-        """
-        if run.watch or not self._config.has_versions:
-            shared = shared_sidebar.prepare(self.build_dir)
-            if shared:
-                log.detail("Sharing rendered sidebar(s): " + ", ".join(shared))
-        return None
-
     def _preparation_steps(self, run: Run, log: "BuildLog", refresh: bool = True) -> list[Step]:
         """
         Return the build's preparation steps in execution order
@@ -1331,11 +750,18 @@ class GreatDocs:
 
         def generate_api_reference() -> Outcome:
             nonlocal ref
-            outcome, ref = self._step_api_reference(run, log)
+            outcome, ref = reference.api(run, self._config, self.layout, log)
             return outcome
 
         def prepare_freeze_cache() -> Outcome:
-            outcome, frozen_pages[:] = self._step_freeze_cache(run)
+            # Earlier steps can change the site title. Read it when preparing page metadata.
+            outcome, frozen_pages[:] = passes.freeze_cache(
+                run,
+                self._config,
+                self.layout,
+                default_description=self._default_description(run.project.manifest),
+                structured_data=self._structured_data(run.project),
+            )
             return outcome
 
         def list_frozen_pages() -> Outcome:
@@ -1362,12 +788,12 @@ class GreatDocs:
             ),
             Step(
                 "Configure API reference",
-                lambda: self._step_api_reference_config(run, refresh),
+                lambda: reference.api_config(run, self._config, self.layout, refresh=refresh),
                 user_code=True,
             ),
             Step(
                 "Generate llms.txt / llms-full.txt",
-                lambda: self._step_llms_txt(run),
+                lambda: generated.llms_txt(run, self._config, self.layout),
                 warn=Warn(
                     USER_CODE_ERRORS, "Error generating llms.txt", "llms.txt generation had issues"
                 ),
@@ -1375,7 +801,7 @@ class GreatDocs:
             ),
             Step(
                 "Generate SKILL.md",
-                lambda: self._step_skill_md(run),
+                lambda: generated.skills(run, self._config, self.layout),
                 warn=Warn(
                     USER_CODE_ERRORS, "Error generating SKILL.md", "SKILL.md generation had issues"
                 ),
@@ -1383,19 +809,19 @@ class GreatDocs:
             ),
             Step(
                 "Check the site URL",
-                lambda: self._warn_without_site_url(run, log),
+                lambda: generated.check_site_url(run, self._config, self.layout, log),
                 user_code=True,
                 quiet=False,
                 listed=False,
             ),
             Step(
                 "Generate changelog",
-                lambda: self._step_changelog(run),
+                lambda: generated.changelog(run, self._config, self.layout, remote=self._remote),
                 remote_content=True,
             ),
             Step(
                 "Generate CLI reference",
-                lambda: self._step_cli_reference(run),
+                lambda: reference.cli(run, self._config, self.layout),
                 warn=Warn(
                     USER_CODE_ERRORS, "Error generating CLI docs", "CLI generation had issues"
                 ),
@@ -1403,7 +829,7 @@ class GreatDocs:
             ),
             Step(
                 "Generate Go CLI reference",
-                lambda: self._step_go_cli_reference(),
+                lambda: reference.go_cli(self._config, self.layout),
                 warn=Warn(
                     (OSError,), "Error generating Go CLI docs", "Go CLI generation had issues"
                 ),
@@ -1411,7 +837,7 @@ class GreatDocs:
             ),
             Step(
                 "Generate Rust CLI reference",
-                lambda: self._step_rust_cli_reference(),
+                lambda: reference.rust_cli(self._config, self.layout),
                 warn=Warn(
                     (OSError,), "Error generating Rust CLI docs", "Rust CLI generation had issues"
                 ),
@@ -1419,7 +845,7 @@ class GreatDocs:
             ),
             Step(
                 "Generate MCP server reference",
-                lambda: self._step_mcp_reference(run),
+                lambda: reference.mcp(run, self._config, self.layout),
                 warn=Warn(
                     USER_CODE_ERRORS, "Error generating MCP docs", "MCP generation had issues"
                 ),
@@ -1460,11 +886,11 @@ class GreatDocs:
             ),
             Step(
                 "Process page tags",
-                lambda: self._step_tags(),
+                lambda: generated.tags(self._config, self.layout),
             ),
             Step(
                 "Process page status badges",
-                lambda: self._step_page_statuses(),
+                lambda: generated.page_statuses(self._config, self.layout),
             ),
             Step(
                 "Copy assets",
@@ -1476,33 +902,35 @@ class GreatDocs:
             Step("Generate API reference", generate_api_reference, user_code=True),
             Step(
                 "Build interlinks index",
-                lambda: self._step_interlinks(run, log, ref),
+                lambda: reference.interlinks(
+                    run, self._config, self.layout, log, api_reference=ref
+                ),
                 quiet=False,
             ),
             Step("Prepare freeze cache", prepare_freeze_cache, quiet=False),
             Step("List frozen pages", list_frozen_pages, quiet=False, listed=False),
             Step(
                 "Expand mock-code cells",
-                lambda: self._expand_mock_cells(log),
+                lambda: passes.mock_cells(self.layout, log),
                 quiet=False,
                 listed=False,
             ),
             Step(
                 "Render d2 diagrams",
-                lambda: self._render_d2_diagrams(log),
+                lambda: passes.d2_diagrams(self.layout, log),
                 user_code=True,
                 quiet=False,
                 listed=False,
             ),
             Step(
                 "Pre-render terminal recordings",
-                lambda: self._prerender_term_player(log),
+                lambda: passes.terminal_recordings(self.layout, log),
                 quiet=False,
                 listed=False,
             ),
             Step(
                 "Share sidebars",
-                lambda: self._share_sidebars(run, log),
+                lambda: passes.shared_sidebars(run, self._config, self.layout, log),
                 quiet=False,
                 listed=False,
             ),
@@ -1985,7 +1413,7 @@ class GreatDocs:
             if project.name and project.importable_name:
                 files += proofread.find_modules(self.layout, project.importable_name)
         if include_docs:
-            files += proofread.find_pages(self._config, self.layout, report=_print_warning)
+            files += proofread.find_pages(self._config, self.layout, report=print_warning)
 
         return links.check(
             files,
@@ -2091,7 +1519,7 @@ class GreatDocs:
 
         files: list[Path] = []
         if include_docs:
-            files = proofread.find_pages(self._config, self.layout, report=_print_warning)
+            files = proofread.find_pages(self._config, self.layout, report=print_warning)
         if include_docstrings:
             project = Project.make(self._config, self.layout)
             if project.name and project.importable_name:

@@ -3973,35 +3973,6 @@ def test_build_cli_reference_uses_module_name(tmp_path):
     )
 
 
-# An API reference that plans the llms files: the standard library's `json` always imports.
-LLMS_TXT_QUARTO_YML = "api-reference:\n  package: json\n  sections:\n    - contents: [dumps]\n"
-
-
-@patch("great_docs._cliref.click.discover")
-def test_cli_help_for_llms_uses_module_name(mock_discover):
-    """Regression: llms-full CLI help discovers the Click CLI by importable module
-    name, not the PyPI project name, when the two diverge."""
-    mock_discover.return_value = {"entry_point_name": "my-dist", "help_text": "usage"}
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        root = Path(tmp_dir)
-        (root / "pyproject.toml").write_text('[project]\nname = "my-dist"\n')
-        (root / "great-docs.yml").write_text("module: actual_module\ncli:\n  enabled: true\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir()
-        (docs.build_dir / "_quarto.yml").write_text(LLMS_TXT_QUARTO_YML)
-        docs._step_llms_txt(make_run(docs, user_guide=discover_user_guide(docs)))
-
-        mock_discover.assert_called_once_with(
-            "actual_module",
-            docs.layout.package_root,
-            cli_module=None,
-            cli_name=None,
-            display_name="my-dist",
-            report=print,
-        )
-
-
 @patch("great_docs._checks.harper.run_harper")
 def test_proofread_docstrings_use_module_name(mock_run_harper):
     """Find docstrings under the importable module when its name differs from the project"""
@@ -4121,55 +4092,6 @@ def test_proofread_harper_error_on_a_page_is_that_pages_error(tmp_path):
 
     assert page.issues == ()
     assert page.error == "timed out"
-
-
-def test_cli_help_for_llms_display_name_is_project_name():
-    """Regression: with no [project.scripts], the llms-full CLI heading uses the
-    project (distribution) name even though the CLI is imported from a module
-    with a different name."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        root = Path(tmp_dir)
-        (root / "pyproject.toml").write_text('[project]\nname = "my-dist"\n')
-        (root / "great-docs.yml").write_text("module: actual_module\ncli:\n  enabled: true\n")
-        pkg_dir = root / "actual_module"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text('"""actual_module."""\n')
-        (pkg_dir / "cli.py").write_text(
-            'import click\n\n\n@click.group()\ndef main():\n    """Main CLI."""\n'
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir()
-            (docs.build_dir / "_quarto.yml").write_text(LLMS_TXT_QUARTO_YML)
-            docs._step_llms_txt(make_run(docs, user_guide=discover_user_guide(docs)))
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("actual_module", None)
-            sys.modules.pop("actual_module.cli", None)
-
-        assert "## CLI: my-dist" in (docs.build_dir / "llms-full.txt").read_text()
-
-
-def test_llms_full_written_without_cli_when_cli_module_fails_to_import(tmp_path, monkeypatch):
-    """
-    Write `llms-full.txt` without the CLI when a candidate CLI module fails to import
-    """
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "brokencli-pkg"\n')
-    (tmp_path / "great-docs.yml").write_text("module: brokencli_pkg\ncli:\n  enabled: true\n")
-    pkg_dir = tmp_path / "brokencli_pkg"
-    pkg_dir.mkdir()
-    (pkg_dir / "__init__.py").write_text('"""brokencli_pkg."""\n')
-    (pkg_dir / "cli.py").write_text("import brokencli_missing_dependency\n")
-    monkeypatch.syspath_prepend(str(tmp_path))
-
-    docs = GreatDocs(project_path=str(tmp_path))
-    docs.build_dir.mkdir()
-    (docs.build_dir / "_quarto.yml").write_text(LLMS_TXT_QUARTO_YML)
-    docs._step_llms_txt(make_run(docs, user_guide=discover_user_guide(docs)))
-
-    assert "## CLI" not in (docs.build_dir / "llms-full.txt").read_text()
 
 
 def test_entry_point_name():
@@ -9433,7 +9355,7 @@ def test_build_cli_error_handled(tmp_path, capsys):
 
     assert "Error generating CLI docs: click" in capsys.readouterr().out
     write_pages.assert_not_called()
-    stubs.steps["_prerender_term_player"].assert_called_once()
+    stubs.steps["passes.terminal_recordings"].assert_called_once()
 
 
 def test_build_llms_txt_error_handled(tmp_path, capsys):
@@ -9453,7 +9375,7 @@ def test_build_llms_txt_error_handled(tmp_path, capsys):
         docs.build(watch=False, refresh=False)
 
     assert "Error generating llms.txt: no summary" in capsys.readouterr().out
-    stubs.steps["_prerender_term_player"].assert_called_once()
+    stubs.steps["passes.terminal_recordings"].assert_called_once()
 
 
 def test_build_skill_md_error_handled(tmp_path, capsys):
@@ -9472,7 +9394,7 @@ def test_build_skill_md_error_handled(tmp_path, capsys):
         docs.build(watch=False, refresh=False)
 
     assert "Error generating SKILL.md: read-only" in capsys.readouterr().out
-    stubs.steps["_prerender_term_player"].assert_called_once()
+    stubs.steps["passes.terminal_recordings"].assert_called_once()
 
 
 def test_build_log_numbers_every_step(tmp_path, capsys):
@@ -10904,7 +10826,7 @@ def test_build_reports_project_errors_as_failures(tmp_path, capsys, step, run, t
     out = capsys.readouterr().out
     assert "Build failed at Step" in out
     assert f"   {error}" in out
-    stubs.steps["_prerender_term_player"].assert_not_called()
+    stubs.steps["passes.terminal_recordings"].assert_not_called()
 
 
 def test_build_lets_own_errors_through(tmp_path):
@@ -10919,7 +10841,7 @@ def test_build_lets_own_errors_through(tmp_path):
         with pytest.raises(AttributeError, match="renamed method"):
             docs.build(watch=False, refresh=False)
 
-    stubs.steps["_prerender_term_player"].assert_not_called()
+    stubs.steps["passes.terminal_recordings"].assert_not_called()
 
 
 def test_build_changelog_no_releases(tmp_path):

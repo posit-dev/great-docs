@@ -23,7 +23,7 @@ from .._website import page_dates, quarto_yml, social_cards
 from .._website.homepage import page as homepage_page
 from .._website.homepage import source as homepage_source
 from .._website.navigation import navbar as nav_navbar
-from .steps import Outcome, Skipped
+from .steps import Outcome, Skipped, print_warning
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -37,22 +37,6 @@ if TYPE_CHECKING:
     from .pipeline import Run
 
 __all__ = ["assets", "custom_pages", "page_map", "sections", "user_guide"]
-
-
-def _print_warning(message: str) -> None:
-    """
-    Print a warning as a detail line in the current build step
-
-    Parameters
-    ----------
-    message
-        The warning's text.
-
-    Returns
-    -------
-    :
-    """
-    print(f"   ⚠️  {message}")
 
 
 def _is_mapping(value: object) -> TypeGuard[dict[str, Any]]:
@@ -215,7 +199,7 @@ def _publish_guide_pages(
         source_dir,
         target_dir,
         strip_prefix=strip_prefix,
-        report=_print_warning,
+        report=print_warning,
     )
 
     return copied_files
@@ -388,7 +372,7 @@ def sections(
     """
     if not config.sections:
         return Skipped("no sections configured")
-    found = authored_sections.read(config, layout, report=_print_warning)
+    found = authored_sections.read(config, layout, report=print_warning)
     if not found:
         return "No sections to process"
 
@@ -415,7 +399,7 @@ def sections(
                 section.source,
                 section.destination,
                 strip_prefix=True,
-                report=_print_warning,
+                report=print_warning,
             )
 
         quarto_config = quarto_yml.read(build_dir, seed_website=True)
@@ -479,7 +463,7 @@ def custom_pages(
     :
         The result line or skip reason.
     """
-    report = _print_warning
+    report = print_warning
     sources = authored_pages.find_sources(config, layout, report=report)
     if not sources:
         return Skipped("no custom pages")
