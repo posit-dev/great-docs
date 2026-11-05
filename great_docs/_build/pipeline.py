@@ -371,7 +371,7 @@ def preparation_steps(
         ),
         Step(
             "Check the site URL",
-            lambda: generated.check_site_url(run, config, layout, log),
+            lambda: generated.check_site_url(run, config, log),
             user_code=True,
             quiet=False,
             listed=False,

@@ -108,7 +108,7 @@ def skills(run: Run, config: Config, layout: Layout) -> Outcome:
     return "Created skill.md"
 
 
-def check_site_url(run: Run, config: Config, layout: Layout, log: BuildLog) -> Outcome:
+def check_site_url(run: Run, config: Config, log: BuildLog) -> Outcome:
     """
     Warn when the skills page has no site URL for its install instructions
 
@@ -117,9 +117,7 @@ def check_site_url(run: Run, config: Config, layout: Layout, log: BuildLog) -> O
     run
         The current build, which supplies the package's project URLs.
     config
-        The project's configuration.
-    layout
-        The project's directories.
+        The project's configuration, which supplies the site URL.
     log
         The build log.
 
@@ -131,12 +129,7 @@ def check_site_url(run: Run, config: Config, layout: Layout, log: BuildLog) -> O
     if not config.skill_enabled:
         return None
     urls = run.project.manifest["urls"]
-    has_site_url = bool(config.site_url or urls.get("Documentation", ""))
-    build_dir = layout.build_dir
-    if not has_site_url and quarto_yml.path(build_dir).exists():
-        website = quarto_yml.read(build_dir).get("website", {})
-        has_site_url = bool(website.get("site-url", ""))
-    if not has_site_url:
+    if not (config.site_url or urls.get("Documentation", "")):
         log.warn(
             "No site URL found — skills page will show <site-url> placeholders. "
             "Set site_url in great-docs.yml or add a Documentation URL to "

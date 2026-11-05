@@ -7,13 +7,14 @@ from __future__ import annotations
 import sys
 from collections.abc import Iterator
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from great_docs import GreatDocs
 from great_docs._build import generated
-from tests.support import make_run
+from great_docs._build.log import BuildLog
+from tests.support import make_run, write_config
 
 # Use the standard library's `json` so planning `llms.txt` needs no test package.
 LLMS_API_BLOCK = {"package": "json", "sections": [{"contents": ["dumps"]}]}
@@ -113,3 +114,27 @@ def test_llms_full_is_written_without_cli_when_the_cli_module_fails_to_import(im
     generated.llms_txt(make_run(docs, api_block=LLMS_API_BLOCK), docs._config, docs.layout)
 
     assert "## CLI" not in (docs.build_dir / "llms-full.txt").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("settings", "warned"),
+    [
+        ("skill:\n  enabled: true\n", True),
+        ("skill:\n  enabled: true\nsite_url: https://example.com/docs/\n", False),
+        ("skill:\n  enabled: false\n", False),
+    ],
+)
+def test_site_url_check_warns_when_the_skills_page_has_no_site_url(
+    settings: str, warned: bool, tmp_path: Path
+):
+    """
+    Warn about placeholder install URLs only for an enabled skill without a site URL
+    """
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n', encoding="utf-8")
+    write_config(tmp_path, settings)
+    docs = GreatDocs(project_path=str(tmp_path))
+    log = MagicMock(spec=BuildLog)
+
+    generated.check_site_url(make_run(docs), docs._config, log)
+
+    assert log.warn.called is warned
