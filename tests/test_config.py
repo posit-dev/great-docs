@@ -1542,6 +1542,36 @@ class TestChangelogShorthand:
             write_config(tmp_path, f"changelog: {value}\n")
 
 
+class TestPackageInfoPage:
+    def test_default_shows_release_dates(self, tmp_path: Path):
+        cfg = Config(tmp_path)
+        assert cfg.package_info_page is True
+        assert cfg.package_info_page_release_dates is True
+
+    @pytest.mark.parametrize("value", [True, False])
+    def test_bool_switches_the_page_and_keeps_release_dates(self, tmp_path: Path, value: bool):
+        cfg = write_config(tmp_path, f"package_info_page: {str(value).lower()}\n")
+        assert cfg.package_info_page is value
+        assert cfg.package_info_page_release_dates is True
+
+    def test_mapping_without_enabled_keeps_the_page(self, tmp_path: Path):
+        cfg = write_config(tmp_path, "package_info_page:\n  release_dates: false\n")
+        assert cfg.package_info_page is True
+        assert cfg.package_info_page_release_dates is False
+
+    def test_mapping_can_disable_the_page(self, tmp_path: Path):
+        cfg = write_config(tmp_path, "package_info_page:\n  enabled: false\n")
+        assert cfg.package_info_page is False
+
+    def test_null_disables_the_page(self, tmp_path: Path):
+        assert write_config(tmp_path, "package_info_page:\n").package_info_page is False
+
+    @pytest.mark.parametrize("value", ["yes please", "5", "[]"])
+    def test_other_value_is_rejected(self, tmp_path: Path, value: str):
+        with pytest.raises(ConfigError, match="great-docs.yml.*package_info_page.*true or false"):
+            write_config(tmp_path, f"package_info_page: {value}\n")
+
+
 class TestSeoShorthandNormalization:
     def test_sitemap_true_expands(self, tmp_path: Path):
         cfg = write_config(tmp_path, "seo:\n  sitemap: true\n")
@@ -1687,7 +1717,6 @@ class TestSingleSourceInvariant:
             "github_style",
             "homepage",
             "attribution",
-            "package_info_page",
             "back_to_top",
             "keyboard_nav",
             "dark_mode_toggle",

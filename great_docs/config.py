@@ -268,6 +268,20 @@ class Config:
                 "Use `changelog: {enabled: true}`, `changelog: true` or `changelog: false`."
             )
 
+        # A boolean `package_info_page` sets `enabled`, as for `changelog`. A
+        # null reaches here only through `_NULL_DISABLES` and disables the page.
+        raw = config.get("package_info_page")
+        if isinstance(raw, bool) or raw is None:
+            merged = copy.deepcopy(DEFAULT_CONFIG["package_info_page"])
+            merged["enabled"] = bool(raw)
+            config["package_info_page"] = merged
+        elif not isinstance(raw, dict):
+            raise ConfigError(
+                f"{self.config_path}: package_info_page: {raw!r} must be a mapping, true or "
+                "false. Use `package_info_page: {release_dates: false}`, "
+                "`package_info_page: true` or `package_info_page: false`."
+            )
+
         # `hero` is excluded from the loop above: its `enabled` sub-field
         # defaults to `None` (auto — enable when a logo exists), which the
         # bool-shorthand loop would collapse to `False`.
@@ -364,16 +378,15 @@ class Config:
 
         return config
 
-    # A bare `key:` (null) switches these options off. For every other
-    # dict-valued option a null means "not specified" and `_merge` keeps the
-    # packaged defaults, so an empty or commented-out block reads the same as
-    # an absent one. These four are the exception for backward compatibility:
-    # each defaults to on, yet a null has always disabled it.
+    # Preserve the legacy behaviour of a bare `key:` (null): these five options
+    # default to enabled, but null disables them. For other mapping-valued options,
+    # null keeps the packaged defaults, just as an absent or commented-out block does.
     _NULL_DISABLES: tuple[str, ...] = (
         "social_cards",
         "markdown_pages",
         "mcp",
         "freeze",
+        "package_info_page",
     )
 
     @staticmethod
@@ -773,8 +786,13 @@ class Config:
 
     @property
     def package_info_page(self) -> bool:
-        """Check if package info page generation is enabled."""
-        return self["package_info_page"]
+        """Return whether package-info page generation is enabled"""
+        return self["package_info_page.enabled"]
+
+    @property
+    def package_info_page_release_dates(self) -> bool:
+        """Return whether the package-info page includes the latest PyPI release dates"""
+        return self["package_info_page.release_dates"]
 
     @property
     def back_to_top(self) -> bool:
