@@ -1,7 +1,10 @@
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from great_docs._website.project_pages import package_info
+from great_docs._yaml import split_front_matter
 from tests.support import StubRemote, mock_config
 
 
@@ -95,7 +98,7 @@ def test_package_info_lists_runtime_dependencies(tmp_path: Path):
     assert path == tmp_path / "package-info.qmd"
     assert reported == [f"Created {path}"]
     content = (tmp_path / "package-info.qmd").read_text(encoding="utf-8")
-    assert 'title: "Package Info"' in content
+    assert split_front_matter(content)[0].string("title") == "Package Info"
     assert "## Runtime Dependencies" in content
     assert 'class="gd-no-link">numpy</code>' in content
     assert "<code>&gt;=1.24</code>" in content
@@ -196,3 +199,23 @@ def test_package_info_is_skipped_when_disabled_or_empty(tmp_path: Path):
 
     assert not (tmp_path / "package-info.qmd").exists()
     assert remote.calls == []
+
+
+def test_package_info_title_survives_yaml_syntax(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Check that YAML front matter preserves quotes and a colon in a translated title"""
+    title = 'Package "Info": details'
+    translate = package_info.get_translation
+    monkeypatch.setattr(
+        package_info,
+        "get_translation",
+        lambda key, lang: title if key == "package_info" else translate(key, lang),
+    )
+
+    path = package_info.write_page(
+        _config(), tmp_path, _metadata([_dep("numpy")]), StubRemote(), report=print
+    )
+
+    assert path is not None
+    front_matter, _ = split_front_matter(path.read_text(encoding="utf-8"))
+    assert front_matter.string("title") == title
+    assert front_matter.string("body-classes") == "gd-package-info-page"

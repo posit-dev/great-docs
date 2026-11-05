@@ -7,6 +7,8 @@ from __future__ import annotations
 import html
 from typing import TYPE_CHECKING
 
+from yaml12 import format_yaml
+
 from ..._apiref._render._tables import html_table
 from ..._icons import get_icon_svg
 from ..._translations import get_translation
@@ -184,16 +186,16 @@ def write_page(
 
     body = "\n".join(sections)
 
-    content = f"""---
-title: "{title}"
-toc: true
-sidebar: false
-body-classes: "gd-package-info-page"
-anchor-sections: true
----
-
-{body}
-"""
+    front_matter = format_yaml(
+        {
+            "title": title,
+            "toc": True,
+            "sidebar": False,
+            "body-classes": "gd-package-info-page",
+            "anchor-sections": True,
+        }
+    )
+    content = f"---\n{front_matter.rstrip()}\n---\n\n{body}\n"
 
     path = build_dir / FILENAME
     _ = path.write_text(content, encoding="utf-8")
