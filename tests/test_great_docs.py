@@ -8907,12 +8907,12 @@ def test_build_no_api_reference(tmp_path):
     with (
         stubbed_build(),
         patch("great_docs._apiref.api_reference.APIReference", mock_builder_class),
-        patch("great_docs._website.prerender.write_page_metadata") as write_page_metadata,
+        patch("great_docs._website.page_metadata.write_to_pages") as write_to_pages,
     ):
         docs.build(watch=False, refresh=False)
 
     mock_builder_class.assert_not_called()
-    write_page_metadata.assert_called_once()
+    write_to_pages.assert_called_once()
 
 
 def test_build_after_a_build_without_api_reference_generates_one(tmp_path):

@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .._term_player import prerender as term_prerender
-from .._website import prerender, quarto_yml
+from .._website import page_metadata, prerender, quarto_yml
 from .._website.navigation import shared_sidebar
 from .steps import Outcome, Skipped
 
@@ -58,7 +58,10 @@ def freeze_cache(
     # Versioned builds write metadata after resolving each version's content. Watch mode
     # bypasses that pipeline, so it needs metadata here.
     if not config.has_versions or run.watch:
-        prerender.write_page_metadata(build_dir, config, default_description, structured_data)
+        quarto_config = quarto_yml.read(build_dir, seed_website=True)
+        _ = page_metadata.write_to_pages(
+            build_dir, quarto_config, config, default_description, structured_data
+        )
     if frozen_pages:
         return f"Using {len(frozen_pages)} page(s) from the freeze cache", frozen_pages
     if layout.freeze_dir.is_dir():

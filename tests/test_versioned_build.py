@@ -42,7 +42,7 @@ from great_docs._versions.build import (
     write_version_map,
 )
 from great_docs._versions.model import VersionEntry, parse_versions_config
-from great_docs._website import prerender, quarto_yml
+from great_docs._website import page_metadata, quarto_yml
 
 if TYPE_CHECKING:
     from great_docs.config import Config
@@ -329,7 +329,9 @@ class TestPreprocessVersion:
                 layout=Layout.make(tmp_path),
                 quarto_config={},
             )
-            prerender.write_page_metadata(dest, config, None, None)
+            page_metadata.write_to_pages(
+                dest, quarto_yml.read(dest, seed_website=True), config, None, None
+            )
             front_matter = (dest / "page.qmd").read_text().split("---")[1]
             descriptions.append(parse_yaml(front_matter)["description-meta"])
 
