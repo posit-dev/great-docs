@@ -1,7 +1,8 @@
 """
 Project set-up for Great Docs
 
-Entries in the project's `.gitignore` keep build output out of version control.
+Entries in the project's `.gitignore` keep build output out of version control. The
+`authors:` block in a new `great-docs.yml` lists the package's declared authors.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 
     from ._layout import Layout
 
-__all__ = ["update_gitignore"]
+__all__ = ["format_authors_yaml", "update_gitignore"]
 
 _YES = {"", "y", "yes"}
 
@@ -121,6 +122,44 @@ def update_gitignore(
         report("✅ Anchored the great-docs/ entry to the project root as /great-docs/")
     else:
         report("✅ Updated .gitignore to ignore Great Docs build output")
+
+
+def format_authors_yaml(authors: list[dict[str, str]]) -> str:
+    """
+    Format the `authors:` block for a new `great-docs.yml`
+
+    Each author has a `name` and any supplied `role` and `email` fields.
+    Commented placeholders mark optional details for the user to fill in.
+
+    Parameters
+    ----------
+    authors
+        Author mappings with a `name` and optional `role` and `email` fields.
+
+    Returns
+    -------
+    :
+        The YAML block without a trailing newline, or an empty string if there are no authors.
+    """
+    if not authors:
+        return ""
+
+    lines = ["authors:"]
+
+    for author in authors:
+        lines.append(f"  - name: {author['name']}")
+        if "role" in author:
+            lines.append(f"    role: {author['role']}")
+        lines.append("    # affiliation: ")
+        if "email" in author:
+            lines.append(f"    email: {author['email']}")
+        else:
+            lines.append("    # email: ")
+        lines.append("    # github: ")
+        lines.append("    # orcid: ")
+        lines.append("    # homepage: ")
+
+    return "\n".join(lines)
 
 
 def _agrees(answer: str) -> bool:

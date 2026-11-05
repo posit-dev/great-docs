@@ -2274,63 +2274,6 @@ def test_extract_authors_from_pyproject_no_file():
         assert authors == []
 
 
-def test_format_authors_yaml_basic_single_with_comments():
-    """Test formatting authors as YAML."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        # Create minimal pyproject.toml
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        authors = [{"name": "Test Author", "role": "Maintainer", "email": "test@example.com"}]
-        yaml_output = docs._format_authors_yaml(authors)
-
-        assert yaml_output.startswith("authors:")
-        assert "authors:" in yaml_output
-        assert "- name: Test Author" in yaml_output
-        assert "role: Maintainer" in yaml_output
-        assert "email: test@example.com" in yaml_output
-        assert "# github:" in yaml_output
-        assert "# orcid:" in yaml_output
-
-
-def test_format_authors_yaml_empty_with_project():
-    """Test formatting empty authors list."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        # Create minimal pyproject.toml
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-        yaml_output = docs._format_authors_yaml([])
-
-        assert yaml_output == ""
-
-
-def test_format_authors_yaml_no_email():
-    """Test formatting authors without email."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        # Create minimal pyproject.toml
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        authors = [{"name": "No Email Author", "role": "Author"}]
-        yaml_output = docs._format_authors_yaml(authors)
-
-        assert "- name: No Email Author" in yaml_output
-        assert "role: Author" in yaml_output
-        assert "# email:" in yaml_output  # Should be commented out placeholder
-
-
 def test_strip_numeric_prefix_two_digit():
     """Test stripping two-digit numeric prefix like 00-, 01-, etc."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -8341,15 +8284,6 @@ def test_extract_authors_from_pyproject_no_authors():
         assert result == []
 
 
-def test_format_authors_yaml_empty_v2():
-    """_format_authors_yaml returns empty string for empty list."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._format_authors_yaml([])
-
-        assert result == ""
-
-
 def test_quarto_environment_sets_quarto_python():
     """Set `QUARTO_PYTHON` to a non-empty executable path"""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -11978,24 +11912,6 @@ def test_extract_authors_from_pyproject_duplicate_names():
         assert result[0]["role"] == "Maintainer"
 
 
-def test_format_authors_yaml_basic():
-    """Test _format_authors_yaml generates valid YAML output."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        authors = [
-            {"name": "Alice", "role": "Author", "email": "alice@example.com"},
-            {"name": "Bob", "role": "Maintainer"},
-        ]
-        result = docs._format_authors_yaml(authors)
-        assert "authors:" in result
-        assert "- name: Alice" in result
-        assert "role: Author" in result
-        assert "email: alice@example.com" in result
-        assert "- name: Bob" in result
-        assert "role: Maintainer" in result
-
-
 def test_categorise_references_missing_item_raises(capsys: pytest.CaptureFixture[str]):
     """Report missing configured names and raise `BuildError`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -14502,32 +14418,6 @@ def test_extract_authors_from_pyproject_no_pyproject():
         authors = docs._extract_authors_from_pyproject()
 
         assert authors == []
-
-
-def test_format_authors_yaml():
-    """Test _format_authors_yaml generates correct YAML."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        authors = [
-            {"name": "Alice", "role": "Author", "email": "alice@test.com"},
-            {"name": "Bob", "role": "Maintainer"},
-        ]
-        result = docs._format_authors_yaml(authors)
-
-        assert "authors:" in result
-        assert "name: Alice" in result
-        assert "role: Author" in result
-        assert "email: alice@test.com" in result
-        assert "name: Bob" in result
-
-
-def test_format_authors_yaml_empty():
-    """Test _format_authors_yaml returns empty string for no authors."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._format_authors_yaml([])
-
-        assert result == ""
 
 
 def test_get_package_exports_with_all():

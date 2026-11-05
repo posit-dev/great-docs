@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from great_docs._install import update_gitignore
+from great_docs._install import format_authors_yaml, update_gitignore
 from great_docs._layout import Layout
 
 # Every entry a package-root configuration needs
@@ -251,3 +251,32 @@ def test_docs_layout_asks_before_writing(tmp_path: Path, docs_layout: Layout):
 
     assert not (tmp_path / ".gitignore").exists()
     assert questions == ["Ignore Great Docs build output? [Y/n]: "]
+
+
+def test_authors_yaml_is_empty_without_authors():
+    assert format_authors_yaml([]) == ""
+
+
+def test_authors_yaml_writes_fields_and_placeholders():
+    authors = [
+        {"name": "Alice", "role": "Author", "email": "alice@example.com"},
+        {"name": "Bob", "role": "Maintainer"},
+    ]
+
+    assert format_authors_yaml(authors).splitlines() == [
+        "authors:",
+        "  - name: Alice",
+        "    role: Author",
+        "    # affiliation: ",
+        "    email: alice@example.com",
+        "    # github: ",
+        "    # orcid: ",
+        "    # homepage: ",
+        "  - name: Bob",
+        "    role: Maintainer",
+        "    # affiliation: ",
+        "    # email: ",
+        "    # github: ",
+        "    # orcid: ",
+        "    # homepage: ",
+    ]

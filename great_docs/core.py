@@ -39,7 +39,7 @@ from ._content.pages import PageMap
 from ._content.user_guide import UserGuide
 from ._contribution import Contribution
 from ._github import GithubRepo
-from ._install import update_gitignore
+from ._install import format_authors_yaml, update_gitignore
 from ._layout import PACKAGE_DIRS, Layout
 from ._reference import block as reference_block
 from ._reference import discovery, documented, probe
@@ -1972,41 +1972,6 @@ class GreatDocs:
         except Exception:  # pragma: no cover
             return []  # pragma: no cover
 
-    def _format_authors_yaml(self, authors: list[dict[str, str]]) -> str:
-        """
-        Format authors list as YAML for great-docs.yml.
-
-        Parameters
-        ----------
-        authors
-            List of author dictionaries from _extract_authors_from_pyproject.
-
-        Returns
-        -------
-        str
-            YAML-formatted authors section, or empty string if no authors.
-        """
-        if not authors:
-            return ""
-
-        lines = ["authors:"]
-
-        for author in authors:
-            lines.append(f"  - name: {author['name']}")
-            if "role" in author:
-                lines.append(f"    role: {author['role']}")
-            # Add commented placeholders for optional fields
-            lines.append("    # affiliation: ")
-            if "email" in author:
-                lines.append(f"    email: {author['email']}")
-            else:
-                lines.append("    # email: ")
-            lines.append("    # github: ")
-            lines.append("    # orcid: ")
-            lines.append("    # homepage: ")
-
-        return "\n".join(lines)
-
     def _generate_initial_config(self, force: bool = False) -> bool:
         """
         Generate an initial great-docs.yml with discovered exports.
@@ -2074,7 +2039,7 @@ class GreatDocs:
         overrides["parser"] = f"parser: {parser_style}"
 
         # Authors from pyproject.toml
-        authors_yaml = self._format_authors_yaml(self._extract_authors_from_pyproject())
+        authors_yaml = format_authors_yaml(self._extract_authors_from_pyproject())
         if authors_yaml:  # pragma: no cover
             overrides["authors"] = authors_yaml  # pragma: no cover
 
