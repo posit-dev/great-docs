@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import subprocess
 from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -837,6 +838,35 @@ class TestHandleStatusWithConfig:
 # ---------------------------------------------------------------------------
 
 
+def _git(root: Path, *args: str) -> None:
+    """
+    Run `git *args` in `root`, raising `CalledProcessError` on a non-zero exit
+    """
+    subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+
+
+@pytest.fixture
+def tagged_project(tmp_path: Path) -> Path:
+    """
+    Create a tagged package with uncommitted API changes
+
+    Relative to tag `v0.1.0`, the working tree adds `added`, removes `dropped`
+    and gives `kept` a second required parameter.
+    """
+    write_pyproject(tmp_path, "diffpkg")
+    init = tmp_path / "diffpkg" / "__init__.py"
+    init.parent.mkdir()
+    init.write_text("def kept(a): ...\n\n\ndef dropped(): ...\n", encoding="utf-8")
+    _git(tmp_path, "init")
+    _git(tmp_path, "config", "user.email", "t@t.co")
+    _git(tmp_path, "config", "user.name", "t")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-m", "v0.1.0")
+    _git(tmp_path, "tag", "v0.1.0")
+    init.write_text("def kept(a, b): ...\n\n\ndef added(): ...\n", encoding="utf-8")
+    return tmp_path
+
+
 class TestHandleApiDiff:
     def test_no_package_name_returns_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
@@ -848,65 +878,29 @@ class TestHandleApiDiff:
             result = asyncio.run(_handle_api_diff({}))
         assert "Could not detect" in result[0].text
 
-    def _patched_exports(self):
-        mock_exports = MagicMock()
-        write_pyproject(Path.cwd(), "mypkg")
-        mock_exports.config = mock_config()
-        return mock_exports
+    def test_base_ref_diffs_working_tree(self, tagged_project: Path):
+        arguments = {"project_path": str(tagged_project), "base": "v0.1.0"}
+        text = asyncio.run(_handle_api_diff(arguments))[0].text
+        assert "v0.1.0 → HEAD" in text
+        assert "Added (1):\n  + added" in text
+        assert "Removed (1):\n  - dropped" in text
+        assert "Changed (1):\n  ~ kept" in text
 
-    def _mock_snapshot(self, symbols=None):
-        snap = MagicMock()
-        snap.symbols = symbols or {}
-        return snap
+    def test_no_refs_shows_current_api(self, tagged_project: Path):
+        text = asyncio.run(_handle_api_diff({"project_path": str(tagged_project)}))[0].text
+        assert "function: added" in text
+        assert "function: kept" in text
+        assert "dropped" not in text
 
-    def test_no_refs_shows_current_api(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        from great_docs._api_diff import ApiSnapshot
+    def test_unknown_base_ref_returns_message(self, tagged_project: Path):
+        arguments = {"project_path": str(tagged_project), "base": "v9.9.9"}
+        text = asyncio.run(_handle_api_diff(arguments))[0].text
+        assert "Could not build an API snapshot at 'v9.9.9'" in text
 
-        monkeypatch.chdir(tmp_path)
-        snap = self._mock_snapshot({"MyClass": MagicMock(kind="class")})
-        with (
-            patch(
-                "great_docs.mcp._get_exports",
-                side_effect=_reading_project(self._patched_exports(), Path.cwd()),
-            ),
-            patch.object(ApiSnapshot, "from_live", return_value=snap, create=True),
-        ):
-            result = asyncio.run(_handle_api_diff({}))
-        assert "MyClass" in result[0].text
-
-    def test_base_ref_without_snapshot_returns_message(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
-        from great_docs._api_diff import ApiSnapshot
-
-        monkeypatch.chdir(tmp_path)
-        snap = self._mock_snapshot()
-        with (
-            patch(
-                "great_docs.mcp._get_exports",
-                side_effect=_reading_project(self._patched_exports(), Path.cwd()),
-            ),
-            patch.object(ApiSnapshot, "from_live", return_value=snap, create=True),
-        ):
-            result = asyncio.run(_handle_api_diff({"base": "v0.1"}))
-        assert "No snapshot found" in result[0].text
-
-    def test_provide_base_message_when_only_head(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
-        from great_docs._api_diff import ApiSnapshot
-
-        monkeypatch.chdir(tmp_path)
-        snap = self._mock_snapshot()
-        with (
-            patch(
-                "great_docs.mcp._get_exports",
-                side_effect=_reading_project(self._patched_exports(), Path.cwd()),
-            ),
-            patch.object(ApiSnapshot, "from_live", return_value=snap, create=True),
-        ):
-            result = asyncio.run(_handle_api_diff({"head": "HEAD"}))
-        assert "Provide a base ref" in result[0].text
+    def test_provide_base_message_when_only_head(self, tagged_project: Path):
+        arguments = {"project_path": str(tagged_project), "head": "HEAD"}
+        text = asyncio.run(_handle_api_diff(arguments))[0].text
+        assert "Provide a base ref" in text
 
 
 # ---------------------------------------------------------------------------
@@ -1339,154 +1333,6 @@ class TestHandleScanRefConfigDictItem:
         text = result[0].text
         assert "do_thing" in text
         assert "[x]" in text
-
-
-# ---------------------------------------------------------------------------
-# _handle_api_diff
-# ---------------------------------------------------------------------------
-
-
-class TestHandleApiDiffWithSnapshot:
-    def _patched_exports(self):
-        mock_exports = MagicMock()
-        write_pyproject(Path.cwd(), "mypkg")
-        mock_exports.config = mock_config()
-        return mock_exports
-
-    def _mock_current_snapshot(self):
-        snap = MagicMock()
-        snap.symbols = {}
-        return snap
-
-    def test_with_added_symbols(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        """_handle_api_diff shows added symbols when base snapshot exists."""
-        from great_docs._api_diff import ApiSnapshot, SymbolChange
-
-        monkeypatch.chdir(tmp_path)
-        snap_dir = tmp_path / ".great-docs-snapshots"
-        snap_dir.mkdir()
-        (snap_dir / "v0.1.json").write_text("{}")
-
-        current = self._mock_current_snapshot()
-        added_sym = MagicMock(spec=SymbolChange)
-        added_sym.name = "new_func"
-        added_sym.kind = "function"
-        diff = MagicMock()
-        diff.added = [added_sym]
-        diff.removed = []
-        diff.changed = []
-        base_snap = MagicMock()
-        base_snap.diff.return_value = diff
-
-        with (
-            patch(
-                "great_docs.mcp._get_exports",
-                side_effect=_reading_project(self._patched_exports(), Path.cwd()),
-            ),
-            patch.object(ApiSnapshot, "from_live", return_value=current, create=True),
-            patch.object(ApiSnapshot, "from_json", return_value=base_snap, create=True),
-        ):
-            result = asyncio.run(_handle_api_diff({"base": "v0.1"}))
-
-        assert "Added" in result[0].text
-        assert "new_func" in result[0].text
-
-    def test_with_removed_symbols(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        """_handle_api_diff shows removed symbols when base snapshot exists."""
-        from great_docs._api_diff import ApiSnapshot, SymbolChange
-
-        monkeypatch.chdir(tmp_path)
-        snap_dir = tmp_path / ".great-docs-snapshots"
-        snap_dir.mkdir()
-        (snap_dir / "v0.1.json").write_text("{}")
-
-        current = self._mock_current_snapshot()
-        removed_sym = MagicMock(spec=SymbolChange)
-        removed_sym.name = "old_func"
-        removed_sym.kind = "function"
-        diff = MagicMock()
-        diff.added = []
-        diff.removed = [removed_sym]
-        diff.changed = []
-        base_snap = MagicMock()
-        base_snap.diff.return_value = diff
-
-        with (
-            patch(
-                "great_docs.mcp._get_exports",
-                side_effect=_reading_project(self._patched_exports(), Path.cwd()),
-            ),
-            patch.object(ApiSnapshot, "from_live", return_value=current, create=True),
-            patch.object(ApiSnapshot, "from_json", return_value=base_snap, create=True),
-        ):
-            result = asyncio.run(_handle_api_diff({"base": "v0.1"}))
-
-        assert "Removed" in result[0].text
-        assert "old_func" in result[0].text
-
-    def test_with_changed_symbols(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        """_handle_api_diff shows changed symbols when base snapshot exists."""
-        from great_docs._api_diff import ApiSnapshot, SymbolChange
-
-        monkeypatch.chdir(tmp_path)
-        snap_dir = tmp_path / ".great-docs-snapshots"
-        snap_dir.mkdir()
-        (snap_dir / "v0.1.json").write_text("{}")
-
-        current = self._mock_current_snapshot()
-        changed_sym = MagicMock(spec=SymbolChange)
-        changed_sym.name = "changed_func"
-        changed_sym.change_type = "signature_changed"
-        diff = MagicMock()
-        diff.added = []
-        diff.removed = []
-        diff.changed = [changed_sym]
-        base_snap = MagicMock()
-        base_snap.diff.return_value = diff
-
-        with (
-            patch(
-                "great_docs.mcp._get_exports",
-                side_effect=_reading_project(self._patched_exports(), Path.cwd()),
-            ),
-            patch.object(ApiSnapshot, "from_live", return_value=current, create=True),
-            patch.object(ApiSnapshot, "from_json", return_value=base_snap, create=True),
-        ):
-            result = asyncio.run(_handle_api_diff({"base": "v0.1"}))
-
-        assert "Changed" in result[0].text
-        assert "changed_func" in result[0].text
-
-    def test_no_diff_shows_no_changes_message(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
-        """_handle_api_diff shows 'No API changes detected' when diff is empty."""
-        from great_docs._api_diff import ApiSnapshot
-
-        monkeypatch.chdir(tmp_path)
-        snap_dir = tmp_path / ".great-docs-snapshots"
-        snap_dir.mkdir()
-        (snap_dir / "v0.1.json").write_text("{}")
-
-        current = self._mock_current_snapshot()
-        diff = MagicMock()
-        diff.added = []
-        diff.removed = []
-        diff.changed = []
-        base_snap = MagicMock()
-        base_snap.diff.return_value = diff
-
-        with (
-            patch(
-                "great_docs.mcp._get_exports",
-                side_effect=_reading_project(self._patched_exports(), Path.cwd()),
-            ),
-            patch.object(ApiSnapshot, "from_live", return_value=current, create=True),
-            patch.object(ApiSnapshot, "from_json", return_value=base_snap, create=True),
-        ):
-            result = asyncio.run(_handle_api_diff({"base": "v0.1"}))
-
-        assert "No API changes detected" in result[0].text
 
 
 # ---------------------------------------------------------------------------
