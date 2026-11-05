@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .._project import Project
+from .._reference.exports import Exports
 
 if TYPE_CHECKING:
     from .._content.user_guide import UserGuide
@@ -29,6 +30,8 @@ class Run:
     ----------
     project
         The documented project, read from its files when the build starts.
+    exports
+        The package models and exports shared by this build, loaded on demand.
     watch
         Whether the site is served in watch mode.
     has_api_reference
@@ -47,6 +50,7 @@ class Run:
     """
 
     project: Project
+    exports: Exports
     watch: bool
     has_api_reference: bool = True
     api_discovery_done: bool = False
@@ -72,4 +76,5 @@ class Run:
         :
             The initial build state with the project's name, metadata and GitHub repository.
         """
-        return cls(project=Project.make(config, layout), watch=watch)
+        project = Project.make(config, layout)
+        return cls(project=project, exports=Exports(config, project), watch=watch)

@@ -19,6 +19,7 @@ from ._install import update_gitignore
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
 from ._manifest import ManifestError
 from ._project import Project
+from ._reference.exports import Exports
 from ._website import changelog as changelog_page
 from ._website import quarto_yml
 from .config import ConfigError
@@ -1098,9 +1099,13 @@ def scan(
     """
 
     try:
-        docs = GreatDocs(project_path=project_path, config_path=config_path)
-
-        project = Project.make(docs._config, docs.layout)
+        package_exports = Exports.make(
+            Layout.make(
+                Path(project_path) if project_path else Path.cwd(),
+                Path(config_path) if config_path else None,
+            )
+        )
+        project = package_exports.project
         importable_name = project.importable_name
         if not project.name or not importable_name:
             click.echo("Error: Could not detect package name.", err=True)
@@ -1113,16 +1118,16 @@ def scan(
         click.echo(f"Package: {importable_name}\n")
 
         # Get discovered exports
-        exports = docs._get_package_exports(importable_name)
+        exports = package_exports.names(importable_name)
         if not exports:
             click.echo("No exports discovered.")
             sys.exit(0)
 
         # Group exports for comparison with the configured reference.
-        categories = docs._categorise_exports(importable_name, exports)
+        categories = package_exports.categorise(importable_name, exports)
 
         # Build sets of what's in the reference config
-        reference_config = docs._config.reference
+        reference_config = package_exports.config.reference
         ref_items = set()  # Items explicitly listed
         ref_classes_with_members = set()  # Classes with members: true (or default)
         ref_classes_without_members = set()  # Classes with members: false
@@ -3366,16 +3371,17 @@ def api_diff_cmd(
         # --- Graph mode ---
         if graph:
             from great_docs._reference import documented as documented_reference
-            from great_docs.core import GreatDocs
 
-            docs = GreatDocs(project_path=str(project_root), config_path=config_path)
-            project = Project.make(docs._config, docs.layout)
+            package_exports = Exports.make(
+                Layout.make(project_root, Path(config_path) if config_path else None)
+            )
+            project = package_exports.project
             documented = (
                 documented_reference.symbol_names(
-                    docs._config,
+                    package_exports.config,
                     importable_name=project.module or result.package_name.replace("-", "_"),
                     search_paths=project.search_paths(),
-                    create_sections=docs._create_api_sections_with_config,
+                    create_sections=package_exports.sections,
                 )
                 or None
             )
@@ -3648,17 +3654,18 @@ def api_snapshot_cmd(
         sys.exit(1)
 
     from great_docs._reference import documented as documented_reference
-    from great_docs.core import GreatDocs
 
     try:
-        docs = GreatDocs(project_path=str(project_root), config_path=config_path)
-        project = Project.make(docs._config, docs.layout)
+        package_exports = Exports.make(
+            Layout.make(project_root, Path(config_path) if config_path else None)
+        )
+        project = package_exports.project
         documented = (
             documented_reference.symbol_names(
-                docs._config,
+                package_exports.config,
                 importable_name=project.module or pkg_name.replace("-", "_"),
                 search_paths=project.search_paths(),
-                create_sections=docs._create_api_sections_with_config,
+                create_sections=package_exports.sections,
             )
             or None
         )

@@ -154,7 +154,8 @@ from great_docs._cliref import render as cli_render
 from great_docs._content import user_guide
 from great_docs._content.naming import strip_numeric_prefix
 from great_docs._github import GithubRepo
-from great_docs._project import locate_package_init, read_manifest
+from great_docs._layout import Layout
+from great_docs._project import Project, locate_package_init, read_manifest
 from great_docs._reference import block as reference_block
 from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import (
@@ -164,6 +165,7 @@ from great_docs._reference.discovery import (
     empty_categories,
     parse_dunder_all,
 )
+from great_docs._reference.exports import Exports
 from great_docs._reference.probe import detect_docstring_style, detect_dynamic_mode
 from great_docs._utils import QUARTO_YML_HEADER, validate_build_dir
 from great_docs._website import page_status
@@ -228,6 +230,7 @@ from tests.support import (
     find_user_guide_dir,
     homepage_hero,
     homepage_margin,
+    make_exports,
     make_project,
     make_run,
     mock_config,
@@ -406,111 +409,9 @@ def test_parse_dunder_all_real_project():
     assert "main" not in exports
 
 
-def test_create_api_sections():
-    """Test auto-generation of API reference sections."""
-    docs = GreatDocs()
-    sections = docs._create_api_sections_with_config("great_docs")
-
-    assert sections is not None
-    assert len(sections) > 0
-
-    # Check that we have at least one section with contents
-    has_contents = any(section.get("contents") for section in sections)
-    assert has_contents
-
-
 def test_cli_import():
     """Test that CLI module can be imported."""
     assert callable(main)
-
-
-def test_method_section_generation():
-    """Test that classes with >5 methods get separate method sections."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Create a test package with a class that has many methods
-        package_dir = Path(tmp_dir) / "testpkg"
-        package_dir.mkdir()
-
-        # Create __init__.py with __all__ and a class with many methods
-        init_content = '''
-"""Test package."""
-__version__ = "1.0.0"
-__all__ = ["BigClass", "SmallClass", "some_function"]
-
-class BigClass:
-    """A class with many methods."""
-    def method1(self): pass
-    def method2(self): pass
-    def method3(self): pass
-    def method4(self): pass
-    def method5(self): pass
-    def method6(self): pass
-    def method7(self): pass
-
-class SmallClass:
-    """A class with few methods."""
-    def method1(self): pass
-    def method2(self): pass
-
-def some_function():
-    """A function."""
-    pass
-'''
-        (package_dir / "__init__.py").write_text(init_content)
-
-        # Add temp dir to sys.path so griffe can find the package
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            sections = docs._create_api_sections_with_config("testpkg")
-
-            assert sections is not None
-
-            # Check that we have a Classes section
-            class_section = next((s for s in sections if s["title"] == "Classes"), None)
-
-            assert class_section is not None
-
-            # BigClass should have members: [] since it has >5 methods
-            big_class_entry = next(
-                (
-                    c
-                    for c in class_section["contents"]
-                    if isinstance(c, dict) and c.get("name") == "BigClass"
-                ),
-                None,
-            )
-
-            assert big_class_entry is not None
-            assert big_class_entry == {"name": "BigClass", "members": []}
-
-            # SmallClass should be a plain string (inline documentation)
-            assert "SmallClass" in class_section["contents"]
-
-            # Check that we have a separate method section for BigClass
-            method_section = next((s for s in sections if s["title"] == "BigClass Methods"), None)
-
-            assert method_section is not None
-            assert len(method_section["contents"]) == 7
-            assert "BigClass.method1" in method_section["contents"]
-            assert "BigClass.method7" in method_section["contents"]
-
-            # SmallClass should NOT have a separate method section
-            small_method_section = next(
-                (s for s in sections if s["title"] == "SmallClass Methods"), None
-            )
-
-            assert small_method_section is None
-
-            # Check that functions section exists
-            func_section = next((s for s in sections if s["title"] == "Functions"), None)
-
-            assert func_section is not None
-            assert "some_function" in func_section["contents"]
-        finally:
-            # Clean up sys.path
-            sys.path.remove(tmp_dir)
 
 
 def test_config_exclude_in_parse():
@@ -1419,7 +1320,7 @@ def my_function(x, y):
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            style = detect_docstring_style(docs._get_griffe_package("numpypkg"), report=print)
+            style = detect_docstring_style(make_exports(docs).package("numpypkg"), report=print)
             assert style == "numpy"
         finally:
             sys.path.remove(tmp_dir)
@@ -1445,7 +1346,7 @@ def my_function(x, y):
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            style = detect_docstring_style(docs._get_griffe_package("nodocspkg"), report=print)
+            style = detect_docstring_style(make_exports(docs).package("nodocspkg"), report=print)
 
             assert style == "numpy"  # Default when no docstrings found
         finally:
@@ -1712,7 +1613,7 @@ class MyClass:
         try:
             docs = GreatDocs(project_path=tmp_dir)
             result = detect_dynamic_mode(
-                docs._get_griffe_package("simple_pkg"), ["hello", "MyClass"], report=print
+                make_exports(docs).package("simple_pkg"), ["hello", "MyClass"], report=print
             )
             # Should return True for a simple package
             assert result is True
@@ -3746,345 +3647,6 @@ def test_navbar_release_absent_without_github_repo():
 
         assert "github_releases" not in remote.calls
         assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
-
-
-def test_module_exports_categorized():
-    """Test that packages exporting submodules properly categorize their contents."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Create a package that exports submodules (like python-dateutil)
-        pkg_dir = Path(tmp_dir) / "modpkg"
-        pkg_dir.mkdir()
-
-        # Main __init__.py exports submodules
-        (pkg_dir / "__init__.py").write_text(
-            '"""A package with submodule exports."""\n__all__ = ["shapes", "colors"]\n'
-        )
-
-        # Create shapes submodule with classes and functions
-        shapes_dir = pkg_dir / "shapes"
-        shapes_dir.mkdir()
-        (shapes_dir / "__init__.py").write_text(
-            '"""Shapes module."""\n'
-            "class Circle:\n"
-            '    """A circle."""\n'
-            "    def area(self): pass\n"
-            "\n"
-            "class Square:\n"
-            '    """A square."""\n'
-            "    def area(self): pass\n"
-            "\n"
-            "def draw(shape):\n"
-            '    """Draw a shape."""\n'
-            "    pass\n"
-            "\n"
-            "MAX_SIDES = 100\n"
-        )
-
-        # Create colors submodule with functions
-        colors_dir = pkg_dir / "colors"
-        colors_dir.mkdir()
-        (colors_dir / "__init__.py").write_text(
-            '"""Colors module."""\n'
-            "def mix(a, b):\n"
-            '    """Mix two colors."""\n'
-            "    pass\n"
-            "\n"
-            "def blend(a, b, ratio=0.5):\n"
-            '    """Blend two colors."""\n'
-            "    pass\n"
-            "\n"
-            "RED = (255, 0, 0)\n"
-            "BLUE = (0, 0, 255)\n"
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            categories = docs._categorise_exports("modpkg", ["shapes", "colors"])
-
-            # Classes inside modules should be categorized with qualified names
-            assert "shapes.Circle" in categories["classes"]
-            assert "shapes.Square" in categories["classes"]
-
-            # Functions inside modules should be categorized with qualified names
-            assert "shapes.draw" in categories["functions"]
-            assert "colors.mix" in categories["functions"]
-            assert "colors.blend" in categories["functions"]
-
-            # Constants inside modules should be categorized
-            assert "shapes.MAX_SIDES" in categories["constants"]
-            assert "colors.RED" in categories["constants"]
-            assert "colors.BLUE" in categories["constants"]
-
-            # Nothing should be in "other"
-            assert categories["other"] == []
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_module_class_methods_tracked():
-    """Test that classes inside modules have methods properly counted."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "methpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '"""Package with module exports."""\n__all__ = ["models"]\n'
-        )
-
-        models_dir = pkg_dir / "models"
-        models_dir.mkdir()
-        (models_dir / "__init__.py").write_text(
-            '"""Models module."""\n'
-            "class BigModel:\n"
-            '    """A model with many methods."""\n'
-            "    def fit(self): pass\n"
-            "    def predict(self): pass\n"
-            "    def score(self): pass\n"
-            "    def transform(self): pass\n"
-            "    def validate(self): pass\n"
-            "    def serialize(self): pass\n"
-            "    def load(self): pass\n"
-            "\n"
-            "class SmallModel:\n"
-            '    """A model with few methods."""\n'
-            "    def fit(self): pass\n"
-            "    def predict(self): pass\n"
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            categories = docs._categorise_exports("methpkg", ["models"])
-
-            # BigModel should have 7 methods tracked
-            assert categories["class_methods"]["models.BigModel"] == 7
-            assert len(categories["class_method_names"]["models.BigModel"]) == 7
-            assert "fit" in categories["class_method_names"]["models.BigModel"]
-            assert "serialize" in categories["class_method_names"]["models.BigModel"]
-
-            # SmallModel should have 2 methods tracked
-            assert categories["class_methods"]["models.SmallModel"] == 2
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_module_big_class_splitting():
-    """Test that classes inside modules with >5 methods get separate sections."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "splitpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '"""Package with big class in submodule."""\n__all__ = ["engine"]\n'
-        )
-
-        engine_dir = pkg_dir / "engine"
-        engine_dir.mkdir()
-        (engine_dir / "__init__.py").write_text(
-            '"""Engine module."""\n'
-            "class Engine:\n"
-            '    """A big engine class."""\n'
-            "    def start(self): pass\n"
-            "    def stop(self): pass\n"
-            "    def accelerate(self): pass\n"
-            "    def brake(self): pass\n"
-            "    def reverse(self): pass\n"
-            "    def park(self): pass\n"
-            "    def idle(self): pass\n"
-            "\n"
-            "def create_engine():\n"
-            '    """Create an engine."""\n'
-            "    pass\n"
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            sections = docs._create_api_sections_with_config("splitpkg")
-
-            assert sections is not None
-
-            # Classes section should exist with engine.Engine having members: []
-            class_section = next((s for s in sections if s["title"] == "Classes"), None)
-            assert class_section is not None
-
-            big_class_entry = next(
-                (
-                    c
-                    for c in class_section["contents"]
-                    if isinstance(c, dict) and c.get("name") == "engine.Engine"
-                ),
-                None,
-            )
-            assert big_class_entry is not None
-            assert big_class_entry == {"name": "engine.Engine", "members": []}
-
-            # Separate method section for engine.Engine
-            method_section = next(
-                (s for s in sections if s["title"] == "engine.Engine Methods"),
-                None,
-            )
-
-            assert method_section is not None
-            assert len(method_section["contents"]) == 7
-            assert "engine.Engine.start" in method_section["contents"]
-            assert "engine.Engine.park" in method_section["contents"]
-
-            # Functions section should have create_engine
-            func_section = next((s for s in sections if s["title"] == "Functions"), None)
-
-            assert func_section is not None
-            assert "engine.create_engine" in func_section["contents"]
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_module_exception_subclassification():
-    """Test that exceptions inside modules are categorized correctly."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "errpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '"""Package with exceptions in submodule."""\n__all__ = ["errors"]\n'
-        )
-
-        errors_dir = pkg_dir / "errors"
-        errors_dir.mkdir()
-        (errors_dir / "__init__.py").write_text(
-            '"""Errors module."""\n'
-            "class ValidationError(ValueError):\n"
-            '    """Validation failed."""\n'
-            "    pass\n"
-            "\n"
-            "class NotFoundError(KeyError):\n"
-            '    """Item not found."""\n'
-            "    pass\n"
-            "\n"
-            "class Widget:\n"
-            '    """A regular class."""\n'
-            "    pass\n"
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            categories = docs._categorise_exports("errpkg", ["errors"])
-
-            # Exceptions should be in the exceptions category
-            assert "errors.ValidationError" in categories["exceptions"]
-            assert "errors.NotFoundError" in categories["exceptions"]
-
-            # Regular class should be in classes
-            assert "errors.Widget" in categories["classes"]
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_module_empty_submodule_goes_to_other():
-    """Test that modules with no documentable members go to 'other'."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "emptypkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '"""Package with empty submodule."""\n__all__ = ["empty_mod"]\n'
-        )
-
-        empty_dir = pkg_dir / "empty_mod"
-        empty_dir.mkdir()
-        (empty_dir / "__init__.py").write_text(
-            '"""Empty module with only private members."""\n_internal = 42\n_helper = lambda x: x\n'
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            categories = docs._categorise_exports("emptypkg", ["empty_mod"])
-
-            # Module with no public members should go to "other"
-            assert "empty_mod" in categories["other"]
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_module_mixed_with_top_level():
-    """Test packages with both module exports and top-level classes/functions."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "mixedpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '"""Mixed package."""\n'
-            '__all__ = ["TopClass", "top_func", "sub"]\n'
-            "\n"
-            "class TopClass:\n"
-            '    """A top-level class."""\n'
-            "    pass\n"
-            "\n"
-            "def top_func():\n"
-            '    """A top-level function."""\n'
-            "    pass\n"
-        )
-
-        sub_dir = pkg_dir / "sub"
-        sub_dir.mkdir()
-        (sub_dir / "__init__.py").write_text(
-            '"""Sub module."""\n'
-            "class SubClass:\n"
-            '    """A class inside a submodule."""\n'
-            "    pass\n"
-            "\n"
-            "def sub_func():\n"
-            '    """A function inside a submodule."""\n'
-            "    pass\n"
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            categories = docs._categorise_exports("mixedpkg", ["TopClass", "top_func", "sub"])
-
-            # Top-level items
-            assert "TopClass" in categories["classes"]
-            assert "top_func" in categories["functions"]
-
-            # Submodule items (qualified names)
-            assert "sub.SubClass" in categories["classes"]
-            assert "sub.sub_func" in categories["functions"]
-
-            # No "other"
-            assert categories["other"] == []
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_module_submodule_allowed_in_exports():
-    """Test that submodules are not excluded from _get_package_exports."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "subexpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '"""Package with submodule in __all__."""\n__all__ = ["mymod"]\n'
-        )
-
-        mod_dir = pkg_dir / "mymod"
-        mod_dir.mkdir()
-        (mod_dir / "__init__.py").write_text('"""My module."""\ndef hello(): pass\n')
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            exports = docs._get_package_exports("subexpkg")
-
-            # Submodules should NOT be excluded
-            assert exports is not None
-            assert "mymod" in exports
-        finally:
-            sys.path.remove(tmp_dir)
 
 
 # =========================================================================
@@ -7600,20 +7162,11 @@ def test_discover_exports():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         result = discover_exports(
-            docs._get_griffe_package("great_docs"), docs._config, report=print
+            make_exports(docs).package("great_docs"), docs._config, report=print
         )
 
         assert result is not None
         assert "GreatDocs" in result
-
-
-def test_get_package_exports_missing_package():
-    """Verify that discovery returns `None` when neither source finds the package"""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._get_package_exports("nonexistent_pkg_xyzzy")
-
-        assert result is None
 
 
 def test_quarto_environment_sets_quarto_python():
@@ -10140,10 +9693,8 @@ def test_refresh_api_reference_config_updates_sections():
             write_yaml(config, f)
 
         new_sections = [{"title": "New", "desc": "", "contents": ["NewClass", "new_func"]}]
-        with patch.object(docs, "_create_api_sections_with_config", return_value=new_sections):
-            reference_block.refresh(
-                docs._config, docs.build_dir, docs._create_api_sections_with_config
-            )
+        with patch.object(Exports, "sections", return_value=new_sections):
+            reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10204,7 +9755,7 @@ def test_add_api_reference_config_carries_the_callable_signature_settings():
             write_yaml({"project": {"type": "website"}}, f)
 
         sections = [{"title": "All", "desc": "", "contents": ["Widget"]}]
-        with patch.object(docs, "_create_api_sections_with_config", return_value=sections):
+        with patch.object(Exports, "sections", return_value=sections):
             run = make_run(docs)
             docs._add_api_reference_config(run)
 
@@ -10233,7 +9784,7 @@ def test_add_api_reference_config_defaults_the_callable_signature_settings():
             write_yaml({"project": {"type": "website"}}, f)
 
         sections = [{"title": "All", "desc": "", "contents": ["Widget"]}]
-        with patch.object(docs, "_create_api_sections_with_config", return_value=sections):
+        with patch.object(Exports, "sections", return_value=sections):
             run = make_run(docs)
             docs._add_api_reference_config(run)
 
@@ -10266,7 +9817,7 @@ def test_add_api_reference_config_with_sections():
             write_yaml(base_config, f)
 
         fake_sections = [{"title": "Core", "desc": "", "contents": ["Widget", "helper_fn"]}]
-        with patch.object(docs, "_create_api_sections_with_config", return_value=fake_sections):
+        with patch.object(Exports, "sections", return_value=fake_sections):
             run = make_run(docs)
             docs._add_api_reference_config(run)
 
@@ -10286,39 +9837,6 @@ def test_add_api_reference_config_with_sections():
         ]
 
         assert len(ref_items) == 1
-
-
-def test_create_api_sections_with_config_uses_explicit():
-    """Test _create_api_sections_with_config prefers explicit config."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._config = mock_config(reference=[{"title": "Explicit", "contents": ["A"]}])
-
-        fake_config_sections = [{"title": "Explicit", "contents": ["A"]}]
-        with patch.object(
-            reference_sections, "from_explicit_config", return_value=fake_config_sections
-        ):
-            result = docs._create_api_sections_with_config("mypkg")
-
-        assert result == fake_config_sections
-
-
-def test_create_api_sections_with_config_falls_back():
-    """Test _create_api_sections_with_config falls back to auto-discovery."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        fake_auto_sections = [{"title": "Auto", "contents": ["B"]}]
-        with (
-            patch.object(docs, "_get_package_exports", return_value=["B"]),
-            patch.object(docs, "_categorise_exports", return_value={}),
-            patch.object(reference_sections, "from_categories", return_value=fake_auto_sections),
-        ):
-            result = docs._create_api_sections_with_config("mypkg")
-
-        assert result == fake_auto_sections
 
 
 def test_prepare_build_directory_creates_structure():
@@ -10421,7 +9939,7 @@ def test_prepare_build_directory_adds_llms_links_after_api_reference_setup():
         try:
             docs = GreatDocs(project_path=tmp_dir)
             sections = [{"title": "All", "desc": "", "contents": ["widget"]}]
-            with patch.object(docs, "_create_api_sections_with_config", return_value=sections):
+            with patch.object(Exports, "sections", return_value=sections):
                 docs._prepare_build_directory(make_run(docs))
 
             index_content = (docs.build_dir / "index.qmd").read_text()
@@ -10949,41 +10467,6 @@ def test_build_sections_from_reference_config_dict_no_name():
         assert result[0]["contents"][0] == "Valid"
 
 
-def test_categorise_references_missing_item_raises(capsys: pytest.CaptureFixture[str]):
-    """Report missing configured names and raise `BuildError`"""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Create a minimal package with one export
-        pkg_dir = Path(tmp_dir) / "mypkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '"""Test package."""\ndef real_func():\n    """A real function."""\n    pass\n'
-        )
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            Path(tmp_dir, "great-docs.yml").write_text(
-                "reference:\n  - title: Functions\n    contents:\n"
-                "      - real_func\n      - nonexistent_item\n"
-            )
-            docs = GreatDocs(project_path=tmp_dir)
-
-            # Mock importlib.metadata.version to simulate an installed package
-            with patch("importlib.metadata.version", return_value="1.0.0"):
-                with pytest.raises(BuildError) as exc_info:
-                    docs._create_api_sections_with_config("mypkg")
-
-            error_msg = str(exc_info.value)
-            assert "nonexistent_item" in error_msg
-            assert "mypkg" in error_msg
-            assert "not found" in error_msg
-            assert capsys.readouterr().err == f"ERROR: {error_msg}\n"
-        finally:
-            sys.path.remove(tmp_dir)
-
-
 def test_categorise_references_all_found_no_error():
     """Verify that configured names are classified when all exist"""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -11015,136 +10498,17 @@ def test_categorise_references_all_found_no_error():
             ]
 
             # Should not raise
-            categories = categorise_references(docs._get_griffe_package("mypkg2"), reference_config)
+            categories = categorise_references(
+                make_exports(docs).package("mypkg2"), reference_config
+            )
             assert "greet" in categories["functions"]
             assert "Widget" in categories["classes"]
         finally:
             sys.path.remove(tmp_dir)
 
 
-def test_create_api_sections_basic():
-    """Test _create_api_sections with mocked exports and categories."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        categories = empty_categories()
-        categories["classes"] = ["Widget"]
-        categories["functions"] = ["create_widget", "destroy_widget"]
-        categories["class_methods"] = {"Widget": 3}
-        categories["class_method_names"] = {"Widget": ["render", "update", "close"]}
-
-        with patch.object(
-            docs, "_get_package_exports", return_value=["Widget", "create_widget", "destroy_widget"]
-        ):
-            with patch.object(docs, "_categorise_exports", return_value=categories):
-                result = docs._create_api_sections_with_config("mypkg")
-
-        assert result is not None
-        titles = [s["title"] for s in result]
-        assert "Classes" in titles
-        assert "Functions" in titles
-
-
-def test_create_api_sections_large_class():
-    """Test _create_api_sections separates large classes (>5 methods)."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        categories = empty_categories()
-        categories["classes"] = ["BigClass"]
-        categories["class_methods"] = {"BigClass": 10}
-        categories["class_method_names"] = {
-            "BigClass": ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10"]
-        }
-
-        with patch.object(docs, "_get_package_exports", return_value=["BigClass"]):
-            with patch.object(docs, "_categorise_exports", return_value=categories):
-                result = docs._create_api_sections_with_config("mypkg")
-
-        assert result is not None
-        titles = [s["title"] for s in result]
-        assert "BigClass Methods" in titles
-        # BigClass should have members: [] in the classes section
-        classes_section = next(s for s in result if s["title"] == "Classes")
-        assert {"name": "BigClass", "members": []} in classes_section["contents"]
-
-
-def test_create_api_sections_no_exports():
-    """Test _create_api_sections returns None when no exports."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        with patch.object(docs, "_get_package_exports", return_value=None):
-            result = docs._create_api_sections_with_config("mypkg")
-
-        assert result is None
-
-
-def test_create_api_sections_all_types():
-    """Test _create_api_sections with all category types populated."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        categories = empty_categories()
-        categories["classes"] = ["MyClass"]
-        categories["dataclasses"] = ["MyData"]
-        categories["enums"] = ["Color"]
-        categories["exceptions"] = ["MyError"]
-        categories["namedtuples"] = ["Point"]
-        categories["typeddicts"] = ["Options"]
-        categories["protocols"] = ["Renderable"]
-        categories["abstract_classes"] = ["BaseWidget"]
-        categories["functions"] = ["do_thing"]
-        categories["async_functions"] = ["async_fetch"]
-        categories["constants"] = ["VERSION"]
-        categories["type_aliases"] = ["WidgetList"]
-        categories["other"] = ["misc_obj"]
-        categories["class_methods"] = {}
-        categories["class_method_names"] = {}
-
-        all_exports = (
-            categories["classes"]
-            + categories["dataclasses"]
-            + categories["enums"]
-            + categories["exceptions"]
-            + categories["namedtuples"]
-            + categories["typeddicts"]
-            + categories["protocols"]
-            + categories["abstract_classes"]
-            + categories["functions"]
-            + categories["async_functions"]
-            + categories["constants"]
-            + categories["type_aliases"]
-            + categories["other"]
-        )
-
-        with patch.object(docs, "_get_package_exports", return_value=all_exports):
-            with patch.object(docs, "_categorise_exports", return_value=categories):
-                result = docs._create_api_sections_with_config("mypkg")
-
-        assert result is not None
-        titles = [s["title"] for s in result]
-        assert "Enumerations" in titles
-        assert "Exceptions" in titles
-        assert "Named Tuples" in titles
-        assert "Typed Dicts" in titles
-        assert "Protocols" in titles
-        assert "Abstract Classes" in titles
-        assert "Async Functions" in titles
-        assert "Constants" in titles
-        assert "Type Aliases" in titles
-        assert "Other" in titles
-
-
 def test_generate_initial_config_with_package():
-    """Test _generate_initial_config creates config file."""
+    """Verify that initialisation creates a configuration for the package"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -11152,7 +10516,6 @@ def test_generate_initial_config_with_package():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        # Create a package with some exports
         pkg_dir = Path(tmp_dir) / "mypkg"
         pkg_dir.mkdir()
         (pkg_dir / "__init__.py").write_text(
@@ -11182,18 +10545,18 @@ def test_generate_initial_config_is_template_with_detected_values(monkeypatch):
         )
         docs = GreatDocs(project_path=tmp_dir)
 
-        monkeypatch.setattr(docs, "_get_griffe_package", lambda name: MagicMock())
+        monkeypatch.setattr(Exports, "package", lambda self, name: MagicMock())
         monkeypatch.setattr(
             "great_docs.core.probe.detect_docstring_style", lambda package, report: "google"
         )
         monkeypatch.setattr(
             "great_docs.core.probe.detect_dynamic_mode", lambda package, exports, report: False
         )
-        monkeypatch.setattr(docs, "_get_package_exports", lambda name: ["Thing"])
+        monkeypatch.setattr(Exports, "names", lambda self, name: ["Thing"])
         monkeypatch.setattr(
-            docs,
-            "_categorise_exports",
-            lambda name, exports: {
+            Exports,
+            "categorise",
+            lambda self, name, exports: {
                 "classes": ["Thing"],
                 "class_methods": {"Thing": 0},
                 "class_method_names": {},
@@ -11225,14 +10588,14 @@ def test_generate_initial_config_records_a_module_named_unlike_the_distribution(
     write_pyproject(tmp_path, "py-yaml12")
     (tmp_path / "yaml12.pyi").write_text("")
     docs = GreatDocs(project_path=str(tmp_path))
-    monkeypatch.setattr(docs, "_get_griffe_package", lambda name: MagicMock())
+    monkeypatch.setattr(Exports, "package", lambda self, name: MagicMock())
     monkeypatch.setattr(
         "great_docs.core.probe.detect_docstring_style", lambda package, report: "numpy"
     )
     monkeypatch.setattr(
         "great_docs.core.probe.detect_dynamic_mode", lambda package, exports, report: True
     )
-    monkeypatch.setattr(docs, "_get_package_exports", lambda name: None)
+    monkeypatch.setattr(Exports, "names", lambda self, name: None)
 
     assert docs._generate_initial_config(force=True) is True
 
@@ -11295,8 +10658,8 @@ def test_generate_initial_config_no_exports():
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
         with (
-            patch.object(docs, "_get_package_exports", return_value=None),
-            patch.object(docs, "_get_griffe_package", return_value=MagicMock()),
+            patch.object(Exports, "names", return_value=None),
+            patch.object(Exports, "package", return_value=MagicMock()),
             patch("great_docs.core.probe.detect_docstring_style", return_value="google"),
             patch("great_docs.core.probe.detect_dynamic_mode", return_value=False),
         ):
@@ -11355,8 +10718,8 @@ def test_init_lists_poetry_1_authors(tmp_path: Path):
     docs = GreatDocs(project_path=str(tmp_path))
 
     with (
-        patch.object(docs, "_get_package_exports", return_value=None),
-        patch.object(docs, "_get_griffe_package", return_value=MagicMock()),
+        patch.object(Exports, "names", return_value=None),
+        patch.object(Exports, "package", return_value=MagicMock()),
         patch("great_docs.core.probe.detect_docstring_style", return_value="numpy"),
         patch("great_docs.core.probe.detect_dynamic_mode", return_value=False),
     ):
@@ -11815,26 +11178,6 @@ def test_process_user_guide_returns_true():
         assert result is True
 
 
-def test_get_package_exports_with_fallback():
-    """Test _get_package_exports tries fallback when griffe fails."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        # Create package with __all__
-        pkg_dir = Path(tmp_dir) / "mypkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '__all__ = ["func_a", "ClassB"]\n\ndef func_a(): pass\n\nclass ClassB: pass\n',
-            encoding="utf-8",
-        )
-
-        result = docs._get_package_exports("mypkg")
-        # Should return something or None
-        assert result is None or isinstance(result, list)
-
-
 def test_prepare_build_directory():
     """Test _prepare_build_directory creates build structure."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -12204,7 +11547,7 @@ def test_refresh_api_reference_config_no_api_reference():
         quarto_yml = build_dir / "_quarto.yml"
         quarto_yml.write_text("website:\n  title: Test\n", encoding="utf-8")
 
-        reference_block.refresh(docs._config, docs.build_dir, docs._create_api_sections_with_config)
+        reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
         # Should not crash
 
 
@@ -12220,7 +11563,7 @@ def test_refresh_api_reference_config_no_package():
             encoding="utf-8",
         )
 
-        reference_block.refresh(docs._config, docs.build_dir, docs._create_api_sections_with_config)
+        reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
         # Should not crash
 
 
@@ -12251,29 +11594,6 @@ def test_create_index_from_readme_with_badges():
         assert index_qmd.exists()
         content = index_qmd.read_text(encoding="utf-8")
         assert "great package" in content
-
-
-def test_get_package_exports_with_exclude():
-    """Test _get_package_exports respects exclude config."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Mock the config to have excludes
-        docs._config = write_config(Path(tmp_dir), "exclude:\n  - _internal\n  - _private\n")
-
-        # Create a package with __init__.py containing __all__
-        pkg_dir = Path(tmp_dir) / "mypkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '__all__ = ["public_func", "_internal", "_private", "Widget"]\n',
-            encoding="utf-8",
-        )
-
-        result = docs._get_package_exports("mypkg")
-        if result is not None:
-            assert "_internal" not in result
-            assert "_private" not in result
 
 
 def test_publish_user_guide_strips_prefix():
@@ -12645,84 +11965,6 @@ def test_extract_command_group():
 
         assert result["name"] == "cli"
         assert len(result.get("commands", [])) >= 1
-
-
-def test_get_package_exports_with_all():
-    """Test _get_package_exports reads __all__ from __init__.py."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "exportpkg_all"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '__all__ = ["func_a", "ClassB", "CONST_C"]\n',
-            encoding="utf-8",
-        )
-        (Path(tmp_dir) / "pyproject.toml").write_text(
-            '[project]\nname = "exportpkg_all"\n', encoding="utf-8"
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        exports = docs._get_package_exports("exportpkg_all")
-
-        assert exports is not None
-        assert "func_a" in exports
-        assert "ClassB" in exports
-        assert "CONST_C" in exports
-
-
-def test_get_package_exports_with_exclusions():
-    """Test _get_package_exports filters items via great-docs.yml exclude."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "exportpkg_excl"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '__all__ = ["func_a", "hidden_b", "ClassC"]\n',
-            encoding="utf-8",
-        )
-        (Path(tmp_dir) / "pyproject.toml").write_text(
-            '[project]\nname = "exportpkg_excl"\n', encoding="utf-8"
-        )
-        (Path(tmp_dir) / "great-docs.yml").write_text("exclude:\n  - hidden_b\n", encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        exports = docs._get_package_exports("exportpkg_excl")
-
-        assert exports is not None
-        assert "func_a" in exports
-        assert "hidden_b" not in exports
-        assert "ClassC" in exports
-
-
-def test_get_package_exports_no_all():
-    """Test _get_package_exports returns None when no __all__."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "exportpkg_noall"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "# No __all__ here\nVERSION = '1.0'\n",
-            encoding="utf-8",
-        )
-        (Path(tmp_dir) / "pyproject.toml").write_text(
-            '[project]\nname = "exportpkg_noall"\n', encoding="utf-8"
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        exports = docs._get_package_exports("exportpkg_noall")
-
-        # No __all__ defined and the only public name (VERSION) is auto-excluded,
-        # so there are no documentable exports.  With griffe search-paths the
-        # package *is* discovered (returns []) rather than undiscoverable (None).
-        assert not exports
-
-
-def test_get_package_exports_hyphenated_name():
-    """Test _get_package_exports with hyphenated package name prints helpful message."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "pyproject.toml").write_text(
-            '[project]\nname = "my-pkg"\n', encoding="utf-8"
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # No `my_pkg` directory exists, so no `__init__.py` is found.
-        exports = docs._get_package_exports("my-pkg")
-
-        assert exports is None
 
 
 # Packaging declarations for a named package, with and without a GitHub repository
@@ -13360,190 +12602,6 @@ def test_discover_fallback_dir_search(tmp_path):
     assert result is not None
 
 
-def test_categorise_exports_basic():
-    """Verify that exports are grouped by reference category"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "catpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '"""Test."""\n'
-            '__all__ = ["MyClass", "my_func", "MY_CONST"]\n'
-            "class MyClass:\n"
-            '    """A class."""\n'
-            "    def method1(self): pass\n"
-            "    def method2(self): pass\n"
-            "def my_func():\n"
-            '    """A func."""\n'
-            "    pass\n"
-            'MY_CONST = "hello"\n',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorise_exports("catpkg", ["MyClass", "my_func", "MY_CONST"])
-
-            assert "MyClass" in result["classes"]
-            assert "my_func" in result["functions"]
-            assert "MY_CONST" in result["constants"]
-            assert result["class_methods"]["MyClass"] == 2
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_categorise_exports_keeps_methods_of_an_unimportable_package(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-):
-    """Verify that a failed package import warns and preserves statically discovered methods"""
-    pkg_dir = tmp_path / "unimportable_catpkg"
-    pkg_dir.mkdir()
-    (pkg_dir / "__init__.py").write_text(
-        "import not_a_real_dependency_xyz\n"
-        "class Widget:\n"
-        "    def grow(self): pass\n"
-        "    def shrink(self): pass\n",
-        encoding="utf-8",
-    )
-
-    sys.path.insert(0, str(tmp_path))
-    try:
-        docs = GreatDocs(project_path=str(tmp_path))
-        result = docs._categorise_exports("unimportable_catpkg", ["Widget"])
-    finally:
-        sys.path.remove(str(tmp_path))
-        sys.modules.pop("unimportable_catpkg", None)
-
-    assert result["class_method_names"]["Widget"] == ["grow", "shrink"]
-    out = capsys.readouterr().out
-    assert "Could not import 'unimportable_catpkg' (ModuleNotFoundError" in out
-
-
-def test_categorise_exports_with_enum():
-    """Verify that enum exports are grouped as enums"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "enumpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "import enum\n"
-            "class Color(enum.Enum):\n"
-            '    """Color enum."""\n'
-            "    RED = 1\n"
-            "    BLUE = 2\n",
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorise_exports("enumpkg", ["Color"])
-
-            assert "Color" in result["enums"]
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_categorise_exports_with_exception():
-    """Verify that exception exports are grouped as exceptions"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "excpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            'class MyError(Exception):\n    """Custom error."""\n'
-            'class MyChildError(MyError):\n    """Child error."""\n',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorise_exports("excpkg", ["MyError", "MyChildError"])
-
-            assert result["exceptions"] == ["MyError", "MyChildError"]
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_categorise_exports_with_dataclass():
-    """Verify that dataclass exports are grouped as dataclasses"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "dcpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "from dataclasses import dataclass\n"
-            "@dataclass\n"
-            "class Point:\n"
-            '    """Point dataclass."""\n'
-            "    x: float\n"
-            "    y: float\n",
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorise_exports("dcpkg", ["Point"])
-
-            assert "Point" in result["dataclasses"]
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_categorise_exports_skips_metadata():
-    """Verify that module metadata is excluded from reference categories"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "skippkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '__version__ = "1.0.0"\ndef func(): pass\n',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorise_exports("skippkg", ["__version__", "func"])
-
-            assert result is not None
-            assert "func" in result["functions"]
-            assert "__version__" not in result["constants"]
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_categorise_exports_module_export():
-    """Verify that exported modules contribute their public members"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "modpkg"
-        pkg_dir.mkdir()
-        sub_dir = pkg_dir / "sub"
-        sub_dir.mkdir()
-        (sub_dir / "__init__.py").write_text(
-            "class SubClass:\n"
-            '    """In submodule."""\n'
-            "    def m(self): pass\n"
-            "def sub_func(): pass\n",
-            encoding="utf-8",
-        )
-        (pkg_dir / "__init__.py").write_text("from . import sub\n", encoding="utf-8")
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorise_exports("modpkg", ["sub"])
-
-            # Should have drilled into the submodule
-            assert "sub.SubClass" in result["classes"] or "sub" in result["other"]
-        finally:
-            sys.path.remove(tmp_dir)
-
-
 def test_discover_exports_with_all():
     """Verify that discovery selects names from `__all__`"""
 
@@ -13562,7 +12620,7 @@ def test_discover_exports_with_all():
         try:
             docs = GreatDocs(project_path=tmp_dir)
             result = discover_exports(
-                docs._get_griffe_package("allpkg"), docs._config, report=print
+                make_exports(docs).package("allpkg"), docs._config, report=print
             )
 
             assert result is not None
@@ -13590,7 +12648,7 @@ def test_discover_exports_follows_all_order_and_reports_missing_names():
         docs = GreatDocs(project_path=tmp_dir)
         lines: list[str] = []
         result = discover_exports(
-            docs._get_griffe_package("orderpkg"), docs._config, report=lines.append
+            make_exports(docs).package("orderpkg"), docs._config, report=lines.append
         )
 
         assert result == ["second", "first"]
@@ -13615,7 +12673,7 @@ def test_discover_exports_without_all():
         try:
             docs = GreatDocs(project_path=tmp_dir)
             result = discover_exports(
-                docs._get_griffe_package("noallpkg"), docs._config, report=print
+                make_exports(docs).package("noallpkg"), docs._config, report=print
             )
 
             assert result is not None
@@ -13643,7 +12701,7 @@ def test_discover_exports_config_exclude():
         try:
             docs = GreatDocs(project_path=tmp_dir)
             result = discover_exports(
-                docs._get_griffe_package("exclpkg"), docs._config, report=print
+                make_exports(docs).package("exclpkg"), docs._config, report=print
             )
 
             assert result is not None
@@ -13672,7 +12730,7 @@ def test_discover_exports_auto_exclude():
         try:
             docs = GreatDocs(project_path=tmp_dir)
             result = discover_exports(
-                docs._get_griffe_package("autoexclpkg"), docs._config, report=print
+                make_exports(docs).package("autoexclpkg"), docs._config, report=print
             )
 
             assert result is not None
@@ -13710,7 +12768,7 @@ def test_discover_exports_auto_include():
         try:
             docs = GreatDocs(project_path=tmp_dir)
             result = discover_exports(
-                docs._get_griffe_package("autoincpkg"), docs._config, report=print
+                make_exports(docs).package("autoincpkg"), docs._config, report=print
             )
 
             assert result is not None
@@ -13750,7 +12808,7 @@ def test_discover_exports_no_auto_exclude():
         try:
             docs = GreatDocs(project_path=tmp_dir)
             result = discover_exports(
-                docs._get_griffe_package("noautoexclpkg"), docs._config, report=print
+                make_exports(docs).package("noautoexclpkg"), docs._config, report=print
             )
 
             assert result is not None
@@ -13785,7 +12843,7 @@ def test_discover_exports_auto_include_no_overlap():
         try:
             docs = GreatDocs(project_path=tmp_dir)
             result = discover_exports(
-                docs._get_griffe_package("nooverlappkg"), docs._config, report=print
+                make_exports(docs).package("nooverlappkg"), docs._config, report=print
             )
 
             assert result is not None
@@ -13820,7 +12878,7 @@ def test_detect_docstring_style_numpy():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            style = detect_docstring_style(docs._get_griffe_package("numpypkg"), report=print)
+            style = detect_docstring_style(make_exports(docs).package("numpypkg"), report=print)
             assert style == "numpy"
         finally:
             sys.path.remove(tmp_dir)
@@ -13851,7 +12909,7 @@ def test_detect_docstring_style_sphinx():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            style = detect_docstring_style(docs._get_griffe_package("sphinxpkg"), report=print)
+            style = detect_docstring_style(make_exports(docs).package("sphinxpkg"), report=print)
             assert style == "sphinx"
         finally:
             sys.path.remove(tmp_dir)
@@ -13868,245 +12926,10 @@ def test_detect_dynamic_mode_no_exports():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            result = detect_dynamic_mode(docs._get_griffe_package("emptydynpkg"), [], report=print)
+            result = detect_dynamic_mode(
+                make_exports(docs).package("emptydynpkg"), [], report=print
+            )
             assert result is True
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_create_api_sections_without_reference_or_exports():
-    """
-    Return no sections when configuration and exports are both empty
-    """
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        with (
-            patch.object(type(docs._config), "reference", property(lambda self: None)),
-            patch.object(docs, "_get_package_exports", return_value=[]),
-        ):
-            result = docs._create_api_sections_with_config("mypkg")
-        assert result is None
-
-
-def test_create_api_sections_from_config_basic():
-    """Test _create_api_sections_from_config with simple reference config."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "secpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '__all__ = ["ClassA", "func_b"]\n'
-            "class ClassA:\n"
-            '    """A class."""\n'
-            "    def m1(self): pass\n"
-            "    def m2(self): pass\n"
-            "def func_b(): pass\n",
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._config = mock_config(
-                reference=[
-                    {"title": "Classes", "contents": ["ClassA"]},
-                    {"title": "Functions", "contents": ["func_b"]},
-                ],
-                should_split_methods=lambda n: n > 5,
-            )
-
-            with (
-                patch.object(
-                    docs,
-                    "_get_package_exports",
-                    return_value=["ClassA", "func_b"],
-                ),
-            ):
-                result = docs._create_api_sections_with_config("secpkg")
-
-            assert result is not None
-            assert len(result) >= 2
-
-            titles = [s["title"] for s in result]
-            assert "Classes" in titles
-            assert "Functions" in titles
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_create_api_sections_from_config_large_class():
-    """Test _create_api_sections_from_config creates companion method section for large classes."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "lgpkg"
-        pkg_dir.mkdir()
-        methods = "\n".join(f"    def method{i}(self): pass\n" for i in range(8))
-        (pkg_dir / "__init__.py").write_text(
-            f'class BigClass:\n    """Big."""\n{methods}',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._config = mock_config(
-                reference=[
-                    {"title": "Classes", "contents": ["BigClass"]},
-                ],
-                should_split_methods=lambda n: n > 5,
-            )
-
-            with (
-                patch.object(docs, "_get_package_exports", return_value=["BigClass"]),
-            ):
-                result = docs._create_api_sections_with_config("lgpkg")
-
-            assert result is not None
-
-            titles = [s["title"] for s in result]
-            # Should create companion method section
-            assert "BigClass Methods" in titles
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_create_api_sections_from_config_dict_items():
-    """Test _create_api_sections_from_config handles dict items with members config."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "dictpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            'class MyClass:\n    """Class."""\n    def m(self): pass\n',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._config = mock_config(
-                reference=[
-                    {
-                        "title": "API",
-                        "contents": [
-                            {"name": "MyClass", "members": False},
-                        ],
-                    },
-                ],
-                should_split_methods=lambda n: n > 5,
-            )
-
-            with (
-                patch.object(docs, "_get_package_exports", return_value=["MyClass"]),
-            ):
-                result = docs._create_api_sections_with_config("dictpkg")
-
-            assert result is not None
-            section = result[0]
-            # Should have dict with members=[] (no method docs)
-            found = False
-            for item in section["contents"]:
-                if isinstance(item, dict) and item.get("name") == "MyClass":
-                    assert item["members"] == []
-                    found = True
-            assert found
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_create_api_sections_from_config_explicit_members_passthrough():
-    """Test _create_api_sections_from_config passes explicit member lists through."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "inhpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            'class Parent:\n    """Parent."""\n    def inherited(self): pass\n'
-            'class Child(Parent):\n    """Child."""\n    def own(self): pass\n',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._config = mock_config(
-                reference=[
-                    {
-                        "title": "API",
-                        "contents": [
-                            {
-                                "name": "Child",
-                                "members": ["own", "inherited"],
-                            },
-                        ],
-                    },
-                ],
-                should_split_methods=lambda n: n > 5,
-            )
-
-            with (
-                patch.object(docs, "_get_package_exports", return_value=["Child"]),
-            ):
-                result = docs._create_api_sections_with_config("inhpkg")
-
-            assert result is not None
-            section = result[0]
-            # The explicit members list should be passed through intact
-            found = False
-            for item in section["contents"]:
-                if isinstance(item, dict) and item.get("name") == "Child":
-                    assert item["members"] == ["own", "inherited"]
-                    found = True
-            assert found
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_create_api_sections_from_config_include_inherited():
-    """Test _create_api_sections_from_config passes include_inherited flag."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "inhpkg2"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            'class Base:\n    """Base."""\n    def base_method(self): pass\n'
-            'class Derived(Base):\n    """Derived."""\n    def derived_method(self): pass\n',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._config = mock_config(
-                reference=[
-                    {
-                        "title": "API",
-                        "contents": [
-                            {
-                                "name": "Derived",
-                                "include_inherited": True,
-                            },
-                        ],
-                    },
-                ],
-                should_split_methods=lambda n: n > 5,
-            )
-
-            with (
-                patch.object(docs, "_get_package_exports", return_value=["Derived"]),
-            ):
-                result = docs._create_api_sections_with_config("inhpkg2")
-
-            assert result is not None
-            section = result[0]
-            # Should have include_inherited flag set
-            found = False
-            for item in section["contents"]:
-                if isinstance(item, dict) and item.get("name") == "Derived":
-                    assert item["include_inherited"] is True
-                    found = True
-            assert found
         finally:
             sys.path.remove(tmp_dir)
 
@@ -14689,7 +13512,7 @@ def test_add_api_reference_config_no_exports():
         (docs.build_dir / "_quarto.yml").write_text(format_yaml({"website": {}}), encoding="utf-8")
 
         with (
-            patch.object(docs, "_create_api_sections_with_config", return_value=None),
+            patch.object(Exports, "sections", return_value=None),
         ):
             run = make_run(docs)
             docs._add_api_reference_config(run)
@@ -14707,7 +13530,7 @@ def test_add_api_reference_config_reports_a_compiled_module_named_unlike_the_dis
     docs.build_dir.mkdir(parents=True)
     (docs.build_dir / "_quarto.yml").write_text(format_yaml({"website": {}}), encoding="utf-8")
 
-    with patch.object(docs, "_create_api_sections_with_config", return_value=None) as create:
+    with patch.object(Exports, "sections", return_value=None) as create:
         docs._add_api_reference_config(make_run(docs))
 
     create.assert_called_once_with("yaml12")
@@ -14739,7 +13562,7 @@ def test_add_api_reference_config_success():
         sections = [{"title": "Functions", "contents": ["func_a"]}]
 
         with (
-            patch.object(docs, "_create_api_sections_with_config", return_value=sections),
+            patch.object(Exports, "sections", return_value=sections),
         ):
             run = make_run(docs)
             docs._add_api_reference_config(run)
@@ -14758,7 +13581,7 @@ def test_refresh_api_reference_config_no_quarto_yml():
         docs.build_dir.mkdir()
 
         # No _quarto.yml — should return early
-        reference_block.refresh(docs._config, docs.build_dir, docs._create_api_sections_with_config)
+        reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
 
 
 def test_refresh_api_reference_config_no_api_ref():
@@ -14770,7 +13593,7 @@ def test_refresh_api_reference_config_no_api_ref():
         docs.build_dir.mkdir()
         (docs.build_dir / "_quarto.yml").write_text(format_yaml({"project": {}}), encoding="utf-8")
 
-        reference_block.refresh(docs._config, docs.build_dir, docs._create_api_sections_with_config)
+        reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
 
 
 def test_refresh_api_reference_config_fallback_to_explicit():
@@ -14796,7 +13619,7 @@ def test_refresh_api_reference_config_fallback_to_explicit():
         user_sections = [{"title": "API", "contents": ["ClassA"]}]
 
         with (
-            patch.object(docs, "_create_api_sections_with_config", return_value=None),
+            patch.object(Exports, "sections", return_value=None),
             patch.object(
                 reference_sections,
                 "from_reference_config",
@@ -14804,25 +13627,22 @@ def test_refresh_api_reference_config_fallback_to_explicit():
             ),
             patch.object(reference_sections, "update_sidebar"),
         ):
-            reference_block.refresh(
-                docs._config, docs.build_dir, docs._create_api_sections_with_config
-            )
+            reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
 
         written = read_yaml(docs.build_dir / "_quarto.yml")
         assert written["api-reference"]["sections"] == user_sections
 
 
 def test_create_blended_index_no_files():
-    """Test _create_blended_index returns early when no files."""
+    """Verify that homepage blending accepts an empty user guide"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         docs._create_blended_index(make_project(docs), {"files": []}, [])
-        # No error expected
 
 
 def test_create_blended_index_missing_first_page():
-    """Test _create_blended_index handles missing first UG page."""
+    """Verify that homepage blending skips a missing first guide page"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -14837,7 +13657,6 @@ def test_create_blended_index_missing_first_page():
         }
         docs._create_blended_index(make_project(docs), ug_info, [])
 
-        # Should not crash, index.qmd should not be created
         assert not (docs.build_dir / "index.qmd").exists()
 
 
@@ -14859,7 +13678,7 @@ def test_discover_exports_submodule_detection():
         try:
             docs = GreatDocs(project_path=tmp_dir)
             result = discover_exports(
-                docs._get_griffe_package("submodpkg"), docs._config, report=print
+                make_exports(docs).package("submodpkg"), docs._config, report=print
             )
 
             assert result is not None
@@ -14886,213 +13705,15 @@ def test_discover_exports_external_reexport_filtered():
         try:
             docs = GreatDocs(project_path=tmp_dir)
             result = discover_exports(
-                docs._get_griffe_package("reexppkg"), docs._config, report=print
+                make_exports(docs).package("reexppkg"), docs._config, report=print
             )
 
             assert result is not None
             assert "MyFunc" in result
-            # Path should be filtered as external re-export
             assert "Path" not in result
         finally:
             sys.path.remove(tmp_dir)
             sys.modules.pop("reexppkg", None)
-
-
-def test_categorise_exports_async_function():
-    """Verify that asynchronous exports are grouped separately from synchronous functions"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "asyncpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "async def async_func():\n"
-            '    """Async function."""\n'
-            "    pass\n"
-            "def sync_func():\n"
-            '    """Sync function."""\n'
-            "    pass\n",
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorise_exports("asyncpkg", ["async_func", "sync_func"])
-
-            assert "async_func" in result["async_functions"]
-            assert "sync_func" in result["functions"]
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("asyncpkg", None)
-
-
-def test_categorise_exports_type_alias():
-    """Verify that type aliases have their own reference group"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "tapkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "from typing import TypeAlias, TypeVar\n"
-            'T = TypeVar("T")\n'
-            "A: TypeAlias = int\n"
-            'MY_CONST = "hello"\n',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorise_exports("tapkg", ["T", "A", "MY_CONST"])
-
-            assert "MY_CONST" in result["constants"]
-            assert "T" in result["type_aliases"]
-            assert "A" in result["type_aliases"]
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("tapkg", None)
-
-
-def test_categorise_exports_namedtuple():
-    """Verify that named tuple exports are grouped as named tuples"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "ntpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "from typing import NamedTuple\n"
-            "class Point(NamedTuple):\n"
-            '    """A point."""\n'
-            "    x: float\n"
-            "    y: float\n",
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorise_exports("ntpkg", ["Point"])
-
-            assert "Point" in result["namedtuples"]
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("ntpkg", None)
-
-
-def test_categorise_exports_protocol():
-    """Verify that protocol exports are grouped as protocols"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "protpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "from typing import Protocol\n"
-            "class Drawable(Protocol):\n"
-            '    """A drawable protocol."""\n'
-            "    def draw(self): ...\n",
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorise_exports("protpkg", ["Drawable"])
-
-            assert "Drawable" in result["protocols"]
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("protpkg", None)
-
-
-def test_categorise_exports_not_in_members():
-    """Verify that undefined exports are grouped under `other`"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "missingpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("x = 1\n", encoding="utf-8")
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorise_exports("missingpkg", ["NotThere"])
-
-            assert "NotThere" in result["other"]
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("missingpkg", None)
-
-
-def test_categorise_exports_griffe_load_failure():
-    """
-    Group exports under `other` when griffe cannot load an importable package
-    """
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "loadfailpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("def func(): pass\n", encoding="utf-8")
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-
-            with patch.object(griffe, "load", side_effect=RuntimeError("load failed")):
-                result = docs._categorise_exports("loadfailpkg", ["func"])
-
-            assert result["other"] == ["func"]
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("loadfailpkg", None)
-
-
-def test_categorise_exports_files_exports_under_other_without_griffe(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-):
-    """
-    Exclude metadata and group exports under `other` when griffe cannot load
-
-    A mistyped `module:` setting can leave an importable package in the project
-    root under a different name. Categorising must leave that package unimported.
-    """
-    (tmp_path / "actual_pkg").mkdir()
-    (tmp_path / "actual_pkg" / "__init__.py").write_text(
-        '__all__ = ["make", "Widget"]\n\ndef make(): pass\n\nclass Widget: pass\n',
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
-    docs = GreatDocs(project_path=str(tmp_path))
-
-    try:
-        result = docs._categorise_exports("named_pkg", ["__version__", "make", "Widget"])
-        imported = "actual_pkg" in sys.modules
-    finally:
-        sys.modules.pop("actual_pkg", None)
-
-    assert result == {**empty_categories(), "other": ["make", "Widget"]}
-    assert "Could not load package with griffe" in capsys.readouterr().err
-    assert not imported
-
-
-def test_categorise_exports_cyclic_alias():
-    """Verify that categorisation excludes cyclic aliases"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "cyclicpkg2"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("class Normal: pass\n", encoding="utf-8")
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            # Asking for a nonexistent export should end up in "other"
-            result = docs._categorise_exports("cyclicpkg2", ["Normal", "DoesNotExist"])
-
-            assert "Normal" in result["classes"]
-            assert "DoesNotExist" in result["other"]
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("cyclicpkg2", None)
 
 
 def test_create_blended_index_creates_index():
@@ -15151,7 +13772,7 @@ def test_detect_docstring_style_no_indicators():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            style = detect_docstring_style(docs._get_griffe_package("noindicpkg"), report=print)
+            style = detect_docstring_style(make_exports(docs).package("noindicpkg"), report=print)
             assert style == "numpy"
         finally:
             sys.path.remove(tmp_dir)
@@ -17426,18 +16047,19 @@ def test_cli_scan_success():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_package")
-            mock_docs._config = mock_config()
-            mock_docs._get_package_exports.return_value = ["MyClass", "my_func"]
-            mock_docs._categorise_exports.return_value = {
+        with patch("great_docs.cli.Exports") as MockExports:
+            package_exports = MockExports.make.return_value
+            package_exports.config = mock_config()
+            package_exports.project = Project.make(
+                package_exports.config, Layout.make(write_pyproject(Path(tmp_dir), "my_package"))
+            )
+            package_exports.names.return_value = ["MyClass", "my_func"]
+            package_exports.categorise.return_value = {
                 "classes": ["MyClass"],
                 "functions": ["my_func"],
                 "class_method_names": {"MyClass": ["method_a"]},
             }
-            mock_docs._config.reference = [
+            package_exports.config.reference = [
                 {
                     "title": "Classes",
                     "contents": [
@@ -17461,17 +16083,18 @@ def test_cli_scan_verbose():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
-            mock_docs._config = mock_config()
-            mock_docs._get_package_exports.return_value = ["func"]
-            mock_docs._categorise_exports.return_value = {
+        with patch("great_docs.cli.Exports") as MockExports:
+            package_exports = MockExports.make.return_value
+            package_exports.config = mock_config()
+            package_exports.project = Project.make(
+                package_exports.config, Layout.make(write_pyproject(Path(tmp_dir), "my_pkg"))
+            )
+            package_exports.names.return_value = ["func"]
+            package_exports.categorise.return_value = {
                 "functions": ["func"],
                 "class_method_names": {},
             }
-            mock_docs._config.reference = [
+            package_exports.config.reference = [
                 {
                     "title": "Functions",
                     "contents": ["func"],
@@ -17489,10 +16112,12 @@ def test_cli_scan_no_package():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), None)
+        with patch("great_docs.cli.Exports") as MockExports:
+            package_exports = MockExports.make.return_value
+            package_exports.config = mock_config()
+            package_exports.project = Project.make(
+                package_exports.config, Layout.make(write_pyproject(Path(tmp_dir), None))
+            )
 
             result = runner.invoke(scan, ["--project-path", tmp_dir])
             assert result.exit_code == 1
@@ -17504,12 +16129,13 @@ def test_cli_scan_no_exports():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
-            mock_docs._config = mock_config()
-            mock_docs._get_package_exports.return_value = []
+        with patch("great_docs.cli.Exports") as MockExports:
+            package_exports = MockExports.make.return_value
+            package_exports.config = mock_config()
+            package_exports.project = Project.make(
+                package_exports.config, Layout.make(write_pyproject(Path(tmp_dir), "my_pkg"))
+            )
+            package_exports.names.return_value = []
 
             result = runner.invoke(scan, ["--project-path", tmp_dir])
             assert result.exit_code == 0
@@ -17521,17 +16147,18 @@ def test_cli_scan_no_reference_config():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
-            mock_docs._config = mock_config()
-            mock_docs._get_package_exports.return_value = ["func"]
-            mock_docs._categorise_exports.return_value = {
+        with patch("great_docs.cli.Exports") as MockExports:
+            package_exports = MockExports.make.return_value
+            package_exports.config = mock_config()
+            package_exports.project = Project.make(
+                package_exports.config, Layout.make(write_pyproject(Path(tmp_dir), "my_pkg"))
+            )
+            package_exports.names.return_value = ["func"]
+            package_exports.categorise.return_value = {
                 "functions": ["func"],
                 "class_method_names": {},
             }
-            mock_docs._config.reference = []
+            package_exports.config.reference = []
 
             result = runner.invoke(scan, ["--project-path", tmp_dir])
             assert result.exit_code == 0
@@ -17543,17 +16170,18 @@ def test_cli_scan_class_without_members():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
-            mock_docs._config = mock_config()
-            mock_docs._get_package_exports.return_value = ["MyClass"]
-            mock_docs._categorise_exports.return_value = {
+        with patch("great_docs.cli.Exports") as MockExports:
+            package_exports = MockExports.make.return_value
+            package_exports.config = mock_config()
+            package_exports.project = Project.make(
+                package_exports.config, Layout.make(write_pyproject(Path(tmp_dir), "my_pkg"))
+            )
+            package_exports.names.return_value = ["MyClass"]
+            package_exports.categorise.return_value = {
                 "classes": ["MyClass"],
                 "class_method_names": {"MyClass": ["method"]},
             }
-            mock_docs._config.reference = [
+            package_exports.config.reference = [
                 {
                     "title": "Classes",
                     "contents": [{"name": "MyClass", "members": False}],
@@ -17570,25 +16198,26 @@ def test_cli_scan_flat_categories():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
-            mock_docs._config = mock_config()
-            mock_docs._get_package_exports.return_value = [
+        with patch("great_docs.cli.Exports") as MockExports:
+            package_exports = MockExports.make.return_value
+            package_exports.config = mock_config()
+            package_exports.project = Project.make(
+                package_exports.config, Layout.make(write_pyproject(Path(tmp_dir), "my_pkg"))
+            )
+            package_exports.names.return_value = [
                 "MyEnum",
                 "MyError",
                 "my_func",
                 "MY_CONST",
             ]
-            mock_docs._categorise_exports.return_value = {
+            package_exports.categorise.return_value = {
                 "enums": ["MyEnum"],
                 "exceptions": ["MyError"],
                 "functions": ["my_func"],
                 "constants": ["MY_CONST"],
                 "class_method_names": {},
             }
-            mock_docs._config.reference = [{"title": "All", "contents": ["MyEnum", "my_func"]}]
+            package_exports.config.reference = [{"title": "All", "contents": ["MyEnum", "my_func"]}]
 
             result = runner.invoke(scan, ["--project-path", tmp_dir])
             assert result.exit_code == 0
@@ -17602,8 +16231,8 @@ def test_cli_scan_error():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            MockGD.side_effect = RuntimeError("scan failed")
+        with patch("great_docs.cli.Exports") as MockExports:
+            MockExports.make.side_effect = RuntimeError("scan failed")
 
             result = runner.invoke(scan, ["--project-path", tmp_dir])
             assert result.exit_code == 1
@@ -17615,17 +16244,18 @@ def test_cli_scan_class_like_categories():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
-            mock_docs._config = mock_config()
-            mock_docs._get_package_exports.return_value = [
+        with patch("great_docs.cli.Exports") as MockExports:
+            package_exports = MockExports.make.return_value
+            package_exports.config = mock_config()
+            package_exports.project = Project.make(
+                package_exports.config, Layout.make(write_pyproject(Path(tmp_dir), "my_pkg"))
+            )
+            package_exports.names.return_value = [
                 "MyDC",
                 "MyABC",
                 "MyProto",
             ]
-            mock_docs._categorise_exports.return_value = {
+            package_exports.categorise.return_value = {
                 "dataclasses": ["MyDC"],
                 "abstract_classes": ["MyABC"],
                 "protocols": ["MyProto"],
@@ -17635,7 +16265,7 @@ def test_cli_scan_class_like_categories():
                     "MyProto": [],
                 },
             }
-            mock_docs._config.reference = []
+            package_exports.config.reference = []
 
             result = runner.invoke(scan, ["--project-path", tmp_dir])
             assert result.exit_code == 0
@@ -17649,17 +16279,18 @@ def test_cli_scan_string_items_in_reference():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
-            mock_docs._config = mock_config()
-            mock_docs._get_package_exports.return_value = ["my_func"]
-            mock_docs._categorise_exports.return_value = {
+        with patch("great_docs.cli.Exports") as MockExports:
+            package_exports = MockExports.make.return_value
+            package_exports.config = mock_config()
+            package_exports.project = Project.make(
+                package_exports.config, Layout.make(write_pyproject(Path(tmp_dir), "my_pkg"))
+            )
+            package_exports.names.return_value = ["my_func"]
+            package_exports.categorise.return_value = {
                 "functions": ["my_func"],
                 "class_method_names": {},
             }
-            mock_docs._config.reference = [{"title": "Functions", "contents": ["my_func"]}]
+            package_exports.config.reference = [{"title": "Functions", "contents": ["my_func"]}]
 
             result = runner.invoke(scan, ["--project-path", tmp_dir])
             assert result.exit_code == 0
@@ -21817,7 +20448,7 @@ def test_detect_docstring_style_no_docstrings():
         sys.path.insert(0, str(tmp))
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            style = detect_docstring_style(docs._get_griffe_package("nodocpkg2"), report=print)
+            style = detect_docstring_style(make_exports(docs).package("nodocpkg2"), report=print)
             assert style == "numpy"
         finally:
             sys.path.remove(str(tmp))
@@ -21863,7 +20494,7 @@ def sub(a, b):
         sys.path.insert(0, str(tmp))
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            style = detect_docstring_style(docs._get_griffe_package("googlepkg2"), report=print)
+            style = detect_docstring_style(make_exports(docs).package("googlepkg2"), report=print)
             assert style == "google"
         finally:
             sys.path.remove(str(tmp))
@@ -22647,7 +21278,7 @@ class TestDetectDocstringStyleSphinx:
             old_path = sys.path[:]
             sys.path.insert(0, tmp_dir)
             try:
-                result = detect_docstring_style(docs._get_griffe_package("mypkg"), report=print)
+                result = detect_docstring_style(make_exports(docs).package("mypkg"), report=print)
             finally:
                 sys.path[:] = old_path
             assert result == "sphinx"
@@ -23007,50 +21638,6 @@ class TestUpdateQuartoConfigScripts:
             assert any("reference-switcher" in s for s in scripts)
 
 
-class TestCreateApiSectionsFromConfig:
-    """Tests for _create_api_sections_from_config section building."""
-
-    def test_expands_module_members_in_section(self):
-        """Expands a module name into its discovered members."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            pkg = tmp / "mypkg"
-            pkg.mkdir()
-            (pkg / "__init__.py").write_text('__all__ = ["sub"]\n')
-            sub = pkg / "sub"
-            sub.mkdir()
-            (sub / "__init__.py").write_text(
-                'def func_a():\n    """A func."""\n    pass\n\n'
-                'class MyClass:\n    """A class."""\n    pass\n'
-            )
-            # Write great-docs.yml with reference config
-            with open(tmp / "great-docs.yml", "w") as f:
-                write_yaml({"reference": [{"title": "Module", "contents": ["sub"]}]}, f)
-            docs = GreatDocs(project_path=tmp_dir)
-            old_path = sys.path[:]
-            sys.path.insert(0, tmp_dir)
-            try:
-                result = docs._create_api_sections_with_config("mypkg")
-            finally:
-                sys.path[:] = old_path
-            if result is not None:
-                assert len(result) >= 1
-                assert result[0]["title"] == "Module"
-
-    def test_returns_none_without_reference_config(self):
-        """Returns None when no reference configuration exists."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            pkg = tmp / "mypkg"
-            pkg.mkdir()
-            (pkg / "__init__.py").write_text("")
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._create_api_sections_with_config("mypkg")
-            assert result is None
-
-
 class TestProcessSectionsBatch9:
     """Additional _process_sections coverage: blog w/ user index, default w/o index."""
 
@@ -23333,91 +21920,6 @@ class TestBuildSectionsFromReferenceConfigBatch9:
             assert result is None
 
 
-class TestCreateApiSectionsFromConfigBatch9:
-    """Additional _create_api_sections_from_config coverage."""
-
-    def test_large_class_gets_companion_section(self):
-        """A class with >5 methods gets a companion methods section."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            pkg_name = "bigclasspkg"
-            (tmp / "pyproject.toml").write_text(f'[project]\nname = "{pkg_name}"\n')
-            pkg = tmp / pkg_name
-            pkg.mkdir()
-            # Create a class with many public methods (>5 threshold)
-            methods = "\n".join(
-                [
-                    f'    def method_{i}(self):\n        """Method {i}."""\n        pass\n'
-                    for i in range(8)
-                ]
-            )
-            (pkg / "__init__.py").write_text(
-                f'__all__ = ["BigClass"]\n\nclass BigClass:\n    """A big class."""\n{methods}'
-            )
-            with open(tmp / "great-docs.yml", "w") as f:
-                write_yaml(
-                    {"reference": [{"title": "Core", "contents": ["BigClass"]}]},
-                    f,
-                )
-            docs = GreatDocs(project_path=tmp_dir)
-            old_path = sys.path[:]
-            # Also clean sys.modules to avoid cross-test pollution
-            cached = {k: v for k, v in sys.modules.items() if k.startswith(pkg_name)}
-            for k in cached:
-                del sys.modules[k]
-            sys.path.insert(0, tmp_dir)
-            try:
-                result = docs._create_api_sections_with_config(pkg_name)
-            finally:
-                sys.path[:] = old_path
-                for k in list(sys.modules):
-                    if k.startswith(pkg_name):
-                        del sys.modules[k]
-            if result is not None:
-                # Should have original section + companion methods section
-                assert len(result) >= 2
-                titles = [s["title"] for s in result]
-                assert "BigClass Methods" in titles
-
-    def test_dict_item_with_members_false(self):
-        """Dict item with members: false in reference config."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            pkg = tmp / "mypkg"
-            pkg.mkdir()
-            (pkg / "__init__.py").write_text(
-                '__all__ = ["MyClass"]\n\nclass MyClass:\n    """A class."""\n    pass\n'
-            )
-            with open(tmp / "great-docs.yml", "w") as f:
-                write_yaml(
-                    {
-                        "reference": [
-                            {
-                                "title": "Core",
-                                "contents": [{"name": "MyClass", "members": False}],
-                            }
-                        ]
-                    },
-                    f,
-                )
-            docs = GreatDocs(project_path=tmp_dir)
-            old_path = sys.path[:]
-            sys.path.insert(0, tmp_dir)
-            try:
-                result = docs._create_api_sections_with_config("mypkg")
-            finally:
-                sys.path[:] = old_path
-            if result is not None:
-                assert len(result) >= 1
-                # MyClass should be a dict with members: []
-                core = result[0]["contents"]
-                assert any(
-                    isinstance(c, dict) and c.get("name") == "MyClass" and c.get("members") == []
-                    for c in core
-                )
-
-
 class TestRefreshApiReferenceConfigBatch9:
     """Tests for _refresh_api_reference_config edge cases."""
 
@@ -23447,9 +21949,7 @@ class TestRefreshApiReferenceConfigBatch9:
                 write_yaml(config, f)
             # Module doesn't exist, so auto-discovery will fail.
             # Method should fall back to explicit config.
-            reference_block.refresh(
-                docs._config, docs.build_dir, docs._create_api_sections_with_config
-            )
+            reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
             with open(quarto_yml) as f:
                 result = read_yaml(f)
             sections = result.get("api-reference", {}).get("sections", [])
@@ -23476,9 +21976,7 @@ class TestRefreshApiReferenceConfigBatch9:
             }
             with open(quarto_yml, "w") as f:
                 write_yaml(config, f)
-            reference_block.refresh(
-                docs._config, docs.build_dir, docs._create_api_sections_with_config
-            )
+            reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
             # Should not crash — just warn and keep config unchanged
 
 
@@ -27271,13 +25769,14 @@ def test_cli_scan_uses_module_name():
 
     runner = CliRunner()
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "firebird-base")
-            mock_docs._config = mock_config(module="firebird.base")
-            mock_docs._get_package_exports.return_value = ["connect", "Config"]
-            mock_docs._categorise_exports.return_value = {
+        with patch("great_docs.cli.Exports") as MockExports:
+            package_exports = MockExports.make.return_value
+            package_exports.config = mock_config(module="firebird.base")
+            package_exports.project = Project.make(
+                package_exports.config, Layout.make(write_pyproject(Path(tmp_dir), "firebird-base"))
+            )
+            package_exports.names.return_value = ["connect", "Config"]
+            package_exports.categorise.return_value = {
                 "classes": ["Config"],
                 "functions": ["connect"],
                 "class_method_names": {},
@@ -27287,8 +25786,7 @@ def test_cli_scan_uses_module_name():
             assert result.exit_code == 0
             # Should show the module name, not the PyPI name
             assert "firebird.base" in result.output
-            # _get_package_exports should have been called with the module name
-            mock_docs._get_package_exports.assert_called_with("firebird.base")
+            package_exports.names.assert_called_with("firebird.base")
 
 
 def test_parse_dunder_all_dotted_name():
@@ -27313,141 +25811,6 @@ def test_parse_dunder_all_dotted_name():
 
 
 # ── inline_methods integration tests ─────────────────────────────────────────
-
-
-def test_create_api_sections_from_config_inline_methods_true_never_splits():
-    """inline_methods: true prevents splitting even for classes with many methods."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "inlinepkg"
-        pkg_dir.mkdir()
-        methods = "\n".join(f"    def method{i}(self): pass\n" for i in range(10))
-        (pkg_dir / "__init__.py").write_text(
-            f'class BigClass:\n    """Big."""\n{methods}',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._config = mock_config(
-                reference=[
-                    {"title": "Classes", "contents": ["BigClass"]},
-                ],
-                should_split_methods=lambda n: False,  # never split
-            )
-
-            with (
-                patch.object(docs, "_get_package_exports", return_value=["BigClass"]),
-            ):
-                result = docs._create_api_sections_with_config("inlinepkg")
-
-            assert result is not None
-            titles = [s["title"] for s in result]
-            # Should NOT create companion method section
-            assert "BigClass Methods" not in titles
-            # BigClass should be a plain string (not split)
-            classes_section = next(s for s in result if s["title"] == "Classes")
-            assert "BigClass" in classes_section["contents"]
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_create_api_sections_from_config_inline_methods_false_always_splits():
-    """inline_methods: false forces splitting even for classes with few methods."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "splitforcepkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            textwrap.dedent("""\
-            class SmallClass:
-                \"\"\"Small class with documented methods.\"\"\"
-
-                def method_a(self) -> str:
-                    \"\"\"
-                    Perform action A.
-
-                    Returns
-                    -------
-                    str
-                        The result.
-                    \"\"\"
-                    return "a"
-
-                def method_b(self) -> str:
-                    \"\"\"
-                    Perform action B.
-
-                    Returns
-                    -------
-                    str
-                        The result.
-                    \"\"\"
-                    return "b"
-            """),
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._config = mock_config(
-                reference=[
-                    {"title": "Classes", "contents": ["SmallClass"]},
-                ],
-                should_split_methods=lambda n: n > 0,  # always split
-            )
-
-            with (
-                patch.object(docs, "_get_package_exports", return_value=["SmallClass"]),
-            ):
-                result = docs._create_api_sections_with_config("splitforcepkg")
-
-            assert result is not None
-            titles = [s["title"] for s in result]
-            # Should create companion method section even for 2 methods
-            assert "SmallClass Methods" in titles
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_create_api_sections_from_config_inline_methods_custom_threshold():
-    """inline_methods: 10 splits only above 10 methods."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "threshpkg"
-        pkg_dir.mkdir()
-        # Class with 8 methods (below threshold of 10)
-        methods = "\n".join(f"    def method{i}(self): pass\n" for i in range(8))
-        (pkg_dir / "__init__.py").write_text(
-            f'class MediumClass:\n    """Medium."""\n{methods}',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._config = mock_config(
-                reference=[
-                    {"title": "Classes", "contents": ["MediumClass"]},
-                ],
-                should_split_methods=lambda n: n > 10,  # threshold=10
-            )
-
-            with (
-                patch.object(docs, "_get_package_exports", return_value=["MediumClass"]),
-            ):
-                result = docs._create_api_sections_with_config("threshpkg")
-
-            assert result is not None
-            titles = [s["title"] for s in result]
-            # 8 methods < 10 threshold, should NOT split
-            assert "MediumClass Methods" not in titles
-            classes_section = next(s for s in result if s["title"] == "Classes")
-            assert "MediumClass" in classes_section["contents"]
-        finally:
-            sys.path.remove(tmp_dir)
 
 
 # ── Package Info Page ──────────────────────────────────────────────────────
@@ -28274,9 +26637,9 @@ def test_categorise_references_cyclic_alias_error(tmp_path):
     mock_pkg = MagicMock()
     mock_pkg.members = {"bad_func": bad_member}
 
-    with patch.object(docs, "_get_griffe_package", return_value=mock_pkg):
+    with patch.object(Exports, "package", return_value=mock_pkg):
         result = categorise_references(
-            docs._get_griffe_package("fakepkg"), [{"contents": ["bad_func"]}]
+            make_exports(docs).package("fakepkg"), [{"contents": ["bad_func"]}]
         )
 
     assert "bad_func" in result["other"]
@@ -28308,7 +26671,7 @@ def test_discover_exports_cyclic_alias_skipped(tmp_path):
     mock_pkg.all_members = mock_pkg.members
 
     # The function discovers exports using pkg.members for public names
-    with patch.object(docs, "_get_griffe_package", return_value=mock_pkg):
+    with patch.object(Exports, "package", return_value=mock_pkg):
         with patch.object(docs, "_config") as mock_config:
             mock_config.__getitem__ = MagicMock(
                 side_effect=lambda k: [] if k == "exclude" else False
@@ -28316,7 +26679,7 @@ def test_discover_exports_cyclic_alias_skipped(tmp_path):
             mock_config.no_auto_exclude = False
             # Call with the package already loaded, bypass discovery
             result = discover_exports(
-                docs._get_griffe_package("fakepkg"), docs._config, report=print
+                make_exports(docs).package("fakepkg"), docs._config, report=print
             )
 
     # Should not crash; result may be None (if __all__ handling differs) or a list
@@ -28342,7 +26705,7 @@ def test_categorise_references_method_ref_categorises_its_class():
         try:
             docs = GreatDocs(project_path=tmp_dir)
             result = categorise_references(
-                docs._get_griffe_package("refpkg"), [{"contents": ["MyClass.my_method"]}]
+                make_exports(docs).package("refpkg"), [{"contents": ["MyClass.my_method"]}]
             )
 
             assert result["classes"] == ["MyClass"]

@@ -27,9 +27,17 @@ from great_docs._reference.discovery import (
     discover_exports,
     empty_categories,
 )
+from great_docs._reference.exports import Exports
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website.seo import robots
-from tests.support import StubRemote, discover_user_guide, make_project, make_run, mock_config
+from tests.support import (
+    StubRemote,
+    discover_user_guide,
+    make_exports,
+    make_project,
+    make_run,
+    mock_config,
+)
 
 
 def _make_gd(tmp_path: Path) -> GreatDocs:
@@ -549,8 +557,7 @@ class TestDiscoverExportsValidation:
             {"good_func": good_obj},
             exports=["good_func", "MissingClass"],
         )
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        result = discover_exports(gd._get_griffe_package("mypkg"), gd._config, report=print)
+        result = discover_exports(pkg, gd._config, report=print)
         assert result is not None
         assert "good_func" in result
         assert "MissingClass" not in result
@@ -565,8 +572,7 @@ class TestDiscoverExportsValidation:
             lambda s: (_ for _ in ()).throw(griffe.CyclicAliasError(["x", "y"]))
         )
         pkg = self._make_mock_pkg({"BadAlias": obj}, exports=["BadAlias"])
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        result = discover_exports(gd._get_griffe_package("mypkg"), gd._config, report=print)
+        result = discover_exports(pkg, gd._config, report=print)
         assert result == []
 
     def test_alias_resolution_error_on_kind(self, tmp_path, monkeypatch):
@@ -579,8 +585,7 @@ class TestDiscoverExportsValidation:
             lambda s: (_ for _ in ()).throw(griffe.AliasResolutionError(MagicMock()))
         )
         pkg = self._make_mock_pkg({"Unresolvable": obj}, exports=["Unresolvable"])
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        result = discover_exports(gd._get_griffe_package("mypkg"), gd._config, report=print)
+        result = discover_exports(pkg, gd._config, report=print)
         assert result == []
 
     def test_key_error_on_kind(self, tmp_path, monkeypatch):
@@ -589,8 +594,7 @@ class TestDiscoverExportsValidation:
         obj = MagicMock()
         type(obj).kind = property(lambda s: (_ for _ in ()).throw(KeyError("missing")))
         pkg = self._make_mock_pkg({"RustObj": obj}, exports=["RustObj"])
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        result = discover_exports(gd._get_griffe_package("mypkg"), gd._config, report=print)
+        result = discover_exports(pkg, gd._config, report=print)
         assert result == []
 
     def test_unexpected_error_on_kind_propagates(self, tmp_path, monkeypatch):
@@ -609,8 +613,7 @@ class TestDiscoverExportsValidation:
         obj.kind = griffe.Kind.MODULE
         obj.is_alias = False
         pkg = self._make_mock_pkg({"submod": obj}, exports=["submod"])
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        result = discover_exports(gd._get_griffe_package("mypkg"), gd._config, report=print)
+        result = discover_exports(pkg, gd._config, report=print)
         assert result is not None
         assert "submod" in result
 
@@ -625,8 +628,7 @@ class TestDiscoverExportsValidation:
             lambda s: (_ for _ in ()).throw(griffe.CyclicAliasError(["x", "y"]))
         )
         pkg = self._make_mock_pkg({"CyclicClass": obj}, exports=["CyclicClass"])
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        result = discover_exports(gd._get_griffe_package("mypkg"), gd._config, report=print)
+        result = discover_exports(pkg, gd._config, report=print)
         assert result == []
 
     def test_alias_resolution_error_on_members_access(self, tmp_path, monkeypatch):
@@ -640,8 +642,7 @@ class TestDiscoverExportsValidation:
             lambda s: (_ for _ in ()).throw(griffe.AliasResolutionError(MagicMock()))
         )
         pkg = self._make_mock_pkg({"Unresolvable": obj}, exports=["Unresolvable"])
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        result = discover_exports(gd._get_griffe_package("mypkg"), gd._config, report=print)
+        result = discover_exports(pkg, gd._config, report=print)
         assert result == []
 
     def test_unexpected_error_on_members_access_propagates(self, tmp_path, monkeypatch):
@@ -664,8 +665,7 @@ class TestDiscoverExportsValidation:
         obj.members = {}
         obj.canonical_path = "other_package.SomeClass"
         pkg = self._make_mock_pkg({"SomeClass": obj}, exports=["SomeClass"])
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        result = discover_exports(gd._get_griffe_package("mypkg"), gd._config, report=print)
+        result = discover_exports(pkg, gd._config, report=print)
         assert result == []
 
     def test_internal_alias_passes(self, tmp_path, monkeypatch):
@@ -678,8 +678,7 @@ class TestDiscoverExportsValidation:
         obj.members = {}
         obj.canonical_path = "mypkg.internal.MyClass"
         pkg = self._make_mock_pkg({"MyClass": obj}, exports=["MyClass"])
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        result = discover_exports(gd._get_griffe_package("mypkg"), gd._config, report=print)
+        result = discover_exports(pkg, gd._config, report=print)
         assert result is not None
         assert "MyClass" in result
 
@@ -691,25 +690,12 @@ class TestCategoriseReferences:
         gd = _make_gd(tmp_path)
         return gd
 
-    def test_griffe_load_failure_keeps_listed_names(self, tmp_path, monkeypatch):
-        """Verify that a load failure preserves configured reference sections"""
-        gd = self._setup(tmp_path, monkeypatch)
-        _patch_cfg(monkeypatch, gd, "reference", [{"title": "API", "contents": ["Foo"]}])
-        monkeypatch.setattr(
-            gd, "_get_griffe_package", lambda name: (_ for _ in ()).throw(ImportError("fail"))
-        )
-        result = gd._create_api_sections_with_config("mypkg")
-        assert result == [{"title": "API", "desc": "", "contents": ["Foo"]}]
-
     def test_non_dict_section_skipped(self, tmp_path, monkeypatch):
         """Verify that reference sections other than dictionaries are ignored"""
         gd = self._setup(tmp_path, monkeypatch)
         pkg = MagicMock()
         pkg.members = {}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        result = categorise_references(
-            gd._get_griffe_package("mypkg"), ["not_a_dict", {"contents": []}]
-        )
+        result = categorise_references(pkg, ["not_a_dict", {"contents": []}])
         assert result["other"] == []
 
     def test_classifies_function(self, tmp_path, monkeypatch):
@@ -720,9 +706,8 @@ class TestCategoriseReferences:
         obj.labels = set()
         pkg = MagicMock()
         pkg.members = {"my_func": obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("great_docs._reference.discovery.function_kind", lambda o: "function")
-        result = categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["my_func"]}])
+        result = categorise_references(pkg, [{"contents": ["my_func"]}])
         assert "my_func" in result["functions"]
 
     def test_classifies_async_function(self, tmp_path, monkeypatch):
@@ -733,9 +718,8 @@ class TestCategoriseReferences:
         obj.labels = {"async"}
         pkg = MagicMock()
         pkg.members = {"afunc": obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("great_docs._reference.discovery.function_kind", lambda o: "async")
-        result = categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["afunc"]}])
+        result = categorise_references(pkg, [{"contents": ["afunc"]}])
         assert "afunc" in result["async_functions"]
 
     def test_classifies_class_as_dataclass(self, tmp_path, monkeypatch):
@@ -747,9 +731,8 @@ class TestCategoriseReferences:
         obj.members["__init__"].kind.value = "function"
         pkg = MagicMock()
         pkg.members = {"MyDC": obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("great_docs._reference.discovery.class_kind", lambda o: "dataclass")
-        result = categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["MyDC"]}])
+        result = categorise_references(pkg, [{"contents": ["MyDC"]}])
         assert "MyDC" in result["dataclasses"]
 
     def test_classifies_attribute_as_constant(self, tmp_path, monkeypatch):
@@ -761,11 +744,8 @@ class TestCategoriseReferences:
         obj.annotation = None
         pkg = MagicMock()
         pkg.members = {"MY_CONST": obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("great_docs._reference.discovery.attribute_kind", lambda o: "constant")
-        result = categorise_references(
-            gd._get_griffe_package("mypkg"), [{"contents": ["MY_CONST"]}]
-        )
+        result = categorise_references(pkg, [{"contents": ["MY_CONST"]}])
         assert "MY_CONST" in result["constants"]
 
     def test_classifies_type_alias(self, tmp_path, monkeypatch):
@@ -776,9 +756,8 @@ class TestCategoriseReferences:
         obj.labels = set()
         pkg = MagicMock()
         pkg.members = {"MyAlias": obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("great_docs._reference.discovery.attribute_kind", lambda o: "typealias")
-        result = categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["MyAlias"]}])
+        result = categorise_references(pkg, [{"contents": ["MyAlias"]}])
         assert "MyAlias" in result["type_aliases"]
 
     def test_cyclic_alias_on_kind_goes_to_other(self, tmp_path, monkeypatch):
@@ -792,10 +771,7 @@ class TestCategoriseReferences:
         )
         pkg = MagicMock()
         pkg.members = {"CyclicThing": obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        result = categorise_references(
-            gd._get_griffe_package("mypkg"), [{"contents": ["CyclicThing"]}]
-        )
+        result = categorise_references(pkg, [{"contents": ["CyclicThing"]}])
         assert "CyclicThing" in result["other"]
 
     def test_unexpected_error_on_kind_propagates(self, tmp_path, monkeypatch):
@@ -805,9 +781,8 @@ class TestCategoriseReferences:
         type(obj).kind = property(lambda s: (_ for _ in ()).throw(ValueError("bad")))
         pkg = MagicMock()
         pkg.members = {"BrokenObj": obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         with pytest.raises(ValueError, match="bad"):
-            categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["BrokenObj"]}])
+            categorise_references(pkg, [{"contents": ["BrokenObj"]}])
 
     def test_missing_name_with_installed_package_raises(self, tmp_path, monkeypatch):
         """Verify that an installed package missing a configured name raises `BuildError`"""
@@ -816,24 +791,22 @@ class TestCategoriseReferences:
         gd = self._setup(tmp_path, monkeypatch)
         pkg = MagicMock()
         pkg.members = {}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("importlib.metadata.version", lambda name: "1.2.3")
         from great_docs import BuildError
 
         with pytest.raises(BuildError, match="not found"):
-            categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["Missing"]}])
+            categorise_references(pkg, [{"contents": ["Missing"]}])
 
     def test_missing_name_uninstalled_package_goes_to_other(self, tmp_path, monkeypatch):
         """Verify that missing names are grouped under `other` for an uninstalled package"""
         gd = self._setup(tmp_path, monkeypatch)
         pkg = MagicMock()
         pkg.members = {}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr(
             "importlib.metadata.version",
             lambda name: (_ for _ in ()).throw(importlib.metadata.PackageNotFoundError(name)),
         )
-        result = categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["Missing"]}])
+        result = categorise_references(pkg, [{"contents": ["Missing"]}])
         assert "Missing" in result["other"]
 
     def test_class_method_counting(self, tmp_path, monkeypatch):
@@ -860,9 +833,8 @@ class TestCategoriseReferences:
 
         pkg = MagicMock()
         pkg.members = {"MyClass": cls_obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("great_docs._reference.discovery.class_kind", lambda o: "class")
-        result = categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["MyClass"]}])
+        result = categorise_references(pkg, [{"contents": ["MyClass"]}])
         assert result["class_methods"]["MyClass"] == 2
         assert "do_stuff" in result["class_method_names"]["MyClass"]
         assert "value" in result["class_method_names"]["MyClass"]
@@ -885,9 +857,8 @@ class TestCategoriseReferences:
 
         pkg = MagicMock()
         pkg.members = {"MyClass": cls_obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("great_docs._reference.discovery.class_kind", lambda o: "class")
-        result = categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["MyClass"]}])
+        result = categorise_references(pkg, [{"contents": ["MyClass"]}])
         assert result["class_methods"]["MyClass"] == 0
 
     def test_module_kind_expands_members(self, tmp_path, monkeypatch):
@@ -918,11 +889,8 @@ class TestCategoriseReferences:
 
         pkg = MagicMock()
         pkg.members = {"AClass": anchor_cls, "mymod": mod_obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("great_docs._reference.discovery.class_kind", lambda o: "class")
-        result = categorise_references(
-            gd._get_griffe_package("mypkg"), [{"contents": ["AClass", "mymod"]}]
-        )
+        result = categorise_references(pkg, [{"contents": ["AClass", "mymod"]}])
         assert "mymod.SubClass" in result["classes"]
         assert "mymod.sub_func" in result["functions"]
         assert "mymod.CONST" in result["constants"]
@@ -949,12 +917,11 @@ class TestCategoriseReferences:
 
         pkg = MagicMock()
         pkg.members = {"mymod": mod_obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr(
             "great_docs._reference.discovery.class_kind",
             lambda o: "dataclass" if o is mod_obj.members["BDataclass"] else "class",
         )
-        result = categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["mymod"]}])
+        result = categorise_references(pkg, [{"contents": ["mymod"]}])
         assert "mymod.BDataclass" in result["dataclasses"]
         assert "mymod.CPlain" in result["classes"]
         assert "mymod.AFunc" in result["functions"]
@@ -978,8 +945,7 @@ class TestCategoriseReferences:
 
         pkg = MagicMock()
         pkg.members = {"mymod": mod_obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        result = categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["mymod"]}])
+        result = categorise_references(pkg, [{"contents": ["mymod"]}])
         assert "mymod.broken" not in result.get("other", [])
 
     def test_module_members_iteration_raises(self, tmp_path, monkeypatch):
@@ -996,8 +962,7 @@ class TestCategoriseReferences:
 
         pkg = MagicMock()
         pkg.members = {"mymod": mod_obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
-        result = categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["mymod"]}])
+        result = categorise_references(pkg, [{"contents": ["mymod"]}])
         assert "mymod" not in result.get("classes", [])
 
     def test_dict_item_in_contents(self, tmp_path, monkeypatch):
@@ -1010,11 +975,8 @@ class TestCategoriseReferences:
 
         pkg = MagicMock()
         pkg.members = {"named_func": obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("great_docs._reference.discovery.function_kind", lambda o: "function")
-        result = categorise_references(
-            gd._get_griffe_package("mypkg"), [{"contents": [{"name": "named_func"}]}]
-        )
+        result = categorise_references(pkg, [{"contents": [{"name": "named_func"}]}])
         assert "named_func" in result["functions"]
 
     def test_class_property_member_counted(self, tmp_path, monkeypatch):
@@ -1031,9 +993,8 @@ class TestCategoriseReferences:
 
         pkg = MagicMock()
         pkg.members = {"MyClass": cls_obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("great_docs._reference.discovery.class_kind", lambda o: "class")
-        result = categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["MyClass"]}])
+        result = categorise_references(pkg, [{"contents": ["MyClass"]}])
         assert result["class_methods"]["MyClass"] == 1
         assert "name" in result["class_method_names"]["MyClass"]
 
@@ -1053,9 +1014,8 @@ class TestCategoriseReferences:
 
         pkg = MagicMock()
         pkg.members = {"MyClass": cls_obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("great_docs._reference.discovery.class_kind", lambda o: "class")
-        result = categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["MyClass"]}])
+        result = categorise_references(pkg, [{"contents": ["MyClass"]}])
         assert result["class_methods"]["MyClass"] == 1
         assert "run" in result["class_method_names"]["MyClass"]
         assert "__init__" not in result["class_method_names"]["MyClass"]
@@ -1076,9 +1036,8 @@ class TestCategoriseReferences:
 
         pkg = MagicMock()
         pkg.members = {"MyClass": cls_obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("great_docs._reference.discovery.class_kind", lambda o: "class")
-        result = categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["MyClass"]}])
+        result = categorise_references(pkg, [{"contents": ["MyClass"]}])
         assert result["class_methods"]["MyClass"] == 0
 
     def test_typevar_attribute(self, tmp_path, monkeypatch):
@@ -1091,9 +1050,8 @@ class TestCategoriseReferences:
 
         pkg = MagicMock()
         pkg.members = {"T": obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("great_docs._reference.discovery.attribute_kind", lambda o: "typevar")
-        result = categorise_references(gd._get_griffe_package("mypkg"), [{"contents": ["T"]}])
+        result = categorise_references(pkg, [{"contents": ["T"]}])
         assert "T" in result["type_aliases"]
 
     def test_other_kind_goes_to_other(self, tmp_path, monkeypatch):
@@ -1109,11 +1067,8 @@ class TestCategoriseReferences:
 
         pkg = MagicMock()
         pkg.members = {"AClass": anchor, "weird": obj}
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr("great_docs._reference.discovery.class_kind", lambda o: "class")
-        result = categorise_references(
-            gd._get_griffe_package("mypkg"), [{"contents": ["AClass", "weird"]}]
-        )
+        result = categorise_references(pkg, [{"contents": ["AClass", "weird"]}])
 
         assert "weird" in result["other"]
 
@@ -1326,51 +1281,6 @@ class TestExtractArgument:
         result = cli_click.extract_argument(param)
         assert result["type"] == "INT"
         assert result["nargs"] == -1
-
-
-# ---------------------------------------------------------------------------
-# _get_package_exports – cache hit path
-# ---------------------------------------------------------------------------
-
-
-class TestGetPackageExportsCacheHit:
-    def test_returns_cached_exports(self, tmp_path):
-        gd = _make_gd(tmp_path)
-        gd._cached_package_name = "mypkg"
-        gd._cached_exports = ["Foo", "Bar"]
-        result = gd._get_package_exports("mypkg")
-        assert result == ["Foo", "Bar"]
-
-    def test_cache_miss_triggers_discovery(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        gd._cached_package_name = None
-        gd._cached_exports = None
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: MagicMock())
-        monkeypatch.setattr(
-            "great_docs.core.discovery.discover_exports", lambda package, config, report: ["X"]
-        )
-        result = gd._get_package_exports("mypkg")
-        assert result == ["X"]
-        assert gd._cached_package_name == "mypkg"
-        assert gd._cached_exports == ["X"]
-
-    def test_fallback_to_parse_when_discover_returns_none(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        gd._cached_package_name = None
-        gd._cached_exports = None
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: MagicMock())
-        monkeypatch.setattr(
-            "great_docs.core.discovery.discover_exports", lambda package, config, report: None
-        )
-        monkeypatch.setattr(
-            "great_docs.core.locate_package_init",
-            lambda root, manifest, name: tmp_path / "__init__.py",
-        )
-        monkeypatch.setattr(
-            "great_docs.core.discovery.parse_dunder_all", lambda init_file, config, report: ["Y"]
-        )
-        result = gd._get_package_exports("mypkg")
-        assert result == ["Y"]
 
 
 # ---------------------------------------------------------------------------
@@ -1876,103 +1786,6 @@ class TestSaveFreezeCache:
         freeze.save(gd.layout)
         merged_js = tmp_path / "_freeze" / "chunk.js"
         assert merged_js.read_bytes().endswith(b"\n")
-
-
-# ---------------------------------------------------------------------------
-# _create_api_sections_from_config – include_inherited
-# ---------------------------------------------------------------------------
-
-
-class TestCreateApiSectionsFromConfig:
-    def test_no_reference_returns_none(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        _patch_cfg(monkeypatch, gd, "reference", None)
-        assert gd._create_api_sections_with_config("mypkg") is None
-
-    def test_include_inherited_on_explicit_members(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        _patch_cfg(
-            monkeypatch,
-            gd,
-            "reference",
-            [
-                {
-                    "title": "Classes",
-                    "contents": [
-                        {"name": "MyClass", "members": ["method_a"], "include_inherited": True},
-                    ],
-                }
-            ],
-        )
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: MagicMock())
-        monkeypatch.setattr(
-            "great_docs.core.discovery.categorise_references",
-            lambda package, reference: empty_categories(),
-        )
-        result = gd._create_api_sections_with_config("mypkg")
-        assert result is not None
-        found = False
-        for section in result:
-            for item in section.get("contents", []):
-                if isinstance(item, dict) and item.get("name") == "MyClass":
-                    assert item.get("include_inherited") is True
-                    found = True
-        assert found
-
-    def test_include_inherited_on_default_entry(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        _patch_cfg(
-            monkeypatch,
-            gd,
-            "reference",
-            [
-                {
-                    "title": "Classes",
-                    "contents": [
-                        {"name": "MyClass", "include_inherited": True},
-                    ],
-                }
-            ],
-        )
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: MagicMock())
-        monkeypatch.setattr(
-            "great_docs.core.discovery.categorise_references",
-            lambda package, reference: empty_categories(),
-        )
-        result = gd._create_api_sections_with_config("mypkg")
-        found = False
-        for section in result:
-            for item in section.get("contents", []):
-                if isinstance(item, dict) and item.get("include_inherited") is True:
-                    found = True
-        assert found
-
-    def test_plain_string_when_no_include_inherited(self, tmp_path, monkeypatch):
-        gd = _make_gd(tmp_path)
-        _patch_cfg(
-            monkeypatch,
-            gd,
-            "reference",
-            [
-                {
-                    "title": "Funcs",
-                    "contents": [
-                        {"name": "my_func"},
-                    ],
-                }
-            ],
-        )
-        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: MagicMock())
-        monkeypatch.setattr(
-            "great_docs.core.discovery.categorise_references",
-            lambda package, reference: empty_categories(),
-        )
-        result = gd._create_api_sections_with_config("mypkg")
-        for section in result:
-            for item in section.get("contents", []):
-                if item == "my_func":
-                    return
-        raise AssertionError("Expected plain string 'my_func' in contents")
 
 
 # ---------------------------------------------------------------------------

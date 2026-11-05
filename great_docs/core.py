@@ -40,11 +40,11 @@ from ._contribution import Contribution
 from ._install import format_authors_yaml, update_gitignore
 from ._layout import Layout
 from ._manifest import Manifest
-from ._project import Project, locate_package_init, read_manifest
+from ._project import Project, read_manifest
 from ._reference import block as reference_block
-from ._reference import discovery, documented, probe
+from ._reference import documented, probe
 from ._reference import sections as reference_sections
-from ._reference.discovery import Categories
+from ._reference.exports import Exports
 from ._remote import HttpRemote, Remote
 from ._subprocess import TEXT_MODE_KWARGS
 from ._term_player import prerender as term_prerender
@@ -223,48 +223,11 @@ class GreatDocs:
         # GitHub and PyPI requests; release warnings print in the build log's format
         self._remote: Remote = HttpRemote(report=lambda message: print(f"   ⚠️  {message}"))
 
-        # Reset these caches at the start of each build or initialisation.
-        self._griffe_pkg_cache: dict | None = None  # {normalized_name: griffe Package}
-        self._cached_exports: list | None = None
-        self._cached_package_name: str | None = None
         self._page_authors = page_dates.site_authors(
             self._config,
             self.layout.source_dir,
             self._identity(Project.make(self._config, self.layout)).base_url,
         )
-
-    def _forget_exports(self) -> None:
-        """
-        Clear cached packages and exports so the next discovery reads the current source
-        """
-        self._griffe_pkg_cache = None
-        self._cached_exports = None
-        self._cached_package_name = None
-
-    def _get_griffe_package(self, package_name: str):
-        """Load a griffe package, using a per-build cache to avoid redundant loads.
-
-        Parameters
-        ----------
-        package_name
-            The normalized (underscored) package name.
-
-        Returns
-        -------
-        griffe.Object
-            The loaded griffe package object.
-        """
-        import griffe
-
-        if self._griffe_pkg_cache is None:
-            self._griffe_pkg_cache = {}
-
-        normalized = package_name.replace("-", "_")
-        if normalized not in self._griffe_pkg_cache:
-            self._griffe_pkg_cache[normalized] = griffe.load(
-                normalized, search_paths=Project.make(self._config, self.layout).search_paths()
-            )
-        return self._griffe_pkg_cache[normalized]
 
     def _prepare_build_directory(self, run: Run) -> None:
         """
@@ -992,141 +955,6 @@ class GreatDocs:
         print("   📄 Blended homepage: first UG page → index.qmd")
         return f"user-guide/{dest_rel}"
 
-    def _get_package_exports(self, package_name: str) -> list[str] | None:
-        """
-        Find the names a package exports, and remember them for later calls
-
-        Read griffe's model of the package. When griffe cannot load the package, or its
-        `__all__` lists only names it does not define, read a literal `__all__` from its
-        `__init__.py` instead.
-
-        Parameters
-        ----------
-        package_name
-            The package's importable name. Dashes count as underscores.
-
-        Returns
-        -------
-        :
-            The exported names, or `None` if neither source lists any.
-        """
-        normalized = package_name.replace("-", "_")
-        if self._cached_package_name == normalized and self._cached_exports is not None:
-            return self._cached_exports
-
-        exports = None
-        try:
-            package = self._get_griffe_package(normalized)
-        except USER_CODE_ERRORS as error:
-            print(
-                f"Warning: Could not load package with griffe ({type(error).__name__})",
-                file=sys.stderr,
-            )
-            if package_name != normalized:
-                print(
-                    f"   (Looking for module '{normalized}' from project '{package_name}')",
-                    file=sys.stderr,
-                )
-        else:
-            exports = discovery.discover_exports(package, self._config, report=print)
-
-        if exports is None:
-            print("Falling back to __all__ discovery", file=sys.stderr)
-            package_root = self.layout.package_root
-            init_file = locate_package_init(package_root, read_manifest(package_root), package_name)
-            if init_file is None:
-                print(
-                    f"Could not locate __init__.py for package '{package_name}'"
-                    + (f" (module name: '{normalized}')" if normalized != package_name else ""),
-                    file=sys.stderr,
-                )
-                if normalized != package_name:
-                    print(
-                        f"Tip: Ensure a '{normalized}/' directory exists with an __init__.py file",
-                        file=sys.stderr,
-                    )
-            else:
-                print(f"Found package __init__.py at: {init_file.relative_to(self.project_root)}")
-                exports = discovery.parse_dunder_all(init_file, self._config, report=print)
-
-        self._cached_package_name = normalized
-        self._cached_exports = exports
-        return exports
-
-    def _categorise_exports(self, package_name: str, exports: list[str]) -> Categories:
-        """
-        Sort a package's exports into the groups of the API reference
-
-        A method, or a member of an exported module, stays only if the renderer can document
-        it after importing the package; if the package cannot be imported, finding it by static
-        analysis is enough. When griffe cannot load the package, every export other than a
-        metadata name such as `__version__` goes under `other`.
-
-        Parameters
-        ----------
-        package_name
-            The package's importable name. Dashes count as underscores.
-        exports
-            The names to sort.
-
-        Returns
-        -------
-        :
-            The sorted exports.
-        """
-        normalized = package_name.replace("-", "_")
-        try:
-            package = self._get_griffe_package(normalized)
-        except USER_CODE_ERRORS as error:
-            print(
-                f"Warning: Could not load package with griffe ({type(error).__name__})",
-                file=sys.stderr,
-            )
-            categories = discovery.empty_categories()
-            categories["other"] = [name for name in exports if name not in discovery.METADATA_NAMES]
-            return categories
-
-        return discovery.categorise_exports(
-            package,
-            exports,
-            renderable=probe.RendererCheck(normalized, report=print),
-            report=print,
-        )
-
-    def _create_api_sections_with_config(self, package_name: str) -> list | None:
-        """
-        Build API sections from explicit entries or discovered exports
-        """
-        reference_config = self._config.reference
-        if reference_config:
-            print("Using explicit reference configuration from great-docs.yml")
-            try:
-                package = self._get_griffe_package(package_name)
-            except USER_CODE_ERRORS:
-                categories = discovery.empty_categories()
-            else:
-                try:
-                    categories = discovery.categorise_references(package, reference_config)
-                except BuildError as error:
-                    print(f"ERROR: {error}", file=sys.stderr)
-                    raise
-            configured = reference_sections.from_explicit_config(
-                self._config, reference_config, categories
-            )
-            if configured:
-                return configured
-
-        exports = self._get_package_exports(package_name)
-        if not exports:
-            return None
-        skip_names = {"__version__", "__author__", "__email__", "__all__"}
-        exports = [name for name in exports if name not in skip_names]
-        if not exports:
-            return None
-        print(f"Found {len(exports)} exported names to document")
-        categories = self._categorise_exports(package_name, exports)
-        return reference_sections.from_categories(self._config, categories)
-
     def _generate_initial_config(self, force: bool = False) -> bool:
         """
         Generate an initial great-docs.yml with discovered exports.
@@ -1156,7 +984,6 @@ class GreatDocs:
 
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
-        self._forget_exports()
         project = Project.make(self._config, self.layout)
         if not project.name or not (importable_name := project.importable_name):
             print("Warning: Could not detect package name, creating minimal config")
@@ -1173,11 +1000,13 @@ class GreatDocs:
         if project.module and project.module != project.name.replace("-", "_"):
             overrides["module"] = f"module: {project.module}"
 
+        package_exports = Exports(self._config, project)
+
         # Detect docstring style
         print("Detecting docstring style...")
         package = None
         try:
-            package = self._get_griffe_package(importable_name)
+            package = package_exports.package(importable_name)
         except USER_CODE_ERRORS as error:
             print(
                 f"Warning: Could not load package for docstring detection ({type(error).__name__})"
@@ -1194,7 +1023,7 @@ class GreatDocs:
             overrides["authors"] = authors_yaml
 
         # Discover exports
-        exports = self._get_package_exports(importable_name)
+        exports = package_exports.names(importable_name)
         if not exports:
             print(
                 "Warning: Could not discover exports; edit the commented "
@@ -1211,7 +1040,7 @@ class GreatDocs:
 
         # Categorize exports (this also detects cyclic aliases)
         print("Categorizing API objects...")
-        categories = self._categorise_exports(importable_name, exports)
+        categories = package_exports.categorise(importable_name, exports)
 
         cyclic_alias_count = categories.get("cyclic_alias_count", 0)
         if cyclic_alias_count > 0:
@@ -1359,7 +1188,7 @@ class GreatDocs:
 
         # Try to auto-generate sections from discovered exports
         # Prioritizes explicit reference config from great-docs.yml over auto-discovery
-        sections = self._create_api_sections_with_config(importable_name)
+        sections = run.exports.sections(importable_name)
 
         # Mark that discovery was performed this build (so Step 2 can skip re-doing it)
         run.api_discovery_done = True
@@ -1646,9 +1475,7 @@ class GreatDocs:
         if run.api_discovery_done:
             print("API reference already configured in this build, skipping re-discovery")
         else:
-            reference_block.refresh(
-                self._config, self.build_dir, self._create_api_sections_with_config
-            )
+            reference_block.refresh(self._config, self.build_dir, run.exports.sections)
         return "API reference refreshed"
 
     def _step_llms_txt(self, run: Run) -> Outcome:
@@ -2425,7 +2252,7 @@ class GreatDocs:
                 self._config,
                 importable_name=run.project.module or package_name.replace("-", "_"),
                 search_paths=run.project.search_paths(),
-                create_sections=self._create_api_sections_with_config,
+                create_sections=run.exports.sections,
             )
 
         result = run_versioned_build(
@@ -2864,7 +2691,6 @@ class GreatDocs:
 
         # Share project facts within this build; reread packaging files for each new build.
         run = Run.make(self._config, self.layout, watch=watch)
-        self._forget_exports()
 
         # --- Gather metadata for the build header -------------------------
         package_name = run.project.name or ""

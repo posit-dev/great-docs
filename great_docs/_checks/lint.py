@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import logging
 import os
 import re
@@ -14,6 +16,7 @@ from .._content import authored
 from .._interlinks import AliasClaims, LoadedSources, build_index, load_sources
 from .._layout import Layout
 from .._project import Project
+from .._reference.exports import Exports
 from .._utils import fenced_lines, is_in_great_docs_build_dir, parse_seealso
 from .._website.homepage import source as homepage_source
 from .._yaml import YamlMapping, YamlValue, split_front_matter
@@ -22,7 +25,7 @@ from ..config import _PARSERS
 if TYPE_CHECKING:
     from .._apiref.inventory import InventoryItem
     from .._interlinks import Index
-    from ..core import GreatDocs
+    from ..config import Config
 
 
 @dataclass
@@ -108,11 +111,6 @@ def run_lint(
     LintResult
         Aggregated lint results.
     """
-    import io
-    import sys
-
-    from ..core import GreatDocs
-
     result = LintResult()
     all_checks = {
         "config",
@@ -140,74 +138,55 @@ def run_lint(
             )
             return result
 
-    # Initialize GreatDocs to access config and package info
-    # Suppress print output from griffe discovery when in quiet mode
-    if quiet:
-        _saved_stdout = sys.stdout
-        sys.stdout = io.StringIO()
+    # Discovery and introspection print their progress; quiet mode discards it.
+    with contextlib.redirect_stdout(io.StringIO()) if quiet else contextlib.nullcontext():
+        layout = Layout.make(project_root, Path(config_path) if config_path else None)
+        package_exports = Exports.make(layout)
+        config = package_exports.config
+        project = package_exports.project
 
-    try:
-        docs = GreatDocs(project_path=str(project_root), config_path=config_path)
-        project = Project.make(docs._config, docs.layout)
-    except Exception:
-        if quiet:
-            sys.stdout = _saved_stdout
-        raise
+        # Configuration problems are reported even if the package cannot be loaded.
+        if "config" in checks:
+            _check_config_keys(config.user_settings, result)
 
-    # Configuration problems are reported even if the package cannot be loaded.
-    if "config" in checks:
-        _check_config_keys(docs._config.user_settings, result)
+        # The config check reads only great-docs.yml, so it also works on projects
+        # without a Python package.
+        if checks <= {"config"}:
+            return result
 
-    # The config check reads only great-docs.yml, so it also works on projects
-    # without a Python package.
-    if checks <= {"config"}:
-        if quiet:
-            sys.stdout = _saved_stdout
-        return result
-
-    importable_name = project.importable_name
-    if not project.name or not importable_name:
-        if quiet:
-            sys.stdout = _saved_stdout
-        result.issues.append(
-            LintIssue(
-                check="config",
-                severity="error",
-                symbol="",
-                message="Could not detect package name. Is this a Python project?",
+        importable_name = project.importable_name
+        if not project.name or not importable_name:
+            result.issues.append(
+                LintIssue(
+                    check="config",
+                    severity="error",
+                    symbol="",
+                    message="Could not detect package name. Is this a Python project?",
+                )
             )
-        )
-        return result
+            return result
 
-    result.package_name = importable_name
+        result.package_name = importable_name
 
-    try:
-        pkg = docs._get_griffe_package(importable_name)
-    except USER_CODE_ERRORS as e:
-        if quiet:
-            sys.stdout = _saved_stdout
-        result.issues.append(
-            LintIssue(
-                check="config",
-                severity="error",
-                symbol="",
-                message=f"Could not load package '{importable_name}': {type(e).__name__}: {e}",
+        try:
+            pkg = package_exports.package(importable_name)
+        except USER_CODE_ERRORS as e:
+            result.issues.append(
+                LintIssue(
+                    check="config",
+                    severity="error",
+                    symbol="",
+                    message=f"Could not load package '{importable_name}': {type(e).__name__}: {e}",
+                )
             )
-        )
-        return result
+            return result
 
-    # Discover exports (also noisy with prints)
-    exports = docs._get_package_exports(importable_name)
-
-    if quiet:
-        sys.stdout = _saved_stdout
-    if exports is None:
-        exports = []
+        exports = package_exports.names(importable_name) or []
 
     result.exports_count = len(exports)
 
     # Get configured docstring style
-    config_style = docs._config["parser"]
+    config_style = config["parser"]
 
     # Run selected checks
     if "docstrings" in checks:
@@ -218,14 +197,14 @@ def run_lint(
         from .._reference import documented as documented_reference
 
         documented = documented_reference.objects(
-            docs._config,
+            config,
             importable_name=importable_name,
             search_paths=project.search_paths(),
-            create_sections=docs._create_api_sections_with_config,
+            create_sections=package_exports.sections,
         )
         # No documented objects means both checks are no-ops, so skip source
         # loading and any inventory download.
-        sources = load_sources(docs._config) if documented else LoadedSources()
+        sources = load_sources(config) if documented else LoadedSources()
         # Use the index the build writes so both checks apply render resolution.
         index = build_index(
             create_inventory(importable_name, "", documented),
@@ -236,7 +215,7 @@ def run_lint(
             pkg, importable_name, exports, documented, index, sources.unread, result
         )
         _check_ambiguous_references(
-            index.dropped, _gather_prose(documented, project_root, docs.layout), result
+            index.dropped, _gather_prose(documented, project_root, layout), result
         )
 
     if "style" in checks:
@@ -246,13 +225,13 @@ def run_lint(
         _check_directive_consistency(pkg, importable_name, exports, result)
 
     if "stale-versions" in checks:
-        _check_stale_versions(project_root, result, docs.layout)
+        _check_stale_versions(project_root, result, layout)
 
     if "descriptions" in checks:
-        _check_page_descriptions(docs, project_root, result)
+        _check_page_descriptions(config, layout, project_root, result)
 
     if "front-matter" in checks:
-        _check_front_matter(docs, project_root, result)
+        _check_front_matter(config, layout, project_root, result)
 
     return result
 
@@ -1097,14 +1076,16 @@ def _extract_frontmatter_upcoming(content: str) -> str | None:
     return m.group(1).strip().strip('"').strip("'")
 
 
-def _site_page_sources(docs: GreatDocs) -> list[Path]:
+def _site_page_sources(config: Config, layout: Layout) -> list[Path]:
     """
     List the Markdown pages an author writes for the site
 
     Parameters
     ----------
-    docs
-        The project being checked.
+    config
+        The project's configuration.
+    layout
+        The project's directories.
 
     Returns
     -------
@@ -1117,10 +1098,12 @@ def _site_page_sources(docs: GreatDocs) -> list[Path]:
     def report(message: str) -> None:
         print(f"   ⚠️  {message}")
 
-    return authored.find_pages(docs._config, docs.layout, report=report)
+    return authored.find_pages(config, layout, report=report)
 
 
-def _check_page_descriptions(docs: GreatDocs, project_root: Path, result: LintResult) -> None:
+def _check_page_descriptions(
+    config: Config, layout: Layout, project_root: Path, result: LintResult
+) -> None:
     """
     Flag pages whose search description falls back to the site default
 
@@ -1132,8 +1115,10 @@ def _check_page_descriptions(docs: GreatDocs, project_root: Path, result: LintRe
 
     Parameters
     ----------
-    docs
-        The project being checked.
+    config
+        The project's configuration.
+    layout
+        The project's directories.
     project_root
         Root of the project, against which page paths are reported.
     result
@@ -1142,21 +1127,19 @@ def _check_page_descriptions(docs: GreatDocs, project_root: Path, result: LintRe
     from .._website.homepage import hero
     from .._website.seo import description
 
-    config = docs._config
     if not config.seo_enabled:
         return
 
-    homepage = next(iter(homepage_source.find(docs.layout)), None)
-    has_default = (
-        docs._default_description(Project.make(docs._config, docs.layout).manifest) is not None
-    )
-    for path in _site_page_sources(docs):
+    homepage = next(iter(homepage_source.find(layout)), None)
+    manifest = Project.make(config, layout).manifest
+    has_default = description.default_description(config, manifest["description"]) is not None
+    for path in _site_page_sources(config, layout):
         front_matter, body = split_front_matter(path.read_text(encoding="utf-8"))
         if any(key in front_matter for key in description.PAGE_KEYS):
             continue
         if path == homepage:
             # The homepage is described after badges and hero elements are removed
-            found = hero.find(config, docs.layout.source_dir, body)
+            found = hero.find(config, layout.source_dir, body)
             if found is not None and found.body is not None:
                 body = found.body
         citations = description.resolves_citations(front_matter, config)
@@ -1304,7 +1287,9 @@ def _wrong_type(front_matter: YamlMapping, path: str, forms: tuple[FrontMatterFo
     return not any(_accepts(front_matter, key, form, value) for form in forms)
 
 
-def _check_front_matter(docs: GreatDocs, project_root: Path, result: LintResult) -> None:
+def _check_front_matter(
+    config: Config, layout: Layout, project_root: Path, result: LintResult
+) -> None:
     """
     Flag Great Docs front matter values with unsupported types
 
@@ -1313,14 +1298,16 @@ def _check_front_matter(docs: GreatDocs, project_root: Path, result: LintResult)
 
     Parameters
     ----------
-    docs
-        The project being checked.
+    config
+        The project's configuration.
+    layout
+        The project's directories.
     project_root
         Root of the project, against which page paths are reported.
     result
         Aggregated results to append to.
     """
-    for path in _site_page_sources(docs):
+    for path in _site_page_sources(config, layout):
         front_matter, _ = split_front_matter(path.read_text(encoding="utf-8"))
         for key, forms in GREAT_DOCS_KEYS.items():
             if not _wrong_type(front_matter, key, forms):

@@ -3,8 +3,8 @@ Shared configuration and build setup for `GreatDocs` tests
 
 `write_config` writes and loads `great-docs.yml`. `mock_config` provides a `Config` double
 with empty defaults. `write_pyproject` declares a project's name. `make_project` reads a
-project's facts as a build does, and `make_run` creates build state for testing build methods
-directly.
+project's facts as a build does, `make_exports` prepares to find its exports, and `make_run`
+creates build state for testing build methods directly.
 `stubbed_build` stubs Quarto and build steps while preserving the build's control flow.
 `StubRemote` supplies GitHub and PyPI data without network requests. `homepage_hero` and
 `homepage_margin` build the homepage hero and sidebar from the project's configuration and metadata.
@@ -31,6 +31,7 @@ from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
 from great_docs._content import user_guide
 from great_docs._project import Project
+from great_docs._reference.exports import Exports
 from great_docs._website.homepage import hero, margin
 from great_docs._website.project_pages import community
 
@@ -156,6 +157,23 @@ def make_project(docs: GreatDocs) -> Project:
         The project's name, metadata and GitHub repository as its files describe them now.
     """
     return Project.make(docs._config, docs.layout)
+
+
+def make_exports(docs: GreatDocs) -> Exports:
+    """
+    Prepare export discovery from the project's current files, as a build does
+
+    Parameters
+    ----------
+    docs
+        The project.
+
+    Returns
+    -------
+    :
+        An export discovery object with no packages loaded or exports discovered.
+    """
+    return Exports(docs._config, make_project(docs))
 
 
 def make_run(docs: GreatDocs, **values: Any) -> Run:

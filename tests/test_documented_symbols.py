@@ -12,7 +12,7 @@ from great_docs import BuildError
 from great_docs._apiref.inventory import InventoryItem
 from great_docs._reference import documented
 from great_docs.core import GreatDocs
-from tests.support import make_project
+from tests.support import make_exports, make_project
 
 
 def _symbol_names(gd: GreatDocs, package_name: str) -> list[str]:
@@ -36,7 +36,7 @@ def _symbol_names(gd: GreatDocs, package_name: str) -> list[str]:
         gd._config,
         importable_name=project.module or package_name.replace("-", "_"),
         search_paths=project.search_paths(),
-        create_sections=gd._create_api_sections_with_config,
+        create_sections=make_exports(gd).sections,
     )
 
 
@@ -61,7 +61,7 @@ def _objects(gd: GreatDocs, package_name: str) -> list[InventoryItem]:
         gd._config,
         importable_name=project.module or package_name.replace("-", "_"),
         search_paths=project.search_paths(),
-        create_sections=gd._create_api_sections_with_config,
+        create_sections=make_exports(gd).sections,
     )
 
 
@@ -152,7 +152,7 @@ def test_resolver_matches_renderer_sections(tmp_path: Path):
     assert _symbol_names(gd, "mypkg") == expected
 
     # Renderer sections, flattened independently, must also match ground truth.
-    sections = gd._create_api_sections_with_config("mypkg")
+    sections = make_exports(gd).sections("mypkg")
     renderer_stems: list[str] = []
     for section in sections or []:
         for item in section.get("contents", []):
@@ -263,7 +263,7 @@ def test_search_path_failure_preserves_original_error(tmp_path: Path):
             gd._config,
             importable_name="mypkg",
             search_paths=fail_search_paths(),
-            create_sections=gd._create_api_sections_with_config,
+            create_sections=make_exports(gd).sections,
         )
 
 

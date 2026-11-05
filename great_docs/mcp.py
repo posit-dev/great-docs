@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import shlex
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlsplit
 
 from mcp.server import Server
@@ -40,6 +40,9 @@ from ._layout import CONVENTIONAL_DOC_DIRS, Layout, LayoutError
 from ._project import Project
 from ._utils import is_in_great_docs_build_dir, recognised_build_dirs
 from .config import Config
+
+if TYPE_CHECKING:
+    from ._reference.exports import Exports
 
 server = Server("great-docs")
 
@@ -155,6 +158,35 @@ def _get_great_docs(
     from .core import GreatDocs
 
     return GreatDocs(project_path=project_path, config_path=config_path, create=create)
+
+
+def _get_exports(project_path: str | None, config_path: str | None) -> Exports:
+    """
+    Prepare export discovery for the selected project
+
+    Read the configuration and packaging files now; load packages and discover exports
+    when requested.
+
+    Parameters
+    ----------
+    project_path
+        The project directory, or `None` to use the current directory.
+    config_path
+        The configuration file, or `None` to locate it within the project.
+
+    Returns
+    -------
+    :
+        An export discovery object for the selected project.
+    """
+    from ._reference.exports import Exports
+
+    return Exports.make(
+        Layout.make(
+            Path(project_path) if project_path else Path.cwd(),
+            Path(config_path) if config_path else None,
+        )
+    )
 
 
 def _get_layout(arguments: dict, *, create: bool = False) -> Layout:
@@ -518,23 +550,23 @@ async def _handle_scan(arguments: dict) -> list[TextContent]:
     project_path = arguments.get("project_path")
     verbose = arguments.get("verbose", False)
 
-    docs = _get_great_docs(project_path, arguments.get("config_path"))
-    project = Project.make(docs._config, docs.layout)
+    package_exports = _get_exports(project_path, arguments.get("config_path"))
+    project = package_exports.project
     importable_name = project.importable_name
     if not project.name or not importable_name:
         return [TextContent(type="text", text="Error: Could not detect package name.")]
 
-    exports = docs._get_package_exports(importable_name)
+    exports = package_exports.names(importable_name)
     if not exports:
         return [TextContent(type="text", text="No exports discovered.")]
 
-    categories = docs._categorise_exports(importable_name, exports)
+    categories = package_exports.categorise(importable_name, exports)
 
     # Build structured output
     lines = [f"Package: {importable_name}", f"Total exports: {len(exports)}", ""]
 
     # Reference config status
-    reference_config = docs._config.reference
+    reference_config = package_exports.config.reference
     ref_items = set()
     for section in reference_config:
         for item in section.get("contents", []):
@@ -1173,15 +1205,17 @@ async def read_resource(uri: AnyUrl) -> str:
 
     elif uri_str == "gd://api-surface":
         try:
-            docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
-            project = Project.make(docs._config, docs.layout)
+            package_exports = _get_exports(
+                arguments.get("project_path"), arguments.get("config_path")
+            )
+            project = package_exports.project
             importable_name = project.importable_name
             if not project.name or not importable_name:
                 return "Error: Could not detect package name."
-            exports = docs._get_package_exports(importable_name)
+            exports = package_exports.names(importable_name)
             if not exports:
                 return f"No exports discovered for {importable_name}."
-            categories = docs._categorise_exports(importable_name, exports)
+            categories = package_exports.categorise(importable_name, exports)
 
             lines = [f"Package: {importable_name}", f"Total exports: {len(exports)}", ""]
             for cat_key, label in [
@@ -1337,11 +1371,13 @@ async def handle_completion(
         if ref.name == "improve-docstrings" and argument.name == "symbol":
             # Complete with actual package symbols
             try:
-                docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
-                importable_name = Project.make(docs._config, docs.layout).importable_name
+                package_exports = _get_exports(
+                    arguments.get("project_path"), arguments.get("config_path")
+                )
+                importable_name = package_exports.project.importable_name
                 if not importable_name:
                     return Completion(values=[])
-                exports = docs._get_package_exports(importable_name)
+                exports = package_exports.names(importable_name)
                 filtered = [e for e in exports if value.lower() in e.lower()]
                 return Completion(values=filtered[:20], hasMore=len(filtered) > 20)
             except Exception:
@@ -1364,11 +1400,13 @@ async def handle_completion(
     if isinstance(ref, ResourceTemplateReference):
         if "reference" in str(ref.uri) and argument.name == "symbol":
             try:
-                docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
-                importable_name = Project.make(docs._config, docs.layout).importable_name
+                package_exports = _get_exports(
+                    arguments.get("project_path"), arguments.get("config_path")
+                )
+                importable_name = package_exports.project.importable_name
                 if not importable_name:
                     return Completion(values=[])
-                exports = docs._get_package_exports(importable_name)
+                exports = package_exports.names(importable_name)
                 filtered = [e for e in exports if value.lower() in e.lower()]
                 return Completion(values=filtered[:20], hasMore=len(filtered) > 20)
             except Exception:

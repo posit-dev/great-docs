@@ -2379,6 +2379,33 @@ def test_api_snapshot_all_tags_differ(tmp_path: Path):
     assert set(s1) != set(s2)
 
 
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["scan"],
+        ["lint"],
+        ["api-snapshot", "v0.1.0"],
+        ["api-diff", "v0.1.0", "v0.1.0", "--graph"],
+    ],
+)
+def test_export_commands_run_with_a_bare_name_author(tmp_path: Path, args: list[str]):
+    _git(tmp_path, "init")
+    _git(tmp_path, "config", "user.email", "t@t.co")
+    _git(tmp_path, "config", "user.name", "t")
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+    (tmp_path / "mypkg").mkdir()
+    (tmp_path / "mypkg" / "__init__.py").write_text(
+        '"""A package."""\n\n__all__ = ["f"]\n\n\ndef f() -> None:\n    """Do nothing."""\n'
+    )
+    (tmp_path / "great-docs.yml").write_text("authors:\n  - Jane Doe\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-m", "v010")
+    _git(tmp_path, "tag", "v0.1.0")
+
+    result = CliRunner().invoke(cli, [*args, "--project-path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+
+
 class TestFormatSeconds:
     def test_under_sixty(self):
         assert _format_seconds(5.0) == "5.0s"
@@ -4508,10 +4535,7 @@ class TestApiDiffGraphHead:
         mock_graph.return_value = graph_result
 
         runner = CliRunner()
-        with (
-            patch("great_docs.core.GreatDocs"),
-            patch("great_docs._reference.documented.symbol_names", return_value=["A"]),
-        ):
+        with patch("great_docs._reference.documented.symbol_names", return_value=["A"]):
             result = runner.invoke(
                 cli,
                 [

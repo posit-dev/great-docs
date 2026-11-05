@@ -35,7 +35,14 @@ from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import discover_exports, parse_dunder_all
 from great_docs._reference.probe import detect_docstring_style
 from great_docs._website import quarto_yml as quarto_yml_file
-from tests.support import StubRemote, discover_user_guide, make_project, make_run, write_config
+from tests.support import (
+    StubRemote,
+    discover_user_guide,
+    make_exports,
+    make_project,
+    make_run,
+    write_config,
+)
 
 # ── Setup: make test-packages/synthetic importable ───────────────────────────
 
@@ -205,7 +212,7 @@ def test_L1_export_discovery(pkg_name: str, tmp_path: Path):
     # Packages without __all__ use griffe-based discovery
     if exports is None:
         exports = discover_exports(
-            docs._get_griffe_package(module_name), docs._config, report=print
+            make_exports(docs).package(module_name), docs._config, report=print
         )
 
     assert exports is not None, (
@@ -240,7 +247,7 @@ def test_L1_section_generation(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected.get("detected_module", pkg_name)
-    sections = docs._create_api_sections_with_config(module_name)
+    sections = make_exports(docs).sections(module_name)
 
     if sections is None:
         pytest.skip(
@@ -267,7 +274,7 @@ def test_L1_big_class_method_section(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected.get("detected_module", pkg_name)
-    sections = docs._create_api_sections_with_config(module_name)
+    sections = make_exports(docs).sections(module_name)
     assert sections is not None
 
     big_class = expected["big_class_name"]
@@ -332,7 +339,7 @@ def test_L1_docstring_parser_detection(pkg_name: str, tmp_path: Path):
     init_file = _package_init(docs, module_name)
     assert init_file is not None
 
-    detected = detect_docstring_style(docs._get_griffe_package(module_name), report=print)
+    detected = detect_docstring_style(make_exports(docs).package(module_name), report=print)
     assert detected == expected["detected_parser"], (
         f"Expected parser {expected['detected_parser']!r}, got {detected!r}"
     )
