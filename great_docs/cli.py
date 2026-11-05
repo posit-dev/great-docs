@@ -20,9 +20,11 @@ from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
 from ._manifest import ManifestError
 from ._project import Project
 from ._reference.exports import Exports
+from ._remote import HttpRemote
 from ._website import changelog as changelog_page
 from ._website import quarto_yml
-from .config import ConfigError
+from ._website.identity import Identity
+from .config import Config, ConfigError
 from .core import GreatDocs
 
 if TYPE_CHECKING:
@@ -2353,9 +2355,15 @@ def changelog(
     Set 'GITHUB_TOKEN' or 'GH_TOKEN' to avoid API rate limits.
     """
     try:
-        docs = GreatDocs(project_path=project_path, config_path=config_path)
+        layout = Layout.make(
+            Path(project_path) if project_path else Path.cwd(),
+            Path(config_path) if config_path else None,
+        )
+        config = Config(
+            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
+        )
 
-        repo = Project.make(docs._config, docs.layout).github
+        repo = Project.make(config, layout).github
         if repo is None:
             click.echo(
                 "Error: No GitHub repository URL found in pyproject.toml. "
@@ -2366,10 +2374,10 @@ def changelog(
             sys.exit(1)
 
         contribution = changelog_page.write_page(
-            docs._config,
-            docs.build_dir,
+            config,
+            layout.build_dir,
             repo,
-            docs._remote,
+            HttpRemote(report=lambda message: print(f"   ⚠️  {message}")),
             max_releases=max_releases,
             report=click.echo,
         )
@@ -2377,10 +2385,10 @@ def changelog(
             click.echo("No published releases found on GitHub.")
         else:
             # Link the page from a site that has been built
-            if quarto_yml.path(docs.build_dir).exists():
-                with quarto_yml.edit(docs.build_dir) as quarto_config:
+            if quarto_yml.path(layout.build_dir).exists():
+                with quarto_yml.edit(layout.build_dir) as quarto_config:
                     quarto_yml.apply(quarto_config, contribution)
-            click.echo(f"✅ Changelog generated: {docs.build_dir / changelog_page.FILENAME}")
+            click.echo(f"✅ Changelog generated: {layout.build_dir / changelog_page.FILENAME}")
 
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
@@ -2547,28 +2555,32 @@ def proofread(
                 click.echo("Using smart defaults for technical docs. Use --strict to disable.\n")
 
         # Determine files to check
-        docs = GreatDocs(project_path=project_path, config_path=config_path)
+        layout = Layout.make(
+            Path(project_path) if project_path else Path.cwd(),
+            Path(config_path) if config_path else None,
+        )
+        config = Config(
+            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
+        )
 
         if files:
             files_to_check = [Path(f) for f in files]
         else:
             if docs_dir:
                 files_to_check = [*Path(docs_dir).rglob("*.qmd"), *Path(docs_dir).rglob("*.md")]
-                readme = docs.project_root / "README.md"
+                readme = layout.package_root / "README.md"
                 if readme.exists():
                     files_to_check.append(readme)
             else:
                 files_to_check = proofreading.find_pages(
-                    docs._config,
-                    docs.layout,
+                    config,
+                    layout,
                     report=lambda message: click.echo(f"⚠️  {message}", err=True),
                 )
             if include_docstrings:
-                project = Project.make(docs._config, docs.layout)
+                project = Project.make(config, layout)
                 if project.name and project.importable_name:
-                    files_to_check += proofreading.find_modules(
-                        docs.layout, project.importable_name
-                    )
+                    files_to_check += proofreading.find_modules(layout, project.importable_name)
 
         if not files_to_check:
             click.echo("No documentation files found to check.", err=True)
@@ -2603,7 +2615,7 @@ def proofread(
         # Exclude Python files unless docstring checking is requested.
         all_results = proofreading.check(
             [f for f in files_to_check if include_docstrings or f.suffix != ".py"],
-            docs.project_root,
+            layout.package_root,
             options,
             report=click.echo if show_progress else lambda _line: None,
         )
@@ -2793,14 +2805,20 @@ def seo(
     from ._website.seo import robots, sitemap
 
     try:
-        docs = GreatDocs(project_path=project_path, config_path=config_path)
-        site_dir = docs.layout.site_dir
+        layout = Layout.make(
+            Path(project_path) if project_path else Path.cwd(),
+            Path(config_path) if config_path else None,
+        )
+        config = Config(
+            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
+        )
+        site_dir = layout.site_dir
 
         if not site_dir.exists():
             click.echo("Error: Site not built. Run 'great-docs build' first.", err=True)
             sys.exit(1)
 
-        separate_site = docs.layout.source_dir != docs.layout.package_root
+        separate_site = layout.source_dir != layout.package_root
         if fix and separate_site:
             from ._utils import validate_site_dir
 
@@ -2817,7 +2835,15 @@ def seo(
         warnings = []
         info = []
 
-        identity = docs._identity(Project.make(docs._config, docs.layout))
+        project = Project.make(config, layout)
+        github = project.github
+        identity = Identity.make(
+            config,
+            layout.build_dir,
+            github.owner if github else None,
+            github.name if github else None,
+            project.name,
+        )
         canonical_base = identity.base_url
 
         # ── Check sitemap.xml ────────────────────────────────────────────
@@ -2838,7 +2864,7 @@ def seo(
         else:
             issues.append("❌ sitemap.xml not found")
             if fix:
-                sitemap.write(site_dir, docs._config, canonical_base, report=click.echo)
+                sitemap.write(site_dir, config, canonical_base, report=click.echo)
                 record_generated_file("sitemap.xml")
                 info.append("   → Generated sitemap.xml")
 
@@ -2855,7 +2881,7 @@ def seo(
         else:
             issues.append("❌ robots.txt not found")
             if fix:
-                robots.write(site_dir, docs._config, canonical_base, report=click.echo)
+                robots.write(site_dir, config, canonical_base, report=click.echo)
                 record_generated_file("robots.txt")
                 info.append("   → Generated robots.txt")
 
@@ -2871,7 +2897,7 @@ def seo(
         # The audit requires the site name only when a string template contains
         # `{site_name}`. A missing placeholder or non-string value skips this
         # check.
-        title_template = docs._config.seo_title_template
+        title_template = config.seo_title_template
         site_name = identity.name
         if not isinstance(title_template, str) or "{site_name}" not in title_template:
             site_name = ""

@@ -1044,6 +1044,44 @@ def test_seo_fix_missing_files(tmp_path, monkeypatch):
     assert result.exit_code in (0, 1)
 
 
+@pytest.fixture
+def bare_name_author(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A GitHub-hosted project whose `authors` entry is a bare name instead of a mapping"""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\n\n[project.urls]\nRepository = "https://github.com/owner/pkg"\n'
+    )
+    (tmp_path / "great-docs.yml").write_text("authors:\n  - Jane Doe\n")
+    (tmp_path / "README.md").write_text("# Pkg\n\nPerfect text.\n")
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+def test_seo_runs_with_a_bare_name_author(bare_name_author: Path):
+    site = bare_name_author / "great-docs" / "_site"
+    site.mkdir(parents=True)
+    (site / "index.html").write_text("<html><head><title>Pkg</title></head></html>")
+
+    result = CliRunner().invoke(cli, ["seo", "--project-path", "."])
+    assert "sitemap.xml not found" in result.output
+
+
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+def test_proofread_runs_with_a_bare_name_author(
+    mock_check: MagicMock, mock_run: MagicMock, bare_name_author: Path
+):
+    result = CliRunner().invoke(cli, ["proofread", "README.md", "--project-path", "."])
+    assert result.exit_code == 0, result.output
+    assert "No issues" in result.output
+
+
+@patch("great_docs._website.changelog.write_page", return_value=None)
+def test_changelog_runs_with_a_bare_name_author(mock_write: MagicMock, bare_name_author: Path):
+    result = CliRunner().invoke(cli, ["changelog", "--project-path", "."])
+    assert result.exit_code == 0, result.output
+    assert "No published releases" in result.output
+
+
 def test_lint_help():
     """lint --help shows expected options."""
     runner = CliRunner()
@@ -3215,15 +3253,11 @@ class TestProofreadMissedBranches:
         user_guide.mkdir()
         (user_guide / "page.qmd").write_text("This text has no errors.")
 
-    @patch("great_docs.cli.GreatDocs")
     @patch("great_docs._checks.harper.run_harper")
-    def test_auto_discover_user_guide(self, mock_harper, mock_gd_cls, tmp_path, monkeypatch):
+    def test_auto_discover_user_guide(self, mock_harper, tmp_path, monkeypatch):
         """Without --file, auto-discovers user_guide/*.qmd."""
         monkeypatch.chdir(tmp_path)
         self._make_project(tmp_path)
-        mock_docs = MagicMock()
-        mock_docs.project_root = tmp_path
-        mock_gd_cls.return_value = mock_docs
         mock_harper.return_value = []
         runner = CliRunner()
         result = runner.invoke(
@@ -3232,17 +3266,13 @@ class TestProofreadMissedBranches:
         )
         assert result.exit_code in (0, 1, 3)  # 3 = harper not found, 1 = issues found
 
-    @patch("great_docs.cli.GreatDocs")
     @patch("great_docs._checks.harper.run_harper")
-    def test_dictionary_file_read(self, mock_harper, mock_gd_cls, tmp_path, monkeypatch):
+    def test_dictionary_file_read(self, mock_harper, tmp_path, monkeypatch):
         """--dictionary file is read line by line, skipping comments."""
         monkeypatch.chdir(tmp_path)
         self._make_project(tmp_path)
         dict_file = tmp_path / "custom.txt"
         dict_file.write_text("# comment\nmyword\nanother\n")
-        mock_docs = MagicMock()
-        mock_docs.project_root = tmp_path
-        mock_gd_cls.return_value = mock_docs
         mock_harper.return_value = []
         runner = CliRunner()
         result = runner.invoke(
@@ -3251,15 +3281,11 @@ class TestProofreadMissedBranches:
         )
         assert result.exit_code in (0, 3)
 
-    @patch("great_docs.cli.GreatDocs")
     @patch("great_docs._checks.harper.run_harper")
-    def test_spelling_only_flag(self, mock_harper, mock_gd_cls, tmp_path, monkeypatch):
+    def test_spelling_only_flag(self, mock_harper, tmp_path, monkeypatch):
         """--spelling-only sets only_rules=["SpellCheck"]."""
         monkeypatch.chdir(tmp_path)
         self._make_project(tmp_path)
-        mock_docs = MagicMock()
-        mock_docs.project_root = tmp_path
-        mock_gd_cls.return_value = mock_docs
         mock_harper.return_value = []
         runner = CliRunner()
         result = runner.invoke(
@@ -3289,17 +3315,11 @@ class TestProofreadMissedBranches:
         assert mock_text.call_count == 2
         assert "Spelling::SpellCheck: Misspelled" in result.output
 
-    @patch("great_docs.cli.GreatDocs")
     @patch("great_docs._checks.harper.run_harper")
-    def test_verbose_no_issues_shows_checkmark(
-        self, mock_harper, mock_gd_cls, tmp_path, monkeypatch
-    ):
+    def test_verbose_no_issues_shows_checkmark(self, mock_harper, tmp_path, monkeypatch):
         """--verbose with no issues shows ✅ per file."""
         monkeypatch.chdir(tmp_path)
         self._make_project(tmp_path)
-        mock_docs = MagicMock()
-        mock_docs.project_root = tmp_path
-        mock_gd_cls.return_value = mock_docs
 
         from great_docs._checks.harper import HarperFileResult
 
@@ -3380,17 +3400,17 @@ class TestSeoMissedBranches:
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
         runner = CliRunner()
-        with patch("great_docs.cli.GreatDocs", side_effect=RuntimeError("boom")):
+        with patch("great_docs.cli.Config", side_effect=RuntimeError("boom")):
             result = runner.invoke(cli, ["seo", "--project-path", str(tmp_path)])
         assert result.exit_code == 1
-        assert "Error" in result.output
+        assert "Error: boom" in result.output
 
     def test_seo_json_exception_path(self, tmp_path, monkeypatch):
         """An exception with --json outputs JSON error object."""
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
         runner = CliRunner()
-        with patch("great_docs.cli.GreatDocs", side_effect=RuntimeError("boom")):
+        with patch("great_docs.cli.Config", side_effect=RuntimeError("boom")):
             result = runner.invoke(cli, ["seo", "--json", "--project-path", str(tmp_path)])
         assert result.exit_code == 1
         assert "error" in result.output
@@ -3697,20 +3717,14 @@ class TestTermshowMissedBranches:
 
 
 class TestProofreadDictFileException:
-    @patch("great_docs.cli.GreatDocs")
     @patch("great_docs._checks.harper.run_harper")
-    def test_dict_file_read_exception_shows_warning(
-        self, mock_harper, mock_gd_cls, tmp_path, monkeypatch
-    ):
+    def test_dict_file_read_exception_shows_warning(self, mock_harper, tmp_path, monkeypatch):
         """Exception reading --dictionary file shows a warning and continues."""
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
         ug = tmp_path / "user_guide"
         ug.mkdir()
         (ug / "page.qmd").write_text("This text has no errors.")
-        mock_docs = MagicMock()
-        mock_docs.project_root = tmp_path
-        mock_gd_cls.return_value = mock_docs
         mock_harper.return_value = []
         # Use a dict file that doesn't exist → triggers the except block
         runner = CliRunner()

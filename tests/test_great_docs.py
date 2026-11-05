@@ -16314,12 +16314,7 @@ def _invoke_changelog(project: Path, remote: StubRemote, *args: str) -> Result:
         The command's result.
     """
 
-    def make_docs(project_path: str | None, config_path: str | None) -> GreatDocs:
-        docs = GreatDocs(project_path=project_path, config_path=config_path)
-        docs._remote = remote
-        return docs
-
-    with patch("great_docs.cli.GreatDocs", side_effect=make_docs):
+    with patch("great_docs.cli.HttpRemote", return_value=remote):
         return CliRunner().invoke(changelog, ["--project-path", str(project), *args])
 
 
@@ -16404,15 +16399,10 @@ def test_cli_changelog_no_github_repo():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            mock_docs = MagicMock()
-            MockGD.return_value = mock_docs
-            # The project's files name no GitHub repository.
-            mock_docs.layout.package_root = Path(tmp_dir)
-
-            result = runner.invoke(changelog, ["--project-path", tmp_dir])
-            assert result.exit_code == 1
-            assert "No GitHub repository URL found" in result.output
+        # An empty project cannot supply a GitHub repository URL.
+        result = runner.invoke(changelog, ["--project-path", tmp_dir])
+        assert result.exit_code == 1
+        assert "No GitHub repository URL found" in result.output
 
 
 def test_cli_changelog_max_releases_without_pyproject(tmp_path: Path):
@@ -16451,9 +16441,7 @@ def test_cli_changelog_error():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
-            MockGD.side_effect = RuntimeError("changelog failed")
-
+        with patch("great_docs.cli.Config", side_effect=RuntimeError("changelog failed")):
             result = runner.invoke(changelog, ["--project-path", tmp_dir])
             assert result.exit_code == 1
             assert "Error: changelog failed" in result.output
