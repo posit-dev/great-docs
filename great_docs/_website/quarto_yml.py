@@ -101,7 +101,7 @@ def write(build_dir: Path, quarto_config: dict[str, Any]) -> None:
     write_quarto_yml(path(build_dir), quarto_config)
 
 
-def write_initial(build_dir: Path) -> None:
+def write_initial(build_dir: Path) -> dict[str, Any]:
     """
     Write the initial website configuration
 
@@ -116,8 +116,14 @@ def write_initial(build_dir: Path) -> None:
     Returns
     -------
     :
+        A new mapping containing the written configuration, ready for in-memory updates.
     """
-    write(build_dir, {"project": {"type": "website"}, "format": {"html": {"theme": "flatly"}}})
+    quarto_config: dict[str, Any] = {
+        "project": {"type": "website"},
+        "format": {"html": {"theme": "flatly"}},
+    }
+    write(build_dir, quarto_config)
+    return quarto_config
 
 
 @contextmanager

@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, cast
 from .._cliref import click as cli_click
 from .._cliref import render as cli_render
 from .._reference import block as reference_block
-from .._website import quarto_yml
 from . import quarto
 from .facts import source_links
 from .steps import USER_CODE_ERRORS, Outcome, Skipped, StepError, print_warning
@@ -30,9 +29,9 @@ if TYPE_CHECKING:
 __all__ = ["add_api_block", "api", "api_config", "cli", "go_cli", "interlinks", "mcp", "rust_cli"]
 
 
-def add_api_block(run: Run, config: Config, layout: Layout) -> None:
+def add_api_block(run: Run, config: Config) -> None:
     """
-    Write the API reference configuration to `_quarto.yml`
+    Add the API reference configuration to the build's Quarto configuration
 
     Skip the reference when disabled, when the project is not Python, or when no package name
     is detected. Warn for a missing package name. Use an explicit `reference` configuration
@@ -43,11 +42,10 @@ def add_api_block(run: Run, config: Config, layout: Layout) -> None:
     Parameters
     ----------
     run
-        The current build, which records API reference availability and configuration.
+        The build state, updated with API reference availability and the reference's block
+        in the Quarto configuration.
     config
         The project's configuration.
-    layout
-        The project's directories.
 
     Returns
     -------
@@ -89,12 +87,8 @@ def add_api_block(run: Run, config: Config, layout: Layout) -> None:
         run.has_api_reference = False
         return
 
-    build_dir = layout.build_dir
-    quarto_config = quarto_yml.read(build_dir)
-    run.api_block = reference_block.configure(config, quarto_config, importable_name, sections)
-    quarto_yml.write(build_dir, quarto_config)
-
-    print(f"Added API reference configuration to {quarto_yml.path(build_dir)}")
+    run.api_block = reference_block.configure(config, run.quarto_config, importable_name, sections)
+    print("Added API reference configuration")
 
 
 def api_config(run: Run, *, refresh: bool) -> Outcome:
@@ -130,14 +124,14 @@ def api(
     """
     Write the API reference pages and the inventory of documented objects
 
-    When dynamic introspection fails, retry once with static analysis. Set
-    `dynamic: false` in both the saved and recorded API reference configurations.
+    When dynamic introspection fails, set `dynamic: false` in the in-memory API reference
+    configuration and retry once with static analysis.
 
     Parameters
     ----------
     run
-        Build state recording whether the site has an API reference and its configuration,
-        with repository details for source links.
+        The build's API reference availability, Quarto configuration and repository details
+        for source links.
     config
         The project's configuration.
     layout
@@ -168,12 +162,10 @@ def api(
     from .._apiref.resolve import ObjectNotFoundError
 
     failures = (*USER_CODE_ERRORS, ObjectNotFoundError)
-    build_dir = layout.build_dir
-    quarto_yml_path = str(quarto_yml.path(build_dir))
     repo_url = run.project.github.url if run.project.github else None
     links = source_links(config, layout.package_root, repo_url, warn=print_warning)
     try:
-        ref = APIReference(quarto_yml_path, links)
+        ref = APIReference(run.quarto_config, links)
         ref.build()
         return "API reference generated", ref
     except failures as e:
@@ -184,13 +176,12 @@ def api(
             "Dynamic introspection failed for a resolved item, retrying with static analysis..."
         )
         log.detail(str(e))
-        with quarto_yml.edit(build_dir) as quarto_config:
-            if "api-reference" in quarto_config:
-                quarto_config["api-reference"]["dynamic"] = False
+        # The block belongs to the in-memory Quarto configuration, so the retry sees
+        # this change and the final configuration write saves it.
         if run.api_block is not None:
             run.api_block["dynamic"] = False
     try:
-        ref = APIReference(quarto_yml_path, links)
+        ref = APIReference(run.quarto_config, links)
         ref.build()
     except failures as e:
         raise StepError(f"API reference build failed: {e}") from e

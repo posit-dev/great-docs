@@ -38,7 +38,7 @@ def freeze_cache(
     Parameters
     ----------
     run
-        Build state indicating whether watch mode is active.
+        The build's watch status and Quarto configuration for page selection and metadata.
     config
         The project's configuration.
     layout
@@ -58,9 +58,8 @@ def freeze_cache(
     # Versioned builds write metadata after resolving each version's content. Watch mode
     # bypasses that pipeline, so it needs metadata here.
     if not config.has_versions or run.watch:
-        quarto_config = quarto_yml.read(build_dir, seed_website=True)
         _ = page_metadata.write_to_pages(
-            build_dir, quarto_config, config, default_description, structured_data
+            build_dir, run.quarto_config, config, default_description, structured_data
         )
     if frozen_pages:
         return f"Using {len(frozen_pages)} page(s) from the freeze cache", frozen_pages
@@ -117,18 +116,26 @@ def d2_diagrams(layout: Layout, log: BuildLog) -> Outcome:
     return None
 
 
-def terminal_recordings(config: Config, layout: Layout, log: BuildLog) -> None:
+def terminal_recordings(run: Run, config: Config, layout: Layout, log: BuildLog) -> None:
     """
     Render the source directory's `.termshow` recordings for the `termshow` shortcode
 
+    Add the player's resources to the build's Quarto configuration.
+
     Parameters
     ----------
+    run
+        The build state holding the Quarto configuration.
     config
         The project's configuration.
     layout
         The project's directories.
     log
         The build log for recording failures and a summary of successful renders.
+
+    Returns
+    -------
+    :
     """
     source_dir = layout.source_dir
     build_dir = layout.build_dir
@@ -143,8 +150,7 @@ def terminal_recordings(config: Config, layout: Layout, log: BuildLog) -> None:
             f"Pre-rendered {done.count} terminal recording(s) "
             f"({done.manifest_bytes / 1024:.0f} KB of player data)"
         )
-        with quarto_yml.edit(build_dir, seed_website=True) as quarto_config:
-            quarto_yml.apply(quarto_config, done.contribution, config)
+        quarto_yml.apply(run.quarto_config, done.contribution, config)
 
 
 def shared_sidebars(run: Run, config: Config, layout: Layout, log: BuildLog) -> Outcome:
@@ -156,7 +162,7 @@ def shared_sidebars(run: Run, config: Config, layout: Layout, log: BuildLog) -> 
     Parameters
     ----------
     run
-        Build state indicating whether watch mode is active.
+        The build's watch status and Quarto configuration, updated with shared sidebars.
     config
         The project's configuration.
     layout
@@ -169,11 +175,8 @@ def shared_sidebars(run: Run, config: Config, layout: Layout, log: BuildLog) -> 
     :
         `None`; the result is a detail line of the previous step.
     """
-    build_dir = layout.build_dir
-    if (run.watch or not config.has_versions) and quarto_yml.path(build_dir).is_file():
-        quarto_config = quarto_yml.read(build_dir)
-        shared = shared_sidebar.prepare(build_dir, quarto_config)
+    if run.watch or not config.has_versions:
+        shared = shared_sidebar.prepare(layout.build_dir, run.quarto_config)
         if shared:
-            quarto_yml.write(build_dir, quarto_config)
             log.detail("Sharing rendered sidebar(s): " + ", ".join(shared))
     return None

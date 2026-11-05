@@ -79,9 +79,9 @@ def _write_api_reference(docs: GreatDocs) -> Outcome:
     :
         The step's outcome.
     """
-    outcome, _ = reference.api(
-        make_run(docs), docs._config, docs.layout, BuildLog(stream=io.StringIO())
-    )
+    quarto_config = quarto_yml.read(docs.build_dir)
+    run = make_run(docs, quarto_config=quarto_config, api_block=quarto_config["api-reference"])
+    outcome, _ = reference.api(run, docs._config, docs.layout, BuildLog(stream=io.StringIO()))
     return outcome
 
 
@@ -147,24 +147,31 @@ def test_api_imports_the_package_from_the_project_root(
     assert root in sys.path
 
 
-def test_api_retry_with_static_analysis_updates_the_configuration_and_the_build_state(
+def test_api_retry_with_static_analysis_disables_dynamic_introspection_in_the_configuration(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     """
-    Keep the build state's API reference configuration equal to the written one on retry
+    Disable dynamic introspection in memory before retrying with static analysis
     """
     docs = _source_linked_project(tmp_path / "static_retry", "static_retry", "main")
     monkeypatch.chdir(docs.build_dir)
-    block = quarto_yml.read(docs.build_dir)["api-reference"]
+    quarto_config = quarto_yml.read(docs.build_dir)
+    block = quarto_config["api-reference"]
     block["dynamic"] = True
-    run = make_run(docs, api_block=block)
+    run = make_run(docs, quarto_config=quarto_config, api_block=block)
+    dynamic: list[bool] = []
 
-    with patch.object(APIReference, "build", side_effect=[ImportError("dynamic"), None]):
+    def build(ref: APIReference) -> None:
+        dynamic.append(ref.settings.dynamic)
+        if len(dynamic) == 1:
+            raise ImportError("dynamic")
+
+    with patch.object(APIReference, "build", autospec=True, side_effect=build):
         outcome, _ = reference.api(run, docs._config, docs.layout, BuildLog(stream=io.StringIO()))
 
     assert outcome == "API reference generated (static analysis)"
-    assert run.api_block == {**block, "dynamic": False}
-    assert quarto_yml.read(docs.build_dir)["api-reference"] == run.api_block
+    assert dynamic == [True, False]
+    assert run.quarto_config["api-reference"]["dynamic"] is False
 
 
 def test_cli_reports_a_command_tree_without_pages(tmp_path: Path):

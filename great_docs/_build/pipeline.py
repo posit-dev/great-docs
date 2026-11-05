@@ -76,9 +76,13 @@ class Run:
         Whether the site has an API reference. Preparing the build directory sets it to
         `False` when the reference is disabled, the project is not a Python project, no
         package name is detected, or the package has nothing to document.
+    quarto_config
+        The site's Quarto configuration, empty until build directory preparation creates
+        the initial mapping. Preparation updates it in memory and writes the finished
+        configuration to `_quarto.yml` at the end.
     api_block
-        The `api-reference` block written to `_quarto.yml`, or `None` for a site
-        without an API reference.
+        The `api-reference` block of `quarto_config`, or `None` for a site without an API
+        reference.
     user_guide
         The user guide discovered during build preparation, or `None` when no guide
         pages were found.
@@ -93,6 +97,7 @@ class Run:
     watch: bool
     page_authors: list[dict[str, Any]]
     has_api_reference: bool = True
+    quarto_config: dict[str, Any] = field(default_factory=lambda: dict[str, Any]())
     api_block: dict[str, Any] | None = None
     user_guide: UserGuide | None = None
     contributions: list[Contribution] = field(default_factory=lambda: list[Contribution]())
@@ -465,7 +470,7 @@ def preparation_steps(
         ),
         Step(
             "Pre-render terminal recordings",
-            lambda: passes.terminal_recordings(config, layout, log),
+            lambda: passes.terminal_recordings(run, config, layout, log),
             quiet=False,
             listed=False,
         ),
@@ -473,6 +478,11 @@ def preparation_steps(
             "Share sidebars",
             lambda: passes.shared_sidebars(run, config, layout, log),
             quiet=False,
+            listed=False,
+        ),
+        Step(
+            "Write the site configuration",
+            lambda: site.write_quarto_config(run, layout),
             listed=False,
         ),
     ]

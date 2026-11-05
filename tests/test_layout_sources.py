@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 from urllib.parse import quote, unquote, urlsplit
 
 import pytest
-from yaml12 import read_yaml, write_yaml
+from yaml12 import write_yaml
 
 from great_docs import GreatDocs
 from great_docs._build import content as content_steps
@@ -317,7 +317,7 @@ def test_documentation_sources(source_project: tuple[Path, Path], explicit: bool
         assert (build / name).is_file(), name
     guide_name = "01-start.qmd" if explicit else "start.qmd"
     assert (build / "user-guide" / guide_name).is_file()
-    config = read_yaml(build / "_quarto.yml")
+    config = run.quarto_config
     assert config["project"]["output-dir"] == "_site"
     assert "scripts/prepare.py" in config["project"]["pre-render"]
     assert config["bibliography"] == "references.bib"
@@ -448,7 +448,7 @@ def test_api_reference_build_uses_selected_cwd(
 
     monkeypatch.setattr("great_docs._build.quarto.ensure_installed", lambda: None)
     monkeypatch.setattr(prepare, "build_directory", prepare_reference)
-    monkeypatch.setattr(APIReference, "__init__", lambda self, path, source_links: None)
+    monkeypatch.setattr(APIReference, "__init__", lambda self, config, source_links: None)
     monkeypatch.setattr(APIReference, "build", check_cwd)
     with pytest.raises(ReferenceReached):
         gd.build(refresh=False)

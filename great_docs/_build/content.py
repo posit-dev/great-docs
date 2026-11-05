@@ -535,16 +535,16 @@ def custom_pages(
 
 def assets(run: Run, config: Config, layout: Layout, *, remote: Remote) -> Outcome:
     """
-    Copy the project's `assets/` directory and merge the site settings into `_quarto.yml`
+    Copy project assets and merge site settings into the build's Quarto configuration
 
-    Merge settings even when the project has no `assets/` directory so navigation
-    and resources recorded by earlier build steps reach `_quarto.yml`. Pages refer to
-    copied assets under `assets/`.
+    Merge settings even without an `assets/` directory so the configuration includes
+    navigation and resources recorded by earlier build steps. Pages refer to copied assets
+    under `assets/`.
 
     Parameters
     ----------
     run
-        The current build.
+        The current build, whose Quarto configuration is changed in place.
     config
         The project's configuration.
     layout

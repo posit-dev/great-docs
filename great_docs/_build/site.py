@@ -2,7 +2,8 @@
 Site identity and Quarto configuration
 
 Resolve the site's identity, default search description and structured data from the
-project's configuration and metadata.
+project's configuration and metadata. Merge site settings into the build's Quarto
+configuration and write it to `_quarto.yml`.
 """
 
 from __future__ import annotations
@@ -23,7 +24,13 @@ if TYPE_CHECKING:
     from ..config import Config
     from .pipeline import Run
 
-__all__ = ["default_description", "identity", "structured_data", "update_quarto_config"]
+__all__ = [
+    "default_description",
+    "identity",
+    "structured_data",
+    "update_quarto_config",
+    "write_quarto_config",
+]
 
 
 def identity(config: Config, layout: Layout, project: Project) -> Identity:
@@ -100,19 +107,20 @@ def structured_data(run: Run, config: Config) -> StructuredData | None:
 
 def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Remote) -> None:
     """
-    Merge Great Docs settings into the build directory's `_quarto.yml`
+    Merge Great Docs settings into the build's Quarto configuration
 
-    Require an existing `_quarto.yml` with `project` and `format.html` mappings.
     Combine `great-docs.yml`, package metadata and GitHub data with recorded build
     contributions to configure render scripts, theme, resources and navigation.
     Apply contributions in build step order.
     Preserve unrelated settings.
 
+    Require `project` and `format.html` mappings in the Quarto configuration.
+
     Parameters
     ----------
     run
-        The build state: the recorded contributions, and the API reference availability
-        that the reference switcher needs.
+        The build's Quarto configuration to update in place, recorded contributions and
+        API reference availability for the reference switcher.
     config
         The project's configuration.
     layout
@@ -127,20 +135,17 @@ def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Re
     Raises
     ------
     FileNotFoundError
-        If the build directory has no `_quarto.yml`, or a header include file does not exist.
+        If a header include file does not exist.
     KeyError
-        If `_quarto.yml` lacks a `project` or `format.html` mapping, including when it is empty.
+        If the Quarto configuration lacks a `project` or `format.html` mapping.
     """
-    build_dir = layout.build_dir
-    quarto_config = quarto_yml.read(build_dir)
-
     repo = run.project.github
 
     assembly.assemble(
-        quarto_config,
+        run.quarto_config,
         config,
         layout,
-        build_dir,
+        layout.build_dir,
         repo=repo,
         facts=Facts.make(config, repo, remote),
         identity=run.identity,
@@ -152,6 +157,20 @@ def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Re
         warn=print_warning,
     )
 
-    quarto_yml.write(build_dir, quarto_config)
 
-    print(f"Updated {quarto_yml.path(build_dir)} with great-docs configuration")
+def write_quarto_config(run: Run, layout: Layout) -> None:
+    """
+    Write the build's Quarto configuration to `_quarto.yml`
+
+    Parameters
+    ----------
+    run
+        The build state holding the configuration.
+    layout
+        The project's directories.
+
+    Returns
+    -------
+    :
+    """
+    quarto_yml.write(layout.build_dir, run.quarto_config)

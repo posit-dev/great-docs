@@ -2121,12 +2121,12 @@ def test_the_assets_step_completes_the_quarto_configuration(tmp_path: Path, has_
     write_initial_quarto_yml(docs.build_dir)
     run = make_run(docs)
     update_quarto_config(docs, run)
-    assert "assets/**" not in read_quarto_yml(docs.build_dir)["project"]["resources"]
+    assert "assets/**" not in run.quarto_config["project"]["resources"]
 
     outcome = content.assets(run, docs._config, docs.layout, remote=docs._remote)
 
     assert outcome == ("Assets copied" if has_assets else Skipped("no assets directory"))
-    resources = read_quarto_yml(docs.build_dir)["project"]["resources"]
+    resources = run.quarto_config["project"]["resources"]
     assert ("assets/**" in resources) is has_assets
 
 
@@ -2146,11 +2146,10 @@ def test_the_assets_step_adds_the_recorded_contributions_before_ordering_the_nav
     write_initial_quarto_yml(docs.build_dir)
     run = make_run(docs)
     update_quarto_config(docs, run)
-    with edit_quarto_yml(docs.build_dir) as quarto_config:
-        quarto_config["website"]["navbar"]["left"] = [{"text": "Examples", "href": "ex.qmd"}]
+    run.quarto_config["website"]["navbar"]["left"] = [{"text": "Examples", "href": "ex.qmd"}]
     run.contributions.append(Contribution(navbar=(NavbarLink("Changelog", "changelog.qmd"),)))
 
     _ = content.assets(run, docs._config, docs.layout, remote=docs._remote)
 
-    left = read_quarto_yml(docs.build_dir)["website"]["navbar"]["left"]
+    left = run.quarto_config["website"]["navbar"]["left"]
     assert [item["text"] for item in left] == ["Changelog", "Examples"]

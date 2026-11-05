@@ -14,8 +14,8 @@ from great_docs._term_player.prerender import (
     render_recordings,
 )
 from great_docs._term_player.transcript import TRANSCRIPT_FILE
-from great_docs._website import quarto_yml
 from great_docs.core import GreatDocs
+from tests.support import make_run
 
 # Delays are relative to the previous event: output at 0s, 1s, 2s and 4s
 EVENTS = [
@@ -75,10 +75,11 @@ def test_build_step_registers_the_output_as_a_resource(tmp_path: Path):
     (tmp_path / "great-docs.yml").write_text("{}\n", encoding="utf-8")
     _write(tmp_path / "demos")
     docs = GreatDocs(project_path=str(tmp_path))
+    run = make_run(docs)
     stream = io.StringIO()
-    passes.terminal_recordings(docs._config, docs.layout, BuildLog(stream=stream))
+    passes.terminal_recordings(run, docs._config, docs.layout, BuildLog(stream=stream))
     assert (docs.build_dir / "termshow" / "demos" / "demo" / "manifest.json").exists()
-    assert quarto_yml.read(docs.build_dir)["project"]["resources"] == ["termshow/**"]
+    assert run.quarto_config["project"]["resources"] == ["termshow/**"]
     assert "Pre-rendered 1 terminal recording(s)" in stream.getvalue()
 
 
@@ -94,7 +95,9 @@ def test_build_step_leaves_out_recordings_that_are_not_documentation(tmp_path):
     for foreign in (".git", ".venv", "venv/lib", "node_modules/tool", "great-docs-v1/demos"):
         _write(tmp_path / foreign)
     docs = GreatDocs(project_path=str(tmp_path))
-    passes.terminal_recordings(docs._config, docs.layout, BuildLog(stream=io.StringIO()))
+    passes.terminal_recordings(
+        make_run(docs), docs._config, docs.layout, BuildLog(stream=io.StringIO())
+    )
     rendered = docs.build_dir / "termshow"
     found = sorted(
         p.parent.relative_to(rendered).as_posix() for p in rendered.rglob("manifest.json")

@@ -1,9 +1,9 @@
 """
 Build directory preparation
 
-Replace the build directory with a fresh Quarto project containing the site's configuration,
-assets, scripts, stylesheets and bibliography. Configure the API reference and write the
-homepage and project pages.
+Replace the build directory with a fresh Quarto project containing the initial site
+configuration, assets, scripts, stylesheets and bibliography. Configure the API reference
+and write the homepage and project pages.
 """
 
 from __future__ import annotations
@@ -53,8 +53,8 @@ def build_directory(
     Parameters
     ----------
     run
-        The current build, updated with API reference availability, reference navigation
-        and the discovered user guide.
+        The current build, updated with the initial Quarto configuration, API reference
+        availability, reference navigation and the discovered user guide.
     config
         The project's configuration.
     layout
@@ -87,7 +87,7 @@ def build_directory(
         shutil.rmtree(build_dir)
 
     build_dir.mkdir(parents=True, exist_ok=True)
-    quarto_yml.write_initial(build_dir)
+    run.quarto_config = quarto_yml.write_initial(build_dir)
 
     scripts_dir = build_dir / "scripts"
     scripts_dir.mkdir(exist_ok=True)
@@ -163,7 +163,7 @@ def build_directory(
     with open(build_dir / "_gd_options.json", "w") as f:
         json.dump(gd_options, f)
 
-    reference.add_api_block(run, config, layout)
+    reference.add_api_block(run, config)
     if run.api_block is not None:
         run.contributions.append(reference_sections.contribution(config, run.api_block))
 
