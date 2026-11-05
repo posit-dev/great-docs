@@ -447,7 +447,7 @@ class GreatDocs:
         files: list[Path] = []
         if include_source:
             project = Project.make(self._config, self.layout)
-            if project.name and project.importable_name:
+            if project.importable_name:
                 files += proofread.find_modules(self.layout, project.importable_name)
         if include_docs:
             files += proofread.find_pages(self._config, self.layout, report=print_warning)
@@ -559,7 +559,7 @@ class GreatDocs:
             files = proofread.find_pages(self._config, self.layout, report=print_warning)
         if include_docstrings:
             project = Project.make(self._config, self.layout)
-            if project.name and project.importable_name:
+            if project.importable_name:
                 files += proofread.find_modules(self.layout, project.importable_name)
 
         options = proofread.Options(

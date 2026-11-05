@@ -826,3 +826,41 @@ def test_proofread_command_reads_the_authored_pages_the_build_publishes(
 
     assert result.exit_code == 0, result.output
     assert checked == [*AUTHORED_PAGES, "src/demo/__init__.py"]
+
+
+def _write_unnamed_project(root: Path) -> None:
+    """
+    Write a project with a configured module and no distribution name
+    """
+    (root / "great-docs.yml").write_text("module: beta\n")
+    for package in ("alpha", "beta"):
+        (root / package).mkdir()
+        (root / package / "__init__.py").write_text(f'"""The {package} package"""\n')
+
+
+def test_proofread_reads_the_configured_module_of_a_project_without_a_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    _write_unnamed_project(tmp_path)
+    checked = _record_checked_files(monkeypatch)
+
+    GreatDocs(project_path=tmp_path).proofread(include_docs=False, include_docstrings=True)
+
+    assert checked == ["beta/__init__.py"]
+
+
+def test_proofread_command_reads_the_configured_module_of_a_project_without_a_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    _write_unnamed_project(tmp_path)
+    checked = _record_checked_files(monkeypatch)
+    monkeypatch.setattr(
+        "great_docs._checks.harper.check_harper_available", lambda: (True, "harper-cli")
+    )
+
+    result = CliRunner().invoke(
+        cli, ["proofread", "--project-path", str(tmp_path), "--include-docstrings"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert checked == ["beta/__init__.py"]

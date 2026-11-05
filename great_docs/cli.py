@@ -2577,7 +2577,7 @@ def proofread(
                 )
             if include_docstrings:
                 project = Project.make(config, layout)
-                if project.name and project.importable_name:
+                if project.importable_name:
                     files_to_check += proofreading.find_modules(layout, project.importable_name)
 
         if not files_to_check:
