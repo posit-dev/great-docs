@@ -4006,7 +4006,9 @@ class TestFreezeFileSearchFallback:
                 ["freeze", "missing.qmd", "--project-path", str(tmp_path)],
             )
         assert "not found in build directory" in result.output
-        assert "Hint" in result.output
+        # Freeze prepares the build directory itself, so running a build first cannot help.
+        assert "great-docs build" not in result.output
+        assert "does not publish this page" in result.output
 
 
 class TestFreezePersistCache:
