@@ -293,6 +293,17 @@ The Package Info page is enabled by default. To disable it, add to `great-docs.y
 package_info_page: false
 ```
 
+The "Last Published" column requires one PyPI request per dependency on each build. Set
+`release_dates` to `false` to keep the page, omit that column and skip those requests:
+
+```{.yaml filename="docs/great-docs.yml"}
+package_info_page:
+  release_dates: false
+```
+
+The mapping also accepts `enabled`, which defaults to `true`. Set `package_info_page: false`
+as shorthand for `package_info_page: {enabled: false}`.
+
 ### Accessing the Page
 
 The Package Info page is accessible via a "Package Info" link in the **Meta** section of the
