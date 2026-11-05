@@ -6,12 +6,13 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 
 import pytest
-from yaml12 import parse_yaml, read_yaml
+from yaml12 import format_yaml, parse_yaml
 
 from great_docs._api_diff import ApiSnapshot, ParameterInfo, SymbolInfo
 from great_docs._layout import Layout
 from great_docs._utils import QUARTO_YML_HEADER, is_great_docs_build_dir
 from great_docs._versions.build import (
+    _adjust_quarto_config_for_version,
     _clean_stale_version_dirs,
     _compute_excluded_section_dirs,
     _in_excluded_section,
@@ -26,7 +27,6 @@ from great_docs._versions.build import (
     _published_claims,
     _rebuild_api_from_snapshot,
     _redirect_page,
-    _rewrite_quarto_yml_for_version,
     _snapshot_cache_path,
     _validate_git_ref_is_tag,
     _version_build_dir,
@@ -42,7 +42,7 @@ from great_docs._versions.build import (
     write_version_map,
 )
 from great_docs._versions.model import VersionEntry, parse_versions_config
-from great_docs._website import prerender
+from great_docs._website import prerender, quarto_yml
 
 if TYPE_CHECKING:
     from great_docs.config import Config
@@ -222,7 +222,7 @@ class TestPreprocessVersion:
         versions = self._setup_versions()
         dest = tmp_path / "build"
         pages = preprocess_version(
-            source, dest, versions[0], versions, layout=Layout.make(tmp_path)
+            source, dest, versions[0], versions, layout=Layout.make(tmp_path), quarto_config={}
         )
 
         assert "index.html" in pages
@@ -245,14 +245,14 @@ class TestPreprocessVersion:
         # Build for 0.3 — should include new-feature
         dest1 = tmp_path / "build1"
         pages1 = preprocess_version(
-            source, dest1, versions[0], versions, layout=Layout.make(tmp_path)
+            source, dest1, versions[0], versions, layout=Layout.make(tmp_path), quarto_config={}
         )
         assert "new-feature.html" in pages1
 
         # Build for 0.2 — should exclude new-feature
         dest2 = tmp_path / "build2"
         pages2 = preprocess_version(
-            source, dest2, versions[1], versions, layout=Layout.make(tmp_path)
+            source, dest2, versions[1], versions, layout=Layout.make(tmp_path), quarto_config={}
         )
         assert "new-feature.html" not in pages2
         assert not (dest2 / "new-feature.qmd").exists()
@@ -279,14 +279,18 @@ class TestPreprocessVersion:
 
         # Build for 0.3
         dest1 = tmp_path / "build1"
-        preprocess_version(source, dest1, versions[0], versions, layout=Layout.make(tmp_path))
+        preprocess_version(
+            source, dest1, versions[0], versions, layout=Layout.make(tmp_path), quarto_config={}
+        )
         content1 = (dest1 / "page.qmd").read_text()
         assert "New in 0.3!" in content1
         assert "Old content." not in content1
 
         # Build for 0.2
         dest2 = tmp_path / "build2"
-        preprocess_version(source, dest2, versions[1], versions, layout=Layout.make(tmp_path))
+        preprocess_version(
+            source, dest2, versions[1], versions, layout=Layout.make(tmp_path), quarto_config={}
+        )
         content2 = (dest2 / "page.qmd").read_text()
         assert "New in 0.3!" not in content2
         assert "Old content." in content2
@@ -317,7 +321,13 @@ class TestPreprocessVersion:
         for i, entry in enumerate(versions[:2]):
             dest = tmp_path / f"build{i}"
             preprocess_version(
-                source, dest, entry, versions, config=config, layout=Layout.make(tmp_path)
+                source,
+                dest,
+                entry,
+                versions,
+                config=config,
+                layout=Layout.make(tmp_path),
+                quarto_config={},
             )
             prerender.write_page_metadata(dest, config, None, None)
             front_matter = (dest / "page.qmd").read_text().split("---")[1]
@@ -341,7 +351,7 @@ class TestPreprocessVersion:
         versions = self._setup_versions()
         dest = tmp_path / "build"
         pages = preprocess_version(
-            source, dest, versions[0], versions, layout=Layout.make(tmp_path)
+            source, dest, versions[0], versions, layout=Layout.make(tmp_path), quarto_config={}
         )
 
         # _quarto.yml should NOT be in pages (it starts with _)
@@ -396,6 +406,7 @@ class TestPreprocessVersion:
             versions,
             project_root=tmp_path,
             layout=Layout.make(tmp_path),
+            quarto_config={},
         )
 
         # Should have generated API reference pages
@@ -471,6 +482,7 @@ class TestPreprocessVersion:
             versions,
             project_root=tmp_path,
             layout=Layout.make(tmp_path),
+            quarto_config={},
         )
 
         assert "reference/MyClass.html" in pages
@@ -511,7 +523,13 @@ class TestPreprocessVersion:
 
         dest = tmp_path / "build"
         preprocess_version(
-            source, dest, versions[1], versions, project_root=tmp_path, layout=Layout.make(tmp_path)
+            source,
+            dest,
+            versions[1],
+            versions,
+            project_root=tmp_path,
+            layout=Layout.make(tmp_path),
+            quarto_config={},
         )
 
         assert not (dest / "reference" / "new_func.qmd").exists()
@@ -524,7 +542,7 @@ class TestPreprocessVersion:
         versions = self._setup_versions()
 
         pages = preprocess_version(
-            source, source, versions[0], versions, layout=Layout.make(tmp_path)
+            source, source, versions[0], versions, layout=Layout.make(tmp_path), quarto_config={}
         )
 
         assert (source / "index.qmd").is_file()
@@ -743,6 +761,7 @@ class TestSectionVersionScoping:
             versions,
             section_configs=sections,
             layout=layout,
+            quarto_config={},
         )
         assert "recipes/01-basic.html" in pages1
 
@@ -755,6 +774,7 @@ class TestSectionVersionScoping:
             versions,
             section_configs=sections,
             layout=layout,
+            quarto_config={},
         )
         assert "recipes/01-basic.html" not in pages2
         assert "guide/intro.html" in pages2
@@ -784,6 +804,7 @@ class TestSectionVersionScoping:
                 versions,
                 section_configs=sections,
                 layout=Layout.make(tmp_path),
+                quarto_config={},
             )
             for entry in versions
         }
@@ -822,6 +843,7 @@ class TestSectionVersionScoping:
             versions,
             section_configs=sections,
             layout=layout,
+            quarto_config={},
         )
 
         assert sorted(pages) == ["guides/intro.html", "user-guide/recipes/basic.html"]
@@ -863,6 +885,7 @@ class TestSectionVersionScoping:
             {"dir": "migrations", "versions": ["0.3"]},
         ]
         dest = tmp_path / "build-0.2"
+        quarto_config = quarto_yml.read(source)
 
         preprocess_version(
             source,
@@ -871,10 +894,10 @@ class TestSectionVersionScoping:
             versions,
             section_configs=sections,
             layout=Layout.make(tmp_path),
+            quarto_config=quarto_config,
         )
 
-        navbar = read_yaml(dest / "_quarto.yml")["website"]["navbar"]
-        assert navbar == {
+        assert quarto_config["website"]["navbar"] == {
             "left": [
                 {"text": "Guide", "href": "guide/intro.qmd"},
                 {"text": "More", "menu": ["guide/faq.qmd"]},
@@ -1187,8 +1210,9 @@ class TestSyncStatusInlineScript:
     Upcoming page data in versioned Quarto configuration
     """
 
-    def _make_quarto_yml(self, tmp_path, include_js_inline=True):
-        """Create a _quarto.yml with __GD_STATUS_DATA__ inline script."""
+    @staticmethod
+    def _quarto_config(include_js_inline=True) -> dict:
+        """Return a Quarto configuration with the `__GD_STATUS_DATA__` inline script"""
         import json
 
         status_data = {
@@ -1210,14 +1234,14 @@ class TestSyncStatusInlineScript:
             lines.append(
                 "      - text: '<script>// var upcoming = window.__GD_UPCOMING_DATA__;</script>'"
             )
-        (tmp_path / "_quarto.yml").write_text("\n".join(lines))
+        return parse_yaml("\n".join(lines))
 
     def test_injects_upcoming_data(self, tmp_path):
         import json
 
         from great_docs._versions.build import _add_upcoming_status_data
 
-        self._make_quarto_yml(tmp_path)
+        quarto_config = self._quarto_config()
         status_path = tmp_path / "_page_status.json"
         status_path.write_text(
             json.dumps(
@@ -1228,17 +1252,17 @@ class TestSyncStatusInlineScript:
                 }
             )
         )
-        _add_upcoming_status_data(tmp_path)
-        yml = (tmp_path / "_quarto.yml").read_text()
+        _add_upcoming_status_data(quarto_config, tmp_path)
+        yml = format_yaml(quarto_config)
         assert "<script>window.__GD_UPCOMING_DATA__=" in yml
-        assert '"user-guide/feature.qmd": "0.8"' in str(read_yaml(tmp_path / "_quarto.yml"))
+        assert '"user-guide/feature.qmd": "0.8"' in str(quarto_config)
 
     def test_does_not_double_inject(self, tmp_path):
         import json
 
         from great_docs._versions.build import _add_upcoming_status_data
 
-        self._make_quarto_yml(tmp_path)
+        quarto_config = self._quarto_config()
         status_path = tmp_path / "_page_status.json"
         status_path.write_text(
             json.dumps(
@@ -1249,9 +1273,9 @@ class TestSyncStatusInlineScript:
                 }
             )
         )
-        _add_upcoming_status_data(tmp_path)
-        _add_upcoming_status_data(tmp_path)
-        yml = (tmp_path / "_quarto.yml").read_text()
+        _add_upcoming_status_data(quarto_config, tmp_path)
+        _add_upcoming_status_data(quarto_config, tmp_path)
+        yml = format_yaml(quarto_config)
         assert yml.count("<script>window.__GD_UPCOMING_DATA__=") == 1
 
     def test_no_upcoming_pages_skips(self, tmp_path):
@@ -1259,20 +1283,20 @@ class TestSyncStatusInlineScript:
 
         from great_docs._versions.build import _add_upcoming_status_data
 
-        self._make_quarto_yml(tmp_path)
+        quarto_config = self._quarto_config()
         status_path = tmp_path / "_page_status.json"
         status_path.write_text(json.dumps({"page_statuses": {}, "definitions": {}}))
-        _add_upcoming_status_data(tmp_path)
-        yml = (tmp_path / "_quarto.yml").read_text()
+        _add_upcoming_status_data(quarto_config, tmp_path)
+        yml = format_yaml(quarto_config)
         assert "__GD_UPCOMING_DATA__=" not in yml
 
     def test_missing_status_json_skips(self, tmp_path):
         from great_docs._versions.build import _add_upcoming_status_data
 
-        self._make_quarto_yml(tmp_path)
+        quarto_config = self._quarto_config()
         # No _page_status.json
-        _add_upcoming_status_data(tmp_path)
-        yml = (tmp_path / "_quarto.yml").read_text()
+        _add_upcoming_status_data(quarto_config, tmp_path)
+        yml = format_yaml(quarto_config)
         assert "__GD_UPCOMING_DATA__=" not in yml
 
     def test_no_status_data_script_skips(self, tmp_path):
@@ -1280,8 +1304,7 @@ class TestSyncStatusInlineScript:
 
         from great_docs._versions.build import _add_upcoming_status_data
 
-        # _quarto.yml without __GD_STATUS_DATA__ script tag
-        (tmp_path / "_quarto.yml").write_text(
+        quarto_config = parse_yaml(
             "format:\n  html:\n    include-after-body:\n      - somefile.js\n"
         )
         (tmp_path / "_page_status.json").write_text(
@@ -1293,8 +1316,8 @@ class TestSyncStatusInlineScript:
                 }
             )
         )
-        _add_upcoming_status_data(tmp_path)
-        yml = (tmp_path / "_quarto.yml").read_text()
+        _add_upcoming_status_data(quarto_config, tmp_path)
+        yml = format_yaml(quarto_config)
         assert "__GD_UPCOMING_DATA__=" not in yml
 
     def test_not_confused_by_js_reference(self, tmp_path):
@@ -1303,7 +1326,7 @@ class TestSyncStatusInlineScript:
 
         from great_docs._versions.build import _add_upcoming_status_data
 
-        self._make_quarto_yml(tmp_path, include_js_inline=True)
+        quarto_config = self._quarto_config(include_js_inline=True)
         status_path = tmp_path / "_page_status.json"
         status_path.write_text(
             json.dumps(
@@ -1314,8 +1337,8 @@ class TestSyncStatusInlineScript:
                 }
             )
         )
-        _add_upcoming_status_data(tmp_path)
-        yml = (tmp_path / "_quarto.yml").read_text()
+        _add_upcoming_status_data(quarto_config, tmp_path)
+        yml = format_yaml(quarto_config)
         # Should still inject despite the JS reference existing
         assert "<script>window.__GD_UPCOMING_DATA__=" in yml
 
@@ -1412,7 +1435,7 @@ class TestGenerateRedirectFiles:
 
 
 # ---------------------------------------------------------------------------
-# Canonical URL injection (via _rewrite_quarto_yml_for_version)
+# Canonical URL configuration
 # ---------------------------------------------------------------------------
 
 
@@ -1422,36 +1445,25 @@ class TestCanonicalUrlInjection:
     """
 
     @staticmethod
-    def _rewritten(tmp_path: Path, entry, latest_tag: str) -> dict:
-        from yaml12 import read_yaml, write_yaml
-
-        from great_docs._versions.build import _rewrite_quarto_yml_for_version
-
-        dest = tmp_path / entry.tag
-        dest.mkdir()
-        with open(dest / "_quarto.yml", "w") as f:
-            write_yaml(
-                {
-                    "project": {"type": "website"},
-                    "filters": ["interlinks", "page-url"],
-                    "gd-base-url": "https://example.com/pkg/",
-                    "website": {"title": "Test", "site-url": "https://example.com/pkg/"},
-                },
-                f,
-            )
-        _rewrite_quarto_yml_for_version(dest, entry, latest_tag)
-        with open(dest / "_quarto.yml") as f:
-            return read_yaml(f)
+    def _rewritten(entry, latest_tag: str) -> dict:
+        quarto_config = {
+            "project": {"type": "website"},
+            "filters": ["interlinks", "page-url"],
+            "gd-base-url": "https://example.com/pkg/",
+            "website": {"title": "Test", "site-url": "https://example.com/pkg/"},
+        }
+        _adjust_quarto_config_for_version(quarto_config, entry, latest_tag)
+        return quarto_config
 
     def test_older_version_keeps_the_latest_base_address(self, tmp_path: Path):
-        old = self._rewritten(tmp_path, _make_entry("0.1"), "0.2")
+        old = self._rewritten(_make_entry("0.1"), "0.2")
         assert old["filters"] == ["interlinks", "page-url"]
         assert old["gd-base-url"] == "https://example.com/pkg/"
         assert old["website"]["site-url"] == "https://example.com/pkg/v/0.1/"
         assert "include-in-header" not in old.get("format", {}).get("html", {})
 
     def test_latest_version_keeps_the_filter(self, tmp_path: Path):
-        latest = self._rewritten(tmp_path, _make_entry("0.2", latest=True), "0.2")
+        latest = self._rewritten(_make_entry("0.2", latest=True), "0.2")
         assert latest["filters"] == ["interlinks", "page-url"]
         assert latest["gd-base-url"] == "https://example.com/pkg/"
 
@@ -1464,66 +1476,36 @@ class TestCanonicalUrlInjection:
 class TestSiteUrlVersionAdjustment:
     def test_non_latest_adjusts_site_url(self, tmp_path: Path):
         """Non-latest versions get site-url with /v/<tag>/ appended."""
-        from great_docs._versions.build import _rewrite_quarto_yml_for_version
-
-        dest = tmp_path / "v02"
-        dest.mkdir()
-        (dest / "_quarto.yml").write_text(
+        result = parse_yaml(
             "project:\n  type: website\n  output-dir: _site\n"
             "format:\n  html: {}\nwebsite:\n  title: Test\n"
             "  site-url: 'http://myserver:3838/data-team/mypkg/'\n",
-            encoding="utf-8",
         )
         entry = _make_entry("0.2")
-        _rewrite_quarto_yml_for_version(dest, entry, "0.3")
-
-        from yaml12 import read_yaml
-
-        with open(dest / "_quarto.yml") as f:
-            result = read_yaml(f)
+        _adjust_quarto_config_for_version(result, entry, "0.3")
 
         assert result["website"]["site-url"] == "http://myserver:3838/data-team/mypkg/v/0.2/"
 
     def test_latest_keeps_site_url_unchanged(self, tmp_path: Path):
         """Latest version keeps the original site-url as-is."""
-        from great_docs._versions.build import _rewrite_quarto_yml_for_version
-
-        dest = tmp_path / "root"
-        dest.mkdir()
-        (dest / "_quarto.yml").write_text(
+        result = parse_yaml(
             "project:\n  type: website\n  output-dir: _site\n"
             "format:\n  html: {}\nwebsite:\n  title: Test\n"
             "  site-url: 'http://myserver:3838/data-team/mypkg/'\n",
-            encoding="utf-8",
         )
         entry = _make_entry("0.3", latest=True)
-        _rewrite_quarto_yml_for_version(dest, entry, "0.3")
-
-        from yaml12 import read_yaml
-
-        with open(dest / "_quarto.yml") as f:
-            result = read_yaml(f)
+        _adjust_quarto_config_for_version(result, entry, "0.3")
 
         assert result["website"]["site-url"] == "http://myserver:3838/data-team/mypkg/"
 
     def test_no_site_url_in_config_no_adjustment(self, tmp_path: Path):
         """When site-url is not in _quarto.yml, nothing is injected."""
-        from great_docs._versions.build import _rewrite_quarto_yml_for_version
-
-        dest = tmp_path / "v02"
-        dest.mkdir()
-        (dest / "_quarto.yml").write_text(
+        result = parse_yaml(
             "project:\n  type: website\n  output-dir: _site\n"
             "format:\n  html: {}\nwebsite:\n  title: Test\n",
-            encoding="utf-8",
         )
         entry = _make_entry("0.2")
-        _rewrite_quarto_yml_for_version(dest, entry, "0.3")
-
-        from yaml12 import read_yaml
-
-        with open(dest / "_quarto.yml") as f:
-            result = read_yaml(f)
+        _adjust_quarto_config_for_version(result, entry, "0.3")
 
         assert "site-url" not in result.get("website", {})
 
@@ -1566,7 +1548,7 @@ class TestRebuildApiFromGitRefCustomCacheDir:
             "great_docs._versions.build._validate_git_ref_is_tag",
             return_value=True,
         ):
-            pages = _rebuild_api_from_git_ref(dest, tmp_path, entry, config)
+            pages = _rebuild_api_from_git_ref(dest, tmp_path, entry, config, quarto_config={})
 
         assert "reference/my_func.html" in pages
         assert not (tmp_path / ".great-docs-cache").exists()
@@ -1607,7 +1589,7 @@ class TestPruneCliPagesForVersionCustomCacheDir:
         (cli_dir / "build.qmd").write_text("Build command")
         (cli_dir / "old_command.qmd").write_text("Old command")
 
-        _prune_cli_pages_for_version(tmp_path, tmp_path, entry, config)
+        _prune_cli_pages_for_version(tmp_path, tmp_path, entry, config, quarto_config={})
 
         assert (cli_dir / "build.qmd").exists()
         assert (cli_dir / "index.qmd").exists()
@@ -1722,7 +1704,7 @@ class TestPruneCliPages:
         class MockSnap:
             cli_commands = type("CLI", (), {"subcommands": [MockCmd()]})()
 
-        _prune_cli_pages(tmp_path, MockSnap())
+        _prune_cli_pages(tmp_path, MockSnap(), quarto_config={})
 
         assert (cli_dir / "index.qmd").exists()
         assert (cli_dir / "build.qmd").exists()
@@ -1734,7 +1716,7 @@ class TestPruneCliPages:
         class MockSnap:
             cli_commands = None
 
-        _prune_cli_pages(tmp_path, MockSnap())  # Should not raise
+        _prune_cli_pages(tmp_path, MockSnap(), quarto_config={})  # Should not raise
 
     def test_no_cli_commands_does_nothing(self, tmp_path: Path):
         from great_docs._versions.build import _prune_cli_pages
@@ -1746,7 +1728,7 @@ class TestPruneCliPages:
         class MockSnap:
             cli_commands = None
 
-        _prune_cli_pages(tmp_path, MockSnap())
+        _prune_cli_pages(tmp_path, MockSnap(), quarto_config={})
         assert (cli_dir / "build.qmd").exists()
 
 
@@ -1783,11 +1765,8 @@ class TestRewriteCliIndex:
 
 class TestPruneQuartoCliSidebar:
     def test_removes_invalid_sidebar_entries(self, tmp_path: Path):
-        from yaml12 import format_yaml, parse_yaml
-
         from great_docs._versions.build import _prune_quarto_cli_sidebar
 
-        quarto = tmp_path / "_quarto.yml"
         config = {
             "website": {
                 "sidebar": [
@@ -1802,11 +1781,10 @@ class TestPruneQuartoCliSidebar:
                 ]
             }
         }
-        quarto.write_text(format_yaml(config), encoding="utf-8")
 
-        _prune_quarto_cli_sidebar(tmp_path, {"index", "build"})
+        _prune_quarto_cli_sidebar(config, {"index", "build"})
 
-        result = parse_yaml(quarto.read_text())
+        result = config
         contents = result["website"]["sidebar"][0]["contents"]
         stems = [Path(c).stem for c in contents]
         assert "build" in stems
@@ -2052,11 +2030,8 @@ class TestPruneReferenceIndex:
 
 class TestPruneQuartoSidebar:
     def test_removes_invalid_reference_entries(self, tmp_path: Path):
-        from yaml12 import format_yaml, parse_yaml
-
         from great_docs._versions.build import _prune_quarto_sidebar
 
-        quarto = tmp_path / "_quarto.yml"
         config = {
             "website": {
                 "sidebar": [
@@ -2071,11 +2046,10 @@ class TestPruneQuartoSidebar:
                 ]
             }
         }
-        quarto.write_text(format_yaml(config), encoding="utf-8")
 
-        _prune_quarto_sidebar(tmp_path, "reference", {"MyFunc", "MyClass"})
+        _prune_quarto_sidebar(config, "reference", {"MyFunc", "MyClass"})
 
-        result = parse_yaml(quarto.read_text())
+        result = config
         contents = result["website"]["sidebar"][0]["contents"]
         stems = [Path(c).stem for c in contents]
         assert "MyFunc" in stems
@@ -2083,11 +2057,8 @@ class TestPruneQuartoSidebar:
         assert "OldFunc" not in stems
 
     def test_removes_empty_section_groups(self, tmp_path: Path):
-        from yaml12 import format_yaml, parse_yaml
-
         from great_docs._versions.build import _prune_quarto_sidebar
 
-        quarto = tmp_path / "_quarto.yml"
         config = {
             "website": {
                 "sidebar": [
@@ -2104,47 +2075,14 @@ class TestPruneQuartoSidebar:
                 ]
             }
         }
-        quarto.write_text(format_yaml(config), encoding="utf-8")
 
-        _prune_quarto_sidebar(tmp_path, "reference", {"Kept"})
+        _prune_quarto_sidebar(config, "reference", {"Kept"})
 
-        result = parse_yaml(quarto.read_text())
+        result = config
         contents = result["website"]["sidebar"][0]["contents"]
         # The section group with "OldFunc" should be removed
         assert len(contents) == 1
         assert contents[0] == "reference/Kept.qmd"
-
-
-@pytest.mark.parametrize(
-    "prune",
-    [
-        lambda dest: _prune_quarto_cli_sidebar(dest, {"index"}),
-        _prune_missing_sidebar_pages,
-        lambda dest: _prune_quarto_sidebar(dest, "reference", {"Kept"}),
-    ],
-    ids=["cli", "missing-pages", "reference"],
-)
-def test_sidebar_pruning_keeps_generated_header(tmp_path: Path, prune):
-    # Each pruner drops a different stale entry from this one sidebar
-    (tmp_path / "reference").mkdir()
-    (tmp_path / "reference" / "Kept.qmd").write_text("", encoding="utf-8")
-    quarto_yml = tmp_path / "_quarto.yml"
-    seeded = (
-        QUARTO_YML_HEADER
-        + "website:\n"
-        + "  sidebar:\n"
-        + "    - id: cli-reference\n"
-        + "      contents:\n"
-        + "        - reference/cli/old.qmd\n"
-        + "        - reference/Old.qmd\n"
-        + "        - reference/Kept.qmd\n"
-    )
-    quarto_yml.write_text(seeded, encoding="utf-8")
-
-    prune(tmp_path)
-
-    assert quarto_yml.read_text(encoding="utf-8") != seeded
-    assert is_great_docs_build_dir(tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -2194,7 +2132,7 @@ class TestRebuildApiFromGitRef:
 
         entry = _make_entry("0.2")
         entry = VersionEntry(tag="0.2", label="0.2", latest=False, git_ref=None)
-        result = _rebuild_api_from_git_ref(tmp_path, tmp_path, entry)
+        result = _rebuild_api_from_git_ref(tmp_path, tmp_path, entry, quarto_config={})
         assert result == []
 
     def test_invalid_tag_warns_and_returns_empty(self, tmp_path: Path):
@@ -2206,7 +2144,7 @@ class TestRebuildApiFromGitRef:
 
         with patch("great_docs._versions.build._validate_git_ref_is_tag", return_value=False):
             with pytest.warns(UserWarning, match="not a valid tag"):
-                result = _rebuild_api_from_git_ref(tmp_path, tmp_path, entry)
+                result = _rebuild_api_from_git_ref(tmp_path, tmp_path, entry, quarto_config={})
         assert result == []
 
 
@@ -2348,8 +2286,7 @@ class TestSyncStatusInlineScriptIndentation:
         status_data = {"upcoming_pages": {"guide.qmd": "0.4"}}
         (tmp_path / "_page_status.json").write_text(json.dumps(status_data), encoding="utf-8")
 
-        # _quarto.yml with indented status data line
-        yml_content = (
+        quarto_config = parse_yaml(
             "project:\n"
             "  type: website\n"
             "format:\n"
@@ -2358,11 +2295,10 @@ class TestSyncStatusInlineScriptIndentation:
             "      - text: '<script>window.__GD_STATUS_DATA__={};'\n"
             "      - text: 'other'\n"
         )
-        (tmp_path / "_quarto.yml").write_text(yml_content, encoding="utf-8")
 
-        _add_upcoming_status_data(tmp_path)
+        _add_upcoming_status_data(quarto_config, tmp_path)
 
-        result = (tmp_path / "_quarto.yml").read_text()
+        result = format_yaml(quarto_config)
         assert "__GD_UPCOMING_DATA__" in result
         # Verify indentation matches — the injected line should start with same indent
         lines = result.split("\n")
@@ -2374,9 +2310,9 @@ class TestSyncStatusInlineScriptIndentation:
         from great_docs._versions.build import _add_upcoming_status_data
 
         (tmp_path / "_page_status.json").write_text("bad json!", encoding="utf-8")
-        (tmp_path / "_quarto.yml").write_text("project:\n  type: website\n")
-        # Should not raise
-        _add_upcoming_status_data(tmp_path)
+        quarto_config = {"project": {"type": "website"}}
+        _add_upcoming_status_data(quarto_config, tmp_path)
+        assert quarto_config == {"project": {"type": "website"}}
 
 
 # ---------------------------------------------------------------------------
@@ -2388,8 +2324,7 @@ class TestPruneMissingSidebarPagesFull:
     def test_prunes_via_yaml12(self, tmp_path: Path):
         from great_docs._versions.build import _prune_missing_sidebar_pages
 
-        # Create a _quarto.yml with sidebar referencing pages
-        yml_content = {
+        quarto_config = {
             "project": {"type": "website"},
             "website": {
                 "sidebar": [
@@ -2403,38 +2338,24 @@ class TestPruneMissingSidebarPagesFull:
                 ]
             },
         }
-        from yaml12 import write_yaml
-
-        with open(tmp_path / "_quarto.yml", "w", encoding="utf-8") as f:
-            write_yaml(yml_content, f)
-
         # Only guide.qmd exists, removed.qmd and ref.qmd don't
         (tmp_path / "guide.qmd").write_text("---\ntitle: Guide\n---\n")
 
-        _prune_missing_sidebar_pages(tmp_path)
+        _prune_missing_sidebar_pages(quarto_config, tmp_path)
 
-        from yaml12 import read_yaml
-
-        with open(tmp_path / "_quarto.yml", "r", encoding="utf-8") as f:
-            result = read_yaml(f)
-
-        contents = result["website"]["sidebar"][0]["contents"]
+        contents = quarto_config["website"]["sidebar"][0]["contents"]
         assert "guide.qmd" in contents
         assert "removed.qmd" not in contents
         # The "API" section with ref.qmd should be removed entirely
         section_items = [c for c in contents if isinstance(c, dict) and "section" in c]
         assert len(section_items) == 0
 
-    def test_no_quarto_yml_does_nothing(self, tmp_path: Path):
+    def test_empty_configuration_does_nothing(self, tmp_path: Path):
         from great_docs._versions.build import _prune_missing_sidebar_pages
 
-        _prune_missing_sidebar_pages(tmp_path)  # Should not raise
-
-    def test_empty_yaml_does_nothing(self, tmp_path: Path):
-        from great_docs._versions.build import _prune_missing_sidebar_pages
-
-        (tmp_path / "_quarto.yml").write_text("", encoding="utf-8")
-        _prune_missing_sidebar_pages(tmp_path)  # Should not raise
+        quarto_config = {}
+        _prune_missing_sidebar_pages(quarto_config, tmp_path)
+        assert quarto_config == {}
 
 
 # ---------------------------------------------------------------------------
@@ -2447,13 +2368,13 @@ class TestPruneCliPagesForVersion:
         from great_docs._versions.build import _prune_cli_pages_for_version
 
         entry = VersionEntry(tag="0.3", label="0.3", latest=True, git_ref=None)
-        _prune_cli_pages_for_version(tmp_path, tmp_path, entry)
+        _prune_cli_pages_for_version(tmp_path, tmp_path, entry, quarto_config={})
 
     def test_no_cache_file_does_nothing(self, tmp_path: Path):
         from great_docs._versions.build import _prune_cli_pages_for_version
 
         entry = VersionEntry(tag="0.2", label="0.2", latest=False, git_ref="v0.2.0")
-        _prune_cli_pages_for_version(tmp_path, tmp_path, entry)
+        _prune_cli_pages_for_version(tmp_path, tmp_path, entry, quarto_config={})
 
     def test_loads_snapshot_and_prunes(self, tmp_path: Path):
         from unittest.mock import MagicMock, patch
@@ -2482,7 +2403,7 @@ class TestPruneCliPagesForVersion:
         (cli_dir / "build.qmd").write_text("build cmd")
 
         # The snapshot doesn't have cli_commands, so no pruning occurs (early return)
-        _prune_cli_pages_for_version(tmp_path, tmp_path, entry)
+        _prune_cli_pages_for_version(tmp_path, tmp_path, entry, quarto_config={})
         assert (cli_dir / "build.qmd").exists()
 
 
@@ -2516,7 +2437,7 @@ class TestPreprocessVersionUpcoming:
         # Build for 0.4 (the prerelease)
         dest = tmp_path / "build"
         pages = preprocess_version(
-            source, dest, versions[0], versions, layout=Layout.make(tmp_path)
+            source, dest, versions[0], versions, layout=Layout.make(tmp_path), quarto_config={}
         )
 
         assert "new-feature.html" in pages
@@ -2537,7 +2458,7 @@ class TestPreprocessVersionUpcoming:
         # Build for 0.3: future.qmd should be included but flagged as upcoming
         dest = tmp_path / "build"
         pages = preprocess_version(
-            source, dest, versions[1], versions, layout=Layout.make(tmp_path)
+            source, dest, versions[1], versions, layout=Layout.make(tmp_path), quarto_config={}
         )
 
         assert "future.html" in pages
@@ -2556,7 +2477,9 @@ class TestPreprocessVersionUpcoming:
 
         versions = self._setup_versions()
         dest = tmp_path / "build"
-        preprocess_version(source, dest, versions[1], versions, layout=Layout.make(tmp_path))
+        preprocess_version(
+            source, dest, versions[1], versions, layout=Layout.make(tmp_path), quarto_config={}
+        )
         content = (dest / "page.qmd").read_text()
 
         # With expiry="1 releases", badge for 0.2 should be expired when building 0.3
@@ -2585,6 +2508,7 @@ class TestPreprocessVersionUpcoming:
             versions,
             section_configs=section_configs,
             layout=Layout.make(tmp_path),
+            quarto_config={},
         )
         assert "recipes/foo.html" not in pages
         assert not (dest / "recipes" / "foo.qmd").exists()
@@ -2619,7 +2543,7 @@ class TestRebuildApiFromSnapshotEdge:
         # No reference/ dir exists yet
 
         entry = _make_entry("0.2")
-        pages = _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+        pages = _rebuild_api_from_snapshot(dest_dir, snap_path, entry, quarto_config={})
 
         assert "reference/MyFunc.html" in pages
         assert (dest_dir / "reference" / "MyFunc.qmd").exists()
@@ -2636,7 +2560,7 @@ class TestRebuildApiFromSnapshotEdge:
         dest_dir = tmp_path / "build"
         dest_dir.mkdir()
 
-        _rebuild_api_from_snapshot(dest_dir, snap_path, _make_entry("0.2"))
+        _rebuild_api_from_snapshot(dest_dir, snap_path, _make_entry("0.2"), quarto_config={})
 
         ref_dir = dest_dir / "reference"
         page = (ref_dir / "MyFunc.qmd").read_text()
@@ -2661,7 +2585,7 @@ class TestRebuildApiFromSnapshotEdge:
         (ref_dir / "GT.qmd").write_text("---\ntitle: GT\n---\n# GT {.doc-heading}\nRich content\n")
 
         entry = _make_entry("0.2")
-        pages = _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+        pages = _rebuild_api_from_snapshot(dest_dir, snap_path, entry, quarto_config={})
         assert "reference/GT.html" in pages
         # Content should be preserved
         assert "Rich content" in (ref_dir / "GT.qmd").read_text()
@@ -2683,7 +2607,7 @@ class TestRebuildApiFromSnapshotEdge:
         dest_dir.mkdir()
 
         entry = _make_entry("0.2")
-        _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+        _rebuild_api_from_snapshot(dest_dir, snap_path, entry, quarto_config={})
 
         index_content = (dest_dir / "reference" / "index.qmd").read_text()
         assert "## Classes" in index_content
@@ -2709,7 +2633,7 @@ class TestRebuildApiFromSnapshotEdge:
         (ref_dir / "index.qmd").write_text("---\ntitle: API\n---\n")
 
         entry = _make_entry("0.2")
-        _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+        _rebuild_api_from_snapshot(dest_dir, snap_path, entry, quarto_config={})
 
         assert (ref_dir / "kept.qmd").exists()
         assert not (ref_dir / "removed.qmd").exists()
@@ -2738,7 +2662,7 @@ class TestRebuildApiFromSnapshotEdge:
         (ref_dir / "index.qmd").write_text("---\ntitle: API\n---\n")
 
         entry = _make_entry("0.2")
-        _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+        _rebuild_api_from_snapshot(dest_dir, snap_path, entry, quarto_config={})
 
         # Methods of a documented class survive under the shallow fallback.
         assert (ref_dir / "Big.qmd").exists()
@@ -2773,7 +2697,7 @@ class TestRebuildApiFromSnapshotEdge:
         (ref_dir / "index.qmd").write_text("---\ntitle: API\n---\n")
 
         entry = _make_entry("0.2")
-        _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+        _rebuild_api_from_snapshot(dest_dir, snap_path, entry, quarto_config={})
 
         assert (ref_dir / "Big.qmd").exists()
         assert (ref_dir / "Big.m0.qmd").exists()
@@ -2804,7 +2728,7 @@ class TestRebuildApiFromSnapshotEdge:
         )
 
         entry = _make_entry("0.2")
-        _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+        _rebuild_api_from_snapshot(dest_dir, snap_path, entry, quarto_config={})
 
         index_content = (ref_dir / "index.qmd").read_text()
         assert "kept" in index_content
@@ -2842,7 +2766,7 @@ class TestRebuildApiFromSnapshotInventory:
 
         config = Config(tmp_path)
         entry = _make_entry("0.2")
-        _rebuild_api_from_snapshot(dest_dir, snap_path, entry, config)
+        _rebuild_api_from_snapshot(dest_dir, snap_path, entry, config, quarto_config={})
 
         inv = decode((dest_dir / "objects.inv").read_bytes())
         by_name = {e.name: e for e in inv.entries}
@@ -2867,7 +2791,7 @@ class TestRebuildApiFromSnapshotInventory:
         (dest_dir / "objects.inv").write_bytes(b"stale bytes from the live build")
 
         entry = _make_entry("0.2")
-        _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+        _rebuild_api_from_snapshot(dest_dir, snap_path, entry, quarto_config={})
 
         assert (dest_dir / "objects.inv").read_bytes() == b"stale bytes from the live build"
         assert not (dest_dir / "_inv").exists()
@@ -3011,7 +2935,9 @@ class TestRebuildApiFromSnapshotInventory:
         )
         (dest_dir / INVENTORY_FILENAME).write_bytes(encode(live))
 
-        _rebuild_api_from_snapshot(dest_dir, snap_path, _make_entry("0.2"), Config(tmp_path))
+        _rebuild_api_from_snapshot(
+            dest_dir, snap_path, _make_entry("0.2"), Config(tmp_path), quarto_config={}
+        )
 
         inv = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
         by_name = {e.name: e for e in inv.entries}
@@ -3082,7 +3008,9 @@ class TestRebuildApiFromSnapshotInventory:
         )
         (dest_dir / INVENTORY_FILENAME).write_bytes(encode(live))
 
-        _rebuild_api_from_snapshot(dest_dir, snap_path, _make_entry("0.2"), Config(tmp_path))
+        _rebuild_api_from_snapshot(
+            dest_dir, snap_path, _make_entry("0.2"), Config(tmp_path), quarto_config={}
+        )
 
         inv = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
         by_name = {e.name: e for e in inv.entries}
@@ -3234,11 +3162,8 @@ class TestPruneReferenceIndexDefinitionList:
 class TestPruneQuartoSidebarSubPath:
     def test_keeps_sub_paths(self, tmp_path: Path):
         """Sub-paths like reference/cli/build.qmd are kept (not pruned)."""
-        from yaml12 import format_yaml, parse_yaml
-
         from great_docs._versions.build import _prune_quarto_sidebar
 
-        quarto = tmp_path / "_quarto.yml"
         config = {
             "website": {
                 "sidebar": [
@@ -3253,41 +3178,30 @@ class TestPruneQuartoSidebarSubPath:
                 ]
             }
         }
-        quarto.write_text(format_yaml(config), encoding="utf-8")
 
-        _prune_quarto_sidebar(tmp_path, "reference", {"MyFunc"})
+        _prune_quarto_sidebar(config, "reference", {"MyFunc"})
 
-        result = parse_yaml(quarto.read_text())
+        result = config
         contents = result["website"]["sidebar"][0]["contents"]
         assert "reference/MyFunc.qmd" in contents
         assert "reference/cli/build.qmd" in contents  # sub-path kept
         assert "reference/Removed.qmd" not in contents
 
     def test_no_matching_sidebar_does_nothing(self, tmp_path: Path):
-        from yaml12 import format_yaml, parse_yaml
-
         from great_docs._versions.build import _prune_quarto_sidebar
 
-        quarto = tmp_path / "_quarto.yml"
         config = {"website": {"sidebar": [{"id": "other", "contents": ["guide.qmd"]}]}}
-        quarto.write_text(format_yaml(config), encoding="utf-8")
 
-        _prune_quarto_sidebar(tmp_path, "reference", {"func"})
+        _prune_quarto_sidebar(config, "reference", {"func"})
 
-        # File should be unchanged since no sidebar matches
-        result = parse_yaml(quarto.read_text())
-        assert result["website"]["sidebar"][0]["contents"] == ["guide.qmd"]
+        assert config["website"]["sidebar"][0]["contents"] == ["guide.qmd"]
 
-    def test_no_quarto_yml_does_nothing(self, tmp_path: Path):
+    def test_empty_configuration_does_nothing(self):
         from great_docs._versions.build import _prune_quarto_sidebar
 
-        _prune_quarto_sidebar(tmp_path, "reference", {"func"})
-
-    def test_empty_yaml_does_nothing(self, tmp_path: Path):
-        from great_docs._versions.build import _prune_quarto_sidebar
-
-        (tmp_path / "_quarto.yml").write_text("", encoding="utf-8")
-        _prune_quarto_sidebar(tmp_path, "reference", {"func"})
+        config = {}
+        _prune_quarto_sidebar(config, "reference", {"func"})
+        assert config == {}
 
 
 # ---------------------------------------------------------------------------
@@ -3319,7 +3233,7 @@ class TestRebuildApiFromGitRefCache:
         dest.mkdir()
 
         with patch("great_docs._versions.build._validate_git_ref_is_tag", return_value=True):
-            pages = _rebuild_api_from_git_ref(dest, tmp_path, entry)
+            pages = _rebuild_api_from_git_ref(dest, tmp_path, entry, quarto_config={})
 
         assert "reference/my_func.html" in pages
 
@@ -3348,7 +3262,7 @@ class TestRebuildApiFromGitRefCache:
             patch("great_docs._api_diff.snapshot_at_tag", return_value=mock_snap) as snapshot,
         ):
             pages = _rebuild_api_from_git_ref(
-                dest, tmp_path, entry, documented_symbols=lambda name: ["func2"]
+                dest, tmp_path, entry, documented_symbols=lambda name: ["func2"], quarto_config={}
             )
 
         assert "reference/func2.html" in pages
@@ -3373,7 +3287,7 @@ class TestRebuildApiFromGitRefCache:
             ),
             patch("great_docs._api_diff._detect_package_name", return_value=None),
         ):
-            pages = _rebuild_api_from_git_ref(dest, tmp_path, entry)
+            pages = _rebuild_api_from_git_ref(dest, tmp_path, entry, quarto_config={})
 
         assert pages == []
 
@@ -3394,7 +3308,7 @@ class TestRebuildApiFromGitRefCache:
             patch("great_docs._api_diff._detect_package_name", return_value="pkg"),
             patch("great_docs._api_diff.snapshot_at_tag", return_value=None),
         ):
-            pages = _rebuild_api_from_git_ref(dest, tmp_path, entry)
+            pages = _rebuild_api_from_git_ref(dest, tmp_path, entry, quarto_config={})
 
         assert pages == []
 
@@ -3448,39 +3362,21 @@ class TestExpandVersionBadgesFenceEdge:
 
 
 # ---------------------------------------------------------------------------
-# _rewrite_quarto_yml_for_version — edge cases
+# Version-specific titles
 # ---------------------------------------------------------------------------
 
 
-class TestRewriteQuartoYmlEdge:
-    def test_no_quarto_yml_does_nothing(self, tmp_path: Path):
-        from great_docs._versions.build import _rewrite_quarto_yml_for_version
-
-        entry = _make_entry("0.2")
-        _rewrite_quarto_yml_for_version(tmp_path, entry, "0.3")  # no crash
-
-    def test_non_latest_title_gets_version_suffix(self, tmp_path: Path):
-        from yaml12 import read_yaml, write_yaml
-
-        from great_docs._versions.build import _rewrite_quarto_yml_for_version
-
-        dest = tmp_path / "vdir"
-        dest.mkdir()
-        config = {
+class TestAdjustQuartoConfigEdge:
+    def test_non_latest_title_gets_version_suffix(self):
+        quarto_config = {
             "project": {"type": "website", "output-dir": "_site"},
             "format": {"html": {}},
             "website": {"title": "My Docs"},
         }
-        with open(dest / "_quarto.yml", "w") as f:
-            write_yaml(config, f)
 
-        entry = _make_entry("0.2")
-        _rewrite_quarto_yml_for_version(dest, entry, "0.3")
+        _adjust_quarto_config_for_version(quarto_config, _make_entry("0.2"), "0.3")
 
-        with open(dest / "_quarto.yml", "r") as f:
-            result = read_yaml(f)
-
-        assert "(0.2)" in result["website"]["title"]
+        assert "(0.2)" in quarto_config["website"]["title"]
 
     @pytest.mark.parametrize(
         ("navbar_title", "expected"),
@@ -3489,31 +3385,18 @@ class TestRewriteQuartoYmlEdge:
             (False, False),
         ],
     )
-    def test_non_latest_navbar_title_gets_version_suffix(
-        self, tmp_path: Path, navbar_title, expected
-    ):
+    def test_non_latest_navbar_title_gets_version_suffix(self, navbar_title, expected):
         # An explicit navbar title overrides the site title. Both need
         # the version suffix.
-        from yaml12 import read_yaml, write_yaml
-
-        from great_docs._versions.build import _rewrite_quarto_yml_for_version
-
-        dest = tmp_path / "vdir"
-        dest.mkdir()
-        config = {
+        quarto_config = {
             "project": {"type": "website", "output-dir": "_site"},
             "format": {"html": {}},
             "website": {"title": "My Docs", "navbar": {"title": navbar_title}},
         }
-        with open(dest / "_quarto.yml", "w") as f:
-            write_yaml(config, f)
 
-        _rewrite_quarto_yml_for_version(dest, _make_entry("0.2"), "0.3")
+        _adjust_quarto_config_for_version(quarto_config, _make_entry("0.2"), "0.3")
 
-        with open(dest / "_quarto.yml", "r") as f:
-            result = read_yaml(f)
-
-        assert result["website"]["navbar"]["title"] == expected
+        assert quarto_config["website"]["navbar"]["title"] == expected
 
 
 # ---------------------------------------------------------------------------
@@ -4086,13 +3969,23 @@ class TestPruneCliPagesForVersionFull:
         (cli_dir / "index.qmd").write_text("CLI index")
         (cli_dir / "build.qmd").write_text("Build command")
         (cli_dir / "old_command.qmd").write_text("Old command")
+        sidebar = {
+            "id": "cli-reference",
+            "contents": [
+                "reference/cli/index.qmd",
+                "reference/cli/build.qmd",
+                "reference/cli/old_command.qmd",
+            ],
+        }
+        quarto_config = {"website": {"sidebar": [sidebar]}}
 
-        _prune_cli_pages_for_version(tmp_path, tmp_path, entry)
+        _prune_cli_pages_for_version(tmp_path, tmp_path, entry, quarto_config=quarto_config)
 
         # build.qmd should be kept, old_command.qmd should be removed
         assert (cli_dir / "build.qmd").exists()
         assert (cli_dir / "index.qmd").exists()
         assert not (cli_dir / "old_command.qmd").exists()
+        assert sidebar["contents"] == ["reference/cli/index.qmd", "reference/cli/build.qmd"]
 
 
 # ---------------------------------------------------------------------------
@@ -4126,12 +4019,20 @@ class TestPreprocessVersionApiSnapshot:
         )
 
         dest = tmp_path / "build"
+        sidebar = {"id": "reference", "contents": ["reference/my_func.qmd", "reference/gone.qmd"]}
         pages = preprocess_version(
-            source, dest, entry, versions, project_root=project_root, layout=Layout.make(tmp_path)
+            source,
+            dest,
+            entry,
+            versions,
+            project_root=project_root,
+            layout=Layout.make(tmp_path),
+            quarto_config={"website": {"sidebar": [sidebar]}},
         )
 
         assert "reference/my_func.html" in pages
         assert (dest / "reference" / "my_func.qmd").exists()
+        assert sidebar["contents"] == ["reference/my_func.qmd"]
 
     def test_api_snapshot_file_missing_skips(self, tmp_path: Path):
         source = tmp_path / "source"
@@ -4150,7 +4051,13 @@ class TestPreprocessVersionApiSnapshot:
 
         dest = tmp_path / "build"
         pages = preprocess_version(
-            source, dest, entry, versions, project_root=project_root, layout=Layout.make(tmp_path)
+            source,
+            dest,
+            entry,
+            versions,
+            project_root=project_root,
+            layout=Layout.make(tmp_path),
+            quarto_config={},
         )
 
         # Should succeed without generating API pages
@@ -4170,31 +4077,29 @@ class TestSyncStatusNoUpcoming:
         # _page_status.json with empty upcoming_pages
         data = {"page_statuses": {"x.qmd": "new"}, "upcoming_pages": {}}
         (tmp_path / "_page_status.json").write_text(json.dumps(data))
-        (tmp_path / "_quarto.yml").write_text("project:\n  type: website\n")
+        quarto_config = {"project": {"type": "website"}}
 
-        _add_upcoming_status_data(tmp_path)
+        _add_upcoming_status_data(quarto_config, tmp_path)
 
-        # _quarto.yml should be unchanged
-        assert "__GD_UPCOMING_DATA__" not in (tmp_path / "_quarto.yml").read_text()
+        assert quarto_config == {"project": {"type": "website"}}
 
     def test_already_injected_skips(self, tmp_path: Path):
         from great_docs._versions.build import _add_upcoming_status_data
 
         data = {"upcoming_pages": {"x.qmd": "0.4"}}
         (tmp_path / "_page_status.json").write_text(json.dumps(data))
-        yml_content = (
+        quarto_config = parse_yaml(
             "format:\n"
             "  html:\n"
             "    include-in-header:\n"
             "      - text: '<script>window.__GD_STATUS_DATA__={};'\n"
             '      - text: \'<script>window.__GD_UPCOMING_DATA__={"x.qmd":"0.4"};\'\n'
         )
-        (tmp_path / "_quarto.yml").write_text(yml_content)
 
-        _add_upcoming_status_data(tmp_path)
+        _add_upcoming_status_data(quarto_config, tmp_path)
 
         # Should not double-inject
-        content = (tmp_path / "_quarto.yml").read_text()
+        content = format_yaml(quarto_config)
         assert content.count("__GD_UPCOMING_DATA__") == 1
 
     def test_no_status_data_line_returns_early(self, tmp_path: Path):
@@ -4202,11 +4107,10 @@ class TestSyncStatusNoUpcoming:
 
         data = {"upcoming_pages": {"x.qmd": "0.4"}}
         (tmp_path / "_page_status.json").write_text(json.dumps(data))
-        # _quarto.yml without __GD_STATUS_DATA__
-        (tmp_path / "_quarto.yml").write_text("project:\n  type: website\n")
+        quarto_config = {"project": {"type": "website"}}
 
-        _add_upcoming_status_data(tmp_path)
-        assert "__GD_UPCOMING_DATA__" not in (tmp_path / "_quarto.yml").read_text()
+        _add_upcoming_status_data(quarto_config, tmp_path)
+        assert quarto_config == {"project": {"type": "website"}}
 
 
 # ---------------------------------------------------------------------------
@@ -4251,6 +4155,7 @@ class TestPreprocessVersionGitRef:
                 versions,
                 project_root=project_root,
                 layout=Layout.make(tmp_path),
+                quarto_config={},
             )
 
         assert "reference/my_func.html" in pages
@@ -4263,11 +4168,8 @@ class TestPreprocessVersionGitRef:
 
 class TestPruneQuartoSidebarNestedSectionGroup:
     def test_removes_empty_section_group(self, tmp_path: Path):
-        from yaml12 import format_yaml, parse_yaml
-
         from great_docs._versions.build import _prune_quarto_sidebar
 
-        quarto = tmp_path / "_quarto.yml"
         config = {
             "website": {
                 "sidebar": [
@@ -4287,22 +4189,18 @@ class TestPruneQuartoSidebarNestedSectionGroup:
                 ]
             }
         }
-        quarto.write_text(format_yaml(config), encoding="utf-8")
 
-        _prune_quarto_sidebar(tmp_path, "reference", {"kept"})
+        _prune_quarto_sidebar(config, "reference", {"kept"})
 
-        result = parse_yaml(quarto.read_text())
+        result = config
         contents = result["website"]["sidebar"][0]["contents"]
         # The section group should be entirely removed since all its entries are invalid
         assert len(contents) == 1
         assert contents[0] == "reference/kept.qmd"
 
     def test_partially_prunes_section_group(self, tmp_path: Path):
-        from yaml12 import format_yaml, parse_yaml
-
         from great_docs._versions.build import _prune_quarto_sidebar
 
-        quarto = tmp_path / "_quarto.yml"
         config = {
             "website": {
                 "sidebar": [
@@ -4321,11 +4219,10 @@ class TestPruneQuartoSidebarNestedSectionGroup:
                 ]
             }
         }
-        quarto.write_text(format_yaml(config), encoding="utf-8")
 
-        _prune_quarto_sidebar(tmp_path, "reference", {"kept"})
+        _prune_quarto_sidebar(config, "reference", {"kept"})
 
-        result = parse_yaml(quarto.read_text())
+        result = config
         contents = result["website"]["sidebar"][0]["contents"]
         assert len(contents) == 1
         section = contents[0]
@@ -4390,7 +4287,7 @@ class TestPruneCliPagesFull:
         (cli_dir / "serve.qmd").write_text("Serve cmd")
         (cli_dir / "old_cmd.qmd").write_text("Old cmd")
 
-        _prune_cli_pages(tmp_path, snap)
+        _prune_cli_pages(tmp_path, snap, quarto_config={})
 
         # old_cmd.qmd should be removed (not in valid_stems)
         assert not (cli_dir / "old_cmd.qmd").exists()
@@ -4409,7 +4306,7 @@ class TestPruneCliPagesFull:
 
         snap = MagicMock()
         snap.cli_commands = None
-        _prune_cli_pages(tmp_path, snap)  # No crash
+        _prune_cli_pages(tmp_path, snap, quarto_config={})  # No crash
 
     def test_no_cli_commands_returns_early(self, tmp_path: Path):
         from unittest.mock import MagicMock
@@ -4422,23 +4319,29 @@ class TestPruneCliPagesFull:
 
         snap = MagicMock()
         snap.cli_commands = None
-        _prune_cli_pages(tmp_path, snap)
+        _prune_cli_pages(tmp_path, snap, quarto_config={})
         # All files still there
         assert (cli_dir / "build.qmd").exists()
 
 
 # ---------------------------------------------------------------------------
-# _prune_missing_sidebar_pages — exception path
+# Unreadable Quarto configuration
 # ---------------------------------------------------------------------------
 
 
-class TestPruneMissingSidebarPagesException:
-    def test_corrupt_yaml_handled_gracefully(self, tmp_path: Path):
-        from great_docs._versions.build import _prune_missing_sidebar_pages
+def test_invalid_quarto_config_stops_the_versioned_build(tmp_path: Path):
+    layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Home\n---\nHi"})
+    (layout.build_dir / "_quarto.yml").write_text(
+        QUARTO_YML_HEADER + "invalid: yaml: content: [\n  unmatched bracket", encoding="utf-8"
+    )
 
-        (tmp_path / "_quarto.yml").write_text("invalid: yaml: content: [\n  unmatched bracket")
-        # Should not raise
-        _prune_missing_sidebar_pages(tmp_path)
+    with pytest.raises(ValueError):
+        run_versioned_build(
+            source_dir=layout.build_dir,
+            project_root=layout.package_root,
+            layout=layout,
+            versions_config=["0.3", "0.2"],
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -4651,7 +4554,11 @@ class TestGitRefRebuildKeepsSubmodulePages:
             )
 
         pages = _rebuild_api_from_git_ref(
-            tmp_path / "build", tmp_path, entry, documented_symbols=documented_symbols
+            tmp_path / "build",
+            tmp_path,
+            entry,
+            documented_symbols=documented_symbols,
+            quarto_config={},
         )
 
         assert (ref / "sub.Widget.qmd").exists()
@@ -4692,18 +4599,80 @@ class TestIsGreatDocsBuildDir:
         assert is_great_docs_build_dir(tmp_path) is False
 
 
-class TestRewriteQuartoYmlKeepsHeader:
-    def test_header_survives_version_rewrite(self, tmp_path: Path):
-        (tmp_path / "_quarto.yml").write_text(
-            QUARTO_YML_HEADER + "website:\n  title: Test\n  site-url: https://example.com\n",
-            encoding="utf-8",
-        )
-        entry = _make_entry("0.2")
-        _rewrite_quarto_yml_for_version(tmp_path, entry, "0.3")
+class TestVersionConfigurationWrite:
+    """Version-specific Quarto configuration written by the build"""
 
-        content = (tmp_path / "_quarto.yml").read_text(encoding="utf-8")
-        assert content.startswith("# Generated by Great Docs")
-        assert is_great_docs_build_dir(tmp_path) is True
+    @pytest.fixture()
+    def built(self, tmp_path: Path) -> tuple[Layout, list[VersionEntry]]:
+        from unittest.mock import patch
+
+        layout = _make_project(
+            tmp_path,
+            {
+                "index.qmd": "---\ntitle: Home\n---\nHi",
+                "recipes/basic.qmd": "---\ntitle: Basic\n---\nRecipe",
+                "legacy/old.qmd": "---\ntitle: Old\n---\nOld",
+            },
+        )
+        quarto_config = quarto_yml.read(layout.build_dir)
+        quarto_config["website"]["navbar"] = {
+            "left": [
+                {"text": "Recipes", "href": "recipes/basic.qmd"},
+                {"text": "Legacy", "href": "legacy/old.qmd"},
+            ]
+        }
+        quarto_yml.write(layout.build_dir, quarto_config)
+        config = cast(
+            "Config",
+            SimpleNamespace(
+                sections=[
+                    {"dir": "recipes", "versions": ["0.3"]},
+                    {"dir": "legacy", "versions": ["0.2"]},
+                ],
+                seo_enabled=False,
+                social_cards_enabled=False,
+                bibliography=[],
+            ),
+        )
+
+        def render(build_dirs, **kwargs):
+            for build_dir in build_dirs:
+                (build_dir / "_site").mkdir(exist_ok=True)
+                (build_dir / "_site" / "index.html").write_text("<html></html>")
+            return [(str(build_dir), 0, "", "", []) for build_dir in build_dirs]
+
+        with patch("great_docs._versions.build.render_versions_parallel", side_effect=render):
+            result = run_versioned_build(
+                source_dir=layout.build_dir,
+                project_root=layout.package_root,
+                layout=layout,
+                versions_config=["0.3", "0.2"],
+                config=config,
+            )
+        assert result["success"], result["errors"]
+        return layout, parse_versions_config(["0.3", "0.2"])
+
+    def test_every_version_keeps_the_generated_header(self, built):
+        layout, versions = built
+        for entry in versions:
+            directory = _version_build_dir(layout.build_dir, entry, "0.3", layout)
+            assert is_great_docs_build_dir(directory)
+
+    def test_versions_start_from_the_same_configuration(self, built):
+        # The latest version prunes the source directory after the historical copy.
+        # Each version must retain its own navbar links and title.
+        layout, versions = built
+        navbars = {}
+        titles = {}
+        for entry in versions:
+            directory = _version_build_dir(layout.build_dir, entry, "0.3", layout)
+            quarto_config = quarto_yml.read(directory)
+            navbars[entry.tag] = [
+                item["href"] for item in quarto_config["website"]["navbar"]["left"]
+            ]
+            titles[entry.tag] = quarto_config["website"]["title"]
+        assert navbars == {"0.3": ["recipes/basic.qmd"], "0.2": ["legacy/old.qmd"]}
+        assert titles == {"0.3": "Test", "0.2": "Test (0.2)"}
 
 
 # ---------------------------------------------------------------------------
@@ -4758,7 +4727,7 @@ class TestPruneCliPagesNonQmd:
         class MockSnap:
             cli_commands = type("CLI", (), {"subcommands": [MockCmd()]})()
 
-        _prune_cli_pages(tmp_path, MockSnap())
+        _prune_cli_pages(tmp_path, MockSnap(), quarto_config={})
         assert txt.exists()
 
 
@@ -4785,19 +4754,16 @@ class TestRewriteCliIndexMdHref:
 
 
 class TestPruneQuartoCliSidebarEdges:
-    def test_empty_yaml_returns_early(self, tmp_path: Path):
+    def test_empty_configuration_does_nothing(self):
         from great_docs._versions.build import _prune_quarto_cli_sidebar
 
-        quarto = tmp_path / "_quarto.yml"
-        quarto.write_text("", encoding="utf-8")
-        _prune_quarto_cli_sidebar(tmp_path, {"index"})
+        config = {}
+        _prune_quarto_cli_sidebar(config, {"index"})
+        assert config == {}
 
     def test_non_cli_sidebar_skipped(self, tmp_path: Path):
-        from yaml12 import format_yaml, parse_yaml
-
         from great_docs._versions.build import _prune_quarto_cli_sidebar
 
-        quarto = tmp_path / "_quarto.yml"
         config = {
             "website": {
                 "sidebar": [
@@ -4805,17 +4771,13 @@ class TestPruneQuartoCliSidebarEdges:
                 ]
             }
         }
-        quarto.write_text(format_yaml(config), encoding="utf-8")
-        _prune_quarto_cli_sidebar(tmp_path, {"index"})
-        result = parse_yaml(quarto.read_text())
+        _prune_quarto_cli_sidebar(config, {"index"})
+        result = config
         assert len(result["website"]["sidebar"][0]["contents"]) == 2
 
     def test_dict_item_in_contents_kept(self, tmp_path: Path):
-        from yaml12 import format_yaml, parse_yaml
-
         from great_docs._versions.build import _prune_quarto_cli_sidebar
 
-        quarto = tmp_path / "_quarto.yml"
         config = {
             "website": {
                 "sidebar": [
@@ -4830,9 +4792,8 @@ class TestPruneQuartoCliSidebarEdges:
                 ]
             }
         }
-        quarto.write_text(format_yaml(config), encoding="utf-8")
-        _prune_quarto_cli_sidebar(tmp_path, {"index"})
-        result = parse_yaml(quarto.read_text())
+        _prune_quarto_cli_sidebar(config, {"index"})
+        result = config
         contents = result["website"]["sidebar"][0]["contents"]
         has_dict = any(isinstance(c, dict) for c in contents)
         assert has_dict

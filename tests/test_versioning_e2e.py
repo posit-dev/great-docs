@@ -27,6 +27,7 @@ from great_docs._versions.model import (
     get_latest_version,
     parse_versions_config,
 )
+from great_docs._website import quarto_yml
 
 
 @pytest.mark.parametrize("directory", [".", "docs", "website"])
@@ -279,6 +280,7 @@ def run_mock_versioned_build(
 
     for entry in ordered_targets:
         ver_dir = _version_build_dir(source_dir, entry, latest_tag)
+        quarto_config = quarto_yml.read(source_dir)
         pp_pages = preprocess_version(
             source_dir,
             ver_dir,
@@ -287,7 +289,9 @@ def run_mock_versioned_build(
             project_root=project_root,
             section_configs=section_configs,
             layout=layout,
+            quarto_config=quarto_config,
         )
+        quarto_yml.write(ver_dir, quarto_config)
         pages_by_version[entry.tag] = pp_pages
         build_dirs.append(ver_dir)
 
@@ -2159,10 +2163,11 @@ class TestVersionTitleSuffix:
         latest = get_latest_version(versions)
         latest_tag = latest.tag
 
-        from great_docs._versions.build import _rewrite_quarto_yml_for_version
+        from great_docs._versions.build import _adjust_quarto_config_for_version
 
         for entry in versions:
             ver_dir = _version_build_dir(source_dir, entry, latest_tag)
+            quarto_config = quarto_yml.read(source_dir)
             preprocess_version(
                 source_dir,
                 ver_dir,
@@ -2170,8 +2175,10 @@ class TestVersionTitleSuffix:
                 versions,
                 project_root=project_root,
                 layout=Layout.make(project_root),
+                quarto_config=quarto_config,
             )
-            _rewrite_quarto_yml_for_version(ver_dir, entry, latest_tag)
+            _adjust_quarto_config_for_version(quarto_config, entry, latest_tag)
+            quarto_yml.write(ver_dir, quarto_config)
 
         return {
             "source_dir": source_dir,
