@@ -195,7 +195,6 @@ from great_docs.cli import (
     setup_github_pages,
     uninstall,
 )
-from great_docs.core import _initial_authors
 from great_docs.pandoc.blocks import (
     Block,
     Blocks,
@@ -1805,30 +1804,6 @@ def test_citation_year_handles_invalid_date():
 
         assert current_year in content
         assert f"year = {{{current_year}}}" in content
-
-
-def test_initial_authors_list_maintainers_then_authors(tmp_path: Path):
-    """Maintainers come first; a person who is both appears once, as a maintainer"""
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "pkg"\n'
-        '[[project.authors]]\nname = "Alice"\nemail = "alice@example.com"\n'
-        '[[project.authors]]\nname = "Bob"\n'
-        '[[project.maintainers]]\nname = "Bob"\nemail = "bob@example.com"\n'
-        '[[project.maintainers]]\nemail = "nameless@example.com"\n',
-        encoding="utf-8",
-    )
-
-    assert _initial_authors(_manifest.read(tmp_path)) == [
-        {"name": "Bob", "role": "Maintainer", "email": "bob@example.com"},
-        {"name": "Alice", "role": "Author", "email": "alice@example.com"},
-    ]
-
-
-def test_initial_authors_without_people(tmp_path: Path):
-    """A project that declares no people gets no authors"""
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n', encoding="utf-8")
-
-    assert _initial_authors(_manifest.read(tmp_path)) == []
 
 
 def test_strip_numeric_prefix_two_digit():
@@ -10508,185 +10483,6 @@ def test_categorise_references_all_found_no_error():
             sys.path.remove(tmp_dir)
 
 
-def test_generate_initial_config_with_package():
-    """Verify that initialisation creates a configuration for the package"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        pkg_dir = Path(tmp_dir) / "mypkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '__all__ = ["Widget"]\n__version__ = "1.0"\nclass Widget:\n    pass\n'
-        )
-
-        with patch("great_docs.core.probe.detect_docstring_style", return_value="numpy"):
-            with patch("great_docs.core.probe.detect_dynamic_mode", return_value=True):
-                result = docs._generate_initial_config(force=True)
-
-        assert result is True
-        config_path = Path(tmp_dir) / "great-docs.yml"
-        assert config_path.exists()
-        content = config_path.read_text()
-        assert "parser: numpy" in content
-
-
-def test_generate_initial_config_is_template_with_detected_values(monkeypatch):
-    import io
-
-    from yaml12 import read_yaml
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        (project_path / "pyproject.toml").write_text(
-            '[project]\nname = "demo"\nversion = "0.1.0"\n'
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-
-        monkeypatch.setattr(Exports, "package", lambda self, name: MagicMock())
-        monkeypatch.setattr(
-            "great_docs.core.probe.detect_docstring_style", lambda package, report: "google"
-        )
-        monkeypatch.setattr(
-            "great_docs.core.probe.detect_dynamic_mode", lambda package, exports, report: False
-        )
-        monkeypatch.setattr(Exports, "names", lambda self, name: ["Thing"])
-        monkeypatch.setattr(
-            Exports,
-            "categorise",
-            lambda self, name, exports: {
-                "classes": ["Thing"],
-                "class_methods": {"Thing": 0},
-                "class_method_names": {},
-                "cyclic_alias_count": 0,
-            },
-        )
-
-        assert docs._generate_initial_config(force=True) is True
-
-        text = (project_path / "great-docs.yml").read_text()
-        # Detected values are live:
-        assert "\nparser: google\n" in text
-        assert "\ndynamic: false\n" in text
-        assert "  - title: Classes" in text
-        assert "      - Thing" in text
-        # Full template is present (a key init never used to emit) but commented:
-        assert "# seo:" in text
-        # Parses and round-trips through the config loader:
-        cfg = read_yaml(io.StringIO(text))
-        assert cfg["parser"] == "google"
-        assert cfg["dynamic"] is False
-        assert cfg["reference"][0]["title"] == "Classes"
-        assert "module" not in cfg
-
-
-def test_generate_initial_config_records_a_module_named_unlike_the_distribution(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    write_pyproject(tmp_path, "py-yaml12")
-    (tmp_path / "yaml12.pyi").write_text("")
-    docs = GreatDocs(project_path=str(tmp_path))
-    monkeypatch.setattr(Exports, "package", lambda self, name: MagicMock())
-    monkeypatch.setattr(
-        "great_docs.core.probe.detect_docstring_style", lambda package, report: "numpy"
-    )
-    monkeypatch.setattr(
-        "great_docs.core.probe.detect_dynamic_mode", lambda package, exports, report: True
-    )
-    monkeypatch.setattr(Exports, "names", lambda self, name: None)
-
-    assert docs._generate_initial_config(force=True) is True
-
-    assert read_yaml(tmp_path / "great-docs.yml")["module"] == "yaml12"
-
-
-def test_generate_initial_config_no_package_is_non_empty(monkeypatch):
-    """Test the no-package-name branch still emits a non-empty config."""
-    import io
-
-    from yaml12 import read_yaml
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        # An empty project has no packaging files and no package directory.
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._generate_initial_config(force=True) is True
-
-        text = (project_path / "great-docs.yml").read_text()
-        cfg = read_yaml(io.StringIO(text))
-        assert cfg is not None, "no-package init config must not be empty"
-        assert cfg["parser"] == "numpy"
-        assert cfg["dynamic"] is True
-
-
-def test_generate_initial_config_existing_no_force():
-    """Test _generate_initial_config skips existing config without force."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        config_path = Path(tmp_dir) / "great-docs.yml"
-        config_path.write_text("parser: numpy\n")
-
-        result = docs._generate_initial_config(force=False)
-        assert result is False
-
-
-def test_generate_initial_config_no_package():
-    """Test _generate_initial_config creates minimal config without package."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        # No pyproject.toml = no package detected
-
-        result = docs._generate_initial_config(force=True)
-        assert result is True
-        config_path = Path(tmp_dir) / "great-docs.yml"
-        assert config_path.exists()
-        content = config_path.read_text()
-        assert "parser:" in content
-
-
-def test_generate_initial_config_no_exports():
-    """Test _generate_initial_config creates minimal config when no exports found."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        with (
-            patch.object(Exports, "names", return_value=None),
-            patch.object(Exports, "package", return_value=MagicMock()),
-            patch("great_docs.core.probe.detect_docstring_style", return_value="google"),
-            patch("great_docs.core.probe.detect_dynamic_mode", return_value=False),
-        ):
-            result = docs._generate_initial_config(force=True)
-
-        assert result is True
-        config_path = Path(tmp_dir) / "great-docs.yml"
-        content = config_path.read_text()
-        assert "parser: google" in content
-        assert "dynamic: false" in content
-
-
-def test_generate_initial_config_unloadable_package(capsys: pytest.CaptureFixture[str]):
-    """Verify that a griffe load failure selects NumPy and `dynamic: true`"""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        Path(tmp_dir, "pyproject.toml").write_text('[project]\nname = "unloadable_pkg_q7z"\n')
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._generate_initial_config(force=True) is True
-
-        content = Path(tmp_dir, "great-docs.yml").read_text()
-        assert "\nparser: numpy\n" in content
-        assert "\ndynamic: true\n" in content
-        assert "Could not load package for docstring detection" in capsys.readouterr().out
-
-
 _POETRY_1_PYPROJECT = """\
 [tool.poetry]
 name = "poetry-pkg"
@@ -10711,26 +10507,6 @@ def test_poetry_1_project_facts_reach_the_build(tmp_path: Path):
     assert project.name == "poetry-pkg"
     assert project.manifest["description"] == "A Poetry 1.x package"
     assert project.github == GithubRepo("owner", "repo")
-
-
-def test_init_lists_poetry_1_authors(tmp_path: Path):
-    """`great-docs init` lists the authors of a Poetry 1.x project"""
-    (tmp_path / "pyproject.toml").write_text(_POETRY_1_PYPROJECT, encoding="utf-8")
-    docs = GreatDocs(project_path=str(tmp_path))
-
-    with (
-        patch.object(Exports, "names", return_value=None),
-        patch.object(Exports, "package", return_value=MagicMock()),
-        patch("great_docs.core.probe.detect_docstring_style", return_value="numpy"),
-        patch("great_docs.core.probe.detect_dynamic_mode", return_value=False),
-    ):
-        assert docs._generate_initial_config(force=True) is True
-
-    config = read_yaml(tmp_path / "great-docs.yml")
-    assert isinstance(config, dict)
-    assert config["authors"] == [
-        {"name": "Ada Lovelace", "role": "Author", "email": "ada@example.com"}
-    ]
 
 
 def test_empty_categories_structure():

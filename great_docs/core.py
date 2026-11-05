@@ -37,12 +37,12 @@ from ._content.naming import (
 from ._content.pages import PageMap
 from ._content.user_guide import UserGuide
 from ._contribution import Contribution
-from ._install import format_authors_yaml, update_gitignore
+from ._install import update_gitignore, write_initial_config
 from ._layout import Layout
 from ._manifest import Manifest
-from ._project import Project, read_manifest
+from ._project import Project
 from ._reference import block as reference_block
-from ._reference import documented, probe
+from ._reference import documented
 from ._reference import sections as reference_sections
 from ._reference.exports import Exports
 from ._remote import HttpRemote, Remote
@@ -75,40 +75,13 @@ from ._website.project_pages import citation, licence, package_info
 from ._website.seo import description as seo_description
 from ._website.seo import site_files
 from ._website.seo.structured_data import StructuredData
-from .config import Config, create_default_config
+from .config import Config
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from ._apiref.api_reference import APIReference
     from ._build.log import BuildLog
-
-
-def _initial_authors(manifest: Manifest) -> list[dict[str, str]]:
-    """
-    List maintainers and authors for a new `great-docs.yml`
-
-    Parameters
-    ----------
-    manifest
-        The project's declared metadata.
-
-    Returns
-    -------
-    :
-        Entries with a `name`, a `role` and an `email` when declared. List named
-        maintainers first with role `Maintainer`, then named authors with role `Author`.
-        Keep only the first entry for each name.
-    """
-    authors: dict[str, dict[str, str]] = {}
-    for people, role in ((manifest["maintainers"], "Maintainer"), (manifest["authors"], "Author")):
-        for person in people:
-            name = person.get("name")
-            if name and name not in authors:
-                authors[name] = {"name": name, "role": role}
-                if email := person.get("email"):
-                    authors[name]["email"] = email
-    return list(authors.values())
 
 
 def _print_warning(message: str) -> None:
@@ -476,8 +449,15 @@ class GreatDocs:
         self.layout = Layout.make(self.project_root, self._selected_config_path, create=True)
         self.build_dir = self.layout.build_dir
 
-        # Generate great-docs.yml with discovered exports
-        self._generate_initial_config(force=force)
+        project = Project.make(self._config, self.layout)
+        write_initial_config(
+            self._config,
+            self.layout,
+            project,
+            Exports(self._config, project),
+            force=force,
+            report=print,
+        )
 
         # Reload configuration after generating it
         self._config = Config(
@@ -954,114 +934,6 @@ class GreatDocs:
 
         print("   📄 Blended homepage: first UG page → index.qmd")
         return f"user-guide/{dest_rel}"
-
-    def _generate_initial_config(self, force: bool = False) -> bool:
-        """
-        Generate an initial great-docs.yml with discovered exports.
-
-        Renders the shipped `great-docs.default.yml` template with detected
-        values (`parser`, `dynamic`, and optionally `module`, `authors`,
-        `reference`) spliced in as live keys.
-
-        Parameters
-        ----------
-        force
-            If `True`, overwrite existing great-docs.yml without prompting.
-
-        Returns
-        -------
-        bool
-            True if config was created, False if skipped.
-        """
-        config_path = self.layout.config_path
-
-        if config_path.exists() and not force:
-            print(
-                f"great-docs.yml already exists at {config_path}\n"
-                "Use --force to overwrite it (this will reset to defaults)."
-            )
-            return False
-
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-
-        project = Project.make(self._config, self.layout)
-        if not project.name or not (importable_name := project.importable_name):
-            print("Warning: Could not detect package name, creating minimal config")
-            # No importable name to detect from; fall back to the documented
-            # parser/dynamic defaults so the emitted config is never empty.
-            minimal_overrides = {"parser": "parser: numpy", "dynamic": "dynamic: true"}
-            config_path.write_text(create_default_config(minimal_overrides), encoding="utf-8")
-            print(f"Created {config_path}")
-            return True
-
-        overrides: dict[str, str] = {}
-
-        # Preserve module names that differ even after hyphens are replaced with underscores.
-        if project.module and project.module != project.name.replace("-", "_"):
-            overrides["module"] = f"module: {project.module}"
-
-        package_exports = Exports(self._config, project)
-
-        # Detect docstring style
-        print("Detecting docstring style...")
-        package = None
-        try:
-            package = package_exports.package(importable_name)
-        except USER_CODE_ERRORS as error:
-            print(
-                f"Warning: Could not load package for docstring detection ({type(error).__name__})"
-            )
-            parser_style = "numpy"
-        else:
-            parser_style = probe.detect_docstring_style(package, report=print)
-        overrides["parser"] = f"parser: {parser_style}"
-
-        authors_yaml = format_authors_yaml(
-            _initial_authors(read_manifest(self.layout.package_root))
-        )
-        if authors_yaml:
-            overrides["authors"] = authors_yaml
-
-        # Discover exports
-        exports = package_exports.names(importable_name)
-        if not exports:
-            print(
-                "Warning: Could not discover exports; edit the commented "
-                "'reference:' section in great-docs.yml to list your API."
-            )
-            print("Testing dynamic introspection mode...")
-            dynamic_mode = package is None or probe.detect_dynamic_mode(
-                package, package.members, report=print
-            )
-            overrides["dynamic"] = f"dynamic: {'true' if dynamic_mode else 'false'}"
-            config_path.write_text(create_default_config(overrides), encoding="utf-8")
-            print(f"Created {config_path}")
-            return True
-
-        # Categorize exports (this also detects cyclic aliases)
-        print("Categorizing API objects...")
-        categories = package_exports.categorise(importable_name, exports)
-
-        cyclic_alias_count = categories.get("cyclic_alias_count", 0)
-        if cyclic_alias_count > 0:
-            print(
-                f"Detected {cyclic_alias_count} cyclic alias(es), using dynamic: false"
-            )  # pragma: no cover
-            dynamic_mode = False  # pragma: no cover
-        else:
-            print("Testing dynamic introspection mode...")
-            dynamic_mode = package is None or probe.detect_dynamic_mode(
-                package, exports, report=print
-            )
-        overrides["dynamic"] = f"dynamic: {'true' if dynamic_mode else 'false'}"
-
-        reference_yaml = reference_block.reference_yaml(self._config, categories)
-        if "  - title:" in reference_yaml:
-            overrides["reference"] = reference_yaml
-
-        config_path.write_text(create_default_config(overrides), encoding="utf-8")
-        print(f"Created {config_path}")
-        return True
 
     def _create_index_from_readme(
         self,

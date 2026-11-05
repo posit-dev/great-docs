@@ -1,8 +1,8 @@
 """
 Project set-up for Great Docs
 
-Entries in the project's `.gitignore` keep build output out of version control. The
-`authors:` block in a new `great-docs.yml` lists the package's declared authors.
+Create `great-docs.yml` with detected package settings and add build-output exclusions
+to the project's `.gitignore`.
 """
 
 from __future__ import annotations
@@ -11,12 +11,23 @@ from typing import TYPE_CHECKING
 
 from yaml12 import format_yaml
 
+from ._build.steps import USER_CODE_ERRORS
+from ._reference import block as reference_block
+from ._reference import probe
+from .config import create_default_config
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from ._layout import Layout
+    import griffe as gf
 
-__all__ = ["format_authors_yaml", "update_gitignore"]
+    from ._layout import Layout
+    from ._manifest import Manifest
+    from ._project import Project
+    from ._reference.exports import Exports
+    from .config import Config
+
+__all__ = ["format_authors_yaml", "update_gitignore", "write_initial_config"]
 
 _YES = {"", "y", "yes"}
 
@@ -31,6 +42,117 @@ _VERSIONING_ENTRIES = (
     ".great-docs/",
 )
 _VERSIONING_COMMENT = "\n# Great Docs versioned-build artifacts\n"
+
+
+def write_initial_config(
+    config: Config,
+    layout: Layout,
+    project: Project,
+    exports: Exports,
+    *,
+    force: bool,
+    report: Callable[[str], None],
+) -> None:
+    """
+    Write a new `great-docs.yml` with detected package settings
+
+    Activate `parser` and `dynamic` in the shipped default configuration, plus `module`,
+    `authors` and `reference` when detected. Leave other keys commented. Use `parser: numpy`
+    and `dynamic: true` when no package is detected.
+
+    Parameters
+    ----------
+    config
+        The project's current configuration, which shapes the reference sections.
+    layout
+        The project's layout, which locates `great-docs.yml`.
+    project
+        The project's metadata and package names.
+    exports
+        The project's package and export discovery.
+    force
+        Whether to replace an existing `great-docs.yml`. If `False`, an existing file is
+        kept and the user is told how to replace it.
+    report
+        A callback for progress and warning messages.
+
+    Returns
+    -------
+    :
+    """
+    config_path = layout.config_path
+
+    if config_path.exists() and not force:
+        report(
+            f"great-docs.yml already exists at {config_path}\n"
+            "Use --force to overwrite it (this will reset to defaults)."
+        )
+        return
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not project.name or not (importable_name := project.importable_name):
+        report("Warning: Could not detect package name, creating minimal config")
+        # Keep active defaults even when no package can be inspected.
+        minimal_overrides = {"parser": "parser: numpy", "dynamic": "dynamic: true"}
+        _ = config_path.write_text(create_default_config(minimal_overrides), encoding="utf-8")
+        report(f"Created {config_path}")
+        return
+
+    overrides: dict[str, str] = {}
+
+    # Preserve module names that differ even after hyphens are replaced with underscores.
+    if project.module and project.module != project.name.replace("-", "_"):
+        overrides["module"] = f"module: {project.module}"
+
+    report("Detecting docstring style...")
+    package: gf.Module | None = None
+    try:
+        package = exports.package(importable_name)
+    except USER_CODE_ERRORS as error:
+        report(f"Warning: Could not load package for docstring detection ({type(error).__name__})")
+        parser_style = "numpy"
+    else:
+        parser_style = probe.detect_docstring_style(package, report=report)
+    overrides["parser"] = f"parser: {parser_style}"
+
+    if authors_yaml := format_authors_yaml(_initial_authors(project.manifest)):
+        overrides["authors"] = authors_yaml
+
+    names = exports.names(importable_name)
+    if not names:
+        report(
+            "Warning: Could not discover exports; edit the commented "
+            "'reference:' section in great-docs.yml to list your API."
+        )
+        report("Testing dynamic introspection mode...")
+        dynamic_mode = package is None or probe.detect_dynamic_mode(
+            package, package.members, report=report
+        )
+        overrides["dynamic"] = f"dynamic: {'true' if dynamic_mode else 'false'}"
+        _ = config_path.write_text(create_default_config(overrides), encoding="utf-8")
+        report(f"Created {config_path}")
+        return
+
+    report("Categorizing API objects...")
+    categories = exports.categorise(importable_name, names)
+
+    # Dynamic mode cannot resolve a cyclic alias.
+    cyclic_alias_count = categories.get("cyclic_alias_count", 0)
+    if cyclic_alias_count > 0:
+        report(f"Detected {cyclic_alias_count} cyclic alias(es), using dynamic: false")
+        dynamic_mode = False
+    else:
+        report("Testing dynamic introspection mode...")
+        dynamic_mode = package is None or probe.detect_dynamic_mode(package, names, report=report)
+    overrides["dynamic"] = f"dynamic: {'true' if dynamic_mode else 'false'}"
+
+    reference_yaml = reference_block.reference_yaml(config, categories)
+    if "  - title:" in reference_yaml:
+        overrides["reference"] = reference_yaml
+
+    _ = config_path.write_text(create_default_config(overrides), encoding="utf-8")
+    report(f"Created {config_path}")
 
 
 def update_gitignore(
@@ -165,6 +287,33 @@ def format_authors_yaml(authors: list[dict[str, str]]) -> str:
         lines.extend(f"    {line}" for line in entry[1:])
 
     return "\n".join(lines)
+
+
+def _initial_authors(manifest: Manifest) -> list[dict[str, str]]:
+    """
+    List maintainers and authors for a new `great-docs.yml`
+
+    Parameters
+    ----------
+    manifest
+        The project's declared metadata.
+
+    Returns
+    -------
+    :
+        Entries with a `name`, a `role` and an `email` when declared. List named
+        maintainers first with role `Maintainer`, then named authors with role `Author`.
+        Keep only the first entry for each name.
+    """
+    authors: dict[str, dict[str, str]] = {}
+    for people, role in ((manifest["maintainers"], "Maintainer"), (manifest["authors"], "Author")):
+        for person in people:
+            name = person.get("name")
+            if name and name not in authors:
+                authors[name] = {"name": name, "role": role}
+                if email := person.get("email"):
+                    authors[name]["email"] = email
+    return list(authors.values())
 
 
 def _yaml_field(key: str, value: str) -> list[str]:
