@@ -1710,13 +1710,11 @@ class GreatDocs:
 
     def _add_api_reference_config(self, run: Run) -> None:
         """
-        Add API reference configuration to _quarto.yml if not present.
+        Add API reference defaults to `_quarto.yml` unless already configured
 
-        Adds sensible defaults for API reference generation with automatic
-        package detection.  If no documentable exports are discovered (and no
-        explicit `reference` config exists in great-docs.yml), the method
-        skips API reference setup and records that this build has no API
-        reference.
+        Warn and skip the API reference when no package name is detected. Also skip it
+        when no documentable exports are found, unless `great-docs.yml` has an explicit
+        `reference` configuration. Record either skip in the current build's state.
 
         Parameters
         ----------
@@ -1730,9 +1728,7 @@ class GreatDocs:
             run.has_api_reference = False
             return
 
-        # Python API reference only applies to projects with a Python component.
-        # Non-Python projects (e.g. project_type: go) have no importable package
-        # to introspect — skip rather than prompting for a package name.
+        # Non-Python projects have no importable Python package to introspect.
         if not self._config.is_python_project:
             print("API reference skipped (non-Python project)")
             run.has_api_reference = False
@@ -1749,17 +1745,9 @@ class GreatDocs:
         package_name = self._detect_package_name()
 
         if not package_name:
-            try:  # pragma: no cover
-                response = input(
-                    "\nCould not auto-detect package name. Enter package name for API reference (or press Enter to skip): "
-                ).strip()
-            except EOFError:  # pragma: no cover
-                response = ""
-            if not response:  # pragma: no cover
-                print("Skipping API reference configuration")
-                run.has_api_reference = False
-                return
-            package_name = response  # pragma: no cover
+            _print_warning("Could not detect the package name; skipping the API reference")
+            run.has_api_reference = False
+            return
 
         print(f"Adding API reference configuration for package: {package_name}")
 

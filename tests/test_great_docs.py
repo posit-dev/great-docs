@@ -16356,24 +16356,27 @@ def test_add_api_reference_config_already_exists():
         docs._add_api_reference_config(run)
 
 
-def test_add_api_reference_config_no_package():
-    """Test _add_api_reference_config when package can't be detected and user skips."""
+def test_add_api_reference_config_without_package_name_warns_and_skips(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    """An undetected package skips the API reference with a warning and no prompt"""
+    # Two package directories and no packaging files leave the package name undetected.
+    for package in ("first", "second"):
+        (tmp_path / package).mkdir()
+        (tmp_path / package / "__init__.py").write_text("", encoding="utf-8")
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs.build_dir.mkdir(parents=True)
+    (docs.build_dir / "_quarto.yml").write_text(format_yaml({"website": {}}), encoding="utf-8")
+    run = make_run()
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._config = mock_config(reference_enabled=True, is_python_project=True)
+    with patch("builtins.input", side_effect=AssertionError("the build must not prompt")):
+        docs._add_api_reference_config(run)
 
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-        (docs.build_dir / "_quarto.yml").write_text(format_yaml({"website": {}}), encoding="utf-8")
-
-        with (
-            patch.object(docs, "_detect_package_name", return_value=None),
-            patch("builtins.input", return_value=""),
-        ):
-            run = make_run()
-            docs._add_api_reference_config(run)
-
-        assert run.has_api_reference is False
+    assert run.has_api_reference is False
+    assert (
+        "   ⚠️  Could not detect the package name; skipping the API reference"
+        in capsys.readouterr().out
+    )
 
 
 def test_add_api_reference_config_no_exports():
@@ -16431,26 +16434,6 @@ def test_add_api_reference_config_success():
         assert run.has_api_reference is True
         written = read_yaml(docs.build_dir / "_quarto.yml")
         assert written["api-reference"]["sections"] == sections
-
-
-def test_add_api_reference_config_eof_error():
-    """Test _add_api_reference_config handles EOFError on input."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._config = mock_config(reference_enabled=True, is_python_project=True)
-
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-        (docs.build_dir / "_quarto.yml").write_text(format_yaml({"website": {}}), encoding="utf-8")
-
-        with (
-            patch.object(docs, "_detect_package_name", return_value=None),
-            patch("builtins.input", side_effect=EOFError),
-        ):
-            run = make_run()
-            docs._add_api_reference_config(run)
-
-        assert run.has_api_reference is False
 
 
 def test_refresh_api_reference_config_no_quarto_yml():

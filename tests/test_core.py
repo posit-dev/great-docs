@@ -378,11 +378,6 @@ class TestDiscoverMcpServer:
         # Two package directories and no `pyproject.toml` leave the package name undetected.
         assert gd._detect_package_name() is None
 
-        def no_terminal(prompt: str) -> str:
-            raise EOFError
-
-        # Closed standard input keeps the package-name prompt from blocking the test.
-        monkeypatch.setattr("builtins.input", no_terminal)
         candidates = _build_mcp_candidates(gd, monkeypatch)
 
         assert candidates == ["mypkgxyz.mcp", "mypkgxyz.mcp_server", "mypkgxyz.server"]
