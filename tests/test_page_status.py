@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 from yaml12 import read_yaml
 
+from great_docs._build import generated
+from great_docs._contribution import Contribution, InlineData
 from great_docs._website import page_status
 from great_docs.config import Config
 from great_docs.core import GreatDocs
@@ -272,19 +274,32 @@ class TestProcessPageStatuses:
     def test_no_pages_returns_false(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
         result = page_status.process(gd._config, gd.layout, gd.build_dir)
-        assert result is False
+        assert result is None
 
-    def test_with_pages_returns_true(self, tmp_path: Path):
+    def test_with_pages_returns_the_written_data(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
         ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "intro.qmd", "Intro", status="new")
 
         result = page_status.process(gd._config, gd.layout, gd.build_dir)
-        assert result is True
 
-        # Verify JSON file was created
-        json_path = gd.build_dir / "_page_status.json"
-        assert json_path.exists()
+        written = json.loads((gd.build_dir / "_page_status.json").read_text(encoding="utf-8"))
+        assert written["page_statuses"] == {"user-guide/intro.qmd": "new"}
+        assert result == Contribution(
+            inline_data=(InlineData("__GD_STATUS_DATA__", written, before="page-status-badges.js"),)
+        )
+
+
+def test_the_page_status_step_records_the_badge_data(tmp_path: Path):
+    gd = _bootstrap_project(tmp_path)
+    _make_qmd(gd.build_dir / "user-guide" / "intro.qmd", "Intro", status="new")
+    run = make_run(gd)
+
+    assert generated.page_statuses(run, gd._config, gd.layout) == "Status badges processed"
+
+    [contribution] = run.contributions
+    assert [data.name for data in contribution.inline_data] == ["__GD_STATUS_DATA__"]
+    assert not (gd.build_dir / "_quarto.yml").exists()
 
 
 # ── Configuration Pass Tests ────────────────────────────────────────────────

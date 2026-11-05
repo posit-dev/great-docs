@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from .. import _marimo
 from .._content import publish
 from .._content import user_guide as authored_guide
+from .._contribution import Contribution
 from .._reference import sections as reference_sections
 from .._utils import GITIGNORE_CONTENT
 from .._website import page_dates, quarto_yml, scripts
@@ -53,8 +54,8 @@ def build_directory(
     Parameters
     ----------
     run
-        The current build, which records whether the site has an API reference and the
-        discovered user guide.
+        The current build, which records API reference availability, the reference sidebar
+        and the discovered user guide.
     config
         The project's configuration.
     layout
@@ -168,7 +169,8 @@ def build_directory(
 
     reference.add_api_block(run, config, layout)
     if run.api_block is not None:
-        reference_sections.update_sidebar(config, build_dir, run.api_block)
+        sidebar = reference_sections.sidebar(config, run.api_block)
+        run.contributions.append(Contribution(sidebars=(sidebar,)))
 
     # API reference availability determines whether the homepage links to `llms.txt` and
     # `llms-full.txt`; resolve it before writing the homepage.

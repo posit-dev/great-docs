@@ -248,7 +248,8 @@ def cli(run: Run, config: Config, layout: Layout) -> Outcome:
     Parameters
     ----------
     run
-        The current build, which supplies the package and module names.
+        The current build, which supplies the package and module names and records the
+        pages' sidebar and navbar link.
     config
         The project's configuration.
     layout
@@ -275,15 +276,17 @@ def cli(run: Run, config: Config, layout: Layout) -> Outcome:
     )
     if not cli_info:
         return Skipped("no Click CLI found")
-    return _write_cli_pages(config, layout, cli_info, "CLI")
+    return _write_cli_pages(run, config, layout, cli_info, "CLI")
 
 
-def go_cli(config: Config, layout: Layout) -> Outcome:
+def go_cli(run: Run, config: Config, layout: Layout) -> Outcome:
     """
     Write reference pages for the project's Go command-line interface
 
     Parameters
     ----------
+    run
+        The current build, which records the pages' sidebar and navbar link.
     config
         The project's configuration.
     layout
@@ -308,15 +311,17 @@ def go_cli(config: Config, layout: Layout) -> Outcome:
     cli_info = cast("CliCommand | None", introspect_cobra_cli(project))
     if not cli_info:
         return Skipped("Go CLI introspection failed (is 'go' on PATH?)")
-    return _write_cli_pages(config, layout, cli_info, "Go CLI", f" ({project.binary_name})")
+    return _write_cli_pages(run, config, layout, cli_info, "Go CLI", f" ({project.binary_name})")
 
 
-def rust_cli(config: Config, layout: Layout) -> Outcome:
+def rust_cli(run: Run, config: Config, layout: Layout) -> Outcome:
     """
     Write reference pages for the project's Rust command-line interface
 
     Parameters
     ----------
+    run
+        The current build, which records the pages' sidebar and navbar link.
     config
         The project's configuration.
     layout
@@ -341,17 +346,21 @@ def rust_cli(config: Config, layout: Layout) -> Outcome:
     cli_info = cast("CliCommand | None", introspect_rust_cli(project))
     if not cli_info:
         return Skipped("Rust CLI introspection failed (is 'cargo' on PATH?)")
-    return _write_cli_pages(config, layout, cli_info, "Rust CLI", f" ({project.binary_names[0]})")
+    return _write_cli_pages(
+        run, config, layout, cli_info, "Rust CLI", f" ({project.binary_names[0]})"
+    )
 
 
 def _write_cli_pages(
-    config: Config, layout: Layout, cli_info: CliCommand, kind: str, suffix: str = ""
+    run: Run, config: Config, layout: Layout, cli_info: CliCommand, kind: str, suffix: str = ""
 ) -> Outcome:
     """
-    Write CLI reference pages and add their sidebar and the Reference navbar link
+    Write CLI reference pages and record their sidebar and the Reference navbar link
 
     Parameters
     ----------
+    run
+        The current build, which records the sidebar and navbar link.
     config
         The project's configuration.
     layout
@@ -368,12 +377,10 @@ def _write_cli_pages(
     :
         The step's result line.
     """
-    build_dir = layout.build_dir
-    cli_files = cli_render.write_pages(config, build_dir, cli_info, report=print)
+    cli_files = cli_render.write_pages(config, layout.build_dir, cli_info, report=print)
     if not cli_files:
         return f"No {kind} pages generated"
-    with quarto_yml.edit(build_dir) as quarto_config:
-        quarto_yml.apply(quarto_config, cli_render.contribution(config, cli_files), config)
+    run.contributions.append(cli_render.contribution(config, cli_files))
     n_pages = cli_render.count_pages(cli_files)
     print(f"Updated sidebar with {n_pages} CLI reference page(s)")
     return f"{n_pages} {kind} reference page(s){suffix}"
@@ -386,7 +393,8 @@ def mcp(run: Run, config: Config, layout: Layout) -> Outcome:
     Parameters
     ----------
     run
-        The current build, which supplies the package name and repository.
+        The current build, which supplies the package name and repository and records the
+        pages' sidebar.
     config
         The project's configuration.
     layout
@@ -411,7 +419,6 @@ def mcp(run: Run, config: Config, layout: Layout) -> Outcome:
     )
     if not mcp_files:
         return "No MCP pages generated"
-    with quarto_yml.edit(build_dir) as quarto_config:
-        quarto_yml.apply(quarto_config, mcp_build.contribution(config, mcp_files), config)
+    run.contributions.append(mcp_build.contribution(config, mcp_files))
     print(f"Updated sidebar with {cli_render.count_pages(mcp_files)} MCP reference page(s)")
     return f"{len(mcp_info.get('tools', []))} MCP tool page(s) + manifest"

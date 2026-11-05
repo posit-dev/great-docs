@@ -6162,49 +6162,34 @@ def test_render_source_relative_path_falls_back_to_griffe():
     assert _render_doc_source_relative_path(obj, SourceLinks()) == "raghilda/embedding.py"
 
 
-def test_update_sidebar_from_sections_basic():
-    """Test _update_sidebar_from_sections builds sidebar from API reference."""
+def test_reference_sidebar_lists_the_api_sections():
+    """List the index and API sections in an untitled sidebar"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-
-        config = {
-            "project": {"type": "website"},
-            "website": {"sidebar": []},
-            "api-reference": {
-                "package": "mypkg",
-                "sections": [
-                    {
-                        "title": "Classes",
-                        "desc": "",
-                        "contents": ["MyClass", "OtherClass"],
-                    },
-                    {
-                        "title": "Functions",
-                        "desc": "",
-                        "contents": ["my_func"],
-                    },
-                ],
-            },
+        api_block = {
+            "package": "mypkg",
+            "sections": [
+                {
+                    "title": "Classes",
+                    "desc": "",
+                    "contents": ["MyClass", "OtherClass"],
+                },
+                {
+                    "title": "Functions",
+                    "desc": "",
+                    "contents": ["my_func"],
+                },
+            ],
         }
 
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
+        sidebar = reference_sections.sidebar(docs._config, api_block)
 
-        reference_sections.update_sidebar(docs._config, docs.build_dir, config["api-reference"])
+        assert sidebar.id == "reference"
+        assert sidebar.title is None
 
-        with open(quarto_yml, "r") as f:
-            result = read_yaml(f)
-
-        sidebar = result["website"]["sidebar"]
-
-        assert len(sidebar) == 1
-        assert sidebar[0]["id"] == "reference"
-
-        contents = sidebar[0]["contents"]
+        contents = sidebar.contents
 
         # First entry is API link
         assert contents[0] == {"text": "API Index", "href": "reference/index.qmd"}
@@ -6217,81 +6202,54 @@ def test_update_sidebar_from_sections_basic():
         assert {"text": "my_func", "href": "reference/my_func.qmd"} in contents[2]["contents"]
 
 
-def test_update_sidebar_from_sections_dict_items():
-    """Test _update_sidebar_from_sections handles dict items in contents."""
+def test_reference_sidebar_lists_dict_items():
+    """List API reference entries supplied as mappings"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-
-        config = {
-            "project": {"type": "website"},
-            "website": {"sidebar": []},
-            "api-reference": {
-                "package": "mypkg",
-                "sections": [
-                    {
-                        "title": "Core",
-                        "desc": "",
-                        "contents": [
-                            {"name": "BigClass", "members": []},
-                            "simple_func",
-                        ],
-                    },
-                ],
-            },
+        api_block = {
+            "package": "mypkg",
+            "sections": [
+                {
+                    "title": "Core",
+                    "desc": "",
+                    "contents": [
+                        {"name": "BigClass", "members": []},
+                        "simple_func",
+                    ],
+                },
+            ],
         }
 
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
+        sidebar = reference_sections.sidebar(docs._config, api_block)
 
-        reference_sections.update_sidebar(docs._config, docs.build_dir, config["api-reference"])
-
-        with open(quarto_yml, "r") as f:
-            result = read_yaml(f)
-
-        sidebar = result["website"]["sidebar"]
-        section = sidebar[0]["contents"][1]  # First section after API link
+        section = sidebar.contents[1]  # First section after API link
 
         assert {"text": "BigClass", "href": "reference/BigClass.qmd"} in section["contents"]
         assert {"text": "simple_func", "href": "reference/simple_func.qmd"} in section["contents"]
 
 
-def test_update_sidebar_from_sections_sanitizes_colons():
+def test_reference_sidebar_sanitizes_colons():
     """Colons in `module:Item` entry names must be sanitized in sidebar hrefs."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-
-        config = {
-            "project": {"type": "website"},
-            "website": {"sidebar": []},
-            "api-reference": {
-                "package": "mypkg",
-                "sections": [
-                    {
-                        "title": "Devices",
-                        "desc": "",
-                        "contents": ["devices.keithley:Keithley2400"],
-                    },
-                ],
-            },
+        api_block = {
+            "package": "mypkg",
+            "sections": [
+                {
+                    "title": "Devices",
+                    "desc": "",
+                    "contents": ["devices.keithley:Keithley2400"],
+                },
+            ],
         }
 
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
+        sidebar = reference_sections.sidebar(docs._config, api_block)
 
-        reference_sections.update_sidebar(docs._config, docs.build_dir, config["api-reference"])
-
-        with open(quarto_yml, "r") as f:
-            result = read_yaml(f)
-
-        section = result["website"]["sidebar"][0]["contents"][1]
+        section = sidebar.contents[1]
         assert {
             "text": "devices.keithley:Keithley2400",
             "href": "reference/devices.keithley.Keithley2400.qmd",
@@ -7458,7 +7416,7 @@ def test_prepare_build_directory_creates_structure():
 
         # This structure check does not require an importable package.
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "update_sidebar"):
+            with patch.object(reference_sections, "sidebar"):
                 prepare_build_directory(docs, make_run(docs))
 
         # Check directory structure
@@ -7498,7 +7456,7 @@ def test_prepare_build_directory_can_retry_after_missing_header_include(tmp_path
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch("great_docs._build.reference.add_api_block"):
-        with patch.object(reference_sections, "update_sidebar"):
+        with patch.object(reference_sections, "sidebar"):
             with pytest.raises(FileNotFoundError, match="Header include file not found"):
                 prepare_build_directory(docs, make_run(docs))
 
@@ -7516,7 +7474,7 @@ def test_prepare_build_directory_writes_website_project(tmp_path):
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch("great_docs._build.reference.add_api_block"):
-        with patch.object(reference_sections, "update_sidebar"):
+        with patch.object(reference_sections, "sidebar"):
             prepare_build_directory(docs, make_run(docs))
 
     config = read_yaml(docs.build_dir / "_quarto.yml")
@@ -7570,7 +7528,7 @@ def test_prepare_build_directory_copies_js_files():
         readme.write_text("# My Pkg\n", encoding="utf-8")
 
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "update_sidebar"):
+            with patch.object(reference_sections, "sidebar"):
                 prepare_build_directory(docs, make_run(docs))
 
         # The GitHub widget needs a repository; the other core scripts do not.
@@ -7635,7 +7593,7 @@ def test_prepare_build_directory_copies_bibliography():
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "update_sidebar"):
+            with patch.object(reference_sections, "sidebar"):
                 prepare_build_directory(docs, make_run(docs))
 
         # .bib copied into build dir by basename
@@ -7672,7 +7630,7 @@ def test_prepare_build_directory_copies_multiple_bib_and_csl():
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "update_sidebar"):
+            with patch.object(reference_sections, "sidebar"):
                 prepare_build_directory(docs, make_run(docs))
 
         assert (docs.build_dir / "refs.bib").exists()
@@ -7701,7 +7659,7 @@ def test_prepare_build_directory_bibliography_missing_warns(capsys):
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "update_sidebar"):
+            with patch.object(reference_sections, "sidebar"):
                 prepare_build_directory(docs, make_run(docs))
 
         out = capsys.readouterr().out
@@ -7733,7 +7691,7 @@ def test_bibliography_does_not_set_reference_section_title():
 
         docs = GreatDocs(project_path=tmp_dir)
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "update_sidebar"):
+            with patch.object(reference_sections, "sidebar"):
                 prepare_build_directory(docs, make_run(docs))
 
         with open(docs.build_dir / "_quarto.yml", encoding="utf-8") as f:
@@ -7760,7 +7718,7 @@ def _prepared_quarto_config(lang: str) -> dict:
 
         docs = GreatDocs(project_path=tmp_dir)
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "update_sidebar"):
+            with patch.object(reference_sections, "sidebar"):
                 prepare_build_directory(docs, make_run(docs))
 
         with open(docs.build_dir / "_quarto.yml", encoding="utf-8") as f:
@@ -7811,7 +7769,7 @@ def test_prepare_build_directory_optional_js_copy_page():
         readme.write_text("# My Pkg\n", encoding="utf-8")
 
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "update_sidebar"):
+            with patch.object(reference_sections, "sidebar"):
                 prepare_build_directory(docs, make_run(docs))
 
         assert (docs.build_dir / "copy-page.js").exists()
@@ -7838,7 +7796,7 @@ def test_prepare_build_directory_cleans_existing():
         stale_file.write_text("old content")
 
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "update_sidebar"):
+            with patch.object(reference_sections, "sidebar"):
                 prepare_build_directory(docs, make_run(docs))
 
         # Stale file should be gone
@@ -9071,7 +9029,7 @@ def test_build_with_changelog(tmp_path):
     )
     docs._remote = StubRemote(releases=[GITHUB_RELEASE])
 
-    with stubbed_build():
+    with stubbed_build(run=["content.assets"]):
         docs.build(watch=False, refresh=False)
 
     assert "## v1.0.0" in (docs.build_dir / "changelog.qmd").read_text(encoding="utf-8")
@@ -9111,7 +9069,7 @@ def test_build_with_cli_documentation(tmp_path):
     cli_files = ["reference/cli/index.qmd"]
 
     with (
-        stubbed_build(),
+        stubbed_build(run=["content.assets"]),
         patch("great_docs._cliref.click.discover", return_value=cli_info) as discover,
         patch("great_docs._cliref.render.write_pages", return_value=cli_files) as write_pages,
     ):
@@ -17893,65 +17851,6 @@ class TestQuartoEnvironment:
             assert "python" in env["PYTHONPATH"]
 
 
-class TestUpdateSidebarFromSections:
-    """Tests for _update_sidebar_from_sections."""
-
-    def _make_docs(self, tmp_dir, sections):
-        """Helper: create a GreatDocs with _quarto.yml containing api-reference sections."""
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        config = {
-            "website": {"sidebar": []},
-            "api-reference": {"package": "mypkg", "sections": sections},
-            "format": {"html": {}},
-        }
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
-        return docs
-
-    def test_builds_sidebar_from_sections(self):
-        """Creates sidebar entries from API reference sections."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            sections = [
-                {"title": "Classes", "contents": ["MyClass", "OtherClass"]},
-                {"title": "Functions", "contents": ["func_a"]},
-            ]
-            docs = self._make_docs(tmp_dir, sections)
-            reference_sections.update_sidebar(
-                docs._config, docs.build_dir, {"package": "mypkg", "sections": sections}
-            )
-            with open(docs.build_dir / "_quarto.yml") as f:
-                config = read_yaml(f)
-            sidebar = config["website"]["sidebar"]
-            assert len(sidebar) == 1
-            assert sidebar[0]["id"] == "reference"
-            # First entry is the API link, then sections
-            contents = sidebar[0]["contents"]
-            assert contents[0]["href"] == "reference/index.qmd"
-            assert contents[1]["section"] == "Classes"
-            assert {"text": "MyClass", "href": "reference/MyClass.qmd"} in contents[1]["contents"]
-
-    def test_handles_dict_format_items(self):
-        """Processes dict-format items with name key."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            sections = [
-                {"title": "Classes", "contents": [{"name": "Graph", "members": []}]},
-            ]
-            docs = self._make_docs(tmp_dir, sections)
-            reference_sections.update_sidebar(
-                docs._config, docs.build_dir, {"package": "mypkg", "sections": sections}
-            )
-            with open(docs.build_dir / "_quarto.yml") as f:
-                config = read_yaml(f)
-            contents = config["website"]["sidebar"][0]["contents"]
-            assert {"text": "Graph", "href": "reference/Graph.qmd"} in contents[1]["contents"]
-
-
 class TestUpdateQuartoConfigScripts:
     """
     Site script registration tests
@@ -19871,7 +19770,7 @@ def test_prepare_build_directory_copies_video_embed_js():
         readme.write_text("# My Pkg\n", encoding="utf-8")
 
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "update_sidebar"):
+            with patch.object(reference_sections, "sidebar"):
                 prepare_build_directory(docs, make_run(docs))
 
         assert (docs.build_dir / "video-embed.js").exists()
@@ -21135,71 +21034,6 @@ def test_keyboard_nav_scss_styles_exist():
     assert ".gd-menu-overlay," in content
 
 
-# ── status data injection ────────────────────────────────────────
-
-
-def test_status_data_injection_no_json():
-    """Does nothing when _page_status.json doesn't exist."""
-    with tempfile.TemporaryDirectory() as tmp:
-        gd = GreatDocs(project_path=tmp)
-        gd.build_dir = Path(tmp)
-        page_status.inject(gd.build_dir)
-
-
-def test_status_data_injection_injects():
-    """Injects status data as inline script."""
-    with tempfile.TemporaryDirectory() as tmp:
-        project = Path(tmp)
-        gd = GreatDocs(project_path=tmp)
-        gd.build_dir = project
-
-        status_data = {"page_statuses": {}, "definitions": {}}
-        (project / "_page_status.json").write_text(json.dumps(status_data))
-        quarto_config = {"format": {"html": {"include-after-body": ["page-status-badges.js"]}}}
-        (project / "_quarto.yml").write_text(format_yaml(quarto_config))
-
-        page_status.inject(gd.build_dir)
-
-        result = read_yaml(project / "_quarto.yml")
-        entries = result["format"]["html"]["include-after-body"]
-        has_status = any("__GD_STATUS_DATA__" in str(e) for e in entries)
-        assert has_status
-
-
-def test_status_data_injection_string_body():
-    """Handles include-after-body as string (converted to list)."""
-    with tempfile.TemporaryDirectory() as tmp:
-        project = Path(tmp)
-        gd = GreatDocs(project_path=tmp)
-        gd.build_dir = project
-
-        (project / "_page_status.json").write_text('{"page_statuses": {}}')
-        quarto_config = {"format": {"html": {"include-after-body": "existing.js"}}}
-        (project / "_quarto.yml").write_text(format_yaml(quarto_config))
-
-        page_status.inject(gd.build_dir)
-
-        result = read_yaml(project / "_quarto.yml")
-        entries = result["format"]["html"]["include-after-body"]
-        assert isinstance(entries, list)
-        assert len(entries) >= 2  # original + injected
-
-
-def test_inline_status_data_injection_keeps_generated_header(tmp_path: Path):
-    """Preserve the generated configuration header when embedding status data"""
-    gd = GreatDocs(project_path=str(tmp_path))
-    gd.build_dir.mkdir()
-    write_initial_quarto_yml(gd.build_dir)
-    with edit_quarto_yml(gd.build_dir) as config:
-        config["format"]["html"]["include-after-body"] = ["page-status-badges.js"]
-    (gd.build_dir / "_page_status.json").write_text("{}", encoding="utf-8")
-
-    page_status.inject(gd.build_dir)
-
-    assert "_DATA__=" in (gd.build_dir / "_quarto.yml").read_text(encoding="utf-8")
-    validate_build_dir(gd.build_dir)
-
-
 # ── status collection ────────────────────────────────────────────
 
 
@@ -22086,7 +21920,7 @@ def test_prepare_build_dir_pre_render_script_exists(tmp_path):
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch("great_docs._build.reference.add_api_block"):
-        with patch.object(reference_sections, "update_sidebar"):
+        with patch.object(reference_sections, "sidebar"):
             prepare_build_directory(docs, make_run(docs))
 
     # Script should be copied to scripts/ in the build dir
@@ -22105,7 +21939,7 @@ def test_prepare_build_dir_css_file_warning(tmp_path):
     out = io.StringIO()
     with redirect_stdout(out):
         with patch("great_docs._build.reference.add_api_block"):
-            with patch.object(reference_sections, "update_sidebar"):
+            with patch.object(reference_sections, "sidebar"):
                 prepare_build_directory(docs, make_run(docs))
 
     assert "CSS" in out.getvalue() or "css" in out.getvalue().lower()
@@ -22119,7 +21953,7 @@ def test_prepare_build_dir_css_file_exists(tmp_path):
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch("great_docs._build.reference.add_api_block"):
-        with patch.object(reference_sections, "update_sidebar"):
+        with patch.object(reference_sections, "sidebar"):
             prepare_build_directory(docs, make_run(docs))
 
     # CSS file should be in the build dir

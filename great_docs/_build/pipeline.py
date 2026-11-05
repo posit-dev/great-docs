@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import metadata
 from importlib import util as import_util
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .._content import user_guide as user_guide_pages
+from .._contribution import Contribution
 from .._project import Project
 from .._reference.exports import Exports
 from .._subprocess import TEXT_MODE_KWARGS
@@ -86,6 +87,9 @@ class Run:
         The navbar's GitHub data, fetched when the Quarto configuration is first
         written and reused on later writes within the build. `None` before the
         first write.
+    contributions
+        The navigation, resources, render exclusions and script data recorded for the
+        Quarto configuration, in preparation step order.
     """
 
     project: Project
@@ -97,6 +101,7 @@ class Run:
     api_block: dict[str, Any] | None = None
     user_guide: UserGuide | None = None
     facts: Facts | None = None
+    contributions: list[Contribution] = field(default_factory=lambda: list[Contribution]())
 
     @classmethod
     def make(cls, config: Config, layout: Layout, *, watch: bool) -> Run:
@@ -389,13 +394,13 @@ def preparation_steps(
         ),
         Step(
             "Generate Go CLI reference",
-            lambda: reference.go_cli(config, layout),
+            lambda: reference.go_cli(run, config, layout),
             warn=Warn((OSError,), "Error generating Go CLI docs", "Go CLI generation had issues"),
             user_code=True,
         ),
         Step(
             "Generate Rust CLI reference",
-            lambda: reference.rust_cli(config, layout),
+            lambda: reference.rust_cli(run, config, layout),
             warn=Warn(
                 (OSError,), "Error generating Rust CLI docs", "Rust CLI generation had issues"
             ),
@@ -433,8 +438,11 @@ def preparation_steps(
             ),
             fails_on=(ValueError,),
         ),
-        Step("Process page tags", lambda: generated.tags(config, layout)),
-        Step("Process page status badges", lambda: generated.page_statuses(config, layout)),
+        Step("Process page tags", lambda: generated.tags(run, config, layout)),
+        Step(
+            "Process page status badges",
+            lambda: generated.page_statuses(run, config, layout),
+        ),
         Step(
             "Copy assets",
             lambda: content.assets(run, config, layout, remote=remote),

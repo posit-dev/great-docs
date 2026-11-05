@@ -5,10 +5,9 @@ Build API reference section descriptions
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from .._website import quarto_yml
+from .._contribution import Sidebar
 
 if TYPE_CHECKING:
     from ..config import Config
@@ -375,30 +374,24 @@ def from_explicit_config(
     return sections if sections else None
 
 
-def update_sidebar(site_config: Config, build_dir: Path, api_block: dict[str, Any]) -> None:
+def sidebar(site_config: Config, api_block: dict[str, Any]) -> Sidebar:
     """
-    Replace the site's sidebars in `_quarto.yml` with the API reference sidebar
+    Make the API reference sidebar
 
-    The sidebar lists the reference index first, then groups links to generated
-    object pages by API reference section.
+    The sidebar has no title. It lists the reference index first, then groups links to
+    generated object pages by API reference section.
 
     Parameters
     ----------
     site_config
         The project's configuration, which sets the language of the index link.
-    build_dir
-        The Quarto project directory.
     api_block
         The API reference configuration whose sections the sidebar lists.
 
     Returns
     -------
     :
-
-    Raises
-    ------
-    FileNotFoundError
-        If the build directory has no `_quarto.yml`.
+        The sidebar, with `reference` as its `id`.
     """
     from .._apiref import APIReference, SpecObject
     from .._translations import get_translation
@@ -415,6 +408,4 @@ def update_sidebar(site_config: Config, build_dir: Path, api_block: dict[str, An
         ]
         contents.append({"section": heading, "contents": links})
 
-    with quarto_yml.edit(build_dir) as quarto_config:
-        website = cast("dict[str, Any]", quarto_config.setdefault("website", {}))
-        website["sidebar"] = [{"id": "reference", "contents": contents}]
+    return Sidebar("reference", None, tuple(contents))

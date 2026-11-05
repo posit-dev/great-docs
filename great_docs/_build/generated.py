@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from .._cliref import click as cli_click
 from .._website import changelog as changelog_page
-from .._website import inline_data, page_status, quarto_yml
+from .._website import page_status
 from .._website import tags as page_tags
 from .._website.ai_agents import llms_txt as llms_files
 from .._website.ai_agents.skills import SkillsWriter
@@ -140,12 +140,13 @@ def check_site_url(run: Run, config: Config, log: BuildLog) -> Outcome:
 
 def changelog(run: Run, config: Config, layout: Layout, *, remote: Remote) -> Outcome:
     """
-    Write the changelog page from GitHub Releases and link it from the navbar
+    Write the changelog page from GitHub Releases and record its navbar link
 
     Parameters
     ----------
     run
-        The current build, which supplies the project's GitHub repository.
+        The current build, which supplies the project's GitHub repository and records the
+        navbar link.
     config
         The project's configuration.
     layout
@@ -163,21 +164,21 @@ def changelog(run: Run, config: Config, layout: Layout, *, remote: Remote) -> Ou
     repo = run.project.github
     if repo is None:
         return Skipped("no GitHub repo info")
-    build_dir = layout.build_dir
-    contribution = changelog_page.write_page(config, build_dir, repo, remote, report=print)
+    contribution = changelog_page.write_page(config, layout.build_dir, repo, remote, report=print)
     if contribution is None:
         return "No releases found; skipped"
-    with quarto_yml.edit(build_dir) as quarto_config:
-        quarto_yml.apply(quarto_config, contribution, config)
+    run.contributions.append(contribution)
     return "Changelog from GitHub Releases"
 
 
-def tags(config: Config, layout: Layout) -> Outcome:
+def tags(run: Run, config: Config, layout: Layout) -> Outcome:
     """
-    Write the tags index, embed tag pill data and add the navbar link
+    Write the tags index and pill data, and record the navbar link and data to embed
 
     Parameters
     ----------
+    run
+        The current build, which records the navbar link and data to embed.
     config
         The project's configuration.
     layout
@@ -190,24 +191,21 @@ def tags(config: Config, layout: Layout) -> Outcome:
     """
     if not config.tags_enabled:
         return Skipped("tags not enabled")
-    output = page_tags.write(config, layout, report=print)
-    if output is None:
+    contribution = page_tags.write(config, layout, report=print)
+    if contribution is None:
         return Skipped("no tagged pages found")
-    with quarto_yml.edit(layout.build_dir) as quarto_config:
-        if output.page_data is not None:
-            inline_data.add(
-                quarto_config, "__GD_TAGS_DATA__", output.page_data, before="page-tags.js"
-            )
-        quarto_yml.apply(quarto_config, output.contribution, config)
+    run.contributions.append(contribution)
     return "Tags processed"
 
 
-def page_statuses(config: Config, layout: Layout) -> Outcome:
+def page_statuses(run: Run, config: Config, layout: Layout) -> Outcome:
     """
-    Write the status badge data for pages that declare a status
+    Write the page status data and record it for embedding
 
     Parameters
     ----------
+    run
+        The current build, which records the page data.
     config
         The project's configuration.
     layout
@@ -220,6 +218,8 @@ def page_statuses(config: Config, layout: Layout) -> Outcome:
     """
     if not config.page_status_enabled:
         return Skipped("page status not enabled")
-    if not page_status.process(config, layout, layout.build_dir):
+    contribution = page_status.process(config, layout, layout.build_dir)
+    if contribution is None:
         return Skipped("no pages with status")
+    run.contributions.append(contribution)
     return "Status badges processed"

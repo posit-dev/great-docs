@@ -11,15 +11,15 @@ from __future__ import annotations
 
 import shutil
 from functools import partial
-from typing import TYPE_CHECKING, Any, TypeGuard, cast
+from typing import TYPE_CHECKING, Any
 
 from .._content import custom_pages as authored_pages
 from .._content import publish, walk
 from .._content import sections as authored_sections
 from .._content import user_guide as authored_guide
 from .._content.pages import PageMap
-from .._contribution import Contribution
-from .._website import page_dates, quarto_yml, social_cards
+from .._contribution import Contribution, NavbarLink, Sidebar
+from .._website import page_dates, social_cards
 from .._website.ai_agents import llms_txt as llms_files
 from .._website.homepage import page as homepage_page
 from .._website.homepage import source as homepage_source
@@ -39,23 +39,6 @@ if TYPE_CHECKING:
     from .pipeline import Run
 
 __all__ = ["assets", "custom_pages", "homepage", "page_map", "sections", "user_guide"]
-
-
-def _is_mapping(value: object) -> TypeGuard[dict[str, Any]]:
-    """
-    Check whether a `_quarto.yml` entry is a mapping
-
-    Parameters
-    ----------
-    value
-        The entry.
-
-    Returns
-    -------
-    :
-        Whether `value` is a `dict`.
-    """
-    return isinstance(value, dict)
 
 
 def page_map(config: Config, layout: Layout, guide: UserGuide | None) -> PageMap:
@@ -158,7 +141,7 @@ def user_guide(
     remote: Remote,
 ) -> Outcome:
     """
-    Publish the user guide and add its sidebar and navbar link
+    Publish the user guide and record its sidebar and navbar link
 
     With `homepage: user_guide`, publish the guide's first page as the homepage. In that mode,
     warn and fall back to the project's index page, README or generated landing page if the
@@ -168,7 +151,8 @@ def user_guide(
     ----------
     run
         The current build, which holds the discovered user guide and the project's name,
-        metadata and API reference configuration for a blended homepage.
+        metadata and API reference configuration for a blended homepage, and records the
+        guide's navigation.
     config
         The project's configuration.
     layout
@@ -215,7 +199,7 @@ def user_guide(
             api_block=run.api_block,
         )
 
-    _add_guide_navigation(config, layout, guide, blended_first_page)
+    run.contributions.append(_guide_navigation(config, guide, blended_first_page))
 
     if guide["sections"]:
         print(f"   Sections: {', '.join(guide['sections'])}")
@@ -345,23 +329,16 @@ def _promote_first_page(
     return f"user-guide/{dest_rel}"
 
 
-def _add_guide_navigation(
-    config: Config,
-    layout: Layout,
-    guide: UserGuide,
-    blended_first_page: str | None = None,
-) -> None:
+def _guide_navigation(
+    config: Config, guide: UserGuide, blended_first_page: str | None = None
+) -> Contribution:
     """
-    Add the user guide's sidebar and navbar link to `_quarto.yml`
-
-    Leave the build directory unchanged if it has no `_quarto.yml`.
+    Make the user guide's sidebar and navbar link
 
     Parameters
     ----------
     config
         The project's configuration.
-    layout
-        The project's directories.
     guide
         The user guide.
     blended_first_page
@@ -371,58 +348,38 @@ def _add_guide_navigation(
     Returns
     -------
     :
+        The sidebar and, unless the guide's first page became the homepage, a navbar
+        link to that page.
     """
-    build_dir = layout.build_dir
-    if not quarto_yml.path(build_dir).exists():
-        return
-
-    quarto_config = quarto_yml.read(build_dir)
-
-    if "website" not in quarto_config:
-        quarto_config["website"] = {}
-    website = cast("dict[str, Any]", quarto_config["website"])
-
-    sidebar_config = authored_guide.sidebar(guide)
+    sidebar = authored_guide.sidebar(guide)
 
     # The sidebar must link to the homepage after the first guide page moves there.
     if config.homepage == "user_guide" and blended_first_page:
-        authored_guide.link_homepage(sidebar_config, blended_first_page)
-
-    if "sidebar" not in website:
-        website["sidebar"] = []
-
-    sidebar = [
-        entry
-        for entry in cast("list[Any]", website["sidebar"])
-        if not (_is_mapping(entry) and entry.get("id") == authored_guide.SIDEBAR_ID)
-    ]
-    sidebar.append(sidebar_config)
-    website["sidebar"] = sidebar
+        authored_guide.link_homepage(sidebar, blended_first_page)
 
     # In blended mode, the homepage replaces the guide's navbar link.
-    if config.homepage != "user_guide" and "navbar" in website:
-        navbar = cast("dict[str, Any]", website["navbar"])
-        if "left" in navbar:
-            items = cast("list[Any]", navbar["left"])
-            href = authored_guide.entry(guide)
-            # Match the destination; the label may already be translated.
-            has_user_guide = any(_is_mapping(item) and item.get("href") == href for item in items)
-            if not has_user_guide:
-                # Place the guide before Reference, or first if Reference is absent.
-                insert_idx = next(
-                    (
-                        i
-                        for i, item in enumerate(items)
-                        if _is_mapping(item) and nav_navbar.REFERENCE.owns(item.get("href"))
-                    ),
-                    0,
-                )
-                items.insert(
-                    insert_idx,
-                    {"text": nav_navbar.USER_GUIDE.label(config), "href": href},
-                )
+    navbar: tuple[NavbarLink, ...] = ()
+    if config.homepage != "user_guide":
+        label = nav_navbar.USER_GUIDE.label(config)
+        navbar = (NavbarLink(label, authored_guide.entry(guide), kind="user_guide"),)
+    return Contribution(navbar=navbar, sidebars=(_sidebar(sidebar),))
 
-    quarto_yml.write(build_dir, quarto_config)
+
+def _sidebar(entry: dict[str, Any]) -> Sidebar:
+    """
+    Make a sidebar from a `website.sidebar` entry
+
+    Parameters
+    ----------
+    entry
+        The entry, with its `id`, optional `title` and `contents`.
+
+    Returns
+    -------
+    :
+        The sidebar.
+    """
+    return Sidebar(entry["id"], entry.get("title"), tuple(entry["contents"]))
 
 
 def sections(
@@ -433,12 +390,13 @@ def sections(
     page_authors: list[dict[str, Any]],
 ) -> Outcome:
     """
-    Publish the configured sections and add their sidebars and navbar links
+    Publish the configured sections and record their sidebars and navbar links
 
     Parameters
     ----------
     run
-        The current build, which holds the discovered user guide for rewriting links.
+        The current build, which holds the discovered user guide for rewriting links and
+        records the sections' navigation.
     config
         The project's configuration.
     layout
@@ -457,7 +415,6 @@ def sections(
     if not found:
         return "No sections to process"
 
-    build_dir = layout.build_dir
     pages = page_map(config, layout, run.user_guide)
     add_dates = partial(page_dates.add_to_page, config=config, authors=page_authors)
     for section in found:
@@ -483,24 +440,15 @@ def sections(
                 report=print_warning,
             )
 
-        quarto_config = quarto_yml.read(build_dir, seed_website=True)
-        changed = published.sidebar is not None
-        if published.sidebar is not None:
-            sidebar_id = published.sidebar["id"]
-            quarto_config["website"]["sidebar"] = [
-                *(
-                    entry
-                    for entry in cast("list[Any]", quarto_config["website"]["sidebar"])
-                    if not (_is_mapping(entry) and entry.get("id") == sidebar_id)
+        link = published.navbar
+        run.contributions.append(
+            Contribution(
+                navbar=(
+                    NavbarLink(link.text, link.href, kind="authored", after=published.navbar_after),
                 ),
-                published.sidebar,
-            ]
-        if nav_navbar.add_link(
-            quarto_config, published.navbar, config, after=published.navbar_after
-        ):
-            changed = True
-        if changed:
-            quarto_yml.write(build_dir, quarto_config)
+                sidebars=(_sidebar(published.sidebar),) if published.sidebar is not None else (),
+            )
+        )
 
         label = "📰" if section.blog else "📂"
         print(f"   {label} {section.title}: {len(published.pages)} post(s) from {section.dir}/")
@@ -519,12 +467,13 @@ def custom_pages(
     default_description: str | None,
 ) -> Outcome:
     """
-    Publish the configured custom pages
+    Publish custom pages and record their navbar links, resources and render exclusions
 
     Parameters
     ----------
     run
-        The current build, which holds the discovered user guide for rewriting links.
+        The current build, which holds the discovered user guide for rewriting links and
+        records the pages' navbar links, resources and render exclusions.
     config
         The project's configuration.
     layout
@@ -569,18 +518,16 @@ def custom_pages(
         add_dates=partial(page_dates.add_to_page, config=config, authors=page_authors),
         report=report,
     )
-    # `navbar_after` refers to a label; contributions cannot express that placement.
-    for link, after in published.navbar:
-        quarto_config = quarto_yml.read(build_dir, seed_website=True)
-        if nav_navbar.add_link(quarto_config, link, config, after=after):
-            quarto_yml.write(build_dir, quarto_config)
-    if published.resources or published.render_excludes:
-        contribution = Contribution(
+    run.contributions.append(
+        Contribution(
+            navbar=tuple(
+                NavbarLink(link.text, link.href, kind="authored", after=after)
+                for link, after in published.navbar
+            ),
             resources=tuple(published.resources),
             render_excludes=tuple(published.render_excludes),
         )
-        with quarto_yml.edit(build_dir, seed_website=True) as quarto_config:
-            quarto_yml.apply(quarto_config, contribution, config)
+    )
     if not published.pages:
         return Skipped("no custom pages")
     return f"{published.pages} custom page(s)"
