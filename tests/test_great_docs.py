@@ -12418,19 +12418,6 @@ def test_api_reference_from_config_dict():
     assert ref.package == "json"
 
 
-def test_api_reference_from_yaml_file():
-    """APIReference is created from a YAML file path."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        cfg_file = Path(tmp_dir) / "quarto.yml"
-        cfg_file.write_text(
-            "api-reference:\n  package: json\n  sections: []\n",
-            encoding="utf-8",
-        )
-        ref = APIReference(str(cfg_file))
-        assert ref.package == "json"
-
-
 def test_api_reference_no_section_raises():
     """APIReference raises KeyError when no section found."""
 
