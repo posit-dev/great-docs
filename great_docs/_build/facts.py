@@ -116,10 +116,10 @@ def source_ref(config: Config, package_root: Path, *, warn: Callable[[str], None
 
     A configured `source.branch` takes precedence, and `git` does not run.
     Otherwise the exact tag at `HEAD` wins over the branch name. When `git`
-    cannot start, even after one retry, a warning names the error and the ref
-    falls back to `main`. When `git` exits with a non-zero status, as outside
-    a repository, or `HEAD` is detached and has no exact tag, the ref falls
-    back to `main` silently.
+    cannot start, even after one retry, or runs longer than 5 seconds, a
+    warning names the error and the ref falls back to `main`. When `git` exits
+    with a non-zero status, as outside a repository, or `HEAD` is detached and
+    has no exact tag, the ref falls back to `main` silently.
 
     Parameters
     ----------
@@ -142,7 +142,7 @@ def source_ref(config: Config, package_root: Path, *, warn: Callable[[str], None
         if tag is not None:
             return tag
         result = _git(package_root, "rev-parse", "--abbrev-ref", "HEAD")
-    except OSError as error:
+    except (OSError, subprocess.TimeoutExpired) as error:
         warn(f"Could not run git to detect the source-link ref ({error}); using 'main'")
         return "main"
     branch = result.stdout.strip()
@@ -169,6 +169,8 @@ def exact_tag(root: Path) -> str | None:
     ------
     OSError
         If `git` cannot start on either of the two attempts.
+    subprocess.TimeoutExpired
+        If `git` runs longer than 5 seconds.
     """
     result = _git(root, "describe", "--tags", "--exact-match", "HEAD")
     tag = result.stdout.strip()
@@ -177,7 +179,7 @@ def exact_tag(root: Path) -> str | None:
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     """
-    Run a `git` command, retrying once if the process cannot start
+    Run a `git` command with a 5-second timeout and one retry if it cannot start
 
     Parameters
     ----------
@@ -195,11 +197,13 @@ def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     ------
     OSError
         If `git` cannot start on either of the two attempts.
+    subprocess.TimeoutExpired
+        If `git` runs longer than 5 seconds.
     """
     command = ["git", *args]
     try:
-        return subprocess.run(command, cwd=root, capture_output=True, **TEXT_MODE_KWARGS)
+        return subprocess.run(command, cwd=root, capture_output=True, timeout=5, **TEXT_MODE_KWARGS)
     except OSError:
         # Under heavy load, an immediate retry can encounter `EAGAIN` again.
         time.sleep(0.2)
-    return subprocess.run(command, cwd=root, capture_output=True, **TEXT_MODE_KWARGS)
+    return subprocess.run(command, cwd=root, capture_output=True, timeout=5, **TEXT_MODE_KWARGS)

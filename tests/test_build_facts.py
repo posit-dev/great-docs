@@ -151,6 +151,16 @@ def test_git_that_never_starts_warns_before_falling_back(tmp_path: Path):
     assert "Resource temporarily unavailable" in warnings[0]
 
 
+def test_git_that_runs_too_long_warns_before_falling_back(tmp_path: Path):
+    warnings: list[str] = []
+    with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(["git"], 5)):
+        ref = source_ref(mock_config(), tmp_path, warn=warnings.append)
+
+    assert ref == "main"
+    assert len(warnings) == 1
+    assert "timed out after 5 seconds" in warnings[0]
+
+
 def test_source_links_link_to_the_repository(tmp_path: Path):
     config = mock_config(source_enabled=True, source_branch="dev", source_path="pkg/src")
 

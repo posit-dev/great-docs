@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from . import _marimo
 from ._build import freeze, outputs, quarto, serve, timings
-from ._build.facts import Facts, source_links
+from ._build.facts import Facts, exact_tag, source_links
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
@@ -2212,10 +2212,12 @@ class GreatDocs:
 
     def _auto_save_snapshot(self) -> None:
         """
-        Auto-save an API snapshot after a successful versioned build (Strategy C).
+        Save an API snapshot after a successful versioned build (Strategy C)
 
-        Saves to `.great-docs/snapshots/<version>.json` where `<version>` is the current git tag (if
-        exactly on one) or `dev`.
+        Save to `.great-docs/snapshots/<version>.json`, using the exact tag at
+        `HEAD` as `<version>`, or `dev` when there is no tag. Retry once if `git`
+        cannot start. Fall back silently to `dev` if it still cannot start or
+        exceeds the 5-second timeout. Other errors propagate.
         """
         from great_docs._api_diff import snapshot_from_griffe
 
@@ -2227,20 +2229,10 @@ class GreatDocs:
         # PyPI project name.
         importable_name = self._resolve_importable_name(package_name)
 
-        # Determine version label
-        version = "dev"
         try:
-            result = subprocess.run(
-                ["git", "describe", "--tags", "--exact-match", "HEAD"],
-                cwd=self.project_root,
-                capture_output=True,
-                **TEXT_MODE_KWARGS,
-                timeout=5,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                version = result.stdout.strip()
-        except Exception:
-            pass
+            version = exact_tag(self.project_root) or "dev"
+        except (OSError, subprocess.TimeoutExpired):
+            version = "dev"
 
         snap = snapshot_from_griffe(importable_name, version=version)
 
