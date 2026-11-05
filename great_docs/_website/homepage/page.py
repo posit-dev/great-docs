@@ -15,13 +15,14 @@ from typing import TYPE_CHECKING, Any
 from yaml12 import format_yaml
 
 from ..._content import publish
+from ..._manifest import Manifest
 from ..._yaml import YamlValue, locate_front_matter, set_front_matter_option
 from ..project_pages import community
 from ..seo import description as seo_description
 from . import hero, landing, margin, readme, source
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable
     from pathlib import Path
 
     from ..._content.pages import PageMap
@@ -121,7 +122,7 @@ def write_readme(
     layout: Layout,
     build_dir: Path,
     *,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     package_name: str | None,
     pages: PageMap,
     page_authors: list[dict[str, Any]],
@@ -281,7 +282,7 @@ def write_blended(
     build_dir: Path,
     content: str,
     *,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     package_name: str | None,
     pages: PageMap,
     page_authors: list[dict[str, Any]],
@@ -367,7 +368,7 @@ def _hero(
     build_dir: Path,
     readme_text: str | None,
     *,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     package_name: str | None,
     pages: PageMap,
 ) -> tuple[str, str | None]:
@@ -417,7 +418,7 @@ def _sidebar(
     layout: Layout,
     build_dir: Path,
     *,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     package_name: str | None,
     page_authors: list[dict[str, Any]],
 ) -> str:

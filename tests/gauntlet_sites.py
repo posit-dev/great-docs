@@ -366,7 +366,7 @@ def build_site(rendered_dir: Path, name: str) -> Path:
         docs = GreatDocs(str(pkg_dir))
         output = io.StringIO()
         log = BuildLog(stream=output)
-        run = Run(package_name=docs._detect_package_name() or "", watch=False)
+        run = Run.make(docs._config, docs.layout, watch=False)
         with contextlib.redirect_stdout(output):
             freeze.prepare(docs._preparation_steps(run, log), log, docs.build_dir)
 

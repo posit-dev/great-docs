@@ -37,6 +37,7 @@ from ._build import outputs
 from ._build.steps import BuildError
 from ._content import user_guide
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, LayoutError
+from ._project import Project
 from ._utils import is_in_great_docs_build_dir, recognised_build_dirs
 from .config import Config
 
@@ -518,7 +519,7 @@ async def _handle_scan(arguments: dict) -> list[TextContent]:
     verbose = arguments.get("verbose", False)
 
     docs = _get_great_docs(project_path, arguments.get("config_path"))
-    package_name = docs._detect_package_name()
+    package_name = Project.make(docs._config, docs.layout).name
     if not package_name:
         return [TextContent(type="text", text="Error: Could not detect package name.")]
 
@@ -665,7 +666,7 @@ async def _handle_status(arguments: dict) -> list[TextContent]:
     if config_path.exists():
         lines.append(f"Configuration: {config_path.relative_to(root)} ✓")
         docs = _get_great_docs(project_path, arguments.get("config_path"))
-        pkg = docs._detect_package_name()
+        pkg = Project.make(docs._config, docs.layout).name
         if pkg:
             lines.append(f"Package: {pkg}")
 
@@ -768,7 +769,7 @@ async def _handle_api_diff(arguments: dict) -> list[TextContent]:
     head_ref = arguments.get("head")
 
     docs = _get_great_docs(project_path, arguments.get("config_path"))
-    package_name = docs._detect_package_name()
+    package_name = Project.make(docs._config, docs.layout).name
     if not package_name:
         return [TextContent(type="text", text="Error: Could not detect package name.")]
 
@@ -1177,7 +1178,7 @@ async def read_resource(uri: AnyUrl) -> str:
     elif uri_str == "gd://api-surface":
         try:
             docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
-            package_name = docs._detect_package_name()
+            package_name = Project.make(docs._config, docs.layout).name
             if not package_name:
                 return "Error: Could not detect package name."
             module_name = docs._detect_module_name()
@@ -1223,7 +1224,7 @@ async def read_resource(uri: AnyUrl) -> str:
         symbol = uri_str.removeprefix("gd://reference/")
         try:
             docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
-            package_name = docs._detect_package_name()
+            package_name = Project.make(docs._config, docs.layout).name
             module_name = docs._detect_module_name()
             importable_name = module_name or docs._normalize_package_name(package_name)
             # Try to get docstring for the symbol
@@ -1342,7 +1343,7 @@ async def handle_completion(
             # Complete with actual package symbols
             try:
                 docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
-                package_name = docs._detect_package_name()
+                package_name = Project.make(docs._config, docs.layout).name
                 module_name = docs._detect_module_name()
                 importable_name = module_name or docs._normalize_package_name(package_name)
                 exports = docs._get_package_exports(importable_name)
@@ -1369,7 +1370,7 @@ async def handle_completion(
         if "reference" in str(ref.uri) and argument.name == "symbol":
             try:
                 docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
-                package_name = docs._detect_package_name()
+                package_name = Project.make(docs._config, docs.layout).name
                 module_name = docs._detect_module_name()
                 importable_name = module_name or docs._normalize_package_name(package_name)
                 exports = docs._get_package_exports(importable_name)

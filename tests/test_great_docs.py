@@ -12,7 +12,7 @@ import textwrap
 import time
 import types
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
@@ -153,6 +153,7 @@ from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
 from great_docs._content import user_guide
 from great_docs._content.naming import strip_numeric_prefix
+from great_docs._github import GithubRepo
 from great_docs._reference import block as reference_block
 from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import (
@@ -226,10 +227,12 @@ from tests.support import (
     find_user_guide_dir,
     homepage_hero,
     homepage_margin,
+    make_project,
     make_run,
     mock_config,
     stubbed_build,
     write_config,
+    write_pyproject,
 )
 
 
@@ -386,15 +389,6 @@ def test_create_api_sections():
     # Check that we have at least one section with contents
     has_contents = any(section.get("contents") for section in sections)
     assert has_contents
-
-
-def test_detect_package_name_from_pyproject_real_project():
-    """Test package name detection from pyproject.toml."""
-    # Test on great-docs's own pyproject.toml
-    docs = GreatDocs()
-    package_name = docs._detect_package_name()
-
-    assert package_name == "great-docs"
 
 
 def test_find_package_init():
@@ -1031,318 +1025,6 @@ def test_setup_github_pages_install_from_main_with_poetry():
         content = workflow_file.read_text()
         assert "poetry install" in content
         assert "poetry run pip install git+https://github.com/posit-dev/great-docs.git" in content
-
-
-def test_get_github_repo_info():
-    """Test GitHub repository info extraction from pyproject.toml."""
-    # Test on great-docs's own pyproject.toml
-    docs = GreatDocs()
-    owner, repo, base_url = docs._get_github_repo_info()
-
-    assert owner == "posit-dev"
-    assert repo == "great-docs"
-    assert base_url == "https://github.com/posit-dev/great-docs"
-
-
-def test_get_github_repo_info_no_repo():
-    """Test GitHub repo info when no repository URL exists."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Create a minimal pyproject.toml without repository URL
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text("""
-[project]
-name = "test-package"
-version = "0.1.0"
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo, base_url = docs._get_github_repo_info()
-
-        assert owner is None
-        assert repo is None
-        assert base_url is None
-
-
-def test_get_github_repo_info_string_license():
-    """Test GitHub repo info when license is PEP 639 string format."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text("""
-[project]
-name = "test-package"
-version = "0.1.0"
-license = "MIT"
-
-[project.urls]
-Repository = "https://github.com/testowner/testrepo"
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo, base_url = docs._get_github_repo_info()
-
-        assert owner == "testowner"
-        assert repo == "testrepo"
-        assert base_url == "https://github.com/testowner/testrepo"
-
-
-def test_get_github_repo_info_yml_override():
-    """Test that repo in great-docs.yml overrides pyproject.toml URLs."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # pyproject.toml with one repo URL
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text("""
-[project]
-name = "test-package"
-version = "0.1.0"
-
-[project.urls]
-Repository = "https://github.com/original/repo"
-""")
-
-        # great-docs.yml overrides with a different repo
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("repo: https://github.com/override/other-repo\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo, base_url = docs._get_github_repo_info()
-
-        assert owner == "override"
-        assert repo == "other-repo"
-        assert base_url == "https://github.com/override/other-repo"
-
-
-def test_get_github_repo_info_yml_no_pyproject():
-    """Test that repo in great-docs.yml works without pyproject.toml URLs."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # pyproject.toml with no URLs at all
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text("""
-[project]
-name = "test-package"
-version = "0.1.0"
-""")
-
-        # great-docs.yml provides the repo
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("repo: https://github.com/myorg/myrepo\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo, base_url = docs._get_github_repo_info()
-
-        assert owner == "myorg"
-        assert repo == "myrepo"
-        assert base_url == "https://github.com/myorg/myrepo"
-
-
-def test_get_github_repo_info_url_key_fallback():
-    """Test that alternative URL key names are resolved in priority order."""
-    # Each key name the code checks, in priority order
-    key_names = [
-        "Repository",
-        "repository",
-        "Source",
-        "source",
-        "GitHub",
-        "github",
-        "Homepage",
-        "homepage",
-    ]
-    for key in key_names:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            pyproject = Path(tmp_dir) / "pyproject.toml"
-            pyproject.write_text(f"""
-[project]
-name = "test-package"
-version = "0.1.0"
-
-[project.urls]
-{key} = "https://github.com/found-via/{key}"
-""")
-
-            docs = GreatDocs(project_path=tmp_dir)
-            owner, repo, base_url = docs._get_github_repo_info()
-
-            assert owner == "found-via", f"Failed for URL key '{key}'"
-            assert repo == key, f"Failed for URL key '{key}'"
-            assert base_url == f"https://github.com/found-via/{key}"
-
-
-def test_get_github_repo_info_url_key_priority():
-    """Test that 'Repository' takes priority over 'Homepage'."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text("""
-[project]
-name = "test-package"
-version = "0.1.0"
-
-[project.urls]
-Homepage = "https://github.com/fallback/homepage-repo"
-Repository = "https://github.com/primary/repo-repo"
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo, base_url = docs._get_github_repo_info()
-
-        assert owner == "primary"
-        assert repo == "repo-repo"
-
-
-@pytest.mark.parametrize(
-    "label", ["Source Code", "source-code", "source_code", "REPOSITORY", "Git Hub", "HomePage"]
-)
-def test_get_github_repo_info_url_label_ignores_case_and_separators(tmp_path: Path, label: str):
-    """A URL label matches whatever its case and its spaces, hyphens and underscores"""
-    (tmp_path / "pyproject.toml").write_text(
-        f'[project]\nname = "pkg"\n\n[project.urls]\n"{label}" = "https://github.com/owner/repo"\n',
-        encoding="utf-8",
-    )
-
-    assert GreatDocs(project_path=str(tmp_path))._get_github_repo_info() == (
-        "owner",
-        "repo",
-        "https://github.com/owner/repo",
-    )
-
-
-def test_get_github_repo_info_ignores_other_url_labels(tmp_path: Path):
-    """A GitHub URL under a label outside the recognised ones names no repository"""
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "pkg"\n\n[project.urls]\nChangelog = "https://github.com/owner/repo"\n',
-        encoding="utf-8",
-    )
-
-    assert GreatDocs(project_path=str(tmp_path))._get_github_repo_info() == (None, None, None)
-
-
-def test_get_github_repo_info_source_code_ranks_after_source(tmp_path: Path):
-    """`Source Code` ranks below `Source` and above `GitHub` and `Homepage`"""
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "pkg"\n\n[project.urls]\n'
-        'Homepage = "https://github.com/owner/home"\n'
-        'GitHub = "https://github.com/owner/hub"\n'
-        '"Source Code" = "https://github.com/owner/code"\n'
-        'Source = "https://github.com/owner/source"\n',
-        encoding="utf-8",
-    )
-    docs = GreatDocs(project_path=str(tmp_path))
-
-    assert docs._get_github_repo_info()[1] == "source"
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "pkg"\n\n[project.urls]\n'
-        'Homepage = "https://github.com/owner/home"\n'
-        'GitHub = "https://github.com/owner/hub"\n'
-        '"Source Code" = "https://github.com/owner/code"\n',
-        encoding="utf-8",
-    )
-
-    assert GreatDocs(project_path=str(tmp_path))._get_github_repo_info()[1] == "code"
-
-
-def test_get_github_repo_info_non_github_url():
-    """Test that non-GitHub URLs return None."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text("""
-[project]
-name = "test-package"
-version = "0.1.0"
-
-[project.urls]
-Repository = "https://gitlab.com/owner/repo"
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo, base_url = docs._get_github_repo_info()
-
-        assert owner is None
-        assert repo is None
-        assert base_url is None
-
-
-def test_get_github_repo_info_dot_git_suffix():
-    """Test that .git suffix is stripped from repo name."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text("""
-[project]
-name = "test-package"
-version = "0.1.0"
-
-[project.urls]
-Repository = "https://github.com/owner/repo.git"
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo, base_url = docs._get_github_repo_info()
-
-        assert owner == "owner"
-        assert repo == "repo"
-        assert base_url == "https://github.com/owner/repo"
-
-
-def test_get_github_repo_info_license_dict_text():
-    """Test that dict-style license with 'text' key doesn't break URL extraction."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text("""
-[project]
-name = "test-package"
-version = "0.1.0"
-license = {text = "Apache-2.0"}
-
-[project.urls]
-Repository = "https://github.com/owner/repo"
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo, base_url = docs._get_github_repo_info()
-
-        assert owner == "owner"
-        assert repo == "repo"
-        assert base_url == "https://github.com/owner/repo"
-
-
-def test_get_github_repo_info_license_dict_file():
-    """Test that dict-style license with 'file' key doesn't break URL extraction."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text("""
-[project]
-name = "test-package"
-version = "0.1.0"
-license = {file = "LICENSE"}
-
-[project.urls]
-Repository = "https://github.com/owner/repo"
-""")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo, base_url = docs._get_github_repo_info()
-
-        assert owner == "owner"
-        assert repo == "repo"
-
-
-def test_get_github_repo_info_yml_non_github():
-    """Test that non-GitHub repo in great-docs.yml returns None."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text("""
-[project]
-name = "test-package"
-version = "0.1.0"
-""")
-
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("repo: https://gitlab.com/myorg/myrepo\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo, base_url = docs._get_github_repo_info()
-
-        assert owner is None
-        assert repo is None
-        assert base_url is None
 
 
 def test_source_link_config_defaults():
@@ -2108,7 +1790,9 @@ def test_citation_year_from_date_released():
         docs_dir.mkdir(parents=True, exist_ok=True)
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
+        docs._create_index_from_readme(
+            make_project(docs), discover_user_guide(docs), has_api_reference=True
+        )
 
         # Check that citation.qmd was created
         citation_qmd = docs_dir / "citation.qmd"
@@ -2152,7 +1836,9 @@ def test_citation_year_defaults_to_current():
         docs_dir.mkdir(parents=True, exist_ok=True)
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
+        docs._create_index_from_readme(
+            make_project(docs), discover_user_guide(docs), has_api_reference=True
+        )
 
         # Check that citation.qmd was created
         citation_qmd = docs_dir / "citation.qmd"
@@ -2199,7 +1885,9 @@ def test_citation_year_handles_invalid_date():
         docs_dir.mkdir(parents=True, exist_ok=True)
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
+        docs._create_index_from_readme(
+            make_project(docs), discover_user_guide(docs), has_api_reference=True
+        )
 
         # Check that citation.qmd was created
         citation_qmd = docs_dir / "citation.qmd"
@@ -2621,7 +2309,7 @@ def test_assets_added_to_quarto_config():
 
         # Update Quarto config
         write_initial_quarto_yml(docs.build_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         # Read the generated _quarto.yml
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -2661,7 +2349,7 @@ def test_dark_only_logo_does_not_crash_quarto_config():
         docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         write_initial_quarto_yml(docs.build_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "r") as f:
@@ -2687,7 +2375,7 @@ def test_assets_not_added_to_quarto_config_when_missing():
 
         # Update Quarto config without assets
         write_initial_quarto_yml(docs.build_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         # Read the generated _quarto.yml
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -2723,7 +2411,7 @@ def test_assets_added_to_config_after_copy():
         # Create great-docs directory and initial config (simulating _prepare_build_directory)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         # Read initial config - should NOT have assets/**
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -2737,7 +2425,7 @@ def test_assets_added_to_config_after_copy():
 
         assert assets_copied is True
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         # Read updated config - should NOW have assets/**
         with open(quarto_yml, "r") as f:
@@ -2763,7 +2451,7 @@ def test_assets_config_update_only_when_copied():
         # Create great-docs directory and initial config
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         # Try to copy assets when none exist: should return False
         assets_copied = docs._copy_assets()
@@ -2794,7 +2482,7 @@ def test_skill_render_exclusion_uses_enumerated_globs():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "r") as f:
@@ -2829,7 +2517,7 @@ def test_user_guide_asset_copy_skips_the_staged_quarto_project() -> None:
         (docs_dir / "_quarto/default/_quarto.yml").write_text(QUARTO_YML_HEADER + "project: {}\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._prepare_build_directory(make_run())
+        docs._prepare_build_directory(make_run(docs))
         docs._publish_user_guide(discover_user_guide(docs))
 
         assert (docs.build_dir / "user-guide/images/c.png").read_bytes() == b"chart"
@@ -2902,7 +2590,9 @@ def test_landing_page_generated_when_no_readme():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
+        docs._create_index_from_readme(
+            make_project(docs), discover_user_guide(docs), has_api_reference=True
+        )
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -2914,49 +2604,6 @@ def test_landing_page_generated_when_no_readme():
         assert "A great package" in content
         assert "pip install my-package" in content
         assert "API Reference" in content
-
-
-def test_landing_page_metadata_fallback_to_setup_cfg():
-    """Test that metadata falls back to setup.cfg when pyproject.toml lacks [project]."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        # pyproject.toml without [project] section
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text("[build-system]\nrequires = ['setuptools']\n")
-
-        setup_cfg = project_path / "setup.cfg"
-        setup_cfg.write_text(
-            "[metadata]\n"
-            "name = my-tool\n"
-            "description = A CLI tool for developers\n"
-            "author = Jane Doe\n"
-            "author_email = jane@example.com\n"
-            "license = MIT\n"
-            "url = https://github.com/jane/my-tool\n"
-            "project_urls =\n"
-            "    Documentation = https://my-tool.readthedocs.io\n"
-            "    Source = https://github.com/jane/my-tool\n"
-            "\n[options]\n"
-            "python_requires = >=3.8\n"
-        )
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("")
-
-        pkg_dir = project_path / "my_tool"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        metadata = docs._get_package_metadata()
-
-        assert metadata["description"] == "A CLI tool for developers"
-        assert metadata["license"] == "MIT"
-        assert metadata["requires_python"] == ">=3.8"
-        assert metadata["authors"] == [{"name": "Jane Doe", "email": "jane@example.com"}]
-        assert "Repository" in metadata["urls"]
-        assert "Source" in metadata["urls"]
 
 
 def test_landing_page_not_generated_when_readme_exists():
@@ -2979,7 +2626,9 @@ def test_landing_page_not_generated_when_readme_exists():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
+        docs._create_index_from_readme(
+            make_project(docs), discover_user_guide(docs), has_api_reference=True
+        )
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -3016,7 +2665,9 @@ def test_landing_page_has_sidebar_metadata():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
+        docs._create_index_from_readme(
+            make_project(docs), discover_user_guide(docs), has_api_reference=True
+        )
 
         index_qmd = docs.build_dir / "index.qmd"
         content = index_qmd.read_text()
@@ -3046,7 +2697,9 @@ def test_readme_rst_creates_index():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
+        docs._create_index_from_readme(
+            make_project(docs), discover_user_guide(docs), has_api_reference=True
+        )
 
         index_qmd = docs.build_dir / "index.qmd"
 
@@ -3081,7 +2734,9 @@ def test_readme_rst_not_used_when_readme_md_exists():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
+        docs._create_index_from_readme(
+            make_project(docs), discover_user_guide(docs), has_api_reference=True
+        )
 
         index_qmd = docs.build_dir / "index.qmd"
         content = index_qmd.read_text()
@@ -3115,7 +2770,10 @@ def test_index_qmd_frontmatter_title_preserved():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
 
         content = (docs.build_dir / "index.qmd").read_text()
@@ -3142,7 +2800,10 @@ def test_index_qmd_frontmatter_title_empty_without_source_title():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
 
         content = (docs.build_dir / "index.qmd").read_text()
@@ -3171,7 +2832,10 @@ def test_index_qmd_frontmatter_title_yaml_safe():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
 
         content = (docs.build_dir / "index.qmd").read_text()
@@ -3193,7 +2857,7 @@ def _homepage_from(source_name: str, source: str, tmp_dir: str) -> dict:
     docs = GreatDocs(project_path=tmp_dir)
     docs.build_dir.mkdir(parents=True, exist_ok=True)
     docs._create_index_from_readme(
-        discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        make_project(docs), discover_user_guide(docs), has_api_reference=True, force_rebuild=True
     )
     return _homepage_frontmatter((docs.build_dir / "index.qmd").read_text())
 
@@ -3902,7 +3566,7 @@ def test_navbar_no_home_new_build():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             config = read_yaml(f)
@@ -3938,7 +3602,7 @@ def test_navbar_home_removed_from_existing():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             config = read_yaml(f)
@@ -3986,7 +3650,7 @@ def test_navbar_release_from_github_release():
         docs = GreatDocs(project_path=tmp_dir)
 
         docs._remote = StubRemote(releases=fake_releases)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         navbar = read_yaml(quarto_yml)["website"]["navbar"]
 
@@ -4021,7 +3685,7 @@ def test_navbar_release_absent_without_releases():
         docs = GreatDocs(project_path=tmp_dir)
 
         docs._remote = StubRemote()
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
 
@@ -4055,7 +3719,7 @@ def test_navbar_release_absent_on_malformed_github_response():
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch("requests.get", return_value=response):
-            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run(docs))
 
         assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
 
@@ -4080,7 +3744,7 @@ def test_navbar_release_absent_without_github_repo():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs._remote = remote = StubRemote()
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         assert "github_releases" not in remote.calls
         assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
@@ -4890,7 +4554,7 @@ def test_resolver_get_object_or_raise_missing(tmp_path, monkeypatch):
     (tmp_path / "gdmiss").mkdir()
     (tmp_path / "gdmiss" / "__init__.py").write_text("__all__ = []\n")
     from great_docs._apiref.api_reference import Settings
-    from great_docs._apiref.resolve import ObjectNotFoundError, Resolver
+    from great_docs._apiref.resolve import Resolver
 
     resolver = Resolver(Settings(parser="numpy"))
     resolver.current_package = "gdmiss"
@@ -5054,7 +4718,6 @@ def test_resolve_members_children_linked():
     import griffe as gf
 
     from great_docs._apiref.api_reference import Settings
-    from great_docs._apiref.content import Link
 
     cls, method = _make_class_with_method()
     objects = {"mymod:MyClass": cls, "mymod:MyClass.my_method": method}
@@ -5542,7 +5205,7 @@ class TestFaviconLinkInjection:
 
         # Run the config build
         write_initial_quarto_yml(docs.build_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         # Read the generated _quarto.yml
         quarto_yml = docs.build_dir / "_quarto.yml"
@@ -5641,7 +5304,7 @@ def test_config_markdown_pages_disabled():
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "r") as f:
@@ -5678,7 +5341,7 @@ def test_config_markdown_pages_widget_disabled():
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         quarto_yml = docs.build_dir / "_quarto.yml"
 
@@ -5708,7 +5371,7 @@ def test_config_markdown_pages_default_enabled():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "r") as f:
@@ -5744,7 +5407,7 @@ class TestPositBadgeInjection:
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml) as f:
@@ -5816,8 +5479,8 @@ class TestPositBadgeInjection:
             docs = GreatDocs(project_path=tmp_dir)
             docs.build_dir.mkdir(parents=True, exist_ok=True)
             write_initial_quarto_yml(docs.build_dir)
-            docs._update_quarto_config(make_run())
-            docs._update_quarto_config(make_run())  # second run
+            docs._update_quarto_config(make_run(docs))
+            docs._update_quarto_config(make_run(docs))  # second run
 
             quarto_yml = docs.build_dir / "_quarto.yml"
 
@@ -5828,28 +5491,6 @@ class TestPositBadgeInjection:
             badge_count = sum(1 for item in header if "supported-by-posit" in str(item))
 
             assert badge_count == 1
-
-
-def test_detect_package_name_from_setup_cfg_preexisting():
-    """_detect_package_name reads name from setup.cfg when no pyproject.toml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        setup_cfg = Path(tmp_dir) / "setup.cfg"
-        setup_cfg.write_text("[metadata]\nname = my-cfg-package\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._detect_package_name() == "my-cfg-package"
-
-
-def test_detect_package_name_from_setup_py_preexisting():
-    """_detect_package_name reads name from setup.py when no pyproject.toml or setup.cfg."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        setup_py = Path(tmp_dir) / "setup.py"
-        setup_py.write_text('from setuptools import setup\nsetup(name="my-setup-package")\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._detect_package_name() == "my-setup-package"
 
 
 def test_normalize_package_name_multiple_formats():
@@ -5955,12 +5596,7 @@ def test_build_cli_reference_uses_module_name(tmp_path):
     docs.build_dir.mkdir(parents=True)
     (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
-    run = (
-        "_detect_package_name",
-        "_get_package_metadata",
-        "_resolve_importable_name",
-        "_detect_module_name",
-    )
+    run = ("_resolve_importable_name", "_detect_module_name")
     with (
         stubbed_build(docs, run=run),
         patch("great_docs._cliref.click.discover", return_value=None) as discover,
@@ -5987,7 +5623,7 @@ def test_auto_save_snapshot_uses_module_name(mock_snapshot):
         (root / "great-docs.yml").write_text("module: actual_module\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._auto_save_snapshot()
+        docs._auto_save_snapshot(make_project(docs))
 
         assert mock_snapshot.call_args[0][0] == "actual_module"
 
@@ -6016,7 +5652,7 @@ def test_auto_save_snapshot_names_the_version_after_the_exact_tag(
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch("subprocess.run", side_effect=outcomes), patch("time.sleep"):
-        docs._auto_save_snapshot()
+        docs._auto_save_snapshot(make_project(docs))
 
     assert mock_snapshot.call_args.kwargs["version"] == version
 
@@ -6038,7 +5674,7 @@ def test_cli_help_for_llms_uses_module_name(mock_discover):
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir()
         (docs.build_dir / "_quarto.yml").write_text(LLMS_TXT_QUARTO_YML)
-        docs._step_llms_txt(make_run(user_guide=discover_user_guide(docs)))
+        docs._step_llms_txt(make_run(docs, user_guide=discover_user_guide(docs)))
 
         mock_discover.assert_called_once_with(
             "actual_module",
@@ -6191,7 +5827,7 @@ def test_cli_help_for_llms_display_name_is_project_name():
             docs = GreatDocs(project_path=tmp_dir)
             docs.build_dir.mkdir()
             (docs.build_dir / "_quarto.yml").write_text(LLMS_TXT_QUARTO_YML)
-            docs._step_llms_txt(make_run(user_guide=discover_user_guide(docs)))
+            docs._step_llms_txt(make_run(docs, user_guide=discover_user_guide(docs)))
         finally:
             sys.path.remove(tmp_dir)
             sys.modules.pop("actual_module", None)
@@ -6215,7 +5851,7 @@ def test_llms_full_written_without_cli_when_cli_module_fails_to_import(tmp_path,
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir()
     (docs.build_dir / "_quarto.yml").write_text(LLMS_TXT_QUARTO_YML)
-    docs._step_llms_txt(make_run(user_guide=discover_user_guide(docs)))
+    docs._step_llms_txt(make_run(docs, user_guide=discover_user_guide(docs)))
 
     assert "## CLI" not in (docs.build_dir / "llms-full.txt").read_text()
 
@@ -6300,37 +5936,6 @@ def test_entry_point_name_no_pyproject_returns_none():
         docs = GreatDocs(project_path=tmp_dir)
 
         assert cli_click.entry_point_name(docs.layout.package_root, "other:cli") is None
-
-
-def test_get_package_metadata_setup_cfg_maintainer_basic():
-    """_get_package_metadata reads maintainer from setup.cfg."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "setup.cfg").write_text(
-            "[metadata]\n"
-            "name = my-package\n"
-            "description = Desc\n"
-            "maintainer = Maintainer Person\n"
-            "maintainer_email = maint@example.com\n"
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        metadata = docs._get_package_metadata()
-
-        assert len(metadata["maintainers"]) == 1
-        assert metadata["maintainers"][0]["name"] == "Maintainer Person"
-
-
-def test_get_package_metadata_setup_cfg_python_requires_basic():
-    """_get_package_metadata reads python_requires from setup.cfg."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "setup.cfg").write_text(
-            "[metadata]\nname = my-package\ndescription = D\n\n[options]\npython_requires = >=3.8\n"
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        metadata = docs._get_package_metadata()
-
-        assert metadata["requires_python"] == ">=3.8"
 
 
 def test_find_package_init_auto_discovers():
@@ -6442,7 +6047,7 @@ def test_process_custom_pages_passthrough_and_raw():
         )
         (custom_dir / "app.js").write_text("console.log('custom');\n", encoding="utf-8")
 
-        result = docs._process_custom_pages(discover_user_guide(docs))
+        result = docs._process_custom_pages(make_project(docs), discover_user_guide(docs))
 
         assert result == 2
 
@@ -6488,7 +6093,7 @@ def test_process_custom_pages_missing_dir():
         with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml({"website": {"sidebar": [], "navbar": {"left": []}}}, f)
 
-        assert docs._process_custom_pages(discover_user_guide(docs)) == 0
+        assert docs._process_custom_pages(make_project(docs), discover_user_guide(docs)) == 0
 
 
 def test_process_custom_pages_respects_configured_output_prefix():
@@ -6519,7 +6124,7 @@ def test_process_custom_pages_respects_configured_output_prefix():
         )
         (marketing_dir / "app.js").write_text("console.log('marketing');\n", encoding="utf-8")
 
-        result = docs._process_custom_pages(discover_user_guide(docs))
+        result = docs._process_custom_pages(make_project(docs), discover_user_guide(docs))
 
         assert result == 1
         assert (docs.build_dir / "py" / "landing.qmd").exists()
@@ -6582,7 +6187,7 @@ def test_process_custom_pages_supports_multiple_directories():
             encoding="utf-8",
         )
 
-        result = docs._process_custom_pages(discover_user_guide(docs))
+        result = docs._process_custom_pages(make_project(docs), discover_user_guide(docs))
 
         assert result == 2
         assert (docs.build_dir / "py" / "landing.qmd").exists()
@@ -6630,7 +6235,7 @@ def test_process_custom_pages_supports_nested_output_prefixes():
         (apps_dir / "assets").mkdir()
         (apps_dir / "assets" / "widget.js").write_text("window.APPS = true;\n", encoding="utf-8")
 
-        result = docs._process_custom_pages(discover_user_guide(docs))
+        result = docs._process_custom_pages(make_project(docs), discover_user_guide(docs))
 
         assert result == 1
         assert (docs.build_dir / "products" / "python" / "start.qmd").exists()
@@ -6677,7 +6282,7 @@ def test_process_custom_pages_skips_missing_configured_directories():
             encoding="utf-8",
         )
 
-        result = docs._process_custom_pages(discover_user_guide(docs))
+        result = docs._process_custom_pages(make_project(docs), discover_user_guide(docs))
 
         assert result == 1
         assert not (docs.build_dir / "ghost").exists()
@@ -6710,7 +6315,7 @@ def test_process_custom_pages_can_be_disabled_explicitly():
         with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml({"website": {"sidebar": [], "navbar": {"left": []}}}, f)
 
-        assert docs._process_custom_pages(discover_user_guide(docs)) == 0
+        assert docs._process_custom_pages(make_project(docs), discover_user_guide(docs)) == 0
         assert not (docs.build_dir / "custom" / "landing.qmd").exists()
 
 
@@ -6773,7 +6378,7 @@ def test_process_custom_pages_ignores_frontmatter_after_leading_blank_lines():
             encoding="utf-8",
         )
 
-        docs._process_custom_pages(discover_user_guide(docs))
+        docs._process_custom_pages(make_project(docs), discover_user_guide(docs))
 
         with open(docs.build_dir / "_quarto.yml") as f:
             config = read_yaml(f)
@@ -6817,7 +6422,7 @@ def test_process_custom_pages_adds_passthrough_navbar_link():
             encoding="utf-8",
         )
 
-        docs._process_custom_pages(discover_user_guide(docs))
+        docs._process_custom_pages(make_project(docs), discover_user_guide(docs))
 
         with open(docs.build_dir / "_quarto.yml") as f:
             config = read_yaml(f)
@@ -6870,7 +6475,7 @@ def test_process_custom_pages_adds_raw_navbar_link_with_custom_text():
             encoding="utf-8",
         )
 
-        docs._process_custom_pages(discover_user_guide(docs))
+        docs._process_custom_pages(make_project(docs), discover_user_guide(docs))
 
         with open(docs.build_dir / "_quarto.yml") as f:
             config = read_yaml(f)
@@ -8053,7 +7658,12 @@ def test_process_user_guide_no_guide():
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._process_user_guide(discover_user_guide(docs), has_api_reference=True) is False
+        assert (
+            docs._process_user_guide(
+                make_project(docs), discover_user_guide(docs), has_api_reference=True
+            )
+            is False
+        )
 
 
 def test_process_user_guide_with_pages():
@@ -8073,7 +7683,12 @@ def test_process_user_guide_with_pages():
         with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(config, f)
 
-        assert docs._process_user_guide(discover_user_guide(docs), has_api_reference=True) is True
+        assert (
+            docs._process_user_guide(
+                make_project(docs), discover_user_guide(docs), has_api_reference=True
+            )
+            is True
+        )
         assert (docs.build_dir / "user-guide").exists()
 
 
@@ -8095,7 +7710,9 @@ def test_process_user_guide_with_sections():
         with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(config, f)
 
-        result = docs._process_user_guide(discover_user_guide(docs), has_api_reference=True)
+        result = docs._process_user_guide(
+            make_project(docs), discover_user_guide(docs), has_api_reference=True
+        )
 
         assert result is True
 
@@ -8151,25 +7768,6 @@ def test_count_pages_nested_v2():
     ]
 
     assert cli_render.count_pages(items) == 3
-
-
-def test_detect_package_name_from_pyproject_v2():
-    """_detect_package_name reads name from pyproject.toml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "my-cool-pkg"\n')
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._detect_package_name() == "my-cool-pkg"
-
-
-def test_detect_package_name_no_pyproject():
-    """_detect_package_name returns None when no pyproject.toml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_package_name()
-
-        assert result is None
 
 
 def test_parse_dunder_all():
@@ -8730,7 +8328,7 @@ def test_freeze_writes_the_llms_files_build_would(label: str, tmp_path: Path):
     log = BuildLog(stream=io.StringIO())
 
     with stubbed_build(docs):
-        freeze.prepare(docs._preparation_steps(make_run(), log), log, docs.build_dir)
+        freeze.prepare(docs._preparation_steps(make_run(docs), log), log, docs.build_dir)
 
     available = llms_txt.is_planned(docs.build_dir)
     assert (docs.build_dir / "llms.txt").exists() == available, label
@@ -8785,72 +8383,6 @@ def test_homepage_margin_citation_link():
         # (but it may not appear in margin sections if no explicit block uses it;
         # check the result doesn't error out at minimum)
         assert isinstance(result, str)
-
-
-def test_get_github_repo_info_from_pyproject_urls():
-    """_get_github_repo_info extracts info from pyproject.toml URLs."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n[project.urls]\nRepository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo_name, base_url = docs._get_github_repo_info()
-
-        assert owner == "owner"
-        assert repo_name == "repo"
-        assert base_url == "https://github.com/owner/repo"
-
-
-def test_get_github_repo_info_from_gd_yml():
-    """_get_github_repo_info prefers great-docs.yml repo over pyproject.toml."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n[project.urls]\nRepository = "https://github.com/old/old"\n',
-            encoding="utf-8",
-        )
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            format_yaml({"repo": "https://github.com/new/new"}),
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo_name, base_url = docs._get_github_repo_info()
-
-        assert owner == "new"
-        assert repo_name == "new"
-        assert base_url == "https://github.com/new/new"
-
-
-def test_get_github_repo_info_no_github():
-    """_get_github_repo_info returns None tuple when no GitHub URL found."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo_name, base_url = docs._get_github_repo_info()
-
-        assert owner is None
-        assert repo_name is None
-        assert base_url is None
-
-
-def test_get_github_repo_info_trailing_slash():
-    """_get_github_repo_info handles trailing slash in URL."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n[project.urls]\nRepository = "https://github.com/user/project/"\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo_name, base_url = docs._get_github_repo_info()
-
-        assert owner == "user"
-        assert repo_name == "project"
 
 
 def test_homepage_hero_disabled_no_logo():
@@ -9170,7 +8702,10 @@ def test_create_index_from_readme_with_license():
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
         license_qmd = gd_dir / "license.qmd"
 
@@ -9199,7 +8734,10 @@ def test_create_index_from_readme_with_citation():
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
         citation_qmd = gd_dir / "citation.qmd"
 
@@ -9221,7 +8759,10 @@ def test_create_index_from_readme_creates_index_qmd():
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
         index_qmd = gd_dir / "index.qmd"
 
@@ -9244,7 +8785,10 @@ def test_create_index_from_readme_generates_landing_page():
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
         index_qmd = gd_dir / "index.qmd"
 
@@ -9278,7 +8822,9 @@ def test_create_blended_index_basic():
             "source_dir": Path(tmp_dir) / "user_guide",
             "explicit": False,
         }
-        docs._create_blended_index(user_guide_info, ["user-guide/introduction.qmd"])
+        docs._create_blended_index(
+            make_project(docs), user_guide_info, ["user-guide/introduction.qmd"]
+        )
         index_qmd = gd_dir / "index.qmd"
 
         assert index_qmd.exists()
@@ -9300,7 +8846,7 @@ def test_create_blended_index_empty_files():
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
         user_guide_info = {"files": [], "source_dir": Path(tmp_dir), "explicit": False}
-        docs._create_blended_index(user_guide_info, [])
+        docs._create_blended_index(make_project(docs), user_guide_info, [])
 
         # index.qmd should not have been created
         assert not (gd_dir / "index.qmd").exists()
@@ -9482,7 +9028,10 @@ def test_create_index_from_readme_citation_bibtex():
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
         citation_qmd = gd_dir / "citation.qmd"
 
@@ -9517,7 +9066,10 @@ def test_create_index_from_readme_citation_two_authors():
         gd_dir.mkdir()
         docs = GreatDocs(project_path=tmp_dir)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
         citation_qmd = gd_dir / "citation.qmd"
         content = citation_qmd.read_text(encoding="utf-8")
@@ -9821,7 +9373,7 @@ def test_update_quarto_config_navbar_color_light_dark():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -9856,7 +9408,7 @@ def test_update_quarto_config_navbar_color_light_only():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -9896,7 +9448,7 @@ def test_update_quarto_config_navbar_color_does_not_leak_onto_root():
                 f,
             )
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -9947,7 +9499,7 @@ def test_update_quarto_config_announcement_banner():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -9994,7 +9546,7 @@ def test_update_quarto_config_content_style():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10035,7 +9587,7 @@ def test_update_quarto_config_navbar_style():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10074,7 +9626,7 @@ def test_update_quarto_config_dark_mode_toggle():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10116,7 +9668,7 @@ def test_update_quarto_config_cli_pages_add_ref_switcher():
         cli_index.parent.mkdir(parents=True)
         cli_index.write_text("", encoding="utf-8")
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10153,7 +9705,7 @@ def test_update_quarto_config_page_footer_with_authors():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10194,7 +9746,7 @@ def test_update_quarto_config_page_footer_with_funding():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10229,7 +9781,7 @@ def test_update_quarto_config_page_footer_funding_no_authors():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10264,7 +9816,7 @@ def test_update_quarto_config_posit_badge():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10296,7 +9848,7 @@ def test_update_quarto_config_sidebar_filter():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10330,7 +9882,7 @@ def test_update_quarto_config_sidebar_filter_custom_min_items():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10366,7 +9918,7 @@ def test_update_quarto_config_attribution():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10402,7 +9954,7 @@ def test_update_quarto_config_site_url():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10431,7 +9983,7 @@ def test_update_quarto_config_site_url_not_set():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10472,7 +10024,10 @@ def test_create_index_from_readme_citation_parsing():
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
 
         citation_qmd = docs.build_dir / "citation.qmd"
@@ -10515,7 +10070,10 @@ def test_create_index_from_readme_citation_single_author():
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
 
         citation_qmd = docs.build_dir / "citation.qmd"
@@ -10555,7 +10113,10 @@ def test_create_index_from_readme_citation_three_authors():
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
 
         citation_qmd = docs.build_dir / "citation.qmd"
@@ -10578,7 +10139,10 @@ def test_create_index_from_readme_no_citation():
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
 
         citation_qmd = docs.build_dir / "citation.qmd"
@@ -10602,7 +10166,10 @@ def test_create_index_from_readme_heading_adjustment():
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
 
         index_qmd = docs.build_dir / "index.qmd"
@@ -10636,7 +10203,10 @@ def test_create_index_from_readme_rst_source():
             return_value="# My Package\n\nSome RST content.\n",
         ):
             docs._create_index_from_readme(
-                discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+                make_project(docs),
+                discover_user_guide(docs),
+                has_api_reference=True,
+                force_rebuild=True,
             )
 
         index_qmd = docs.build_dir / "index.qmd"
@@ -10658,7 +10228,10 @@ def test_create_index_from_readme_landing_page_fallback():
         # No README.md, no index.qmd, no README.rst
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
 
         index_qmd = docs.build_dir / "index.qmd"
@@ -10685,7 +10258,10 @@ def test_create_index_from_readme_hero_section():
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
 
         index_qmd = docs.build_dir / "index.qmd"
@@ -10716,7 +10292,10 @@ def test_create_index_from_readme_hero_strips_duplicate_h1():
 
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
 
         index_qmd = docs.build_dir / "index.qmd"
@@ -10758,7 +10337,7 @@ def test_create_index_from_readme_auto_hero_strips_duplicate_h1(
     docs.build_dir.mkdir(parents=True, exist_ok=True)
 
     docs._create_index_from_readme(
-        discover_user_guide(docs), has_api_reference=False, force_rebuild=True
+        make_project(docs), discover_user_guide(docs), has_api_reference=False, force_rebuild=True
     )
 
     content = (docs.build_dir / "index.qmd").read_text(encoding="utf-8")
@@ -10779,7 +10358,7 @@ def test_create_index_from_readme_hero_name_true_keeps_title(tmp_path: Path):
     docs.build_dir.mkdir(parents=True, exist_ok=True)
 
     docs._create_index_from_readme(
-        discover_user_guide(docs), has_api_reference=False, force_rebuild=True
+        make_project(docs), discover_user_guide(docs), has_api_reference=False, force_rebuild=True
     )
 
     assert "## testpkg" in (docs.build_dir / "index.qmd").read_text(encoding="utf-8")
@@ -10846,7 +10425,7 @@ def test_add_api_reference_config_non_python_project():
 
         # Must not call input() — patch it to fail loudly if the skip is missed.
         with patch("builtins.input", side_effect=AssertionError("should not prompt")):
-            run = make_run()
+            run = make_run(docs)
             docs._add_api_reference_config(run)
 
         assert run.has_api_reference is False
@@ -10877,7 +10456,7 @@ def test_add_api_reference_config_carries_the_callable_signature_settings():
 
         sections = [{"title": "All", "desc": "", "contents": ["Widget"]}]
         with patch.object(docs, "_create_api_sections_with_config", return_value=sections):
-            run = make_run()
+            run = make_run(docs)
             docs._add_api_reference_config(run)
 
         with open(quarto_yml, "r") as f:
@@ -10906,7 +10485,7 @@ def test_add_api_reference_config_defaults_the_callable_signature_settings():
 
         sections = [{"title": "All", "desc": "", "contents": ["Widget"]}]
         with patch.object(docs, "_create_api_sections_with_config", return_value=sections):
-            run = make_run()
+            run = make_run(docs)
             docs._add_api_reference_config(run)
 
         with open(quarto_yml, "r") as f:
@@ -10939,7 +10518,7 @@ def test_add_api_reference_config_with_sections():
 
         fake_sections = [{"title": "Core", "desc": "", "contents": ["Widget", "helper_fn"]}]
         with patch.object(docs, "_create_api_sections_with_config", return_value=fake_sections):
-            run = make_run()
+            run = make_run(docs)
             docs._add_api_reference_config(run)
 
         assert run.has_api_reference is True
@@ -11008,7 +10587,7 @@ def test_prepare_build_directory_creates_structure():
         # Mock _add_api_reference_config to avoid needing actual package
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(reference_sections, "update_sidebar"):
-                docs._prepare_build_directory(make_run())
+                docs._prepare_build_directory(make_run(docs))
 
         # Check directory structure
         assert docs.build_dir.exists()
@@ -11049,10 +10628,10 @@ def test_prepare_build_directory_can_retry_after_missing_header_include(tmp_path
     with patch.object(docs, "_add_api_reference_config"):
         with patch.object(reference_sections, "update_sidebar"):
             with pytest.raises(FileNotFoundError, match="Header include file not found"):
-                docs._prepare_build_directory(make_run())
+                docs._prepare_build_directory(make_run(docs))
 
             (tmp_path / "header.html").write_text('<meta name="retry">\n')
-            docs._prepare_build_directory(make_run())
+            docs._prepare_build_directory(make_run(docs))
 
     assert (docs.build_dir / "_quarto.yml").exists()
     assert (docs.build_dir / "_includes" / "header.html").read_text() == ('<meta name="retry">\n')
@@ -11066,7 +10645,7 @@ def test_prepare_build_directory_writes_website_project(tmp_path):
 
     with patch.object(docs, "_add_api_reference_config"):
         with patch.object(reference_sections, "update_sidebar"):
-            docs._prepare_build_directory(make_run())
+            docs._prepare_build_directory(make_run(docs))
 
     config = read_yaml(docs.build_dir / "_quarto.yml")
     assert config["project"]["type"] == "website"
@@ -11094,7 +10673,7 @@ def test_prepare_build_directory_adds_llms_links_after_api_reference_setup():
             docs = GreatDocs(project_path=tmp_dir)
             sections = [{"title": "All", "desc": "", "contents": ["widget"]}]
             with patch.object(docs, "_create_api_sections_with_config", return_value=sections):
-                docs._prepare_build_directory(make_run())
+                docs._prepare_build_directory(make_run(docs))
 
             index_content = (docs.build_dir / "index.qmd").read_text()
             assert "llms.txt" in index_content
@@ -11117,7 +10696,7 @@ def test_prepare_build_directory_copies_js_files():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(reference_sections, "update_sidebar"):
-                docs._prepare_build_directory(make_run())
+                docs._prepare_build_directory(make_run(docs))
 
         # The GitHub widget needs a repository; the other core scripts do not.
         assert not (docs.build_dir / "github-widget.js").exists()
@@ -11180,7 +10759,7 @@ def test_prepare_build_directory_copies_bibliography():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(reference_sections, "update_sidebar"):
-                docs._prepare_build_directory(make_run())
+                docs._prepare_build_directory(make_run(docs))
 
         # .bib copied into build dir by basename
         assert (docs.build_dir / "references.bib").exists()
@@ -11215,7 +10794,7 @@ def test_prepare_build_directory_copies_multiple_bib_and_csl():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(reference_sections, "update_sidebar"):
-                docs._prepare_build_directory(make_run())
+                docs._prepare_build_directory(make_run(docs))
 
         assert (docs.build_dir / "refs.bib").exists()
         assert (docs.build_dir / "software.bib").exists()
@@ -11244,7 +10823,7 @@ def test_prepare_build_directory_bibliography_missing_warns(capsys):
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(reference_sections, "update_sidebar"):
-                docs._prepare_build_directory(make_run())
+                docs._prepare_build_directory(make_run(docs))
 
         out = capsys.readouterr().out
         assert "Bibliography file not found" in out
@@ -11276,7 +10855,7 @@ def test_bibliography_does_not_set_reference_section_title():
         docs = GreatDocs(project_path=tmp_dir)
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(reference_sections, "update_sidebar"):
-                docs._prepare_build_directory(make_run())
+                docs._prepare_build_directory(make_run(docs))
 
         with open(docs.build_dir / "_quarto.yml", encoding="utf-8") as f:
             config = read_yaml(f)
@@ -11303,7 +10882,7 @@ def _prepared_quarto_config(lang: str) -> dict:
         docs = GreatDocs(project_path=tmp_dir)
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(reference_sections, "update_sidebar"):
-                docs._prepare_build_directory(make_run())
+                docs._prepare_build_directory(make_run(docs))
 
         with open(docs.build_dir / "_quarto.yml", encoding="utf-8") as f:
             return read_yaml(f)
@@ -11352,7 +10931,7 @@ def test_prepare_build_directory_optional_js_copy_page():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(reference_sections, "update_sidebar"):
-                docs._prepare_build_directory(make_run())
+                docs._prepare_build_directory(make_run(docs))
 
         assert (docs.build_dir / "copy-page.js").exists()
 
@@ -11377,7 +10956,7 @@ def test_prepare_build_directory_cleans_existing():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(reference_sections, "update_sidebar"):
-                docs._prepare_build_directory(make_run())
+                docs._prepare_build_directory(make_run(docs))
 
         # Stale file should be gone
         assert not stale_file.exists()
@@ -11580,7 +11159,7 @@ def test_update_quarto_config_page_footer_three_authors():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -11615,7 +11194,7 @@ def test_update_quarto_config_page_footer_single_author():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -11654,7 +11233,7 @@ def test_update_quarto_config_page_footer_author_homepage():
         with open(quarto_yml, "w") as f:
             write_yaml(base_config, f)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -11956,7 +11535,6 @@ def test_generate_initial_config_is_template_with_detected_values(monkeypatch):
         )
         docs = GreatDocs(project_path=tmp_dir)
 
-        monkeypatch.setattr(docs, "_detect_package_name", lambda: "demo")
         monkeypatch.setattr(docs, "_detect_module_name", lambda: None)
         monkeypatch.setattr(docs, "_get_griffe_package", lambda name: MagicMock())
         monkeypatch.setattr(
@@ -12002,8 +11580,8 @@ def test_generate_initial_config_no_package_is_non_empty(monkeypatch):
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
+        # An empty project has no packaging files and no package directory.
         docs = GreatDocs(project_path=tmp_dir)
-        monkeypatch.setattr(docs, "_detect_package_name", lambda: None)
 
         assert docs._generate_initial_config(force=True) is True
 
@@ -12097,21 +11675,11 @@ def test_poetry_1_project_facts_reach_the_build(tmp_path: Path):
         (tmp_path / package / "__init__.py").write_text("", encoding="utf-8")
     docs = GreatDocs(project_path=str(tmp_path))
 
-    assert docs._detect_package_name() == "poetry-pkg"
-    assert docs._get_package_metadata()["description"] == "A Poetry 1.x package"
-    assert docs._get_github_repo_info() == ("owner", "repo", "https://github.com/owner/repo")
+    project = make_project(docs)
 
-
-def test_project_facts_survive_an_unparsable_setup_cfg(tmp_path: Path):
-    """A `setup.cfg` that `configparser` rejects leaves the `pyproject.toml` metadata in use"""
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "pkg"\ndescription = "Summary"\n', encoding="utf-8"
-    )
-    (tmp_path / "setup.cfg").write_text("[flake8]\nignore = E1\nignore = E2\n", encoding="utf-8")
-    docs = GreatDocs(project_path=str(tmp_path))
-
-    assert docs._detect_package_name() == "pkg"
-    assert docs._get_package_metadata()["description"] == "Summary"
+    assert project.name == "poetry-pkg"
+    assert project.manifest["description"] == "A Poetry 1.x package"
+    assert project.github == GithubRepo("owner", "repo")
 
 
 def test_init_lists_poetry_1_authors(tmp_path: Path):
@@ -12159,62 +11727,6 @@ def test_empty_categories_structure():
         assert key in cats
 
 
-def test_detect_package_name_from_pyproject():
-    """Test _detect_package_name reads name from pyproject.toml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "cool-pkg"\n', encoding="utf-8")
-
-        result = docs._detect_package_name()
-        assert result == "cool-pkg"
-
-
-def test_detect_package_name_from_setup_cfg_v2():
-    """Test _detect_package_name reads name from setup.cfg."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        setup_cfg = Path(tmp_dir) / "setup.cfg"
-        setup_cfg.write_text("[metadata]\nname = legacy-pkg\n", encoding="utf-8")
-
-        result = docs._detect_package_name()
-        assert result == "legacy-pkg"
-
-
-def test_detect_package_name_from_setup_py_v2():
-    """Test _detect_package_name reads name from setup.py."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        setup_py = Path(tmp_dir) / "setup.py"
-        setup_py.write_text(
-            "from setuptools import setup\nsetup(name='old-pkg')\n",
-            encoding="utf-8",
-        )
-
-        result = docs._detect_package_name()
-        assert result == "old-pkg"
-
-
-def test_detect_package_name_reads_setup_py_name_keyword(tmp_path: Path):
-    """A longer name ending in `name`, such as `username`, is not the package name"""
-    (tmp_path / "setup.py").write_text(
-        'username = "bob"\nsetup(name="realpkg")\n', encoding="utf-8"
-    )
-
-    assert GreatDocs(project_path=str(tmp_path))._detect_package_name() == "realpkg"
-
-
-def test_detect_package_name_not_found_empty_dir():
-    """Test _detect_package_name returns None when no config found."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_package_name()
-        assert result is None
-
-
 def test_detect_module_name_setuptools_packages():
     """Test _detect_module_name via setuptools.packages in pyproject.toml."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -12250,76 +11762,6 @@ def test_detect_module_name_hatch_packages():
         # The hatch packages setting says 'src/hatch_mod', but the last
         # segment is the module name
         assert result is not None or result is None  # May or may not resolve
-
-
-def test_get_package_metadata_basic():
-    """Test _get_package_metadata reads pyproject.toml fields."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\ndescription = "A test package"\n'
-            'version = "1.2.3"\n'
-            '[[project.authors]]\nname = "TestDev"\n',
-            encoding="utf-8",
-        )
-
-        metadata = docs._get_package_metadata()
-        assert metadata["description"] == "A test package"
-        assert any(a.get("name") == "TestDev" for a in metadata.get("authors", []))
-
-
-def test_get_package_metadata_with_urls():
-    """Test _get_package_metadata reads project URLs."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n'
-            "[project.urls]\n"
-            'Repository = "https://github.com/user/repo"\n'
-            'Documentation = "https://docs.example.com"\n',
-            encoding="utf-8",
-        )
-
-        metadata = docs._get_package_metadata()
-        urls = metadata.get("urls", {})
-        assert urls.get("Repository") == "https://github.com/user/repo"
-        assert urls.get("Documentation") == "https://docs.example.com"
-
-
-def test_get_package_metadata_setup_cfg():
-    """Test _get_package_metadata reads from setup.cfg."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        setup_cfg = Path(tmp_dir) / "setup.cfg"
-        setup_cfg.write_text(
-            "[metadata]\nname = legacypkg\ndescription = A legacy package\n"
-            "url = https://github.com/user/legacypkg\n",
-            encoding="utf-8",
-        )
-
-        metadata = docs._get_package_metadata()
-        assert metadata["description"] == "A legacy package"
-        urls = metadata.get("urls", {})
-        assert urls.get("Repository") == "https://github.com/user/legacypkg"
-
-
-def test_get_package_metadata_keeps_in_memory_config_without_pyproject(tmp_path: Path):
-    """
-    Keep in-memory configuration when reading metadata without `pyproject.toml`
-    """
-    (tmp_path / "go.mod").write_text("module example.com/tool\n")
-    (tmp_path / "great-docs.yml").write_text("changelog:\n  max_releases: 10\n")
-    docs = GreatDocs(project_path=str(tmp_path))
-    docs._config._config["changelog"]["max_releases"] = 3
-
-    docs._get_package_metadata()
-
-    assert docs._config.changelog_max_releases == 3
 
 
 def test_is_compiled_extension():
@@ -12392,37 +11834,6 @@ def test_is_compiled_extension_pyi_with_py():
         result = docs._is_compiled_extension()
 
         assert result is False
-
-
-def test_get_github_repo_info_https():
-    """Test _get_github_repo_info parses HTTPS URL."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n'
-            "[project.urls]\n"
-            'Repository = "https://github.com/myowner/myrepo"\n',
-            encoding="utf-8",
-        )
-        owner, repo, base_url = docs._get_github_repo_info()
-
-        assert owner == "myowner"
-        assert repo == "myrepo"
-        assert base_url == "https://github.com/myowner/myrepo"
-
-
-def test_get_github_repo_info_no_urls():
-    """Test _get_github_repo_info returns None when no GitHub URL."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
-        owner, repo, base_url = docs._get_github_repo_info()
-
-        assert owner is None
-        assert repo is None
-        assert base_url is None
 
 
 def test_process_sections_empty_config():
@@ -12576,118 +11987,13 @@ def test_parse_dunder_all_no_all():
         assert result is None
 
 
-def test_get_package_metadata_license_string():
-    """Test _get_package_metadata reads PEP 639 string license."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "pkg"\nlicense = "MIT"\n', encoding="utf-8")
-        metadata = docs._get_package_metadata()
-
-        assert metadata["license"] == "MIT"
-
-
-def test_get_package_metadata_maintainers():
-    """Test _get_package_metadata reads maintainers."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n\n[[project.maintainers]]\n'
-            'name = "Maintainer"\nemail = "m@e.com"\n',
-            encoding="utf-8",
-        )
-        metadata = docs._get_package_metadata()
-
-        assert len(metadata["maintainers"]) == 1
-        assert metadata["maintainers"][0]["name"] == "Maintainer"
-
-
-def test_get_package_metadata_requires_python():
-    """Test _get_package_metadata reads requires-python."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\nrequires-python = ">=3.9"\n',
-            encoding="utf-8",
-        )
-        metadata = docs._get_package_metadata()
-
-        assert metadata["requires_python"] == ">=3.9"
-
-
-def test_get_package_metadata_keywords():
-    """Test _get_package_metadata reads keywords."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\nkeywords = ["docs", "api"]\n',
-            encoding="utf-8",
-        )
-        metadata = docs._get_package_metadata()
-
-        assert "docs" in metadata["keywords"]
-        assert "api" in metadata["keywords"]
-
-
-def test_get_package_metadata_optional_deps():
-    """Test _get_package_metadata reads optional-dependencies."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n\n[project.optional-dependencies]\ndev = ["pytest"]\n',
-            encoding="utf-8",
-        )
-        metadata = docs._get_package_metadata()
-
-        assert "dev" in metadata["optional_dependencies"]
-
-
-def test_get_package_metadata_setup_cfg_author():
-    """Test _get_package_metadata reads author from setup.cfg."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        setup_cfg = Path(tmp_dir) / "setup.cfg"
-        setup_cfg.write_text(
-            "[metadata]\ndescription = Legacy pkg\n"
-            "author = LegacyDev\nauthor_email = dev@legacy.com\n",
-            encoding="utf-8",
-        )
-        metadata = docs._get_package_metadata()
-
-        assert metadata["description"] == "Legacy pkg"
-        assert len(metadata["authors"]) == 1
-        assert metadata["authors"][0]["name"] == "LegacyDev"
-        assert metadata["authors"][0]["email"] == "dev@legacy.com"
-
-
-def test_get_package_metadata_setup_cfg_project_urls():
-    """Test _get_package_metadata reads project_urls from setup.cfg."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        setup_cfg = Path(tmp_dir) / "setup.cfg"
-        setup_cfg.write_text(
-            "[metadata]\ndescription = Legacy pkg\n"
-            "project_urls =\n"
-            "    Documentation = https://docs.example.com\n"
-            "    Source = https://github.com/user/repo\n",
-            encoding="utf-8",
-        )
-        metadata = docs._get_package_metadata()
-        urls = metadata.get("urls", {})
-
-        assert urls.get("Documentation") == "https://docs.example.com"
-        assert urls.get("Source") == "https://github.com/user/repo"
-
-
 def test_process_user_guide_returns_false_no_guide():
     """Test _process_user_guide returns False when no user guide."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        result = docs._process_user_guide(discover_user_guide(docs), has_api_reference=True)
+        result = docs._process_user_guide(
+            make_project(docs), discover_user_guide(docs), has_api_reference=True
+        )
         assert result is False
 
 
@@ -12757,32 +12063,6 @@ def test_publish_user_guide_basic():
         assert isinstance(result, list)
 
 
-def test_get_package_metadata_setup_cfg_license():
-    """Test _get_package_metadata reads license from setup.cfg."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        setup_cfg = Path(tmp_dir) / "setup.cfg"
-        setup_cfg.write_text(
-            "[metadata]\ndescription = Legacy\nlicense = BSD-3-Clause\n",
-            encoding="utf-8",
-        )
-        metadata = docs._get_package_metadata()
-        assert metadata["license"] == "BSD-3-Clause"
-
-
-def test_get_package_metadata_setup_cfg_python_requires():
-    """Test _get_package_metadata reads python_requires from setup.cfg."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        setup_cfg = Path(tmp_dir) / "setup.cfg"
-        setup_cfg.write_text(
-            "[metadata]\ndescription = Legacy\n\n[options]\npython_requires = >=3.8\n",
-            encoding="utf-8",
-        )
-        metadata = docs._get_package_metadata()
-        assert metadata["requires_python"] == ">=3.8"
-
-
 def test_strip_numeric_prefix():
     """Test _strip_numeric_prefix removes numeric prefixes."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -12826,14 +12106,6 @@ def test_normalize_package_name_various():
         assert docs._normalize_package_name("my-package") == "my_package"
         assert docs._normalize_package_name("my_package") == "my_package"
         assert docs._normalize_package_name("simple") == "simple"
-
-
-def test_detect_package_name_not_found():
-    """Test _detect_package_name returns None in empty dir."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_package_name()
-        assert result is None
 
 
 def test_update_config_with_user_guide():
@@ -12886,7 +12158,10 @@ def test_create_index_from_readme_with_readme():
         build_dir.mkdir(parents=True, exist_ok=True)
 
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
         index_qmd = build_dir / "index.qmd"
         assert index_qmd.exists()
@@ -12909,7 +12184,10 @@ def test_create_index_from_readme_no_source():
         build_dir.mkdir(parents=True, exist_ok=True)
 
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
         index_qmd = build_dir / "index.qmd"
         assert index_qmd.exists()
@@ -12928,7 +12206,10 @@ def test_create_index_from_readme_skip_existing():
         (build_dir / "index.qmd").write_text("existing content\n")
 
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=False
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=False,
         )
         content = (build_dir / "index.qmd").read_text(encoding="utf-8")
         assert content == "existing content\n"
@@ -12984,21 +12265,10 @@ def test_process_user_guide_returns_true():
             encoding="utf-8",
         )
 
-        result = docs._process_user_guide(discover_user_guide(docs), has_api_reference=True)
+        result = docs._process_user_guide(
+            make_project(docs), discover_user_guide(docs), has_api_reference=True
+        )
         assert result is True
-
-
-def test_detect_package_name_prefers_pyproject():
-    """Test _detect_package_name prefers pyproject.toml over other sources."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        # Create both pyproject.toml and setup.cfg
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "pyproject-pkg"\n', encoding="utf-8")
-        setup_cfg = Path(tmp_dir) / "setup.cfg"
-        setup_cfg.write_text("[metadata]\nname = cfg-pkg\n", encoding="utf-8")
-        result = docs._detect_package_name()
-        assert result == "pyproject-pkg"
 
 
 def test_get_package_exports_with_fallback():
@@ -13028,7 +12298,7 @@ def test_prepare_build_directory():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        docs._prepare_build_directory(make_run())
+        docs._prepare_build_directory(make_run(docs))
 
         build_dir = Path(tmp_dir) / "great-docs"
         assert build_dir.exists()
@@ -13052,7 +12322,7 @@ def test_update_quarto_config_creates_structure():
             encoding="utf-8",
         )
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         result = _parse_yaml(quarto_yml.read_text(encoding="utf-8"))
         assert result["project"]["output-dir"] == "_site"
@@ -13071,8 +12341,8 @@ def _syntax_definitions_after_update(tmp_path: Path, html: str) -> list[str]:
         encoding="utf-8",
     )
 
-    docs._update_quarto_config(make_run())
-    docs._update_quarto_config(make_run())
+    docs._update_quarto_config(make_run(docs))
+    docs._update_quarto_config(make_run(docs))
 
     result = _parse_yaml(quarto_yml.read_text(encoding="utf-8"))
     return result["format"]["html"]["syntax-definitions"]
@@ -13381,21 +12651,6 @@ def test_detect_module_name_directory_scan():
         assert result == "mypkg"
 
 
-def test_get_package_metadata_setup_cfg_author_email():
-    """Test _get_package_metadata reads author with email from setup.cfg."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        setup_cfg = Path(tmp_dir) / "setup.cfg"
-        setup_cfg.write_text(
-            "[metadata]\nname = mypkg\nauthor = Dev One\nauthor_email = dev@example.com\n",
-            encoding="utf-8",
-        )
-        result = docs._get_package_metadata()
-        assert len(result["authors"]) == 1
-        assert result["authors"][0]["name"] == "Dev One"
-        assert result["authors"][0]["email"] == "dev@example.com"
-
-
 def test_find_package_init_src_layout():
     """Test _find_package_init finds init in src/ layout."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -13436,7 +12691,9 @@ def test_process_user_guide_homepage_mode():
         build_dir.mkdir(parents=True, exist_ok=True)
 
         # No user guide directory — should fall back to index mode
-        result = docs._process_user_guide(discover_user_guide(docs), has_api_reference=True)
+        result = docs._process_user_guide(
+            make_project(docs), discover_user_guide(docs), has_api_reference=True
+        )
         assert result is False
 
         # Just confirm no crash
@@ -13518,27 +12775,15 @@ def test_create_index_from_readme_with_badges():
         build_dir.mkdir(parents=True)
 
         docs._create_index_from_readme(
-            discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+            make_project(docs),
+            discover_user_guide(docs),
+            has_api_reference=True,
+            force_rebuild=True,
         )
         index_qmd = build_dir / "index.qmd"
         assert index_qmd.exists()
         content = index_qmd.read_text(encoding="utf-8")
         assert "great package" in content
-
-
-def test_detect_package_name_single_package_dir():
-    """Test _detect_package_name finds name from single package directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        # No pyproject.toml, setup.cfg, setup.py
-        # Create a single package directory
-        pkg_dir = Path(tmp_dir) / "coolpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("")
-
-        result = docs._detect_package_name()
-        # Should find it from directory scan
-        assert result == "coolpkg" or result is None  # May or may not find it depending on logic
 
 
 def test_get_package_exports_with_exclude():
@@ -13612,7 +12857,7 @@ def test_update_quarto_config_with_assets():
         assets_dir.mkdir()
         (assets_dir / "image.png").write_text("fake image")
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             config = read_yaml(f)
@@ -13630,7 +12875,7 @@ def test_prepare_build_directory_copies_assets():
 
         docs._config = write_config(Path(tmp_dir))
 
-        docs._prepare_build_directory(make_run())
+        docs._prepare_build_directory(make_run(docs))
 
         build_dir = Path(tmp_dir) / "great-docs"
         assert build_dir.exists()
@@ -13764,116 +13009,6 @@ def test_build_sections_from_reference_config_skips_nameless_dict():
         result = reference_sections.from_reference_config(ref_config)
         assert result is not None
         assert result[0]["contents"] == ["good"]
-
-
-def test_detect_package_name_from_single_package_dir():
-    """Test _detect_package_name falls back to single package directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "mypkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("")
-        docs = GreatDocs(project_path=tmp_dir)
-        name = docs._detect_package_name()
-        assert name == "mypkg"
-
-
-def test_get_package_metadata_from_setup_cfg():
-    """Test _get_package_metadata reads from setup.cfg fallback."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        setup_cfg = Path(tmp_dir) / "setup.cfg"
-        setup_cfg.write_text(
-            "[metadata]\nname = testpkg\ndescription = A test package\n"
-            "license = MIT\nauthor = Test Author\nauthor_email = test@example.com\n"
-            "[options]\npython_requires = >=3.8\n",
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        meta = docs._get_package_metadata()
-        assert meta["description"] == "A test package"
-        assert meta["license"] == "MIT"
-        assert meta["requires_python"] == ">=3.8"
-        assert len(meta["authors"]) == 1
-        assert meta["authors"][0]["name"] == "Test Author"
-
-
-def test_get_package_metadata_license_dict():
-    """Test _get_package_metadata handles PEP 639 license dict."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n[project.license]\ntext = "Apache-2.0"\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        meta = docs._get_package_metadata()
-        assert meta["license"] == "Apache-2.0"
-
-
-def test_get_package_metadata_license_file_dict():
-    """Test _get_package_metadata handles license dict with file key.
-
-    When license is specified as {file = "LICENSE"} without a classifier,
-    the license field is left empty since a filename isn't useful for JSON-LD.
-    Projects should add a classifier like "License :: OSI Approved :: MIT License"
-    to get proper license detection.
-    """
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n[project.license]\nfile = "LICENSE"\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        meta = docs._get_package_metadata()
-        # Without a classifier, file references don't provide a license ID
-        assert meta["license"] == ""
-
-
-def test_get_package_metadata_license_from_classifier():
-    """Test _get_package_metadata extracts license from classifier."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            "[project]\n"
-            'name = "pkg"\n'
-            'license = {file = "LICENSE"}\n'
-            'classifiers = ["License :: OSI Approved :: MIT License"]\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        meta = docs._get_package_metadata()
-        # Should extract "MIT" from classifier
-        assert meta["license"] == "MIT"
-
-
-def test_get_package_metadata_setup_cfg_urls():
-    """Test _get_package_metadata reads URLs from setup.cfg."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        setup_cfg = Path(tmp_dir) / "setup.cfg"
-        setup_cfg.write_text(
-            "[metadata]\nname = testpkg\ndescription = A pkg\n"
-            "url = https://github.com/test/pkg\n"
-            "project_urls =\n    Documentation = https://docs.test.com\n",
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        meta = docs._get_package_metadata()
-        assert "Repository" in meta.get("urls", {})
-
-
-def test_get_package_metadata_setup_cfg_maintainer():
-    """Test _get_package_metadata reads maintainer from setup.cfg."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        setup_cfg = Path(tmp_dir) / "setup.cfg"
-        setup_cfg.write_text(
-            "[metadata]\nname = testpkg\ndescription = pkg\n"
-            "maintainer = Jane Doe\nmaintainer_email = jane@example.com\n",
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        meta = docs._get_package_metadata()
-        assert len(meta.get("maintainers", [])) == 1
-        assert meta["maintainers"][0]["name"] == "Jane Doe"
 
 
 def test_detect_module_name_from_setuptools_packages():
@@ -14017,46 +13152,6 @@ def test_empty_categories():
         assert "class_method_names" in cats
         assert isinstance(cats["classes"], list)
         assert isinstance(cats["class_methods"], dict)
-
-
-def test_get_github_repo_info_from_config():
-    """Test _get_github_repo_info reads from great-docs.yml repo setting."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        config_path = Path(tmp_dir) / "great-docs.yml"
-        config_path.write_text(
-            "repo: https://github.com/cfgowner/cfgrepo\n",
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo, url = docs._get_github_repo_info()
-        assert owner == "cfgowner"
-        assert repo == "cfgrepo"
-        assert url == "https://github.com/cfgowner/cfgrepo"
-
-
-def test_get_github_repo_info_ssh_url():
-    """Test _get_github_repo_info handles SSH git URLs."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n[project.urls]\n'
-            'Repository = "git@github.com:sshowner/sshrepo.git"\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo, url = docs._get_github_repo_info()
-        assert owner == "sshowner"
-        assert repo == "sshrepo"
-
-
-def test_get_github_repo_info_no_url():
-    """Test _get_github_repo_info returns None when no URL."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo, url = docs._get_github_repo_info()
-        assert owner is None
-        assert repo is None
-        assert url is None
 
 
 def test_detect_module_name_from_maturin():
@@ -14256,10 +13351,18 @@ def test_get_package_exports_hyphenated_name():
         assert exports is None
 
 
+# Packaging declarations for a named package, with and without a GitHub repository
+MYPKG_PYPROJECT = '[project]\nname = "mypkg"\n'
+MYPKG_ON_GITHUB_PYPROJECT = (
+    MYPKG_PYPROJECT + '\n[project.urls]\nRepository = "https://github.com/owner/repo"\n'
+)
+
+
 def _buildable_docs(
     tmp_path: Path,
     *,
     quarto_yml: str = QUARTO_YML_HEADER,
+    pyproject: str | None = None,
     **settings: object,
 ) -> GreatDocs:
     """
@@ -14271,6 +13374,8 @@ def _buildable_docs(
         The project directory.
     quarto_yml
         The text of the build directory's `_quarto.yml`.
+    pyproject
+        The text of `pyproject.toml`, or `None` for a project without one.
     **settings
         `Config` property values, by name.
 
@@ -14280,6 +13385,8 @@ def _buildable_docs(
         The project with an empty `great-docs.yml`, a configuration double and a build
         directory containing `_quarto.yml`.
     """
+    if pyproject is not None:
+        (tmp_path / "pyproject.toml").write_text(pyproject, encoding="utf-8")
     docs = GreatDocs(project_path=str(tmp_path))
     # `GreatDocs.build()` requires a configuration file, even with a configuration double.
     (tmp_path / "great-docs.yml").write_text("", encoding="utf-8")
@@ -14293,13 +13400,14 @@ def test_build_prepare_and_render_flow(tmp_path):
     """Test build() happy path: prepares, renders, runs quarto render."""
     docs = _buildable_docs(
         tmp_path,
+        pyproject=MYPKG_PYPROJECT,
         quarto_yml=QUARTO_YML_HEADER + "api-reference:\n  package: mypkg\n",
     )
     mock_builder = MagicMock()
     mock_builder_class = MagicMock(return_value=mock_builder)
 
     with (
-        stubbed_build(docs, api_reference=True, _detect_package_name="mypkg"),
+        stubbed_build(docs, api_reference=True),
         patch("great_docs._apiref.api_reference.APIReference", mock_builder_class),
     ):
         docs.build(watch=False, refresh=True)
@@ -14330,14 +13438,16 @@ def test_build_after_a_build_without_api_reference_generates_one(tmp_path):
     Verify API reference generation after a build without one on the same instance
     """
     docs = _buildable_docs(
-        tmp_path, quarto_yml=QUARTO_YML_HEADER + "api-reference:\n  package: mypkg\n"
+        tmp_path,
+        pyproject=MYPKG_PYPROJECT,
+        quarto_yml=QUARTO_YML_HEADER + "api-reference:\n  package: mypkg\n",
     )
     with stubbed_build(docs):
         docs.build(refresh=False)
 
     mock_builder_class = MagicMock()
     with (
-        stubbed_build(docs, api_reference=True, _detect_package_name="mypkg"),
+        stubbed_build(docs, api_reference=True),
         patch("great_docs._apiref.api_reference.APIReference", mock_builder_class),
     ):
         docs.build(refresh=False)
@@ -14349,6 +13459,7 @@ def test_build_dynamic_fallback_to_static(tmp_path):
     """Test build() falls back to static mode when dynamic mode fails."""
     docs = _buildable_docs(
         tmp_path,
+        pyproject=MYPKG_PYPROJECT,
         quarto_yml=QUARTO_YML_HEADER
         + format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
         dynamic=True,
@@ -14357,7 +13468,7 @@ def test_build_dynamic_fallback_to_static(tmp_path):
     mock_builder.build.side_effect = [RuntimeError("Dynamic mode failed"), None]
 
     with (
-        stubbed_build(docs, api_reference=True, _detect_package_name="mypkg"),
+        stubbed_build(docs, api_reference=True),
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
@@ -14371,6 +13482,7 @@ def test_build_dynamic_fallback_preserves_the_quarto_yml_header(tmp_path):
     """The static-analysis retry rewrites api-reference.dynamic without losing the ownership header."""
     docs = _buildable_docs(
         tmp_path,
+        pyproject=MYPKG_PYPROJECT,
         quarto_yml=QUARTO_YML_HEADER
         + format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
         dynamic=True,
@@ -14379,7 +13491,7 @@ def test_build_dynamic_fallback_preserves_the_quarto_yml_header(tmp_path):
     mock_builder.build.side_effect = [RuntimeError("Dynamic mode failed"), None]
 
     with (
-        stubbed_build(docs, api_reference=True, _detect_package_name="mypkg"),
+        stubbed_build(docs, api_reference=True),
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
@@ -14394,6 +13506,7 @@ def test_build_static_mode_failure_raises(tmp_path):
     """Raise `BuildError` when static API reference generation also fails"""
     docs = _buildable_docs(
         tmp_path,
+        pyproject=MYPKG_PYPROJECT,
         quarto_yml=QUARTO_YML_HEADER
         + format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
         dynamic=True,
@@ -14402,7 +13515,7 @@ def test_build_static_mode_failure_raises(tmp_path):
     mock_builder.build.side_effect = RuntimeError("Build always fails")
 
     with (
-        stubbed_build(docs, api_reference=True, _detect_package_name="mypkg"),
+        stubbed_build(docs, api_reference=True),
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
@@ -14415,13 +13528,14 @@ def test_build_non_dynamic_failure_raises(tmp_path):
     """Raise `BuildError` when non-dynamic API reference generation fails"""
     docs = _buildable_docs(
         tmp_path,
+        pyproject=MYPKG_PYPROJECT,
         quarto_yml=QUARTO_YML_HEADER + format_yaml({"api-reference": {"package": "mypkg"}}),
     )
     mock_builder = MagicMock()
     mock_builder.build.side_effect = RuntimeError("Build failed")
 
     with (
-        stubbed_build(docs, api_reference=True, _detect_package_name="mypkg"),
+        stubbed_build(docs, api_reference=True),
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
@@ -14468,6 +13582,7 @@ def test_build_with_changelog(tmp_path):
     """Check that the build generates a changelog when enabled"""
     docs = _buildable_docs(
         tmp_path,
+        pyproject=MYPKG_ON_GITHUB_PYPROJECT,
         quarto_yml=NAVBAR_QUARTO_YML,
         changelog_enabled=True,
         changelog_max_releases=50,
@@ -14476,8 +13591,6 @@ def test_build_with_changelog(tmp_path):
 
     with stubbed_build(
         docs,
-        _detect_package_name="mypkg",
-        _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
     ):
         docs.build(watch=False, refresh=False)
 
@@ -14494,6 +13607,7 @@ def test_build_changelog_error_stops_the_build(tmp_path):
     """
     docs = _buildable_docs(
         tmp_path,
+        pyproject=MYPKG_ON_GITHUB_PYPROJECT,
         quarto_yml=NAVBAR_QUARTO_YML,
         changelog_enabled=True,
         changelog_max_releases=50,
@@ -14504,8 +13618,6 @@ def test_build_changelog_error_stops_the_build(tmp_path):
 
     with stubbed_build(
         docs,
-        _detect_package_name="mypkg",
-        _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
     ) as stubs:
         with pytest.raises(IsADirectoryError):
             docs.build(watch=False, refresh=False)
@@ -14516,12 +13628,12 @@ def test_build_changelog_error_stops_the_build(tmp_path):
 
 def test_build_with_cli_documentation(tmp_path):
     """Test build() generates CLI docs when cli_enabled."""
-    docs = _buildable_docs(tmp_path, cli_enabled=True)
+    docs = _buildable_docs(tmp_path, pyproject=MYPKG_PYPROJECT, cli_enabled=True)
     cli_info = {"name": "mycli", "commands": [], "help_text": "Help"}
     cli_files = ["reference/cli/index.qmd"]
 
     with (
-        stubbed_build(docs, _detect_package_name="mypkg"),
+        stubbed_build(docs),
         patch("great_docs._cliref.click.discover", return_value=cli_info) as discover,
         patch("great_docs._cliref.render.write_pages", return_value=cli_files) as write_pages,
     ):
@@ -14600,10 +13712,10 @@ def test_build_cli_error_handled(tmp_path, capsys):
     `build()` prints `Error generating CLI docs: click` and still writes page
     metadata.
     """
-    docs = _buildable_docs(tmp_path, cli_enabled=True)
+    docs = _buildable_docs(tmp_path, pyproject=MYPKG_PYPROJECT, cli_enabled=True)
 
     with (
-        stubbed_build(docs, _detect_package_name="mypkg") as stubs,
+        stubbed_build(docs) as stubs,
         patch("great_docs._cliref.click.discover", side_effect=ImportError("click")),
         patch("great_docs._cliref.render.write_pages") as write_pages,
     ):
@@ -15893,55 +15005,6 @@ def test_preview_serves_and_stops():
         mock_server.server_close.assert_called_once()
 
 
-def test_detect_package_name_from_setup_cfg():
-    """Test _detect_package_name from setup.cfg."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "setup.cfg").write_text(
-            "[metadata]\nname = my-awesome-pkg\n", encoding="utf-8"
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_package_name()
-        assert result == "my-awesome-pkg"
-
-
-def test_detect_package_name_from_setup_py():
-    """Test _detect_package_name from setup.py."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        (Path(tmp_dir) / "setup.py").write_text(
-            'from setuptools import setup\nsetup(name="legacy-pkg")\n',
-            encoding="utf-8",
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_package_name()
-        assert result == "legacy-pkg"
-
-
-def test_detect_package_name_from_single_package():
-    """Test _detect_package_name from single Python package directory."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "solo_package"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("", encoding="utf-8")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_package_name()
-        assert result == "solo_package"
-
-
-def test_detect_package_name_returns_none():
-    """Test _detect_package_name returns None when nothing found."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_package_name()
-        assert result is None
-
-
 def test_check_links_with_docs_files():
     """Test check_links scans documentation files."""
 
@@ -16258,7 +15321,6 @@ def test_homepage_hero_auto_badges():
             patch("great_docs._website.homepage.hero.extract_hero_elements", return_value=elements),
             patch("great_docs._website.branding.detect_hero_logo", return_value=None),
             patch("great_docs._website.branding.detect_logo", return_value=None),
-            patch.object(docs, "_get_package_metadata", return_value={}),
         ):
             html, cleaned = homepage_hero(docs, "# My Package\n![badge](url)\n")
 
@@ -16286,8 +15348,6 @@ def test_homepage_hero_no_content():
         with (
             patch("great_docs._website.branding.detect_hero_logo", return_value=None),
             patch("great_docs._website.branding.detect_logo", return_value=None),
-            patch.object(docs, "_get_package_metadata", return_value={}),
-            patch.object(docs, "_detect_package_name", return_value=None),
         ):
             html, cleaned = homepage_hero(docs)
 
@@ -16318,8 +15378,7 @@ def test_homepage_hero_with_logo_dict():
         (pkg_root / "logo-light.svg").write_text("<svg/>", encoding="utf-8")
         (pkg_root / "logo-dark.svg").write_text("<svg/>", encoding="utf-8")
 
-        with patch.object(docs, "_get_package_metadata", return_value={}):
-            html, _ = homepage_hero(docs)
+        html, _ = homepage_hero(docs)
 
         assert "gd-only-light" in html
         assert "gd-only-dark" in html
@@ -16332,7 +15391,7 @@ def test_add_api_reference_config_disabled():
         docs = GreatDocs(project_path=tmp_dir)
         docs._config = mock_config(reference_enabled=False)
 
-        run = make_run()
+        run = make_run(docs)
         docs._add_api_reference_config(run)
 
         assert run.has_api_reference is False
@@ -16352,7 +15411,7 @@ def test_add_api_reference_config_already_exists():
         )
 
         # Should not modify anything
-        run = make_run()
+        run = make_run(docs)
         docs._add_api_reference_config(run)
 
 
@@ -16367,7 +15426,7 @@ def test_add_api_reference_config_without_package_name_warns_and_skips(
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir(parents=True)
     (docs.build_dir / "_quarto.yml").write_text(format_yaml({"website": {}}), encoding="utf-8")
-    run = make_run()
+    run = make_run(docs)
 
     with patch("builtins.input", side_effect=AssertionError("the build must not prompt")):
         docs._add_api_reference_config(run)
@@ -16383,6 +15442,7 @@ def test_add_api_reference_config_no_exports():
     """Test _add_api_reference_config when no documentable exports found."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
+        write_pyproject(Path(tmp_dir), "mypkg")
         docs = GreatDocs(project_path=tmp_dir)
         docs._config = mock_config(reference_enabled=True, is_python_project=True)
 
@@ -16390,12 +15450,11 @@ def test_add_api_reference_config_no_exports():
         (docs.build_dir / "_quarto.yml").write_text(format_yaml({"website": {}}), encoding="utf-8")
 
         with (
-            patch.object(docs, "_detect_package_name", return_value="mypkg"),
             patch.object(docs, "_detect_module_name", return_value="mypkg"),
             patch.object(docs, "_is_compiled_extension", return_value=False),
             patch.object(docs, "_create_api_sections_with_config", return_value=None),
         ):
-            run = make_run()
+            run = make_run(docs)
             docs._add_api_reference_config(run)
 
         assert run.has_api_reference is False
@@ -16405,6 +15464,7 @@ def test_add_api_reference_config_success():
     """Test _add_api_reference_config successfully adds API config."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
+        write_pyproject(Path(tmp_dir), "mypkg")
         docs = GreatDocs(project_path=tmp_dir)
         docs._config = mock_config(
             reference_enabled=True,
@@ -16423,12 +15483,11 @@ def test_add_api_reference_config_success():
         sections = [{"title": "Functions", "contents": ["func_a"]}]
 
         with (
-            patch.object(docs, "_detect_package_name", return_value="mypkg"),
             patch.object(docs, "_detect_module_name", return_value="mypkg"),
             patch.object(docs, "_is_compiled_extension", return_value=False),
             patch.object(docs, "_create_api_sections_with_config", return_value=sections),
         ):
-            run = make_run()
+            run = make_run(docs)
             docs._add_api_reference_config(run)
 
         assert run.has_api_reference is True
@@ -16504,7 +15563,7 @@ def test_create_blended_index_no_files():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs._create_blended_index({"files": []}, [])
+        docs._create_blended_index(make_project(docs), {"files": []}, [])
         # No error expected
 
 
@@ -16522,7 +15581,7 @@ def test_create_blended_index_missing_first_page():
             "source_dir": Path(tmp_dir) / "user_guide",
             "explicit": False,
         }
-        docs._create_blended_index(ug_info, [])
+        docs._create_blended_index(make_project(docs), ug_info, [])
 
         # Should not crash, index.qmd should not be created
         assert not (docs.build_dir / "index.qmd").exists()
@@ -16816,7 +15875,7 @@ def test_create_blended_index_creates_index():
             patch("great_docs._website.homepage.margin.render", return_value=""),
             patch("great_docs._website.homepage.hero.find", return_value=None),
         ):
-            docs._create_blended_index(ug_info, [])
+            docs._create_blended_index(make_project(docs), ug_info, [])
 
         index_qmd = docs.build_dir / "index.qmd"
         assert index_qmd.exists()
@@ -17017,6 +16076,7 @@ def test_build_changelog_no_releases(tmp_path):
     """
     docs = _buildable_docs(
         tmp_path,
+        pyproject=MYPKG_ON_GITHUB_PYPROJECT,
         quarto_yml=NAVBAR_QUARTO_YML,
         changelog_enabled=True,
         changelog_max_releases=50,
@@ -17025,8 +16085,6 @@ def test_build_changelog_no_releases(tmp_path):
 
     with stubbed_build(
         docs,
-        _detect_package_name="mypkg",
-        _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
     ):
         docs.build(watch=False, refresh=False)
 
@@ -17041,15 +16099,14 @@ def test_build_changelog_no_repo(tmp_path):
     """
     docs = _buildable_docs(
         tmp_path,
+        pyproject=MYPKG_PYPROJECT,
         quarto_yml=NAVBAR_QUARTO_YML,
         changelog_enabled=True,
         changelog_max_releases=50,
     )
     docs._remote = StubRemote(releases=[GITHUB_RELEASE])
 
-    with stubbed_build(
-        docs, _detect_package_name="mypkg", _get_github_repo_info=(None, None, None)
-    ):
+    with stubbed_build(docs):
         docs.build(watch=False, refresh=False)
 
     assert "github_releases" not in docs._remote.calls
@@ -17090,7 +16147,7 @@ def _make_uqc_docs(tmp_dir, gd_yml_content="", pyproject_content=None, quarto_co
 def test_update_quarto_config_math_method_defaults_to_katex():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             config = read_yaml(f)
@@ -17104,7 +16161,7 @@ def test_update_quarto_config_forwards_math_method_override():
             tmp_dir,
             gd_yml_content="site:\n  html-math-method: mathjax\n",
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             config = read_yaml(f)
@@ -17124,7 +16181,7 @@ def test_update_quarto_config_resources_string():
                 "format": {"html": {}},
             },
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17146,7 +16203,7 @@ def test_update_quarto_config_include_in_header_string():
                 "format": {"html": {"include-in-header": "header.html"}},
             },
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17169,12 +16226,8 @@ def test_update_quarto_config_github_icon_fallback():
             },
         )
 
-        with patch.object(
-            docs,
-            "_get_github_repo_info",
-            return_value=("owner", "repo", "https://github.com/owner/repo"),
-        ):
-            docs._update_quarto_config(make_run())
+        on_github = replace(make_project(docs), github=GithubRepo("owner", "repo"))
+        docs._update_quarto_config(make_run(docs, project=on_github))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17199,7 +16252,7 @@ def test_update_quarto_config_dark_logo():
         with patch(
             "great_docs._website.branding.generate_favicons", return_value={"icon": "favicon.ico"}
         ):
-            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17226,7 +16279,7 @@ def test_update_quarto_config_logo_name_collision():
         with patch(
             "great_docs._website.branding.generate_favicons", return_value={"icon": "favicon.ico"}
         ):
-            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17244,7 +16297,7 @@ def test_update_quarto_config_logo_not_found():
             gd_yml_content="logo:\n  light: nonexistent-logo.png\n",
         )
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
 
 def test_update_quarto_config_dark_logo_not_found():
@@ -17261,7 +16314,7 @@ def test_update_quarto_config_dark_logo_not_found():
         with patch(
             "great_docs._website.branding.generate_favicons", return_value={"icon": "favicon.ico"}
         ):
-            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run(docs))
 
 
 def test_update_quarto_config_favicon_file():
@@ -17279,7 +16332,7 @@ def test_update_quarto_config_favicon_file():
         with patch(
             "great_docs._website.branding.generate_favicons", return_value={"icon": "favicon.ico"}
         ):
-            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17299,7 +16352,7 @@ def test_update_quarto_config_favicon_not_found():
         )
 
         with patch("great_docs._website.branding.generate_favicons", return_value={}):
-            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run(docs))
 
 
 def test_update_quarto_config_favicon_resources_added():
@@ -17322,7 +16375,7 @@ def test_update_quarto_config_favicon_resources_added():
         }
 
         with patch("great_docs._website.branding.generate_favicons", return_value=generated):
-            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17364,7 +16417,7 @@ def test_update_quarto_config_favicon_absolute_urls_with_site_url():
         }
 
         with patch("great_docs._website.branding.generate_favicons", return_value=generated):
-            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17412,7 +16465,7 @@ def test_update_quarto_config_favicon_no_links_without_site_url():
         }
 
         with patch("great_docs._website.branding.generate_favicons", return_value=generated):
-            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17457,7 +16510,7 @@ def test_update_quarto_config_favicon_absolute_urls_from_pyproject():
         }
 
         with patch("great_docs._website.branding.generate_favicons", return_value=generated):
-            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17483,12 +16536,8 @@ def test_update_quarto_config_favicon_absolute_urls_from_pyproject():
             },
         )
 
-        with patch.object(
-            docs,
-            "_get_github_repo_info",
-            return_value=("owner", "repo", "https://github.com/owner/repo"),
-        ):
-            docs._update_quarto_config(make_run())
+        on_github = replace(make_project(docs), github=GithubRepo("owner", "repo"))
+        docs._update_quarto_config(make_run(docs, project=on_github))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17509,7 +16558,7 @@ def test_update_quarto_config_footer_author_string():
                 '[[project.maintainers]]\nname = "Bob Jones"\n'
             ),
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17530,7 +16579,7 @@ def test_update_quarto_config_footer_funding_no_url():
             ),
             gd_yml_content="funding:\n  name: ACME Foundation\n",
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17548,7 +16597,7 @@ def test_update_quarto_config_funding_only_no_authors():
             pyproject_content='[project]\nname = "testpkg"\n',
             gd_yml_content="funding:\n  name: ACME Foundation\n  homepage: https://acme.org\n",
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17566,7 +16615,7 @@ def test_update_quarto_config_attribution_v2():
             tmp_dir,
             gd_yml_content="attribution: true\n",
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17590,7 +16639,7 @@ def test_update_quarto_config_announcement_banner_v2():
                 "  style: rounded\n"
             ),
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17614,7 +16663,7 @@ def test_update_quarto_config_navbar_style_v2():
             tmp_dir,
             gd_yml_content="navbar_style: gradient-sunset\n",
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17632,7 +16681,7 @@ def test_update_quarto_config_content_style_v2():
             tmp_dir,
             gd_yml_content="content_style:\n  preset: warm-glow\n  pages: all\n",
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -17658,7 +16707,7 @@ def test_update_quarto_config_logo_href():
         with patch(
             "great_docs._website.branding.generate_favicons", return_value={"icon": "favicon.ico"}
         ):
-            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -19179,7 +18228,7 @@ def test_cli_scan_success():
         with patch("great_docs.cli.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
-            mock_docs._detect_package_name.return_value = "my_package"
+            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_package")
             mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_package"
             mock_docs._get_package_exports.return_value = ["MyClass", "my_func"]
@@ -19215,7 +18264,7 @@ def test_cli_scan_verbose():
         with patch("great_docs.cli.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
-            mock_docs._detect_package_name.return_value = "my_pkg"
+            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
             mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_pkg"
             mock_docs._get_package_exports.return_value = ["func"]
@@ -19244,7 +18293,7 @@ def test_cli_scan_no_package():
         with patch("great_docs.cli.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
-            mock_docs._detect_package_name.return_value = None
+            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), None)
 
             result = runner.invoke(scan, ["--project-path", tmp_dir])
             assert result.exit_code == 1
@@ -19259,7 +18308,7 @@ def test_cli_scan_no_exports():
         with patch("great_docs.cli.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
-            mock_docs._detect_package_name.return_value = "my_pkg"
+            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
             mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_pkg"
             mock_docs._get_package_exports.return_value = []
@@ -19277,7 +18326,7 @@ def test_cli_scan_no_reference_config():
         with patch("great_docs.cli.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
-            mock_docs._detect_package_name.return_value = "my_pkg"
+            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
             mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_pkg"
             mock_docs._get_package_exports.return_value = ["func"]
@@ -19300,7 +18349,7 @@ def test_cli_scan_class_without_members():
         with patch("great_docs.cli.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
-            mock_docs._detect_package_name.return_value = "my_pkg"
+            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
             mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_pkg"
             mock_docs._get_package_exports.return_value = ["MyClass"]
@@ -19328,7 +18377,7 @@ def test_cli_scan_flat_categories():
         with patch("great_docs.cli.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
-            mock_docs._detect_package_name.return_value = "my_pkg"
+            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
             mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_pkg"
             mock_docs._get_package_exports.return_value = [
@@ -19374,7 +18423,7 @@ def test_cli_scan_class_like_categories():
         with patch("great_docs.cli.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
-            mock_docs._detect_package_name.return_value = "my_pkg"
+            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
             mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_pkg"
             mock_docs._get_package_exports.return_value = [
@@ -19409,7 +18458,7 @@ def test_cli_scan_string_items_in_reference():
         with patch("great_docs.cli.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
-            mock_docs._detect_package_name.return_value = "my_pkg"
+            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "my_pkg")
             mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_pkg"
             mock_docs._get_package_exports.return_value = ["my_func"]
@@ -19757,7 +18806,8 @@ def test_cli_changelog_no_github_repo():
         with patch("great_docs.cli.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
-            mock_docs._get_github_repo_info.return_value = (None, None, None)
+            # The project's files name no GitHub repository.
+            mock_docs.layout.package_root = Path(tmp_dir)
 
             result = runner.invoke(changelog, ["--project-path", tmp_dir])
             assert result.exit_code == 1
@@ -23554,47 +22604,12 @@ def test_prepare_build_directory_config_js_branches():
         if scss_src.exists():
             shutil.copy2(scss_src, docs.build_dir / "great-docs.scss")
 
-        docs._prepare_build_directory(make_run())
+        docs._prepare_build_directory(make_run(docs))
 
         # Verify the config-specific JS files were copied
         assert (docs.build_dir / "announcement-banner.js").exists()
         assert (docs.build_dir / "navbar-style.js").exists()
         assert (docs.build_dir / "content-style.js").exists()
-
-
-def test_get_github_repo_info_git_suffix():
-    """_get_github_repo_info strips .git suffix from repo URL."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text(
-            '[project]\nname = "mypkg"\nversion = "1.0"\n'
-            '[project.urls]\nRepository = "https://github.com/owner/myrepo.git"\n'
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo, base_url = docs._get_github_repo_info()
-
-        assert owner == "owner"
-        assert repo == "myrepo"
-        assert ".git" not in base_url
-        assert base_url == "https://github.com/owner/myrepo"
-
-
-def test_get_github_repo_info_no_match():
-    """_get_github_repo_info returns None tuple when URL doesn't match pattern."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text(
-            '[project]\nname = "mypkg"\nversion = "1.0"\n'
-            '[project.urls]\nRepository = "https://gitlab.com/owner/myrepo"\n'
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        owner, repo, base_url = docs._get_github_repo_info()
-
-        assert owner is None
-        assert repo is None
-        assert base_url is None
 
 
 def test_detect_docstring_style_no_docstrings():
@@ -24432,7 +23447,7 @@ class TestCreateBlendedIndex:
                 "explicit": False,
             }
             copied_files = ["user-guide/intro.qmd"]
-            docs._create_blended_index(user_guide_info, copied_files)
+            docs._create_blended_index(make_project(docs), user_guide_info, copied_files)
             index_qmd = docs.build_dir / "index.qmd"
             assert index_qmd.exists()
             content = index_qmd.read_text()
@@ -24445,7 +23460,7 @@ class TestCreateBlendedIndex:
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = self._setup_blended(tmp_dir)
             user_guide_info = {"files": [], "source_dir": Path(tmp_dir), "explicit": False}
-            docs._create_blended_index(user_guide_info, [])
+            docs._create_blended_index(make_project(docs), user_guide_info, [])
             assert not (docs.build_dir / "index.qmd").exists()
 
     def test_returns_blended_first_page(self):
@@ -24462,7 +23477,9 @@ class TestCreateBlendedIndex:
                 "source_dir": source_dir,
                 "explicit": False,
             }
-            first_page = docs._create_blended_index(user_guide_info, ["user-guide/intro.qmd"])
+            first_page = docs._create_blended_index(
+                make_project(docs), user_guide_info, ["user-guide/intro.qmd"]
+            )
             assert first_page == "user-guide/intro.qmd"
 
 
@@ -24878,7 +23895,7 @@ class TestUpdateQuartoConfigScripts:
             }
             with open(quarto_yml, "w") as f:
                 write_yaml(config, f)
-            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run(docs))
             with open(quarto_yml) as f:
                 result = read_yaml(f)
             after_body = result["format"]["html"]["include-after-body"]
@@ -24899,7 +23916,7 @@ class TestUpdateQuartoConfigScripts:
             }
             with open(quarto_yml, "w") as f:
                 write_yaml(config, f)
-            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run(docs))
             with open(quarto_yml) as f:
                 result = read_yaml(f)
             header = result["format"]["html"].get("include-in-header", [])
@@ -24921,7 +23938,7 @@ class TestUpdateQuartoConfigScripts:
             }
             with open(quarto_yml, "w") as f:
                 write_yaml(config, f)
-            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run(docs))
             with open(quarto_yml) as f:
                 result = read_yaml(f)
             footer = result["website"].get("page-footer", {})
@@ -24946,7 +23963,7 @@ class TestUpdateQuartoConfigScripts:
             cli_index = docs.build_dir / "reference" / "cli" / "index.qmd"
             cli_index.parent.mkdir(parents=True)
             cli_index.write_text("", encoding="utf-8")
-            docs._update_quarto_config(make_run())
+            docs._update_quarto_config(make_run(docs))
             with open(quarto_yml) as f:
                 result = read_yaml(f)
             after_body = result["format"]["html"].get("include-after-body", [])
@@ -25483,7 +24500,7 @@ class TestUpdateQuartoConfigStrNormalizationBatch10:
         quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "w") as f:
             write_yaml(quarto_content, f)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
         with open(quarto_yml) as f:
             return read_yaml(f)
 
@@ -25531,25 +24548,6 @@ class TestQuartoEnvironmentBatch10:
                 env = quarto.environment(docs._config)
             assert "PYTHONPATH" in env
             assert os.pathsep not in env["PYTHONPATH"] or tmp_dir in env["PYTHONPATH"]
-
-
-class TestGetGithubRepoInfoBatch10:
-    """Cover .git suffix removal in _get_github_repo_info."""
-
-    def test_git_suffix_removed(self):
-        """Repository URL with .git suffix is cleaned."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text(
-                '[project]\nname = "mypkg"\n'
-                '[project.urls]\nRepository = "https://github.com/owner/repo.git"\n'
-            )
-            (tmp / "great-docs.yml").write_text("")
-            docs = GreatDocs(project_path=tmp_dir)
-            owner, repo, base_url = docs._get_github_repo_info()
-            assert owner == "owner"
-            assert repo == "repo"
-            assert ".git" not in base_url
 
 
 class TestHomepageHeroBatch10:
@@ -25649,7 +24647,7 @@ class TestCreateBlendedIndexBatch10:
                 "explicit": True,
                 "has_index": False,
             }
-            docs._create_blended_index(user_guide_info, [])
+            docs._create_blended_index(make_project(docs), user_guide_info, [])
             index = docs.build_dir / "index.qmd"
             assert index.exists()
             content = index.read_text()
@@ -25677,7 +24675,7 @@ class TestCreateBlendedIndexBatch10:
                 "explicit": False,
                 "has_index": False,
             }
-            docs._create_blended_index(user_guide_info, [])
+            docs._create_blended_index(make_project(docs), user_guide_info, [])
             content = (docs.build_dir / "index.qmd").read_text()
             assert "title: My Title" in content
             # The first '# My Title' heading should be stripped
@@ -25704,7 +24702,7 @@ class TestCreateBlendedIndexBatch10:
                 "explicit": False,
                 "has_index": False,
             }
-            docs._create_blended_index(user_guide_info, [])
+            docs._create_blended_index(make_project(docs), user_guide_info, [])
             content = (docs.build_dir / "index.qmd").read_text()
             assert "Just plain content." in content
 
@@ -25782,7 +24780,9 @@ def test_create_blended_index_with_subdirectory_structure():
             "has_index": True,
         }
 
-        first_page = docs._create_blended_index(user_guide_info, ["user-guide/index.qmd"])
+        first_page = docs._create_blended_index(
+            make_project(docs), user_guide_info, ["user-guide/index.qmd"]
+        )
 
         # index.qmd should be created at site root
         index_qmd = docs.build_dir / "index.qmd"
@@ -25834,7 +24834,7 @@ def test_create_blended_index_subdir_file_first():
         }
 
         first_page = docs._create_blended_index(
-            user_guide_info, ["user-guide/getting-started/intro.qmd"]
+            make_project(docs), user_guide_info, ["user-guide/getting-started/intro.qmd"]
         )
 
         # index.qmd should be created at site root
@@ -25933,8 +24933,8 @@ def _skills_writer(docs: GreatDocs) -> SkillsWriter:
         docs._config,
         docs.layout,
         docs.build_dir,
-        docs._detect_package_name(),
-        docs._get_package_metadata(),
+        make_project(docs).name,
+        make_project(docs).manifest,
     )
 
 
@@ -25943,8 +24943,8 @@ def _skills_page_writer(docs: GreatDocs) -> SkillsPageWriter:
         docs._config,
         docs.layout,
         docs.build_dir,
-        docs._detect_package_name(),
-        docs._get_package_metadata(),
+        make_project(docs).name,
+        make_project(docs).manifest,
     )
 
 
@@ -26958,7 +25958,7 @@ def test_announcement_inline_markdown_backticks():
             tmp_dir,
             gd_yml_content=("announcement:\n  content: 'Install with: `pip install great-docs`'\n"),
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -26976,7 +25976,7 @@ def test_announcement_inline_markdown_bold():
             tmp_dir,
             gd_yml_content=("announcement:\n  content: '**Breaking change** in v2.0'\n"),
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -26993,7 +25993,7 @@ def test_announcement_inline_markdown_italic():
             tmp_dir,
             gd_yml_content=("announcement:\n  content: 'This is *important* news'\n"),
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27012,7 +26012,7 @@ def test_announcement_inline_markdown_link():
                 "announcement:\n  content: 'See [release notes](https://example.com/changelog)'\n"
             ),
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27034,7 +26034,7 @@ def test_announcement_inline_markdown_combined():
                 "  content: '**New!** Try `great-docs init` — see [docs](https://example.com)'\n"
             ),
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27053,7 +26053,7 @@ def test_announcement_plain_text_unaffected():
             tmp_dir,
             gd_yml_content=("announcement:\n  content: 'Just a plain announcement'\n"),
         )
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27067,7 +26067,7 @@ def test_update_quarto_config_disables_native_code_copy():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27080,7 +26080,7 @@ def test_update_quarto_config_includes_copy_code_js_in_resources():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27093,7 +26093,7 @@ def test_update_quarto_config_includes_copy_code_js_in_after_body():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27109,8 +26109,8 @@ def test_update_quarto_config_copy_code_not_duplicated():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27134,7 +26134,7 @@ def test_update_quarto_config_includes_tooltips_js_in_resources():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27147,7 +26147,7 @@ def test_update_quarto_config_includes_tooltips_js_in_after_body():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27163,8 +26163,8 @@ def test_update_quarto_config_tooltips_not_duplicated():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27187,7 +26187,7 @@ def test_update_quarto_config_includes_responsive_tables_js_in_resources():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27200,7 +26200,7 @@ def test_update_quarto_config_includes_responsive_tables_js_in_after_body():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27216,8 +26216,8 @@ def test_update_quarto_config_responsive_tables_not_duplicated():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27240,7 +26240,7 @@ def test_update_quarto_config_includes_video_embed_js_in_resources():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27253,7 +26253,7 @@ def test_update_quarto_config_includes_video_embed_js_in_after_body():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27269,8 +26269,8 @@ def test_update_quarto_config_video_embed_not_duplicated():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27294,7 +26294,7 @@ def test_update_quarto_config_video_embed_script_tag_format():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27319,7 +26319,7 @@ def test_prepare_build_directory_copies_video_embed_js():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(reference_sections, "update_sidebar"):
-                docs._prepare_build_directory(make_run())
+                docs._prepare_build_directory(make_run(docs))
 
         assert (docs.build_dir / "video-embed.js").exists()
 
@@ -27441,7 +26441,7 @@ def test_video_embed_always_included():
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Minimal config — no special settings
         docs, quarto_yml = _make_uqc_docs(tmp_dir, gd_yml_content="")
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27458,7 +26458,7 @@ def test_update_quarto_config_mermaid_theme_default():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27473,7 +26473,7 @@ def test_update_quarto_config_includes_mermaid_renderer_js():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27489,8 +26489,8 @@ def test_update_quarto_config_mermaid_renderer_not_duplicated():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        docs._update_quarto_config(make_run())
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27654,7 +26654,9 @@ seo:
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        sitemap.write(site_dir, docs._config, docs._identity().base_url, report=print)
+        sitemap.write(
+            site_dir, docs._config, docs._identity(make_project(docs)).base_url, report=print
+        )
 
         sitemap_path = site_dir / "sitemap.xml"
 
@@ -27695,7 +26697,9 @@ seo:
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        robots.write(site_dir, docs._config, docs._identity().base_url, report=print)
+        robots.write(
+            site_dir, docs._config, docs._identity(make_project(docs)).base_url, report=print
+        )
 
         robots_path = site_dir / "robots.txt"
 
@@ -27721,7 +26725,7 @@ def test_back_to_top_enabled_by_default():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27743,7 +26747,7 @@ def test_back_to_top_disabled_via_config():
             gd_yml_content="back_to_top: false\n",
         )
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27762,7 +26766,7 @@ def test_back_to_top_script_tag_content():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27779,8 +26783,8 @@ def test_back_to_top_not_duplicated():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config(make_run())
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27803,7 +26807,7 @@ def test_back_to_top_with_string_include_after_body():
             },
         )
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27838,7 +26842,7 @@ def test_back_to_top_js_copied_to_project():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, _ = _make_uqc_docs(tmp_dir)
-        docs._prepare_build_directory(make_run())
+        docs._prepare_build_directory(make_run(docs))
 
         js_file = docs.build_dir / "back-to-top.js"
         assert js_file.exists()
@@ -27852,7 +26856,7 @@ def test_back_to_top_js_not_copied_when_disabled():
             tmp_dir,
             gd_yml_content="back_to_top: false\n",
         )
-        docs._prepare_build_directory(make_run())
+        docs._prepare_build_directory(make_run(docs))
 
         js_file = docs.build_dir / "back-to-top.js"
         assert not js_file.exists()
@@ -27876,7 +26880,7 @@ def test_wide_layout_enabled_by_default():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27900,8 +26904,8 @@ def test_wide_layout_meta_precedes_theme_init():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config(make_run())
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27922,9 +26926,9 @@ def test_repeated_config_pass_keeps_wide_layout_in_place():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
         first = read_yaml(quarto_yml)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
         second = read_yaml(quarto_yml)
 
         # Other scripts must follow the loader on the first pass to expose a move to the end
@@ -27947,7 +26951,7 @@ def test_theme_init_added_when_details_already_listed():
             },
         )
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27975,7 +26979,7 @@ def test_wide_layout_custom_settings():
             ),
         )
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -27995,8 +26999,8 @@ def test_wide_layout_disabled_via_config():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir, gd_yml_content="wide_layout: false\n")
 
-        docs._update_quarto_config(make_run())
-        docs._prepare_build_directory(make_run())
+        docs._update_quarto_config(make_run(docs))
+        docs._prepare_build_directory(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -28013,7 +27017,7 @@ def test_wide_layout_js_copied_to_project():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, _ = _make_uqc_docs(tmp_dir)
-        docs._prepare_build_directory(make_run())
+        docs._prepare_build_directory(make_run(docs))
 
         assert (docs.build_dir / "wide-layout.js").exists()
 
@@ -28121,7 +27125,7 @@ def test_on_this_page_enabled_by_default():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -28145,7 +27149,7 @@ def test_on_this_page_disabled_via_config():
             gd_yml_content="back_to_top: false\n",
         )
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -28166,7 +27170,7 @@ def test_on_this_page_script_tag_is_plain():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -28183,7 +27187,7 @@ def test_color_swatch_script_tag_is_plain():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -28206,8 +27210,8 @@ def test_update_quarto_config_includes_are_plain_tags_once():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir, gd_yml_content="marimo:\n  enabled: true\n")
 
-        docs._update_quarto_config(make_run())
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -28266,8 +27270,8 @@ def test_on_this_page_not_duplicated():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config(make_run())
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -28283,7 +27287,7 @@ def test_on_this_page_js_copied_to_project():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, _ = _make_uqc_docs(tmp_dir)
-        docs._prepare_build_directory(make_run())
+        docs._prepare_build_directory(make_run(docs))
 
         js_file = docs.build_dir / "on-this-page.js"
 
@@ -28298,7 +27302,7 @@ def test_on_this_page_js_not_copied_when_disabled():
             tmp_dir,
             gd_yml_content="back_to_top: false\n",
         )
-        docs._prepare_build_directory(make_run())
+        docs._prepare_build_directory(make_run(docs))
 
         js_file = docs.build_dir / "on-this-page.js"
 
@@ -28366,7 +27370,7 @@ def test_keyboard_nav_enabled_by_default():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -28388,7 +27392,7 @@ def test_keyboard_nav_disabled_via_config():
             gd_yml_content="keyboard_nav: false\n",
         )
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -28407,7 +27411,7 @@ def test_keyboard_nav_script_tag_content():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -28424,8 +27428,8 @@ def test_keyboard_nav_not_duplicated():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        docs._update_quarto_config(make_run())
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
+        docs._update_quarto_config(make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -28459,7 +27463,7 @@ def test_keyboard_nav_js_copied_to_project():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, _ = _make_uqc_docs(tmp_dir)
-        docs._prepare_build_directory(make_run())
+        docs._prepare_build_directory(make_run(docs))
 
         js_file = docs.build_dir / "keyboard-nav.js"
         assert js_file.exists()
@@ -28473,7 +27477,7 @@ def test_keyboard_nav_js_not_copied_when_disabled():
             tmp_dir,
             gd_yml_content="keyboard_nav: false\n",
         )
-        docs._prepare_build_directory(make_run())
+        docs._prepare_build_directory(make_run(docs))
 
         js_file = docs.build_dir / "keyboard-nav.js"
         assert not js_file.exists()
@@ -28839,7 +27843,7 @@ def test_write_skills_page_multi_skill_install_section():
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
-        # pyproject.toml so _detect_package_name works
+        # `pyproject.toml` names the package
         (project / "pyproject.toml").write_text('[project]\nname = "test-pkg"\n')
         gd = GreatDocs(project_path=tmp)
         gd.build_dir = project
@@ -28891,7 +27895,7 @@ def test_write_skills_page_multi_skill_no_cli_without_package_name():
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
-        # No pyproject.toml -> _detect_package_name returns None
+        # Without `pyproject.toml` or a package directory, no name is detected
         gd = GreatDocs(project_path=tmp)
         gd.build_dir = project
 
@@ -29050,7 +28054,9 @@ def test_sitemap_write_basic():
         sub.mkdir()
         (sub / "index.html").write_text("<html></html>")
 
-        sitemap.write(gd.layout.site_dir, gd._config, gd._identity().base_url, report=print)
+        sitemap.write(
+            gd.layout.site_dir, gd._config, gd._identity(make_project(gd)).base_url, report=print
+        )
 
         sitemap_path = site_dir / "sitemap.xml"
         assert sitemap_path.exists()
@@ -29071,7 +28077,9 @@ def test_sitemap_write_no_site_dir(capsys):
         )
         gd = GreatDocs(project_path=tmp)
 
-        sitemap.write(gd.layout.site_dir, gd._config, gd._identity().base_url, report=print)
+        sitemap.write(
+            gd.layout.site_dir, gd._config, gd._identity(make_project(gd)).base_url, report=print
+        )
         captured = capsys.readouterr()
         assert "_site" in captured.out
 
@@ -29114,7 +28122,7 @@ def test_sitemap_write_excludes_unindexed_pages(tmp_path: Path):
         (site_dir / rel_path).parent.mkdir(parents=True, exist_ok=True)
         (site_dir / rel_path).write_text(html)
 
-    sitemap.write(site_dir, gd._config, gd._identity().base_url, report=print)
+    sitemap.write(site_dir, gd._config, gd._identity(make_project(gd)).base_url, report=print)
 
     locs = re.findall(r"<loc>([^<]*)</loc>", (site_dir / "sitemap.xml").read_text())
     assert locs == ["https://example.com/"]
@@ -29132,7 +28140,7 @@ def test_sitemap_write_keeps_v_directory_without_versions(tmp_path: Path):
     (site_dir / "v").mkdir(parents=True)
     (site_dir / "v" / "page.html").write_text("<html><head></head></html>")
 
-    sitemap.write(site_dir, gd._config, gd._identity().base_url, report=print)
+    sitemap.write(site_dir, gd._config, gd._identity(make_project(gd)).base_url, report=print)
 
     assert "https://example.com/v/page.html" in (site_dir / "sitemap.xml").read_text()
 
@@ -29154,7 +28162,9 @@ def test_robots_write_basic():
         site_dir = gd.layout.site_dir
         site_dir.mkdir(parents=True)
 
-        robots.write(gd.layout.site_dir, gd._config, gd._identity().base_url, report=print)
+        robots.write(
+            gd.layout.site_dir, gd._config, gd._identity(make_project(gd)).base_url, report=print
+        )
 
         robots_path = site_dir / "robots.txt"
         assert robots_path.exists()
@@ -29173,7 +28183,9 @@ def test_robots_write_no_site_dir(capsys):
         (project / "great-docs.yml").write_text("seo:\n  robots: true\n")
         gd = GreatDocs(project_path=tmp)
 
-        robots.write(gd.layout.site_dir, gd._config, gd._identity().base_url, report=print)
+        robots.write(
+            gd.layout.site_dir, gd._config, gd._identity(make_project(gd)).base_url, report=print
+        )
         captured = capsys.readouterr()
         assert "_site" in captured.out
 
@@ -29286,7 +28298,7 @@ def test_cli_scan_uses_module_name():
         with patch("great_docs.cli.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
-            mock_docs._detect_package_name.return_value = "firebird-base"
+            mock_docs.layout.package_root = write_pyproject(Path(tmp_dir), "firebird-base")
             # Simulate module: firebird.base in great-docs.yml
             mock_docs._detect_module_name.return_value = "firebird.base"
             mock_docs._get_package_exports.return_value = ["connect", "Config"]
@@ -29479,47 +28491,6 @@ def test_create_api_sections_from_config_inline_methods_custom_threshold():
 # ── Package Info Page ──────────────────────────────────────────────────────
 
 
-def test_get_package_metadata_parses_dependencies():
-    """_get_package_metadata extracts parsed dependencies from pyproject.toml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            textwrap.dedent("""\
-                [project]
-                name = "mypkg"
-                dependencies = [
-                    "numpy>=1.24",
-                    "click>=8.0,<9.0",
-                    "typing_extensions>=4.0; python_version<'3.12'",
-                ]
-
-                [project.optional-dependencies]
-                dev = ["pytest>=7.0"]
-            """),
-            encoding="utf-8",
-        )
-        gd_dir = Path(tmp_dir) / "great-docs"
-        gd_dir.mkdir()
-
-        docs = GreatDocs(project_path=tmp_dir)
-        metadata = docs._get_package_metadata()
-
-        # Runtime deps
-        deps = metadata["dependencies"]
-        assert len(deps) == 3
-        assert deps[0]["name"] == "numpy"
-        assert ">=1.24" in deps[0]["specifier"]
-        assert deps[1]["name"] == "click"
-        assert deps[2]["name"] == "typing-extensions" or deps[2]["name"] == "typing_extensions"
-        assert "marker" in deps[2]
-
-        # Optional deps full
-        opt_full = metadata["optional_dependencies_full"]
-        assert "dev" in opt_full
-        assert len(opt_full["dev"]) == 1
-        assert opt_full["dev"][0]["name"] == "pytest"
-
-
 def test_homepage_margin_includes_package_info_link():
     """Verify that the sidebar includes a Package Info link when the page exists"""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -29569,7 +28540,7 @@ def test_announcement_position_in_meta_tag():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(docs.build_dir / "_quarto.yml", "r") as f:
             config = read_yaml(f)
@@ -29591,7 +28562,7 @@ def test_announcement_position_defaults_above_in_meta_tag():
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         write_initial_quarto_yml(docs.build_dir)
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         with open(docs.build_dir / "_quarto.yml", "r") as f:
             config = read_yaml(f)
@@ -29770,87 +28741,8 @@ def test_detect_module_name_hatch_regular_package():
 
 
 # ---------------------------------------------------------------------------
-# _get_package_metadata — dependency extras and optional_dep group parsing
+# Dependency extras and optional dependency groups
 # ---------------------------------------------------------------------------
-
-
-def test_get_package_metadata_dep_with_extras():
-    """_get_package_metadata parses extras on a PEP 508 dependency."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text(
-            '[project]\nname = "mypkg"\nversion = "1.0"\ndependencies = ["httpx[http2]>=0.24"]\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=str(tmp_dir))
-        meta = docs._get_package_metadata()
-        dep = next(d for d in meta["dependencies"] if d["name"] == "httpx")
-        assert "http2" in dep["extras"]
-
-
-def test_get_package_metadata_dep_with_marker():
-    """_get_package_metadata captures environment markers on dependencies."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text(
-            '[project]\nname = "mypkg"\nversion = "1.0"\n'
-            'dependencies = ["pywin32>=1; sys_platform == \\"win32\\""]\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=str(tmp_dir))
-        meta = docs._get_package_metadata()
-        dep = next(d for d in meta["dependencies"] if d["name"] == "pywin32")
-        assert "sys_platform" in dep["marker"]
-
-
-def test_get_package_metadata_optional_dep_group_with_extras():
-    """_get_package_metadata parses extras inside optional-dependency groups."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text(
-            '[project]\nname = "mypkg"\nversion = "1.0"\n'
-            "[project.optional-dependencies]\n"
-            'full = ["httpx[http2]>=0.24", "boto3[s3]"]\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=str(tmp_dir))
-        meta = docs._get_package_metadata()
-        full_group = meta["optional_dependencies_full"]["full"]
-        httpx = next(d for d in full_group if d["name"] == "httpx")
-        assert "http2" in httpx["extras"]
-        boto3 = next(d for d in full_group if d["name"] == "boto3")
-        assert "s3" in boto3["extras"]
-
-
-def test_get_package_metadata_optional_dep_with_marker():
-    """_get_package_metadata captures markers in optional dep groups."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text(
-            '[project]\nname = "mypkg"\nversion = "1.0"\n'
-            "[project.optional-dependencies]\n"
-            'windows = ["pywin32>=1; sys_platform == \\"win32\\""]\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=str(tmp_dir))
-        meta = docs._get_package_metadata()
-        win_group = meta["optional_dependencies_full"]["windows"]
-        dep = next(d for d in win_group if d["name"] == "pywin32")
-        assert "sys_platform" in dep["marker"]
-
-
-def test_get_package_metadata_invalid_dep_falls_back():
-    """_get_package_metadata stores raw string when PEP 508 parse fails."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text(
-            '[project]\nname = "mypkg"\nversion = "1.0"\n'
-            'dependencies = ["!!!not-valid-pep508!!!"]\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=str(tmp_dir))
-        meta = docs._get_package_metadata()
-        assert any(d["specifier"] == "" for d in meta["dependencies"])
 
 
 # ---------------------------------------------------------------------------
@@ -29868,7 +28760,7 @@ def test_prepare_build_dir_pre_render_script_exists(tmp_path):
 
     with patch.object(docs, "_add_api_reference_config"):
         with patch.object(reference_sections, "update_sidebar"):
-            docs._prepare_build_directory(make_run())
+            docs._prepare_build_directory(make_run(docs))
 
     # Script should be copied to scripts/ in the build dir
     assert (docs.build_dir / "scripts" / "prerender.py").exists()
@@ -29887,7 +28779,7 @@ def test_prepare_build_dir_css_file_warning(tmp_path):
     with redirect_stdout(out):
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(reference_sections, "update_sidebar"):
-                docs._prepare_build_directory(make_run())
+                docs._prepare_build_directory(make_run(docs))
 
     assert "CSS" in out.getvalue() or "css" in out.getvalue().lower()
 
@@ -29901,7 +28793,7 @@ def test_prepare_build_dir_css_file_exists(tmp_path):
 
     with patch.object(docs, "_add_api_reference_config"):
         with patch.object(reference_sections, "update_sidebar"):
-            docs._prepare_build_directory(make_run())
+            docs._prepare_build_directory(make_run(docs))
 
     # CSS file should be in the build dir
     assert (docs.build_dir / "custom.css").exists()
@@ -29916,7 +28808,7 @@ def test_prepare_build_dir_css_file_exists(tmp_path):
     out = io.StringIO()
     with redirect_stdout(out):
         try:
-            docs._prepare_build_directory(make_run())
+            docs._prepare_build_directory(make_run(docs))
         except Exception:
             pass
     assert "Warning" in out.getvalue() or "warning" in out.getvalue().lower()
@@ -29933,7 +28825,7 @@ def test_prepare_build_dir_missing_bibliography_file(tmp_path):
     out = io.StringIO()
     with redirect_stdout(out):
         try:
-            docs._prepare_build_directory(make_run())
+            docs._prepare_build_directory(make_run(docs))
         except Exception:
             pass
     assert "Warning" in out.getvalue() or "warning" in out.getvalue().lower()
@@ -29950,7 +28842,7 @@ def test_prepare_build_dir_missing_csl_file(tmp_path):
     out = io.StringIO()
     with redirect_stdout(out):
         try:
-            docs._prepare_build_directory(make_run())
+            docs._prepare_build_directory(make_run(docs))
         except Exception:
             pass
     assert "Warning" in out.getvalue() or "warning" in out.getvalue().lower()
@@ -29967,7 +28859,7 @@ def test_prepare_build_dir_missing_css_file(tmp_path):
     out = io.StringIO()
     with redirect_stdout(out):
         try:
-            docs._prepare_build_directory(make_run())
+            docs._prepare_build_directory(make_run(docs))
         except Exception:
             pass
     assert "Warning: CSS file not found: nonexistent.css" in out.getvalue()
@@ -29985,7 +28877,7 @@ def test_prepare_build_dir_marimo_not_installed(tmp_path):
     with redirect_stdout(out):
         with patch("importlib.util.find_spec", return_value=None):
             try:
-                docs._prepare_build_directory(make_run())
+                docs._prepare_build_directory(make_run(docs))
             except Exception:
                 pass
     assert "Warning" in out.getvalue() or "warning" in out.getvalue().lower()
@@ -30596,7 +29488,7 @@ def test_freeze_runs_every_preparation_step_but_the_changelog(tmp_path: Path):
     """
     docs = GreatDocs(project_path=str(tmp_path))
     log = BuildLog(stream=io.StringIO())
-    steps = docs._preparation_steps(make_run(), log)
+    steps = docs._preparation_steps(make_run(docs), log)
     ran: list[str] = []
 
     def record(selected: list[Step], *_: object) -> None:
@@ -30625,13 +29517,13 @@ def _write_custom_pages(docs: GreatDocs, project: Path) -> None:
     """Wrap the project's passthrough custom page"""
     with open(docs.build_dir / "_quarto.yml", "w") as f:
         write_yaml({"website": {"sidebar": [], "navbar": {"left": []}}}, f)
-    docs._process_custom_pages(discover_user_guide(docs))
+    docs._process_custom_pages(make_project(docs), discover_user_guide(docs))
 
 
 def _write_index(docs: GreatDocs, project: Path) -> None:
     """Write the homepage and the community pages"""
     docs._create_index_from_readme(
-        discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+        make_project(docs), discover_user_guide(docs), has_api_reference=True, force_rebuild=True
     )
 
 
@@ -30707,7 +29599,7 @@ def test_user_guide_homepage_has_no_dates(tmp_path: Path):
     docs.build_dir.mkdir(parents=True, exist_ok=True)
     info = discover_user_guide(docs)
 
-    docs._create_blended_index(info, docs._publish_user_guide(info))
+    docs._create_blended_index(make_project(docs), info, docs._publish_user_guide(info))
 
     homepage, _ = split_front_matter((docs.build_dir / "index.qmd").read_text())
     second, _ = split_front_matter((docs.build_dir / "user-guide/next.qmd").read_text())
@@ -30756,7 +29648,7 @@ def test_blended_index_hero_fence_is_raw_html():
             "source_dir": Path(tmp_dir) / "user_guide",
             "explicit": False,
         }
-        docs._create_blended_index(info, ["user-guide/introduction.qmd"])
+        docs._create_blended_index(make_project(docs), info, ["user-guide/introduction.qmd"])
 
         lines = (gd_dir / "index.qmd").read_text(encoding="utf-8").splitlines()
 
@@ -30776,7 +29668,10 @@ def test_readme_homepage_without_margin_starts_with_front_matter_fence():
 
         with patch("great_docs._website.homepage.margin.render", return_value=""):
             docs._create_index_from_readme(
-                discover_user_guide(docs), has_api_reference=True, force_rebuild=True
+                make_project(docs),
+                discover_user_guide(docs),
+                has_api_reference=True,
+                force_rebuild=True,
             )
 
         content = (docs.build_dir / "index.qmd").read_text(encoding="utf-8")

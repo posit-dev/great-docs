@@ -2,7 +2,9 @@
 Shared configuration and build setup for `GreatDocs` tests
 
 `write_config` writes and loads `great-docs.yml`. `mock_config` provides a `Config` double
-with empty defaults. `make_run` creates build state for testing build methods directly.
+with empty defaults. `write_pyproject` declares a project's name. `make_project` reads a
+project's facts as a build does, and `make_run` creates build state for testing build methods
+directly.
 `stubbed_build` stubs Quarto and build steps while preserving the build's control flow.
 `StubRemote` supplies GitHub and PyPI data without network requests. `homepage_hero` and
 `homepage_margin` build the homepage hero and sidebar from the project's configuration and metadata.
@@ -28,6 +30,7 @@ from great_docs import Config, GreatDocs
 from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
 from great_docs._content import user_guide
+from great_docs._project import Project
 from great_docs._website.homepage import hero, margin
 from great_docs._website.project_pages import community
 
@@ -39,11 +42,8 @@ if TYPE_CHECKING:
 # called by the step actions so the step table and its actions still run.
 # Update this list when a build step moves out of `GreatDocs`.
 _BUILD_METHODS: tuple[str, ...] = (
-    "_detect_package_name",
     "_griffe_search_paths",
     "_prepare_build_directory",
-    "_get_package_metadata",
-    "_get_github_repo_info",
     "_resolve_importable_name",
     "_detect_module_name",
     "_process_user_guide",
@@ -122,14 +122,55 @@ def mock_config(**values: object) -> NonCallableMagicMock:
     return config
 
 
-def make_run(**values: Any) -> Run:
+def write_pyproject(root: Path, name: str | None) -> Path:
     """
-    Create initial build state with optional field overrides
-
-    By default, the build has no detected package name and watch mode is off.
+    Declare a project's distribution name in its `pyproject.toml`
 
     Parameters
     ----------
+    root
+        The project directory.
+    name
+        The name to declare, or `None` to leave the packaging files unchanged. Without a
+        declared name or a sole package directory, the project has no detected name.
+
+    Returns
+    -------
+    :
+        `root`, for use as a project double's package root.
+    """
+    if name is not None:
+        (root / "pyproject.toml").write_text(f'[project]\nname = "{name}"\n', encoding="utf-8")
+    return root
+
+
+def make_project(docs: GreatDocs) -> Project:
+    """
+    Read a project's facts from its files, as a build does when it starts
+
+    Parameters
+    ----------
+    docs
+        The project.
+
+    Returns
+    -------
+    :
+        The project's name, metadata and GitHub repository as its files describe them now.
+    """
+    return Project.make(docs._config, docs.layout)
+
+
+def make_run(docs: GreatDocs, **values: Any) -> Run:
+    """
+    Create build state from the project's current files, with optional field overrides
+
+    Watch mode is off unless overridden.
+
+    Parameters
+    ----------
+    docs
+        The project.
     **values
         Overrides for `Run` fields, by name.
 
@@ -138,7 +179,7 @@ def make_run(**values: Any) -> Run:
     :
         The build state with the supplied values.
     """
-    return replace(Run(package_name="", watch=False), **values)
+    return replace(Run.make(docs._config, docs.layout, watch=False), **values)
 
 
 @dataclass(frozen=True)
@@ -408,13 +449,14 @@ def homepage_hero(docs: GreatDocs, readme: str | None = None) -> tuple[str, str 
     found = hero.find(docs._config, docs.layout.source_dir, readme)
     if found is None:
         return "", None
+    project = make_project(docs)
     html = hero.render(
         found,
         docs._config,
         docs.layout,
         docs.build_dir,
-        metadata=docs._get_package_metadata(),
-        package_name=docs._detect_package_name(),
+        metadata=project.manifest,
+        package_name=project.name,
         pages=docs._page_map(discover_user_guide(docs)),
     )
     return html, found.body if html else None
@@ -435,12 +477,13 @@ def homepage_margin(docs: GreatDocs) -> str:
         The sidebar's Markdown.
     """
     package_root = docs.layout.package_root
+    project = make_project(docs)
     return margin.render(
         docs._config,
         docs.build_dir,
         package_root=package_root,
-        metadata=docs._get_package_metadata(),
-        package_name=docs._detect_package_name(),
+        metadata=project.manifest,
+        package_name=project.name,
         community_pages=community.write_pages(
             docs._config, package_root, docs.build_dir, docs._page_authors
         ),

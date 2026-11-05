@@ -300,8 +300,8 @@ def test_repeated_config_passes_keep_one_status_script(tmp_path: Path, inlined: 
     quarto_yml = gd.build_dir / "_quarto.yml"
     quarto_yml.write_text("project:\n  type: website\nformat:\n  html: {}\n")
 
-    gd._update_quarto_config(make_run())
-    gd._update_quarto_config(make_run())
+    gd._update_quarto_config(make_run(gd))
+    gd._update_quarto_config(make_run(gd))
 
     entries = read_yaml(quarto_yml)["format"]["html"]["include-after-body"]
     assert sum("renderPageBadge" in str(e) or "page-status-badges" in str(e) for e in entries) == 1

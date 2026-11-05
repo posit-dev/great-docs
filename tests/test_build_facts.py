@@ -63,7 +63,7 @@ def test_both_configuration_passes_of_a_build_share_one_fetch(tmp_path: Path):
     (docs.build_dir / "_quarto.yml").write_text(
         "project:\n  type: website\nformat:\n  html: {}\n", encoding="utf-8"
     )
-    run = make_run()
+    run = make_run(docs)
 
     docs._update_quarto_config(run)
     docs._update_quarto_config(run)

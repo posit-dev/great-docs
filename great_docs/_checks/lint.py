@@ -13,6 +13,7 @@ from .._builtin.directives import DIRECTIVES
 from .._content import authored
 from .._interlinks import AliasClaims, LoadedSources, build_index, load_sources
 from .._layout import Layout
+from .._project import Project
 from .._utils import fenced_lines, is_in_great_docs_build_dir, parse_seealso
 from .._website.homepage import source as homepage_source
 from .._yaml import YamlMapping, YamlValue, split_front_matter
@@ -147,7 +148,7 @@ def run_lint(
 
     try:
         docs = GreatDocs(project_path=str(project_root), config_path=config_path)
-        package_name = docs._detect_package_name()
+        package_name = Project.make(docs._config, docs.layout).name
     except Exception:
         if quiet:
             sys.stdout = _saved_stdout
@@ -1146,7 +1147,9 @@ def _check_page_descriptions(docs: GreatDocs, project_root: Path, result: LintRe
         return
 
     homepage = next(iter(homepage_source.find(docs.layout)), None)
-    has_default = docs._default_description() is not None
+    has_default = (
+        docs._default_description(Project.make(docs._config, docs.layout).manifest) is not None
+    )
     for path in _site_page_sources(docs):
         front_matter, body = split_front_matter(path.read_text(encoding="utf-8"))
         if any(key in front_matter for key in description.PAGE_KEYS):

@@ -13,6 +13,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from ..._manifest import Manifest
 from .. import head
 
 if TYPE_CHECKING:
@@ -99,7 +100,7 @@ class StructuredData:
     def make(
         cls,
         config: Config,
-        metadata: dict[str, Any],
+        metadata: Manifest,
         site_name: str,
         base_url: str | None,
     ) -> StructuredData | None:

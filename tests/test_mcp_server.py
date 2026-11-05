@@ -32,7 +32,7 @@ from great_docs.mcp import (
     list_tools,
     read_resource,
 )
-from tests.support import mock_config
+from tests.support import mock_config, write_pyproject
 
 
 def test_tool_schemas_accept_config_selection() -> None:
@@ -357,7 +357,7 @@ class TestHandleStatus:
         (tmp_path / "great-docs.yml").write_text("project:\n  name: test\n", encoding="utf-8")
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = "mypackage"
+        mock_docs.layout.package_root = write_pyproject(tmp_path, "mypackage")
         mock_docs._config = mock_config(cli_enabled=False, mcp_enabled=False, sections=[])
         mock_docs._config.__getitem__ = lambda self, key: (
             [] if key in ("user_guide", "versions") else None
@@ -482,7 +482,7 @@ class TestCallToolDispatch:
     def test_dispatches_gd_scan(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = None
+        mock_docs.layout.package_root = write_pyproject(tmp_path, None)
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             result = asyncio.run(call_tool("gd_scan", {}))
         assert result[0].text
@@ -498,7 +498,7 @@ class TestCallToolDispatch:
     def test_dispatches_gd_api_diff(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = None
+        mock_docs.layout.package_root = write_pyproject(tmp_path, None)
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             result = asyncio.run(call_tool("gd_api_diff", {}))
         assert result[0].text
@@ -590,7 +590,7 @@ class TestHandleScan:
     def test_no_package_name_returns_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = None
+        mock_docs.layout.package_root = write_pyproject(tmp_path, None)
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             result = asyncio.run(_handle_scan({}))
         assert "Could not detect" in result[0].text
@@ -598,7 +598,7 @@ class TestHandleScan:
     def test_no_exports_returns_message(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = "mypkg"
+        mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         mock_docs._get_package_exports.return_value = []
@@ -609,7 +609,7 @@ class TestHandleScan:
     def test_with_function_exports(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = "mypkg"
+        mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         mock_docs._get_package_exports.return_value = ["do_thing", "helper"]
@@ -626,7 +626,7 @@ class TestHandleScan:
     def test_with_class_exports_and_verbose(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = "mypkg"
+        mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         mock_docs._get_package_exports.return_value = ["MyClass"]
@@ -645,7 +645,7 @@ class TestHandleScan:
     ):
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = "mypkg"
+        mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         mock_docs._get_package_exports.return_value = ["do_thing"]
@@ -717,7 +717,7 @@ class TestHandleLint:
 class TestHandleStatusWithConfig:
     def _mock_docs(self, pkg="mypkg", features=None):
         mock = MagicMock()
-        mock._detect_package_name.return_value = pkg
+        mock.layout.package_root = write_pyproject(Path.cwd(), pkg)
         cfg = features or {}
         mock._config = mock_config(
             cli_enabled=cfg.get("cli", False),
@@ -792,14 +792,14 @@ class TestHandleApiDiff:
     def test_no_package_name_returns_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = None
+        mock_docs.layout.package_root = write_pyproject(tmp_path, None)
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             result = asyncio.run(_handle_api_diff({}))
         assert "Could not detect" in result[0].text
 
     def _patched_docs(self):
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = "mypkg"
+        mock_docs.layout.package_root = write_pyproject(Path.cwd(), "mypkg")
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         return mock_docs
@@ -994,7 +994,7 @@ class TestReadResource:
     def test_api_surface_no_package(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = None
+        mock_docs.layout.package_root = write_pyproject(tmp_path, None)
         with patch("great_docs.mcp._get_great_docs", return_value=mock_docs):
             result = asyncio.run(read_resource(self._uri("gd://api-surface")))
         assert "Could not detect" in result
@@ -1002,7 +1002,7 @@ class TestReadResource:
     def test_api_surface_with_exports(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = "mypkg"
+        mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         mock_docs._get_package_exports.return_value = ["do_thing"]
@@ -1185,7 +1185,7 @@ class TestHandleCompletion:
 
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = "mypkg"
+        mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         mock_docs._get_package_exports.return_value = ["MyClass", "my_func", "other_func"]
@@ -1212,7 +1212,7 @@ class TestHandleCompletion:
 
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = "mypkg"
+        mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         mock_docs._get_package_exports.return_value = ["MyClass", "my_func"]
@@ -1262,7 +1262,7 @@ class TestHandleScanRefConfigDictItem:
         """Reference config dict items (with 'name' key) are included in ref_items."""
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = "mypkg"
+        mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         mock_docs._get_package_exports.return_value = ["do_thing"]
@@ -1284,7 +1284,7 @@ class TestHandleScanRefConfigDictItem:
 class TestHandleApiDiffWithSnapshot:
     def _patched_docs(self):
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = "mypkg"
+        mock_docs.layout.package_root = write_pyproject(Path.cwd(), "mypkg")
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         return mock_docs
@@ -1428,7 +1428,7 @@ class TestReadResourceApiSurface:
         """read_resource returns 'No exports discovered' when _get_package_exports is empty."""
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = "mypkg"
+        mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
         mock_docs._get_package_exports.return_value = []
@@ -1463,7 +1463,7 @@ class TestReadResourceReference:
         """gd://reference/symbol returns kind and docstring when symbol is found."""
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = "mypkg"
+        mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
 
@@ -1489,7 +1489,7 @@ class TestReadResourceReference:
         """gd://reference/symbol returns 'not found' message when getattr returns None."""
         monkeypatch.chdir(tmp_path)
         mock_docs = MagicMock()
-        mock_docs._detect_package_name.return_value = "mypkg"
+        mock_docs.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_docs._detect_module_name.return_value = "mypkg"
         mock_docs._normalize_package_name.return_value = "mypkg"
 

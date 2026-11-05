@@ -188,10 +188,10 @@ class TestSiteIncludes:
         quarto_yml.write_initial(docs.build_dir)
 
         # The build adds tag data between updates, before the script that reads it.
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
         with quarto_yml.edit(docs.build_dir) as quarto_config:
             inline_data.add(quarto_config, "__GD_TAGS_DATA__", {}, before="page-tags.js")
-        docs._update_quarto_config(make_run())
+        docs._update_quarto_config(make_run(docs))
 
         html = quarto_yml.read(docs.build_dir)["format"]["html"]
         after_body = [str(entry) for entry in html["include-after-body"]]

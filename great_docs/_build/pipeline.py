@@ -7,8 +7,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .._project import Project
+
 if TYPE_CHECKING:
     from .._content.user_guide import UserGuide
+    from .._layout import Layout
+    from ..config import Config
     from .facts import Facts
 
 __all__ = ["Run"]
@@ -23,14 +27,14 @@ class Run:
 
     Attributes
     ----------
-    package_name
-        The detected package name, or `""` when none was found.
+    project
+        The documented project, read from its files when the build starts.
     watch
         Whether the site is served in watch mode.
     has_api_reference
         Whether the site has an API reference. Preparing the build directory sets it to
-        `False` when the reference is disabled, the project is not a Python project, or the
-        package has nothing to document.
+        `False` when the reference is disabled, the project is not a Python project, no
+        package name is detected, or the package has nothing to document.
     api_discovery_done
         Whether this build has already discovered the package's exports.
     user_guide
@@ -42,9 +46,30 @@ class Run:
         first write.
     """
 
-    package_name: str
+    project: Project
     watch: bool
     has_api_reference: bool = True
     api_discovery_done: bool = False
     user_guide: UserGuide | None = None
     facts: Facts | None = None
+
+    @classmethod
+    def make(cls, config: Config, layout: Layout, *, watch: bool) -> Run:
+        """
+        Create build state from the project's current files
+
+        Parameters
+        ----------
+        config
+            The project's configuration.
+        layout
+            The project's directories.
+        watch
+            Whether the site is served in watch mode.
+
+        Returns
+        -------
+        :
+            The initial build state with the project's name, metadata and GitHub repository.
+        """
+        return cls(project=Project.make(config, layout), watch=watch)

@@ -15,7 +15,7 @@ from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._versions.build import assemble_site, run_versioned_build
 from great_docs._versions.model import VersionEntry, build_version_map, parse_versions_config
 from great_docs._website.homepage import source as homepage_source
-from tests.support import discover_user_guide, make_run
+from tests.support import discover_user_guide, make_project, make_run
 
 
 @pytest.fixture(params=[".", "docs", "website"])
@@ -150,7 +150,7 @@ def test_latest_collision_preserves_source(
         gd.build_dir.mkdir()
         (gd.build_dir / "keep.txt").write_text("keep")
     with pytest.raises(ValueError):
-        gd._prepare_build_directory(make_run())
+        gd._prepare_build_directory(make_run(gd))
     assert (original / "keep.txt").read_text() == "keep"
     assert (gd.build_dir / "keep.txt").read_text() == "keep"
 
@@ -170,7 +170,7 @@ def test_unowned_deployment_is_preserved(source_project: tuple[Path, Path]) -> N
 def test_nonversion_assembly_and_uninstall(source_project: tuple[Path, Path]) -> None:
     root, source = source_project
     gd = make_docs(root, source)
-    gd._prepare_build_directory(make_run())
+    gd._prepare_build_directory(make_run(gd))
     local_site = gd.build_dir / "_site"
     local_site.mkdir()
     (local_site / "index.html").write_text("home")
@@ -194,14 +194,14 @@ def test_site_inventory_protects_added_content(
     if source == root:
         pytest.skip("Legacy deployment remains inside the generated project")
     gd = make_docs(root, source)
-    gd._prepare_build_directory(make_run())
+    gd._prepare_build_directory(make_run(gd))
     (gd.build_dir / "_site").mkdir()
     (gd.build_dir / "_site/index.html").write_text("home")
     assemble_site(gd.build_dir, [], "", gd.layout.site_dir, layout=gd.layout)
     (gd.layout.site_dir / "added.txt").write_text("keep")
     with pytest.raises(ValueError, match="unrecognised"):
         if operation == "build":
-            gd._prepare_build_directory(make_run())
+            gd._prepare_build_directory(make_run(gd))
         else:
             gd.uninstall()
     assert (gd.layout.site_dir / "added.txt").read_text() == "keep"
@@ -233,7 +233,7 @@ def test_freeze_custom_config_name(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     (source / "_freeze").mkdir()
     (source / "_freeze/result.json").write_text("cached")
     gd = GreatDocs(str(tmp_path), config_path=str(config))
-    gd._prepare_build_directory(make_run())
+    gd._prepare_build_directory(make_run(gd))
     monkeypatch.chdir(gd.build_dir)
     runpy.run_path(str(gd.build_dir / "scripts/restore-freeze.py"))
     assert (gd.build_dir / "_freeze/result.json").read_text() == "cached"
@@ -276,11 +276,11 @@ def test_documentation_sources(source_project: tuple[Path, Path], explicit: bool
         source / "great-docs.yml",
     )
     gd = make_docs(root, source)
-    gd._prepare_build_directory(make_run())
+    gd._prepare_build_directory(make_run(gd))
     gd._copy_assets()
     gd._publish_user_guide(discover_user_guide(gd))
     gd._process_sections(discover_user_guide(gd))
-    gd._process_custom_pages(discover_user_guide(gd))
+    gd._process_custom_pages(make_project(gd), discover_user_guide(gd))
     build = gd.build_dir
     assert build == (root / "great-docs" if root == source else source / "_quarto/default")
     assert not hasattr(gd, "project_path")
@@ -347,7 +347,7 @@ def test_duplicate_hook_names_fail_before_copy(source_project: tuple[Path, Path]
     )
     gd = make_docs(root, source)
     with pytest.raises(ValueError, match="hook|script"):
-        gd._prepare_build_directory(make_run())
+        gd._prepare_build_directory(make_run(gd))
 
 
 def test_nested_sources_and_shared_assets(source_project: tuple[Path, Path]) -> None:
@@ -405,7 +405,7 @@ def test_notebooks_use_documentation_root(source_project: tuple[Path, Path]) -> 
         patch("importlib.util.find_spec", return_value=object()),
         patch.dict("sys.modules", {"great_docs._marimo": marimo}),
     ):
-        gd._prepare_build_directory(make_run())
+        gd._prepare_build_directory(make_run(gd))
     assert (gd.build_dir / "notebooks/data.json").read_text() == "{}"
 
 
@@ -534,10 +534,10 @@ def test_blended_homepage_references_use_final_destination(
         {"module": "sample", "homepage": "user_guide", "hero": False}, source / "great-docs.yml"
     )
     gd = make_docs(root, source)
-    gd._prepare_build_directory(make_run())
+    gd._prepare_build_directory(make_run(gd))
     info = discover_user_guide(gd)
     copied = gd._publish_user_guide(info)
-    gd._create_blended_index(info, copied)
+    gd._create_blended_index(make_project(gd), info, copied)
     result = (gd.build_dir / "index.qmd").read_text()
     path = result.split("![Plot](", 1)[1].split(")", 1)[0]
     assert (gd.build_dir / unquote(urlsplit(path).path)).resolve().is_relative_to(gd.build_dir)
@@ -556,8 +556,8 @@ def test_custom_html_rebases_local_assets(source_project: tuple[Path, Path]) -> 
         f'---\nlayout: raw\n---\n<div>\n    <img\n      src="{prefix}assets/plot.svg">\n</div>'
     )
     gd = make_docs(root, source)
-    gd._prepare_build_directory(make_run())
-    gd._process_custom_pages(discover_user_guide(gd))
+    gd._prepare_build_directory(make_run(gd))
+    gd._process_custom_pages(make_project(gd), discover_user_guide(gd))
     result = (gd.build_dir / "custom/about.html").read_text()
     path = result.split('src="', 1)[1].split('"', 1)[0]
     assert (gd.build_dir / "custom" / unquote(urlsplit(path).path)).read_text() == "plot"

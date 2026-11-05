@@ -7,9 +7,9 @@ from __future__ import annotations
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from ..._layout import Layout
+from ..._manifest import Manifest
 from ...config import Config
 from .. import quarto_yml
 from .skill_md import compose
@@ -27,7 +27,7 @@ class SkillsWriter:
     layout: Layout
     build_dir: Path
     distribution_name: str | None
-    metadata: dict[str, Any]
+    metadata: Manifest
 
     def write(self) -> None:
         """

@@ -22,7 +22,7 @@ from great_docs._checks.lint import (
 from great_docs._interlinks import Source
 from great_docs._interlinks.sphinx_inventory import Inventory, InventoryEntry
 from great_docs._utils import QUARTO_YML_HEADER
-from tests.support import mock_config
+from tests.support import mock_config, write_pyproject
 
 
 @pytest.mark.parametrize("directory", [".", "docs", "website"])
@@ -886,7 +886,7 @@ class TestRunLint:
     @patch("great_docs.core.GreatDocs")
     def test_no_package_detected(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
-        mock_gd._detect_package_name.return_value = None
+        mock_gd.layout.package_root = write_pyproject(tmp_path, None)
         mock_gd_cls.return_value = mock_gd
 
         result = run_lint(tmp_path)
@@ -897,7 +897,7 @@ class TestRunLint:
     @patch("great_docs.core.GreatDocs")
     def test_successful_lint_run(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
-        mock_gd._detect_package_name.return_value = "mypkg"
+        mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_gd._resolve_importable_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a", "func_b"]
         mock_gd._config.__getitem__.return_value = "numpy"
@@ -926,7 +926,7 @@ class TestRunLint:
     ):
         """Verify that configured member selection does not make `flush` ambiguous"""
         mock_gd = _mock_docs()
-        mock_gd._detect_package_name.return_value = "mypkg"
+        mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_gd._resolve_importable_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["StoreCache", "NetCache"]
         mock_gd._config.__getitem__.return_value = "numpy"
@@ -971,7 +971,7 @@ class TestRunLint:
         A reference that resolves no objects must therefore load no sources.
         """
         mock_gd = _mock_docs()
-        mock_gd._detect_package_name.return_value = "mypkg"
+        mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_gd._resolve_importable_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a"]
         mock_gd._config.__getitem__.return_value = "numpy"
@@ -990,7 +990,7 @@ class TestRunLint:
     def test_resolves_module_name_when_project_name_differs(self, mock_gd_cls, tmp_path):
         """Verify that lint loads the importable module when its name differs from the project"""
         mock_gd = _mock_docs()
-        mock_gd._detect_package_name.return_value = "my-dist"
+        mock_gd.layout.package_root = write_pyproject(tmp_path, "my-dist")
         mock_gd._resolve_importable_name.return_value = "actual_module"
         mock_gd._get_package_exports.return_value = ["func_a"]
         mock_gd._config.__getitem__.return_value = "numpy"
@@ -1010,7 +1010,7 @@ class TestRunLint:
     @patch("great_docs.core.GreatDocs")
     def test_selective_checks(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
-        mock_gd._detect_package_name.return_value = "mypkg"
+        mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_gd._detect_module_name.return_value = None
         mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a"]
@@ -1038,7 +1038,7 @@ class TestRunLint:
     @patch("great_docs.core.GreatDocs")
     def test_config_check_runs_alone(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
-        mock_gd._detect_package_name.return_value = "mypkg"
+        mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a"]
         mock_gd._config.__getitem__.return_value = "numpy"
@@ -1065,7 +1065,7 @@ class TestRunLint:
     @patch("great_docs.core.GreatDocs")
     def test_no_exports(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
-        mock_gd._detect_package_name.return_value = "mypkg"
+        mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = None
         mock_gd._config.__getitem__.return_value = "numpy"
@@ -1083,7 +1083,7 @@ class TestRunLint:
     @patch("great_docs.core.GreatDocs")
     def test_griffe_load_failure(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
-        mock_gd._detect_package_name.return_value = "mypkg"
+        mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd_cls.return_value = mock_gd
 
@@ -1121,7 +1121,7 @@ class TestRunLintQuiet:
     @patch("great_docs.core.GreatDocs")
     def test_quiet_suppresses_output(self, mock_gd_cls, tmp_path, capsys):
         mock_gd = _mock_docs()
-        mock_gd._detect_package_name.return_value = "mypkg"
+        mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a"]
         mock_gd._config.__getitem__.return_value = "numpy"
@@ -1139,7 +1139,7 @@ class TestRunLintQuiet:
     @patch("great_docs.core.GreatDocs")
     def test_quiet_no_package_restores_stdout(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
-        mock_gd._detect_package_name.return_value = None
+        mock_gd.layout.package_root = write_pyproject(tmp_path, None)
         mock_gd_cls.return_value = mock_gd
 
         import sys
@@ -1154,7 +1154,7 @@ class TestRunLintQuiet:
     @patch("great_docs.core.GreatDocs")
     def test_quiet_griffe_load_failure_restores_stdout(self, mock_gd_cls, tmp_path):
         mock_gd = _mock_docs()
-        mock_gd._detect_package_name.return_value = "mypkg"
+        mock_gd.layout.package_root = write_pyproject(tmp_path, "mypkg")
         mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd_cls.return_value = mock_gd
 

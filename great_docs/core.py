@@ -1,6 +1,5 @@
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -9,7 +8,7 @@ from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import _manifest, _marimo
+from . import _marimo
 from ._build import freeze, outputs, quarto, serve, timings
 from ._build.facts import Facts, exact_tag, source_links
 from ._build.pipeline import Run
@@ -38,10 +37,10 @@ from ._content.naming import (
 from ._content.pages import PageMap
 from ._content.user_guide import UserGuide
 from ._contribution import Contribution
-from ._github import GithubRepo
 from ._install import format_authors_yaml, update_gitignore
 from ._layout import PACKAGE_DIRS, Layout
-from ._manifest import Manifest, ManifestError
+from ._manifest import Manifest
+from ._project import Project, read_manifest
 from ._reference import block as reference_block
 from ._reference import discovery, documented, probe
 from ._reference import sections as reference_sections
@@ -83,49 +82,6 @@ if TYPE_CHECKING:
 
     from ._apiref.api_reference import APIReference
     from ._build.log import BuildLog
-
-
-# Recognised repository URL labels, casefolded without separators, in preference order.
-_REPOSITORY_URL_LABELS = ("repository", "source", "sourcecode", "github", "homepage")
-
-
-def _url_label(label: str) -> str:
-    """
-    Normalise a project URL label for matching
-
-    Parameters
-    ----------
-    label
-        The label as declared, such as `Source Code`.
-
-    Returns
-    -------
-    :
-        The label casefolded, without spaces, hyphens or underscores, such as `sourcecode`.
-    """
-    return re.sub(r"[\s_-]", "", label).casefold()
-
-
-def _read_manifest(root: Path) -> Manifest:
-    """
-    Read project metadata with an empty fallback for packaging errors
-
-    Parameters
-    ----------
-    root
-        The directory holding the packaging files.
-
-    Returns
-    -------
-    :
-        The declared metadata, ignoring an unreadable or invalid `setup.cfg` when
-        `pyproject.toml` can be read and parsed. Any other packaging read or parse error
-        produces an empty manifest.
-    """
-    try:
-        return _manifest.read(root, ignore_unparsable_setup_cfg=True)
-    except ManifestError:
-        return _manifest.empty()
 
 
 def _initial_authors(manifest: Manifest) -> list[dict[str, str]]:
@@ -268,12 +224,13 @@ class GreatDocs:
         self._remote: Remote = HttpRemote(report=lambda message: print(f"   ⚠️  {message}"))
 
         # Caches for the instance's lifetime; builds do not reset them
-        self._package_metadata_cache: dict[str, Any] | None = None
         self._griffe_pkg_cache: dict | None = None  # {normalized_name: griffe Package}
         self._cached_exports: list | None = None
         self._cached_package_name: str | None = None
         self._page_authors = page_dates.site_authors(
-            self._config, self.layout.source_dir, self._identity().base_url
+            self._config,
+            self.layout.source_dir,
+            self._identity(Project.make(self._config, self.layout)).base_url,
         )
 
     def _get_griffe_package(self, package_name: str):
@@ -417,7 +374,7 @@ class GreatDocs:
         scripts.copy(
             self._config,
             self.build_dir,
-            has_repository=self._get_github_repo_info()[0] is not None,
+            has_repository=run.project.github is not None,
         )
 
         # Create .gitignore for the great-docs directory
@@ -450,7 +407,9 @@ class GreatDocs:
         # margin can then include links to `llms.txt` and `llms-full.txt` when the
         # build will generate them.
         run.user_guide = user_guide.discover(self._config, self.layout, report=_print_warning)
-        self._create_index_from_readme(run.user_guide, run.has_api_reference, force_rebuild=True)
+        self._create_index_from_readme(
+            run.project, run.user_guide, run.has_api_reference, force_rebuild=True
+        )
 
     def _copy_assets(self) -> bool:
         """
@@ -569,30 +528,6 @@ class GreatDocs:
         print("  great-docs scan           # Preview API organization")
         print("  great-docs build --watch  # Watch for changes and rebuild")
 
-    def _detect_package_name(self) -> str | None:
-        """
-        Detect the project's distribution name
-
-        Use the name declared in the packaging files. If none is available, use the sole
-        non-hidden package directory at the project root.
-
-        Returns
-        -------
-        :
-            The declared name or package directory name, or `None` if neither identifies
-            the distribution.
-        """
-        if name := _read_manifest(self.project_root)["name"]:
-            return name
-        potential_packages = [
-            d
-            for d in self.project_root.iterdir()
-            if d.is_dir() and (d / "__init__.py").exists() and not d.name.startswith(".")
-        ]
-        if len(potential_packages) == 1:
-            return potential_packages[0].name
-        return None
-
     def _normalize_package_name(self, package_name: str) -> str:
         """
         Convert a package name to its importable form.
@@ -670,7 +605,7 @@ class GreatDocs:
             if pyi_file.stem != "__init__":
                 return pyi_file.stem
 
-        manifest = _read_manifest(package_root)
+        manifest = read_manifest(package_root)
         if manifest["extension_module"]:
             # Document the top-level package rather than its compiled extension submodule.
             return manifest["extension_module"].split(".", 1)[0]
@@ -696,7 +631,9 @@ class GreatDocs:
             name = declared.split("/")[-1]
             path = package_root / declared
             if path.is_dir() and not (path / "__init__.py").exists():
-                distribution = (self._detect_package_name() or "").replace("-", "_")
+                distribution = (Project.make(self._config, self.layout).name or "").replace(
+                    "-", "_"
+                )
                 sub_name = distribution.removeprefix(f"{name}_")
                 if (
                     distribution.startswith(f"{name}_")
@@ -705,7 +642,7 @@ class GreatDocs:
                     return f"{name}.{sub_name}"
             return name
 
-        project_name = self._detect_package_name()
+        project_name = Project.make(self._config, self.layout).name
         init_file = self._find_package_init(project_name) if project_name else None
         if init_file is None:
             return None
@@ -758,71 +695,6 @@ class GreatDocs:
             if candidate.is_dir():
                 extra.append(candidate)
         return extra + sys.path
-
-    def _get_package_metadata(self) -> dict[str, Any]:
-        """
-        Read project metadata from packaging files
-
-        Read the description, licence, authors, maintainers, URLs, Python requirement,
-        keywords and dependencies from the packaging files. Cache the first result when
-        `pyproject.toml` exists; otherwise, read the files on each call.
-
-        Returns
-        -------
-        :
-            The project fields, keyed by name. Ignore an unreadable or invalid `setup.cfg`
-            beside a readable, valid `pyproject.toml`. Other packaging read or parse errors
-            leave the fields empty.
-        """
-        if self._package_metadata_cache is not None:
-            return self._package_metadata_cache
-        package_root = self.layout.package_root
-        manifest = _read_manifest(package_root)
-        metadata: dict[str, Any] = {
-            "description": manifest["description"],
-            "license": manifest["license"],
-            "authors": manifest["authors"],
-            "maintainers": manifest["maintainers"],
-            "urls": manifest["urls"],
-            "requires_python": manifest["requires_python"],
-            "keywords": manifest["keywords"],
-            "dependencies": manifest["dependencies"],
-            "optional_dependencies": manifest["optional_dependencies"],
-            # The package-information page requires this key for parsed optional dependencies.
-            "optional_dependencies_full": manifest["optional_dependencies"],
-        }
-        if (package_root / "pyproject.toml").exists():
-            self._package_metadata_cache = metadata
-        return metadata
-
-    def _get_github_repo_info(self) -> tuple[str | None, str | None, str | None]:
-        """
-        Find the project's GitHub repository
-
-        Use the configured `repo`, falling back to project URLs labelled `Repository`,
-        `Source`, `Source Code`, `GitHub` or `Homepage`, in that order. Ignore case,
-        whitespace, hyphens and underscores when matching labels.
-
-        Returns
-        -------
-        :
-            The owner, repository name and repository URL, or three `None` values if no URL
-            is selected or the selected URL is not a GitHub repository.
-        """
-        repo_url = self._config.repo
-        if not repo_url:
-            # Reverse insertion order so the first declared label wins after normalisation.
-            urls = {
-                _url_label(label): url
-                for label, url in reversed(self._get_package_metadata().get("urls", {}).items())
-            }
-            repo_url = next(
-                (urls[label] for label in _REPOSITORY_URL_LABELS if label in urls), None
-            )
-        repo = GithubRepo.parse(repo_url)
-        if repo is None:
-            return None, None, None
-        return repo.owner, repo.name, repo.url
 
     # =========================================================================
     # Custom Sections Methods
@@ -900,12 +772,14 @@ class GreatDocs:
     # Custom Static Pages Methods
     # =========================================================================
 
-    def _process_custom_pages(self, guide: UserGuide | None) -> int:
+    def _process_custom_pages(self, project: Project, guide: UserGuide | None) -> int:
         """
         Publish the configured custom pages
 
         Parameters
         ----------
+        project
+            The project's name, metadata and repository for page titles and search descriptions.
         guide
             The discovered user guide, or `None` when it has no pages.
 
@@ -919,7 +793,7 @@ class GreatDocs:
         if not sources:
             return 0
 
-        identity = self._identity()
+        identity = self._identity(project)
         head = custom_pages.RawPageHead(
             base_url=identity.base_url,
             card_image_url=(
@@ -929,9 +803,9 @@ class GreatDocs:
                 if self._config.social_cards_enabled
                 else None
             ),
-            structured_data=self._structured_data(),
+            structured_data=self._structured_data(project),
             site_name=identity.name,
-            default_description=self._default_description(),
+            default_description=self._default_description(project.manifest),
         )
         published = custom_pages.publish(
             sources,
@@ -1062,9 +936,14 @@ class GreatDocs:
                 dst_file.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src_file, dst_file)
 
-    def _default_description(self) -> str | None:
+    def _default_description(self, manifest: Manifest) -> str | None:
         """
         Resolve the site's default search description
+
+        Parameters
+        ----------
+        manifest
+            The project's declared metadata, used when no search description is configured.
 
         Returns
         -------
@@ -1072,22 +951,24 @@ class GreatDocs:
             The description as plain text, or `None` when neither
             `seo.default_description` nor the package description is set.
         """
-        package_description = self._get_package_metadata().get("description")
-        return seo_description.default_description(self._config, package_description)
+        return seo_description.default_description(self._config, manifest["description"])
 
-    def _structured_data(self) -> StructuredData | None:
+    def _structured_data(self, project: Project) -> StructuredData | None:
         """
         Describe the package as JSON-LD for the homepage and reference pages
+
+        Parameters
+        ----------
+        project
+            The documented project.
 
         Returns
         -------
         :
             The structured data, or `None` when it is disabled.
         """
-        identity = self._identity()
-        return StructuredData.make(
-            self._config, self._get_package_metadata(), identity.name, identity.base_url
-        )
+        identity = self._identity(project)
+        return StructuredData.make(self._config, project.manifest, identity.name, identity.base_url)
 
     def _update_config_with_user_guide(
         self, guide: UserGuide, blended_first_page: str | None = None
@@ -1162,12 +1043,16 @@ class GreatDocs:
 
         quarto_yml.write(self.build_dir, config)
 
-    def _process_user_guide(self, guide: UserGuide | None, has_api_reference: bool) -> bool:
+    def _process_user_guide(
+        self, project: Project, guide: UserGuide | None, has_api_reference: bool
+    ) -> bool:
         """
         Publish the user guide and add its sidebar and navbar link
 
         Parameters
         ----------
+        project
+            The project's name and metadata for a fallback or blended homepage.
         guide
             The discovered user guide, or `None` when it has no pages.
         has_api_reference
@@ -1187,7 +1072,7 @@ class GreatDocs:
                     "falling back to index mode"
                 )
                 self._create_index_from_readme(
-                    guide, has_api_reference, force_rebuild=True, fallback_to_index=True
+                    project, guide, has_api_reference, force_rebuild=True, fallback_to_index=True
                 )
             return False
 
@@ -1204,7 +1089,9 @@ class GreatDocs:
         # In "user_guide" homepage mode, promote the first UG page to index.qmd
         blended_first_page = None
         if self._config.homepage == "user_guide":
-            blended_first_page = self._create_blended_index(guide, copied_files)  # pragma: no cover
+            blended_first_page = self._create_blended_index(  # pragma: no cover
+                project, guide, copied_files
+            )
 
         self._update_config_with_user_guide(guide, blended_first_page)
 
@@ -1214,7 +1101,9 @@ class GreatDocs:
         print("✅ User Guide configured")
         return True
 
-    def _create_blended_index(self, guide: UserGuide, copied_files: list[str]) -> str | None:
+    def _create_blended_index(
+        self, project: Project, guide: UserGuide, copied_files: list[str]
+    ) -> str | None:
         """
         Promote the first user guide page to `index.qmd` in blended homepage mode
 
@@ -1222,6 +1111,8 @@ class GreatDocs:
 
         Parameters
         ----------
+        project
+            The project's name and metadata for the homepage.
         guide
             The user guide.
         copied_files
@@ -1249,8 +1140,8 @@ class GreatDocs:
             self.layout,
             self.build_dir,
             first_ug_path.read_text(encoding="utf-8"),
-            metadata=self._get_package_metadata(),
-            package_name=self._detect_package_name(),
+            metadata=project.manifest,
+            package_name=project.name,
             pages=self._page_map(guide),
             page_authors=self._page_authors,
         )
@@ -1284,7 +1175,7 @@ class GreatDocs:
         normalized_name = package_name.replace("-", "_")
 
         package_root = self.layout.package_root
-        manifest = _read_manifest(package_root)
+        manifest = read_manifest(package_root)
 
         # Declared packages take precedence over candidates in discovery directories.
         search_paths: list[Path] = []
@@ -1550,7 +1441,7 @@ class GreatDocs:
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Detect package name
-        package_name = self._detect_package_name()
+        package_name = Project.make(self._config, self.layout).name
         if not package_name:
             print("Warning: Could not detect package name, creating minimal config")
             # No importable name to detect from; fall back to the documented
@@ -1587,7 +1478,7 @@ class GreatDocs:
         overrides["parser"] = f"parser: {parser_style}"
 
         authors_yaml = format_authors_yaml(
-            _initial_authors(_read_manifest(self.layout.package_root))
+            _initial_authors(read_manifest(self.layout.package_root))
         )
         if authors_yaml:
             overrides["authors"] = authors_yaml
@@ -1635,6 +1526,7 @@ class GreatDocs:
 
     def _create_index_from_readme(
         self,
+        project: Project,
         guide: UserGuide | None,
         has_api_reference: bool,
         force_rebuild: bool = False,
@@ -1649,6 +1541,8 @@ class GreatDocs:
 
         Parameters
         ----------
+        project
+            The project's name and metadata for the homepage and package information pages.
         guide
             The discovered user guide, or `None` when it has no pages.
         has_api_reference
@@ -1666,23 +1560,18 @@ class GreatDocs:
             `None`.
         """
         package_root = self.layout.package_root
-        metadata = self._get_package_metadata()
+        metadata = project.manifest
 
         licence.write_page(
             self._config,
             package_root,
             self.build_dir,
-            metadata.get("license", ""),
+            metadata["license"],
             self._page_authors,
             report=print,
         )
         citation.write_page(
-            self._config,
-            package_root,
-            self.build_dir,
-            metadata,
-            self._page_authors,
-            report=print,
+            self._config, package_root, self.build_dir, self._page_authors, report=print
         )
         package_info.write_page(self._config, self.build_dir, metadata, self._remote, report=print)
 
@@ -1699,7 +1588,7 @@ class GreatDocs:
             self.layout,
             self.build_dir,
             metadata=metadata,
-            package_name=self._detect_package_name(),
+            package_name=project.name,
             pages=self._page_map(guide),
             page_authors=self._page_authors,
             has_api_reference=has_api_reference,
@@ -1741,9 +1630,7 @@ class GreatDocs:
             print("API reference configuration already exists, skipping")
             return
 
-        # Detect package name (project name from pyproject.toml)
-        package_name = self._detect_package_name()
-
+        package_name = run.project.name
         if not package_name:
             _print_warning("Could not detect the package name; skipping the API reference")
             run.has_api_reference = False
@@ -1822,8 +1709,7 @@ class GreatDocs:
         """
         quarto_config = quarto_yml.read(self.build_dir)
 
-        owner, repo_name, _ = self._get_github_repo_info()
-        repo = GithubRepo(owner, repo_name) if owner and repo_name else None
+        repo = run.project.github
         if run.facts is None:
             run.facts = Facts.make(self._config, repo, self._remote)
 
@@ -1834,9 +1720,9 @@ class GreatDocs:
             self.build_dir,
             repo=repo,
             facts=run.facts,
-            identity=self._identity(),
-            package_name=self._detect_package_name(),
-            metadata=self._get_package_metadata(),
+            identity=self._identity(run.project),
+            package_name=run.project.name,
+            metadata=run.project.manifest,
             has_api_reference=run.has_api_reference,
             report=print,
             warn=_print_warning,
@@ -1846,7 +1732,7 @@ class GreatDocs:
 
         print(f"Updated {quarto_yml.path(self.build_dir)} with great-docs configuration")
 
-    def _auto_save_snapshot(self) -> None:
+    def _auto_save_snapshot(self, project: Project) -> None:
         """
         Save an API snapshot after a successful versioned build (Strategy C)
 
@@ -1854,10 +1740,15 @@ class GreatDocs:
         `HEAD` as `<version>`, or `dev` when there is no tag. Retry once if `git`
         cannot start. Fall back silently to `dev` if it still cannot start or
         exceeds the 5-second timeout. Other errors propagate.
+
+        Parameters
+        ----------
+        project
+            The project to snapshot. No snapshot is saved without a detected package name.
         """
         from great_docs._api_diff import snapshot_from_griffe
 
-        package_name = self._detect_package_name()
+        package_name = project.name
         if not package_name:
             return
 
@@ -1892,20 +1783,31 @@ class GreatDocs:
     # SEO GENERATION METHODS
     # ══════════════════════════════════════════════════════════════════════════
 
-    def _identity(self) -> Identity:
+    def _identity(self, project: Project) -> Identity:
         """
         Resolve the site's name and addresses
 
         The site title in `_quarto.yml` changes during a build, so each call
         reads the identity afresh.
 
+        Parameters
+        ----------
+        project
+            The project's name and GitHub repository, used as fallbacks for the site's identity.
+
         Returns
         -------
         :
             The site's identity.
         """
-        owner, repo, _ = self._get_github_repo_info()
-        return Identity.make(self._config, self.build_dir, owner, repo, self._detect_package_name())
+        github = project.github
+        return Identity.make(
+            self._config,
+            self.build_dir,
+            github.owner if github else None,
+            github.name if github else None,
+            project.name,
+        )
 
     def _prerender_term_player(self, log: "BuildLog") -> None:
         """
@@ -2070,10 +1972,10 @@ class GreatDocs:
         """
         if not llms_txt.is_planned(self.build_dir):
             return Skipped("no API reference")
-        llms_txt.write_index(self.build_dir, self._get_package_metadata(), report=print)
+        llms_txt.write_index(self.build_dir, run.project.manifest, report=print)
 
         cli = None
-        package_name = self._detect_package_name() if self._config.cli_enabled else None
+        package_name = run.project.name if self._config.cli_enabled else None
         if package_name:
             # The importable module name can differ from the PyPI project name.
             try:
@@ -2096,9 +1998,14 @@ class GreatDocs:
         )
         return "Created llms.txt + llms-full.txt"
 
-    def _step_skill_md(self) -> Outcome:
+    def _step_skill_md(self, run: Run) -> Outcome:
         """
         Write the agent skill files and the skills page
+
+        Parameters
+        ----------
+        run
+            The current build.
 
         Returns
         -------
@@ -2111,17 +2018,19 @@ class GreatDocs:
             self._config,
             self.layout,
             self.build_dir,
-            self._detect_package_name(),
-            self._get_package_metadata(),
+            run.project.name,
+            run.project.manifest,
         ).write()
         return "Created skill.md"
 
-    def _warn_without_site_url(self, log: "BuildLog") -> Outcome:
+    def _warn_without_site_url(self, run: Run, log: "BuildLog") -> Outcome:
         """
         Warn when the skills page has no site URL for its install instructions
 
         Parameters
         ----------
+        run
+            The current build.
         log
             The build log.
 
@@ -2132,7 +2041,7 @@ class GreatDocs:
         """
         if not self._config.skill_enabled:
             return None
-        urls = self._get_package_metadata().get("urls", {})
+        urls = run.project.manifest["urls"]
         has_site_url = bool(self._config.site_url or urls.get("Documentation", ""))
         if not has_site_url and quarto_yml.path(self.build_dir).exists():
             website = quarto_yml.read(self.build_dir).get("website", {})
@@ -2145,9 +2054,14 @@ class GreatDocs:
             )
         return None
 
-    def _step_changelog(self) -> Outcome:
+    def _step_changelog(self, run: Run) -> Outcome:
         """
         Write the changelog page from GitHub Releases and link it from the navbar
+
+        Parameters
+        ----------
+        run
+            The current build.
 
         Returns
         -------
@@ -2156,11 +2070,11 @@ class GreatDocs:
         """
         if not self._config.changelog_enabled:
             return Skipped("disabled in config")
-        owner, repo, _base_url = self._get_github_repo_info()
-        if not (owner and repo):
+        repo = run.project.github
+        if repo is None:
             return Skipped("no GitHub repo info")
         contribution = changelog.write_page(
-            self._config, self.build_dir, GithubRepo(owner, repo), self._remote, report=print
+            self._config, self.build_dir, repo, self._remote, report=print
         )
         if contribution is None:
             return "No releases found; skipped"
@@ -2184,16 +2098,17 @@ class GreatDocs:
         """
         if not self._config.cli_enabled:
             return Skipped("CLI not enabled")
-        if not run.package_name:
+        package_name = run.project.name
+        if not package_name:
             return Skipped("no package detected")
         # The importable module name can differ from the project name.
-        module = self._resolve_importable_name(run.package_name)
+        module = self._resolve_importable_name(package_name)
         cli_info = cli_click.discover(
             module,
             self.layout.package_root,
             cli_module=self._config.cli_module,
             cli_name=self._config.cli_name,
-            display_name=run.package_name,
+            display_name=package_name,
             report=print,
         )
         if not cli_info:
@@ -2285,9 +2200,10 @@ class GreatDocs:
         """
         if not self._config.mcp_enabled:
             return Skipped("MCP not enabled")
+        package_name = run.project.name
         mcp_package = (
-            self._resolve_importable_name(run.package_name)
-            if run.package_name
+            self._resolve_importable_name(package_name)
+            if package_name
             else self._detect_module_name()
         )
         from ._mcpref import build as mcp_build
@@ -2295,9 +2211,7 @@ class GreatDocs:
         mcp_info = mcp_build.discover_server(self._config, mcp_package)
         if not mcp_info:
             return Skipped("no MCP server found")
-        package_name = self._detect_package_name()
-        owner, repo, _ = self._get_github_repo_info()
-        repo_url = f"https://github.com/{owner}/{repo}" if owner and repo else None
+        repo_url = run.project.github.url if run.project.github else None
         mcp_files = mcp_build.build_mcp_reference(
             self._config, mcp_info, self.build_dir, package_name, repo_url
         )
@@ -2322,7 +2236,7 @@ class GreatDocs:
         :
             The result line or skip reason.
         """
-        if not self._process_user_guide(run.user_guide, run.has_api_reference):
+        if not self._process_user_guide(run.project, run.user_guide, run.has_api_reference):
             return Skipped("no user guide found")
         return "User Guide configured"
 
@@ -2361,7 +2275,7 @@ class GreatDocs:
         :
             The result line or skip reason.
         """
-        n_pages = self._process_custom_pages(run.user_guide)
+        n_pages = self._process_custom_pages(run.project, run.user_guide)
         if not n_pages:
             return Skipped("no custom pages")
         return f"{n_pages} custom page(s)"
@@ -2465,7 +2379,7 @@ class GreatDocs:
 
         failures = (*USER_CODE_ERRORS, ObjectNotFoundError)
         quarto_yml_path = str(quarto_yml.path(self.build_dir))
-        _, _, repo_url = self._get_github_repo_info()
+        repo_url = run.project.github.url if run.project.github else None
         links = source_links(self._config, self.layout.package_root, repo_url, warn=_print_warning)
         try:
             ref = APIReference(quarto_yml_path, links)
@@ -2489,12 +2403,14 @@ class GreatDocs:
             raise StepError(f"API reference build failed: {e}") from e
         return "API reference generated (static analysis)", ref
 
-    def _step_interlinks(self, log: "BuildLog", ref: "APIReference | None") -> Outcome:
+    def _step_interlinks(self, run: Run, log: "BuildLog", ref: "APIReference | None") -> Outcome:
         """
         Write the index that resolves cross-reference links to documented names
 
         Parameters
         ----------
+        run
+            The current build.
         log
             The build log.
         ref
@@ -2510,7 +2426,7 @@ class GreatDocs:
         index, notes = build_project_index(
             self.build_dir,
             self._config,
-            self._detect_package_name() or "",
+            run.project.name or "",
             AliasClaims.make(ref.items) if ref is not None else AliasClaims(),
         )
         for note in notes:
@@ -2540,7 +2456,10 @@ class GreatDocs:
         # previews this directory without the per-version pipeline, so it needs metadata here.
         if not self._config.has_versions or run.watch:
             prerender.write_page_metadata(
-                self.build_dir, self._config, self._default_description(), self._structured_data()
+                self.build_dir,
+                self._config,
+                self._default_description(run.project.manifest),
+                self._structured_data(run.project),
             )
         if frozen_pages:
             return f"Using {len(frozen_pages)} page(s) from the freeze cache", frozen_pages
@@ -2756,13 +2675,15 @@ class GreatDocs:
         return result
 
     def _step_render_versions(
-        self, log: "BuildLog", version_tags: list[str] | None, latest_only: bool
+        self, run: Run, log: "BuildLog", version_tags: list[str] | None, latest_only: bool
     ) -> "tuple[Outcome, dict[str, Any]]":
         """
         Render the selected versions of a versioned site and assemble them
 
         Parameters
         ----------
+        run
+            The current build.
         log
             The build log.
         version_tags
@@ -2827,8 +2748,8 @@ class GreatDocs:
             badge_expiry_raw=self._config["new_is_old"],
             config=self._config,
             layout=self.layout,
-            default_description=self._default_description(),
-            structured_data=self._structured_data(),
+            default_description=self._default_description(run.project.manifest),
+            structured_data=self._structured_data(run.project),
             documented_symbols=documented_symbols,
         )
 
@@ -2859,16 +2780,21 @@ class GreatDocs:
             assemble_site(self.build_dir, [], "", self.layout.site_dir, layout=self.layout)
         return None
 
-    def _step_seo_files(self) -> Outcome:
+    def _step_seo_files(self, run: Run) -> Outcome:
         """
         Write `sitemap.xml` and `robots.txt` for the rendered site
+
+        Parameters
+        ----------
+        run
+            The current build.
 
         Returns
         -------
         :
             The step's result line.
         """
-        base_url = self._identity().base_url
+        base_url = self._identity(run.project).base_url
         site_files.write(self.layout.site_dir, self._config, base_url, report=print)
         return "sitemap.xml + robots.txt"
 
@@ -2928,12 +2854,14 @@ class GreatDocs:
             log.detail(f"Saved freeze cache ({n_frozen} files)")
         return None
 
-    def _save_api_snapshot(self, log: "BuildLog") -> Outcome:
+    def _save_api_snapshot(self, run: Run, log: "BuildLog") -> Outcome:
         """
         Save the current API snapshot for version comparisons
 
         Parameters
         ----------
+        run
+            The current build.
         log
             The build log.
 
@@ -2943,7 +2871,7 @@ class GreatDocs:
             `None`; handled exceptions become warnings attributed to the previous listed step.
         """
         try:
-            self._auto_save_snapshot()
+            self._auto_save_snapshot(run.project)
         except USER_CODE_ERRORS as e:
             log.warn(f"Snapshot auto-save failed: {e}")
         return None
@@ -3023,7 +2951,7 @@ class GreatDocs:
             ),
             Step(
                 "Generate SKILL.md",
-                lambda: self._step_skill_md(),
+                lambda: self._step_skill_md(run),
                 warn=Warn(
                     USER_CODE_ERRORS, "Error generating SKILL.md", "SKILL.md generation had issues"
                 ),
@@ -3031,14 +2959,14 @@ class GreatDocs:
             ),
             Step(
                 "Check the site URL",
-                lambda: self._warn_without_site_url(log),
+                lambda: self._warn_without_site_url(run, log),
                 user_code=True,
                 quiet=False,
                 listed=False,
             ),
             Step(
                 "Generate changelog",
-                lambda: self._step_changelog(),
+                lambda: self._step_changelog(run),
                 remote_content=True,
             ),
             Step(
@@ -3105,7 +3033,7 @@ class GreatDocs:
             Step("Generate API reference", generate_api_reference, user_code=True),
             Step(
                 "Build interlinks index",
-                lambda: self._step_interlinks(log, ref),
+                lambda: self._step_interlinks(run, log, ref),
                 quiet=False,
             ),
             Step("Prepare freeze cache", prepare_freeze_cache, quiet=False),
@@ -3242,8 +3170,11 @@ class GreatDocs:
             last_timings = parallel_render.read_timings(*timing_files)
             last_startup = parallel_render.read_startup(*timing_files)
 
+        # Share project facts within this build; reread packaging files for each new build.
+        run = Run.make(self._config, self.layout, watch=watch)
+
         # --- Gather metadata for the build header -------------------------
-        package_name = self._detect_package_name() or ""
+        package_name = run.project.name or ""
         package_version = ""
         package_location = ""
         if package_name:
@@ -3355,8 +3286,6 @@ class GreatDocs:
             n_code_cells=n_code_cells,
         )
 
-        # Values that several steps read; a new build starts from a new `Run`
-        run = Run(package_name=package_name, watch=watch)
         log = BuildLog(
             package_name=package_name,
             package_version=package_version,
@@ -3375,7 +3304,7 @@ class GreatDocs:
             return "Site rendered"
 
         def render_versions() -> Outcome:
-            outcome, result = self._step_render_versions(log, version_tags, latest_only)
+            outcome, result = self._step_render_versions(run, log, version_tags, latest_only)
             render_timings["timings_by_version"] = result.get("timings_by_version")
             return outcome
 
@@ -3399,7 +3328,7 @@ class GreatDocs:
         steps += [
             Step(
                 "Generate SEO files",
-                lambda: self._step_seo_files(),
+                lambda: self._step_seo_files(run),
                 warn=Warn((OSError,), "Error generating SEO files", "SEO files had issues"),
             ),
             Step(
@@ -3419,7 +3348,7 @@ class GreatDocs:
             steps.append(
                 Step(
                     "Save an API snapshot",
-                    lambda: self._save_api_snapshot(log),
+                    lambda: self._save_api_snapshot(run, log),
                     user_code=True,
                     quiet=False,
                     listed=False,
@@ -3594,7 +3523,7 @@ class GreatDocs:
         ```
         """
         files: list[Path] = []
-        if include_source and (package_name := self._detect_package_name()):
+        if include_source and (package_name := Project.make(self._config, self.layout).name):
             module = self._resolve_importable_name(package_name)
             files += proofread.find_modules(self.layout, module)
         if include_docs:
@@ -3705,7 +3634,7 @@ class GreatDocs:
         files: list[Path] = []
         if include_docs:
             files = proofread.find_pages(self._config, self.layout, report=_print_warning)
-        if include_docstrings and (package_name := self._detect_package_name()):
+        if include_docstrings and (package_name := Project.make(self._config, self.layout).name):
             module = self._resolve_importable_name(package_name)
             files += proofread.find_modules(self.layout, module)
 

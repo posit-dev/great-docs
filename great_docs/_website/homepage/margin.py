@@ -10,6 +10,7 @@ from __future__ import annotations
 import html
 from typing import TYPE_CHECKING, Any, cast
 
+from ..._manifest import Manifest
 from ..._translations import get_translation
 from ..ai_agents import llms_txt
 from ..spdx import get_license_info
@@ -57,7 +58,7 @@ def render(
     build_dir: Path,
     *,
     package_root: Path,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     package_name: str | None,
     community_pages: Sequence[CommunityPage],
 ) -> str:
@@ -98,9 +99,7 @@ def render(
     return "\n".join(sections)
 
 
-def _links(
-    config: Config, metadata: Mapping[str, Any], package_name: str | None, lang: str
-) -> list[str]:
+def _links(config: Config, metadata: Manifest, package_name: str | None, lang: str) -> list[str]:
     """
     Render the Links section: PyPI and the project URLs
 
@@ -205,7 +204,7 @@ def _ai_agents(
     return [f"\n#### {get_translation('ai_agents', lang)}\n", *items]
 
 
-def _developers(config: Config, metadata: Mapping[str, Any], lang: str) -> list[str]:
+def _developers(config: Config, metadata: Manifest, lang: str) -> list[str]:
     """
     Render the Developers section: a card per author, then the funder
 
@@ -397,7 +396,7 @@ def _icon_row(icons: list[str]) -> str:
 
 def _community(
     build_dir: Path,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     package_name: str | None,
     community_pages: Sequence[CommunityPage],
     lang: str,
@@ -450,7 +449,7 @@ def _community(
     return [f"\n#### {get_translation('community', lang)}\n", *items]
 
 
-def _meta(config: Config, build_dir: Path, metadata: Mapping[str, Any], lang: str) -> list[str]:
+def _meta(config: Config, build_dir: Path, metadata: Manifest, lang: str) -> list[str]:
     """
     Render the Meta section: Python requirement, extras, tags and package information
 

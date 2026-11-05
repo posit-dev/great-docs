@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from great_docs import GreatDocs
-from tests.support import discover_user_guide
+from tests.support import discover_user_guide, make_project
 
 
 @pytest.fixture(params=[".", "docs"])
@@ -20,7 +20,9 @@ def docs(tmp_path: Path, request: pytest.FixtureRequest) -> GreatDocs:
 def stage(docs: GreatDocs, content: str | None) -> str:
     if content is not None:
         (docs.project_root / "README.md").write_text(content)
-    docs._create_index_from_readme(discover_user_guide(docs), has_api_reference=True)
+    docs._create_index_from_readme(
+        make_project(docs), discover_user_guide(docs), has_api_reference=True
+    )
     return (docs.build_dir / "index.qmd").read_text()
 
 

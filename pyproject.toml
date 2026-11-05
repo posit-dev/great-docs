@@ -196,6 +196,7 @@ include = [
     "great_docs/_manifest.py",
     "great_docs/_marimo.py",
     "great_docs/_mcpref",
+    "great_docs/_project.py",
     "great_docs/_reference",
     "great_docs/_remote.py",
     "great_docs/_source_refs.py",

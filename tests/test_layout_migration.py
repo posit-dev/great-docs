@@ -1775,7 +1775,7 @@ def test_migrated_shared_asset_is_staged_under_the_build(project: Path) -> None:
         move.destination.parent.mkdir(parents=True, exist_ok=True)
         move.source.rename(move.destination)
     gd = GreatDocs(str(project))
-    gd._prepare_build_directory(make_run())
+    gd._prepare_build_directory(make_run(gd))
     gd._publish_user_guide(discover_user_guide(gd))
     page = gd.build_dir / "user-guide/start.qmd"
     assert "![Chart](../_shared/assets/chart.png)" in page.read_text()

@@ -29,13 +29,29 @@ from great_docs._reference.discovery import (
 )
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website.seo import robots
-from tests.support import StubRemote, discover_user_guide, make_run, mock_config
+from tests.support import StubRemote, discover_user_guide, make_project, make_run, mock_config
 
 
 def _make_gd(tmp_path: Path) -> GreatDocs:
     """Create a GreatDocs instance in a temp directory with minimal config."""
     (tmp_path / "great-docs.yml").write_text("module: mypkg\n", encoding="utf-8")
     return GreatDocs(project_path=str(tmp_path))
+
+
+def _put_on_github(root: Path) -> None:
+    """
+    Declare the project's repository as `acme/mypkg` on GitHub in its `pyproject.toml`
+
+    Parameters
+    ----------
+    root
+        The project directory.
+    """
+    (root / "pyproject.toml").write_text(
+        '[project]\nname = "mypkg"\n\n[project.urls]\n'
+        'Repository = "https://github.com/acme/mypkg"\n',
+        encoding="utf-8",
+    )
 
 
 def _patch_cfg(monkeypatch, gd, name, value):
@@ -338,7 +354,7 @@ def _build_mcp_candidates(gd: GreatDocs, monkeypatch: pytest.MonkeyPatch) -> lis
         imported.append(name)
         return real_import(name, package)
 
-    def stop_build(guide: object, has_api_reference: bool) -> None:
+    def stop_build(project: object, guide: object, has_api_reference: bool) -> None:
         raise McpStepPassed
 
     monkeypatch.setattr("great_docs._build.quarto.ensure_installed", lambda: None)
@@ -376,7 +392,7 @@ class TestDiscoverMcpServer:
         (tmp_path / "great-docs.yml").write_text("module: mypkgxyz\n", encoding="utf-8")
         gd = GreatDocs(project_path=str(tmp_path))
         # Two package directories and no `pyproject.toml` leave the package name undetected.
-        assert gd._detect_package_name() is None
+        assert make_project(gd).name is None
 
         candidates = _build_mcp_candidates(gd, monkeypatch)
 
@@ -510,7 +526,6 @@ class TestDiscoverExportsValidation:
     def _setup(self, tmp_path, monkeypatch):
         """Set up a GreatDocs instance with mocked griffe package."""
         gd = _make_gd(tmp_path)
-        monkeypatch.setattr(gd, "_get_package_metadata", lambda: {})
         return gd
 
     def _make_mock_pkg(self, members_dict, exports=None):
@@ -1630,8 +1645,8 @@ class TestCanonicalIntegration:
 
     def test_base_url_falls_back_to_the_github_pages_address(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("acme", "mypkg", None))
-        assert gd._identity().base_url == "https://acme.github.io/mypkg/"
+        _put_on_github(tmp_path)
+        assert gd._identity(make_project(gd)).base_url == "https://acme.github.io/mypkg/"
 
     def test_raw_custom_page_gets_a_canonical_link(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
@@ -1639,14 +1654,14 @@ class TestCanonicalIntegration:
         (gd.build_dir / "_quarto.yml").write_text(
             "website:\n  sidebar: []\n  navbar:\n    left: []\n", encoding="utf-8"
         )
-        monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("acme", "mypkg", None))
+        _put_on_github(tmp_path)
         custom = tmp_path / "custom"
         custom.mkdir()
         (custom / "widget.html").write_text(
             "---\nlayout: raw\n---\n<html><head></head></html>", encoding="utf-8"
         )
 
-        gd._process_custom_pages(discover_user_guide(gd))
+        gd._process_custom_pages(make_project(gd), discover_user_guide(gd))
 
         page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert (
@@ -1669,7 +1684,7 @@ class TestCanonicalIntegration:
             "---\nlayout: raw\n---\n<html><head></head></html>", encoding="utf-8"
         )
 
-        gd._process_custom_pages(discover_user_guide(gd))
+        gd._process_custom_pages(make_project(gd), discover_user_guide(gd))
 
         page = (gd.build_dir / "reference" / "demo.html").read_text(encoding="utf-8")
         assert page.count('<script type="application/ld+json">') == 1
@@ -1685,7 +1700,7 @@ class TestCanonicalIntegration:
         (gd.build_dir / "_quarto.yml").write_text(
             "website:\n  title: Pkg\n  sidebar: []\n  navbar:\n    left: []\n", encoding="utf-8"
         )
-        monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("acme", "mypkg", None))
+        _put_on_github(tmp_path)
         custom = tmp_path / "custom"
         custom.mkdir()
         (custom / "widget.html").write_text(
@@ -1693,7 +1708,7 @@ class TestCanonicalIntegration:
             encoding="utf-8",
         )
 
-        gd._process_custom_pages(discover_user_guide(gd))
+        gd._process_custom_pages(make_project(gd), discover_user_guide(gd))
 
         page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert page.count('<meta property="og:title" content="Widget Lab">') == 1
@@ -1719,7 +1734,7 @@ class TestCanonicalIntegration:
             "---\nlayout: raw\n---\n<html><head></head></html>", encoding="utf-8"
         )
 
-        gd._process_custom_pages(discover_user_guide(gd))
+        gd._process_custom_pages(make_project(gd), discover_user_guide(gd))
 
         page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert page.count('<meta name="gd-i18n"') == 1
@@ -1737,7 +1752,6 @@ class TestPageDescriptions:
             "website:\n  sidebar: []\n  navbar:\n    left: []\n", encoding="utf-8"
         )
         _patch_cfg(monkeypatch, gd, "seo_default_description", default)
-        monkeypatch.setattr(gd, "_get_package_metadata", lambda: {})
         return gd
 
     def test_pages_get_their_opening_paragraph_or_the_default(self, tmp_path, monkeypatch):
@@ -1747,7 +1761,7 @@ class TestPageDescriptions:
         code = gd.build_dir / "code.qmd"
         code.write_text("```python\nx = 1\n```\n", encoding="utf-8")
 
-        gd._step_freeze_cache(make_run())
+        gd._step_freeze_cache(make_run(gd))
 
         assert f"description-meta: {self.LONG}" in prose.read_text(encoding="utf-8")
         assert "description-meta: Site default" in code.read_text(encoding="utf-8")
@@ -1759,7 +1773,7 @@ class TestPageDescriptions:
         page = gd.build_dir / "guide.qmd"
         page.write_text(f"{self.LONG}\n", encoding="utf-8")
 
-        gd._step_freeze_cache(make_run())
+        gd._step_freeze_cache(make_run(gd))
 
         assert "description-meta" not in page.read_text(encoding="utf-8")
 
@@ -1769,7 +1783,7 @@ class TestPageDescriptions:
         page = gd.build_dir / "guide.qmd"
         page.write_text(f"{self.LONG}\n", encoding="utf-8")
 
-        gd._step_freeze_cache(make_run())
+        gd._step_freeze_cache(make_run(gd))
 
         assert "description-meta" not in page.read_text(encoding="utf-8")
 
@@ -1779,7 +1793,7 @@ class TestPageDescriptions:
         page = gd.build_dir / "guide.qmd"
         page.write_text(f"---\nscale-to-fit: [.wide]\n---\n\n{self.LONG}\n", encoding="utf-8")
 
-        gd._step_freeze_cache(make_run(watch=True))
+        gd._step_freeze_cache(make_run(gd, watch=True))
 
         content = page.read_text(encoding="utf-8")
         assert "description-meta" in content
@@ -1787,11 +1801,11 @@ class TestPageDescriptions:
 
     def test_default_falls_back_to_the_package_description(self, tmp_path, monkeypatch):
         gd = self._gd(tmp_path, monkeypatch, default=None)
-        monkeypatch.setattr(
-            gd, "_get_package_metadata", lambda: {"description": "From `pyproject`"}
+        (tmp_path / "pyproject.toml").write_text(
+            '[project]\nname = "mypkg"\ndescription = "From `pyproject`"\n', encoding="utf-8"
         )
 
-        assert gd._default_description() == "From pyproject"
+        assert gd._default_description(make_project(gd).manifest) == "From pyproject"
 
     def test_raw_custom_page_gets_the_default(self, tmp_path, monkeypatch):
         gd = self._gd(tmp_path, monkeypatch, default="Tom & Jerry")
@@ -1801,7 +1815,7 @@ class TestPageDescriptions:
             "---\nlayout: raw\n---\n<html><head></head></html>", encoding="utf-8"
         )
 
-        gd._process_custom_pages(discover_user_guide(gd))
+        gd._process_custom_pages(make_project(gd), discover_user_guide(gd))
 
         page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert page.count('<meta name="description" content="Tom &amp; Jerry">') == 1
@@ -1967,7 +1981,7 @@ class TestStepApiReferenceConfig:
     def test_skips_discovery_when_already_done(self, tmp_path):
         gd = _make_gd(tmp_path)
         with patch.object(reference_block, "refresh") as refresh:
-            gd._step_api_reference_config(make_run(api_discovery_done=True), refresh=True)
+            gd._step_api_reference_config(make_run(gd, api_discovery_done=True), refresh=True)
         refresh.assert_not_called()
 
 
@@ -2036,7 +2050,7 @@ class TestStepApiReference:
             docs = _source_linked_project(tmp_path / name, name, branch)
             monkeypatch.syspath_prepend(str(docs.layout.package_root))
             monkeypatch.chdir(docs.build_dir)
-            docs._step_api_reference(make_run(), MagicMock())
+            docs._step_api_reference(make_run(docs), MagicMock())
             pages.append((docs.build_dir / "reference" / "greet.qmd").read_text(encoding="utf-8"))
 
         assert "github.com/owner/srclinks_a/blob/branch-a/srclinks_a/__init__.py" in pages[0]

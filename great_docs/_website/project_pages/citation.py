@@ -26,7 +26,6 @@ def write_page(
     config: Config,
     package_root: Path,
     build_dir: Path,
-    metadata: Mapping[str, Any],
     authors: list[dict[str, Any]],
     *,
     report: Callable[[str], None],
@@ -47,8 +46,6 @@ def write_page(
         The project directory holding `CITATION.cff`.
     build_dir
         The Quarto project directory to write the page into.
-    metadata
-        The project metadata, whose `name` the introduction cites, else `this package`.
     authors
         The configured authors, with local portrait paths replaced by site URLs.
     report
@@ -67,9 +64,8 @@ def write_page(
         citation = cast("dict[str, Any]", read_yaml(f))
     cff_authors: list[dict[str, Any]] = citation.get("authors") or []
 
-    package_name = metadata.get("name", "this package")
-    intro_paragraph = f"""
-To cite {package_name} in publications, please use the following citation.
+    intro_paragraph = """
+To cite this package in publications, please use the following citation.
 """
 
     configured_authors: list[dict[str, Any]] = config.authors or []

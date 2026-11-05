@@ -12,6 +12,7 @@ import inspect
 from typing import TYPE_CHECKING, Any, cast
 
 from ..._build.steps import USER_CODE_ERRORS
+from ..._manifest import Manifest
 from ..._yaml import locate_front_matter
 from .. import quarto_yml
 
@@ -93,7 +94,7 @@ def is_planned(build_dir: Path) -> bool:
 
 def write_index(
     build_dir: Path,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     *,
     report: Callable[[str], None],
 ) -> Path | None:

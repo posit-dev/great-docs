@@ -54,7 +54,7 @@ def _metadata(
     """
     return {
         "dependencies": runtime or [],
-        "optional_dependencies_full": optional or {},
+        "optional_dependencies": optional or {},
         "requires_python": requires_python,
     }
 

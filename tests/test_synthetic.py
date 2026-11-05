@@ -34,7 +34,7 @@ from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import discover_exports, parse_dunder_all
 from great_docs._reference.probe import detect_docstring_style
 from great_docs._website import quarto_yml as quarto_yml_file
-from tests.support import StubRemote, discover_user_guide, make_run, write_config
+from tests.support import StubRemote, discover_user_guide, make_project, make_run, write_config
 
 # ── Setup: make test-packages/synthetic importable ───────────────────────────
 
@@ -141,7 +141,7 @@ def test_L0_package_name_detection(pkg_name: str, tmp_path: Path):
         pytest.skip("No 'detected_name' in spec expected outcomes")
 
     docs = GreatDocs(project_path=str(pkg_dir))
-    detected = docs._detect_package_name()
+    detected = make_project(docs).name
     assert detected == expected["detected_name"], (
         f"Expected package name {expected['detected_name']!r}, got {detected!r}"
     )
@@ -581,7 +581,7 @@ def test_L2_name_module_mismatch(pkg_name: str, tmp_path: Path):
     docs = GreatDocs(project_path=str(pkg_dir))
 
     # Project name detection should find the pyproject.toml name
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name == expected["detected_name"]
 
     # Module should differ from normalized project name
@@ -649,7 +649,7 @@ def test_L3_cli_sidebar_flat_paths(pkg_name: str, tmp_path: Path):
     config = docs._config
     docs.install(force=True)
 
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name is not None
 
     cli_info = _discover_cli(docs, config, detected_name)
@@ -683,7 +683,7 @@ def test_L3_cli_sidebar_nested_structure(pkg_name: str, tmp_path: Path):
     config = docs._config
     docs.install(force=True)
 
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name is not None
 
     cli_info = _discover_cli(docs, config, detected_name)
@@ -732,7 +732,7 @@ def test_L3_cli_sidebar_no_wrong_level_paths(pkg_name: str, tmp_path: Path):
     config = docs._config
     docs.install(force=True)
 
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name is not None
 
     cli_info = _discover_cli(docs, config, detected_name)
@@ -798,9 +798,9 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
     docs = GreatDocs(project_path=str(pkg_dir))
     config = docs._config
     docs.install(force=True)
-    docs._prepare_build_directory(make_run())
+    docs._prepare_build_directory(make_run(docs))
 
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name is not None
 
     cli_info = _discover_cli(docs, config, detected_name)
@@ -852,11 +852,11 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     docs = GreatDocs(project_path=str(pkg_dir))
     config = docs._config
     docs.install(force=True)
-    run = make_run()
+    run = make_run(docs)
     docs._prepare_build_directory(run)
 
     # Generate CLI docs
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name is not None
     cli_info = _discover_cli(docs, config, detected_name)
     assert cli_info is not None
@@ -865,7 +865,7 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
         quarto_yml_file.apply(quarto_config, cli_render.contribution(docs._config, cli_files))
 
     # Process user guide
-    docs._process_user_guide(run.user_guide, run.has_api_reference)
+    docs._process_user_guide(run.project, run.user_guide, run.has_api_reference)
 
     quarto_yml = docs.build_dir / "_quarto.yml"
     with open(quarto_yml, encoding="utf-8") as f:
@@ -925,7 +925,7 @@ def test_L2_cli_discovery(pkg_name: str, tmp_path: Path):
     config = docs._config
     docs.install(force=True)
 
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name is not None
 
     cli_info = _discover_cli(docs, config, detected_name)
@@ -949,7 +949,7 @@ def test_L2_cli_nested_groups(pkg_name: str, tmp_path: Path):
     config = docs._config
     docs.install(force=True)
 
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name is not None
 
     cli_info = _discover_cli(docs, config, detected_name)
@@ -993,9 +993,9 @@ def _setup_blended_homepage(pkg_dir: Path, spec: dict) -> GreatDocs:
         existing.update(spec["config"])
         docs._config = write_config(docs.layout.package_root, existing)
 
-    run = make_run()
+    run = make_run(docs)
     docs._prepare_build_directory(run)
-    docs._process_user_guide(run.user_guide, run.has_api_reference)
+    docs._process_user_guide(run.project, run.user_guide, run.has_api_reference)
     return docs
 
 
@@ -1014,7 +1014,7 @@ def test_L3_bibliography_wired_into_quarto_config(pkg_name: str, tmp_path: Path)
 
     # The generated great-docs.yml already carries the bibliography key, so the
     # build directory prep alone should copy the file and wire the config.
-    docs._prepare_build_directory(make_run())
+    docs._prepare_build_directory(make_run(docs))
 
     bib_file = expected["bibliography_file"]
 
@@ -1050,7 +1050,7 @@ def test_L3_custom_css_wired_into_quarto_config(pkg_name: str, tmp_path: Path):
 
     # The generated great-docs.yml already carries the site.css key, so the
     # build directory prep alone should copy the file and wire the config.
-    docs._prepare_build_directory(make_run())
+    docs._prepare_build_directory(make_run(docs))
 
     css_file = expected["custom_css_file"]
 
@@ -1202,7 +1202,7 @@ def test_L3_code_include_expansion(tmp_path: Path):
     pkg_dir, spec = _make_package("gdtest_code_include", tmp_path)
     docs = GreatDocs(project_path=str(pkg_dir))
     docs.install(force=True)
-    docs._prepare_build_directory(make_run())
+    docs._prepare_build_directory(make_run(docs))
 
     ug_info = discover_user_guide(docs)
     assert ug_info is not None

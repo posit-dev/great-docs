@@ -15,10 +15,10 @@ from ._build import from_repo as repository
 from ._build import quarto, serve
 from ._build.steps import BuildError
 from ._content import user_guide
-from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
 from ._manifest import ManifestError
+from ._project import Project
 from ._website import changelog as changelog_page
 from ._website import quarto_yml
 from .config import ConfigError
@@ -1101,7 +1101,7 @@ def scan(
         docs = GreatDocs(project_path=project_path, config_path=config_path)
 
         # Detect package name
-        package_name = docs._detect_package_name()
+        package_name = Project.make(docs._config, docs.layout).name
         if not package_name:
             click.echo("Error: Could not detect package name.", err=True)
             sys.exit(1)
@@ -1456,7 +1456,7 @@ def freeze(
 
     docs = GreatDocs(project_path=project_path, config_path=config_path)
     log = BuildLog()
-    run = Run(package_name=docs._detect_package_name() or "", watch=False)
+    run = Run.make(docs._config, docs.layout, watch=False)
     try:
         freeze_cache.prepare(docs._preparation_steps(run, log), log, docs.build_dir)
     except BuildError:
@@ -2359,8 +2359,8 @@ def changelog(
     try:
         docs = GreatDocs(project_path=project_path, config_path=config_path)
 
-        owner, repo, _base_url = docs._get_github_repo_info()
-        if not owner or not repo:
+        repo = Project.make(docs._config, docs.layout).github
+        if repo is None:
             click.echo(
                 "Error: No GitHub repository URL found in pyproject.toml. "
                 "Add a [project.urls] entry like:\n\n"
@@ -2372,7 +2372,7 @@ def changelog(
         contribution = changelog_page.write_page(
             docs._config,
             docs.build_dir,
-            GithubRepo(owner, repo),
+            repo,
             docs._remote,
             max_releases=max_releases,
             report=click.echo,
@@ -2567,7 +2567,9 @@ def proofread(
                     docs.layout,
                     report=lambda message: click.echo(f"⚠️  {message}", err=True),
                 )
-            if include_docstrings and (package_name := docs._detect_package_name()):
+            if include_docstrings and (
+                package_name := Project.make(docs._config, docs.layout).name
+            ):
                 module = docs._resolve_importable_name(package_name)
                 files_to_check += proofreading.find_modules(docs.layout, module)
 
@@ -2818,7 +2820,7 @@ def seo(
         warnings = []
         info = []
 
-        identity = docs._identity()
+        identity = docs._identity(Project.make(docs._config, docs.layout))
         canonical_base = identity.base_url
 
         # ── Check sitemap.xml ────────────────────────────────────────────

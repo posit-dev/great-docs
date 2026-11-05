@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from ..._layout import Layout
+from ..._manifest import Manifest
 from ..._yaml import split_front_matter
 from ...config import Config
 from .. import page_dates, quarto_yml
@@ -39,7 +40,7 @@ class SkillsPageWriter:
     layout: Layout
     build_dir: Path
     distribution_name: str | None
-    metadata: dict[str, Any]
+    metadata: Manifest
 
     @classmethod
     def make(cls, writer: SkillsWriter) -> SkillsPageWriter:

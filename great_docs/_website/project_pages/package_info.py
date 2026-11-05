@@ -5,16 +5,17 @@ Package dependency tables with version constraints and optional PyPI release dat
 from __future__ import annotations
 
 import html
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from ..._apiref._render._tables import html_table
 from ..._icons import get_icon_svg
 from ..._translations import get_translation
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable
     from pathlib import Path
 
+    from ..._manifest import Dependency, Manifest
     from ..._remote import Remote
     from ...config import Config
 
@@ -35,7 +36,7 @@ _COL_WIDTHS: dict[tuple[bool, bool], tuple[int, ...]] = {
 def write_page(
     config: Config,
     build_dir: Path,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     remote: Remote,
     *,
     report: Callable[[str], None],
@@ -59,7 +60,7 @@ def write_page(
     build_dir
         The Quarto project directory to write the page into.
     metadata
-        The project metadata, read for `dependencies`, `optional_dependencies_full` and
+        The project metadata, read for `dependencies`, `optional_dependencies` and
         `requires_python`. No page is written when all three are empty.
     remote
         The source of PyPI release dates. Queries run only when the page is written and
@@ -75,9 +76,9 @@ def write_page(
     if not config.package_info_page or not config.is_python_project:
         return None
 
-    runtime_deps: list[dict[str, Any]] = metadata.get("dependencies", [])
-    optional_deps: dict[str, list[dict[str, Any]]] = metadata.get("optional_dependencies_full", {})
-    requires_python: str = metadata.get("requires_python", "")
+    runtime_deps = metadata.get("dependencies", [])
+    optional_deps = metadata.get("optional_dependencies", {})
+    requires_python = metadata.get("requires_python", "")
 
     if not runtime_deps and not optional_deps and not requires_python:
         return None
@@ -99,7 +100,7 @@ def write_page(
     show_dates = config.package_info_page_release_dates
     pypi_dates = remote.pypi_release_dates(all_dep_names) if show_dates else {}
 
-    def dependency_table(deps: list[dict[str, Any]]) -> str:
+    def dependency_table(deps: list[Dependency]) -> str:
         """
         Format a dependency table with PyPI links and optional release dates
 
@@ -127,9 +128,8 @@ def write_page(
             pkg_cell = f'<code class="gd-no-link">{html.escape(name)}</code>'
             row = [pkg_cell, spec]
             if has_markers:
-                row.append(
-                    f"<code>{html.escape(dep['marker'])}</code>" if dep.get("marker") else ""
-                )
+                marker = dep.get("marker")
+                row.append(f"<code>{html.escape(marker)}</code>" if marker else "")
             if show_dates:
                 row.append(html.escape(pypi_dates.get(name, "—")))
             row.append(pypi_cell)
