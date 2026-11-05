@@ -43,6 +43,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "Pillow>=9.0.0",
     "ruff>=0.9.9",
+    "watchfiles>=1.0.0",
 ]
 
 [project.optional-dependencies]

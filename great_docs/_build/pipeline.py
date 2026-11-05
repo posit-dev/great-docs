@@ -1,9 +1,9 @@
 """
 Documentation build order and shared state
 
-`run` builds a single-version or versioned site, or serves a prepared project with
-`quarto preview`. Rendering and freezing write the Quarto project with the same preparation
-steps; freeze preparation skips the steps that publish remote content.
+Builds produce a single-version or versioned site. Watch mode serves a prepared project
+with `quarto preview` and repeats preparation after source edits. Rendering and freezing
+use the same preparation steps, except that freezing skips remote content publication.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from .._reference.exports import Exports
 from .._subprocess import TEXT_MODE_KWARGS
 from .._website import page_dates
 from .._website.navigation import shared_sidebar
+from ..config import Config
 from . import (
     content,
     finish,
@@ -35,6 +36,7 @@ from . import (
     reference,
     render,
     site,
+    watch,
 )
 from .log import BuildLog, estimate_build_time
 from .steps import USER_CODE_ERRORS, BuildError, Outcome, Step, Warn, count_listed, run_steps
@@ -44,7 +46,6 @@ if TYPE_CHECKING:
     from .._content.user_guide import UserGuide
     from .._layout import Layout
     from .._remote import Remote
-    from ..config import Config
     from .facts import Facts
 
 __all__ = ["Run", "prepare_for_freeze", "preparation_steps", "run"]
@@ -144,8 +145,8 @@ def run(
     remote
         The source of GitHub and PyPI data.
     watch
-        Whether to serve the prepared site with `quarto preview` instead of rendering it.
-        Watch mode skips the steps that follow rendering.
+        Whether to serve the prepared project with `quarto preview` and repeat preparation
+        after source edits. Watch mode skips the full render and the steps that follow it.
     refresh
         Whether to rediscover the package's exports for the API reference.
     version_tags
@@ -232,7 +233,7 @@ def run(
     log.header()
 
     if watch:
-        _watch(config, layout, log, [*preparation, render_step])
+        _watch(config, layout, log, [*preparation, render_step], remote=remote, refresh=refresh)
         return
 
     run_steps([*preparation, render_step, *finishing], log, layout.build_dir)
@@ -551,9 +552,19 @@ def _finishing_steps(
     return steps
 
 
-def _watch(config: Config, layout: Layout, log: BuildLog, steps: list[Step]) -> None:
+def _watch(
+    config: Config,
+    layout: Layout,
+    log: BuildLog,
+    steps: list[Step],
+    *,
+    remote: Remote,
+    refresh: bool,
+) -> None:
     """
-    Prepare the Quarto project and serve it until `quarto preview` exits
+    Prepare the Quarto project and preview it with rebuilds after source edits
+
+    Each rebuild reloads `great-docs.yml` and repeats preparation while the preview runs.
 
     Parameters
     ----------
@@ -565,18 +576,35 @@ def _watch(config: Config, layout: Layout, log: BuildLog, steps: list[Step]) -> 
         The build log, with its header already written.
     steps
         The steps that prepare the project, ending with the render step.
+    remote
+        The source of GitHub and PyPI data.
+    refresh
+        Whether each rebuild rediscovers the package's exports for the API reference.
 
     Raises
     ------
     BuildError
-        If a step reports a failure. The log already contains the report.
+        If an initial preparation step fails. The log already contains the report.
     """
     run_steps(steps, log, layout.build_dir)
     log.footer(watch_mode=True)
     finish.print_layout_notice(layout)
     preview_env = quarto.environment(config)
     preview_env[shared_sidebar.PREVIEW_ENV] = "1"
-    _ = subprocess.run(["quarto", "preview", "--no-browser"], cwd=layout.build_dir, env=preview_env)
+
+    def rebuild(staging: watch.Staging) -> None:
+        edited = Config(
+            config.project_root, config_path=config.config_path, cache_dir=config.cache_dir
+        )
+        current = Run.make(edited, staging, watch=True)
+        rebuild_log = BuildLog()
+        preparation = preparation_steps(
+            current, edited, staging, rebuild_log, remote=remote, refresh=refresh
+        )
+        rebuild_log.total_steps = count_listed(preparation)
+        run_steps(preparation, rebuild_log, staging.build_dir)
+
+    watch.serve(layout, preview_env, rebuild)
 
 
 def _make_log(run: Run, config: Config, layout: Layout) -> BuildLog:

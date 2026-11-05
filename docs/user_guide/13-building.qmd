@@ -61,34 +61,42 @@ After all steps complete, the finished site is in `docs/_site/`.
 
 ## Preview Mode
 
-To view your site locally with live reload:
+To view your built site locally:
 
 ```{.bash filename="Terminal"}
 great-docs preview
 ```
 
-This starts a local development server and opens your default browser. When you edit source files
-(user guide pages, docstrings, configuration), the site rebuilds automatically and the browser
-refreshes to show your changes.
-
-Preview mode is ideal during the writing process because it lets you see how content will look in
-the final rendered site without committing or deploying anything.
+This serves `docs/_site/` locally and opens your default browser. If the site hasn't been built,
+it builds it first. After source edits, run `great-docs build` again or use
+[watch mode](#watch-mode) to rebuild automatically while you write.
 
 ## Build Options
 
 The `great-docs build` command accepts several options that control its behavior.
 
-### Watch Mode
+### Watch Mode {#watch-mode}
 
-Watch mode keeps the build process running and automatically rebuilds when files change. This is
-similar to preview mode but without starting a local server:
+Watch mode prepares the site, serves it with `quarto preview`, and rebuilds it after changes to
+your documentation sources:
 
 ```{.bash filename="Terminal"}
 great-docs build --watch
 ```
 
-This is useful when you want to rebuild continuously but view the output in a different way (for
-example, opening the HTML files directly or using a separate static file server).
+Great Docs watches the directory containing `great-docs.yml`, including your pages, assets and
+the configuration itself. After each batch of edits, it prepares the project again and copies
+only changed files into the previewed project. Quarto re-renders the affected pages and refreshes
+the browser. Press Ctrl+C to stop.
+
+Edits to `great-docs.yml` apply without a restart. Changes to the generated `_quarto.yml`'s
+`project` settings, such as the output directory, may require Quarto to restart. Great Docs
+prints a notice when these settings change: stop and rerun `great-docs build --watch` to apply
+them. If a rebuild fails, the preview keeps showing the last successful build until you fix the
+error.
+
+Watch mode skips the steps that follow a full render, so it doesn't update `docs/_site/`. Run
+`great-docs build` before you deploy.
 
 ### Clean Build
 

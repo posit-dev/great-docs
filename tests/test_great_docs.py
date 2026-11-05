@@ -9235,14 +9235,15 @@ def test_build_with_assets_triggers_config_update(tmp_path):
 
 
 def test_build_watch_mode(tmp_path):
-    """Test build() in watch mode calls quarto preview."""
+    """Check that watch mode starts `quarto preview`"""
     docs = _buildable_docs(tmp_path)
 
-    with stubbed_build(), patch("subprocess.run") as mock_run:
+    with stubbed_build(), patch("great_docs._build.watch.source_changes", return_value=iter(())):
+        popen = subprocess.Popen
         docs.build(watch=True, refresh=False)
 
-    mock_run.assert_called_once()
-    assert mock_run.call_args[0][0] == ["quarto", "preview", "--no-browser"]
+    quarto_calls = [call.args[0] for call in popen.call_args_list if call.args[0][0] == "quarto"]
+    assert quarto_calls == [["quarto", "preview", "--no-browser"]]
 
 
 def test_build_quarto_render_failure(tmp_path):

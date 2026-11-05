@@ -244,7 +244,8 @@ class GreatDocs:
         Parameters
         ----------
         watch
-            If `True`, watch for changes and rebuild automatically.
+            If `True`, serve the site with `quarto preview` and rebuild it when the
+            documentation sources or `great-docs.yml` change.
         refresh
             If `True` (default), re-discover package exports and update API reference config before
             building. Set to False for faster rebuilds when your package API hasn't changed.

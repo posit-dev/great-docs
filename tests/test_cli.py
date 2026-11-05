@@ -303,7 +303,6 @@ def test_layout_notice_once_per_build_or_preview_session(
         page = "---\nresources:\n  - missing.png\n---\n" + page
     (source / "index.qmd").write_text(page)
     docs = GreatDocs(str(tmp_path))
-    run = subprocess.run
     popen = subprocess.Popen
     rendered: list[Path] = []
 
@@ -313,16 +312,11 @@ def test_layout_notice_once_per_build_or_preview_session(
         (site / "index.html").write_text("<html>Documentation</html>")
         rendered.append(build_dir)
 
-    def run_quarto(
-        command: list[str], *args: object, **kwargs: object
-    ) -> subprocess.CompletedProcess:
+    def start_quarto(command: list[str], *args: object, **kwargs: object) -> object:
         if command[:2] == ["quarto", "preview"]:
             for _ in range(3):
                 render(Path(str(kwargs["cwd"])))
-            return subprocess.CompletedProcess(command, 0)
-        return run(command, *args, **kwargs)
-
-    def start_quarto(command: list[str], *args: object, **kwargs: object) -> object:
+            return MagicMock(**{"poll.return_value": 0, "wait.return_value": 0})
         if command[:2] == ["quarto", "render"]:
             if mode == "render-error":
                 return MagicMock(stdout=iter([]), stderr=iter(["Render failed"]), returncode=1)
@@ -337,8 +331,8 @@ def test_layout_notice_once_per_build_or_preview_session(
             render(build_dir)
         return [(str(build_dir), 0, "", "", []) for build_dir in build_dirs]
 
-    monkeypatch.setattr(subprocess, "run", run_quarto)
     monkeypatch.setattr(subprocess, "Popen", start_quarto)
+    monkeypatch.setattr("great_docs._build.watch.source_changes", lambda *_: iter(()))
     monkeypatch.setattr("great_docs._versions.build.render_versions_parallel", render_versions)
     monkeypatch.setattr("http.server.ThreadingHTTPServer", MagicMock())
     monkeypatch.setattr("threading.Timer", MagicMock())
