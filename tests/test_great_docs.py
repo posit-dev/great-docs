@@ -6199,7 +6199,7 @@ def test_update_sidebar_from_sections_basic():
         with open(quarto_yml, "w") as f:
             write_yaml(config, f)
 
-        reference_sections.update_sidebar(docs._config, docs.build_dir)
+        reference_sections.update_sidebar(docs._config, docs.build_dir, config["api-reference"])
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -6252,7 +6252,7 @@ def test_update_sidebar_from_sections_dict_items():
         with open(quarto_yml, "w") as f:
             write_yaml(config, f)
 
-        reference_sections.update_sidebar(docs._config, docs.build_dir)
+        reference_sections.update_sidebar(docs._config, docs.build_dir, config["api-reference"])
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -6291,7 +6291,7 @@ def test_update_sidebar_from_sections_sanitizes_colons():
         with open(quarto_yml, "w") as f:
             write_yaml(config, f)
 
-        reference_sections.update_sidebar(docs._config, docs.build_dir)
+        reference_sections.update_sidebar(docs._config, docs.build_dir, config["api-reference"])
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -6301,24 +6301,6 @@ def test_update_sidebar_from_sections_sanitizes_colons():
             "text": "devices.keithley:Keithley2400",
             "href": "reference/devices.keithley.Keithley2400.qmd",
         } in section["contents"]
-
-
-def test_update_sidebar_no_api_reference():
-    """Test _update_sidebar_from_sections with no api-reference does nothing."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-
-        config = {"project": {"type": "website"}, "website": {"sidebar": []}}
-
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
-
-        # Should not raise
-        reference_sections.update_sidebar(docs._config, docs.build_dir)
 
 
 def test_update_quarto_config_navbar_color_light_dark():
@@ -10445,8 +10427,9 @@ def test_add_api_block_success():
             add_api_block(docs, run)
 
         assert run.has_api_reference is True
-        written = read_yaml(docs.build_dir / "_quarto.yml")
+        written = read_quarto_yml(docs.build_dir)
         assert written["api-reference"]["sections"] == sections
+        assert run.api_block == written["api-reference"]
 
 
 def test_discover_exports_submodule_detection():
@@ -17942,7 +17925,9 @@ class TestUpdateSidebarFromSections:
                 {"title": "Functions", "contents": ["func_a"]},
             ]
             docs = self._make_docs(tmp_dir, sections)
-            reference_sections.update_sidebar(docs._config, docs.build_dir)
+            reference_sections.update_sidebar(
+                docs._config, docs.build_dir, {"package": "mypkg", "sections": sections}
+            )
             with open(docs.build_dir / "_quarto.yml") as f:
                 config = read_yaml(f)
             sidebar = config["website"]["sidebar"]
@@ -17963,28 +17948,13 @@ class TestUpdateSidebarFromSections:
                 {"title": "Classes", "contents": [{"name": "Graph", "members": []}]},
             ]
             docs = self._make_docs(tmp_dir, sections)
-            reference_sections.update_sidebar(docs._config, docs.build_dir)
+            reference_sections.update_sidebar(
+                docs._config, docs.build_dir, {"package": "mypkg", "sections": sections}
+            )
             with open(docs.build_dir / "_quarto.yml") as f:
                 config = read_yaml(f)
             contents = config["website"]["sidebar"][0]["contents"]
             assert {"text": "Graph", "href": "reference/Graph.qmd"} in contents[1]["contents"]
-
-    def test_no_api_reference_returns_early(self):
-        """Returns early when no api-reference in config."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.build_dir / "_quarto.yml"
-            config = {"website": {"sidebar": [{"id": "reference", "contents": []}]}}
-            with open(quarto_yml, "w") as f:
-                write_yaml(config, f)
-            reference_sections.update_sidebar(docs._config, docs.build_dir)
-            with open(quarto_yml) as f:
-                result = read_yaml(f)
-            # Sidebar unchanged
-            assert result["website"]["sidebar"][0]["id"] == "reference"
 
 
 class TestUpdateQuartoConfigScripts:

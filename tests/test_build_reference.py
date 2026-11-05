@@ -13,10 +13,12 @@ import pytest
 import yaml
 
 from great_docs import GreatDocs
+from great_docs._apiref.api_reference import APIReference
 from great_docs._build import reference
 from great_docs._build.log import BuildLog
 from great_docs._build.steps import Outcome
 from great_docs._utils import QUARTO_YML_HEADER
+from great_docs._website import quarto_yml
 from tests.support import make_run, write_config
 
 
@@ -143,6 +145,26 @@ def test_api_imports_the_package_from_the_project_root(
     assert _write_api_reference(docs) == "API reference generated"
 
     assert root in sys.path
+
+
+def test_api_retry_with_static_analysis_updates_the_configuration_and_the_build_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """
+    Keep the build state's API reference configuration equal to the written one on retry
+    """
+    docs = _source_linked_project(tmp_path / "static_retry", "static_retry", "main")
+    monkeypatch.chdir(docs.build_dir)
+    block = quarto_yml.read(docs.build_dir)["api-reference"]
+    block["dynamic"] = True
+    run = make_run(docs, api_block=block)
+
+    with patch.object(APIReference, "build", side_effect=[ImportError("dynamic"), None]):
+        outcome, _ = reference.api(run, docs._config, docs.layout, BuildLog(stream=io.StringIO()))
+
+    assert outcome == "API reference generated (static analysis)"
+    assert run.api_block == {**block, "dynamic": False}
+    assert quarto_yml.read(docs.build_dir)["api-reference"] == run.api_block
 
 
 def test_cli_reports_a_command_tree_without_pages(tmp_path: Path):

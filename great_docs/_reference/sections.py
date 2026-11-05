@@ -375,53 +375,46 @@ def from_explicit_config(
     return sections if sections else None
 
 
-def update_sidebar(site_config: Config, build_dir: Path) -> None:
+def update_sidebar(site_config: Config, build_dir: Path, api_block: dict[str, Any]) -> None:
     """
-    Update sidebar navigation from API reference sections
+    Replace the site's sidebars in `_quarto.yml` with the API reference sidebar
 
-    Keep the reference index first, followed by sections containing links to
-    generated object pages.
+    The sidebar lists the reference index first, then groups links to generated
+    object pages by API reference section.
+
+    Parameters
+    ----------
+    site_config
+        The project's configuration, which sets the language of the index link.
+    build_dir
+        The Quarto project directory.
+    api_block
+        The API reference configuration whose sections the sidebar lists.
+
+    Returns
+    -------
+    :
+
+    Raises
+    ------
+    FileNotFoundError
+        If the build directory has no `_quarto.yml`.
     """
-    if not quarto_yml.path(build_dir).exists():
-        return  # pragma: no cover
-
-    quarto_config = quarto_yml.read(build_dir)
-
     from .._apiref import APIReference, SpecObject
-
-    if "api-reference" not in quarto_config or "sections" not in quarto_config["api-reference"]:
-        return
-
-    sidebar_contents: list[dict[str, Any]] = []
-
-    for section in APIReference(quarto_config).sections:
-        heading = section.title or section.subtitle or ""
-        section_entry: dict[str, Any] = {"section": heading, "contents": []}
-
-        for entry in section.contents:
-            if isinstance(entry, SpecObject):
-                section_entry["contents"].append(
-                    {"text": entry.name, "href": f"reference/{entry.page_path}.qmd"}
-                )
-
-        sidebar_contents.append(section_entry)
-
-    if "website" not in quarto_config:
-        quarto_config["website"] = {}  # pragma: no cover
-
-    # The index link is independent of the generated sections.
     from .._translations import get_translation
 
-    api_index_label = get_translation("api_index", site_config.lang)
-    full_contents = [
-        {"text": api_index_label, "href": "reference/index.qmd"},
-    ] + sidebar_contents
-
-    quarto_config["website"]["sidebar"] = [
-        {
-            "id": "reference",
-            "contents": full_contents,
-        }
+    contents: list[dict[str, Any]] = [
+        {"text": get_translation("api_index", site_config.lang), "href": "reference/index.qmd"}
     ]
+    for section in APIReference({"api-reference": api_block}).sections:
+        heading = section.title or section.subtitle or ""
+        links = [
+            {"text": entry.name, "href": f"reference/{entry.page_path}.qmd"}
+            for entry in section.contents
+            if isinstance(entry, SpecObject)
+        ]
+        contents.append({"section": heading, "contents": links})
 
-    quarto_yml.write(build_dir, quarto_config)
+    with quarto_yml.edit(build_dir) as quarto_config:
+        website = cast("dict[str, Any]", quarto_config.setdefault("website", {}))
+        website["sidebar"] = [{"id": "reference", "contents": contents}]

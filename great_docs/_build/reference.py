@@ -37,12 +37,13 @@ def add_api_block(run: Run, config: Config, layout: Layout) -> None:
     Skip the reference when disabled, when the project is not Python, or when no package name
     is detected. Warn for a missing package name. Use an explicit `reference` configuration
     when supplied; otherwise discover sections from the package's exports. Skip when neither
-    supplies sections. Record skipped references in the build state.
+    supplies sections. Record the configuration or mark the reference as skipped in
+    the build state.
 
     Parameters
     ----------
     run
-        The current build, including API reference availability.
+        The current build, which records API reference availability and configuration.
     config
         The project's configuration.
     layout
@@ -90,7 +91,7 @@ def add_api_block(run: Run, config: Config, layout: Layout) -> None:
 
     build_dir = layout.build_dir
     quarto_config = quarto_yml.read(build_dir)
-    reference_block.configure(config, quarto_config, importable_name, sections)
+    run.api_block = reference_block.configure(config, quarto_config, importable_name, sections)
     quarto_yml.write(build_dir, quarto_config)
 
     print(f"Added API reference configuration to {quarto_yml.path(build_dir)}")
@@ -129,13 +130,14 @@ def api(
     """
     Write the API reference pages and the inventory of documented objects
 
-    When dynamic introspection fails, retry once with static analysis.
+    When dynamic introspection fails, retry once with static analysis. Set
+    `dynamic: false` in both the saved and recorded API reference configurations.
 
     Parameters
     ----------
     run
-        Build state recording whether the site has an API reference, with repository details
-        for source links.
+        Build state recording whether the site has an API reference and its configuration,
+        with repository details for source links.
     config
         The project's configuration.
     layout
@@ -185,6 +187,8 @@ def api(
         with quarto_yml.edit(build_dir) as quarto_config:
             if "api-reference" in quarto_config:
                 quarto_config["api-reference"]["dynamic"] = False
+        if run.api_block is not None:
+            run.api_block["dynamic"] = False
     try:
         ref = APIReference(quarto_yml_path, links)
         ref.build()

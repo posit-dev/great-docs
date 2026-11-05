@@ -108,9 +108,25 @@ def configure(
     quarto_config: dict[str, Any],
     importable_name: str,
     sections: list[dict[str, Any]],
-) -> None:
+) -> dict[str, Any]:
     """
     Add reference settings and navigation to a Quarto mapping
+
+    Parameters
+    ----------
+    site_config
+        The project's configuration.
+    quarto_config
+        The Quarto configuration, updated in place.
+    importable_name
+        The name under which the documented package is imported.
+    sections
+        The API reference sections.
+
+    Returns
+    -------
+    :
+        The `api-reference` block added to the Quarto configuration.
     """
     # The index title names the API; the navbar label covers API, CLI and MCP references.
     ref_title = site_config.reference_title or "API Reference"
@@ -118,10 +134,10 @@ def configure(
     ref_desc = site_config.reference_desc
 
     if not site_config.reference_title and site_config.lang != "en":
-        from .._translations import get_translation  # pragma: no cover
+        from .._translations import get_translation
 
-        ref_title = get_translation("api_reference", site_config.lang)  # pragma: no cover
-        nav_title = get_translation("reference", site_config.lang)  # pragma: no cover
+        ref_title = get_translation("api_reference", site_config.lang)
+        nav_title = get_translation("reference", site_config.lang)
 
     api_ref_config: dict[str, Any] = {
         "package": importable_name,
@@ -129,17 +145,17 @@ def configure(
         "title": ref_title,
     }
     if ref_desc:
-        api_ref_config["desc"] = ref_desc  # pragma: no cover
+        api_ref_config["desc"] = ref_desc
 
     dynamic = site_config.dynamic
     api_ref_config["dynamic"] = dynamic
     if not dynamic:
-        print("Using static introspection mode (dynamic: false)")  # pragma: no cover
+        print("Using static introspection mode (dynamic: false)")
 
     parser = site_config.parser
     if parser and parser != "numpy":
-        api_ref_config["parser"] = parser  # pragma: no cover
-        print(f"Using '{parser}' docstring parser")  # pragma: no cover
+        api_ref_config["parser"] = parser
+        print(f"Using '{parser}' docstring parser")
     else:
         api_ref_config["parser"] = "numpy"
 
@@ -178,3 +194,5 @@ def configure(
         )
         if not has_ref_sidebar:
             sidebars.append({"id": "reference", "contents": "reference/"})
+
+    return api_ref_config

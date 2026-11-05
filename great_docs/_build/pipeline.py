@@ -76,6 +76,9 @@ class Run:
         Whether the site has an API reference. Preparing the build directory sets it to
         `False` when the reference is disabled, the project is not a Python project, no
         package name is detected, or the package has nothing to document.
+    api_block
+        The `api-reference` block written to `_quarto.yml`, or `None` for a site
+        without an API reference.
     user_guide
         The user guide discovered during build preparation, or `None` when no guide
         pages were found.
@@ -91,6 +94,7 @@ class Run:
     watch: bool
     page_authors: list[dict[str, Any]]
     has_api_reference: bool = True
+    api_block: dict[str, Any] | None = None
     user_guide: UserGuide | None = None
     facts: Facts | None = None
 
