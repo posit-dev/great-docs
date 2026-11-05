@@ -530,12 +530,13 @@ def extract_argument(param: Any) -> CliArgument:
     Parameters
     ----------
     param
-        The Click argument.
+        The Click argument or converted Typer argument.
 
     Returns
     -------
     :
-        The argument's description; its type is `None` for text.
+        The argument's description, including non-empty help text when available.
+        Its type is `None` for text.
     """
     type_name = param.type.name if hasattr(param.type, "name") else str(param.type)
 
@@ -547,6 +548,9 @@ def extract_argument(param: Any) -> CliArgument:
         "nargs": param.nargs,
         "deprecated": getattr(param, "deprecated", False),
     }
+    # Typer arguments can declare help text; plain Click arguments have no `help` attribute.
+    if help_text := getattr(param, "help", None):
+        info["help"] = help_text
     choices = extract_choices(param)
     if choices is not None:
         info["choices"] = choices

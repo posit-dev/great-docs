@@ -13,6 +13,7 @@ import importlib
 import sys
 import types
 from pathlib import Path
+from typing import Annotated
 from unittest.mock import patch
 
 import click
@@ -145,6 +146,19 @@ class TestTyperHelpers:
         assert kinds["name"] == "argument"
         assert kinds["count"] == "option"
         assert kinds["loud"] == "option"
+
+    def test_extract_command_keeps_typer_argument_help(self):
+        from great_docs._cliref.click import to_click_command
+
+        app = typer.Typer()
+
+        @app.command()
+        def greet(name: Annotated[str, typer.Argument(help="Who to greet.")]):
+            """Greet NAME."""
+
+        info = cli_click.extract_command(to_click_command(app), "greet")
+
+        assert info["arguments"][0]["help"] == "Who to greet."
 
 
 # ---------------------------------------------------------------------------
