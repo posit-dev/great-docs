@@ -3950,7 +3950,7 @@ class TestFreezeFileSearchFallback:
 
         runner = CliRunner()
         with (
-            patch("great_docs.cli.GreatDocs") as mock_gd,
+            patch("great_docs._build.pipeline.prepare_for_freeze"),
             patch("subprocess.run") as mock_run,
         ):
             mock_run.return_value = MagicMock(returncode=0, stderr="")
@@ -3969,7 +3969,7 @@ class TestFreezeFileSearchFallback:
 
         runner = CliRunner()
         with (
-            patch("great_docs.cli.GreatDocs") as mock_gd,
+            patch("great_docs._build.pipeline.prepare_for_freeze"),
             patch("subprocess.run") as mock_run,
         ):
             mock_run.return_value = MagicMock(returncode=0, stderr="")
@@ -3988,7 +3988,7 @@ class TestFreezeFileSearchFallback:
 
         runner = CliRunner()
         with (
-            patch("great_docs.cli.GreatDocs") as mock_gd,
+            patch("great_docs._build.pipeline.prepare_for_freeze"),
             patch("subprocess.run") as mock_run,
         ):
             mock_run.return_value = MagicMock(returncode=0, stderr="")
@@ -4006,7 +4006,7 @@ class TestFreezeFileSearchFallback:
         self._setup_project(tmp_path, None)
 
         runner = CliRunner()
-        with patch("great_docs.cli.GreatDocs") as mock_gd:
+        with patch("great_docs._build.pipeline.prepare_for_freeze"):
             result = runner.invoke(
                 cli,
                 ["freeze", "missing.qmd", "--project-path", str(tmp_path)],
@@ -4035,7 +4035,7 @@ class TestFreezePersistCache:
         other.write_text('{"page": "other"}')
 
         with (
-            patch("great_docs.cli.GreatDocs"),
+            patch("great_docs._build.pipeline.prepare_for_freeze"),
             patch("subprocess.run", return_value=MagicMock(returncode=0, stderr="")),
         ):
             result = CliRunner().invoke(
@@ -4074,7 +4074,7 @@ class TestFreezePersistCache:
 
         runner = CliRunner()
         with (
-            patch("great_docs.cli.GreatDocs") as mock_gd,
+            patch("great_docs._build.pipeline.prepare_for_freeze"),
             patch("subprocess.run") as mock_run,
         ):
             mock_run.return_value = MagicMock(returncode=0, stderr="")
@@ -4104,7 +4104,7 @@ class TestFreezePersistCache:
 
         runner = CliRunner()
         with (
-            patch("great_docs.cli.GreatDocs") as mock_gd,
+            patch("great_docs._build.pipeline.prepare_for_freeze"),
             patch("subprocess.run") as mock_run,
         ):
             mock_run.return_value = MagicMock(returncode=0, stderr="")

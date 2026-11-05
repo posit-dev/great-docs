@@ -1,10 +1,12 @@
 """
 The build steps that render the site with Quarto
 
-`site` renders a single-version site in one Quarto process or several, `versions` renders
-each selected version of a versioned site and assembles them, and `assemble_site` copies a
-single-version site to a site directory outside the build directory. Starting Quarto and its
-environment belong to `quarto`, splitting pages among processes to `parallel_render`.
+Report render settings, render a single-version site in one or more Quarto processes,
+render and assemble selected versions of a versioned site, and copy a single-version site
+to a site directory outside the build directory.
+
+`quarto` starts Quarto and supplies its environment. `parallel_render` splits pages among
+processes.
 """
 
 from __future__ import annotations
@@ -25,7 +27,31 @@ if TYPE_CHECKING:
     from .log import BuildLog
     from .pipeline import Run
 
-__all__ = ["assemble_site", "site", "versions"]
+__all__ = ["assemble_site", "show_settings", "site", "versions"]
+
+
+def show_settings(config: Config, log: BuildLog) -> Outcome:
+    """
+    Show the freeze mode and the pre-render scripts that Quarto will use
+
+    Parameters
+    ----------
+    config
+        The project's configuration.
+    log
+        The build log.
+
+    Returns
+    -------
+    :
+        `None`; the settings are detail lines under the previous build step.
+    """
+    freeze_mode = config.freeze
+    if freeze_mode is not None:
+        log.detail(f"Freeze mode: {'auto' if freeze_mode == 'auto' else 'true'}")
+    for script in config.pre_render or ():
+        log.detail(f"Pre-render script: {script}")
+    return None
 
 
 def site(

@@ -33,7 +33,7 @@ from unittest.mock import DEFAULT, MagicMock, NonCallableMagicMock, patch
 from yaml12 import format_yaml
 
 from great_docs import Config, GreatDocs
-from great_docs._build import content, prepare, reference, site
+from great_docs._build import content, pipeline, prepare, reference, site
 from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
 from great_docs._build.steps import Outcome, Skipped, print_warning
@@ -47,10 +47,10 @@ if TYPE_CHECKING:
     from great_docs._content.user_guide import UserGuide
     from great_docs._github import GithubRepo
 
-# Stub the calls within step actions so the step table and build control flow still run.
-# Keep names in first-call order. Use a method name for a call on `GreatDocs`, or a dotted
-# path relative to `great_docs._build` for a module function. Update paths when steps move.
-_BUILD_METHODS: tuple[str, ...] = (
+# Stub calls within step actions to preserve the step table and build control flow.
+# List functions in first-call order by dotted path relative to `great_docs._build`.
+# Update paths when steps move.
+_BUILD_CALLS: tuple[str, ...] = (
     "prepare.build_directory",
     "content.user_guide",
     "content.sections",
@@ -60,7 +60,7 @@ _BUILD_METHODS: tuple[str, ...] = (
     "passes.terminal_recordings",
     "site.default_description",
     "site.structured_data",
-    "_print_layout_notice",
+    "finish.print_layout_notice",
 )
 
 # Configuration and build annotations use names imported only while type
@@ -211,9 +211,9 @@ def prepare_build_directory(docs: GreatDocs, run: Run) -> Outcome:
     Parameters
     ----------
     docs
-        The project supplying configuration, directories, remote data and page authors.
+        The project supplying configuration, directories and remote data.
     run
-        The current build.
+        The current build, which supplies the page authors.
 
     Returns
     -------
@@ -221,7 +221,7 @@ def prepare_build_directory(docs: GreatDocs, run: Run) -> Outcome:
         The step's outcome.
     """
     return prepare.build_directory(
-        run, docs._config, docs.layout, remote=docs._remote, page_authors=docs._page_authors
+        run, docs._config, docs.layout, remote=docs._remote, page_authors=run.page_authors
     )
 
 
@@ -278,7 +278,7 @@ def write_homepage(docs: GreatDocs, *, has_api_reference: bool = True) -> None:
     """
     run = make_run(docs, user_guide=discover_user_guide(docs), has_api_reference=has_api_reference)
     content.homepage(
-        run, docs._config, docs.layout, page_authors=docs._page_authors, remote=docs._remote
+        run, docs._config, docs.layout, page_authors=run.page_authors, remote=docs._remote
     )
 
 
@@ -381,7 +381,9 @@ def _preparation_step(docs: GreatDocs, title: str, run: Run) -> Outcome:
     :
         The step's outcome.
     """
-    steps = docs._preparation_steps(run, BuildLog(stream=io.StringIO()))
+    steps = pipeline.preparation_steps(
+        run, docs._config, docs.layout, BuildLog(stream=io.StringIO()), remote=docs._remote
+    )
     return next(step for step in steps if step.title == title).run()
 
 
@@ -393,7 +395,8 @@ class BuildStubs:
     Attributes
     ----------
     steps
-        Method stubs keyed by name. Set `side_effect` to an exception to make a step fail.
+        Function stubs keyed by path relative to `great_docs._build`. Set `side_effect`
+        to an exception to make a step fail.
     render
         The `quarto render` process, which defaults to exit status 0 and no output. Set
         `returncode` and `stderr` to simulate a render failure.
@@ -405,7 +408,6 @@ class BuildStubs:
 
 @contextmanager
 def stubbed_build(
-    docs: GreatDocs,
     run: Iterable[str] = (),
     *,
     api_reference: bool = False,
@@ -420,13 +422,11 @@ def stubbed_build(
     overridden in `returns`, they return empty values of their declared return types. For an
     `Outcome` return type, they report a skip so the build log counts the step as run.
 
-    Identify a call by its `GreatDocs` method name, such as `_print_layout_notice`, or its
-    function path relative to `great_docs._build`, such as `content.sections`.
+    Identify a call by its function path relative to `great_docs._build`, such as
+    `content.sections`.
 
     Parameters
     ----------
-    docs
-        The instance to stub.
     run
         Names of calls to run for real, including any other calls they need to run for real.
         Leave all other calls stubbed.
@@ -450,17 +450,17 @@ def stubbed_build(
         If a build step in the list no longer exists.
     """
     real = set(run)
-    unknown = sorted((real | set(returns)) - set(_BUILD_METHODS))
+    unknown = sorted((real | set(returns)) - set(_BUILD_CALLS))
     if unknown:
         raise ValueError(f"build() does not call {unknown}")
     both = sorted(real & set(returns))
     if both:
-        raise ValueError(f"a method that runs cannot have a stubbed return value: {both}")
+        raise ValueError(f"a call that runs cannot have a stubbed return value: {both}")
     if api_reference and "prepare.build_directory" in real:
         raise ValueError(
             "the real build directory preparation decides whether there is an API reference"
         )
-    missing = [name for name in _BUILD_METHODS if not hasattr(*_step_owner(GreatDocs, name))]
+    missing = [name for name in _BUILD_CALLS if not hasattr(*_step_owner(name))]
     if missing:
         raise AttributeError(f"no build step {missing}; update the step list in {__name__}")
 
@@ -478,14 +478,13 @@ def stubbed_build(
         render.returncode = 0
 
         steps: dict[str, MagicMock] = {}
-        for name in _BUILD_METHODS:
+        for name in _BUILD_CALLS:
             if name in real:
                 continue
-            owner, attribute = _step_owner(GreatDocs, name)
+            owner, attribute = _step_owner(name)
             value = returns[name] if name in returns else _stub_value(getattr(owner, attribute))
-            target = docs if owner is GreatDocs else owner
             steps[name] = stack.enter_context(
-                patch.object(target, attribute, autospec=True, return_value=value)
+                patch.object(owner, attribute, autospec=True, return_value=value)
             )
         if not api_reference and "prepare.build_directory" in steps:
             steps["prepare.build_directory"].side_effect = _configure_no_api_reference
@@ -511,25 +510,21 @@ def _stub_value(step: Callable[..., object]) -> object:
     return Skipped("stubbed") if annotation == Outcome else _empty(annotation)
 
 
-def _step_owner(cls: type, name: str) -> tuple[object, str]:
+def _step_owner(name: str) -> tuple[types.ModuleType, str]:
     """
-    Find the class or module that defines a build step
+    Find the module that defines a build step
 
     Parameters
     ----------
-    cls
-        The class whose methods are named with a leading underscore.
     name
-        A method name, or a step function's path below `great_docs._build`.
+        The step function's path below `great_docs._build`.
 
     Returns
     -------
     :
-        The class or module, and the step's name in it.
+        The module and the function's name within it.
     """
     module, _, function = name.rpartition(".")
-    if not module:
-        return cls, name
     return importlib.import_module(f"great_docs._build.{module}"), function
 
 
@@ -750,7 +745,7 @@ def homepage_margin(docs: GreatDocs) -> str:
         metadata=project.manifest,
         package_name=project.name,
         community_pages=community.write_pages(
-            docs._config, package_root, docs.build_dir, docs._page_authors
+            docs._config, package_root, docs.build_dir, make_run(docs).page_authors
         ),
     )
 

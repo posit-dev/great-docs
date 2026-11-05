@@ -146,7 +146,7 @@ from great_docs._apiref.spec import ChildrenStyle, SpecObject, SpecOptions, Spec
 from great_docs._apiref.typing_information import TypeInformation, TypeSections
 from great_docs._apiref.write import _insert_contents
 from great_docs._apiref.write import merge_frontmatter as _merge_frontmatter
-from great_docs._build import freeze, quarto, site
+from great_docs._build import freeze, pipeline, quarto, site
 from great_docs._build.log import BuildLog
 from great_docs._build.steps import Step, count_listed
 from great_docs._cliref import click as cli_click
@@ -353,7 +353,7 @@ def test_a_second_build_documents_the_exports_the_package_has_then(tmp_path, mon
         sections = quarto["api-reference"]["sections"]
         return [name for section in sections for name in section["contents"]]
 
-    with stubbed_build(docs, run=["prepare.build_directory"]):
+    with stubbed_build(run=["prepare.build_directory"]):
         docs.build(refresh=False)
         assert documented() == ["alpha"]
         init.write_text('__all__ = ["beta"]\n\n\ndef beta():\n    """Beta."""\n')
@@ -3935,7 +3935,7 @@ def test_build_cli_reference_uses_module_name(tmp_path):
     (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
     with (
-        stubbed_build(docs),
+        stubbed_build(),
         patch("great_docs._cliref.click.discover", return_value=None) as discover,
     ):
         docs.build(refresh=False)
@@ -4164,7 +4164,7 @@ def test_an_escaping_custom_page_output_fails_the_custom_pages_step(tmp_path):
         "content.user_guide",
         "content.custom_pages",
     )
-    with stubbed_build(docs, run=run), pytest.raises(BuildError) as failure:
+    with stubbed_build(run=run), pytest.raises(BuildError) as failure:
         docs.build(refresh=False)
 
     assert str(failure.value) == (
@@ -5406,8 +5406,8 @@ def test_freeze_writes_the_llms_files_build_would(label: str, tmp_path: Path):
     _write_llms_txt_quarto_yml(docs.build_dir, label)
     log = BuildLog(stream=io.StringIO())
 
-    with stubbed_build(docs):
-        freeze.prepare(docs._preparation_steps(make_run(docs), log), log, docs.build_dir)
+    with stubbed_build():
+        pipeline.prepare_for_freeze(docs._config, docs.layout, log, remote=docs._remote)
 
     available = llms_txt.is_planned(docs.build_dir)
     assert (docs.build_dir / "llms.txt").exists() == available, label
@@ -8976,7 +8976,7 @@ def test_build_prepare_and_render_flow(tmp_path):
     mock_builder_class = MagicMock(return_value=mock_builder)
 
     with (
-        stubbed_build(docs, api_reference=True),
+        stubbed_build(api_reference=True),
         patch("great_docs._apiref.api_reference.APIReference", mock_builder_class),
     ):
         docs.build(watch=False, refresh=True)
@@ -8993,7 +8993,7 @@ def test_build_no_api_reference(tmp_path):
     mock_builder_class = MagicMock()
 
     with (
-        stubbed_build(docs),
+        stubbed_build(),
         patch("great_docs._apiref.api_reference.APIReference", mock_builder_class),
         patch("great_docs._website.prerender.write_page_metadata") as write_page_metadata,
     ):
@@ -9012,12 +9012,12 @@ def test_build_after_a_build_without_api_reference_generates_one(tmp_path):
         pyproject=MYPKG_PYPROJECT,
         quarto_yml=QUARTO_YML_HEADER + "api-reference:\n  package: mypkg\n",
     )
-    with stubbed_build(docs):
+    with stubbed_build():
         docs.build(refresh=False)
 
     mock_builder_class = MagicMock()
     with (
-        stubbed_build(docs, api_reference=True),
+        stubbed_build(api_reference=True),
         patch("great_docs._apiref.api_reference.APIReference", mock_builder_class),
     ):
         docs.build(refresh=False)
@@ -9038,7 +9038,7 @@ def test_build_dynamic_fallback_to_static(tmp_path):
     mock_builder.build.side_effect = [RuntimeError("Dynamic mode failed"), None]
 
     with (
-        stubbed_build(docs, api_reference=True),
+        stubbed_build(api_reference=True),
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
@@ -9061,7 +9061,7 @@ def test_build_dynamic_fallback_preserves_the_quarto_yml_header(tmp_path):
     mock_builder.build.side_effect = [RuntimeError("Dynamic mode failed"), None]
 
     with (
-        stubbed_build(docs, api_reference=True),
+        stubbed_build(api_reference=True),
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
@@ -9085,7 +9085,7 @@ def test_build_static_mode_failure_raises(tmp_path):
     mock_builder.build.side_effect = RuntimeError("Build always fails")
 
     with (
-        stubbed_build(docs, api_reference=True),
+        stubbed_build(api_reference=True),
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
@@ -9105,7 +9105,7 @@ def test_build_non_dynamic_failure_raises(tmp_path):
     mock_builder.build.side_effect = RuntimeError("Build failed")
 
     with (
-        stubbed_build(docs, api_reference=True),
+        stubbed_build(api_reference=True),
         patch(
             "great_docs._apiref.api_reference.APIReference", MagicMock(return_value=mock_builder)
         ),
@@ -9159,9 +9159,7 @@ def test_build_with_changelog(tmp_path):
     )
     docs._remote = StubRemote(releases=[GITHUB_RELEASE])
 
-    with stubbed_build(
-        docs,
-    ):
+    with stubbed_build():
         docs.build(watch=False, refresh=False)
 
     assert "## v1.0.0" in (docs.build_dir / "changelog.qmd").read_text(encoding="utf-8")
@@ -9186,9 +9184,7 @@ def test_build_changelog_error_stops_the_build(tmp_path):
     # The page cannot be written over a directory
     (docs.build_dir / "changelog.qmd").mkdir()
 
-    with stubbed_build(
-        docs,
-    ) as stubs:
+    with stubbed_build() as stubs:
         with pytest.raises(IsADirectoryError):
             docs.build(watch=False, refresh=False)
 
@@ -9203,7 +9199,7 @@ def test_build_with_cli_documentation(tmp_path):
     cli_files = ["reference/cli/index.qmd"]
 
     with (
-        stubbed_build(docs),
+        stubbed_build(),
         patch("great_docs._cliref.click.discover", return_value=cli_info) as discover,
         patch("great_docs._cliref.render.write_pages", return_value=cli_files) as write_pages,
     ):
@@ -9219,7 +9215,7 @@ def test_build_with_sections(tmp_path):
     """Test build() processes custom sections when configured."""
     docs = _buildable_docs(tmp_path, sections=[{"title": "Recipes"}])
 
-    with stubbed_build(docs) as stubs:
+    with stubbed_build() as stubs:
         docs.build(watch=False, refresh=False)
 
     stubs.steps["content.sections"].assert_called_once()
@@ -9231,7 +9227,7 @@ def test_build_with_assets_triggers_config_update(tmp_path):
     (docs.layout.source_dir / "assets").mkdir()
     (docs.layout.source_dir / "assets" / "logo.png").write_bytes(b"png")
 
-    with stubbed_build(docs, run=["content.assets"]) as stubs:
+    with stubbed_build(run=["content.assets"]) as stubs:
         docs.build(watch=False, refresh=False)
 
     stubs.steps["site.update_quarto_config"].assert_called_once()
@@ -9242,7 +9238,7 @@ def test_build_watch_mode(tmp_path):
     """Test build() in watch mode calls quarto preview."""
     docs = _buildable_docs(tmp_path)
 
-    with stubbed_build(docs), patch("subprocess.run") as mock_run:
+    with stubbed_build(), patch("subprocess.run") as mock_run:
         docs.build(watch=True, refresh=False)
 
     mock_run.assert_called_once()
@@ -9253,7 +9249,7 @@ def test_build_quarto_render_failure(tmp_path):
     """Raise `BuildError` when Quarto fails to render"""
     docs = _buildable_docs(tmp_path)
 
-    with stubbed_build(docs) as stubs:
+    with stubbed_build() as stubs:
         stubs.render.stderr = iter(["Error: something\n"])
         stubs.render.returncode = 1
 
@@ -9267,7 +9263,7 @@ def test_build_versioned_all_failed_raises(tmp_path: Path, capsys: pytest.Captur
     failed = {"success": False, "errors": ["0.2: render boom"], "versions_built": []}
 
     with (
-        stubbed_build(docs),
+        stubbed_build(),
         patch("great_docs._versions.build.run_versioned_build", return_value=failed),
         pytest.raises(BuildError, match="All version builds failed"),
     ):
@@ -9288,7 +9284,7 @@ def test_build_cli_error_handled(tmp_path, capsys):
     docs = _buildable_docs(tmp_path, pyproject=MYPKG_PYPROJECT, cli_enabled=True)
 
     with (
-        stubbed_build(docs) as stubs,
+        stubbed_build() as stubs,
         patch("great_docs._cliref.click.discover", side_effect=ImportError("click")),
         patch("great_docs._cliref.render.write_pages") as write_pages,
     ):
@@ -9306,7 +9302,7 @@ def test_build_llms_txt_error_handled(tmp_path, capsys):
     docs = _buildable_docs(tmp_path)
 
     with (
-        stubbed_build(docs) as stubs,
+        stubbed_build() as stubs,
         patch("great_docs._website.ai_agents.llms_txt.is_planned", return_value=True),
         patch(
             "great_docs._website.ai_agents.llms_txt.write_index",
@@ -9326,7 +9322,7 @@ def test_build_skill_md_error_handled(tmp_path, capsys):
     docs = _buildable_docs(tmp_path, skill_enabled=True)
 
     with (
-        stubbed_build(docs) as stubs,
+        stubbed_build() as stubs,
         patch(
             "great_docs._website.ai_agents.skills.SkillsWriter.write",
             side_effect=OSError("read-only"),
@@ -9344,7 +9340,7 @@ def test_build_log_numbers_every_step(tmp_path, capsys):
     """
     docs = _buildable_docs(tmp_path)
 
-    with stubbed_build(docs):
+    with stubbed_build():
         docs.build(watch=False, refresh=False)
 
     out = capsys.readouterr().out
@@ -10765,7 +10761,7 @@ def test_build_reports_project_errors_as_failures(tmp_path, capsys, step, run, t
     """
     docs = _buildable_docs(tmp_path, sections=[{"title": "Test"}])
 
-    with stubbed_build(docs, run=run) as stubs:
+    with stubbed_build(run=run) as stubs:
         stubs.steps[step].side_effect = error
 
         with pytest.raises(BuildError, match=f"{title} failed") as raised:
@@ -10784,7 +10780,7 @@ def test_build_lets_own_errors_through(tmp_path):
     """
     docs = _buildable_docs(tmp_path)
 
-    with stubbed_build(docs) as stubs:
+    with stubbed_build() as stubs:
         stubs.steps["content.user_guide"].side_effect = AttributeError("renamed method")
 
         with pytest.raises(AttributeError, match="renamed method"):
@@ -10806,9 +10802,7 @@ def test_build_changelog_no_releases(tmp_path):
     )
     docs._remote = StubRemote()
 
-    with stubbed_build(
-        docs,
-    ):
+    with stubbed_build():
         docs.build(watch=False, refresh=False)
 
     assert "github_releases" in docs._remote.calls
@@ -10829,7 +10823,7 @@ def test_build_changelog_no_repo(tmp_path):
     )
     docs._remote = StubRemote(releases=[GITHUB_RELEASE])
 
-    with stubbed_build(docs):
+    with stubbed_build():
         docs.build(watch=False, refresh=False)
 
     assert "github_releases" not in docs._remote.calls
@@ -23010,7 +23004,9 @@ def test_freeze_runs_every_preparation_step_but_the_changelog(tmp_path: Path):
     """
     docs = GreatDocs(project_path=str(tmp_path))
     log = BuildLog(stream=io.StringIO())
-    steps = docs._preparation_steps(make_run(docs), log)
+    steps = pipeline.preparation_steps(
+        make_run(docs), docs._config, docs.layout, log, remote=docs._remote
+    )
     ran: list[str] = []
 
     def record(selected: list[Step], *_: object) -> None:

@@ -13,7 +13,7 @@ from . import __version__, _manifest
 from ._build import freeze as freeze_cache
 from ._build import from_repo as repository
 from ._build import quarto, serve, site
-from ._build.steps import BuildError
+from ._build.steps import BuildError, print_warning
 from ._content import user_guide
 from ._install import update_gitignore
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
@@ -1446,16 +1446,14 @@ def freeze(
         if build_freeze.exists():
             shutil.rmtree(build_freeze)
 
-    # Quarto requires matching page sources to reuse cached results. Use the build's
-    # preparation steps to keep those sources consistent.
+    from ._build import pipeline
     from ._build.log import BuildLog
-    from ._build.pipeline import Run
 
-    docs = GreatDocs(project_path=project_path, config_path=config_path)
-    log = BuildLog()
-    run = Run.make(docs._config, docs.layout, watch=False)
+    config = Config(layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir)
     try:
-        freeze_cache.prepare(docs._preparation_steps(run, log), log, docs.build_dir)
+        pipeline.prepare_for_freeze(
+            config, layout, BuildLog(), remote=HttpRemote(report=print_warning)
+        )
     except BuildError:
         # Exit without repeating the preparation failure report
         sys.exit(1)
@@ -1477,7 +1475,7 @@ def freeze(
             continue
 
         click.echo(f"  Rendering {page} → {target.relative_to(build_dir)} ...")
-        result = freeze_cache.render_page(docs._config, build_dir, target)
+        result = freeze_cache.render_page(config, build_dir, target)
 
         if result.returncode != 0:
             click.echo(f"  ✗ {page} — render failed", err=True)

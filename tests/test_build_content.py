@@ -122,12 +122,9 @@ def _user_guide(docs: GreatDocs, guide: UserGuide | None) -> Outcome:
     :
         The step's outcome.
     """
+    run = make_run(docs, user_guide=guide)
     return content.user_guide(
-        make_run(docs, user_guide=guide),
-        docs._config,
-        docs.layout,
-        page_authors=docs._page_authors,
-        remote=StubRemote(),
+        run, docs._config, docs.layout, page_authors=run.page_authors, remote=StubRemote()
     )
 
 
@@ -148,7 +145,7 @@ def _publish(docs: GreatDocs, guide: UserGuide) -> list[str]:
         The copied page paths relative to the build directory.
     """
     return content._publish_guide_pages(
-        docs._config, docs.layout, guide, page_authors=docs._page_authors
+        docs._config, docs.layout, guide, page_authors=make_run(docs).page_authors
     )
 
 
@@ -173,7 +170,7 @@ def _promote(docs: GreatDocs, guide: UserGuide) -> str | None:
         docs.layout,
         make_project(docs),
         guide,
-        page_authors=docs._page_authors,
+        page_authors=make_run(docs).page_authors,
     )
 
 
@@ -250,12 +247,9 @@ def test_a_user_guide_homepage_without_guide_pages_falls_back_to_the_readme(tmp_
         tmp_path, {"great-docs.yml": "homepage: user_guide\n", "README.md": "# Demo\n\nHello\n"}
     )
 
+    run = make_run(docs, user_guide=discover_user_guide(docs))
     outcome = content.user_guide(
-        make_run(docs, user_guide=discover_user_guide(docs)),
-        docs._config,
-        docs.layout,
-        page_authors=docs._page_authors,
-        remote=StubRemote(),
+        run, docs._config, docs.layout, page_authors=run.page_authors, remote=StubRemote()
     )
 
     assert outcome == Skipped("no user guide found")

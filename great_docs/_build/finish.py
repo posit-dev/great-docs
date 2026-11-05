@@ -1,9 +1,11 @@
 """
 The build steps that run after the site is rendered
 
-They write the SEO files and the build timings into the site, save the freeze cache and,
-for a versioned site, an API snapshot, and record which files of a separate site directory
-the build owns.
+These steps write SEO files and build timings, save the freeze cache, save an API snapshot
+for versioned sites and record ownership of files in a separate site directory.
+
+`print_layout_notice` shows migration guidance for documentation at the project root after
+a build and before a preview.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ if TYPE_CHECKING:
     from .pipeline import Run
 
 __all__ = [
+    "print_layout_notice",
     "record_site_ownership",
     "save_api_snapshot",
     "save_freeze_cache",
@@ -216,3 +219,26 @@ def record_site_ownership(layout: Layout) -> Outcome:
     if layout.site_dir != layout.build_dir / "_site":
         record_ownership(layout.site_dir)
     return None
+
+
+def print_layout_notice(layout: Layout) -> None:
+    """
+    Print migration guidance for documentation at the project root
+
+    Parameters
+    ----------
+    layout
+        The project's directories. Nothing is printed for documentation in its own
+        directory.
+
+    Returns
+    -------
+    :
+    """
+    from .._layout_migration.notice import layout_notice
+
+    notice = layout_notice(layout)
+    if notice is not None:
+        import click
+
+        click.echo(notice)

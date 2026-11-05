@@ -353,9 +353,8 @@ def build_site(rendered_dir: Path, name: str) -> Path:
     from synthetic.generator import generate_package
 
     from great_docs import GreatDocs
-    from great_docs._build import freeze, quarto
+    from great_docs._build import pipeline, quarto
     from great_docs._build.log import BuildLog
-    from great_docs._build.pipeline import Run
 
     rendered_dir.mkdir(parents=True, exist_ok=True)
     staging = rendered_dir / f".building-{name}-{os.getpid()}"
@@ -366,9 +365,8 @@ def build_site(rendered_dir: Path, name: str) -> Path:
         docs = GreatDocs(str(pkg_dir))
         output = io.StringIO()
         log = BuildLog(stream=output)
-        run = Run.make(docs._config, docs.layout, watch=False)
         with contextlib.redirect_stdout(output):
-            freeze.prepare(docs._preparation_steps(run, log), log, docs.build_dir)
+            pipeline.prepare_for_freeze(docs._config, docs.layout, log, remote=docs._remote)
 
         result = subprocess.run(
             ["quarto", "render"],
