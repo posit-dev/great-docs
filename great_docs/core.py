@@ -636,148 +636,88 @@ class GreatDocs:
 
     def _detect_module_name(self) -> str | None:
         """
-        Detect the actual importable module name for the package.
+        Detect the importable module to document
 
-        The module name may differ from the project name (e.g., project 'py-yaml12'
-        might have module 'yaml12' or 'pyyaml12'). This method tries to find the
-        actual module directory or stub file.
+        The module name can differ from the distribution name: `py-yaml12` may install
+        `yaml12`. Use the first available module from these sources, in order:
 
-        Priority:
-        1. Explicit 'module' setting in great-docs.yml
-        2. .pyi stub files (for compiled extensions)
-        3. pyproject.toml configuration ([tool.maturin], [tool.setuptools], etc.)
-        4. Auto-discovery via _find_package_init
+        1. Use the configured `module`.
+        2. Use the first project-root `.pyi` stub other than `__init__.pyi`.
+        3. Use the top-level package of Maturin's compiled module.
+        4. Use the first package found in setuptools discovery directories, excluding names
+           beginning with `.`, `_` or `test`.
+        5. Use the first setuptools `packages` entry. Preserve dotted import names such as
+           `nspkg.core`; for a path, use its last component.
+        6. Use the last component of the first hatch or Poetry package path. If it is a
+           namespace directory without `__init__.py`, prefer its subpackage named by the
+           remaining distribution name when that subpackage has `__init__.py`. For example,
+           select `firebird.base` for distribution `firebird-base`.
+        7. Find a package directory for the distribution name and form its dotted name
+           relative to the first containing `src`, `python`, `lib` or discovery directory,
+           then the project root. Fall back to the package directory's own name.
 
         Returns
         -------
-        str | None
-            The detected module name, or None if not found.
+        :
+            The importable module name, or `None` if no source identifies one.
         """
-        # First, check for explicit module name in great-docs.yml
         if self._config.module:
             return self._config.module
 
         package_root = self.layout.package_root
 
-        # Check for .pyi stub files (common for PyO3/Rust/compiled extensions)
-        # These indicate the actual module name for compiled packages
-        pyi_files = list(package_root.glob("*.pyi"))
-        if pyi_files:
-            # Use the first .pyi file found (excluding __init__.pyi)
-            for pyi_file in pyi_files:
-                if pyi_file.stem != "__init__":
-                    return pyi_file.stem
+        for pyi_file in package_root.glob("*.pyi"):
+            if pyi_file.stem != "__init__":
+                return pyi_file.stem
 
-        # Check pyproject.toml for explicit package configuration
-        pyproject_path = package_root / "pyproject.toml"
-        if pyproject_path.exists():
-            import tomllib
+        manifest = _read_manifest(package_root)
+        if manifest["extension_module"]:
+            # Document the top-level package rather than its compiled extension submodule.
+            return manifest["extension_module"].split(".", 1)[0]
 
-            try:
-                with open(pyproject_path, "rb") as f:
-                    data = tomllib.load(f)
+        for directory in manifest["discovery_dirs"]:
+            base = package_root / directory
+            if not base.is_dir():
+                continue
+            for item in base.iterdir():
+                if (
+                    item.is_dir()
+                    and (item / "__init__.py").exists()
+                    and not item.name.startswith((".", "_", "test"))
+                ):
+                    return item.name
 
-                # Check [tool.maturin] for PyO3/Rust projects
-                maturin = data.get("tool", {}).get("maturin", {})
-                if maturin:
-                    # maturin projects: module name is often in module-name or derived from Cargo.toml
-                    module_name = maturin.get("module-name")
-                    if module_name:
-                        # If `module-name` is a dotted path (e.g. "ggsql._ggsql"),
-                        # it refers to the compiled extension submodule. The
-                        # top-level importable Python package is the prefix —
-                        # which is what we want for documentation. When
-                        # `python-source` is set, the project also ships a
-                        # pure-Python wrapper at that top-level name.
-                        if "." in module_name:
-                            return module_name.split(".", 1)[0]
-                        return module_name
+        if manifest["declared_import_names"]:
+            # Preserve dotted import names; path entries identify their last directory.
+            return manifest["declared_import_names"][0].split("/")[-1]
 
-                # Check [tool.setuptools.packages] for explicit package list
-                setuptools = data.get("tool", {}).get("setuptools", {})
-                if "packages" in setuptools:
-                    packages = setuptools["packages"]
-                    if packages and isinstance(packages, list):
-                        # Return the first package (main package)
-                        return packages[0].split("/")[-1]
+        if manifest["declared_packages"]:
+            declared = manifest["declared_packages"][0]
+            name = declared.split("/")[-1]
+            path = package_root / declared
+            if path.is_dir() and not (path / "__init__.py").exists():
+                distribution = (self._detect_package_name() or "").replace("-", "_")
+                sub_name = distribution.removeprefix(f"{name}_")
+                if (
+                    distribution.startswith(f"{name}_")
+                    and (path / sub_name / "__init__.py").exists()
+                ):
+                    return f"{name}.{sub_name}"
+            return name
 
-                # Check [tool.setuptools.packages.find]
-                find_config = setuptools.get("packages", {})
-                if isinstance(find_config, dict) and "find" in find_config:
-                    where = find_config["find"].get("where", ["."])
-                    if isinstance(where, str):
-                        where = [where]
-                    for base_dir in where:
-                        base_path = package_root / base_dir
-                        if base_path.exists():
-                            for item in base_path.iterdir():
-                                if item.is_dir() and (item / "__init__.py").exists():
-                                    if not item.name.startswith((".", "_", "test")):
-                                        return item.name
-
-                # Check [tool.hatch.build.targets.wheel.packages]
-                hatch_packages = (
-                    data.get("tool", {})
-                    .get("hatch", {})
-                    .get("build", {})
-                    .get("targets", {})
-                    .get("wheel", {})
-                    .get("packages", [])
-                )
-                if hatch_packages:
-                    pkg = hatch_packages[0]
-                    pkg_name = pkg.split("/")[-1]
-
-                    # Resolve the package path on disk to check for namespace packages
-                    pkg_path = package_root / pkg
-                    init_py = pkg_path / "__init__.py"
-
-                    # If the directory has no __init__.py, it is a namespace root
-                    # (e.g., src/firebird/ for the firebird.* namespace).
-                    # Derive the subpackage from the project name.
-                    if pkg_path.is_dir() and not init_py.exists():
-                        project_name = self._detect_package_name()
-                        if project_name:
-                            normalized_project = project_name.replace("-", "_")
-                            # "firebird-base" → "firebird_base"; namespace "firebird"
-                            # → subpackage "base"
-                            if normalized_project.startswith(pkg_name + "_"):
-                                sub_name = normalized_project[len(pkg_name) + 1 :]
-                                sub_path = pkg_path / sub_name
-                                if sub_path.is_dir() and (sub_path / "__init__.py").exists():
-                                    return f"{pkg_name}.{sub_name}"
-
-                    return pkg_name
-
-            except Exception:
-                pass
-
-        # Try to find via _find_package_init
         project_name = self._detect_package_name()
-        if project_name:
-            init_file = self._find_package_init(project_name)
-            if init_file:
-                # Compute the dotted module name by finding the layout-root
-                # that contains this __init__.py (e.g. src/, python/, lib/
-                # or the project root itself).
-                pkg_dir = init_file.parent
-                for layout_dir in [
-                    package_root / "src",
-                    package_root / "python",
-                    package_root / "lib",
-                    package_root,
-                ]:
-                    try:
-                        rel = pkg_dir.relative_to(layout_dir)
-                    except ValueError:
-                        continue
-                    parts = rel.parts
-                    if parts:
-                        return ".".join(parts)
-                # Fallback: just use the immediate directory name
-                return pkg_dir.name  # pragma: no cover
-
-        return None
+        init_file = self._find_package_init(project_name) if project_name else None
+        if init_file is None:
+            return None
+        package_dir = init_file.parent
+        for layout_dir in (
+            *(package_root / directory for directory in PACKAGE_DIRS),
+            *(package_root / directory for directory in manifest["discovery_dirs"]),
+            package_root,
+        ):
+            if package_dir != layout_dir and package_dir.is_relative_to(layout_dir):
+                return ".".join(package_dir.relative_to(layout_dir).parts)
+        return package_dir.name
 
     def _is_compiled_extension(self) -> bool:
         """

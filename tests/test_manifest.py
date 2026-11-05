@@ -129,6 +129,7 @@ include = "plain"
         "plain",
     ]
     assert manifest["package_dirs"] == ["lib"]
+    assert manifest["declared_import_names"] == ["pkg", "pkg.sub"]
 
 
 def test_reads_setuptools_find_directories(tmp_path: Path):
@@ -278,3 +279,8 @@ def test_unparsable_setup_cfg_alone_raises_even_when_ignorable(tmp_path: Path):
 
     with pytest.raises(ManifestError, match="setup.cfg"):
         _manifest.read(tmp_path, ignore_unparsable_setup_cfg=True)
+
+
+def test_reads_the_maturin_module_name(tmp_path: Path):
+    write(tmp_path, "pyproject.toml", '[tool.maturin]\nmodule-name = "pkg._native"\n')
+    assert _manifest.read(tmp_path)["extension_module"] == "pkg._native"

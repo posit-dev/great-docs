@@ -134,6 +134,15 @@ class Manifest(TypedDict):
     searches, relative to the project root: its `where` value, or `.` when it has none
     """
 
+    extension_module: str
+    """The dotted name of the compiled module that Maturin builds, such as `pkg._native`"""
+
+    declared_import_names: list[str]
+    """
+    The setuptools `packages` entries as written: import names such as `mypkg.sub`, which
+    `declared_packages` also lists as paths
+    """
+
 
 def read(root: Path, *, ignore_unparsable_setup_cfg: bool = False) -> Manifest:
     """
@@ -207,6 +216,8 @@ def empty() -> Manifest:
         declared_packages=[],
         package_dirs=[],
         discovery_dirs=[],
+        extension_module="",
+        declared_import_names=[],
     )
 
 
@@ -308,6 +319,9 @@ def _first(manifest: Manifest, fallback: Manifest) -> Manifest:
         declared_packages=manifest["declared_packages"] or fallback["declared_packages"],
         package_dirs=manifest["package_dirs"] or fallback["package_dirs"],
         discovery_dirs=manifest["discovery_dirs"] or fallback["discovery_dirs"],
+        extension_module=manifest["extension_module"] or fallback["extension_module"],
+        declared_import_names=manifest["declared_import_names"]
+        or fallback["declared_import_names"],
     )
 
 
@@ -354,12 +368,16 @@ def _from_pyproject(data: YamlMapping) -> Manifest:
     setuptools = tool.mapping("setuptools")
     manifest["package_dirs"] = list(_string_values(setuptools.mapping("package-dir")).values())
     packages = setuptools.get("packages")
-    manifest["declared_packages"] += [package.replace(".", "/") for package in _strings(packages)]
+    manifest["declared_import_names"] = _strings(packages)
+    manifest["declared_packages"] += [
+        package.replace(".", "/") for package in manifest["declared_import_names"]
+    ]
     find = setuptools.mapping("packages").mapping("find")
     if "find" in setuptools.mapping("packages"):
         # setuptools searches the project root when `where` is absent.
         manifest["discovery_dirs"] = find.strings("where") if "where" in find else ["."]
         manifest["package_dirs"] += manifest["discovery_dirs"]
+    manifest["extension_module"] = tool.mapping("maturin").string("module-name") or ""
     wheel = tool.mapping("hatch").mapping("build").mapping("targets").mapping("wheel")
     manifest["declared_packages"] += _strings(wheel.sequence("packages"))
     for entry in tool.mapping("poetry").sequence("packages"):

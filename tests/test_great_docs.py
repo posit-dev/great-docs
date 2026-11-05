@@ -23743,6 +23743,28 @@ def test_detect_module_name_where_string():
         assert name == "mypkg"
 
 
+def test_detect_module_name_keeps_a_dotted_setuptools_package(tmp_path: Path):
+    """A setuptools `packages` entry is an import name, so a dotted one stays whole"""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "nspkg-core"\n\n[tool.setuptools]\npackages = ["nspkg.core"]\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "nspkg" / "core").mkdir(parents=True)
+    (tmp_path / "nspkg" / "core" / "__init__.py").write_text("", encoding="utf-8")
+
+    assert GreatDocs(project_path=str(tmp_path))._detect_module_name() == "nspkg.core"
+
+
+def test_detect_module_name_from_poetry_packages(tmp_path: Path):
+    """A Poetry `packages` entry names the module, whatever the distribution is called"""
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.poetry]\nname = "my-project"\npackages = [{include = "mylib", from = "src"}]\n',
+        encoding="utf-8",
+    )
+
+    assert GreatDocs(project_path=str(tmp_path))._detect_module_name() == "mylib"
+
+
 def test_type_sections_empty_lists():
     """TypeSections with no items produces empty Blocks output."""
 
