@@ -11,6 +11,7 @@ from html import unescape
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
+from .. import _manifest
 from .._build import quarto
 from .._content.walk import find_files
 
@@ -229,18 +230,27 @@ def extract_docstring_examples(
 
 
 def _detect_package(project_root: Path) -> str | None:
-    pyproject = project_root / "pyproject.toml"
-    if pyproject.exists():
-        try:
-            import tomllib
-        except ImportError:
-            import tomli as tomllib  # type: ignore[no-redefine]
-        with open(pyproject, "rb") as f:
-            data = tomllib.load(f)
-            name = data.get("project", {}).get("name")
-            if name:
-                return name.replace("-", "_")
-    return None
+    """
+    Detect the package whose docstring examples are checked
+
+    Parameters
+    ----------
+    project_root
+        The directory holding the packaging files.
+
+    Returns
+    -------
+    :
+        The distribution name with hyphens replaced by underscores, or `None` when the project
+        declares no name.
+
+    Raises
+    ------
+    ManifestError
+        A packaging file cannot be read or parsed.
+    """
+    name = _manifest.read(project_root)["name"]
+    return name.replace("-", "_") if name else None
 
 
 def _collect_object_names(sections: list[dict[str, Any]]) -> list[str]:

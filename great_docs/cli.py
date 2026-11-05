@@ -63,55 +63,42 @@ def _config_option(function: Callable[..., Any]) -> Callable[..., Any]:
     return selected
 
 
-def _detect_python_version_from_pyproject(project_root: Path) -> str | None:
-    """Detect the minimum Python version from pyproject.toml.
-
-    Parses the `requires-python` field (e.g., '>=3.12', '>=3.10,<3.13')
-    and returns a suitable Python version string for CI (e.g., '3.12').
-
-    Returns None if pyproject.toml doesn't exist or has no version requirement.
+def _detect_python_version(project_root: Path) -> str | None:
     """
-    pyproject_path = project_root / "pyproject.toml"
-    if not pyproject_path.exists():
-        return None
+    Choose the Python version a documentation workflow runs on
 
+    Parameters
+    ----------
+    project_root
+        The directory holding the packaging files.
+
+    Returns
+    -------
+    :
+        A `major.minor` version from the project's Python requirement. For a requirement
+        containing `>=` or `~=`, the first version (the lower bound), such as `3.10` for
+        `>=3.10,<3.13`; otherwise, the highest version named. `None` when the project declares
+        no requirement, the requirement names no version, or the metadata cannot be read.
+    """
     try:
-        # Use tomllib (Python 3.11+) or tomli as fallback
-        try:
-            import tomllib
-        except ImportError:  # pragma: no cover
-            import tomli as tomllib  # pragma: no cover
-
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-
-        requires_python = data.get("project", {}).get("requires-python")
-        if not requires_python:
-            return None
-
-        # Parse version specifier to find minimum version
-        # Common patterns: ">=3.12", ">=3.10,<3.13", "~=3.11", ">=3.9"
-        # Extract versions from specifiers
-        version_pattern = r"(\d+\.\d+)"
-        matches = re.findall(version_pattern, requires_python)
-
-        if not matches:
-            return None
-
-        # For >= specifiers, use the specified version
-        if ">=" in requires_python or "~=" in requires_python:
-            # Return the first (minimum) version found
-            return matches[0]
-
-        # For other specifiers, try to pick a reasonable version
-        # Find the highest version mentioned (likely the target)
-        versions = [tuple(map(int, v.split("."))) for v in matches]
-        max_version = max(versions)
-        return f"{max_version[0]}.{max_version[1]}"
-
-    except Exception:
-        # If parsing fails, return None to use default
+        requires_python = _manifest.read(project_root)["requires_python"]
+    except ManifestError:
         return None
+
+    # CI uses major.minor versions, for example from `>=3.12`, `>=3.10,<3.13`,
+    # `~=3.11` or `>=3.9`.
+    matches = re.findall(r"(\d+\.\d+)", requires_python)
+    if not matches:
+        return None
+
+    # Treat the first version as the lower bound for `>=` and `~=` requirements.
+    if ">=" in requires_python or "~=" in requires_python:
+        return matches[0]
+
+    # Other specifiers use the highest named version as the likely CI target.
+    versions = [tuple(map(int, v.split("."))) for v in matches]
+    max_version = max(versions)
+    return f"{max_version[0]}.{max_version[1]}"
 
 
 def _detect_package_manager(project_root: Path) -> str:
@@ -1818,7 +1805,7 @@ def setup_github_pages(
         # Great Docs requires Python 3.11+, so we enforce that as the floor
         min_great_docs_version = (3, 11)
         if python_version is None:
-            detected_version = _detect_python_version_from_pyproject(project_root)
+            detected_version = _detect_python_version(project_root)
             if detected_version:
                 detected_tuple = tuple(int(x) for x in detected_version.split("."))
                 if detected_tuple < min_great_docs_version:
@@ -3841,7 +3828,7 @@ def skill_install(
         else:
             kwargs["package"] = source
     else:
-        # Try to detect current package from pyproject.toml
+        # Use the current project's declared package name when no source is supplied.
         project_root = Path.cwd()
         pkg_name = _detect_current_package(project_root)
         if pkg_name:
@@ -3977,22 +3964,23 @@ def skill_list(source: str | None, url: str | None) -> None:
 
 
 def _detect_current_package(project_root: Path) -> str | None:
-    """Detect the current package name from pyproject.toml."""
-    pyproject_path = project_root / "pyproject.toml"
-    if not pyproject_path.exists():
-        return None
+    """
+    Read the package name declared by a project
 
+    Parameters
+    ----------
+    project_root
+        The directory holding the packaging files.
+
+    Returns
+    -------
+    :
+        The distribution name as written, or `None` when the project declares no name or its
+        metadata cannot be read.
+    """
     try:
-        try:
-            import tomllib
-        except ImportError:
-            import tomli as tomllib  # type: ignore[no-redef]
-
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-
-        return data.get("project", {}).get("name")
-    except Exception:
+        return _manifest.read(project_root)["name"]
+    except ManifestError:
         return None
 
 

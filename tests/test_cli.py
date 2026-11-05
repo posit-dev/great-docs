@@ -17,7 +17,7 @@ from great_docs._build.quarto import QuartoVersionError
 from great_docs.cli import (
     _detect_current_package,
     _detect_optional_dependencies,
-    _detect_python_version_from_pyproject,
+    _detect_python_version,
     _find_build_timing,
     _format_seconds,
     _freeze_info,
@@ -803,55 +803,55 @@ def test_detect_python_version_ge():
     """Parses >=3.12 and returns '3.12'."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text('[project]\nrequires-python = ">=3.12"\n')
-        assert _detect_python_version_from_pyproject(Path(tmp)) == "3.12"
+        assert _detect_python_version(Path(tmp)) == "3.12"
 
 
 def test_detect_python_version_tilde():
     """Parses ~=3.11 and returns '3.11'."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text('[project]\nrequires-python = "~=3.11"\n')
-        assert _detect_python_version_from_pyproject(Path(tmp)) == "3.11"
+        assert _detect_python_version(Path(tmp)) == "3.11"
 
 
 def test_detect_python_version_range():
     """Parses >=3.10,<3.13 and returns '3.10'."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text('[project]\nrequires-python = ">=3.10,<3.13"\n')
-        assert _detect_python_version_from_pyproject(Path(tmp)) == "3.10"
+        assert _detect_python_version(Path(tmp)) == "3.10"
 
 
 def test_detect_python_version_no_pyproject():
     """Returns None when pyproject.toml doesn't exist."""
     with tempfile.TemporaryDirectory() as tmp:
-        assert _detect_python_version_from_pyproject(Path(tmp)) is None
+        assert _detect_python_version(Path(tmp)) is None
 
 
 def test_detect_python_version_no_requires():
     """Returns None when requires-python is absent."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text('[project]\nname = "x"\n')
-        assert _detect_python_version_from_pyproject(Path(tmp)) is None
+        assert _detect_python_version(Path(tmp)) is None
 
 
 def test_detect_python_version_no_version_match():
     """Returns None when requires-python doesn't contain a valid version."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text('[project]\nrequires-python = "no-version"\n')
-        assert _detect_python_version_from_pyproject(Path(tmp)) is None
+        assert _detect_python_version(Path(tmp)) is None
 
 
 def test_detect_python_version_other_specifier():
     """For non->=, non-~= specifiers, returns the highest version."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text('[project]\nrequires-python = "==3.11"\n')
-        assert _detect_python_version_from_pyproject(Path(tmp)) == "3.11"
+        assert _detect_python_version(Path(tmp)) == "3.11"
 
 
 def test_detect_python_version_malformed_toml():
     """Returns None on invalid TOML."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text("not valid {{toml")
-        assert _detect_python_version_from_pyproject(Path(tmp)) is None
+        assert _detect_python_version(Path(tmp)) is None
 
 
 def test_detect_optional_deps_with_dev():
@@ -3858,29 +3858,9 @@ class TestDetectCurrentPackage:
         (tmp_path / "pyproject.toml").write_text("{{invalid toml content")
         assert _detect_current_package(tmp_path) is None
 
-    def test_tomllib_import_fallback(self, tmp_path):
-        """When tomllib import fails, falls back to tomli."""
-        import sys
-
-        (tmp_path / "pyproject.toml").write_text('[project]\nname = "fallback-pkg"\n')
-        # Temporarily hide tomllib to force the ImportError fallback
-        real_tomllib = sys.modules.get("tomllib")
-        sys.modules["tomllib"] = None  # type: ignore[assignment]
-        try:
-            # Force re-import by calling the function (the try/except inside
-            # uses a local import so we need to trigger the ImportError)
-            import importlib
-
-            # The function uses a local `import tomllib` which will check
-            # sys.modules first. Setting to None triggers ImportError.
-            result = _detect_current_package(tmp_path)
-            # Either succeeds via tomli or returns None (no tomli installed)
-            # Either way, lines 3371-3372 are exercised
-        finally:
-            if real_tomllib is not None:
-                sys.modules["tomllib"] = real_tomllib
-            else:
-                del sys.modules["tomllib"]
+    def test_returns_name_from_setup_cfg(self, tmp_path):
+        (tmp_path / "setup.cfg").write_text("[metadata]\nname = cfg-pkg\n")
+        assert _detect_current_package(tmp_path) == "cfg-pkg"
 
 
 class TestPrintTimingTableVersionedTop:

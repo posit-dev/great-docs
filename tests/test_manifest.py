@@ -109,6 +109,9 @@ def test_reads_package_declarations(tmp_path: Path):
 packages = ["pkg", "pkg.sub"]
 package-dir = {"" = "lib"}
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/wheel_pkg"]
+
 [[tool.poetry.packages]]
 include = "other"
 from = "src"
@@ -118,7 +121,13 @@ include = "plain"
 """,
     )
     manifest = _manifest.read(tmp_path)
-    assert manifest["declared_packages"] == ["pkg", "pkg/sub", "src/other", "plain"]
+    assert manifest["declared_packages"] == [
+        "pkg",
+        "pkg/sub",
+        "src/wheel_pkg",
+        "src/other",
+        "plain",
+    ]
     assert manifest["package_dirs"] == ["lib"]
 
 

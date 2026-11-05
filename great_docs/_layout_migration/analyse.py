@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import configparser
 import os
 import re
 import subprocess
-import tomllib
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from great_docs import _manifest
 from great_docs._content.naming import section_slug
 from great_docs._layout import CONVENTIONAL_DOC_DIRS, Layout
+from great_docs._manifest import ManifestError
 from great_docs._utils import is_great_docs_build_dir, recognised_build_dirs
 from great_docs._website import branding
 from great_docs._website.homepage import source as homepage_source
@@ -290,41 +290,39 @@ def _overlaps(left: Path, right: Path) -> bool:
 
 
 def _package_metadata(root: Path) -> tuple[str, list[Path]]:
-    name = ""
+    """
+    Find the package name and source paths protected from migration
+
+    Parameters
+    ----------
+    root
+        The project root.
+
+    Returns
+    -------
+    :
+        The distribution name and the paths a migration must not move into or over. If no
+        name is declared, the name is the only package directory at the root, or an empty
+        string if there is no single package directory. The protected paths are `src`, the
+        declared packages and package directories, every package directory at the root and
+        the directory named after the package.
+
+    Raises
+    ------
+    ManifestError
+        A packaging file cannot be read or parsed.
+    OSError
+        The root cannot be listed.
+    """
+    manifest = _manifest.read(root)
+    name = manifest["name"] or ""
     sources: list[Path] = [root / "src"]
-    manifest = root / "pyproject.toml"
-    if manifest.is_file():
-        data = YamlMapping(tomllib.loads(manifest.read_bytes().decode("utf-8")))
-        name = data.mapping("project").string("name") or ""
-        tool = data.mapping("tool")
-        setuptools = tool.mapping("setuptools")
-        for directory in setuptools.mapping("package-dir").data.values():
-            if isinstance(directory, str) and directory not in {"", "."}:
-                sources.append(absolute_path(root / directory))
-        packages = setuptools.get("packages")
-        if isinstance(packages, dict):
-            for directory in YamlMapping(packages).mapping("find").sequence("where"):
-                if isinstance(directory, str) and directory not in {"", "."}:
-                    sources.append(absolute_path(root / directory))
-        elif isinstance(packages, list):
-            sources.extend(
-                root / package.split(".")[0] for package in packages if isinstance(package, str)
-            )
-        for package in tool.mapping("poetry").sequence("packages"):
-            entry = YamlMapping(package) if isinstance(package, dict) else YamlMapping()
-            include = entry.string("include")
-            if include is not None:
-                sources.append(root / (entry.string("from") or "") / include)
-    if not name and (root / "setup.cfg").is_file():
-        config = configparser.ConfigParser()
-        config.read_string((root / "setup.cfg").read_bytes().decode("utf-8"))
-        name = config.get("metadata", "name", fallback="")
-    if not name and (root / "setup.py").is_file():
-        match = re.search(
-            r"\bname\s*=\s*[\"']([^\"']+)[\"']", (root / "setup.py").read_bytes().decode("utf-8")
-        )
-        if match:
-            name = match[1]
+    sources.extend(
+        absolute_path(root / directory)
+        for directory in manifest["package_dirs"]
+        if directory not in {"", "."}
+    )
+    sources.extend(root / package for package in manifest["declared_packages"])
     packages = [
         child
         for child in sorted(root.iterdir())
@@ -781,7 +779,7 @@ def analyse(layout: Layout, destination: Path) -> Migration:
         retain(root / name)
     try:
         package, package_sources = _package_metadata(root)
-    except (OSError, UnicodeError, ValueError, configparser.Error) as error:
+    except (ManifestError, OSError) as error:
         blockers.append(
             Note(
                 f"Cannot inspect package metadata: {error}",

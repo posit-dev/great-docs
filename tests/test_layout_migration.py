@@ -2245,3 +2245,10 @@ def test_setup_py_name_is_read_from_the_name_keyword(tmp_path: Path):
     put(tmp_path, "great-docs.yml", "")
     migration = analyse(Layout.make(tmp_path), Path("realpkg"))
     assert any("overlaps package sources" in message for message in migration.blockers)
+
+
+def test_hatch_wheel_packages_are_package_sources(tmp_path: Path):
+    put(tmp_path, "pyproject.toml", '[tool.hatch.build.targets.wheel]\npackages = ["code/mypkg"]\n')
+    put(tmp_path, "great-docs.yml", "")
+    migration = analyse(Layout.make(tmp_path), Path("code/mypkg/docs"))
+    assert any("overlaps package sources" in message for message in migration.blockers)

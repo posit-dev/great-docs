@@ -115,7 +115,8 @@ class Manifest(TypedDict):
     declared_packages: list[str]
     """
     Package paths declared for inclusion by the build backend, relative to the project root
-    with `/` separators, such as `mypkg/sub` or `src/mypkg`
+    with `/` separators, such as `mypkg/sub` or `src/mypkg`. The order is setuptools
+    `packages`, hatch wheel `packages`, then Poetry `packages`
     """
 
     package_dirs: list[str]
@@ -339,6 +340,8 @@ def _from_pyproject(data: YamlMapping) -> Manifest:
         manifest["declared_packages"] += [
             package.replace(".", "/") for package in _strings(packages)
         ]
+    wheel = tool.mapping("hatch").mapping("build").mapping("targets").mapping("wheel")
+    manifest["declared_packages"] += _strings(wheel.sequence("packages"))
     for entry in tool.mapping("poetry").sequence("packages"):
         package = YamlMapping(entry) if isinstance(entry, dict) else YamlMapping()
         include = package.string("include")

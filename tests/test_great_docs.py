@@ -178,7 +178,7 @@ from great_docs._yaml import split_front_matter
 from great_docs.cli import (
     _detect_optional_dependencies,
     _detect_package_manager,
-    _detect_python_version_from_pyproject,
+    _detect_python_version,
     build,
     changelog,
     check_links,
@@ -643,13 +643,13 @@ def test_setup_github_pages_overwrite_protection():
         assert "Aborted" in result.output
 
 
-def test_detect_python_version_from_pyproject():
+def test_detect_python_version():
     """Test detection of Python version from pyproject.toml."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_root = Path(tmp_dir)
 
         # Test with no pyproject.toml
-        assert _detect_python_version_from_pyproject(project_root) is None
+        assert _detect_python_version(project_root) is None
 
         # Test with requires-python >= 3.12
         pyproject = project_root / "pyproject.toml"
@@ -658,7 +658,7 @@ def test_detect_python_version_from_pyproject():
 name = "test-package"
 requires-python = ">=3.12"
 """)
-        assert _detect_python_version_from_pyproject(project_root) == "3.12"
+        assert _detect_python_version(project_root) == "3.12"
 
         # Test with requires-python >= 3.10
         pyproject.write_text("""
@@ -666,7 +666,7 @@ requires-python = ">=3.12"
 name = "test-package"
 requires-python = ">=3.10"
 """)
-        assert _detect_python_version_from_pyproject(project_root) == "3.10"
+        assert _detect_python_version(project_root) == "3.10"
 
         # Test with range specifier
         pyproject.write_text("""
@@ -674,7 +674,7 @@ requires-python = ">=3.10"
 name = "test-package"
 requires-python = ">=3.11,<3.13"
 """)
-        assert _detect_python_version_from_pyproject(project_root) == "3.11"
+        assert _detect_python_version(project_root) == "3.11"
 
         # Test with ~= specifier
         pyproject.write_text("""
@@ -682,14 +682,14 @@ requires-python = ">=3.11,<3.13"
 name = "test-package"
 requires-python = "~=3.9"
 """)
-        assert _detect_python_version_from_pyproject(project_root) == "3.9"
+        assert _detect_python_version(project_root) == "3.9"
 
         # Test with no requires-python field
         pyproject.write_text("""
 [project]
 name = "test-package"
 """)
-        assert _detect_python_version_from_pyproject(project_root) is None
+        assert _detect_python_version(project_root) is None
 
 
 def test_setup_github_pages_auto_detects_python_version():
