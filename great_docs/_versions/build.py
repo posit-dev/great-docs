@@ -468,6 +468,10 @@ def _prune_cli_pages_for_version(
     """
     Load a version's cached snapshot and remove obsolete CLI pages
 
+    The pruning is skipped when the cache cannot be read, is not JSON or
+    lacks a snapshot's required keys, or when a page cannot be removed or
+    rewritten. Other errors stop the build.
+
     Parameters
     ----------
     dest_dir
@@ -496,13 +500,13 @@ def _prune_cli_pages_for_version(
     if not cache_path.exists():
         return
 
-    try:
-        from great_docs._api_diff import ApiSnapshot
+    from great_docs._api_diff import ApiSnapshot
 
+    try:
         snap = ApiSnapshot.load(cache_path)
         _prune_cli_pages(dest_dir, snap, quarto_config=quarto_config)
-    except Exception:  # pragma: no cover
-        pass  # pragma: no cover
+    except (OSError, ValueError, KeyError):
+        pass
 
 
 def preprocess_version(

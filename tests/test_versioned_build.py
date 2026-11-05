@@ -2406,6 +2406,35 @@ class TestPruneCliPagesForVersion:
         _prune_cli_pages_for_version(tmp_path, tmp_path, entry, quarto_config={})
         assert (cli_dir / "build.qmd").exists()
 
+    @pytest.mark.parametrize(
+        "cache", ["not json", '{"symbols": {}}'], ids=["invalid-json", "missing-keys"]
+    )
+    def test_unusable_cache_skips_pruning(self, tmp_path: Path, cache: str):
+        from great_docs._versions.build import _prune_cli_pages_for_version
+
+        entry = VersionEntry(tag="0.2", label="0.2", latest=False, git_ref="v0.2.0")
+        cache_file = tmp_path / ".great-docs-cache" / "snapshots" / "v0.2.0.json"
+        cache_file.parent.mkdir(parents=True)
+        cache_file.write_text(cache)
+        cli_dir = tmp_path / "reference" / "cli"
+        cli_dir.mkdir(parents=True)
+        (cli_dir / "old_command.qmd").write_text("Old command")
+
+        _prune_cli_pages_for_version(tmp_path, tmp_path, entry, quarto_config={})
+
+        assert (cli_dir / "old_command.qmd").exists()
+
+    def test_cache_that_is_not_a_mapping_stops_the_build(self, tmp_path: Path):
+        from great_docs._versions.build import _prune_cli_pages_for_version
+
+        entry = VersionEntry(tag="0.2", label="0.2", latest=False, git_ref="v0.2.0")
+        cache_file = tmp_path / ".great-docs-cache" / "snapshots" / "v0.2.0.json"
+        cache_file.parent.mkdir(parents=True)
+        cache_file.write_text("[]")
+
+        with pytest.raises(TypeError):
+            _prune_cli_pages_for_version(tmp_path, tmp_path, entry, quarto_config={})
+
 
 # ---------------------------------------------------------------------------
 # preprocess_version — upcoming detection, badge expiry override
