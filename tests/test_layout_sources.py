@@ -6,6 +6,7 @@ import pytest
 from yaml12 import read_yaml, write_yaml
 
 from great_docs import GreatDocs
+from great_docs._build import content as content_steps
 from great_docs._build import freeze
 from great_docs._build.pipeline import Run
 from great_docs._content import publish
@@ -15,7 +16,13 @@ from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._versions.build import assemble_site, run_versioned_build
 from great_docs._versions.model import VersionEntry, build_version_map, parse_versions_config
 from great_docs._website.homepage import source as homepage_source
-from tests.support import discover_user_guide, make_project, make_run
+from tests.support import (
+    custom_pages_step,
+    discover_user_guide,
+    make_run,
+    sections_step,
+    user_guide_step,
+)
 
 
 @pytest.fixture(params=[".", "docs", "website"])
@@ -34,7 +41,11 @@ def make_docs(root: Path, source: Path) -> GreatDocs:
 
 def rebase(gd: GreatDocs, content: str, source: Path, destination: Path) -> str:
     return publish.rebase_references(
-        content, source, destination, layout=gd.layout, pages=gd._page_map(discover_user_guide(gd))
+        content,
+        source,
+        destination,
+        layout=gd.layout,
+        pages=content_steps.page_map(gd._config, gd.layout, discover_user_guide(gd)),
     )
 
 
@@ -277,10 +288,10 @@ def test_documentation_sources(source_project: tuple[Path, Path], explicit: bool
     )
     gd = make_docs(root, source)
     gd._prepare_build_directory(make_run(gd))
-    gd._copy_assets()
-    gd._publish_user_guide(discover_user_guide(gd))
-    gd._process_sections(discover_user_guide(gd))
-    gd._process_custom_pages(make_project(gd), discover_user_guide(gd))
+    content_steps.assets(gd.layout, update_quarto_config=lambda: None)
+    user_guide_step(gd, discover_user_guide(gd))
+    sections_step(gd, discover_user_guide(gd))
+    custom_pages_step(gd, discover_user_guide(gd))
     build = gd.build_dir
     assert build == (root / "great-docs" if root == source else source / "_quarto/default")
     assert not hasattr(gd, "project_path")
@@ -360,7 +371,7 @@ def test_nested_sources_and_shared_assets(source_project: tuple[Path, Path]) -> 
     page.write_text(f"---\ntitle: Example\n---\n![Plot]({prefix}../shared/plot.svg#panel)")
     gd = make_docs(root, source)
     gd.build_dir.mkdir(parents=True)
-    gd._publish_user_guide(discover_user_guide(gd))
+    user_guide_step(gd, discover_user_guide(gd))
     generated = gd.build_dir / "user-guide/deep/example.qmd"
     content = generated.read_text()
     asset = "shared/plot.svg" if source == root else "_shared/shared/plot.svg"
@@ -535,9 +546,7 @@ def test_blended_homepage_references_use_final_destination(
     )
     gd = make_docs(root, source)
     gd._prepare_build_directory(make_run(gd))
-    info = discover_user_guide(gd)
-    copied = gd._publish_user_guide(info)
-    gd._create_blended_index(make_project(gd), info, copied)
+    user_guide_step(gd, discover_user_guide(gd))
     result = (gd.build_dir / "index.qmd").read_text()
     path = result.split("![Plot](", 1)[1].split(")", 1)[0]
     assert (gd.build_dir / unquote(urlsplit(path).path)).resolve().is_relative_to(gd.build_dir)
@@ -557,7 +566,7 @@ def test_custom_html_rebases_local_assets(source_project: tuple[Path, Path]) -> 
     )
     gd = make_docs(root, source)
     gd._prepare_build_directory(make_run(gd))
-    gd._process_custom_pages(make_project(gd), discover_user_guide(gd))
+    custom_pages_step(gd, discover_user_guide(gd))
     result = (gd.build_dir / "custom/about.html").read_text()
     path = result.split('src="', 1)[1].split('"', 1)[0]
     assert (gd.build_dir / "custom" / unquote(urlsplit(path).path)).read_text() == "plot"

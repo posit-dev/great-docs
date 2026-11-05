@@ -4,7 +4,8 @@ Shared configuration and build setup for `GreatDocs` tests
 `write_config` writes and loads `great-docs.yml`. `mock_config` provides a `Config` double
 with empty defaults. `write_pyproject` declares a project's name. `make_project` reads a
 project's facts as a build does, `make_exports` prepares to find its exports, and `make_run`
-creates build state for testing build methods directly.
+creates build state for testing build methods directly. `user_guide_step`, `sections_step`
+and `custom_pages_step` run individual content steps with the build's arguments.
 `stubbed_build` stubs Quarto and build steps while preserving the build's control flow.
 `StubRemote` supplies GitHub and PyPI data without network requests. `homepage_hero` and
 `homepage_margin` build the homepage hero and sidebar from the project's configuration and metadata.
@@ -15,6 +16,9 @@ the build publishes.
 
 from __future__ import annotations
 
+import importlib
+import inspect
+import io
 import types
 import typing
 from collections.abc import Callable, Collection, Generator, Iterable, Mapping
@@ -27,8 +31,10 @@ from unittest.mock import MagicMock, NonCallableMagicMock, patch
 from yaml12 import format_yaml
 
 from great_docs import Config, GreatDocs
+from great_docs._build import content
 from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
+from great_docs._build.steps import Outcome, Skipped
 from great_docs._content import user_guide
 from great_docs._project import Project
 from great_docs._reference.exports import Exports
@@ -39,15 +45,15 @@ if TYPE_CHECKING:
     from great_docs._content.user_guide import UserGuide
     from great_docs._github import GithubRepo
 
-# Keep these methods in the order `GreatDocs.build()` first calls them. Stub the methods
-# called by the step actions so the step table and its actions still run.
-# Update this list when a build step moves out of `GreatDocs`.
+# Stub the calls within step actions so the step table and build control flow still run.
+# Keep names in first-call order. Use a method name for a call on `GreatDocs`, or a dotted
+# path relative to `great_docs._build` for a module function. Update paths when steps move.
 _BUILD_METHODS: tuple[str, ...] = (
     "_prepare_build_directory",
-    "_process_user_guide",
-    "_process_sections",
-    "_process_custom_pages",
-    "_copy_assets",
+    "content.user_guide",
+    "content.sections",
+    "content.custom_pages",
+    "content.assets",
     "_update_quarto_config",
     "_prerender_term_player",
     "_default_description",
@@ -196,6 +202,89 @@ def make_run(docs: GreatDocs, **values: Any) -> Run:
     return replace(Run.make(docs._config, docs.layout, watch=False), **values)
 
 
+def user_guide_step(docs: GreatDocs, guide: UserGuide | None = None) -> Outcome:
+    """
+    Run the build's user guide step on its own
+
+    Parameters
+    ----------
+    docs
+        The project.
+    guide
+        The discovered user guide, or `None` when it has no pages.
+
+    Returns
+    -------
+    :
+        The step's outcome.
+    """
+    return _preparation_step(docs, "Process User Guide", guide)
+
+
+def sections_step(docs: GreatDocs, guide: UserGuide | None = None) -> Outcome:
+    """
+    Run the build's sections step on its own
+
+    Parameters
+    ----------
+    docs
+        The project.
+    guide
+        The discovered user guide, or `None` when it has no pages.
+
+    Returns
+    -------
+    :
+        The step's outcome.
+    """
+    return _preparation_step(docs, "Process custom sections", guide)
+
+
+def custom_pages_step(docs: GreatDocs, guide: UserGuide | None = None) -> Outcome:
+    """
+    Run the build's custom pages step on its own
+
+    Read the site's current name and addresses from the build directory's `_quarto.yml`
+    when the step runs.
+
+    Parameters
+    ----------
+    docs
+        The project.
+    guide
+        The discovered user guide, or `None` when it has no pages.
+
+    Returns
+    -------
+    :
+        The step's outcome.
+    """
+    return _preparation_step(docs, "Process custom pages", guide)
+
+
+def _preparation_step(docs: GreatDocs, title: str, guide: UserGuide | None) -> Outcome:
+    """
+    Run one preparation step with the build's arguments
+
+    Parameters
+    ----------
+    docs
+        The project.
+    title
+        The step's title in the build log.
+    guide
+        The discovered user guide, or `None` when it has no pages.
+
+    Returns
+    -------
+    :
+        The step's outcome.
+    """
+    run = make_run(docs, user_guide=guide)
+    steps = docs._preparation_steps(run, BuildLog(stream=io.StringIO()))
+    return next(step for step in steps if step.title == title).run()
+
+
 @dataclass(frozen=True)
 class BuildStubs:
     """
@@ -223,25 +312,29 @@ def stubbed_build(
     **returns: object,
 ) -> Generator[BuildStubs]:
     """
-    Stub Quarto and the methods `GreatDocs.build()` calls on an instance
+    Stub Quarto and selected build calls while preserving the build's control flow
 
     Within the block, `docs.build()` keeps its control flow: the Quarto installation check
     passes, the render environment is empty and `quarto render` succeeds silently. Build steps
-    are stubbed except those listed in `run`. Stubs enforce the real methods' call signatures
-    and return empty values of their declared return types unless overridden in `returns`.
+    are stubbed except those listed in `run`. Stubs enforce the real call signatures. Unless
+    overridden in `returns`, they return empty values of their declared return types. For an
+    `Outcome` return type, they report a skip so the build log counts the step as run.
+
+    Identify a call by its `GreatDocs` method name, such as `_prepare_build_directory`, or
+    its function path relative to `great_docs._build`, such as `content.sections`.
 
     Parameters
     ----------
     docs
         The instance to stub.
     run
-        Names of methods to run for real. Also include any build steps these methods need to
-        call for real; other steps remain stubbed.
+        Names of calls to run for real, including any other calls they need to run for real.
+        Leave all other calls stubbed.
     api_reference
         Whether the stubbed preparation of the build directory leaves the site with an API
         reference. By default it configures none, as for a project without one.
     **returns
-        Return values for stubbed methods, by method name.
+        Return values for stubbed build steps, by name.
 
     Yields
     ------
@@ -251,10 +344,10 @@ def stubbed_build(
     Raises
     ------
     ValueError
-        If `run` or `returns` names a method that `build()` does not call, both name the same
-        method, or `api_reference` is true while build directory preparation runs for real.
+        If `run` or `returns` names a build step that `build()` does not call, both name the
+        same step, or `api_reference` is true while build directory preparation runs for real.
     AttributeError
-        If a method in the build-step list no longer exists on `GreatDocs`.
+        If a build step in the list no longer exists.
     """
     real = set(run)
     unknown = sorted((real | set(returns)) - set(_BUILD_METHODS))
@@ -267,9 +360,9 @@ def stubbed_build(
         raise ValueError(
             "the real build directory preparation decides whether there is an API reference"
         )
-    missing = [name for name in _BUILD_METHODS if not hasattr(GreatDocs, name)]
+    missing = [name for name in _BUILD_METHODS if not hasattr(*_step_owner(GreatDocs, name))]
     if missing:
-        raise AttributeError(f"GreatDocs has no {missing}; update the method list in {__name__}")
+        raise AttributeError(f"no build step {missing}; update the step list in {__name__}")
 
     with ExitStack() as stack:
         stack.enter_context(
@@ -288,15 +381,56 @@ def stubbed_build(
         for name in _BUILD_METHODS:
             if name in real:
                 continue
-            value = (
-                returns[name] if name in returns else _empty(_return_type(getattr(GreatDocs, name)))
-            )
+            owner, attribute = _step_owner(GreatDocs, name)
+            value = returns[name] if name in returns else _stub_value(getattr(owner, attribute))
+            target = docs if owner is GreatDocs else owner
             steps[name] = stack.enter_context(
-                patch.object(docs, name, autospec=True, return_value=value)
+                patch.object(target, attribute, autospec=True, return_value=value)
             )
         if not api_reference and "_prepare_build_directory" in steps:
             steps["_prepare_build_directory"].side_effect = _configure_no_api_reference
         yield BuildStubs(steps=steps, render=render)
+
+
+def _stub_value(step: Callable[..., object]) -> object:
+    """
+    Choose what a stubbed build step returns by default
+
+    Parameters
+    ----------
+    step
+        The real build step.
+
+    Returns
+    -------
+    :
+        A skipped outcome for an `Outcome` return type, or the empty value of any other
+        declared return type.
+    """
+    annotation = _return_type(step)
+    return Skipped("stubbed") if annotation == Outcome else _empty(annotation)
+
+
+def _step_owner(cls: type, name: str) -> tuple[object, str]:
+    """
+    Find the class or module that defines a build step
+
+    Parameters
+    ----------
+    cls
+        The class whose methods are named with a leading underscore.
+    name
+        A method name, or a step function's path below `great_docs._build`.
+
+    Returns
+    -------
+    :
+        The class or module, and the step's name in it.
+    """
+    module, _, function = name.rpartition(".")
+    if not module:
+        return cls, name
+    return importlib.import_module(f"great_docs._build.{module}"), function
 
 
 def _configure_no_api_reference(run: Run) -> None:
@@ -315,6 +449,9 @@ def _return_type(function: Callable[..., object]) -> object:
     """
     Resolve the declared return type of a function
 
+    Evaluate only the return annotation. Parameter annotations may refer to types imported
+    only during type checking.
+
     Parameters
     ----------
     function
@@ -325,7 +462,11 @@ def _return_type(function: Callable[..., object]) -> object:
     :
         The evaluated return annotation.
     """
-    return typing.get_type_hints(function, localns=_TYPE_CHECKING_NAMES)["return"]
+    annotation = inspect.get_annotations(function)["return"]
+    if isinstance(annotation, str):
+        annotation = eval(annotation, vars(inspect.getmodule(function)), _TYPE_CHECKING_NAMES)
+    # Annotation evaluation gives `None`, but the caller needs its type to choose an empty value.
+    return type(None) if annotation is None else annotation
 
 
 def _empty(annotation: object) -> object:
@@ -471,7 +612,7 @@ def homepage_hero(docs: GreatDocs, readme: str | None = None) -> tuple[str, str 
         docs.build_dir,
         metadata=project.manifest,
         package_name=project.name,
-        pages=docs._page_map(discover_user_guide(docs)),
+        pages=content.page_map(docs._config, docs.layout, discover_user_guide(docs)),
     )
     return html, found.body if html else None
 

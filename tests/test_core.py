@@ -32,6 +32,7 @@ from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website.seo import robots
 from tests.support import (
     StubRemote,
+    custom_pages_step,
     discover_user_guide,
     make_exports,
     make_project,
@@ -362,13 +363,13 @@ def _build_mcp_candidates(gd: GreatDocs, monkeypatch: pytest.MonkeyPatch) -> lis
         imported.append(name)
         return real_import(name, package)
 
-    def stop_build(project: object, guide: object, has_api_reference: bool) -> None:
+    def stop_build(*args: object, **kwargs: object) -> None:
         raise McpStepPassed
 
     monkeypatch.setattr("great_docs._build.quarto.ensure_installed", lambda: None)
     monkeypatch.setattr(importlib, "import_module", record_import)
     # The user guide is the first step after MCP discovery.
-    monkeypatch.setattr(gd, "_process_user_guide", stop_build)
+    monkeypatch.setattr("great_docs._build.content.user_guide", stop_build)
     with pytest.raises(McpStepPassed):
         gd.build(refresh=False)
 
@@ -1574,7 +1575,7 @@ class TestCanonicalIntegration:
             "---\nlayout: raw\n---\n<html><head></head></html>", encoding="utf-8"
         )
 
-        gd._process_custom_pages(make_project(gd), discover_user_guide(gd))
+        custom_pages_step(gd, discover_user_guide(gd))
 
         page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert (
@@ -1597,7 +1598,7 @@ class TestCanonicalIntegration:
             "---\nlayout: raw\n---\n<html><head></head></html>", encoding="utf-8"
         )
 
-        gd._process_custom_pages(make_project(gd), discover_user_guide(gd))
+        custom_pages_step(gd, discover_user_guide(gd))
 
         page = (gd.build_dir / "reference" / "demo.html").read_text(encoding="utf-8")
         assert page.count('<script type="application/ld+json">') == 1
@@ -1621,7 +1622,7 @@ class TestCanonicalIntegration:
             encoding="utf-8",
         )
 
-        gd._process_custom_pages(make_project(gd), discover_user_guide(gd))
+        custom_pages_step(gd, discover_user_guide(gd))
 
         page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert page.count('<meta property="og:title" content="Widget Lab">') == 1
@@ -1647,7 +1648,7 @@ class TestCanonicalIntegration:
             "---\nlayout: raw\n---\n<html><head></head></html>", encoding="utf-8"
         )
 
-        gd._process_custom_pages(make_project(gd), discover_user_guide(gd))
+        custom_pages_step(gd, discover_user_guide(gd))
 
         page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert page.count('<meta name="gd-i18n"') == 1
@@ -1728,7 +1729,7 @@ class TestPageDescriptions:
             "---\nlayout: raw\n---\n<html><head></head></html>", encoding="utf-8"
         )
 
-        gd._process_custom_pages(make_project(gd), discover_user_guide(gd))
+        custom_pages_step(gd, discover_user_guide(gd))
 
         page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert page.count('<meta name="description" content="Tom &amp; Jerry">') == 1

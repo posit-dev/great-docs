@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from great_docs import GreatDocs
+from great_docs._build import content
 from tests.support import discover_user_guide, make_project
 
 
@@ -74,7 +75,7 @@ def test_copy_readme_images_reuses_assets(docs: GreatDocs) -> None:
     source = docs.project_root / "assets/logo.svg"
     source.parent.mkdir()
     source.write_bytes(b"<svg></svg>")
-    docs._copy_assets()
+    content.assets(docs.layout, update_quarto_config=lambda: None)
 
     page = stage(docs, "![Logo](assets/logo.svg)\n")
 

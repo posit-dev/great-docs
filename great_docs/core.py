@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from . import _marimo
-from ._build import finish, outputs, quarto, render, serve
+from ._build import content, finish, outputs, quarto, render, serve
 from ._build.facts import Facts, source_links
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
@@ -30,13 +30,8 @@ from ._checks.proofread import CheckedFile
 from ._cliref import click as cli_click
 from ._cliref import render as cli_render
 from ._cliref.model import CliCommand
-from ._content import custom_pages, publish, sections, user_guide, walk
-from ._content.naming import (
-    published_path,
-)
-from ._content.pages import PageMap
+from ._content import publish, user_guide
 from ._content.user_guide import UserGuide
-from ._contribution import Contribution
 from ._install import update_gitignore, write_initial_config
 from ._layout import Layout
 from ._manifest import Manifest
@@ -57,15 +52,12 @@ from ._website import (
     prerender,
     quarto_yml,
     scripts,
-    social_cards,
     tags,
 )
 from ._website.ai_agents import llms_txt
 from ._website.ai_agents.skills import SkillsWriter
 from ._website.homepage import page as homepage_page
-from ._website.homepage import source as homepage_source
 from ._website.identity import Identity
-from ._website.navigation import navbar as nav_navbar
 from ._website.navigation import shared_sidebar
 from ._website.project_pages import citation, licence, package_info
 from ._website.seo import description as seo_description
@@ -73,8 +65,6 @@ from ._website.seo.structured_data import StructuredData
 from .config import Config
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
     from ._apiref.api_reference import APIReference
     from ._build.log import BuildLog
 
@@ -320,8 +310,7 @@ class GreatDocs:
         gitignore_path = self.build_dir / ".gitignore"
         gitignore_path.write_text(GITIGNORE_CONTENT, encoding="utf-8")
 
-        # Note: User guide files are copied by _process_user_guide() during build
-        # which handles stripping numeric prefixes for clean URLs
+        # The user guide step copies the guide later, stripping numeric prefixes for clean URLs
 
         # Create _quarto.yml configuration
         self._update_quarto_config(run)
@@ -349,58 +338,6 @@ class GreatDocs:
         self._create_index_from_readme(
             run.project, run.user_guide, run.has_api_reference, force_rebuild=True
         )
-
-    def _copy_assets(self) -> bool:
-        """
-        Copy assets directory from project root to build directory.
-
-        Looks for assets/ directory in project root and copies all contents
-        to great-docs/assets/ directory. This allows pages to reference assets
-        at a predictable path (e.g., assets/image.png).
-
-        Returns
-        -------
-        bool
-            True if assets were copied, False if no assets directory found.
-        """
-        source_assets = self.layout.source_dir / "assets"
-
-        if not source_assets.exists() or not source_assets.is_dir():
-            return False
-
-        dest_assets = self.build_dir / "assets"
-
-        # Remove existing assets directory to ensure clean copy
-        if dest_assets.exists():
-            shutil.rmtree(dest_assets)
-
-        # Copy entire assets directory
-        shutil.copytree(source_assets, dest_assets)
-
-        # Count files for reporting
-        file_count = sum(1 for _ in dest_assets.rglob("*") if _.is_file())
-        print(f"\n📦 Copied {file_count} asset file(s) to great-docs/assets/")
-
-        return True
-
-    def _page_map(self, guide: UserGuide | None) -> PageMap:
-        """
-        Map authored pages to their published paths for this build
-
-        Parameters
-        ----------
-        guide
-            The discovered user guide, or `None` when it has no pages.
-
-        Returns
-        -------
-        :
-            The page map for the current sources and configuration.
-        """
-        homepage = homepage_source.find(self.layout)[:1]
-        if guide is not None and self._config.homepage == "user_guide":
-            homepage.append(guide["files"][0]["path"])
-        return PageMap.make(self._config, self.layout, guide, homepage)
 
     def install(self, force: bool = False) -> None:
         """
@@ -474,246 +411,6 @@ class GreatDocs:
         print("  great-docs scan           # Preview API organization")
         print("  great-docs build --watch  # Watch for changes and rebuild")
 
-    # =========================================================================
-    # Custom Sections Methods
-    # =========================================================================
-
-    def _process_sections(self, guide: UserGuide | None) -> int:
-        """
-        Publish the configured sections and add their sidebars and navbar links
-
-        Parameters
-        ----------
-        guide
-            The discovered user guide, or `None` when it has no pages.
-
-        Returns
-        -------
-        :
-            The number of sections published.
-        """
-        found = sections.read(
-            self._config, self.layout, report=lambda message: print(f"   ⚠️  {message}")
-        )
-        if not found:
-            return 0
-
-        pages = self._page_map(guide)
-        add_dates = partial(page_dates.add_to_page, config=self._config, authors=self._page_authors)
-        for section in found:
-            section.destination.mkdir(parents=True, exist_ok=True)
-            # Copy asset directories first so published pages replace their raw copies
-            for item in section.source.iterdir():
-                if (
-                    item.is_dir()
-                    and not self.layout.is_reserved_directory(item)
-                    and walk.is_asset_dir(item)
-                ):
-                    destination = section.destination / item.name
-                    if destination.exists():
-                        shutil.rmtree(destination)
-                    shutil.copytree(item, destination)
-
-            published = sections.publish(
-                section, config=self._config, layout=self.layout, pages=pages, add_dates=add_dates
-            )
-            if not section.blog:
-                self._copy_directory_metadata(
-                    section.files, section.source, section.destination, strip_prefix=True
-                )
-
-            quarto_config = quarto_yml.read(self.build_dir, seed_website=True)
-            changed = published.sidebar is not None
-            if published.sidebar is not None:
-                sidebar_id = published.sidebar["id"]
-                quarto_config["website"]["sidebar"] = [
-                    *(
-                        entry
-                        for entry in quarto_config["website"]["sidebar"]
-                        if not (isinstance(entry, dict) and entry.get("id") == sidebar_id)
-                    ),
-                    published.sidebar,
-                ]
-            if nav_navbar.add_link(
-                quarto_config, published.navbar, self._config, after=published.navbar_after
-            ):
-                changed = True
-            if changed:
-                quarto_yml.write(self.build_dir, quarto_config)
-
-            label = "📰" if section.blog else "📂"
-            print(f"   {label} {section.title}: {len(published.pages)} post(s) from {section.dir}/")
-
-        return len(found)
-
-    # =========================================================================
-    # Custom Static Pages Methods
-    # =========================================================================
-
-    def _process_custom_pages(self, project: Project, guide: UserGuide | None) -> int:
-        """
-        Publish the configured custom pages
-
-        Parameters
-        ----------
-        project
-            The project's name, metadata and repository for page titles and search descriptions.
-        guide
-            The discovered user guide, or `None` when it has no pages.
-
-        Returns
-        -------
-        :
-            The number of pages processed.
-        """
-        report = _print_warning
-        sources = custom_pages.find_sources(self._config, self.layout, report=report)
-        if not sources:
-            return 0
-
-        identity = self._identity(project)
-        head = custom_pages.RawPageHead(
-            base_url=identity.base_url,
-            card_image_url=(
-                social_cards.publish_image(
-                    self._config, self.layout, self.build_dir, identity.base_url, report=report
-                )
-                if self._config.social_cards_enabled
-                else None
-            ),
-            structured_data=self._structured_data(project),
-            site_name=identity.name,
-            default_description=self._default_description(project.manifest),
-        )
-        published = custom_pages.publish(
-            sources,
-            config=self._config,
-            layout=self.layout,
-            pages=self._page_map(guide),
-            head=head,
-            add_dates=partial(
-                page_dates.add_to_page, config=self._config, authors=self._page_authors
-            ),
-            report=report,
-        )
-        # A page's `navbar_after` names a label, which a `Contribution` cannot express.
-        for link, after in published.navbar:
-            quarto_config = quarto_yml.read(self.build_dir, seed_website=True)
-            if nav_navbar.add_link(quarto_config, link, self._config, after=after):
-                quarto_yml.write(self.build_dir, quarto_config)
-        if published.resources or published.render_excludes:
-            contribution = Contribution(
-                resources=tuple(published.resources),
-                render_excludes=tuple(published.render_excludes),
-            )
-            with quarto_yml.edit(self.build_dir, seed_website=True) as quarto_config:
-                quarto_yml.apply(quarto_config, contribution)
-        return published.pages
-
-    # =========================================================================
-    # User Guide Methods
-    # =========================================================================
-
-    def _publish_user_guide(self, guide: UserGuide) -> list[str]:
-        """
-        Publish the user guide's pages, asset directories and directory metadata
-
-        Parameters
-        ----------
-        guide
-            The user guide.
-
-        Returns
-        -------
-        :
-            The copied page paths relative to the build directory, in reading order.
-        """
-        source_dir = guide["source_dir"]
-        target_dir = self.build_dir / user_guide.SIDEBAR_ID
-        strip_prefix = not guide.get("explicit", False)
-        add_dates = partial(page_dates.add_to_page, config=self._config, authors=self._page_authors)
-        copied_files = user_guide.copy_pages(
-            guide, target_dir, layout=self.layout, pages=self._page_map(guide), add_dates=add_dates
-        )
-
-        # Also copy any asset directories (images, data, code snippets, etc.)
-        for item in source_dir.iterdir():
-            if (
-                item.is_dir()
-                and not self.layout.is_reserved_directory(item)
-                and walk.is_asset_dir(item)
-            ):
-                dst_dir = target_dir / item.name
-                if dst_dir.exists():
-                    shutil.rmtree(dst_dir)  # pragma: no cover
-                shutil.copytree(item, dst_dir)
-
-        self._copy_directory_metadata(
-            (page["path"] for page in guide["files"]),
-            source_dir,
-            target_dir,
-            strip_prefix=strip_prefix,
-        )
-
-        return copied_files
-
-    def _copy_directory_metadata(
-        self,
-        pages: "Iterable[Path]",
-        source_dir: Path,
-        dest_dir: Path,
-        *,
-        strip_prefix: bool,
-    ) -> None:
-        """
-        Copy the `_metadata.yml` and `_metadata.yaml` files that apply to copied pages
-
-        Quarto applies a directory's metadata file to the pages beneath it, so a file
-        is copied from `source_dir` and from every directory between it and a page.
-        Directories whose names start with `_` or `.` are skipped because Quarto
-        renders no pages there. A destination file that already exists was written by
-        the build itself; it is kept and the skipped source is reported.
-
-        Parameters
-        ----------
-        pages
-            Source pages that were copied into `dest_dir`.
-        source_dir
-            Root of the source tree the pages came from.
-        dest_dir
-            Build directory that mirrors `source_dir`.
-        strip_prefix
-            Whether numeric prefixes were stripped from the pages' directory names,
-            so the metadata lands in the same renamed directories.
-
-        Returns
-        -------
-        :
-            Nothing; the files are copied in place.
-        """
-        directories = {Path()}
-        for page in pages:
-            if page.is_relative_to(source_dir):
-                directories.update(page.relative_to(source_dir).parents)
-
-        for rel_dir in sorted(directories):
-            if any(part.startswith(("_", ".")) for part in rel_dir.parts):
-                continue
-            dest_rel = published_path(rel_dir, strip_prefix=strip_prefix)
-            for name in ("_metadata.yml", "_metadata.yaml"):
-                src_file = source_dir / rel_dir / name
-                if not src_file.is_file():
-                    continue
-                dst_file = dest_dir / dest_rel / name
-                if dst_file.exists():
-                    print(
-                        f"   ⚠️  Skipping {src_file}: the build already wrote "
-                        f"{dst_file.relative_to(self.build_dir).as_posix()}"
-                    )
-                    continue
-                dst_file.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src_file, dst_file)
-
     def _default_description(self, manifest: Manifest) -> str | None:
         """
         Resolve the site's default search description
@@ -747,188 +444,6 @@ class GreatDocs:
         """
         identity = self._identity(project)
         return StructuredData.make(self._config, project.manifest, identity.name, identity.base_url)
-
-    def _update_config_with_user_guide(
-        self, guide: UserGuide, blended_first_page: str | None = None
-    ) -> None:
-        """
-        Add the user guide's sidebar and navbar link to `_quarto.yml`
-
-        Parameters
-        ----------
-        guide
-            The user guide.
-        blended_first_page
-            The promoted page's former path under `user-guide/`, or `None` when no page was
-            promoted.
-
-        Returns
-        -------
-        :
-        """
-        if not quarto_yml.path(self.build_dir).exists():
-            return
-
-        config = quarto_yml.read(self.build_dir)
-
-        if "website" not in config:
-            config["website"] = {}
-
-        sidebar_config = user_guide.sidebar(guide)
-
-        # Blended homepage mode publishes the first guide page at the site root
-        if self._config.homepage == "user_guide" and blended_first_page:
-            user_guide.link_homepage(sidebar_config, blended_first_page)  # pragma: no cover
-
-        if "sidebar" not in config["website"]:
-            config["website"]["sidebar"] = []
-
-        sidebar = config["website"]["sidebar"]
-
-        # Remove existing user-guide sidebar if present
-        sidebar = [
-            s for s in sidebar if not (isinstance(s, dict) and s.get("id") == user_guide.SIDEBAR_ID)
-        ]
-
-        # Add the new user guide sidebar
-        sidebar.append(sidebar_config)
-        config["website"]["sidebar"] = sidebar
-
-        # Update navbar to include User Guide link (skip in blended homepage mode)
-        if self._config.homepage != "user_guide" and "navbar" in config["website"]:
-            navbar = config["website"]["navbar"]
-            if "left" in navbar:
-                href = user_guide.entry(guide)
-                # Labels may already be translated; the target identifies an existing guide link
-                has_user_guide = any(
-                    isinstance(item, dict) and item.get("href") == href for item in navbar["left"]
-                )
-                if not has_user_guide:
-                    # The User Guide link precedes Reference, or goes first if Reference is absent.
-                    insert_idx = next(
-                        (
-                            i
-                            for i, item in enumerate(navbar["left"])
-                            if isinstance(item, dict)
-                            and nav_navbar.REFERENCE.owns(item.get("href"))
-                        ),
-                        0,
-                    )
-                    navbar["left"].insert(
-                        insert_idx,
-                        {"text": nav_navbar.USER_GUIDE.label(self._config), "href": href},
-                    )
-
-        quarto_yml.write(self.build_dir, config)
-
-    def _process_user_guide(
-        self, project: Project, guide: UserGuide | None, has_api_reference: bool
-    ) -> bool:
-        """
-        Publish the user guide and add its sidebar and navbar link
-
-        Parameters
-        ----------
-        project
-            The project's name and metadata for a fallback or blended homepage.
-        guide
-            The discovered user guide, or `None` when it has no pages.
-        has_api_reference
-            Whether the site has an API reference, which a fallback homepage links to.
-
-        Returns
-        -------
-        :
-            Whether the user guide was published.
-        """
-        if not guide:
-            # Fallback: if homepage mode is "user_guide" but no UG pages exist,
-            # warn and create a normal index from README instead.
-            if self._config.homepage == "user_guide":
-                print(
-                    "   ⚠️  homepage: user_guide is set but no user guide pages found; "
-                    "falling back to index mode"
-                )
-                self._create_index_from_readme(
-                    project, guide, has_api_reference, force_rebuild=True, fallback_to_index=True
-                )
-            return False
-
-        print("\n📖 Processing User Guide...")
-
-        if guide.get("explicit", False):
-            print("   Using explicit section ordering from great-docs.yml")  # pragma: no cover
-
-        print(f"   Found {len(guide['files'])} page(s)")
-
-        copied_files = self._publish_user_guide(guide)
-        print(f"   Copied {len(copied_files)} file(s) to docs/user-guide/")
-
-        # In "user_guide" homepage mode, promote the first UG page to index.qmd
-        blended_first_page = None
-        if self._config.homepage == "user_guide":
-            blended_first_page = self._create_blended_index(  # pragma: no cover
-                project, guide, copied_files
-            )
-
-        self._update_config_with_user_guide(guide, blended_first_page)
-
-        if guide["sections"]:
-            print(f"   Sections: {', '.join(guide['sections'])}")
-
-        print("✅ User Guide configured")
-        return True
-
-    def _create_blended_index(
-        self, project: Project, guide: UserGuide, copied_files: list[str]
-    ) -> str | None:
-        """
-        Promote the first user guide page to `index.qmd` in blended homepage mode
-
-        Remove the original page from `user-guide/` after writing the homepage.
-
-        Parameters
-        ----------
-        project
-            The project's name and metadata for the homepage.
-        guide
-            The user guide.
-        copied_files
-            List of copied file paths relative to the docs dir (e.g.
-            `["user-guide/introduction.qmd", ...]`).
-
-        Returns
-        -------
-        :
-            The promoted page's former path under `user-guide/`, or `None` when no page was
-            promoted.
-        """
-        if not guide["files"]:
-            return None
-
-        dest_rel = user_guide.published(guide, guide["files"][0])
-        first_ug_path = self.build_dir / user_guide.SIDEBAR_ID / dest_rel
-
-        if not first_ug_path.exists():
-            print(f"   ⚠️  First UG page '{first_ug_path}' not found for blended homepage")
-            return None
-
-        homepage_page.write_blended(
-            self._config,
-            self.layout,
-            self.build_dir,
-            first_ug_path.read_text(encoding="utf-8"),
-            metadata=project.manifest,
-            package_name=project.name,
-            pages=self._page_map(guide),
-            page_authors=self._page_authors,
-        )
-
-        # Remove the duplicate from user-guide/
-        first_ug_path.unlink()
-
-        print("   📄 Blended homepage: first UG page → index.qmd")
-        return f"user-guide/{dest_rel}"
 
     def _create_index_from_readme(
         self,
@@ -995,7 +510,7 @@ class GreatDocs:
             self.build_dir,
             metadata=metadata,
             package_name=project.name,
-            pages=self._page_map(guide),
+            pages=content.page_map(self._config, self.layout, guide),
             page_authors=self._page_authors,
             has_api_reference=has_api_reference,
             has_user_guide=lambda: guide is not None,
@@ -1559,64 +1074,6 @@ class GreatDocs:
         print(f"Updated sidebar with {cli_render.count_pages(mcp_files)} MCP reference page(s)")
         return f"{len(mcp_info.get('tools', []))} MCP tool page(s) + manifest"
 
-    def _step_user_guide(self, run: Run) -> Outcome:
-        """
-        Copy the user guide into the build directory and add its sidebar
-
-        Parameters
-        ----------
-        run
-            The current build.
-
-        Returns
-        -------
-        :
-            The result line or skip reason.
-        """
-        if not self._process_user_guide(run.project, run.user_guide, run.has_api_reference):
-            return Skipped("no user guide found")
-        return "User Guide configured"
-
-    def _step_sections(self, run: Run) -> Outcome:
-        """
-        Copy the configured custom sections into the build directory
-
-        Parameters
-        ----------
-        run
-            The current build.
-
-        Returns
-        -------
-        :
-            The result line or skip reason.
-        """
-        if not self._config.sections:
-            return Skipped("no sections configured")
-        n_sections = self._process_sections(run.user_guide)
-        if not n_sections:
-            return "No sections to process"
-        return f"{n_sections} section(s) processed"
-
-    def _step_custom_pages(self, run: Run) -> Outcome:
-        """
-        Copy the custom pages into the build directory
-
-        Parameters
-        ----------
-        run
-            The current build.
-
-        Returns
-        -------
-        :
-            The result line or skip reason.
-        """
-        n_pages = self._process_custom_pages(run.project, run.user_guide)
-        if not n_pages:
-            return Skipped("no custom pages")
-        return f"{n_pages} custom page(s)"
-
     def _step_tags(self) -> Outcome:
         """
         Write the tags index, embed tag pill data and add the navbar link
@@ -1653,29 +1110,6 @@ class GreatDocs:
         if not page_status.process(self._config, self.layout, self.build_dir):
             return Skipped("no pages with status")
         return "Status badges processed"
-
-    def _step_assets(self, run: Run) -> Outcome:
-        """
-        Copy the project's assets and complete the Quarto configuration
-
-        Earlier steps copy resources such as user-guide images. Register those resources in
-        the Quarto configuration even when the project has no assets directory.
-
-        Parameters
-        ----------
-        run
-            The current build.
-
-        Returns
-        -------
-        :
-            The result line or skip reason.
-        """
-        assets_copied = self._copy_assets()
-        self._update_quarto_config(run)
-        if not assets_copied:
-            return Skipped("no assets directory")
-        return "Assets copied"
 
     def _step_api_reference(
         self, run: Run, log: "BuildLog"
@@ -1874,8 +1308,8 @@ class GreatDocs:
         """
         Return the build's preparation steps in execution order
 
-        These steps write the Quarto project before rendering. Each step resolves its method
-        when it runs, so tests can replace instance methods after the list is created.
+        These steps write the Quarto project before rendering. Resolve methods and step
+        functions when each step runs so tests can replace them after this list is created.
 
         Parameters
         ----------
@@ -1908,6 +1342,15 @@ class GreatDocs:
             for page in frozen_pages:
                 log.detail(f"  - {page}")
             return None
+
+        def write_fallback_homepage() -> None:
+            self._create_index_from_readme(
+                run.project,
+                run.user_guide,
+                run.has_api_reference,
+                force_rebuild=True,
+                fallback_to_index=True,
+            )
 
         return [
             Step("Prepare build directory", lambda: self._step_prepare_build_directory(run)),
@@ -1984,18 +1427,35 @@ class GreatDocs:
             ),
             Step(
                 "Process User Guide",
-                lambda: self._step_user_guide(run),
+                lambda: content.user_guide(
+                    run,
+                    self._config,
+                    self.layout,
+                    page_authors=self._page_authors,
+                    write_fallback_homepage=write_fallback_homepage,
+                ),
                 fails_on=(ValueError,),
                 user_code=True,
             ),
             Step(
                 "Process custom sections",
-                lambda: self._step_sections(run),
+                lambda: content.sections(
+                    run, self._config, self.layout, page_authors=self._page_authors
+                ),
                 fails_on=(ValueError,),
             ),
             Step(
                 "Process custom pages",
-                lambda: self._step_custom_pages(run),
+                # Read the site title when the step runs; earlier steps can change it.
+                lambda: content.custom_pages(
+                    run,
+                    self._config,
+                    self.layout,
+                    page_authors=self._page_authors,
+                    identity=self._identity(run.project),
+                    structured_data=self._structured_data(run.project),
+                    default_description=self._default_description(run.project.manifest),
+                ),
                 fails_on=(ValueError,),
             ),
             Step(
@@ -2008,7 +1468,9 @@ class GreatDocs:
             ),
             Step(
                 "Copy assets",
-                lambda: self._step_assets(run),
+                lambda: content.assets(
+                    self.layout, update_quarto_config=lambda: self._update_quarto_config(run)
+                ),
                 fails_on=(ValueError, FileNotFoundError),
             ),
             Step("Generate API reference", generate_api_reference, user_code=True),

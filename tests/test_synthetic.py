@@ -41,6 +41,7 @@ from tests.support import (
     make_exports,
     make_project,
     make_run,
+    user_guide_step,
     write_config,
 )
 
@@ -892,7 +893,7 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
         quarto_yml_file.apply(quarto_config, cli_render.contribution(docs._config, cli_files))
 
     # Process user guide
-    docs._process_user_guide(run.project, run.user_guide, run.has_api_reference)
+    user_guide_step(docs, run.user_guide)
 
     quarto_yml = docs.build_dir / "_quarto.yml"
     with open(quarto_yml, encoding="utf-8") as f:
@@ -1022,7 +1023,7 @@ def _setup_blended_homepage(pkg_dir: Path, spec: dict) -> GreatDocs:
 
     run = make_run(docs)
     docs._prepare_build_directory(run)
-    docs._process_user_guide(run.project, run.user_guide, run.has_api_reference)
+    user_guide_step(docs, run.user_guide)
     return docs
 
 
@@ -1234,7 +1235,7 @@ def test_L3_code_include_expansion(tmp_path: Path):
     ug_info = discover_user_guide(docs)
     assert ug_info is not None
 
-    docs._publish_user_guide(ug_info)
+    user_guide_step(docs, ug_info)
 
     built = docs.build_dir / "user-guide" / "includes.qmd"
     assert built.exists(), "includes.qmd not found in build dir"
