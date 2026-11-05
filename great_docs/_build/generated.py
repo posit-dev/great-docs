@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from .._cliref import click as cli_click
 from .._website import changelog as changelog_page
-from .._website import inline_data, page_status, quarto_yml
+from .._website import page_status
 from .._website import tags as page_tags
 from .._website.ai_agents import llms_txt as llms_files
 from .._website.ai_agents.skills import SkillsWriter
@@ -39,7 +39,8 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
     Parameters
     ----------
     run
-        Build state containing the package's names and metadata and the discovered user guide.
+        Build state containing the package's names and metadata, the API reference
+        configuration and the discovered user guide.
     config
         The project's configuration.
     layout
@@ -51,9 +52,12 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
         The result line or skip reason.
     """
     build_dir = layout.build_dir
-    if not llms_files.is_planned(build_dir):
+    api_block = run.api_block
+    if not llms_files.is_planned(api_block):
         return Skipped("no API reference")
-    _ = llms_files.write_index(build_dir, run.project.manifest, report=print)
+    _ = llms_files.write_index(
+        build_dir, api_block, run.project.manifest, site_url=config.site_url, report=print
+    )
 
     cli: CliCommand | None = None
     package_name = run.project.name if config.cli_enabled else None
@@ -71,7 +75,9 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
         except ImportError:
             # The CLI reference step reports the import failure. Continue without CLI help.
             pass
-    _ = llms_files.write_full(build_dir, cli=cli, user_guide=run.user_guide, report=print)
+    _ = llms_files.write_full(
+        build_dir, api_block, cli=cli, user_guide=run.user_guide, report=print
+    )
     return "Created llms.txt + llms-full.txt"
 
 
@@ -82,7 +88,8 @@ def skills(run: Run, config: Config, layout: Layout) -> Outcome:
     Parameters
     ----------
     run
-        The current build, which supplies the package's name and metadata.
+        The current build, which supplies the package's name and metadata and the API
+        reference configuration.
     config
         The project's configuration.
     layout
@@ -95,11 +102,13 @@ def skills(run: Run, config: Config, layout: Layout) -> Outcome:
     """
     if not config.skill_enabled:
         return Skipped("disabled in config")
-    SkillsWriter(config, layout, layout.build_dir, run.project.name, run.project.manifest).write()
+    SkillsWriter(config, layout, layout.build_dir, run.project.name, run.project.manifest).write(
+        run.api_block
+    )
     return "Created skill.md"
 
 
-def check_site_url(run: Run, config: Config, layout: Layout, log: BuildLog) -> Outcome:
+def check_site_url(run: Run, config: Config, log: BuildLog) -> Outcome:
     """
     Warn when the skills page has no site URL for its install instructions
 
@@ -108,9 +117,7 @@ def check_site_url(run: Run, config: Config, layout: Layout, log: BuildLog) -> O
     run
         The current build, which supplies the package's project URLs.
     config
-        The project's configuration.
-    layout
-        The project's directories.
+        The project's configuration, which supplies the site URL.
     log
         The build log.
 
@@ -122,12 +129,7 @@ def check_site_url(run: Run, config: Config, layout: Layout, log: BuildLog) -> O
     if not config.skill_enabled:
         return None
     urls = run.project.manifest["urls"]
-    has_site_url = bool(config.site_url or urls.get("Documentation", ""))
-    build_dir = layout.build_dir
-    if not has_site_url and quarto_yml.path(build_dir).exists():
-        website = quarto_yml.read(build_dir).get("website", {})
-        has_site_url = bool(website.get("site-url", ""))
-    if not has_site_url:
+    if not (config.site_url or urls.get("Documentation", "")):
         log.warn(
             "No site URL found — skills page will show <site-url> placeholders. "
             "Set site_url in great-docs.yml or add a Documentation URL to "
@@ -138,12 +140,13 @@ def check_site_url(run: Run, config: Config, layout: Layout, log: BuildLog) -> O
 
 def changelog(run: Run, config: Config, layout: Layout, *, remote: Remote) -> Outcome:
     """
-    Write the changelog page from GitHub Releases and link it from the navbar
+    Write the changelog page from GitHub Releases and record its navbar link
 
     Parameters
     ----------
     run
-        The current build, which supplies the project's GitHub repository.
+        The current build, which supplies the project's GitHub repository and records the
+        navbar link.
     config
         The project's configuration.
     layout
@@ -161,21 +164,21 @@ def changelog(run: Run, config: Config, layout: Layout, *, remote: Remote) -> Ou
     repo = run.project.github
     if repo is None:
         return Skipped("no GitHub repo info")
-    build_dir = layout.build_dir
-    contribution = changelog_page.write_page(config, build_dir, repo, remote, report=print)
+    contribution = changelog_page.write_page(config, layout.build_dir, repo, remote, report=print)
     if contribution is None:
         return "No releases found; skipped"
-    with quarto_yml.edit(build_dir) as quarto_config:
-        quarto_yml.apply(quarto_config, contribution)
+    run.contributions.append(contribution)
     return "Changelog from GitHub Releases"
 
 
-def tags(config: Config, layout: Layout) -> Outcome:
+def tags(run: Run, config: Config, layout: Layout) -> Outcome:
     """
-    Write the tags index, embed tag pill data and add the navbar link
+    Write the tags index and pill data, and record the navbar link and data to embed
 
     Parameters
     ----------
+    run
+        The current build, which records the navbar link and data to embed.
     config
         The project's configuration.
     layout
@@ -188,24 +191,21 @@ def tags(config: Config, layout: Layout) -> Outcome:
     """
     if not config.tags_enabled:
         return Skipped("tags not enabled")
-    output = page_tags.write(config, layout, report=print)
-    if output is None:
+    contribution = page_tags.write(config, layout, report=print)
+    if contribution is None:
         return Skipped("no tagged pages found")
-    with quarto_yml.edit(layout.build_dir) as quarto_config:
-        if output.page_data is not None:
-            inline_data.add(
-                quarto_config, "__GD_TAGS_DATA__", output.page_data, before="page-tags.js"
-            )
-        quarto_yml.apply(quarto_config, output.contribution)
+    run.contributions.append(contribution)
     return "Tags processed"
 
 
-def page_statuses(config: Config, layout: Layout) -> Outcome:
+def page_statuses(run: Run, config: Config, layout: Layout) -> Outcome:
     """
-    Write the status badge data for pages that declare a status
+    Write the page status data and record it for embedding
 
     Parameters
     ----------
+    run
+        The current build, which records the page data.
     config
         The project's configuration.
     layout
@@ -218,6 +218,8 @@ def page_statuses(config: Config, layout: Layout) -> Outcome:
     """
     if not config.page_status_enabled:
         return Skipped("page status not enabled")
-    if not page_status.process(config, layout, layout.build_dir):
+    contribution = page_status.process(config, layout, layout.build_dir)
+    if contribution is None:
         return Skipped("no pages with status")
+    run.contributions.append(contribution)
     return "Status badges processed"

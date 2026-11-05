@@ -1588,13 +1588,13 @@ class TestCanonicalIntegration:
 
     def test_raw_custom_reference_page_gets_structured_data(self, tmp_path):
         (tmp_path / "great-docs.yml").write_text(
-            "module: mypkg\ncustom_pages:\n  - dir: custom\n    output: reference\n",
+            "module: mypkg\ndisplay_name: Pkg\ncustom_pages:\n  - dir: custom\n    output: reference\n",
             encoding="utf-8",
         )
         gd = GreatDocs(project_path=str(tmp_path))
         gd.build_dir.mkdir(parents=True, exist_ok=True)
         (gd.build_dir / "_quarto.yml").write_text(
-            "website:\n  title: Pkg\n  sidebar: []\n  navbar:\n    left: []\n", encoding="utf-8"
+            "website:\n  sidebar: []\n  navbar:\n    left: []\n", encoding="utf-8"
         )
         custom = tmp_path / "custom"
         custom.mkdir()
@@ -1611,12 +1611,12 @@ class TestCanonicalIntegration:
     @pytest.mark.parametrize("seo", ["true", "false"])
     def test_raw_custom_page_gets_social_cards(self, tmp_path, monkeypatch, seo):
         (tmp_path / "great-docs.yml").write_text(
-            f"module: mypkg\nseo:\n  enabled: {seo}\n", encoding="utf-8"
+            f"module: mypkg\ndisplay_name: Pkg\nseo:\n  enabled: {seo}\n", encoding="utf-8"
         )
         gd = GreatDocs(project_path=str(tmp_path))
         gd.build_dir.mkdir(parents=True, exist_ok=True)
         (gd.build_dir / "_quarto.yml").write_text(
-            "website:\n  title: Pkg\n  sidebar: []\n  navbar:\n    left: []\n", encoding="utf-8"
+            "website:\n  sidebar: []\n  navbar:\n    left: []\n", encoding="utf-8"
         )
         _put_on_github(tmp_path)
         custom = tmp_path / "custom"

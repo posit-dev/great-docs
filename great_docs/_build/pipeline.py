@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import metadata
 from importlib import util as import_util
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .._content import user_guide as user_guide_pages
+from .._contribution import Contribution
 from .._project import Project
 from .._reference.exports import Exports
 from .._subprocess import TEXT_MODE_KWARGS
@@ -46,7 +47,7 @@ if TYPE_CHECKING:
     from .._content.user_guide import UserGuide
     from .._layout import Layout
     from .._remote import Remote
-    from .facts import Facts
+    from .._website.identity import Identity
 
 __all__ = ["Run", "prepare_for_freeze", "preparation_steps", "run"]
 
@@ -62,6 +63,9 @@ class Run:
     ----------
     project
         The documented project, read from its files when the build starts.
+    identity
+        The site's name and addresses, resolved from configuration and project metadata
+        when the build starts.
     exports
         The package models and exports shared by this build, loaded on demand.
     watch
@@ -72,25 +76,32 @@ class Run:
         Whether the site has an API reference. Preparing the build directory sets it to
         `False` when the reference is disabled, the project is not a Python project, no
         package name is detected, or the package has nothing to document.
-    api_discovery_done
-        Whether this build has already discovered the package's exports.
+    quarto_config
+        The site's Quarto configuration, initially empty and updated in memory during
+        preparation. Preparation writes the finished configuration to `_quarto.yml`
+        unless rendering versions separately. Each version then writes its own
+        configuration.
+    api_block
+        The `api-reference` block of `quarto_config`, or `None` for a site without an API
+        reference.
     user_guide
         The user guide discovered during build preparation, or `None` when no guide
         pages were found.
-    facts
-        The navbar's GitHub data, fetched when the Quarto configuration is first
-        written and reused on later writes within the build. `None` before the
-        first write.
+    contributions
+        The navigation, resources, render exclusions and script data recorded for the
+        Quarto configuration, in preparation step order.
     """
 
     project: Project
+    identity: Identity
     exports: Exports
     watch: bool
     page_authors: list[dict[str, Any]]
     has_api_reference: bool = True
-    api_discovery_done: bool = False
+    quarto_config: dict[str, Any] = field(default_factory=lambda: dict[str, Any]())
+    api_block: dict[str, Any] | None = None
     user_guide: UserGuide | None = None
-    facts: Facts | None = None
+    contributions: list[Contribution] = field(default_factory=lambda: list[Contribution]())
 
     @classmethod
     def make(cls, config: Config, layout: Layout, *, watch: bool) -> Run:
@@ -109,16 +120,17 @@ class Run:
         Returns
         -------
         :
-            The initial build state with the project's name, metadata, GitHub repository
-            and page authors.
+            The initial build state with the project's name, metadata, GitHub repository,
+            site identity and page authors.
         """
         project = Project.make(config, layout)
-        base_url = site.identity(config, layout, project).base_url
+        identity = site.identity(config, layout, project)
         return cls(
             project=project,
+            identity=identity,
             exports=Exports(config, project),
             watch=watch,
-            page_authors=page_dates.site_authors(config, layout.source_dir, base_url),
+            page_authors=page_dates.site_authors(config, layout.source_dir, identity.base_url),
         )
 
 
@@ -199,13 +211,12 @@ def run(
 
     def render_site() -> Outcome:
         result, render_timings["render"] = render.site(
-            config, layout, log, render_jobs, last_timings, last_startup
+            config, layout, current.quarto_config, log, render_jobs, last_timings, last_startup
         )
         render_timings["page_timings"] = result.page_timings
         return "Site rendered"
 
     def render_versions() -> Outcome:
-        # Structured data names the site from `_quarto.yml`, which earlier steps edit
         outcome, result = render.versions(
             current,
             config,
@@ -214,15 +225,25 @@ def run(
             version_tags,
             latest_only,
             default_description=site.default_description(config, current.project),
-            structured_data=site.structured_data(config, layout, current.project),
+            structured_data=site.structured_data(current, config),
         )
         render_timings["timings_by_version"] = result.get("timings_by_version")
         return outcome
 
-    preparation = preparation_steps(current, config, layout, log, remote=remote, refresh=refresh)
+    # Each version writes its own configuration; preparation only needs the mapping in memory.
+    versioned_render = config.has_versions and not watch
+    preparation = preparation_steps(
+        current,
+        config,
+        layout,
+        log,
+        remote=remote,
+        refresh=refresh,
+        write_quarto_config=not versioned_render,
+    )
     if watch:
         render_step = Step("Build site with Quarto", lambda: "Starting watch mode...")
-    elif config.has_versions:
+    elif versioned_render:
         render_step = Step("Build site with Quarto", render_versions, user_code=True, quiet=False)
     else:
         render_step = Step("Build site with Quarto", render_site, quiet=False)
@@ -233,7 +254,15 @@ def run(
     log.header()
 
     if watch:
-        _watch(config, layout, log, [*preparation, render_step], remote=remote, refresh=refresh)
+        _watch(
+            current,
+            config,
+            layout,
+            log,
+            [*preparation, render_step],
+            remote=remote,
+            refresh=refresh,
+        )
         return
 
     run_steps([*preparation, render_step, *finishing], log, layout.build_dir)
@@ -278,6 +307,7 @@ def preparation_steps(
     *,
     remote: Remote,
     refresh: bool = True,
+    write_quarto_config: bool = True,
 ) -> list[Step]:
     """
     List the build's preparation steps in execution order
@@ -299,6 +329,10 @@ def preparation_steps(
         The source of GitHub and PyPI data.
     refresh
         Whether to rediscover the package's exports for the API reference.
+    write_quarto_config
+        Whether the last step writes the finished Quarto configuration to `_quarto.yml`.
+        If false, the build directory retains the initial configuration whose header
+        marks it as generated.
 
     Returns
     -------
@@ -315,13 +349,12 @@ def preparation_steps(
         return outcome
 
     def prepare_freeze_cache() -> Outcome:
-        # Earlier steps can change the site title. Read it when preparing page metadata.
         outcome, frozen_pages[:] = passes.freeze_cache(
             run,
             config,
             layout,
             default_description=site.default_description(config, run.project),
-            structured_data=site.structured_data(config, layout, run.project),
+            structured_data=site.structured_data(run, config),
         )
         return outcome
 
@@ -330,7 +363,7 @@ def preparation_steps(
             log.detail(f"  - {page}")
         return None
 
-    return [
+    steps = [
         Step(
             "Prepare build directory",
             lambda: prepare.build_directory(
@@ -345,7 +378,7 @@ def preparation_steps(
         ),
         Step(
             "Configure API reference",
-            lambda: reference.api_config(run, config, layout, refresh=refresh),
+            lambda: reference.api_config(run, refresh=refresh),
             user_code=True,
         ),
         Step(
@@ -366,7 +399,7 @@ def preparation_steps(
         ),
         Step(
             "Check the site URL",
-            lambda: generated.check_site_url(run, config, layout, log),
+            lambda: generated.check_site_url(run, config, log),
             user_code=True,
             quiet=False,
             listed=False,
@@ -384,13 +417,13 @@ def preparation_steps(
         ),
         Step(
             "Generate Go CLI reference",
-            lambda: reference.go_cli(config, layout),
+            lambda: reference.go_cli(run, config, layout),
             warn=Warn((OSError,), "Error generating Go CLI docs", "Go CLI generation had issues"),
             user_code=True,
         ),
         Step(
             "Generate Rust CLI reference",
-            lambda: reference.rust_cli(config, layout),
+            lambda: reference.rust_cli(run, config, layout),
             warn=Warn(
                 (OSError,), "Error generating Rust CLI docs", "Rust CLI generation had issues"
             ),
@@ -417,20 +450,22 @@ def preparation_steps(
         ),
         Step(
             "Process custom pages",
-            # Read the site title when the step runs; earlier steps can change it.
             lambda: content.custom_pages(
                 run,
                 config,
                 layout,
                 page_authors=run.page_authors,
-                identity=site.identity(config, layout, run.project),
-                structured_data=site.structured_data(config, layout, run.project),
+                identity=run.identity,
+                structured_data=site.structured_data(run, config),
                 default_description=site.default_description(config, run.project),
             ),
             fails_on=(ValueError,),
         ),
-        Step("Process page tags", lambda: generated.tags(config, layout)),
-        Step("Process page status badges", lambda: generated.page_statuses(config, layout)),
+        Step("Process page tags", lambda: generated.tags(run, config, layout)),
+        Step(
+            "Process page status badges",
+            lambda: generated.page_statuses(run, config, layout),
+        ),
         Step(
             "Copy assets",
             lambda: content.assets(run, config, layout, remote=remote),
@@ -459,7 +494,7 @@ def preparation_steps(
         ),
         Step(
             "Pre-render terminal recordings",
-            lambda: passes.terminal_recordings(layout, log),
+            lambda: passes.terminal_recordings(run, config, layout, log),
             quiet=False,
             listed=False,
         ),
@@ -470,6 +505,15 @@ def preparation_steps(
             listed=False,
         ),
     ]
+    if write_quarto_config:
+        steps.append(
+            Step(
+                "Write the site configuration",
+                lambda: site.write_quarto_config(run, layout),
+                listed=False,
+            )
+        )
+    return steps
 
 
 def _finishing_steps(
@@ -513,9 +557,7 @@ def _finishing_steps(
     steps += [
         Step(
             "Generate SEO files",
-            lambda: finish.seo_files(
-                config, layout, site.identity(config, layout, run.project).base_url
-            ),
+            lambda: finish.seo_files(config, layout, run.identity.base_url),
             warn=Warn((OSError,), "Error generating SEO files", "SEO files had issues"),
         ),
         Step(
@@ -553,6 +595,7 @@ def _finishing_steps(
 
 
 def _watch(
+    run: Run,
     config: Config,
     layout: Layout,
     log: BuildLog,
@@ -568,6 +611,8 @@ def _watch(
 
     Parameters
     ----------
+    run
+        The initial build state populated by `steps`.
     config
         The project's configuration.
     layout
@@ -592,7 +637,7 @@ def _watch(
     preview_env = quarto.environment(config)
     preview_env[shared_sidebar.PREVIEW_ENV] = "1"
 
-    def rebuild(staging: watch.Staging) -> None:
+    def rebuild(staging: watch.Staging) -> dict[str, Any]:
         edited = Config(
             config.project_root, config_path=config.config_path, cache_dir=config.cache_dir
         )
@@ -603,8 +648,9 @@ def _watch(
         )
         rebuild_log.total_steps = count_listed(preparation)
         run_steps(preparation, rebuild_log, staging.build_dir)
+        return current.quarto_config
 
-    watch.serve(layout, preview_env, rebuild)
+    watch.serve(layout, preview_env, rebuild, run.quarto_config)
 
 
 def _make_log(run: Run, config: Config, layout: Layout) -> BuildLog:

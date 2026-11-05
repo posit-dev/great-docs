@@ -77,6 +77,7 @@ def register(
     quarto_yml.apply(
         quarto_config,
         Contribution(resources=tuple(resources), render_excludes=tuple(render_excludes)),
+        config,
     )
 
 

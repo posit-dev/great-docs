@@ -34,7 +34,6 @@ from great_docs._project import locate_package_init
 from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import discover_exports, parse_dunder_all
 from great_docs._reference.probe import detect_docstring_style
-from great_docs._website import quarto_yml as quarto_yml_file
 from tests.support import (
     StubRemote,
     discover_user_guide,
@@ -42,6 +41,7 @@ from tests.support import (
     make_project,
     make_run,
     prepare_build_directory,
+    update_quarto_config,
     user_guide_step,
     write_config,
 )
@@ -827,7 +827,8 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
     docs = GreatDocs(project_path=str(pkg_dir))
     config = docs._config
     docs.install(force=True)
-    prepare_build_directory(docs, make_run(docs))
+    run = make_run(docs)
+    prepare_build_directory(docs, run)
 
     detected_name = make_project(docs).name
     assert detected_name is not None
@@ -838,8 +839,8 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
     cli_files = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
     assert cli_files, "No CLI files generated"
 
-    with quarto_yml_file.edit(docs.build_dir) as quarto_config:
-        quarto_yml_file.apply(quarto_config, cli_render.contribution(docs._config, cli_files))
+    run.contributions.append(cli_render.contribution(docs._config, cli_files))
+    update_quarto_config(docs, run)
 
     quarto_yml = docs.build_dir / "_quarto.yml"
     assert quarto_yml.exists(), "_quarto.yml was not created"
@@ -890,11 +891,11 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     cli_info = _discover_cli(docs, config, detected_name)
     assert cli_info is not None
     cli_files = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
-    with quarto_yml_file.edit(docs.build_dir) as quarto_config:
-        quarto_yml_file.apply(quarto_config, cli_render.contribution(docs._config, cli_files))
+    run.contributions.append(cli_render.contribution(docs._config, cli_files))
 
     # Process user guide
     user_guide_step(docs, run.user_guide)
+    update_quarto_config(docs, run)
 
     quarto_yml = docs.build_dir / "_quarto.yml"
     with open(quarto_yml, encoding="utf-8") as f:
@@ -1025,6 +1026,7 @@ def _setup_blended_homepage(pkg_dir: Path, spec: dict) -> GreatDocs:
     run = make_run(docs)
     prepare_build_directory(docs, run)
     user_guide_step(docs, run.user_guide)
+    update_quarto_config(docs, run)
     return docs
 
 
@@ -1041,9 +1043,11 @@ def test_L3_bibliography_wired_into_quarto_config(pkg_name: str, tmp_path: Path)
     docs = GreatDocs(project_path=str(pkg_dir))
     docs._remote = StubRemote()
 
-    # The generated great-docs.yml already carries the bibliography key, so the
-    # build directory prep alone should copy the file and wire the config.
-    prepare_build_directory(docs, make_run(docs))
+    # The generated `great-docs.yml` supplies the bibliography setting. Preparation
+    # copies the file; configuration assembly registers it in `_quarto.yml`.
+    run = make_run(docs)
+    prepare_build_directory(docs, run)
+    update_quarto_config(docs, run)
 
     bib_file = expected["bibliography_file"]
 
@@ -1077,9 +1081,11 @@ def test_L3_custom_css_wired_into_quarto_config(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
 
-    # The generated great-docs.yml already carries the site.css key, so the
-    # build directory prep alone should copy the file and wire the config.
-    prepare_build_directory(docs, make_run(docs))
+    # The generated `great-docs.yml` supplies `site.css`. Preparation copies the file;
+    # configuration assembly registers it in `_quarto.yml`.
+    run = make_run(docs)
+    prepare_build_directory(docs, run)
+    update_quarto_config(docs, run)
 
     css_file = expected["custom_css_file"]
 

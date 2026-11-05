@@ -25,6 +25,7 @@ __all__ = [
     "TAGS",
     "USER_GUIDE",
     "OwnItem",
+    "add_guide_link",
     "add_link",
     "has_item",
     "icon_labels",
@@ -119,21 +120,44 @@ def add_link(
         Whether the link was added. A configuration without `website.navbar.left`
         is left unchanged.
     """
-    navbar = quarto_config.get("website", {}).get("navbar")
-    if not navbar or "left" not in navbar:
-        return False
-    items = cast("list[Any]", navbar["left"])
-    if any(_field(item, "href") == link.href for item in items):
+    items = _left(quarto_config)
+    if items is None or any(_field(item, "href") == link.href for item in items):
         return False
     anchor = _find(items, after, config) if after else None
     if anchor is not None:
         position = anchor + 1
     else:
-        reference = next(
-            (i for i, item in enumerate(items) if REFERENCE.owns(_field(item, "href"))), None
-        )
+        reference = _find_reference(items)
         position = len(items) if reference is None else reference
     items.insert(position, {"text": link.text, "href": link.href})
+    return True
+
+
+def add_guide_link(quarto_config: dict[str, Any], link: NavbarLink) -> bool:
+    """
+    Add the user guide's link to the navbar's left side unless its `href` is present
+
+    Place the link before Reference, or first if Reference is absent. A link to another
+    guide page does not prevent this addition.
+
+    Parameters
+    ----------
+    quarto_config
+        The Quarto configuration, changed in place.
+    link
+        The link to the guide's first page.
+
+    Returns
+    -------
+    :
+        Whether the link was added. A configuration without `website.navbar.left`
+        is left unchanged.
+    """
+    items = _left(quarto_config)
+    if items is None or any(_field(item, "href") == link.href for item in items):
+        return False
+    reference = _find_reference(items)
+    items.insert(0 if reference is None else reference, {"text": link.text, "href": link.href})
     return True
 
 
@@ -261,6 +285,43 @@ def _find(items: Sequence[object], name: str, config: Config) -> int | None:
         if _field(item, "text") == name:
             return index
     return None
+
+
+def _left(quarto_config: dict[str, Any]) -> list[Any] | None:
+    """
+    Find the entries on the navbar's left side
+
+    Parameters
+    ----------
+    quarto_config
+        The Quarto configuration.
+
+    Returns
+    -------
+    :
+        The list at `website.navbar.left`, or `None` when the configuration has none.
+    """
+    navbar = quarto_config.get("website", {}).get("navbar")
+    if not navbar or "left" not in navbar:
+        return None
+    return cast("list[Any]", navbar["left"])
+
+
+def _find_reference(items: Sequence[object]) -> int | None:
+    """
+    Find the Reference item by its `href`
+
+    Parameters
+    ----------
+    items
+        Entries on the navbar's left side.
+
+    Returns
+    -------
+    :
+        The position of the first item that opens a page under `reference/`, or `None`.
+    """
+    return next((i for i, item in enumerate(items) if REFERENCE.owns(_field(item, "href"))), None)
 
 
 def _field(item: object, key: str) -> Any:

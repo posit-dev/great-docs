@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any, cast
 
+from . import scripts
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -20,9 +22,10 @@ def add(quarto_config: dict[str, Any], name: str, data: Mapping[str, Any], *, be
     """
     Embed a global assignment in an after-body include
 
-    The assignment precedes the first `format.html.include-after-body` entry containing
-    `before`, so the data exists when that script runs. It is appended when no entry
-    matches. A configuration that already assigns the global is left unchanged.
+    The assignment precedes the first `format.html.include-after-body` entry that loads
+    the script named by `before`, so the data exists when that script runs. Match by file
+    name or, for an embedded script, by a name it defines. Append the assignment if no
+    entry matches, and leave an existing assignment to the global unchanged.
 
     Parameters
     ----------
@@ -33,12 +36,19 @@ def add(quarto_config: dict[str, Any], name: str, data: Mapping[str, Any], *, be
     data
         The value to assign, serialisable as JSON.
     before
-        Text that identifies the script entry that reads the global, such as `page-tags.js`.
+        The file name of the Great Docs script that reads the global, such as
+        `page-tags.js`.
 
     Returns
     -------
     :
+
+    Raises
+    ------
+    KeyError
+        If `before` is not the file name of a script shipped with Great Docs.
     """
+    script = scripts.named(before)
     html = cast("dict[str, Any]", quarto_config.setdefault("format", {})).setdefault("html", {})
     html = cast("dict[str, Any]", html)
     entries = html.get("include-after-body", [])
@@ -53,5 +63,5 @@ def add(quarto_config: dict[str, Any], name: str, data: Mapping[str, Any], *, be
     # "</" inside a <script> element would end it early, as in the "</svg>" of an icon.
     text = json.dumps(data).replace("</", r"<\/")
     entry = {"text": f"<script>{assignment}{text};</script>"}
-    position = next((i for i, item in enumerate(entries) if before in str(item)), len(entries))
+    position = next((i for i, item in enumerate(entries) if script.is_entry(item)), len(entries))
     entries.insert(position, entry)

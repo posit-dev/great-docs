@@ -1,15 +1,10 @@
 """
-Build API reference configuration and navigation
+Build API reference configuration
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
-
-from .._website import quarto_yml
-from . import sections as reference_sections
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..config import Config
@@ -108,110 +103,38 @@ def reference_yaml(config: Config, categories: Categories) -> str:
     return "\n".join(lines)
 
 
-def refresh(
-    site_config: Config,
-    build_dir: Path,
-    create_sections: Callable[[str], list[dict[str, Any]] | None],
-) -> None:
-    """
-    Refresh API sections and related settings in `_quarto.yml`
-
-    Rediscover package exports. Preserve unrelated Quarto configuration and
-    apply an explicit reference configuration if discovery yields no sections.
-    """
-    if not quarto_yml.path(build_dir).exists():
-        print("Error: _quarto.yml not found. Run 'great-docs init' first.")
-        return
-
-    quarto_config = quarto_yml.read(build_dir)
-
-    if "api-reference" not in quarto_config:
-        print("Error: No API reference configuration found. Run 'great-docs init' first.")
-        return
-
-    package_name = quarto_config["api-reference"].get("package")
-    if not package_name:
-        print("Error: No package name in API reference config.")
-        return
-
-    print(f"Re-discovering exports for package: {package_name}")
-
-    sections = create_sections(package_name)
-
-    parser = site_config.parser
-    if parser:
-        quarto_config["api-reference"]["parser"] = parser
-
-    dynamic = site_config.dynamic
-    quarto_config["api-reference"]["dynamic"] = dynamic
-
-    ref_title = site_config.reference_title
-    if ref_title:
-        quarto_config["api-reference"]["title"] = ref_title  # pragma: no cover
-    ref_desc = site_config.reference_desc
-    if ref_desc:
-        quarto_config["api-reference"]["desc"] = ref_desc  # pragma: no cover
-    elif "desc" in quarto_config["api-reference"]:
-        del quarto_config["api-reference"]["desc"]  # pragma: no cover
-
-    jupyter_kernel = site_config.jupyter
-    if jupyter_kernel:
-        quarto_config["jupyter"] = jupyter_kernel
-
-    if sections:
-        quarto_config["api-reference"]["sections"] = sections
-        print(f"Updated API reference config with {len(sections)} section(s)")
-
-        # The sidebar reads the saved sections from `_quarto.yml`.
-        quarto_yml.write(build_dir, quarto_config)
-
-        reference_sections.update_sidebar(site_config, build_dir)
-
-        print(f"✅ Refreshed API reference configuration in {quarto_yml.path(build_dir)}")
-    else:
-        reference_config = site_config.reference
-        if reference_config:
-            print(
-                "Auto-discovery failed, but applying explicit reference config from great-docs.yml"
-            )
-            user_sections = reference_sections.from_reference_config(reference_config)
-            if user_sections:
-                quarto_config["api-reference"]["sections"] = user_sections
-                quarto_yml.write(build_dir, quarto_config)
-                reference_sections.update_sidebar(site_config, build_dir)
-                print(f"✅ Applied {len(user_sections)} section(s) from great-docs.yml")
-            else:
-                print(
-                    "Warning: reference config in great-docs.yml produced no sections"
-                )  # pragma: no cover
-        else:
-            print(
-                "Warning: Could not discover package exports. Config unchanged."
-            )  # pragma: no cover
-            print(  # pragma: no cover
-                "Tip: Add a 'reference' section to great-docs.yml to manually specify your API structure."
-            )
-
-
 def configure(
     site_config: Config,
     quarto_config: dict[str, Any],
     importable_name: str,
     sections: list[dict[str, Any]],
-) -> None:
+) -> dict[str, Any]:
     """
-    Add reference settings and navigation to a Quarto mapping
+    Add the API reference settings to a Quarto mapping
+
+    Parameters
+    ----------
+    site_config
+        The project's configuration.
+    quarto_config
+        The Quarto configuration, updated in place.
+    importable_name
+        The name under which the documented package is imported.
+    sections
+        The API reference sections.
+
+    Returns
+    -------
+    :
+        The `api-reference` block added to the Quarto configuration.
     """
-    # The index title names the API; the navbar label covers API, CLI and MCP references.
     ref_title = site_config.reference_title or "API Reference"
-    nav_title = site_config.reference_title or "Reference"
     ref_desc = site_config.reference_desc
 
     if not site_config.reference_title and site_config.lang != "en":
-        from .._translations import get_translation  # pragma: no cover
+        from .._translations import get_translation
 
-        ref_title = get_translation("api_reference", site_config.lang)  # pragma: no cover
-        nav_title = get_translation("reference", site_config.lang)  # pragma: no cover
+        ref_title = get_translation("api_reference", site_config.lang)
 
     api_ref_config: dict[str, Any] = {
         "package": importable_name,
@@ -219,17 +142,17 @@ def configure(
         "title": ref_title,
     }
     if ref_desc:
-        api_ref_config["desc"] = ref_desc  # pragma: no cover
+        api_ref_config["desc"] = ref_desc
 
     dynamic = site_config.dynamic
     api_ref_config["dynamic"] = dynamic
     if not dynamic:
-        print("Using static introspection mode (dynamic: false)")  # pragma: no cover
+        print("Using static introspection mode (dynamic: false)")
 
     parser = site_config.parser
     if parser and parser != "numpy":
-        api_ref_config["parser"] = parser  # pragma: no cover
-        print(f"Using '{parser}' docstring parser")  # pragma: no cover
+        api_ref_config["parser"] = parser
+        print(f"Using '{parser}' docstring parser")
     else:
         api_ref_config["parser"] = "numpy"
 
@@ -248,23 +171,4 @@ def configure(
 
     quarto_config["api-reference"] = api_ref_config
 
-    if "website" in quarto_config and "navbar" in quarto_config["website"]:
-        navbar = quarto_config["website"]["navbar"]
-        left = navbar.get("left", [])
-        has_ref = any(
-            isinstance(item, dict)
-            and cast("dict[str, Any]", item).get("href") == "reference/index.qmd"
-            for item in left
-        )
-        if not has_ref:
-            left.append({"text": nav_title, "href": "reference/index.qmd"})
-            navbar["left"] = left
-
-    if "website" in quarto_config and "sidebar" in quarto_config["website"]:
-        sidebars = quarto_config["website"]["sidebar"]
-        has_ref_sidebar = any(
-            isinstance(s, dict) and cast("dict[str, Any]", s).get("id") == "reference"
-            for s in sidebars
-        )
-        if not has_ref_sidebar:
-            sidebars.append({"id": "reference", "contents": "reference/"})
+    return api_ref_config

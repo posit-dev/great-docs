@@ -4,7 +4,7 @@ Compose a generated agent skill from package and documentation facts
 
 from __future__ import annotations
 
-from pathlib import Path
+from collections.abc import Mapping
 from typing import Any, cast
 
 from yaml12 import format_yaml
@@ -18,18 +18,36 @@ from . import llms_txt
 def compose(
     config: Config,
     layout: Layout,
-    build_dir: Path,
     distribution_name: str | None,
     metadata: Manifest,
-    quarto_config: dict[str, Any],
+    api_block: Mapping[str, Any] | None,
 ) -> str:
     """
-    Compose a SKILL.md file for the documented package
+    Compose a `SKILL.md` file for the documented package
 
     The generated front matter is valid YAML even when metadata contains punctuation.
+
+    Parameters
+    ----------
+    config
+        The project's configuration, including the site URL and the skill settings.
+    layout
+        The project's directories, including the source of the skill's extra body.
+    distribution_name
+        The name under which the package is installed, or `None` when unknown.
+    metadata
+        The package metadata: description, licence, Python requirement and URLs.
+    api_block
+        The API reference configuration for the skill's overview, or `None` to omit
+        the overview.
+
+    Returns
+    -------
+    :
+        The skill's Markdown with its front matter.
     """
     package_name_for_skill = distribution_name or ""
-    api_ref_config = quarto_config.get("api-reference", {})
+    api_ref_config = api_block or {}
     sections = api_ref_config.get("sections", [])
     package_name = api_ref_config.get("package", "")
 
@@ -38,7 +56,7 @@ def compose(
     requires_python = metadata.get("requires_python", "")
 
     urls = metadata.get("urls", {})
-    site_url = urls.get("Documentation", "") or quarto_config.get("website", {}).get("site-url", "")
+    site_url = urls.get("Documentation", "") or config.site_url or ""
     if site_url and "#" in site_url:
         site_url = site_url.split("#")[0]
     if site_url and not site_url.endswith("/"):
@@ -154,7 +172,7 @@ def compose(
     lines.append("")
     if site_url:
         lines.append(f"- [Full documentation]({site_url})")
-    if llms_txt.is_planned(build_dir):
+    if llms_txt.is_planned(api_block):
         lines.append("- [llms.txt](llms.txt) — Indexed API reference for LLMs")
         lines.append("- [llms-full.txt](llms-full.txt) — Comprehensive documentation for LLMs")
     if repo_url:

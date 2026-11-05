@@ -13,11 +13,12 @@ import pytest
 import yaml
 
 from great_docs import GreatDocs
+from great_docs._apiref.api_reference import APIReference
 from great_docs._build import reference
 from great_docs._build.log import BuildLog
 from great_docs._build.steps import Outcome
-from great_docs._reference import block as reference_block
 from great_docs._utils import QUARTO_YML_HEADER
+from great_docs._website import quarto_yml
 from tests.support import make_run, write_config
 
 
@@ -78,26 +79,38 @@ def _write_api_reference(docs: GreatDocs) -> Outcome:
     :
         The step's outcome.
     """
-    outcome, _ = reference.api(
-        make_run(docs), docs._config, docs.layout, BuildLog(stream=io.StringIO())
-    )
+    quarto_config = quarto_yml.read(docs.build_dir)
+    run = make_run(docs, quarto_config=quarto_config, api_block=quarto_config["api-reference"])
+    outcome, _ = reference.api(run, docs._config, docs.layout, BuildLog(stream=io.StringIO()))
     return outcome
 
 
-def test_api_config_skips_discovery_already_done_in_this_build(tmp_path: Path):
+def test_api_config_reuses_the_exports_discovered_during_preparation(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
     """
     Reuse the API reference configuration discovered during build preparation
     """
     write_config(tmp_path, "module: mypkg\n")
     docs = GreatDocs(project_path=str(tmp_path))
+    run = make_run(docs)
 
-    with patch.object(reference_block, "refresh") as refresh:
-        outcome = reference.api_config(
-            make_run(docs, api_discovery_done=True), docs._config, docs.layout, refresh=True
-        )
+    with patch.object(run.exports, "sections") as sections:
+        outcome = reference.api_config(run, refresh=True)
 
-    refresh.assert_not_called()
+    sections.assert_not_called()
     assert outcome == "API reference refreshed"
+    assert "API reference already configured in this build" in capsys.readouterr().out
+
+
+def test_api_config_without_refresh_uses_the_existing_configuration(tmp_path: Path):
+    """
+    Report the existing API reference configuration when the build skips refreshing
+    """
+    write_config(tmp_path, "module: mypkg\n")
+    docs = GreatDocs(project_path=str(tmp_path))
+
+    assert reference.api_config(make_run(docs), refresh=False) == "Using existing config"
 
 
 def test_api_links_each_project_in_a_process_to_its_own_source(
@@ -132,6 +145,33 @@ def test_api_imports_the_package_from_the_project_root(
     assert _write_api_reference(docs) == "API reference generated"
 
     assert root in sys.path
+
+
+def test_api_retry_with_static_analysis_disables_dynamic_introspection_in_the_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """
+    Disable dynamic introspection in memory before retrying with static analysis
+    """
+    docs = _source_linked_project(tmp_path / "static_retry", "static_retry", "main")
+    monkeypatch.chdir(docs.build_dir)
+    quarto_config = quarto_yml.read(docs.build_dir)
+    block = quarto_config["api-reference"]
+    block["dynamic"] = True
+    run = make_run(docs, quarto_config=quarto_config, api_block=block)
+    dynamic: list[bool] = []
+
+    def build(ref: APIReference) -> None:
+        dynamic.append(ref.settings.dynamic)
+        if len(dynamic) == 1:
+            raise ImportError("dynamic")
+
+    with patch.object(APIReference, "build", autospec=True, side_effect=build):
+        outcome, _ = reference.api(run, docs._config, docs.layout, BuildLog(stream=io.StringIO()))
+
+    assert outcome == "API reference generated (static analysis)"
+    assert dynamic == [True, False]
+    assert run.quarto_config["api-reference"]["dynamic"] is False
 
 
 def test_cli_reports_a_command_tree_without_pages(tmp_path: Path):

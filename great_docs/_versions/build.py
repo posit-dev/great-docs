@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -21,7 +22,6 @@ from great_docs._utils import (
     validate_layout_outputs,
     validate_site_dir,
     validate_tree_symlinks,
-    write_quarto_yml,
 )
 from great_docs._versions.model import (
     VersionEntry,
@@ -35,7 +35,7 @@ from great_docs._versions.model import (
     process_version_fences,
     version_url_segment,
 )
-from great_docs._website import page_status, prerender, quarto_yml
+from great_docs._website import page_metadata, page_status, quarto_yml
 from great_docs._website.navigation import shared_sidebar
 
 if TYPE_CHECKING:
@@ -248,15 +248,24 @@ def _update_page_status_json(dest_dir: Path, upcoming_pages: list[tuple[str, str
     status_path.write_text(json.dumps(data), encoding="utf-8")
 
 
-def _add_upcoming_status_data(dest_dir: Path) -> None:
+def _add_upcoming_status_data(quarto_config: dict[str, Any], dest_dir: Path) -> None:
     """
-    Add version-specific upcoming badge data to the Quarto configuration
-    """
-    from yaml12 import read_yaml
+    Add the version's upcoming badge data to its Quarto configuration
 
+    Parameters
+    ----------
+    quarto_config
+        The version's Quarto configuration, changed in place.
+    dest_dir
+        Quarto project directory for the version, whose `_page_status.json`
+        lists the upcoming pages.
+
+    Returns
+    -------
+    :
+    """
     status_path = dest_dir / "_page_status.json"
-    quarto_path = dest_dir / "_quarto.yml"
-    if not status_path.exists() or not quarto_path.exists():
+    if not status_path.exists():
         return
     try:
         data = json.loads(status_path.read_text(encoding="utf-8"))
@@ -265,18 +274,30 @@ def _add_upcoming_status_data(dest_dir: Path) -> None:
     upcoming = data.get("upcoming_pages")
     if not upcoming:
         return
-    config = read_yaml(quarto_path) or {}
-    if page_status.add_upcoming(config, upcoming):
-        write_quarto_yml(quarto_path, config)
+    page_status.add_upcoming(quarto_config, upcoming)
 
 
-def _prune_cli_pages(dest_dir: Path, snap: object) -> None:
+def _prune_cli_pages(dest_dir: Path, snap: object, *, quarto_config: dict[str, Any]) -> None:
     """
-    Remove CLI reference QMD files for commands not in the snapshot.
+    Remove CLI reference pages for commands absent from the snapshot
 
-    The main build generates CLI pages from the *current* installed CLI. When building an older
-    version, commands that didn't exist yet must be removed so they don't appear in that version's
-    site. Also rewrites the CLI index page so the embedded help text only lists valid commands.
+    The main build uses the currently installed CLI. For an older version,
+    remove pages for commands that did not exist in that release. Update the
+    CLI index's embedded help text and the configuration's CLI sidebar to
+    list only commands in the snapshot.
+
+    Parameters
+    ----------
+    dest_dir
+        Quarto project directory for the version.
+    snap
+        Snapshot describing the version's CLI commands.
+    quarto_config
+        The version's Quarto configuration, changed in place.
+
+    Returns
+    -------
+    :
     """
     cli_ref_dir = dest_dir / "reference" / "cli"
     if not cli_ref_dir.is_dir():
@@ -309,8 +330,7 @@ def _prune_cli_pages(dest_dir: Path, snap: object) -> None:
     if index_qmd.exists():
         _rewrite_cli_index(index_qmd, valid_stems)
 
-    # Prune the CLI sidebar in _quarto.yml
-    _prune_quarto_cli_sidebar(dest_dir, valid_stems)
+    _prune_quarto_cli_sidebar(quarto_config, valid_stems)
 
 
 def _rewrite_cli_index(index_qmd: Path, valid_stems: set[str]) -> None:
@@ -355,79 +375,59 @@ def _rewrite_cli_index(index_qmd: Path, valid_stems: set[str]) -> None:
     index_qmd.write_text("\n".join(new_lines), encoding="utf-8")
 
 
-def _prune_quarto_cli_sidebar(dest_dir: Path, valid_stems: set[str]) -> None:
-    """Remove CLI sidebar entries from _quarto.yml for pruned commands."""
-    quarto_yml = dest_dir / "_quarto.yml"
-    if not quarto_yml.exists():
-        return
-
-    try:
-        from yaml12 import read_yaml
-
-        content = read_yaml(quarto_yml)
-        if not content:
-            return
-
-        sidebars = content.get("website", {}).get("sidebar", [])
-        modified = False
-
-        for sidebar in sidebars:
-            if sidebar.get("id") != "cli-reference":
-                continue
-            contents = sidebar.get("contents", [])
-            new_contents = []
-            for item in contents:
-                if isinstance(item, str) and item.startswith("reference/cli/"):
-                    stem = Path(item).stem
-                    if stem in valid_stems:
-                        new_contents.append(item)
-                    else:
-                        modified = True
-                else:
-                    new_contents.append(item)
-            if modified:
-                sidebar["contents"] = new_contents
-            break
-
-        if modified:
-            write_quarto_yml(quarto_yml, content)
-    except Exception:  # pragma: no cover
-        pass  # pragma: no cover
-
-
-def _prune_missing_sidebar_pages(dest_dir: Path) -> None:
-    """Remove sidebar entries whose .qmd files no longer exist in *dest_dir*.
-
-    After page-level and section-level version scoping delete excluded `.qmd` files, the sidebar in
-    `_quarto.yml` may still reference them. Quarto renders those stale entries as raw path text
-    instead of links. This function walks every sidebar section and drops entries that point to
-    non-existent files. Empty sections are removed entirely.
+def _prune_quarto_cli_sidebar(quarto_config: dict[str, Any], valid_stems: set[str]) -> None:
     """
-    from yaml12 import read_yaml
+    Remove CLI sidebar entries for commands the version lacks
 
-    quarto_yml = dest_dir / "_quarto.yml"
-    if not quarto_yml.exists():
-        return
+    Parameters
+    ----------
+    quarto_config
+        The version's Quarto configuration, changed in place.
+    valid_stems
+        File stems of the command pages to keep.
 
-    try:
-        with open(quarto_yml, "r", encoding="utf-8") as fh:
-            content = read_yaml(fh)
-        if not content:
-            return
+    Returns
+    -------
+    :
+    """
+    for sidebar in quarto_config.get("website", {}).get("sidebar", []):
+        if sidebar.get("id") != "cli-reference":
+            continue
+        contents = sidebar.get("contents", [])
+        kept = [
+            item
+            for item in contents
+            if not (isinstance(item, str) and item.startswith("reference/cli/"))
+            or Path(item).stem in valid_stems
+        ]
+        if kept != contents:
+            sidebar["contents"] = kept
+        break
 
-        sidebars = content.get("website", {}).get("sidebar", [])
-        modified = False
 
-        for sidebar in sidebars:
-            pruned = _prune_sidebar_contents(sidebar.get("contents", []), dest_dir)
-            if pruned != sidebar.get("contents", []):
-                sidebar["contents"] = pruned
-                modified = True
+def _prune_missing_sidebar_pages(quarto_config: dict[str, Any], dest_dir: Path) -> None:
+    """
+    Remove sidebar entries whose pages are missing from the version
 
-        if modified:
-            write_quarto_yml(quarto_yml, content)
-    except Exception:
-        pass  # Best-effort
+    Version scoping can delete `.qmd` files still listed in the sidebars.
+    Quarto displays these entries as raw paths instead of links. Remove the
+    entries and any sections left empty.
+
+    Parameters
+    ----------
+    quarto_config
+        The version's Quarto configuration, changed in place.
+    dest_dir
+        Quarto project directory for the version.
+
+    Returns
+    -------
+    :
+    """
+    for sidebar in quarto_config.get("website", {}).get("sidebar", []):
+        pruned = _prune_sidebar_contents(sidebar.get("contents", []), dest_dir)
+        if pruned != sidebar.get("contents", []):
+            sidebar["contents"] = pruned
 
 
 def _prune_sidebar_contents(contents: list, dest_dir: Path) -> list:
@@ -459,10 +459,19 @@ def _prune_sidebar_contents(contents: list, dest_dir: Path) -> list:
 
 
 def _prune_cli_pages_for_version(
-    dest_dir: Path, project_root: Path, entry: VersionEntry, config: Config | None = None
+    dest_dir: Path,
+    project_root: Path,
+    entry: VersionEntry,
+    config: Config | None = None,
+    *,
+    quarto_config: dict[str, Any],
 ) -> None:
     """
     Load a version's cached snapshot and remove obsolete CLI pages
+
+    The pruning is skipped when the cache cannot be read, is not JSON or
+    lacks a snapshot's required keys, or when a page cannot be removed or
+    rewritten. Other errors stop the build.
 
     Parameters
     ----------
@@ -475,6 +484,13 @@ def _prune_cli_pages_for_version(
     config
         Optional project configuration. Selects the snapshot cache location;
         defaults to `project_root / ".great-docs-cache"` when omitted.
+    quarto_config
+        The version's Quarto configuration, changed in place to remove CLI
+        sidebar entries for pruned pages.
+
+    Returns
+    -------
+    :
     """
     git_ref = entry.git_ref
     if not git_ref:
@@ -485,13 +501,13 @@ def _prune_cli_pages_for_version(
     if not cache_path.exists():
         return
 
-    try:
-        from great_docs._api_diff import ApiSnapshot
+    from great_docs._api_diff import ApiSnapshot
 
+    try:
         snap = ApiSnapshot.load(cache_path)
-        _prune_cli_pages(dest_dir, snap)
-    except Exception:  # pragma: no cover
-        pass  # pragma: no cover
+        _prune_cli_pages(dest_dir, snap, quarto_config=quarto_config)
+    except (OSError, ValueError, KeyError):
+        pass
 
 
 def preprocess_version(
@@ -505,6 +521,7 @@ def preprocess_version(
     config: Config | None = None,
     *,
     layout: Layout,
+    quarto_config: dict[str, Any],
     documented_symbols: Callable[[str], list[str]] | None = None,
 ) -> list[str]:
     """
@@ -545,6 +562,10 @@ def preprocess_version(
         live inventory when omitted.
     layout
         Resolved project paths used to locate sections in the build tree.
+    quarto_config
+        The version's Quarto configuration. Changed in place to drop navbar
+        links to removed sections and sidebar entries for removed reference
+        and CLI pages.
     documented_symbols
         Callable that returns the working tree's documented reference page
         stems for a project name; used in step 6. If omitted or it returns no
@@ -615,25 +636,34 @@ def preprocess_version(
         html_rel = str(rel).replace(".qmd", ".html").replace(".md", ".html")
         included_pages.append(html_rel)
 
-    _prune_excluded_section_navbar(dest_dir, excluded_dirs)
+    _prune_excluded_section_navbar(quarto_config, excluded_dirs)
 
     # 3. Strategy A: regenerate API reference from snapshot if configured
     if entry.api_snapshot and project_root:
         snap_path = project_root / entry.api_snapshot
         if snap_path.exists():
-            api_pages = _rebuild_api_from_snapshot(dest_dir, snap_path, entry, config)
+            api_pages = _rebuild_api_from_snapshot(
+                dest_dir, snap_path, entry, config, quarto_config=quarto_config
+            )
             included_pages.extend(api_pages)
 
     # 4. Strategy B: git-ref introspection with caching
     elif entry.git_ref and project_root:
         api_pages = _rebuild_api_from_git_ref(
-            dest_dir, project_root, entry, config, documented_symbols=documented_symbols
+            dest_dir,
+            project_root,
+            entry,
+            config,
+            quarto_config=quarto_config,
+            documented_symbols=documented_symbols,
         )
         included_pages.extend(api_pages)
 
     # 5. Prune CLI pages that don't exist at this version
     if entry.git_ref and project_root:
-        _prune_cli_pages_for_version(dest_dir, project_root, entry, config)
+        _prune_cli_pages_for_version(
+            dest_dir, project_root, entry, config, quarto_config=quarto_config
+        )
 
     # 6. Expand inline [version-badge] markers and version callouts
     for qmd_file in _collect_qmd_files(dest_dir):
@@ -727,44 +757,38 @@ def _in_excluded_section(rel_path: Path, excluded_dirs: set[Path]) -> bool:
     return any(rel_path.is_relative_to(directory) for directory in excluded_dirs)
 
 
-def _prune_excluded_section_navbar(dest_dir: Path, excluded_dirs: set[Path]) -> None:
+def _prune_excluded_section_navbar(quarto_config: dict[str, Any], excluded_dirs: set[Path]) -> None:
     """
     Remove navbar links into excluded section directories
 
     Remove matching links from both sides of the navbar and from nested
-    menus. Remove menus that become empty. Write `_quarto.yml` only when
-    the navbar changes.
+    menus. Remove menus that become empty.
 
     Parameters
     ----------
-    dest_dir
-        Quarto project directory for the version.
+    quarto_config
+        The version's Quarto configuration, changed in place.
     excluded_dirs
-        Published section directories relative to `dest_dir`.
+        Published section directories relative to the version's project
+        directory.
 
     Returns
     -------
     :
     """
-    if not excluded_dirs or not quarto_yml.path(dest_dir).exists():
+    if not excluded_dirs:
         return
 
-    quarto_config = quarto_yml.read(dest_dir)
     navbar = quarto_config.get("website", {}).get("navbar")
     if not isinstance(navbar, dict):
         return
 
-    modified = False
     for side in ("left", "right"):
         items = navbar.get(side)
         if isinstance(items, list):
             kept = _prune_navbar_items(items, excluded_dirs)
             if kept != items:
                 navbar[side] = kept
-                modified = True
-
-    if modified:
-        quarto_yml.write(dest_dir, quarto_config)
 
 
 def _prune_navbar_items(items: list[Any], excluded_dirs: set[Path]) -> list[Any]:
@@ -803,15 +827,18 @@ def _rebuild_api_from_snapshot(
     snapshot_path: Path,
     entry: VersionEntry,
     config: Config | None = None,
+    *,
+    quarto_config: dict[str, Any],
 ) -> list[str]:
     """
-    Rebuild API reference pages from a snapshot, pruning pages not in the snapshot.
+    Rebuild API reference pages from a snapshot and remove pages it lacks
 
-    When the source tree already contains reference pages (e.g. from the main build), pages for
-    symbols in the snapshot are regenerated from the snapshot data and pages for symbols *not* in
-    the snapshot are removed. When no reference directory exists, pages are generated from scratch.
-    When *config* is given, the version's inventory and interlinks index are rebuilt from the same
-    snapshot afterwards, so they describe the pages this call just produced.
+    Regenerate existing pages for symbols in the snapshot and remove pages
+    for symbols absent from it. If no reference directory exists, generate
+    the pages from scratch.
+
+    When `config` is given, rebuild the version's inventory and interlinks
+    index from the same snapshot so they match the generated pages.
 
     Parameters
     ----------
@@ -824,11 +851,14 @@ def _rebuild_api_from_snapshot(
     config
         Project configuration, for rebuilding the inventory and interlinks
         index. Skipped when omitted.
+    quarto_config
+        The version's Quarto configuration, changed in place to remove
+        reference sidebar entries for pruned pages.
 
     Returns
     -------
-    list[str]
-        Relative paths of API pages (as .html).
+    :
+        Relative paths of API pages, with `.html` extensions.
     """
     from great_docs._api_diff import ApiSnapshot
 
@@ -951,8 +981,7 @@ def _rebuild_api_from_snapshot(
 
     generated.append("reference/index.html")
 
-    # --- Update _quarto.yml sidebar to remove missing reference entries ---
-    _prune_quarto_sidebar(dest_dir, "reference", snapshot_symbols)
+    _prune_quarto_sidebar(quarto_config, "reference", snapshot_symbols)
 
     if config is not None:
         _write_snapshot_inventory(dest_dir, snap, config)
@@ -1351,85 +1380,80 @@ def _prune_reference_index(index_qmd: Path, valid_symbols: set[str]) -> None:
     index_qmd.write_text("\n".join(result), encoding="utf-8")
 
 
-def _prune_quarto_sidebar(dest_dir: Path, section: str, valid_symbols: set[str]) -> None:
-    """Remove sidebar entries for missing symbols/commands from _quarto.yml.
-
-    Handles both flat string entries (`reference/Name.qmd`) and nested section groups
-    (`section: Title` with `contents: [...]`). Empty section groups are removed entirely.
+def _prune_quarto_sidebar(
+    quarto_config: dict[str, Any], section: str, valid_symbols: set[str]
+) -> None:
     """
-    quarto_yml = dest_dir / "_quarto.yml"
-    if not quarto_yml.exists():
-        return
+    Remove sidebar entries for section pages absent from the version
 
-    try:
-        from yaml12 import read_yaml
+    Handle flat entries (`reference/Name.qmd`) and nested section groups
+    (`section: Title` with `contents: [...]`). Remove empty section groups.
+    Keep entries in subdirectories of the section, such as `reference/cli/`.
 
-        content = read_yaml(quarto_yml)
-        if not content:
-            return
+    Parameters
+    ----------
+    quarto_config
+        The version's Quarto configuration, changed in place.
+    section
+        Directory of the section's pages, such as `reference`.
+    valid_symbols
+        Names of the symbols the version has.
 
-        sidebars = content.get("website", {}).get("sidebar", [])
-        modified = False
+    Returns
+    -------
+    :
+    """
+    for sidebar in quarto_config.get("website", {}).get("sidebar", []):
+        contents = sidebar.get("contents", [])
+        if not contents:
+            continue
 
-        for sidebar in sidebars:
-            contents = sidebar.get("contents", [])
-            if not contents:  # pragma: no cover
-                continue  # pragma: no cover
-
-            # Check if this sidebar has any reference to our section (flat or nested)
-            def _has_section_ref(items: list) -> bool:
-                for c in items:
-                    if isinstance(c, str) and c.startswith(f"{section}/"):
+        def _has_section_ref(items: list) -> bool:
+            for c in items:
+                if isinstance(c, str) and c.startswith(f"{section}/"):
+                    return True
+                if isinstance(c, dict):
+                    sub = c.get("contents", [])
+                    if sub and _has_section_ref(sub):
                         return True
-                    if isinstance(c, dict):
-                        sub = c.get("contents", [])
-                        if sub and _has_section_ref(sub):
-                            return True
-                return False
+            return False
 
-            if not _has_section_ref(contents):
-                continue
+        if not _has_section_ref(contents):
+            continue
 
-            def _prune_contents(items: list) -> tuple[list, bool]:
-                """Recursively prune items, returning (new_items, was_modified)."""
-                new_items: list = []
-                changed = False
-                for item in items:
-                    if isinstance(item, str) and item.startswith(f"{section}/"):
-                        if "/" in item.replace(f"{section}/", "", 1):
-                            # Sub-path like reference/cli/... — keep
+        def _prune_contents(items: list) -> tuple[list, bool]:
+            """Remove unavailable pages recursively and report whether entries changed"""
+            new_items: list = []
+            changed = False
+            for item in items:
+                if isinstance(item, str) and item.startswith(f"{section}/"):
+                    if "/" in item.replace(f"{section}/", "", 1):
+                        # Keep entries in subdirectories such as `reference/cli/`.
+                        new_items.append(item)
+                    else:
+                        stem = Path(item).stem
+                        if _is_valid_ref_name(stem, valid_symbols):
                             new_items.append(item)
                         else:
-                            stem = Path(item).stem
-                            if _is_valid_ref_name(stem, valid_symbols):
-                                new_items.append(item)
-                            else:
-                                changed = True
-                    elif isinstance(item, dict) and "section" in item:
-                        sub_contents = item.get("contents", [])
-                        pruned_sub, sub_changed = _prune_contents(sub_contents)
-                        if sub_changed:
                             changed = True
-                        if pruned_sub:
-                            new_item = dict(item)
-                            new_item["contents"] = pruned_sub
-                            new_items.append(new_item)
-                        else:
-                            # All entries removed — drop the entire section group
-                            changed = True
+                elif isinstance(item, dict) and "section" in item:
+                    sub_contents = item.get("contents", [])
+                    pruned_sub, sub_changed = _prune_contents(sub_contents)
+                    if sub_changed:
+                        changed = True
+                    if pruned_sub:
+                        new_item = dict(item)
+                        new_item["contents"] = pruned_sub
+                        new_items.append(new_item)
                     else:
-                        new_items.append(item)  # pragma: no cover
-                return new_items, changed
+                        changed = True
+                else:
+                    new_items.append(item)
+            return new_items, changed
 
-            new_contents, was_modified = _prune_contents(contents)
-            if was_modified:
-                sidebar["contents"] = new_contents
-                modified = True
-
-        if modified:
-            write_quarto_yml(quarto_yml, content)
-    except Exception:  # pragma: no cover
-        pass  # pragma: no cover
+        new_contents, was_modified = _prune_contents(contents)
+        if was_modified:
+            sidebar["contents"] = new_contents
 
 
 # ---------------------------------------------------------------------------
@@ -1475,6 +1499,7 @@ def _rebuild_api_from_git_ref(
     entry: VersionEntry,
     config: Config | None = None,
     *,
+    quarto_config: dict[str, Any],
     documented_symbols: Callable[[str], list[str]] | None = None,
 ) -> list[str]:
     """
@@ -1495,6 +1520,9 @@ def _rebuild_api_from_git_ref(
         Project configuration for the snapshot cache location and for
         rebuilding the inventory and interlinks index. When omitted, the
         cache is at `project_root / ".great-docs-cache"`.
+    quarto_config
+        The version's Quarto configuration, changed in place to remove
+        reference sidebar entries for pages absent from the tag.
     documented_symbols
         Callable that returns the working tree's documented reference page
         stems for a project name. Called on a cache miss after the package
@@ -1548,7 +1576,9 @@ def _rebuild_api_from_git_ref(
         snap.save(cache_path)
 
     # Reuse the snapshot-based builder
-    return _rebuild_api_from_snapshot(dest_dir, cache_path, entry, config)
+    return _rebuild_api_from_snapshot(
+        dest_dir, cache_path, entry, config, quarto_config=quarto_config
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1732,52 +1762,56 @@ def expand_version_callouts(content: str, entry: VersionEntry) -> str:
     return result
 
 
-def _rewrite_quarto_yml_for_version(
-    dest_dir: Path,
+def _adjust_quarto_config_for_version(
+    quarto_config: dict[str, Any],
     entry: VersionEntry,
     latest_tag: str,
 ) -> None:
     """
-    Adjust `_quarto.yml` for a documentation version
+    Adjust the Quarto configuration for a documentation version
 
     For older versions, add the version prefix to `site-url` so root-relative
     asset paths resolve within that version. Use the latest version's base
     address for canonical links and `og:url` tags to matching pages.
+
+    Parameters
+    ----------
+    quarto_config
+        The version's Quarto configuration, changed in place.
+    entry
+        Version being configured.
+    latest_tag
+        Tag of the latest version.
+
+    Returns
+    -------
+    :
     """
-    from yaml12 import read_yaml
-
-    quarto_yml = dest_dir / "_quarto.yml"
-    if not quarto_yml.exists():
-        return
-
-    with open(quarto_yml, "r") as f:
-        config = read_yaml(f) or {}
-
     # For non-latest versions, set output-dir so Quarto writes to _site/
     # (it defaults to _site anyway, but be explicit)
-    config.setdefault("project", {})["output-dir"] = "_site"
+    quarto_config.setdefault("project", {})["output-dir"] = "_site"
 
     # Adjust site-url for non-latest versions: append the /v/<tag>/ prefix
     # so that Quarto generates correct root-relative asset paths for versioned subpaths.
-    existing_site_url = config.get("website", {}).get("site-url")
+    existing_site_url = quarto_config.get("website", {}).get("site-url")
     if entry.tag != latest_tag and not entry.latest and existing_site_url:
         base = existing_site_url.rstrip("/")
-        config.setdefault("website", {})["site-url"] = f"{base}/v/{version_url_segment(entry.tag)}/"
+        quarto_config.setdefault("website", {})["site-url"] = (
+            f"{base}/v/{version_url_segment(entry.tag)}/"
+        )
 
     # Set a version-specific title suffix
     if entry.tag != latest_tag and not entry.latest:
-        title = config.get("website", {}).get("title", "")
+        title = quarto_config.get("website", {}).get("title", "")
         if title and f"({entry.label})" not in title:
-            config.setdefault("website", {})["title"] = f"{title} ({entry.label})"
+            quarto_config.setdefault("website", {})["title"] = f"{title} ({entry.label})"
             # An explicit navbar title, such as one with a release badge,
             # overrides the site title, so it needs the version suffix too
-            navbar_title = config["website"].get("navbar", {}).get("title")
+            navbar_title = quarto_config["website"].get("navbar", {}).get("title")
             if isinstance(navbar_title, str) and navbar_title.startswith(title):
-                config["website"]["navbar"]["title"] = (
+                quarto_config["website"]["navbar"]["title"] = (
                     f"{title} ({entry.label}){navbar_title[len(title) :]}"
                 )
-
-    write_quarto_yml(quarto_yml, config)
 
 
 # ---------------------------------------------------------------------------
@@ -2038,7 +2072,7 @@ def write_version_map(
 # ---------------------------------------------------------------------------
 
 
-def run_versioned_build(  # pragma: no cover
+def run_versioned_build(
     source_dir: Path,
     project_root: Path,
     versions_config: list[Any],
@@ -2054,6 +2088,7 @@ def run_versioned_build(  # pragma: no cover
     structured_data: StructuredData | None = None,
     *,
     layout: Layout,
+    quarto_config: dict[str, Any],
     documented_symbols: Callable[[str], list[str]] | None = None,
 ) -> dict[str, Any]:
     """
@@ -2094,6 +2129,10 @@ def run_versioned_build(  # pragma: no cover
         `None` when structured data is disabled.
     layout
         Resolved project paths for build directories and the assembled site.
+    quarto_config
+        The prepared site's Quarto configuration. Each version derives its own
+        configuration from a separate copy and writes it to its build directory's
+        `_quarto.yml`. The supplied mapping remains unchanged.
     documented_symbols
         Callable that returns the working tree's documented reference page
         stems for a project name. New snapshots for versions built from tags
@@ -2153,6 +2192,9 @@ def run_versioned_build(  # pragma: no cover
     dir_by_tag: dict[str, Path] = {}
     for entry in ordered_targets:
         ver_dir = _version_build_dir(source_dir, entry, latest_tag, layout)
+        # Isolate each version's in-place changes so later versions start from the same
+        # prepared configuration.
+        version_config = copy.deepcopy(quarto_config)
         pages = preprocess_version(
             source_dir,
             ver_dir,
@@ -2163,18 +2205,22 @@ def run_versioned_build(  # pragma: no cover
             badge_expiry=badge_expiry,
             config=config,
             layout=layout,
+            quarto_config=version_config,
             documented_symbols=documented_symbols,
         )
         # Describe each version's resolved pages before the version's site title is set. The
         # versions share a freeze cache checked against page sources, so card titles must
         # name the same site in every version.
         if config is not None:
-            prerender.write_page_metadata(ver_dir, config, default_description, structured_data)
-        _prune_missing_sidebar_pages(ver_dir)
-        _rewrite_quarto_yml_for_version(ver_dir, entry, latest_tag)
-        _add_upcoming_status_data(ver_dir)
+            _ = page_metadata.write_to_pages(
+                ver_dir, version_config, config, default_description, structured_data
+            )
+        _prune_missing_sidebar_pages(version_config, ver_dir)
+        _adjust_quarto_config_for_version(version_config, entry, latest_tag)
+        _add_upcoming_status_data(version_config, ver_dir)
         # Last, so the trimmed sidebars reflect every change above
-        shared_sidebar.prepare(ver_dir)
+        shared_sidebar.prepare(ver_dir, version_config)
+        quarto_yml.write(ver_dir, version_config)
         pages_by_version[entry.tag] = pages
         dir_by_tag[entry.tag] = ver_dir
 

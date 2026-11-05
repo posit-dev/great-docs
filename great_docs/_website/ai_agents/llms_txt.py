@@ -9,12 +9,11 @@ from __future__ import annotations
 
 import importlib
 import inspect
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 from ..._build.steps import USER_CODE_ERRORS
 from ..._manifest import Manifest
 from ..._yaml import locate_front_matter
-from .. import quarto_yml
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -26,65 +25,47 @@ __all__ = ["docstring_summary", "is_planned", "write_full", "write_index"]
 _SEPARATOR = "-" * 70
 
 
-def _api_reference_config(build_dir: Path) -> dict[str, Any] | None:
+def _describes_api(api_block: Mapping[str, Any] | None) -> TypeGuard[Mapping[str, Any]]:
     """
-    Read the Quarto configuration used to generate both files
+    Check whether the API reference names a package and contains sections
 
-    The writers and the availability check share this guard, so a page never advertises a
-    file the build does not write, and no file is written without being advertised.
+    Both writers and the availability check use this test, so a page advertises the files
+    only when the build can write them. The availability check also requires the package
+    to import.
 
     Parameters
     ----------
-    build_dir
-        The Quarto project directory.
+    api_block
+        The API reference configuration, or `None` when the site has none.
 
     Returns
     -------
     :
-        The parsed `_quarto.yml`, with an `api-reference` block that names a `package` and
-        has at least one section, or `None` when the project has no such configuration.
+        Whether the configuration names a `package` and has at least one section.
     """
-    if not quarto_yml.path(build_dir).exists():
-        return None
-    try:
-        # Parsing can succeed even when the YAML root is not a mapping.
-        parsed = cast("object", quarto_yml.read(build_dir))
-    except (OSError, ValueError):
-        return None
-    if not isinstance(parsed, dict):
-        return None
-    config = cast("dict[str, Any]", parsed)
-    api_ref_config = config.get("api-reference")
-    if not isinstance(api_ref_config, dict):
-        return None
-    api_ref_config = cast("dict[str, Any]", api_ref_config)
-    if not api_ref_config.get("package") or not api_ref_config.get("sections"):
-        return None
-    return config
+    return api_block is not None and bool(api_block.get("package") and api_block.get("sections"))
 
 
-def is_planned(build_dir: Path) -> bool:
+def is_planned(api_block: Mapping[str, Any] | None) -> bool:
     """
     Check whether the build will write `llms.txt` and `llms-full.txt`
 
-    The homepage checks availability before either file exists. Both files require an
-    `api-reference` block in `_quarto.yml` with an importable `package` and at least one
-    section.
+    The homepage checks availability before either file exists. Both files require an API
+    reference configuration with an importable `package` and at least one section.
 
     Parameters
     ----------
-    build_dir
-        The Quarto project directory.
+    api_block
+        The API reference configuration, or `None` when the site has none.
 
     Returns
     -------
     :
         Whether the build should write both files.
     """
-    config = _api_reference_config(build_dir)
-    if config is None:
+    if not _describes_api(api_block):
         return False
-    package_name = config["api-reference"]["package"]
+    package_name = api_block["package"]
     try:
         _ = importlib.import_module(str(package_name).replace("-", "_"))
     except ImportError:
@@ -94,8 +75,10 @@ def is_planned(build_dir: Path) -> bool:
 
 def write_index(
     build_dir: Path,
+    api_block: Mapping[str, Any] | None,
     metadata: Manifest,
     *,
+    site_url: str | None,
     report: Callable[[str], None],
 ) -> Path | None:
     """
@@ -103,14 +86,18 @@ def write_index(
 
     The file follows the llms.txt format: the package name, its description, and a list of
     links grouped by reference section. Links are absolute when the project has a
-    documentation URL or a `site-url`.
+    documentation URL or a site URL.
 
     Parameters
     ----------
     build_dir
         The Quarto project directory where the file will be written.
+    api_block
+        The API reference configuration, or `None` when the site has none.
     metadata
         The package metadata, including `description` and the `Documentation` entry of `urls`.
+    site_url
+        The configured address of the site, or `None`.
     report
         A callback that receives the line announcing the written file.
 
@@ -122,19 +109,16 @@ def write_index(
     """
     from ..._apiref import APIReference, SpecObject
 
-    config = _api_reference_config(build_dir)
-    if config is None:
+    if not _describes_api(api_block):
         return None
 
-    api_ref_config = config["api-reference"]
-    sections = api_ref_config["sections"]
-    package_name = api_ref_config["package"]
+    sections = api_block["sections"]
+    package_name = api_block["package"]
     description = metadata.get("description", "")
 
-    # The `Documentation` URL from `pyproject.toml` takes precedence over Quarto
-    # `site-url`.
+    # The `Documentation` URL from `pyproject.toml` takes precedence over the site URL.
     urls = metadata.get("urls", {})
-    site_url = urls.get("Documentation", "") or config.get("website", {}).get("site-url", "")
+    site_url = urls.get("Documentation", "") or site_url or ""
     if site_url:
         # Drop an anchor such as `#readme`; links are appended to the base URL.
         if "#" in site_url:
@@ -147,7 +131,7 @@ def write_index(
         lines += [f"> {description}", ""]
     lines += ["## Docs", "", "### API Reference", ""]
 
-    for section in APIReference(config).sections:
+    for section in APIReference({"api-reference": api_block}).sections:
         section_title = section.title or section.subtitle or ""
         section_desc = section.desc or ""
 
@@ -211,6 +195,7 @@ def docstring_summary(package_name: str, item_name: str) -> str:
 
 def write_full(
     build_dir: Path,
+    api_block: Mapping[str, Any] | None,
     *,
     cli: Mapping[str, Any] | None,
     user_guide: Mapping[str, Any] | None,
@@ -226,6 +211,8 @@ def write_full(
     ----------
     build_dir
         The Quarto project directory where the file will be written.
+    api_block
+        The API reference configuration, or `None` when the site has none.
     cli
         The package's Click interface, discovered for the CLI reference, or `None` to omit
         the command-line section.
@@ -241,13 +228,11 @@ def write_full(
         The path written, or `None` when the project has no usable API reference
         configuration or importing the package raises `ImportError`.
     """
-    config = _api_reference_config(build_dir)
-    if config is None:
+    if not _describes_api(api_block):
         return None
 
-    api_ref_config = config["api-reference"]
-    sections = api_ref_config["sections"]
-    package_name = api_ref_config["package"]
+    sections = api_block["sections"]
+    package_name = api_block["package"]
 
     try:
         module = importlib.import_module(package_name.replace("-", "_"))

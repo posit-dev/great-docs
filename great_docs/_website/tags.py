@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from .._content.naming import title_from_name
-from .._contribution import Contribution, NavbarLink
+from .._contribution import Contribution, InlineData, NavbarLink
 from .._icons import get_icon_svg
 from .._translations import get_translation
 from . import page_scan
@@ -30,7 +30,6 @@ if TYPE_CHECKING:
 __all__ = [
     "DATA_FILENAME",
     "INDEX_PAGE",
-    "Output",
     "TagNode",
     "TaggedPage",
     "collect",
@@ -84,17 +83,6 @@ class TagNode:
 
     children: dict[str, TagNode] = field(default_factory=lambda: dict[str, TagNode]())
     """The nested tags, by their last part"""
-
-
-@dataclass(frozen=True)
-class Output:
-    """Tag data and navigation for the site's Quarto configuration"""
-
-    page_data: dict[str, Any] | None
-    """The data `page-tags.js` reads, or `None` when tags are not shown on pages"""
-
-    contribution: Contribution
-    """A navbar link to the index page in front of Reference, or nothing without the page"""
 
 
 def collect(config: Config, layout: Layout) -> list[TaggedPage]:
@@ -328,7 +316,7 @@ def page_data(
     }
 
 
-def write(config: Config, layout: Layout, *, report: Callable[[str], None]) -> Output | None:
+def write(config: Config, layout: Layout, *, report: Callable[[str], None]) -> Contribution | None:
     """
     Write the tags index page and the tag pill data
 
@@ -347,8 +335,8 @@ def write(config: Config, layout: Layout, *, report: Callable[[str], None]) -> O
     Returns
     -------
     :
-        The tag data and navigation to add to the Quarto configuration, or `None`
-        when no page has a visible tag.
+        The index page's navbar link before Reference and the data for `page-tags.js`,
+        each when enabled, or `None` when no page has a visible tag.
     """
     build_dir = layout.build_dir
     pages = collect(config, layout)
@@ -356,7 +344,7 @@ def write(config: Config, layout: Layout, *, report: Callable[[str], None]) -> O
     if not groups:
         return None
 
-    contribution = Contribution()
+    links: tuple[NavbarLink, ...] = ()
     if config.tags_index_page:
         index = build_dir / INDEX_PAGE
         index.parent.mkdir(parents=True, exist_ok=True)
@@ -365,13 +353,14 @@ def write(config: Config, layout: Layout, *, report: Callable[[str], None]) -> O
         link = NavbarLink(
             text=navbar.TAGS.label(config), href=INDEX_PAGE, before="reference/index.qmd"
         )
-        contribution = Contribution(navbar=(link,))
+        links = (link,)
 
-    data = None
+    data: tuple[InlineData, ...] = ()
     if config.tags_show_on_pages:
-        data = page_data(pages, groups, config, report=report)
-        _ = (build_dir / DATA_FILENAME).write_text(json.dumps(data), encoding="utf-8")
-    return Output(page_data=data, contribution=contribution)
+        pills = page_data(pages, groups, config, report=report)
+        _ = (build_dir / DATA_FILENAME).write_text(json.dumps(pills), encoding="utf-8")
+        data = (InlineData("__GD_TAGS_DATA__", pills, before="page-tags.js"),)
+    return Contribution(navbar=links, inline_data=data)
 
 
 def _levels(tag: str, config: Config) -> tuple[str, ...]:

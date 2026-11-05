@@ -10,8 +10,6 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from yaml12 import read_yaml
-
 from .._interlinks.sphinx_inventory import INVENTORY_FILENAME
 from ._settings import Settings, SourceLinks, active_settings
 from .content import Doc, Link, Page
@@ -54,7 +52,7 @@ class APIReference:
 
     def __init__(
         self,
-        config: dict[str, Any] | str | Path,
+        config: dict[str, Any],
         source_links: SourceLinks | None = None,
     ) -> None:
         """
@@ -63,16 +61,17 @@ class APIReference:
         Parameters
         ----------
         config
-            The Quarto configuration, or the path to its YAML file.
+            The Quarto configuration mapping or its `api-reference` block.
         source_links
             The source-link destinations, or `None` to disable source links.
         """
-        cfg = self._load_config(config)
-        self.site_toc_depth = self._read_site_toc_depth(cfg)
-        block = self._select_block(cfg)
+        self.site_toc_depth = self._read_site_toc_depth(config)
+        block = self._select_block(config)
         block = {k: v for k, v in block.items() if k not in _REMOVED_KEYS}
 
-        self.settings = Settings.make(block, lang=self._read_lang(cfg), source_links=source_links)
+        self.settings = Settings.make(
+            block, lang=self._read_lang(config), source_links=source_links
+        )
         self.package = block["package"]
         self.title = block.get("title", "Function reference")
         self.desc = block.get("desc")
@@ -87,28 +86,6 @@ class APIReference:
 
         self._resolver = Resolver(self.settings)
         self._resolver.current_package = self.package
-
-    @staticmethod
-    def _load_config(config: dict[str, Any] | str | Path) -> dict[str, Any]:
-        """
-        Load a configuration mapping
-
-        Return mapping arguments unchanged. Read YAML paths and return an
-        empty mapping when the document's top-level value is not a mapping.
-
-        Parameters
-        ----------
-        config
-            Configuration mapping or YAML file path.
-
-        Returns
-        -------
-        Configuration mapping.
-        """
-        if not isinstance(config, (str, Path)):
-            return config
-        loaded = read_yaml(str(config))
-        return cast("dict[str, Any]", loaded) if isinstance(loaded, dict) else {}
 
     @staticmethod
     def _read_lang(cfg: dict[str, Any]) -> str:

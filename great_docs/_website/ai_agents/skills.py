@@ -5,13 +5,14 @@ Publish AI agent skills and a browsable skills page for a documentation site
 from __future__ import annotations
 
 import shutil
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from ..._layout import Layout
 from ..._manifest import Manifest
 from ...config import Config
-from .. import quarto_yml
 from .skill_md import compose
 from .skills_page import SkillsPageWriter
 from .well_known import publish
@@ -29,12 +30,22 @@ class SkillsWriter:
     distribution_name: str | None
     metadata: Manifest
 
-    def write(self) -> None:
+    def write(self, api_block: Mapping[str, Any] | None) -> None:
         """
         Publish the configured skills and a page for browsing them
 
         Copy authored or curated skills when available; otherwise generate a skill from
         package metadata and the API reference. Publish discovery files when enabled.
+
+        Parameters
+        ----------
+        api_block
+            The API reference configuration for a generated skill, or `None` when the site
+            has none.
+
+        Returns
+        -------
+        :
         """
         if not self.config.skill_enabled:
             return
@@ -79,18 +90,8 @@ class SkillsWriter:
                 )
                 return
 
-        if not quarto_yml.path(self.build_dir).exists():
-            return
-
-        config = quarto_yml.read(self.build_dir)
-
         skill_content = compose(
-            self.config,
-            self.layout,
-            self.build_dir,
-            self.distribution_name,
-            self.metadata,
-            config,
+            self.config, self.layout, self.distribution_name, self.metadata, api_block
         )
 
         skill_path = self.build_dir / "skill.md"

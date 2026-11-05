@@ -14,10 +14,12 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from yaml12 import parse_yaml
 
 from .._utils import write_quarto_yml
+from . import inline_data
 from .navigation import navbar as nav_navbar
 
 if TYPE_CHECKING:
     from .._contribution import Contribution, NavbarLink, Sidebar
+    from ..config import Config
 
 FILENAME = "_quarto.yml"
 
@@ -42,7 +44,7 @@ def path(build_dir: Path) -> Path:
     return build_dir / FILENAME
 
 
-def read(build_dir: Path, *, seed_website: bool = False) -> dict[str, Any]:
+def read(build_dir: Path) -> dict[str, Any]:
     """
     Parse a build directory's Quarto configuration
 
@@ -52,10 +54,6 @@ def read(build_dir: Path, *, seed_website: bool = False) -> dict[str, Any]:
     ----------
     build_dir
         The Quarto project directory.
-    seed_website
-        Whether to treat a missing file as an empty mapping and supply missing
-        `website` defaults: an empty `sidebar` list and a `navbar` mapping with
-        an empty `left` list.
 
     Returns
     -------
@@ -65,18 +63,10 @@ def read(build_dir: Path, *, seed_website: bool = False) -> dict[str, Any]:
     Raises
     ------
     FileNotFoundError
-        If the file is missing and `seed_website` is false.
+        If `_quarto.yml` is missing.
     """
-    file = path(build_dir)
-    if seed_website and not file.exists():
-        quarto_config: dict[str, Any] = {}
-    else:
-        quarto_config = cast("dict[str, Any]", parse_yaml(file.read_text(encoding="utf-8")) or {})
-    if seed_website:
-        website = cast("dict[str, Any]", quarto_config.setdefault("website", {}))
-        website.setdefault("sidebar", [])
-        website.setdefault("navbar", {"left": []})
-    return quarto_config
+    text = path(build_dir).read_text(encoding="utf-8")
+    return cast("dict[str, Any]", parse_yaml(text) or {})
 
 
 def write(build_dir: Path, quarto_config: dict[str, Any]) -> None:
@@ -99,7 +89,7 @@ def write(build_dir: Path, quarto_config: dict[str, Any]) -> None:
     write_quarto_yml(path(build_dir), quarto_config)
 
 
-def write_initial(build_dir: Path) -> None:
+def write_initial(build_dir: Path) -> dict[str, Any]:
     """
     Write the initial website configuration
 
@@ -114,12 +104,18 @@ def write_initial(build_dir: Path) -> None:
     Returns
     -------
     :
+        A new mapping containing the written configuration, ready for in-memory updates.
     """
-    write(build_dir, {"project": {"type": "website"}, "format": {"html": {"theme": "flatly"}}})
+    quarto_config: dict[str, Any] = {
+        "project": {"type": "website"},
+        "format": {"html": {"theme": "flatly"}},
+    }
+    write(build_dir, quarto_config)
+    return quarto_config
 
 
 @contextmanager
-def edit(build_dir: Path, *, seed_website: bool = False) -> Generator[dict[str, Any]]:
+def edit(build_dir: Path) -> Generator[dict[str, Any]]:
     """
     Read the Quarto configuration for in-place changes and write it back
 
@@ -130,10 +126,6 @@ def edit(build_dir: Path, *, seed_website: bool = False) -> Generator[dict[str, 
     ----------
     build_dir
         The Quarto project directory.
-    seed_website
-        Whether to treat a missing file as an empty mapping and supply missing
-        `website` defaults: an empty `sidebar` list and a `navbar` mapping with
-        an empty `left` list.
 
     Yields
     ------
@@ -143,9 +135,9 @@ def edit(build_dir: Path, *, seed_website: bool = False) -> Generator[dict[str, 
     Raises
     ------
     FileNotFoundError
-        If the file is missing and `seed_website` is false.
+        If `_quarto.yml` is missing.
     """
-    quarto_config = read(build_dir, seed_website=seed_website)
+    quarto_config = read(build_dir)
     yield quarto_config
     write(build_dir, quarto_config)
 
@@ -354,35 +346,53 @@ def add_render_excludes(quarto_config: dict[str, Any], names: Iterable[str]) -> 
             render.append(exclude)
 
 
-def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
+def apply(quarto_config: dict[str, Any], contribution: Contribution, config: Config) -> None:
     """
-    Add a build step's navigation, resources and render exclusions to the Quarto configuration
+    Add a build step's navigation, resources, render exclusions and script data
 
-    A link is added to `website.navbar.left` unless an item already has the same `href`
-    or, for Great Docs' own items such as Reference, a target in the same directory.
-    The link precedes the first item whose `href` matches its `before` target. It is
-    appended when no target is set or found. Repeated contributions add each link only
-    once. Configurations without `website.navbar.left` get no links.
+    Assign each inline data entry to a global in `format.html.include-after-body`,
+    before the first entry containing its `before` text, or last if none matches.
+    Preserve the value of any global already assigned.
 
-    Each sidebar replaces the entry with the same `id` in `website.sidebar`, keeping
-    its position. A sidebar with no matching entry is appended. The sidebar list is
-    created when missing.
+    Add links to `website.navbar.left` according to their kind:
 
-    Resources join `project.resources` and render exclusions join `project.render`,
-    each once, as `add_resources` and `add_render_excludes` add them.
+    - Skip a `generated` link if an item has the same `href` or, for Great Docs' own
+      items such as Reference, a target in the same directory. Place it before the first
+      item whose `href` matches `before`, or last if no target is set or found.
+    - Skip an `authored` link only if an item has the same `href`. Place it after the
+      item labelled `after`, before Reference if no label matches, or last if neither
+      is found.
+    - Skip a `user_guide` link only if an item has the same `href`. Place it before
+      Reference, or first if Reference is absent.
+
+    Repeated contributions add each link only once. Configurations without
+    `website.navbar.left` get no links.
+
+    Append each sidebar to `website.sidebar` after removing every entry with the same
+    `id`. Create the list if missing, and omit the `title` key for untitled sidebars.
+
+    Add resources to `project.resources` and render exclusions to `project.render`,
+    each once, as `add_resources` and `add_render_excludes` do.
 
     Parameters
     ----------
     quarto_config
         The configuration, changed in place.
     contribution
-        The navigation, resources and render exclusions to add.
+        The navigation, resources, render exclusions and script data to add.
+    config
+        The Great Docs configuration. Its language determines which translated labels
+        match an `authored` link's `after` value.
 
     Returns
     -------
     :
     """
-    _add_navbar_links(quarto_config, contribution.navbar)
+    # Assign data before adding links to preserve the tags step's configuration key order
+    # when the assignment creates `format`.
+    for item in contribution.inline_data:
+        inline_data.add(quarto_config, item.name, item.data, before=item.before)
+    _add_navbar_links(quarto_config, contribution.navbar, config)
     if contribution.sidebars:
         _add_sidebars(quarto_config, contribution.sidebars)
     if contribution.resources:
@@ -391,7 +401,9 @@ def apply(quarto_config: dict[str, Any], contribution: Contribution) -> None:
         add_render_excludes(quarto_config, contribution.render_excludes)
 
 
-def _add_navbar_links(quarto_config: dict[str, Any], links: Iterable[NavbarLink]) -> None:
+def _add_navbar_links(
+    quarto_config: dict[str, Any], links: Iterable[NavbarLink], config: Config
+) -> None:
     """
     Add missing links to the navbar's left side
 
@@ -401,6 +413,8 @@ def _add_navbar_links(quarto_config: dict[str, Any], links: Iterable[NavbarLink]
         The configuration, changed in place.
     links
         The links, in order.
+    config
+        The Great Docs configuration, which supplies the language for `after` matching.
 
     Returns
     -------
@@ -411,6 +425,12 @@ def _add_navbar_links(quarto_config: dict[str, Any], links: Iterable[NavbarLink]
         return
     items = cast("list[Any]", navbar["left"])
     for link in links:
+        if link.kind == "authored":
+            _ = nav_navbar.add_link(quarto_config, link, config, after=link.after)
+            continue
+        if link.kind == "user_guide":
+            _ = nav_navbar.add_guide_link(quarto_config, link)
+            continue
         if nav_navbar.has_item(items, link.href):
             continue
         hrefs = [
@@ -424,7 +444,7 @@ def _add_navbar_links(quarto_config: dict[str, Any], links: Iterable[NavbarLink]
 
 def _add_sidebars(quarto_config: dict[str, Any], sidebars: Iterable[Sidebar]) -> None:
     """
-    Replace sidebars with the same `id` or append new sidebars
+    Append sidebars, removing earlier entries with the same `id`
 
     Parameters
     ----------
@@ -440,12 +460,13 @@ def _add_sidebars(quarto_config: dict[str, Any], sidebars: Iterable[Sidebar]) ->
     website = cast("dict[str, Any]", quarto_config.setdefault("website", {}))
     existing = entries(website, "sidebar")
     for sidebar in sidebars:
-        entry = {"id": sidebar.id, "title": sidebar.title, "contents": list(sidebar.contents)}
-        ids = [
-            cast("dict[str, Any]", item).get("id") if isinstance(item, dict) else None
+        entry: dict[str, Any] = {"id": sidebar.id}
+        if sidebar.title is not None:
+            entry["title"] = sidebar.title
+        entry["contents"] = list(sidebar.contents)
+        existing[:] = [
+            item
             for item in existing
+            if not (isinstance(item, dict) and cast("dict[str, Any]", item).get("id") == sidebar.id)
         ]
-        if sidebar.id in ids:
-            existing[ids.index(sidebar.id)] = entry
-        else:
-            existing.append(entry)
+        existing.append(entry)

@@ -501,7 +501,7 @@ class TestMultiSkillWellKnown:
                 docs.build_dir,
                 make_project(docs).name,
                 make_project(docs).manifest,
-            ).write()
+            ).write(None)
 
             # Check primary skill.md was created
             primary = great_docs_dir / "skill.md"

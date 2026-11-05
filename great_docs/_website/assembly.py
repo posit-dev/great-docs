@@ -7,7 +7,7 @@ Later settings also depend on entries added by earlier settings.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 from .._manifest import Manifest
@@ -20,6 +20,7 @@ from . import (
     metadata_partial,
     page_url,
     quarto_defaults,
+    quarto_yml,
     scripts,
     social_cards,
 )
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from .._build.facts import Facts
+    from .._contribution import Contribution
     from .._github import GithubRepo
     from .._layout import Layout
     from ..config import Config
@@ -53,17 +55,19 @@ def assemble(
     package_name: str | None,
     metadata: Manifest,
     has_api_reference: bool,
+    contributions: Sequence[Contribution],
     report: Callable[[str], None],
     warn: Callable[[str], None],
 ) -> None:
     """
     Merge Great Docs' site-wide settings into a Quarto configuration
 
-    Add the pre-render scripts, theme, resources, page scripts and stylesheets,
-    site navigation, footer, canonical links and social cards while preserving
-    unrelated configuration. Repeated calls refresh these settings without
-    duplicating entries. Copy referenced files, such as logos, header includes,
-    the metadata partial and the social card image, into the build directory.
+    Add pre-render scripts, theme, resources, page scripts, stylesheets, navigation,
+    footer, canonical links and social cards. Apply the build steps' contributions
+    in order and preserve unrelated configuration. Repeated calls refresh these
+    settings without duplicating entries. Copy referenced files, including logos,
+    header includes, the metadata partial and the social card image, into the
+    build directory.
 
     Parameters
     ----------
@@ -88,6 +92,9 @@ def assemble(
         The project's package metadata, including its authors, maintainers and URLs.
     has_api_reference
         Whether the site has an API reference.
+    contributions
+        Navigation, resources, render exclusions and script data recorded by build
+        steps, in build step order.
     report
         Callback for messages about the settings, such as the bibliography files
         used and unknown icon names.
@@ -129,6 +136,11 @@ def assemble(
 
     # Table order preserves the order in which pages load the site's scripts.
     scripts.include(config, quarto_config, build_dir, has_repository=has_repository)
+
+    # Contributed links and data require the navbar and script includes to exist.
+    # Apply them before configuring the reference switcher, icons and navbar order.
+    for contribution in contributions:
+        quarto_yml.apply(quarto_config, contribution, config)
 
     appearance.register_wide_layout(quarto_config, config)
     reference_switcher.register(

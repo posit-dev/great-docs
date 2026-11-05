@@ -1,9 +1,9 @@
 """
 Build directory preparation
 
-Replace the build directory with a fresh Quarto project containing the site's configuration,
-assets, scripts, stylesheets and bibliography. Configure the API reference and write the
-homepage and project pages.
+Replace the build directory with a fresh Quarto project containing the initial site
+configuration, assets, scripts, stylesheets and bibliography. Configure the API reference
+and write the homepage and project pages.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from .._content import user_guide as authored_guide
 from .._reference import sections as reference_sections
 from .._utils import GITIGNORE_CONTENT
 from .._website import page_dates, quarto_yml, scripts
-from . import content, outputs, reference, site
+from . import content, outputs, reference
 from .steps import Outcome, print_warning
 
 if TYPE_CHECKING:
@@ -53,15 +53,14 @@ def build_directory(
     Parameters
     ----------
     run
-        The current build, which records whether the site has an API reference and the
-        discovered user guide.
+        The current build, updated with the initial Quarto configuration, API reference
+        availability, reference navigation and the discovered user guide.
     config
         The project's configuration.
     layout
         The project's directories.
     remote
-        The source of repository data for the site configuration and PyPI release dates for
-        the package information page.
+        The source of PyPI release dates for the package information page.
     page_authors
         The site's authors, added to the homepage and project pages.
 
@@ -88,7 +87,7 @@ def build_directory(
         shutil.rmtree(build_dir)
 
     build_dir.mkdir(parents=True, exist_ok=True)
-    quarto_yml.write_initial(build_dir)
+    run.quarto_config = quarto_yml.write_initial(build_dir)
 
     scripts_dir = build_dir / "scripts"
     scripts_dir.mkdir(exist_ok=True)
@@ -157,8 +156,6 @@ def build_directory(
 
     _ = (build_dir / ".gitignore").write_text(GITIGNORE_CONTENT, encoding="utf-8")
 
-    site.update_quarto_config(run, config, layout, remote=remote)
-
     page_dates.copy_portraits(config, layout.source_dir, build_dir)
 
     # The restore script needs the freeze cache path relative to the build directory.
@@ -166,9 +163,9 @@ def build_directory(
     with open(build_dir / "_gd_options.json", "w") as f:
         json.dump(gd_options, f)
 
-    reference.add_api_block(run, config, layout)
-    if run.has_api_reference:
-        reference_sections.update_sidebar(config, build_dir)
+    reference.add_api_block(run, config)
+    if run.api_block is not None:
+        run.contributions.append(reference_sections.contribution(config, run.api_block))
 
     # API reference availability determines whether the homepage links to `llms.txt` and
     # `llms-full.txt`; resolve it before writing the homepage.

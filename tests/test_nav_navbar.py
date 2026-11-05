@@ -248,7 +248,7 @@ def test_cli_reference_link_is_labelled_in_the_site_language(tmp_path: Path):
 
     contribution = cli_render.contribution(docs._config, ["reference/cli/index.qmd"])
     with quarto_yml.edit(docs.build_dir) as quarto_config:
-        quarto_yml.apply(quarto_config, contribution)
+        quarto_yml.apply(quarto_config, contribution, docs._config)
 
     assert _built_labels(docs) == ["Blog", "Référence"]
 

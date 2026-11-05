@@ -44,10 +44,11 @@ def register(
     Add the site's address, title, navbar, logo and favicons
 
     Set `website.site-url` to the site address when available. Enable page
-    navigation and set the site title unless the Quarto configuration already
-    sets them. Create a missing navbar, or remove the legacy `Home` link from
-    the left side of an existing navbar. Add the GitHub entry on the right when
-    the project has a GitHub repository.
+    navigation unless the Quarto configuration already sets it. Set a missing
+    site title to the site's name when the name is non-empty. Create a missing
+    navbar, or remove the legacy `Home` link from the left side of an existing
+    navbar. Add the GitHub entry on the right when the project has a GitHub
+    repository.
 
     Show a configured logo, or one found at a conventional path, in place of
     the navbar title unless `logo.show_title` is set. Copy local logo images into
@@ -93,10 +94,8 @@ def register(
     if identity.url:
         website["site-url"] = identity.url
     _ = website.setdefault("page-navigation", True)
-    if "title" not in website:
-        title = identity.name or _binary_name(config, layout.package_root)
-        if title:
-            website["title"] = title
+    if "title" not in website and identity.name:
+        website["title"] = identity.name
 
     _add_navbar(website, config, repo, facts)
 
@@ -128,39 +127,6 @@ def register_release(quarto_config: dict[str, Any], config: Config, facts: Facts
     :
     """
     release.add_to_navbar(quarto_config, facts.latest_release, config.lang)
-
-
-def _binary_name(config: Config, package_root: Path) -> str | None:
-    """
-    Find the name of the project's Go or Rust command-line program
-
-    Parameters
-    ----------
-    config
-        Project configuration, which enables the Go and Rust CLI references.
-    package_root
-        The project's root directory.
-
-    Returns
-    -------
-    :
-        The Go binary name, or the first Rust binary name if no Go name is found.
-        `None` when neither CLI reference is enabled and detected.
-    """
-    name = None
-    if config.go_cli_enabled:
-        from ..._cliref.go import detect_go_cli_project
-
-        go_project = detect_go_cli_project(package_root)
-        if go_project:
-            name = go_project.binary_name
-    if not name and config.rust_cli_enabled:
-        from ..._cliref.rust import detect_rust_cli_project
-
-        rust_project = detect_rust_cli_project(package_root)
-        if rust_project:
-            name = rust_project.binary_names[0]
-    return name
 
 
 def _add_navbar(

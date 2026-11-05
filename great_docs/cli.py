@@ -2385,7 +2385,7 @@ def changelog(
             # Link the page from a site that has been built
             if quarto_yml.path(layout.build_dir).exists():
                 with quarto_yml.edit(layout.build_dir) as quarto_config:
-                    quarto_yml.apply(quarto_config, contribution)
+                    quarto_yml.apply(quarto_config, contribution, config)
             click.echo(f"✅ Changelog generated: {layout.build_dir / changelog_page.FILENAME}")
 
     except Exception as e:

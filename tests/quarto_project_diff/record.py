@@ -9,9 +9,9 @@ A manifest records, for each command of the case: the exit status, every file th
 added, changed or removed in the project, the step skeleton and `[!!]` warnings of its
 output, the census of exceptions that `great_docs` handled, and the calls that reached the
 stub `quarto`. A watch command also records whether its first build started the preview,
-whether a source edit reached another file and whether its output holds a traceback. The
-manifest also names the case's variant, the order of its commands and whether it expects an
-API reference.
+whether a source edit reached the previewed project and whether its output holds a
+traceback. The manifest also names the case's variant, the order of its commands and whether
+it expects an API reference.
 """
 
 from __future__ import annotations
@@ -50,6 +50,7 @@ from tests.quarto_project_diff.normalise import (
 )
 from tests.quarto_project_diff.sides import (
     CENSUS_VARIABLE,
+    PREVIEW_DIRECTORY_VARIABLE,
     PREVIEW_HOLD_VARIABLE,
     QUARTO_LOG_VARIABLE,
     RENDER_PAGES_VARIABLE,
@@ -64,10 +65,10 @@ SCHEMA = 2
 # the stat data in `.git` of a copied repository.
 SKIPPED_DIRECTORIES = frozenset({"__pycache__", ".git"})
 
-# A watch run appends this line to a source file and looks for it in other files.
+# A watch run appends this line to a source file and looks for it in the previewed project.
 WATCH_MARKER = "Line added by the Quarto project diff during a watch run."
-# Seconds a watch run waits for its edit to reach another file, and for the command to exit
-# after the interrupt; and the interval between checks.
+# Seconds a watch run waits for its edit to reach the previewed project, and for the command
+# to exit after the interrupt; and the interval between checks.
 REBUILD_SECONDS = 10.0
 STOP_SECONDS = 10.0
 POLL_SECONDS = 0.2
@@ -363,7 +364,7 @@ def run_command(
     watch: dict[str, bool] | None = None
     with out_file.open("wb") as out, err_file.open("wb") as err:
         if name == "watch":
-            status, watch = run_watch(job, argv, package, env, out, err, quarto_log)
+            status, watch = run_watch(job, argv, package, env, out, err)
         else:
             try:
                 status = subprocess.run(
@@ -416,15 +417,16 @@ def run_watch(
     env: Mapping[str, str],
     out: IO[bytes],
     err: IO[bytes],
-    quarto_log: Path,
 ) -> tuple[int | str, dict[str, bool]]:
     """
     Run a watch command through its first build, one source edit and an interrupt
 
     The stub `quarto preview` runs until interrupted, as a server would. Once it starts, the
     run appends `WATCH_MARKER` to the case's `watch_edit` file, waits up to `REBUILD_SECONDS`
-    for the marker to reach another file under the package, and then sends `SIGINT` to the
-    command's process group, as Ctrl-C does in a terminal.
+    for the marker to reach the project that `quarto preview` serves, and then sends `SIGINT`
+    to the command's process group, as Ctrl-C does in a terminal. Watch mode prepares each
+    rebuild elsewhere before it updates the previewed project, so a marker found anywhere
+    else would end the run before the preview receives the edit.
 
     Parameters
     ----------
@@ -438,35 +440,38 @@ def run_watch(
         The command's environment.
     out, err :
         Files that receive the command's output streams.
-    quarto_log :
-        File where the stub `quarto` logs its calls.
 
     Returns
     -------
     :
         The exit status, or `timeout` when the command outlives its time or ignores the
         interrupt; whether the first build started the preview; and whether the edit reached
-        another file.
+        the previewed project.
     """
     deadline = time.monotonic() + job.timeout
+    preview_file = package.parent / "preview-directory.txt"
     process = subprocess.Popen(
         argv,
         cwd=package.parent,
-        env={**env, PREVIEW_HOLD_VARIABLE: str(math.ceil(job.timeout))},
+        env={
+            **env,
+            PREVIEW_HOLD_VARIABLE: str(math.ceil(job.timeout)),
+            PREVIEW_DIRECTORY_VARIABLE: str(preview_file),
+        },
         stdin=subprocess.DEVNULL,
         stdout=out,
         stderr=err,
         start_new_session=True,
         preexec_fn=_default_sigint,
     )
-    previewed = _wait_until(lambda: _previewing(quarto_log), process, deadline)
+    previewed = _wait_until(lambda: served_directory(preview_file) is not None, process, deadline)
+    served = served_directory(preview_file)
     rebuilt = False
-    if previewed and job.case.watch_edit is not None:
-        source = package / job.case.watch_edit
-        with source.open("a", encoding="utf-8") as file:
+    if served is not None and job.case.watch_edit is not None:
+        with (package / job.case.watch_edit).open("a", encoding="utf-8") as file:
             _ = file.write(f"\n{WATCH_MARKER}\n")
         until = min(deadline, time.monotonic() + REBUILD_SECONDS)
-        rebuilt = _wait_until(lambda: _copied(package, source), process, until)
+        rebuilt = _wait_until(lambda: has_watch_marker(served), process, until)
     status: int | str = "timeout"
     if previewed or process.poll() is not None:
         _signal_group(process, signal.SIGINT)
@@ -530,48 +535,45 @@ def _wait_until(
     return True
 
 
-def _previewing(quarto_log: Path) -> bool:
+def served_directory(preview_file: Path) -> Path | None:
     """
-    Report whether a command has called the stub `quarto preview`
+    Read the directory that the stub `quarto preview` serves
 
     Parameters
     ----------
-    quarto_log :
-        File where the stub logs its calls.
+    preview_file :
+        File where the stub writes its working directory when `preview` starts.
 
     Returns
     -------
     :
-        Whether the log holds a `preview` call.
+        The directory, or `None` before `preview` has started.
     """
-    if not quarto_log.is_file():
-        return False
-    return any(c.startswith("preview") for c in quarto_log.read_text(encoding="utf-8").splitlines())
+    if not preview_file.is_file():
+        return None
+    return Path(preview_file.read_text(encoding="utf-8").strip())
 
 
-def _copied(package: Path, source: Path) -> bool:
+def has_watch_marker(directory: Path) -> bool:
     """
-    Report whether `WATCH_MARKER` appears in a package file other than the edited source
+    Report whether `WATCH_MARKER` appears in a file under a directory
 
     Parameters
     ----------
-    package :
-        The package directory.
-    source :
-        The edited source file.
+    directory :
+        The directory, searched recursively.
 
     Returns
     -------
     :
-        Whether another file holds the marker.
+        Whether a file holds the marker.
     """
     marker = WATCH_MARKER.encode()
-    for dirpath, dirnames, filenames in os.walk(package):
+    for dirpath, dirnames, filenames in os.walk(directory):
         dirnames[:] = [d for d in dirnames if d not in SKIPPED_DIRECTORIES]
         for name in filenames:
-            path = Path(dirpath) / name
             try:
-                if path != source and marker in path.read_bytes():
+                if marker in (Path(dirpath) / name).read_bytes():
                     return True
             except FileNotFoundError:
                 # A rebuild removed the file during the walk.

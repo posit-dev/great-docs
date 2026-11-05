@@ -31,7 +31,7 @@ def test_skill_md_comes_from_first_published_skill_when_first_entry_is_skipped(t
         docs.build_dir,
         make_project(docs).name,
         make_project(docs).manifest,
-    ).write()
+    ).write(None)
 
     page = (docs.build_dir / "skills.qmd").read_text(encoding="utf-8")
     assert 'href="skill.md"' in page

@@ -35,6 +35,7 @@ CENSUS_VARIABLE = "GREAT_DOCS_QUARTO_PROJECT_DIFF_CENSUS"
 QUARTO_LOG_VARIABLE = "GREAT_DOCS_QUARTO_PROJECT_DIFF_QUARTO_LOG"
 RENDER_PAGES_VARIABLE = "GREAT_DOCS_QUARTO_PROJECT_DIFF_RENDER_PAGES"
 PREVIEW_HOLD_VARIABLE = "GREAT_DOCS_QUARTO_PROJECT_DIFF_PREVIEW_HOLD"
+PREVIEW_DIRECTORY_VARIABLE = "GREAT_DOCS_QUARTO_PROJECT_DIFF_PREVIEW_DIRECTORY"
 
 OBSERVER_SOURCE = Path(__file__).resolve().parent / "observer" / "sitecustomize.py"
 
@@ -43,7 +44,8 @@ _STUB_TEMPLATE = """\
 # Quarto stand-in written by the great-docs Quarto project diff. `render` and `preview`
 # succeed without output; every other subcommand runs the real Quarto. When ${pages} is
 # set, `render` writes a placeholder `_site/` page for each page that Quarto would render.
-# When ${hold} is set, `preview` runs for that many seconds, as a server would.
+# When ${served} is set, `preview` writes its working directory, the project it serves, to
+# that file. When ${hold} is set, `preview` runs for that many seconds, as a server would.
 if [ -n "${log}" ]; then
   printf '%s\\n' "$*" >> "${log}"
 fi
@@ -60,6 +62,9 @@ case "$1" in
     fi
     exit 0 ;;
   preview)
+    if [ -n "${served}" ]; then
+      pwd > "${served}.tmp" && mv "${served}.tmp" "${served}"
+    fi
     if [ -n "${hold}" ]; then
       exec sleep "${hold}"
     fi
@@ -274,6 +279,7 @@ def write_stub(directory: Path, real_quarto: str) -> Path:
             log=QUARTO_LOG_VARIABLE,
             pages=RENDER_PAGES_VARIABLE,
             hold=PREVIEW_HOLD_VARIABLE,
+            served=PREVIEW_DIRECTORY_VARIABLE,
             version=STUB_QUARTO_VERSION,
             real=shlex.quote(real_quarto),
         ),

@@ -43,7 +43,7 @@ def test_site_retries_a_transient_failure(tmp_path: Path, quarto_render: MagicMo
     quarto_render.side_effect = [TRANSIENT, RENDERED]
     log = MagicMock(spec=BuildLog)
 
-    result = render.site(mock_config(), Layout.make(tmp_path), log, 1, {}, None)
+    result = render.site(mock_config(), Layout.make(tmp_path), {}, log, 1, {}, None)
 
     assert result == (RENDERED, None)
     assert quarto_render.call_count == 2
@@ -62,6 +62,6 @@ def test_site_stops_after_a_lasting_failure(
     log = MagicMock(spec=BuildLog)
 
     with pytest.raises(StepError, match="Quarto render failed"):
-        _ = render.site(mock_config(), Layout.make(tmp_path), log, 1, {}, None)
+        _ = render.site(mock_config(), Layout.make(tmp_path), {}, log, 1, {}, None)
 
     assert quarto_render.call_count == renders

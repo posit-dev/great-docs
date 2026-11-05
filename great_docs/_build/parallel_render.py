@@ -16,7 +16,8 @@ rendered by one process in one project context.
 
 A parallel render goes like this:
 
-1. The project's pre-render scripts run once, in the project.
+1. The project's pre-render scripts run once, in the project. After a user's
+   script, `_quarto.yml` is read again, so the workers see the script's edits.
 2. `quarto inspect` lists the inputs, which are planned into groups using the
    page timings of the last build, and the time Quarto took to start in it.
 3. Worker copies of the project (without pre- and post-render scripts) render
@@ -32,6 +33,7 @@ the site the ordinary way.
 
 from __future__ import annotations
 
+import copy
 import heapq
 import json
 import os
@@ -54,7 +56,8 @@ from typing import Any
 from yaml12 import parse_yaml, write_yaml
 
 from .._subprocess import TEXT_MODE_KWARGS
-from .._utils import QUARTO_YML_HEADER
+from .._utils import write_quarto_yml
+from .._website import quarto_yml
 from . import quarto
 
 JOBS_ENV = "GREAT_DOCS_RENDER_JOBS"
@@ -96,7 +99,8 @@ _LISTINGS = "listings.json"
 # The project's files a worker doesn't need
 _SKIP_COPY = {"_site", ".quarto", "_gd_sidebars"}
 
-# Pre-render scripts Great Docs adds that don't change the project's inputs
+# Pre-render scripts Great Docs adds that change neither the project's inputs nor
+# `_quarto.yml`
 _KNOWN_PRE_RENDER = {"scripts/restore-freeze.py"}
 
 # Keys of `_quarto.yml` that only Great Docs reads, before the render
@@ -524,11 +528,6 @@ def _name_checker(build_dir: Path) -> Callable[[str], bool]:
     return can_name
 
 
-def _project_config(build_dir: Path) -> tuple[str, dict[str, Any]]:
-    text = (build_dir / "_quarto.yml").read_text(encoding="utf-8")
-    return text, dict(parse_yaml(text) or {})
-
-
 def _scripts(config: Mapping[str, Any], key: str) -> list[str]:
     value = (config.get("project") or {}).get(key)
     if value is None:
@@ -621,21 +620,21 @@ def _clone(entries: Sequence[Path], dest: Path) -> None:
             shutil.copy2(entry, target, follow_symlinks=False)
 
 
-def _copy_project(build_dir: Path, dest: Path) -> None:
-    """Copy a project for a worker"""
+def _copy_project(build_dir: Path, dest: Path, quarto_config: Mapping[str, Any]) -> None:
+    """Copy a project for a worker, with its `_quarto.yml` written from a copy of `quarto_config`"""
     dest.mkdir()
-    _clone([p for p in build_dir.iterdir() if p.name not in _SKIP_COPY], dest)
+    _clone(
+        [p for p in build_dir.iterdir() if p.name not in _SKIP_COPY and p.name != "_quarto.yml"],
+        dest,
+    )
 
     # Workers leave the project's scripts to the parallel render
-    text, config = _project_config(dest)
+    config = copy.deepcopy(dict(quarto_config))
     project = config.get("project") or {}
     project.pop("pre-render", None)
     project.pop("post-render", None)
     _slim_config(config, dest)
-    with open(dest / "_quarto.yml", "w", encoding="utf-8") as f:
-        if text.startswith(QUARTO_YML_HEADER):
-            f.write(QUARTO_YML_HEADER)
-        write_yaml(config, f)
+    write_quarto_yml(dest / "_quarto.yml", config)
 
 
 def _slim_config(config: dict[str, Any], dest: Path) -> None:
@@ -683,6 +682,7 @@ class _Runner:
     def __init__(
         self,
         build_dir: Path,
+        quarto_config: Mapping[str, Any],
         targets: list[Target],
         workers: int,
         env: Mapping[str, str],
@@ -692,6 +692,7 @@ class _Runner:
         overhead: float = TARGET_OVERHEAD,
     ):
         self.build_dir = build_dir
+        self.quarto_config = quarto_config
         self.overhead = overhead
         self.targets = targets
         self.env = dict(env)
@@ -737,7 +738,7 @@ class _Runner:
         try:
             if self.stop.is_set():
                 return
-            _copy_project(self.build_dir, directory)
+            _copy_project(self.build_dir, directory, self.quarto_config)
             if not self.freezes:
                 self._thaw_nothing(directory)
             # Quarto reads every page's metadata before rendering any, caching
@@ -1113,6 +1114,7 @@ class RenderResult:
 
 def render(
     build_dir: Path,
+    quarto_config: Mapping[str, Any],
     env: Mapping[str, str],
     jobs: int,
     timings: Mapping[str, float] | None = None,
@@ -1128,6 +1130,10 @@ def render(
     ----------
     build_dir
         The Quarto project directory.
+    quarto_config
+        The configuration written to the project's `_quarto.yml`, used to plan
+        the render and write worker configurations. After a user's pre-render
+        script, the edited `_quarto.yml` replaces it. The mapping is not modified.
     env
         The environment for Quarto.
     jobs
@@ -1158,7 +1164,7 @@ def render(
     if jobs < 2:
         return RenderResult(fallback="one render process requested")
 
-    text, config = _project_config(build_dir)
+    config = quarto_config
     project_type = (config.get("project") or {}).get("type")
     if project_type != "website":
         return RenderResult(fallback=f"project type is {project_type!r}, not a website")
@@ -1194,7 +1200,12 @@ def render(
         )
         if not ok:
             return RenderResult(returncode=1, stderr=output)
+        # A user's script may edit `_quarto.yml` or the inputs, which the workers must see
         if any(script not in _KNOWN_PRE_RENDER for script in pre_render):
+            try:
+                config = quarto_yml.read(build_dir)
+            except (OSError, ValueError) as e:
+                return RenderResult(fallback=f"couldn't read _quarto.yml after pre-render ({e})")
             try:
                 project = _inspect(build_dir, env)
             except (RuntimeError, ValueError, KeyError, OSError) as e:
@@ -1216,7 +1227,15 @@ def render(
 
     freezes = _project_freezes(config)
     runner = _Runner(
-        build_dir, targets, workers, env, freezes, project.page_freeze, on_page, overhead
+        build_dir,
+        config,
+        targets,
+        workers,
+        env,
+        freezes,
+        project.page_freeze,
+        on_page,
+        overhead,
     )
     origin = time.monotonic()
     try:

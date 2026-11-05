@@ -10,12 +10,11 @@ from unittest.mock import patch
 
 import pytest
 
-from great_docs import GreatDocs
 from great_docs._apiref._settings import SourceLinks
 from great_docs._build.facts import Facts, source_links, source_ref
 from great_docs._github import GithubRepo
 from great_docs._website.navigation.release import Release
-from tests.support import StubRemote, make_run, mock_config, update_quarto_config, write_config
+from tests.support import StubRemote, mock_config
 
 REPO = GithubRepo(owner="owner", name="repo")
 RELEASE = {"tag_name": "v1.2.0", "published_at": "2025-06-15T10:00:00Z"}
@@ -49,26 +48,6 @@ def test_the_icon_style_fetches_only_the_latest_release():
 
     assert facts == Facts()
     assert remote.calls == ["github_releases"]
-
-
-def test_both_configuration_passes_of_a_build_share_one_fetch(tmp_path: Path):
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "pkg"\n\n[project.urls]\nRepository = "https://github.com/owner/repo"\n',
-        encoding="utf-8",
-    )
-    _ = write_config(tmp_path)
-    docs = GreatDocs(project_path=str(tmp_path))
-    docs._remote = remote = StubRemote(releases=[RELEASE])
-    docs.build_dir.mkdir(parents=True)
-    (docs.build_dir / "_quarto.yml").write_text(
-        "project:\n  type: website\nformat:\n  html: {}\n", encoding="utf-8"
-    )
-    run = make_run(docs)
-
-    update_quarto_config(docs, run)
-    update_quarto_config(docs, run)
-
-    assert remote.calls == ["github_stats", "github_releases"]
 
 
 def _exited(returncode: int, stdout: str = "") -> subprocess.CompletedProcess[str]:

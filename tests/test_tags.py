@@ -13,13 +13,13 @@ import pytest
 
 from great_docs._build import generated
 from great_docs._build.steps import Skipped
-from great_docs._contribution import Contribution, NavbarLink
+from great_docs._contribution import Contribution, InlineData, NavbarLink
 from great_docs._layout import Layout
 from great_docs._utils import validate_build_dir
 from great_docs._website import inline_data, page_scan, quarto_yml, tags
 from great_docs.config import Config
 from great_docs.core import GreatDocs
-from tests.support import write_config
+from tests.support import apply_contributions, make_run, write_config
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -709,15 +709,14 @@ class TestWrite:
         _make_qmd(layout.build_dir / "user-guide" / "page.qmd", "Page", tags=["Python"])
         reported: list[str] = []
 
-        output = tags.write(config, layout, report=reported.append)
+        contribution = tags.write(config, layout, report=reported.append)
 
-        assert output is not None
         assert (layout.build_dir / "tags" / "index.qmd").exists()
         written = json.loads((layout.build_dir / "_tags.json").read_text(encoding="utf-8"))
-        assert written == output.page_data
         assert reported == ["Created tags/index.qmd"]
-        assert output.contribution == Contribution(
-            navbar=(NavbarLink("Tags", "tags/index.qmd", before="reference/index.qmd"),)
+        assert contribution == Contribution(
+            navbar=(NavbarLink("Tags", "tags/index.qmd", before="reference/index.qmd"),),
+            inline_data=(InlineData("__GD_TAGS_DATA__", written, before="page-tags.js"),),
         )
 
     def test_nothing_without_tagged_pages(self, tmp_path: Path):
@@ -733,22 +732,22 @@ class TestWrite:
         config, layout = _project(tmp_path, "tags:\n  enabled: true\n  index_page: false\n")
         _make_qmd(layout.build_dir / "user-guide" / "page.qmd", "Page", tags=["Python"])
 
-        output = tags.write(config, layout, report=print)
+        contribution = tags.write(config, layout, report=print)
 
-        assert output is not None
-        assert output.page_data is not None
+        assert contribution is not None
         assert not (layout.build_dir / "tags").exists()
-        assert output.contribution == Contribution()
+        assert contribution.navbar == ()
+        assert [data.name for data in contribution.inline_data] == ["__GD_TAGS_DATA__"]
 
     def test_not_shown_on_pages(self, tmp_path: Path):
         """Write the index without page data when tag pills are disabled"""
         config, layout = _project(tmp_path, "tags:\n  enabled: true\n  show_on_pages: false\n")
         _make_qmd(layout.build_dir / "user-guide" / "page.qmd", "Page", tags=["Python"])
 
-        output = tags.write(config, layout, report=print)
+        contribution = tags.write(config, layout, report=print)
 
-        assert output is not None
-        assert output.page_data is None
+        assert contribution is not None
+        assert contribution.inline_data == ()
         assert (layout.build_dir / "tags" / "index.qmd").exists()
         assert not (layout.build_dir / "_tags.json").exists()
 
@@ -780,6 +779,16 @@ class TestInlineData:
             "only.html",
             {"text": "<script>window.__GD_X__={};</script>"},
         ]
+
+    def test_inserts_before_an_embedded_reading_script(self):
+        """Insert data before an embedded script identified by a name it defines"""
+        embedded = {"text": "<script>function renderPageBadge() {}</script>"}
+        entries: list[Any] = ["first.html", embedded]
+        quarto_config: dict[str, Any] = {"format": {"html": {"include-after-body": entries}}}
+
+        inline_data.add(quarto_config, "__GD_X__", {}, before="page-status-badges.js")
+
+        assert entries == ["first.html", {"text": "<script>window.__GD_X__={};</script>"}, embedded]
 
     def test_keeps_an_earlier_assignment(self):
         """Keep the first assignment when the same global is added twice"""
@@ -833,7 +842,9 @@ class TestTagsStep:
         docs = _docs(tmp_path)
         _make_qmd(docs.build_dir / "user-guide" / "page.qmd", "Page", tags=["Python"])
 
-        assert generated.tags(docs._config, docs.layout) == "Tags processed"
+        run = make_run(docs)
+        assert generated.tags(run, docs._config, docs.layout) == "Tags processed"
+        apply_contributions(docs, run)
 
         entries = quarto_yml.read(docs.build_dir)["format"]["html"]["include-after-body"]
         assert entries[0]["text"].startswith("<script>window.__GD_TAGS_DATA__=")
@@ -845,8 +856,9 @@ class TestTagsStep:
         docs = _docs(tmp_path, "tags: true\nsite:\n  lang: fr\n")
         _make_qmd(docs.build_dir / "user-guide" / "page.qmd", "Page", tags=["Python"])
 
-        _ = generated.tags(docs._config, docs.layout)
-        _ = generated.tags(docs._config, docs.layout)
+        for run in (make_run(docs), make_run(docs)):
+            _ = generated.tags(run, docs._config, docs.layout)
+            apply_contributions(docs, run)
 
         left = quarto_yml.read(docs.build_dir)["website"]["navbar"]["left"]
         assert left == [{"text": "Étiquettes", "href": "tags/index.qmd"}, REFERENCE]
@@ -854,9 +866,13 @@ class TestTagsStep:
     def test_skips_without_tagged_pages(self, tmp_path: Path):
         """Report a skipped step when the project has no tagged pages"""
         docs = _docs(tmp_path)
-        assert generated.tags(docs._config, docs.layout) == Skipped("no tagged pages found")
+        run = make_run(docs)
+        assert generated.tags(run, docs._config, docs.layout) == Skipped("no tagged pages found")
+        assert run.contributions == []
 
     def test_skips_when_disabled(self, tmp_path: Path):
         """Report a skipped step when tags are disabled"""
         docs = _docs(tmp_path, "tags: false\n")
-        assert generated.tags(docs._config, docs.layout) == Skipped("tags not enabled")
+        assert generated.tags(make_run(docs), docs._config, docs.layout) == Skipped(
+            "tags not enabled"
+        )

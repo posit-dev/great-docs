@@ -16,13 +16,17 @@ from yaml12 import format_yaml, read_yaml, write_yaml
 from great_docs import GreatDocs
 from great_docs._build import content
 from great_docs._build.steps import Outcome, Skipped
+from great_docs._contribution import Contribution, NavbarLink
 from great_docs._utils import QUARTO_YML_HEADER
+from great_docs._website.quarto_yml import apply as apply_contribution
+from great_docs._website.quarto_yml import edit as edit_quarto_yml
 from great_docs._website.quarto_yml import read as read_quarto_yml
 from great_docs._website.quarto_yml import write as write_quarto_yml
 from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
 from great_docs._yaml import split_front_matter
 from tests.support import (
     StubRemote,
+    apply_contributions,
     custom_pages_step,
     discover_user_guide,
     make_project,
@@ -108,7 +112,7 @@ def _write_section_project(project_path: Path, dir_name: str) -> Path:
 
 def _user_guide(docs: GreatDocs, guide: UserGuide | None) -> Outcome:
     """
-    Run the user guide step for a project whose fallback homepage must not be written
+    Run the user guide step and apply its navigation without writing a fallback homepage
 
     Parameters
     ----------
@@ -123,9 +127,11 @@ def _user_guide(docs: GreatDocs, guide: UserGuide | None) -> Outcome:
         The step's outcome.
     """
     run = make_run(docs, user_guide=guide)
-    return content.user_guide(
+    outcome = content.user_guide(
         run, docs._config, docs.layout, page_authors=run.page_authors, remote=StubRemote()
     )
+    apply_contributions(docs, run)
+    return outcome
 
 
 def _publish(docs: GreatDocs, guide: UserGuide) -> list[str]:
@@ -171,6 +177,7 @@ def _promote(docs: GreatDocs, guide: UserGuide) -> str | None:
         make_project(docs),
         guide,
         page_authors=make_run(docs).page_authors,
+        api_block=None,
     )
 
 
@@ -178,7 +185,7 @@ def _add_navigation(
     docs: GreatDocs, guide: UserGuide, blended_first_page: str | None = None
 ) -> None:
     """
-    Add a project's user guide sidebar and navbar link to `_quarto.yml`
+    Apply the user guide's sidebar and navbar link to the project's `_quarto.yml`
 
     Parameters
     ----------
@@ -189,7 +196,9 @@ def _add_navigation(
     blended_first_page
         The promoted page's former path, or `None` when no page was promoted.
     """
-    content._add_guide_navigation(docs._config, docs.layout, guide, blended_first_page)
+    contribution = content._guide_navigation(docs._config, guide, blended_first_page)
+    with edit_quarto_yml(docs.build_dir) as quarto_config:
+        apply_contribution(quarto_config, contribution, docs._config)
 
 
 def _assets(docs: GreatDocs) -> Outcome:
@@ -878,14 +887,6 @@ def test_the_guide_sidebar_is_added_to_a_configuration_without_a_website(tmp_pat
 
     sidebars = read_quarto_yml(docs.build_dir)["website"]["sidebar"]
     assert [s["id"] for s in sidebars] == ["user-guide"]
-
-
-def test_the_guide_needs_no_quarto_configuration(tmp_path: Path):
-    docs = _project(tmp_path, {"pyproject.toml": '[project]\nname = "mypkg"\n'})
-
-    _add_navigation(docs, _intro_guide(tmp_path))
-
-    assert not (docs.build_dir / "_quarto.yml").exists()
 
 
 @pytest.mark.parametrize(
@@ -2120,10 +2121,35 @@ def test_the_assets_step_completes_the_quarto_configuration(tmp_path: Path, has_
     write_initial_quarto_yml(docs.build_dir)
     run = make_run(docs)
     update_quarto_config(docs, run)
-    assert "assets/**" not in read_quarto_yml(docs.build_dir)["project"]["resources"]
+    assert "assets/**" not in run.quarto_config["project"]["resources"]
 
     outcome = content.assets(run, docs._config, docs.layout, remote=docs._remote)
 
     assert outcome == ("Assets copied" if has_assets else Skipped("no assets directory"))
-    resources = read_quarto_yml(docs.build_dir)["project"]["resources"]
+    resources = run.quarto_config["project"]["resources"]
     assert ("assets/**" in resources) is has_assets
+
+
+def test_the_assets_step_adds_the_recorded_contributions_before_ordering_the_navbar(
+    tmp_path: Path,
+):
+    """
+    Add an earlier step's navbar link before applying `navbar_order`
+    """
+    docs = _project(
+        tmp_path,
+        {
+            "pyproject.toml": '[project]\nname = "test"\n',
+            "great-docs.yml": "navbar_order: [Changelog]\n",
+        },
+    )
+    write_initial_quarto_yml(docs.build_dir)
+    run = make_run(docs)
+    update_quarto_config(docs, run)
+    run.quarto_config["website"]["navbar"]["left"] = [{"text": "Examples", "href": "ex.qmd"}]
+    run.contributions.append(Contribution(navbar=(NavbarLink("Changelog", "changelog.qmd"),)))
+
+    _ = content.assets(run, docs._config, docs.layout, remote=docs._remote)
+
+    left = run.quarto_config["website"]["navbar"]["left"]
+    assert [item["text"] for item in left] == ["Changelog", "Examples"]

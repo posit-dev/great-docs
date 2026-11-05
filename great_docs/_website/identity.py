@@ -8,9 +8,9 @@ cards, structured data, canonical links, sitemaps and crawler rules.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING
 
-from . import page_url, quarto_yml
+from . import page_url
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -35,7 +35,7 @@ class Identity:
     def make(
         cls,
         config: Config,
-        build_dir: Path,
+        package_root: Path,
         github_owner: str | None,
         github_repo: str | None,
         package_name: str | None,
@@ -43,19 +43,19 @@ class Identity:
         """
         Resolve the site's name and addresses
 
-        Quarto uses `website.title` from the build directory's `_quarto.yml`
-        in page titles, so it takes precedence. The name falls back to the
-        configured display name, then `package_name`. The preferred address
-        is `seo.canonical.base_url`, with fallbacks to `site_url`, then the
-        repository's GitHub Pages address.
+        The name is the configured display name, else `package_name`, else the
+        name of the project's Go or Rust command-line program when its CLI
+        reference is enabled, else an empty string. The preferred address is
+        `seo.canonical.base_url`, else `site_url`, else the repository's GitHub
+        Pages address.
 
         Parameters
         ----------
         config
             Project configuration.
-        build_dir
-            The Quarto project directory. Its `_quarto.yml` may be missing or
-            unreadable.
+        package_root
+            The project's root directory, searched for a Go or Rust program when
+            its CLI reference is enabled.
         github_owner
             Owner of the project's GitHub repository, if it has one.
         github_repo
@@ -69,36 +69,41 @@ class Identity:
             The site's identity.
         """
         return cls(
-            name=_title(build_dir) or config.display_name or package_name or "",
+            name=config.display_name or package_name or _binary_name(config, package_root) or "",
             url=config.site_url,
             base_url=page_url.resolve_base_url(config, github_owner, github_repo),
         )
 
 
-def _title(build_dir: Path) -> str | None:
+def _binary_name(config: Config, package_root: Path) -> str | None:
     """
-    Read the site title from a build directory's `_quarto.yml`
+    Find the name of the project's Go or Rust command-line program
 
     Parameters
     ----------
-    build_dir
-        The Quarto project directory.
+    config
+        Project configuration, which enables the Go and Rust CLI references.
+    package_root
+        The project's root directory.
 
     Returns
     -------
     :
-        A non-empty `website.title`, or `None` when the file is missing,
-        unreadable or has no title.
+        The Go binary name when the Go CLI reference is enabled and a Go project
+        is detected, else the first Rust binary name under the same conditions
+        for Rust, else `None`.
     """
-    if not quarto_yml.path(build_dir).exists():
-        return None
-    try:
-        quarto_config = quarto_yml.read(build_dir)
-    except (OSError, ValueError):
-        return None
-    website = quarto_config.get("website")
-    if isinstance(website, dict):
-        title = cast("dict[str, Any]", website).get("title")
-        if isinstance(title, str) and title:
-            return title
-    return None
+    name = None
+    if config.go_cli_enabled:
+        from .._cliref.go import detect_go_cli_project
+
+        go_project = detect_go_cli_project(package_root)
+        if go_project:
+            name = go_project.binary_name
+    if not name and config.rust_cli_enabled:
+        from .._cliref.rust import detect_rust_cli_project
+
+        rust_project = detect_rust_cli_project(package_root)
+        if rust_project:
+            name = rust_project.binary_names[0]
+    return name

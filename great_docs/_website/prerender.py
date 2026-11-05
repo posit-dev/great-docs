@@ -12,13 +12,9 @@ from typing import TYPE_CHECKING
 from yaml12 import format_yaml
 
 from .._yaml import YamlMapping, locate_front_matter
-from . import page_metadata, quarto_yml
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from ..config import Config
-    from .seo.structured_data import StructuredData
 
 # Only column 0 matches, so nested `freeze:` keys remain unchanged.
 _FREEZE_LINE_RE = re.compile(r"^freeze:.*\n", re.MULTILINE)
@@ -108,41 +104,3 @@ def _nest_freeze(front_matter: str, mapping: YamlMapping) -> str | None:
     indent = _ENTRY_INDENT_RE.match(text, line.end()) if execute else None
     entry = f"\n{indent.group(1) if indent else '  '}freeze: {freeze}"
     return text[: line.end()] + entry + text[line.end() :]
-
-
-def write_page_metadata(
-    project_dir: Path,
-    config: Config,
-    default_description: str | None,
-    structured_data: StructuredData | None,
-) -> None:
-    """
-    Write search descriptions, social card options and `<head>` tags into pages
-
-    Descriptions and social cards depend on page content. Run after that content is final.
-    A missing `_quarto.yml` is treated as an empty configuration.
-
-    Parameters
-    ----------
-    project_dir
-        The Quarto project directory.
-    config
-        Project configuration.
-    default_description
-        The site's default description as plain text.
-    structured_data
-        The JSON-LD for the homepage and reference pages, or `None` when structured data is
-        disabled.
-
-    Returns
-    -------
-    :
-        `None`; page sources are updated in place.
-    """
-    _ = page_metadata.write_to_pages(
-        project_dir,
-        quarto_yml.read(project_dir, seed_website=True),
-        config,
-        default_description,
-        structured_data,
-    )

@@ -48,8 +48,7 @@ def seo_files(config: Config, layout: Layout, base_url: str | None) -> Outcome:
     layout
         The project's directories.
     base_url
-        The site's canonical address, or `None` when it is unknown. The site title in
-        `_quarto.yml` can change during the build, so read it when the step runs.
+        The site's canonical address, or `None` when it is unknown.
 
     Returns
     -------

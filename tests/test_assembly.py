@@ -55,6 +55,7 @@ def _assemble(root: Path, settings: str) -> dict[str, Any]:
         package_name="pkg",
         metadata={},
         has_api_reference=True,
+        contributions=(),
         report=lambda _: None,
         warn=lambda _: None,
     )

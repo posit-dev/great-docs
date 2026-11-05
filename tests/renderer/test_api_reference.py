@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -68,13 +67,8 @@ def test_options_stored_as_is():
     assert ref.options == opts
 
 
-def test_toc_depth_reads_generated_quarto_config(tmp_path: Path):
-    config = tmp_path / "_quarto.yml"
-    config.write_text(
-        "api-reference:\n  package: pkg\nformat:\n  html:\n    toc-depth: 4\n",
-        encoding="utf-8",
-    )
-    ref = APIReference(config)
+def test_toc_depth_reads_the_quarto_html_format():
+    ref = APIReference({"api-reference": {"package": "pkg"}, "format": {"html": {"toc-depth": 4}}})
     assert ref.site_toc_depth == 4
 
 

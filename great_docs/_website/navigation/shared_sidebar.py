@@ -25,11 +25,10 @@ import shutil
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Any, cast
+from typing import Any
 
-from yaml12 import format_yaml, parse_yaml, write_yaml
+from yaml12 import format_yaml, parse_yaml
 
-from ..._utils import QUARTO_YML_HEADER
 from ..._yaml import YamlValue, split_front_matter
 from ..page_metadata import rendered_pages
 
@@ -55,34 +54,36 @@ PREVIEW_ENV = "GREAT_DOCS_PREVIEW"
 _INPUT_SUFFIXES = (".qmd", ".md", ".markdown", ".rmd", ".Rmd", ".rmarkdown", ".ipynb")
 
 
-def prepare(build_dir: Path) -> list[str]:
+def prepare(build_dir: Path, quarto_config: dict[str, Any]) -> list[str]:
     """
     Arrange for each long reference sidebar to be rendered once
 
-    Run this after every other change to the project, just before Quarto
-    renders it.
+    Trim shared sidebars in `quarto_config`, add their full copies and register
+    the post-render script. The caller must write the updated configuration to
+    `_quarto.yml`. Write template pages, directory metadata, the script and its
+    manifest into `build_dir`.
+
+    Run after all other project changes, just before Quarto renders the project.
 
     Parameters
     ----------
     build_dir
         The Quarto project directory.
+    quarto_config
+        The project's Quarto configuration, changed in place when a sidebar
+        is shared.
 
     Returns
     -------
     :
         The ids of the shared sidebars, empty when none is shared.
     """
-    quarto_yml = build_dir / "_quarto.yml"
-    if not quarto_yml.is_file():
-        return []
-    text = quarto_yml.read_text(encoding="utf-8")
-    config = cast("dict[str, Any]", parse_yaml(text) or {})
-    website: YamlValue = config.get("website")
+    website: YamlValue = quarto_config.get("website")
     sidebars = website.get("sidebar") if isinstance(website, dict) else None
     if not isinstance(sidebars, list):
         return []
 
-    project = _Project(build_dir, config)
+    project = _Project(build_dir, quarto_config)
     plans = [plan for sidebar in project.sidebars if (plan := project.plan(sidebar))]
     plans = project.settle(plans)
     if not plans:
@@ -90,7 +91,7 @@ def prepare(build_dir: Path) -> list[str]:
 
     # Work out the crumbs from the full sidebars before trimming them
     manifest = {
-        "output_dir": str(config.get("project", {}).get("output-dir", "_site")),
+        "output_dir": str(quarto_config.get("project", {}).get("output-dir", "_site")),
         "sidebars": [project.manifest_entry(plan) for plan in plans],
     }
 
@@ -101,7 +102,7 @@ def prepare(build_dir: Path) -> list[str]:
             _tag_directory(build_dir / directory, plan.id)
         _write_template(build_dir / plan.template, plan)
 
-    project_config = config.setdefault("project", {})
+    project_config = quarto_config.setdefault("project", {})
     entry = f"scripts/{SCRIPT}"
     post_render: YamlValue = project_config.get("post-render")
     if post_render is None:
@@ -115,11 +116,6 @@ def prepare(build_dir: Path) -> list[str]:
     _ = shutil.copy2(Path(__file__).parents[2] / "assets" / SCRIPT, build_dir / "scripts" / SCRIPT)
 
     _ = (build_dir / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-
-    with open(quarto_yml, "w", encoding="utf-8") as f:
-        if text.startswith(QUARTO_YML_HEADER):
-            _ = f.write(QUARTO_YML_HEADER)
-        write_yaml(config, f)
     return [plan.id for plan in plans]
 
 

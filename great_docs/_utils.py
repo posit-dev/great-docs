@@ -97,22 +97,26 @@ def write_quarto_yml(path: Path, config: dict[str, Any]) -> None:
     Write a build directory's Quarto configuration as a generated file
 
     The file begins with `QUARTO_YML_HEADER`, so the directory still passes the
-    ownership check that guards every later build step.
+    ownership check that guards every later build step. Its last top-level key is
+    `api-reference`, wherever that key sits in `config`.
 
     Parameters
     ----------
     path
         The `_quarto.yml` file to write.
     config
-        The Quarto configuration.
+        The Quarto configuration, left unchanged.
 
     Returns
     -------
     :
     """
+    ordered = {key: value for key, value in config.items() if key != "api-reference"}
+    if "api-reference" in config:
+        ordered["api-reference"] = config["api-reference"]
     with open(path, "w", encoding="utf-8") as f:
         f.write(QUARTO_YML_HEADER)
-        write_yaml(config, f)
+        write_yaml(ordered, f)
 
 
 GITIGNORE_CONTENT = """# Great Docs build directory

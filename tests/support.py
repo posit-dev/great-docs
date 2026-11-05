@@ -7,7 +7,8 @@ project's facts as a build does, `make_exports` prepares to find its exports, an
 creates build state for testing build methods directly. `prepare_build_directory`,
 `update_quarto_config`, `add_api_block` and `write_homepage` provide the project inputs for
 individual build operations. `user_guide_step`, `sections_step`, `custom_pages_step` and
-`freeze_cache_step` run individual steps with the build's arguments.
+`freeze_cache_step` run individual steps with the build's arguments, and
+`apply_contributions` adds what a step records to `_quarto.yml`.
 `stubbed_build` stubs Quarto and build steps while preserving the build's control flow.
 `StubRemote` supplies GitHub and PyPI data without network requests. `homepage_hero` and
 `homepage_margin` build the homepage hero and sidebar from the project's configuration and metadata.
@@ -40,12 +41,15 @@ from great_docs._build.steps import Outcome, Skipped, print_warning
 from great_docs._content import user_guide
 from great_docs._project import Project
 from great_docs._reference.exports import Exports
+from great_docs._website import quarto_yml
+from great_docs._website.ai_agents import llms_txt
 from great_docs._website.homepage import hero, margin
 from great_docs._website.project_pages import community
 
 if TYPE_CHECKING:
     from great_docs._content.user_guide import UserGuide
     from great_docs._github import GithubRepo
+    from great_docs._layout import Layout
 
 # Stub calls within step actions to preserve the step table and build control flow.
 # List functions in first-call order by dotted path relative to `great_docs._build`.
@@ -208,21 +212,26 @@ def prepare_build_directory(docs: GreatDocs, run: Run) -> Outcome:
     """
     Prepare a fresh build directory using the project's build inputs
 
+    Write the Quarto configuration that preparation holds to `_quarto.yml`, as the end of
+    a build's preparation does.
+
     Parameters
     ----------
     docs
         The project supplying configuration, directories and remote data.
     run
-        The current build, which supplies the page authors.
+        The current build, which supplies the page authors and receives the configuration.
 
     Returns
     -------
     :
         The step's outcome.
     """
-    return prepare.build_directory(
+    outcome = prepare.build_directory(
         run, docs._config, docs.layout, remote=docs._remote, page_authors=run.page_authors
     )
+    quarto_yml.write(docs.build_dir, run.quarto_config)
+    return outcome
 
 
 def update_quarto_config(docs: GreatDocs, run: Run) -> None:
@@ -232,7 +241,7 @@ def update_quarto_config(docs: GreatDocs, run: Run) -> None:
     Parameters
     ----------
     docs
-        The project.
+        The project, whose `_quarto.yml` holds the configuration to update.
     run
         The current build.
 
@@ -240,7 +249,62 @@ def update_quarto_config(docs: GreatDocs, run: Run) -> None:
     -------
     :
     """
-    site.update_quarto_config(run, docs._config, docs.layout, remote=docs._remote)
+    with _quarto_config_in(docs.build_dir, run):
+        site.update_quarto_config(run, docs._config, docs.layout, remote=docs._remote)
+
+
+def apply_contributions(docs: GreatDocs, run: Run) -> None:
+    """
+    Apply the build's recorded Quarto contributions in step order
+
+    With recorded contributions, create `_quarto.yml` if missing and supply missing
+    `website` defaults before applying them. Leave the file unchanged when the build has
+    no contributions.
+
+    Parameters
+    ----------
+    docs
+        The project.
+    run
+        The build that recorded the contributions.
+
+    Returns
+    -------
+    :
+    """
+    if not run.contributions:
+        return
+    quarto_config = _seeded_quarto_config(docs.build_dir)
+    for contribution in run.contributions:
+        quarto_yml.apply(quarto_config, contribution, docs._config)
+    quarto_yml.write(docs.build_dir, quarto_config)
+
+
+def _seeded_quarto_config(build_dir: Path) -> dict[str, Any]:
+    """
+    Read a test's Quarto configuration and supply missing navigation defaults
+
+    Use an empty configuration if `_quarto.yml` is missing. Supply an empty `sidebar`
+    list if absent and a `navbar` mapping with an empty `left` list if `navbar` is
+    absent, so contributions can extend a partial test configuration.
+
+    Parameters
+    ----------
+    build_dir
+        The Quarto project directory.
+
+    Returns
+    -------
+    :
+        The parsed configuration with navigation defaults. A missing file starts with
+        an empty configuration.
+    """
+    file_exists = quarto_yml.path(build_dir).exists()
+    quarto_config = quarto_yml.read(build_dir) if file_exists else {}
+    website = quarto_config.setdefault("website", {})
+    website.setdefault("sidebar", [])
+    website.setdefault("navbar", {"left": []})
+    return quarto_config
 
 
 def add_api_block(docs: GreatDocs, run: Run) -> None:
@@ -250,7 +314,7 @@ def add_api_block(docs: GreatDocs, run: Run) -> None:
     Parameters
     ----------
     docs
-        The project.
+        The project, whose `_quarto.yml` receives the API reference configuration.
     run
         The current build.
 
@@ -258,7 +322,35 @@ def add_api_block(docs: GreatDocs, run: Run) -> None:
     -------
     :
     """
-    reference.add_api_block(run, docs._config, docs.layout)
+    with _quarto_config_in(docs.build_dir, run):
+        reference.add_api_block(run, docs._config)
+
+
+@contextmanager
+def _quarto_config_in(build_dir: Path, run: Run) -> Generator[None]:
+    """
+    Hold a test's `_quarto.yml` in the build state while a step runs, then write it back
+
+    The step sees the file's configuration, or an empty one when the file is missing. The
+    file is created only when the step adds configuration, and left unchanged when the step
+    raises an exception.
+
+    Parameters
+    ----------
+    build_dir
+        The Quarto project directory.
+    run
+        The build state that holds the configuration.
+
+    Yields
+    ------
+    :
+    """
+    file_exists = quarto_yml.path(build_dir).exists()
+    run.quarto_config = quarto_yml.read(build_dir) if file_exists else {}
+    yield
+    if file_exists or run.quarto_config:
+        quarto_yml.write(build_dir, run.quarto_config)
 
 
 def write_homepage(docs: GreatDocs, *, has_api_reference: bool = True) -> None:
@@ -324,9 +416,6 @@ def custom_pages_step(docs: GreatDocs, guide: UserGuide | None = None) -> Outcom
     """
     Run the build's custom pages step on its own
 
-    Read the site's current name and addresses from the build directory's `_quarto.yml`
-    when the step runs.
-
     Parameters
     ----------
     docs
@@ -346,8 +435,6 @@ def freeze_cache_step(docs: GreatDocs, *, watch: bool = False) -> Outcome:
     """
     Run the build's freeze cache step on its own
 
-    Read the site's current name and description when the step runs.
-
     Parameters
     ----------
     docs
@@ -365,7 +452,9 @@ def freeze_cache_step(docs: GreatDocs, *, watch: bool = False) -> Outcome:
 
 def _preparation_step(docs: GreatDocs, title: str, run: Run) -> Outcome:
     """
-    Run one preparation step with the build's arguments
+    Run one preparation step with the build's arguments and apply its contributions
+
+    The step sees the test's `_quarto.yml`, with missing `website` defaults supplied.
 
     Parameters
     ----------
@@ -381,10 +470,13 @@ def _preparation_step(docs: GreatDocs, title: str, run: Run) -> Outcome:
     :
         The step's outcome.
     """
+    run.quarto_config = _seeded_quarto_config(docs.build_dir)
     steps = pipeline.preparation_steps(
         run, docs._config, docs.layout, BuildLog(stream=io.StringIO()), remote=docs._remote
     )
-    return next(step for step in steps if step.title == title).run()
+    outcome = next(step for step in steps if step.title == title).run()
+    apply_contributions(docs, run)
+    return outcome
 
 
 @dataclass(frozen=True)
@@ -417,7 +509,9 @@ def stubbed_build(
     Stub Quarto and selected build calls while preserving the build's control flow
 
     Within the block, the Quarto installation check passes and the render environment is
-    empty. Stubbed processes, including `quarto render`, exit successfully without output.
+    empty. The stubbed preparation starts from the test's `_quarto.yml`, the stubbed
+    configuration step applies recorded contributions to it, and the build writes it back. Stubbed processes, including `quarto render`, exit successfully without
+    output.
     Build calls are stubbed except those listed in `run`. Stubs enforce the real call
     signatures and return empty values of their declared return types unless `returns`
     overrides them. Calls returning `Outcome` report a skip, which counts as a completed
@@ -433,7 +527,8 @@ def stubbed_build(
         Leave all other calls stubbed.
     api_reference
         Whether the stubbed preparation of the build directory leaves the site with an API
-        reference. By default it configures none, as for a project without one.
+        reference, configured by the `api-reference` block of the test's `_quarto.yml`. By
+        default it configures none, as for a project without one.
     **returns
         Return values for stubbed build steps, by name.
 
@@ -492,8 +587,12 @@ def stubbed_build(
             steps[name] = stack.enter_context(
                 patch.object(owner, attribute, autospec=True, return_value=value)
             )
-        if not api_reference and "prepare.build_directory" in steps:
-            steps["prepare.build_directory"].side_effect = _configure_no_api_reference
+        if "prepare.build_directory" in steps:
+            steps["prepare.build_directory"].side_effect = (
+                _record_written_api_reference if api_reference else _configure_no_api_reference
+            )
+        if "site.update_quarto_config" in steps:
+            steps["site.update_quarto_config"].side_effect = _apply_recorded_contributions
         yield BuildStubs(steps=steps, render=render)
 
 
@@ -534,14 +633,23 @@ def _step_owner(name: str) -> tuple[types.ModuleType, str]:
     return importlib.import_module(f"great_docs._build.{module}"), function
 
 
-def _configure_no_api_reference(run: Run, *args: object, **kwargs: object) -> object:
+def _configure_no_api_reference(
+    run: Run, config: Config, layout: Layout, *args: object, **kwargs: object
+) -> object:
     """
-    Mark a stubbed build as having no API reference and keep its configured return value
+    Prepare a stubbed build without an API reference and keep the stub's return value
+
+    The build's Quarto configuration is the test's `_quarto.yml`, or empty when the test
+    writes none.
 
     Parameters
     ----------
     run
         The current build.
+    config
+        The project's configuration.
+    layout
+        The project's directories.
     *args
         Additional positional arguments accepted by the preparation stub and ignored here.
     **kwargs
@@ -552,7 +660,78 @@ def _configure_no_api_reference(run: Run, *args: object, **kwargs: object) -> ob
     :
         `DEFAULT`, so the stub returns its configured value.
     """
+    if quarto_yml.path(layout.build_dir).exists():
+        run.quarto_config = quarto_yml.read(layout.build_dir)
     run.has_api_reference = False
+    return DEFAULT
+
+
+def _record_written_api_reference(
+    run: Run, config: Config, layout: Layout, *args: object, **kwargs: object
+) -> object:
+    """
+    Prepare a stubbed build with the test's API reference and keep the stub's return value
+
+    The build's Quarto configuration is the test's `_quarto.yml`, and its `api-reference`
+    block is the recorded one.
+
+    Parameters
+    ----------
+    run
+        The current build.
+    config
+        The project's configuration.
+    layout
+        The project's directories.
+    *args
+        Additional positional arguments accepted by the preparation stub and ignored here.
+    **kwargs
+        Keyword arguments accepted by the preparation stub and ignored here.
+
+    Returns
+    -------
+    :
+        `DEFAULT`, so the stub returns its configured value.
+
+    Raises
+    ------
+    KeyError
+        If the test's `_quarto.yml` has no `api-reference` block.
+    """
+    run.quarto_config = quarto_yml.read(layout.build_dir)
+    run.api_block = run.quarto_config["api-reference"]
+    return DEFAULT
+
+
+def _apply_recorded_contributions(
+    run: Run, config: Config, layout: Layout, *args: object, **kwargs: object
+) -> object:
+    """
+    Add a stubbed build's recorded contributions to its Quarto configuration
+
+    The real configuration step also merges site settings; this stub applies only the
+    contributions.
+
+    Parameters
+    ----------
+    run
+        The current build.
+    config
+        The project's configuration.
+    layout
+        The project's directories.
+    *args
+        Additional positional arguments accepted by the configuration stub and ignored here.
+    **kwargs
+        Keyword arguments accepted by the configuration stub and ignored here.
+
+    Returns
+    -------
+    :
+        `DEFAULT`, so the stub returns its configured value.
+    """
+    for contribution in run.contributions:
+        quarto_yml.apply(run.quarto_config, contribution, config)
     return DEFAULT
 
 
@@ -728,7 +907,7 @@ def homepage_hero(docs: GreatDocs, readme: str | None = None) -> tuple[str, str 
     return html, found.body if html else None
 
 
-def homepage_margin(docs: GreatDocs) -> str:
+def homepage_margin(docs: GreatDocs, *, api_block: dict[str, Any] | None = None) -> str:
     """
     Write a project's community pages and render its homepage sidebar, as a build does
 
@@ -736,6 +915,9 @@ def homepage_margin(docs: GreatDocs) -> str:
     ----------
     docs
         The project.
+    api_block
+        The API reference configuration, which decides whether the sidebar links to
+        `llms.txt`, or `None` for a site without one.
 
     Returns
     -------
@@ -753,6 +935,7 @@ def homepage_margin(docs: GreatDocs) -> str:
         community_pages=community.write_pages(
             docs._config, package_root, docs.build_dir, make_run(docs).page_authors
         ),
+        has_llms_txt=llms_txt.is_planned(api_block),
     )
 
 

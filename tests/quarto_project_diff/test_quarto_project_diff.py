@@ -17,8 +17,21 @@ from tests.quarto_project_diff.catalogue import Release, make_repository
 from tests.quarto_project_diff.__main__ import exit_status
 from tests.quarto_project_diff.compare import FailOn, compare, render
 from tests.quarto_project_diff.normalise import FILE_RULES, log_skeleton, normalise_text, path_rules
-from tests.quarto_project_diff.record import SCHEMA, read_census, store_blob
-from tests.quarto_project_diff.sides import OBSERVER_SOURCE, RequirementError, run_checked
+from tests.quarto_project_diff.record import (
+    SCHEMA,
+    WATCH_MARKER,
+    has_watch_marker,
+    read_census,
+    served_directory,
+    store_blob,
+)
+from tests.quarto_project_diff.sides import (
+    OBSERVER_SOURCE,
+    PREVIEW_DIRECTORY_VARIABLE,
+    RequirementError,
+    run_checked,
+    write_stub,
+)
 
 
 def test_file_rules_remove_commit_and_build_time_only():
@@ -334,6 +347,28 @@ def test_watch_without_rebuild_is_a_known_gap_and_a_crash_fails(tmp_path: Path):
         "watch never reached the preview after its first build (base: passes)",
         "watch exited with status timeout after the interrupt (base: passes)",
     ]
+
+
+def test_watch_edit_counts_once_it_reaches_the_previewed_project(tmp_path: Path):
+    # Watch mode stages each rebuild in its cache directory before it updates the previewed
+    # project, so the marker in the staged copy must not count as a rebuild.
+    stub = write_stub(tmp_path / "bin", "false")
+    served = tmp_path / "docs" / "_quarto" / "default"
+    staged = tmp_path / "docs" / ".cache" / "watch"
+    served.mkdir(parents=True)
+    staged.mkdir(parents=True)
+    preview_file = tmp_path / "preview-directory.txt"
+    env = {**os.environ, PREVIEW_DIRECTORY_VARIABLE: str(preview_file)}
+
+    assert served_directory(preview_file) is None
+    _ = subprocess.run([str(stub), "preview", "--no-browser"], cwd=served, env=env, check=True)
+    assert served_directory(preview_file) == served
+
+    _ = (staged / "configuration.qmd").write_text(WATCH_MARKER, encoding="utf-8")
+    assert not has_watch_marker(served)
+    (served / "user-guide").mkdir()
+    _ = (served / "user-guide" / "configuration.qmd").write_text(WATCH_MARKER, encoding="utf-8")
+    assert has_watch_marker(served)
 
 
 def test_a_command_that_starts_failing_is_a_regression(tmp_path: Path):

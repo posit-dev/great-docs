@@ -235,20 +235,24 @@ def test_watch_keeps_the_last_good_build_after_an_invalid_configuration(
     assert "The preview keeps the last successful build." in capsys.readouterr().out
 
 
-def test_sync_asks_for_a_restart_when_project_settings_change(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+def test_watch_asks_for_a_restart_once_when_project_settings_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ):
-    staged, served = tmp_path / "staged", tmp_path / "served"
-    staged.mkdir()
-    served.mkdir()
-    (served / "_quarto.yml").write_text("project:\n  type: website\n", encoding="utf-8")
-    (staged / "_quarto.yml").write_text(
-        "project:\n  type: website\n  render: [index.qmd]\n", encoding="utf-8"
-    )
+    docs = _project(tmp_path)
+    page = docs.layout.source_dir / "user_guide" / "01-intro.qmd"
+    (docs.layout.source_dir / "hook.py").write_text("", encoding="utf-8")
 
-    _ = watch.sync(staged, served, {"_quarto.yml": b"previous digest"})
+    def add_hook_then_edit(layout: Layout) -> Iterator[set[Path]]:
+        # A `pre_render` script adds `project.pre-render` to the Quarto configuration.
+        layout.config_path.write_text(CONFIG + "pre_render: hook.py\n", encoding="utf-8")
+        yield {layout.config_path}
+        with page.open("a", encoding="utf-8") as file:
+            _ = file.write(f"\n{MARKER}\n")
+        yield {page}
 
-    assert "rerun `great-docs build --watch`" in capsys.readouterr().out
+    _ = _watch(docs, monkeypatch, add_hook_then_edit)
+
+    assert capsys.readouterr().out.count("rerun `great-docs build --watch`") == 1
 
 
 @pytest.mark.parametrize(

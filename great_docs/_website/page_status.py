@@ -1,5 +1,5 @@
 """
-Collect authored page statuses and embed badge data in Quarto projects
+Collect authored page statuses and prepare badge data for embedding
 """
 
 from __future__ import annotations
@@ -8,9 +8,10 @@ import json
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, cast
 
+from .._contribution import Contribution, InlineData
 from .._icons import get_icon_svg
 from .._translations import get_translation
-from . import inline_data, page_scan, quarto_yml, scripts
+from . import page_scan
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
     from .._layout import Layout
     from ..config import Config
 
-__all__ = ["add_upcoming", "collect", "inject", "process", "write"]
+__all__ = ["add_upcoming", "collect", "process", "write"]
 
 _BUILTIN_STATUSES = {"new", "updated", "beta", "deprecated", "experimental", "upcoming"}
 
@@ -47,9 +48,14 @@ def collect(config: Config, layout: Layout, build_dir: Path) -> dict[str, str]:
     return statuses
 
 
-def write(config: Config, build_dir: Path, statuses: Mapping[str, str]) -> None:
+def write(config: Config, build_dir: Path, statuses: Mapping[str, str]) -> dict[str, Any]:
     """
     Write the page status data and resolved badge definitions
+
+    Returns
+    -------
+    :
+        The data written to `_page_status.json`.
     """
     user_statuses = config.user_settings.get("page_status", {})
     user_overrides: dict[str, Any] = (
@@ -84,60 +90,36 @@ def write(config: Config, build_dir: Path, statuses: Mapping[str, str]) -> None:
         "show_on_pages": config.page_status_show_on_pages,
     }
     _ = (build_dir / "_page_status.json").write_text(json.dumps(data), encoding="utf-8")
+    return data
 
 
-def inject(build_dir: Path) -> None:
+def process(config: Config, layout: Layout, build_dir: Path) -> Contribution | None:
     """
-    Embed page status data before the badge script
-
-    Leave the configuration unchanged if `_quarto.yml` or `_page_status.json`
-    is missing, the HTML format is absent, or status data is already embedded.
+    Write badge data when authored pages declare a status
 
     Parameters
     ----------
+    config
+        The Great Docs configuration.
+    layout
+        The project's directories.
     build_dir
-        The Quarto project directory containing `_quarto.yml` and `_page_status.json`.
+        The Quarto project directory whose pages are scanned and which receives
+        `_page_status.json`.
 
     Returns
     -------
     :
-    """
-    status_path = build_dir / "_page_status.json"
-    if not status_path.is_file() or not quarto_yml.path(build_dir).is_file():
-        return
-    quarto_config = quarto_yml.read(build_dir)
-    html = quarto_config.get("format", {}).get("html")
-    if not isinstance(html, dict):
-        return
-    entries: Any = cast("dict[str, Any]", html).get("include-after-body", [])
-    if isinstance(entries, str):
-        entries = [entries]
-    entries = cast("list[Any]", entries)
-    if any("__GD_STATUS_DATA__=" in str(entry) for entry in entries):
-        return
-    script = scripts.named("page-status-badges.js")
-    anchor = next((str(entry) for entry in entries if script.is_entry(entry)), script.name)
-    inline_data.add(
-        quarto_config,
-        "__GD_STATUS_DATA__",
-        json.loads(status_path.read_text(encoding="utf-8")),
-        before=anchor,
-    )
-    quarto_yml.write(build_dir, quarto_config)
-
-
-def process(config: Config, layout: Layout, build_dir: Path) -> bool:
-    """
-    Write badge data when authored pages declare a status
-
-    Return whether any matching page was found.
+        The badge data to embed before `page-status-badges.js`, or `None` when no
+        page declares a known status.
     """
     statuses = collect(config, layout, build_dir)
     if not statuses:
-        return False
-    write(config, build_dir, statuses)
-    inject(build_dir)
-    return True
+        return None
+    data = write(config, build_dir, statuses)
+    return Contribution(
+        inline_data=(InlineData("__GD_STATUS_DATA__", data, before="page-status-badges.js"),)
+    )
 
 
 def add_upcoming(quarto_config: dict[str, Any], upcoming: Mapping[str, str | bool]) -> bool:

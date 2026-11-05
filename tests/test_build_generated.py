@@ -7,16 +7,17 @@ from __future__ import annotations
 import sys
 from collections.abc import Iterator
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from great_docs import GreatDocs
 from great_docs._build import generated
-from tests.support import make_run
+from great_docs._build.log import BuildLog
+from tests.support import make_run, write_config
 
 # Use the standard library's `json` so planning `llms.txt` needs no test package.
-LLMS_TXT_QUARTO_YML = "api-reference:\n  package: json\n  sections:\n    - contents: [dumps]\n"
+LLMS_API_BLOCK = {"package": "json", "sections": [{"contents": ["dumps"]}]}
 
 
 def _cli_project(root: Path, cli_source: str | None = None) -> GreatDocs:
@@ -33,7 +34,7 @@ def _cli_project(root: Path, cli_source: str | None = None) -> GreatDocs:
     Returns
     -------
     :
-        The project, with a build directory whose API reference plans the llms files.
+        The project, with an empty build directory.
     """
     (root / "pyproject.toml").write_text('[project]\nname = "my-dist"\n', encoding="utf-8")
     (root / "great-docs.yml").write_text(
@@ -46,7 +47,6 @@ def _cli_project(root: Path, cli_source: str | None = None) -> GreatDocs:
         (package / "cli.py").write_text(cli_source, encoding="utf-8")
     docs = GreatDocs(project_path=str(root))
     docs.build_dir.mkdir()
-    (docs.build_dir / "_quarto.yml").write_text(LLMS_TXT_QUARTO_YML, encoding="utf-8")
     return docs
 
 
@@ -80,7 +80,7 @@ def test_llms_cli_help_is_discovered_in_the_importable_module(tmp_path: Path):
     docs = _cli_project(tmp_path)
 
     with patch("great_docs._cliref.click.discover", return_value=None) as discover:
-        generated.llms_txt(make_run(docs), docs._config, docs.layout)
+        generated.llms_txt(make_run(docs, api_block=LLMS_API_BLOCK), docs._config, docs.layout)
 
     discover.assert_called_once_with(
         "actual_module",
@@ -100,7 +100,7 @@ def test_llms_cli_heading_uses_the_distribution_name(importable: Path):
         importable, 'import click\n\n\n@click.group()\ndef main():\n    """Main CLI."""\n'
     )
 
-    generated.llms_txt(make_run(docs), docs._config, docs.layout)
+    generated.llms_txt(make_run(docs, api_block=LLMS_API_BLOCK), docs._config, docs.layout)
 
     assert "## CLI: my-dist" in (docs.build_dir / "llms-full.txt").read_text(encoding="utf-8")
 
@@ -111,6 +111,30 @@ def test_llms_full_is_written_without_cli_when_the_cli_module_fails_to_import(im
     """
     docs = _cli_project(importable, "import brokencli_missing_dependency\n")
 
-    generated.llms_txt(make_run(docs), docs._config, docs.layout)
+    generated.llms_txt(make_run(docs, api_block=LLMS_API_BLOCK), docs._config, docs.layout)
 
     assert "## CLI" not in (docs.build_dir / "llms-full.txt").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("settings", "warned"),
+    [
+        ("skill:\n  enabled: true\n", True),
+        ("skill:\n  enabled: true\nsite_url: https://example.com/docs/\n", False),
+        ("skill:\n  enabled: false\n", False),
+    ],
+)
+def test_site_url_check_warns_when_the_skills_page_has_no_site_url(
+    settings: str, warned: bool, tmp_path: Path
+):
+    """
+    Warn about placeholder install URLs only for an enabled skill without a site URL
+    """
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n', encoding="utf-8")
+    write_config(tmp_path, settings)
+    docs = GreatDocs(project_path=str(tmp_path))
+    log = MagicMock(spec=BuildLog)
+
+    generated.check_site_url(make_run(docs), docs._config, log)
+
+    assert log.warn.called is warned

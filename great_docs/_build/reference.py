@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, cast
 from .._cliref import click as cli_click
 from .._cliref import render as cli_render
 from .._reference import block as reference_block
-from .._website import quarto_yml
 from . import quarto
 from .facts import source_links
 from .steps import USER_CODE_ERRORS, Outcome, Skipped, StepError, print_warning
@@ -30,23 +29,23 @@ if TYPE_CHECKING:
 __all__ = ["add_api_block", "api", "api_config", "cli", "go_cli", "interlinks", "mcp", "rust_cli"]
 
 
-def add_api_block(run: Run, config: Config, layout: Layout) -> None:
+def add_api_block(run: Run, config: Config) -> None:
     """
-    Configure an API reference in `_quarto.yml` unless already present
+    Add the API reference configuration to the build's Quarto configuration
 
     Skip the reference when disabled, when the project is not Python, or when no package name
     is detected. Warn for a missing package name. Use an explicit `reference` configuration
     when supplied; otherwise discover sections from the package's exports. Skip when neither
-    supplies sections. Record skips and completed export discovery in the build state.
+    supplies sections. Record the configuration or mark the reference as skipped in
+    the build state.
 
     Parameters
     ----------
     run
-        The current build, including API reference availability and export discovery status.
+        The build state, updated with API reference availability and the reference's block
+        in the Quarto configuration.
     config
         The project's configuration.
-    layout
-        The project's directories.
 
     Returns
     -------
@@ -62,13 +61,6 @@ def add_api_block(run: Run, config: Config, layout: Layout) -> None:
     if not config.is_python_project:
         print("API reference skipped (non-Python project)")
         run.has_api_reference = False
-        return
-
-    build_dir = layout.build_dir
-    quarto_config = quarto_yml.read(build_dir)
-
-    if "api-reference" in quarto_config:
-        print("API reference configuration already exists, skipping")
         return
 
     project = run.project
@@ -90,38 +82,28 @@ def add_api_block(run: Run, config: Config, layout: Layout) -> None:
 
     # An explicit `reference` configuration takes precedence over discovered exports.
     sections = run.exports.sections(importable_name)
-
-    # The API reference configuration step skips rediscovery in this build.
-    run.api_discovery_done = True
-
     if not sections:
         print("No documentable exports found — skipping API reference")
         run.has_api_reference = False
         return
 
-    reference_block.configure(config, quarto_config, importable_name, sections)
-    quarto_yml.write(build_dir, quarto_config)
-
-    print(f"Added API reference configuration to {quarto_yml.path(build_dir)}")
+    run.api_block = reference_block.configure(config, run.quarto_config, importable_name, sections)
+    print("Added API reference configuration")
 
 
-def api_config(run: Run, config: Config, layout: Layout, *, refresh: bool) -> Outcome:
+def api_config(run: Run, *, refresh: bool) -> Outcome:
     """
-    Update the API reference configuration from the package's exports
+    Report the API reference configuration prepared for this build
 
-    Reuse the configuration if this build already discovered the exports during preparation.
+    Build preparation has already discovered the package's exports. Report the
+    configuration status without repeating discovery.
 
     Parameters
     ----------
     run
-        Build state recording whether the site has an API reference and whether its exports
-        have already been discovered.
-    config
-        The project's configuration.
-    layout
-        The project's directories.
+        The build state, including API reference availability.
     refresh
-        Whether to rediscover package exports.
+        Whether the build was asked to rediscover the package's exports.
 
     Returns
     -------
@@ -132,10 +114,7 @@ def api_config(run: Run, config: Config, layout: Layout, *, refresh: bool) -> Ou
         return Skipped("no API reference")
     if not refresh:
         return "Using existing config"
-    if run.api_discovery_done:
-        print("API reference already configured in this build, skipping re-discovery")
-    else:
-        reference_block.refresh(config, layout.build_dir, run.exports.sections)
+    print("API reference already configured in this build, skipping re-discovery")
     return "API reference refreshed"
 
 
@@ -145,12 +124,13 @@ def api(
     """
     Write the API reference pages and the inventory of documented objects
 
-    When dynamic introspection fails, retry once with static analysis.
+    When dynamic introspection fails, set `dynamic: false` in the in-memory API reference
+    configuration and retry once with static analysis.
 
     Parameters
     ----------
     run
-        Build state recording whether the site has an API reference, with repository details
+        The build's API reference availability, Quarto configuration and repository details
         for source links.
     config
         The project's configuration.
@@ -182,12 +162,10 @@ def api(
     from .._apiref.resolve import ObjectNotFoundError
 
     failures = (*USER_CODE_ERRORS, ObjectNotFoundError)
-    build_dir = layout.build_dir
-    quarto_yml_path = str(quarto_yml.path(build_dir))
     repo_url = run.project.github.url if run.project.github else None
     links = source_links(config, layout.package_root, repo_url, warn=print_warning)
     try:
-        ref = APIReference(quarto_yml_path, links)
+        ref = APIReference(run.quarto_config, links)
         ref.build()
         return "API reference generated", ref
     except failures as e:
@@ -198,11 +176,12 @@ def api(
             "Dynamic introspection failed for a resolved item, retrying with static analysis..."
         )
         log.detail(str(e))
-        with quarto_yml.edit(build_dir) as quarto_config:
-            if "api-reference" in quarto_config:
-                quarto_config["api-reference"]["dynamic"] = False
+        # The block belongs to the in-memory Quarto configuration, so the retry sees
+        # this change and the final configuration write saves it.
+        if run.api_block is not None:
+            run.api_block["dynamic"] = False
     try:
-        ref = APIReference(quarto_yml_path, links)
+        ref = APIReference(run.quarto_config, links)
         ref.build()
     except failures as e:
         raise StepError(f"API reference build failed: {e}") from e
@@ -260,7 +239,8 @@ def cli(run: Run, config: Config, layout: Layout) -> Outcome:
     Parameters
     ----------
     run
-        The current build, which supplies the package and module names.
+        The current build, which supplies the package and module names and records the
+        pages' sidebar and navbar link.
     config
         The project's configuration.
     layout
@@ -287,15 +267,17 @@ def cli(run: Run, config: Config, layout: Layout) -> Outcome:
     )
     if not cli_info:
         return Skipped("no Click CLI found")
-    return _write_cli_pages(config, layout, cli_info, "CLI")
+    return _write_cli_pages(run, config, layout, cli_info, "CLI")
 
 
-def go_cli(config: Config, layout: Layout) -> Outcome:
+def go_cli(run: Run, config: Config, layout: Layout) -> Outcome:
     """
     Write reference pages for the project's Go command-line interface
 
     Parameters
     ----------
+    run
+        The current build, which records the pages' sidebar and navbar link.
     config
         The project's configuration.
     layout
@@ -320,15 +302,17 @@ def go_cli(config: Config, layout: Layout) -> Outcome:
     cli_info = cast("CliCommand | None", introspect_cobra_cli(project))
     if not cli_info:
         return Skipped("Go CLI introspection failed (is 'go' on PATH?)")
-    return _write_cli_pages(config, layout, cli_info, "Go CLI", f" ({project.binary_name})")
+    return _write_cli_pages(run, config, layout, cli_info, "Go CLI", f" ({project.binary_name})")
 
 
-def rust_cli(config: Config, layout: Layout) -> Outcome:
+def rust_cli(run: Run, config: Config, layout: Layout) -> Outcome:
     """
     Write reference pages for the project's Rust command-line interface
 
     Parameters
     ----------
+    run
+        The current build, which records the pages' sidebar and navbar link.
     config
         The project's configuration.
     layout
@@ -353,17 +337,21 @@ def rust_cli(config: Config, layout: Layout) -> Outcome:
     cli_info = cast("CliCommand | None", introspect_rust_cli(project))
     if not cli_info:
         return Skipped("Rust CLI introspection failed (is 'cargo' on PATH?)")
-    return _write_cli_pages(config, layout, cli_info, "Rust CLI", f" ({project.binary_names[0]})")
+    return _write_cli_pages(
+        run, config, layout, cli_info, "Rust CLI", f" ({project.binary_names[0]})"
+    )
 
 
 def _write_cli_pages(
-    config: Config, layout: Layout, cli_info: CliCommand, kind: str, suffix: str = ""
+    run: Run, config: Config, layout: Layout, cli_info: CliCommand, kind: str, suffix: str = ""
 ) -> Outcome:
     """
-    Write CLI reference pages and add their sidebar and the Reference navbar link
+    Write CLI reference pages and record their sidebar and the Reference navbar link
 
     Parameters
     ----------
+    run
+        The current build, which records the sidebar and navbar link.
     config
         The project's configuration.
     layout
@@ -380,12 +368,10 @@ def _write_cli_pages(
     :
         The step's result line.
     """
-    build_dir = layout.build_dir
-    cli_files = cli_render.write_pages(config, build_dir, cli_info, report=print)
+    cli_files = cli_render.write_pages(config, layout.build_dir, cli_info, report=print)
     if not cli_files:
         return f"No {kind} pages generated"
-    with quarto_yml.edit(build_dir) as quarto_config:
-        quarto_yml.apply(quarto_config, cli_render.contribution(config, cli_files))
+    run.contributions.append(cli_render.contribution(config, cli_files))
     n_pages = cli_render.count_pages(cli_files)
     print(f"Updated sidebar with {n_pages} CLI reference page(s)")
     return f"{n_pages} {kind} reference page(s){suffix}"
@@ -398,7 +384,8 @@ def mcp(run: Run, config: Config, layout: Layout) -> Outcome:
     Parameters
     ----------
     run
-        The current build, which supplies the package name and repository.
+        The current build, which supplies the package name and repository and records the
+        pages' sidebar.
     config
         The project's configuration.
     layout
@@ -423,7 +410,6 @@ def mcp(run: Run, config: Config, layout: Layout) -> Outcome:
     )
     if not mcp_files:
         return "No MCP pages generated"
-    with quarto_yml.edit(build_dir) as quarto_config:
-        quarto_yml.apply(quarto_config, mcp_build.contribution(config, mcp_files))
+    run.contributions.append(mcp_build.contribution(config, mcp_files))
     print(f"Updated sidebar with {cli_render.count_pages(mcp_files)} MCP reference page(s)")
     return f"{len(mcp_info.get('tools', []))} MCP tool page(s) + manifest"
