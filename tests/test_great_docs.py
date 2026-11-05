@@ -17,6 +17,7 @@ from datetime import datetime
 from functools import cached_property
 from pathlib import Path
 from types import MethodType
+from typing import Any
 from unittest.mock import MagicMock, PropertyMock, call, patch
 
 import click
@@ -146,9 +147,9 @@ from great_docs._apiref.spec import ChildrenStyle, SpecObject, SpecOptions, Spec
 from great_docs._apiref.typing_information import TypeInformation, TypeSections
 from great_docs._apiref.write import _insert_contents
 from great_docs._apiref.write import merge_frontmatter as _merge_frontmatter
-from great_docs._build import freeze, pipeline, quarto, site
+from great_docs._build import freeze, pipeline, quarto, reference, site
 from great_docs._build.log import BuildLog
-from great_docs._build.steps import Step, count_listed
+from great_docs._build.steps import Skipped, Step, count_listed
 from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
 from great_docs._content import user_guide
@@ -5333,14 +5334,9 @@ def test_homepage_margin_with_authors():
 def test_homepage_margin_llms_links():
     """Verify that the sidebar links to `llms.txt` files only when they will be generated"""
     with tempfile.TemporaryDirectory() as tmp_dir:
-        gd_dir = Path(tmp_dir) / "great-docs"
-        gd_dir.mkdir()
-        (gd_dir / "_quarto.yml").write_text(
-            "api-reference:\n  package: os\n  sections:\n    - title: Core\n      contents: [os.getcwd]\n",
-            encoding="utf-8",
-        )
         docs = GreatDocs(project_path=tmp_dir)
-        result = homepage_margin(docs)
+        api_block = {"package": "os", "sections": [{"title": "Core", "contents": ["os.getcwd"]}]}
+        result = homepage_margin(docs, api_block=api_block)
 
         assert "llms.txt" in result
         assert "llms-full.txt" in result
@@ -5349,13 +5345,8 @@ def test_homepage_margin_llms_links():
 def test_homepage_margin_no_llms_links_without_api_reference():
     """A docs-only site gets no llms.txt links, because no files are generated (#350)."""
     with tempfile.TemporaryDirectory() as tmp_dir:
-        gd_dir = Path(tmp_dir) / "great-docs"
-        gd_dir.mkdir()
-        (gd_dir / "_quarto.yml").write_text(
-            "project:\n  type: website\nwebsite:\n  title: Docs only\n", encoding="utf-8"
-        )
         docs = GreatDocs(project_path=tmp_dir)
-        result = homepage_margin(docs)
+        result = homepage_margin(docs, api_block=None)
 
         assert "llms.txt" not in result
         assert "llms-full.txt" not in result
@@ -5405,11 +5396,15 @@ def test_freeze_writes_the_llms_files_build_would(label: str, tmp_path: Path):
     docs.build_dir.mkdir(parents=True, exist_ok=True)
     _write_llms_txt_quarto_yml(docs.build_dir, label)
     log = BuildLog(stream=io.StringIO())
+    api_block = _written_api_block(docs)
 
-    with stubbed_build():
+    with (
+        stubbed_build(api_reference=api_block is not None),
+        patch.object(reference, "api", return_value=(Skipped("stubbed"), None)),
+    ):
         pipeline.prepare_for_freeze(docs._config, docs.layout, log, remote=docs._remote)
 
-    available = llms_txt.is_planned(docs.build_dir)
+    available = llms_txt.is_planned(api_block)
     assert (docs.build_dir / "llms.txt").exists() == available, label
     assert (docs.build_dir / "llms-full.txt").exists() == available, label
 
@@ -18460,6 +18455,24 @@ def _skills_page_writer(docs: GreatDocs) -> SkillsPageWriter:
     )
 
 
+def _written_api_block(docs: GreatDocs) -> dict[str, Any] | None:
+    """
+    Return the `api-reference` block of the test's `_quarto.yml`, as a build records it
+
+    Parameters
+    ----------
+    docs
+        The project.
+
+    Returns
+    -------
+    :
+        The block, or `None` when the file or the block is missing.
+    """
+    quarto_yml = docs.build_dir / "_quarto.yml"
+    return read_quarto_yml(docs.build_dir).get("api-reference") if quarto_yml.exists() else None
+
+
 def test_write_skill_basic():
     """Test basic SKILL.md generation with API sections."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -18494,7 +18507,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         skill_md = great_docs_dir / "skill.md"
         assert skill_md.exists()
@@ -18535,7 +18548,7 @@ def test_generated_skill_front_matter_quotes_punctuation(tmp_path: Path):
     )
     docs = GreatDocs(project_path=tmp_path)
 
-    _skills_writer(docs).write()
+    _skills_writer(docs).write(_written_api_block(docs))
 
     front_matter, _ = split_front_matter((build_dir / "skill.md").read_text())
     assert front_matter.string("description").strip() == (
@@ -18572,7 +18585,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         # Check legacy .well-known/skills/default placement
         well_known = great_docs_dir / ".well-known" / "skills" / "default" / "SKILL.md"
@@ -18611,7 +18624,7 @@ def test_write_skill_disabled():
         great_docs_dir = Path(tmp_dir) / "great-docs"
         great_docs_dir.mkdir()
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         skill_md = great_docs_dir / "skill.md"
         assert not skill_md.exists()
@@ -18648,7 +18661,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         # skill.md should exist but .well-known should not
         assert (great_docs_dir / "skill.md").exists()
@@ -18671,7 +18684,7 @@ def test_write_skill_user_override():
         great_docs_dir = Path(tmp_dir) / "great-docs"
         great_docs_dir.mkdir()
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         skill_md = great_docs_dir / "skill.md"
         assert skill_md.exists()
@@ -18695,7 +18708,7 @@ def test_write_skill_publishes_companions_shown_on_page(tmp_path: Path):
     docs = GreatDocs(project_path=tmp_path)
     docs.build_dir.mkdir()
 
-    _skills_writer(docs).write()
+    _skills_writer(docs).write(_written_api_block(docs))
 
     expected = ["SKILL.md", "assets/logo.png", "recipes.md", "references/api.md"]
     published = docs.build_dir / ".well-known" / "agent-skills" / "demo-pkg"
@@ -18722,7 +18735,7 @@ def test_write_skill_at_project_root_has_no_companions(tmp_path: Path):
     docs = GreatDocs(project_path=tmp_path)
     docs.build_dir.mkdir()
 
-    _skills_writer(docs).write()
+    _skills_writer(docs).write(_written_api_block(docs))
 
     published = docs.build_dir / ".well-known" / "agent-skills" / "demo-pkg"
     assert [p.name for p in published.iterdir()] == ["SKILL.md"]
@@ -18762,7 +18775,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         # Should still generate a skill.md (fallback)
         skill_md = great_docs_dir / "skill.md"
@@ -18811,7 +18824,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         content = (great_docs_dir / "skill.md").read_text()
 
@@ -18863,7 +18876,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         content = (great_docs_dir / "skill.md").read_text()
 
@@ -18908,21 +18921,11 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         content = (great_docs_dir / "skill.md").read_text()
         assert "## Custom Section" in content
         assert "Extra content here." in content
-
-
-def test_write_skill_no_quarto_yml():
-    """
-    Skip skill writing when there is no Quarto configuration
-    """
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        _skills_writer(docs).write()
-        assert not (docs.build_dir / "skill.md").exists()
 
 
 def test_write_skill_with_site_url():
@@ -18957,11 +18960,27 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         content = (great_docs_dir / "skill.md").read_text()
         assert "[Full documentation](https://example.com/docs/)" in content
         assert "[Source code](https://github.com/test/test-package)" in content
+
+
+def test_write_skill_without_quarto_yml():
+    """Generate the skill from the given API reference block without a `_quarto.yml`"""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.build_dir.mkdir()
+        api_block = {
+            "package": "test_package",
+            "sections": [{"title": "Main", "contents": ["foo"]}],
+        }
+
+        _skills_writer(docs).write(api_block)
+
+        assert not (docs.build_dir / "_quarto.yml").exists()
+        assert (docs.build_dir / "skill.md").is_file()
 
 
 def test_config_skill_defaults():
@@ -19043,7 +19062,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         skill_md = great_docs_dir / "skill.md"
         assert skill_md.exists()
@@ -19094,7 +19113,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         content = (great_docs_dir / "skill.md").read_text()
         assert "# Hyphenated" in content
@@ -19134,7 +19153,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         content = (great_docs_dir / "skill.md").read_text()
 
@@ -19162,7 +19181,7 @@ def test_write_skills_page_basic():
             "        - foo\n"
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         skills_qmd = great_docs_dir / "skills.qmd"
         assert skills_qmd.exists()
@@ -19214,7 +19233,7 @@ def test_write_skills_page_omits_robots_tag_without_seo() -> None:
             "        - foo\n"
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         content = (great_docs_dir / "skills.qmd").read_text()
         assert "gd-head-tags" not in content
@@ -19248,7 +19267,7 @@ def test_write_skills_page_github_repo_detection():
             "        - foo\n"
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         content = (great_docs_dir / "skills.qmd").read_text()
 
@@ -19286,7 +19305,7 @@ def test_write_skills_page_site_url():
             "        - foo\n"
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         content = (great_docs_dir / "skills.qmd").read_text()
 
@@ -19323,7 +19342,7 @@ def test_write_skills_page_frontmatter_display():
             "        - foo\n"
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         content = (great_docs_dir / "skills.qmd").read_text()
 
@@ -19365,7 +19384,7 @@ def test_write_skills_page_curated_skill():
         great_docs_dir = Path(tmp_dir) / "great-docs"
         great_docs_dir.mkdir()
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         skills_qmd = great_docs_dir / "skills.qmd"
         assert skills_qmd.exists()
@@ -19389,7 +19408,7 @@ def test_write_skills_page_disabled():
         great_docs_dir = Path(tmp_dir) / "great-docs"
         great_docs_dir.mkdir()
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         assert not (great_docs_dir / "skills.qmd").exists()
 
@@ -19417,7 +19436,7 @@ def test_write_skills_page_well_known_disabled():
             "        - foo\n"
         )
 
-        _skills_writer(docs).write()
+        _skills_writer(docs).write(_written_api_block(docs))
 
         content = (great_docs_dir / "skills.qmd").read_text()
 
@@ -19442,16 +19461,10 @@ def test_homepage_sidebar_skills_link_position():
             'Repository = "https://github.com/test-org/test-package"\n'
         )
 
-        great_docs_dir = Path(tmp_dir) / "great-docs"
-        great_docs_dir.mkdir()
         # llms.txt links are only shown when the files will be generated (#350)
-        (great_docs_dir / "_quarto.yml").write_text(
-            "api-reference:\n  package: os\n  sections:\n"
-            "    - title: Core\n      contents: [os.getcwd]\n",
-            encoding="utf-8",
-        )
+        api_block = {"package": "os", "sections": [{"title": "Core", "contents": ["os.getcwd"]}]}
 
-        margin = homepage_margin(docs)
+        margin = homepage_margin(docs, api_block=api_block)
 
         # Skills link should appear before llms.txt
         skills_pos = margin.find('href="skills.html"')
@@ -21400,14 +21413,14 @@ def test_write_skills_page_multi_skill_install_section():
     """Multi-skill install section uses 'install all' phrasing and lists per-skill URLs."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
-        (project / "great-docs.yml").write_text("display_name: MyPkg\n")
+        # A site URL makes the install instructions use absolute URLs
+        (project / "great-docs.yml").write_text(
+            "display_name: MyPkg\nsite_url: https://example.com/docs/\n"
+        )
         # `pyproject.toml` names the package
         (project / "pyproject.toml").write_text('[project]\nname = "test-pkg"\n')
         gd = GreatDocs(project_path=tmp)
         gd.build_dir = project
-
-        # _quarto.yml with site-url so URLs are generated
-        (project / "_quarto.yml").write_text("website:\n  site-url: https://example.com/docs/\n")
 
         skill_dir_a = project / "skill-a"
         skill_dir_a.mkdir()
@@ -21487,11 +21500,11 @@ def test_write_skills_page_single_skill_install_section():
     """Single-skill install section uses singular phrasing and includes Manual/curl."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
-        (project / "great-docs.yml").write_text("display_name: MyPkg\n")
+        (project / "great-docs.yml").write_text(
+            "display_name: MyPkg\nsite_url: https://example.com/docs/\n"
+        )
         gd = GreatDocs(project_path=tmp)
         gd.build_dir = project
-
-        (project / "_quarto.yml").write_text("website:\n  site-url: https://example.com/docs/\n")
 
         skill_dir = project / "skill-solo"
         skill_dir.mkdir()
@@ -22880,7 +22893,7 @@ def test_skills_page_ignores_a_non_string_description(tmp_path: Path) -> None:
     (tmp_path / "great-docs").mkdir()
     docs = GreatDocs(project_path=str(tmp_path))
 
-    _skills_writer(docs).write()
+    _skills_writer(docs).write(_written_api_block(docs))
 
     assert "# Skill" in (tmp_path / "great-docs" / "skills.qmd").read_text()
 

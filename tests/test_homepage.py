@@ -391,6 +391,7 @@ def test_blended_homepage_keeps_front_matter_whose_title_contains_three_dashes(t
         package_name="pkg",
         pages=content_steps.page_map(docs._config, docs.layout, None),
         page_authors=[],
+        has_llms_txt=False,
     )
 
     front_matter, body = split_front_matter(index_qmd.read_text(encoding="utf-8"))

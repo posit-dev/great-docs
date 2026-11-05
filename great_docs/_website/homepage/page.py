@@ -128,6 +128,7 @@ def write_readme(
     page_authors: list[dict[str, Any]],
     has_api_reference: bool,
     has_user_guide: Callable[[], bool],
+    has_llms_txt: bool,
     report: Callable[[str], None],
 ) -> Path:
     """
@@ -160,6 +161,8 @@ def write_readme(
         A callback that reports whether the site has a user guide. User guide discovery
         reports directory problems, so the callback is called only for a landing page,
         which links to the guide when present.
+    has_llms_txt
+        Whether the build writes `llms.txt` and `llms-full.txt`, which the sidebar links to.
     report
         A callback that receives progress messages and warnings.
 
@@ -239,6 +242,7 @@ def write_readme(
         metadata=metadata,
         package_name=package_name,
         page_authors=page_authors,
+        has_llms_txt=has_llms_txt,
     )
 
     # An explicit `toc` setting overrides the homepage's default of no table of contents.
@@ -280,6 +284,7 @@ def write_blended(
     package_name: str | None,
     pages: PageMap,
     page_authors: list[dict[str, Any]],
+    has_llms_txt: bool,
 ) -> Path:
     """
     Write the homepage from the first user guide page
@@ -305,6 +310,8 @@ def write_blended(
         The published paths of the authored pages.
     page_authors
         The configured authors, with local portrait paths replaced by site URLs.
+    has_llms_txt
+        Whether the build writes `llms.txt` and `llms-full.txt`, which the sidebar links to.
 
     Returns
     -------
@@ -321,6 +328,7 @@ def write_blended(
         metadata=metadata,
         package_name=package_name,
         page_authors=page_authors,
+        has_llms_txt=has_llms_txt,
     )
     hero_html, _ = _hero(
         config,
@@ -415,6 +423,7 @@ def _sidebar(
     metadata: Manifest,
     package_name: str | None,
     page_authors: list[dict[str, Any]],
+    has_llms_txt: bool,
 ) -> str:
     """
     Write the community pages and render the homepage's metadata sidebar
@@ -433,6 +442,8 @@ def _sidebar(
         The package name, or `None` if it is unknown.
     page_authors
         The configured authors, with local portrait paths replaced by site URLs.
+    has_llms_txt
+        Whether the build writes `llms.txt` and `llms-full.txt`.
 
     Returns
     -------
@@ -447,4 +458,5 @@ def _sidebar(
         metadata=metadata,
         package_name=package_name,
         community_pages=community.write_pages(config, package_root, build_dir, page_authors),
+        has_llms_txt=has_llms_txt,
     )

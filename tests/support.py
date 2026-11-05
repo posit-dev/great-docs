@@ -40,12 +40,15 @@ from great_docs._build.steps import Outcome, Skipped, print_warning
 from great_docs._content import user_guide
 from great_docs._project import Project
 from great_docs._reference.exports import Exports
+from great_docs._website import quarto_yml
+from great_docs._website.ai_agents import llms_txt
 from great_docs._website.homepage import hero, margin
 from great_docs._website.project_pages import community
 
 if TYPE_CHECKING:
     from great_docs._content.user_guide import UserGuide
     from great_docs._github import GithubRepo
+    from great_docs._layout import Layout
 
 # Stub calls within step actions to preserve the step table and build control flow.
 # List functions in first-call order by dotted path relative to `great_docs._build`.
@@ -428,7 +431,8 @@ def stubbed_build(
         Leave all other calls stubbed.
     api_reference
         Whether the stubbed preparation of the build directory leaves the site with an API
-        reference. By default it configures none, as for a project without one.
+        reference, configured by the `api-reference` block of the test's `_quarto.yml`. By
+        default it configures none, as for a project without one.
     **returns
         Return values for stubbed build steps, by name.
 
@@ -487,8 +491,10 @@ def stubbed_build(
             steps[name] = stack.enter_context(
                 patch.object(owner, attribute, autospec=True, return_value=value)
             )
-        if not api_reference and "prepare.build_directory" in steps:
-            steps["prepare.build_directory"].side_effect = _configure_no_api_reference
+        if "prepare.build_directory" in steps:
+            steps["prepare.build_directory"].side_effect = (
+                _record_written_api_reference if api_reference else _configure_no_api_reference
+            )
         yield BuildStubs(steps=steps, render=render)
 
 
@@ -548,6 +554,42 @@ def _configure_no_api_reference(run: Run, *args: object, **kwargs: object) -> ob
         `DEFAULT`, so the stub returns its configured value.
     """
     run.has_api_reference = False
+    return DEFAULT
+
+
+def _record_written_api_reference(
+    run: Run, config: Config, layout: Layout, *args: object, **kwargs: object
+) -> object:
+    """
+    Record the test's API reference configuration in a stubbed build and keep its return value
+
+    Preparation records the `api-reference` block it writes to `_quarto.yml`; with
+    preparation stubbed, the test writes the block.
+
+    Parameters
+    ----------
+    run
+        The current build.
+    config
+        The project's configuration.
+    layout
+        The project's directories.
+    *args
+        Additional positional arguments accepted by the preparation stub and ignored here.
+    **kwargs
+        Keyword arguments accepted by the preparation stub and ignored here.
+
+    Returns
+    -------
+    :
+        `DEFAULT`, so the stub returns its configured value.
+
+    Raises
+    ------
+    KeyError
+        If the test's `_quarto.yml` has no `api-reference` block.
+    """
+    run.api_block = quarto_yml.read(layout.build_dir)["api-reference"]
     return DEFAULT
 
 
@@ -723,7 +765,7 @@ def homepage_hero(docs: GreatDocs, readme: str | None = None) -> tuple[str, str 
     return html, found.body if html else None
 
 
-def homepage_margin(docs: GreatDocs) -> str:
+def homepage_margin(docs: GreatDocs, *, api_block: dict[str, Any] | None = None) -> str:
     """
     Write a project's community pages and render its homepage sidebar, as a build does
 
@@ -731,6 +773,9 @@ def homepage_margin(docs: GreatDocs) -> str:
     ----------
     docs
         The project.
+    api_block
+        The API reference configuration, which decides whether the sidebar links to
+        `llms.txt`, or `None` for a site without one.
 
     Returns
     -------
@@ -748,6 +793,7 @@ def homepage_margin(docs: GreatDocs) -> str:
         community_pages=community.write_pages(
             docs._config, package_root, docs.build_dir, make_run(docs).page_authors
         ),
+        has_llms_txt=llms_txt.is_planned(api_block),
     )
 
 

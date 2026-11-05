@@ -14,7 +14,7 @@ from ..._layout import Layout
 from ..._manifest import Manifest
 from ..._yaml import split_front_matter
 from ...config import Config
-from .. import page_dates, quarto_yml
+from .. import page_dates
 from ..scripts import script_tag
 from ..seo import noindex
 from .well_known import companion_files
@@ -178,15 +178,9 @@ class SkillsPageWriter:
             if gh_match:
                 github_owner_repo = gh_match.group(1)
 
-        # Detect site URL
-        site_url = ""
-        if quarto_yml.path(self.build_dir).exists():
-            qconfig = quarto_yml.read(self.build_dir)
-            site_url = urls.get("Documentation", "") or qconfig.get("website", {}).get(
-                "site-url", ""
-            )
-            if site_url and not site_url.endswith("/"):
-                site_url += "/"
+        site_url = urls.get("Documentation", "") or self.config.site_url or ""
+        if site_url and not site_url.endswith("/"):
+            site_url += "/"
 
         lines.append("```{=html}")
         lines.append('<div class="gd-skills-install">')

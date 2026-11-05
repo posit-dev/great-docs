@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from yaml12 import format_yaml
 
 from great_docs._website.ai_agents import llms_txt
 
@@ -11,28 +10,9 @@ from great_docs._website.ai_agents import llms_txt
 DUMPS_SUMMARY = "Serialize ``obj`` to a JSON formatted ``str``"
 
 
-def _write_quarto_yml(build_dir: Path, config: object) -> None:
-    """
-    Write a project's `_quarto.yml`
-
-    Parameters
-    ----------
-    build_dir
-        The Quarto project directory.
-    config
-        The configuration to serialise.
-
-    Returns
-    -------
-    :
-        Nothing; the configuration is written to `_quarto.yml`.
-    """
-    (build_dir / "_quarto.yml").write_text(format_yaml(config), encoding="utf-8")
-
-
 def _api_reference(package: str, *sections: dict[str, Any]) -> dict[str, Any]:
     """
-    Create a Quarto configuration with an `api-reference` block
+    Create an API reference configuration
 
     Parameters
     ----------
@@ -46,10 +26,15 @@ def _api_reference(package: str, *sections: dict[str, Any]) -> dict[str, Any]:
     :
         The configuration.
     """
-    return {"api-reference": {"package": package, "sections": list(sections)}}
+    return {"package": package, "sections": list(sections)}
 
 
-def _write_index(build_dir: Path, metadata: dict[str, Any] | None = None) -> str:
+def _write_index(
+    build_dir: Path,
+    api_block: dict[str, Any],
+    metadata: dict[str, Any] | None = None,
+    site_url: str | None = None,
+) -> str:
     """
     Write `llms.txt` and return its text
 
@@ -57,21 +42,28 @@ def _write_index(build_dir: Path, metadata: dict[str, Any] | None = None) -> str
     ----------
     build_dir
         The Quarto project directory.
+    api_block
+        The API reference configuration.
     metadata
         The package metadata.
+    site_url
+        The configured site URL.
 
     Returns
     -------
     :
         The text of the file.
     """
-    path = llms_txt.write_index(build_dir, metadata or {}, report=lambda _: None)
+    path = llms_txt.write_index(
+        build_dir, api_block, metadata or {}, site_url=site_url, report=lambda _: None
+    )
     assert path is not None
     return path.read_text(encoding="utf-8")
 
 
 def _write_full(
     build_dir: Path,
+    api_block: dict[str, Any],
     cli: dict[str, Any] | None = None,
     user_guide: dict[str, Any] | None = None,
 ) -> str:
@@ -82,6 +74,8 @@ def _write_full(
     ----------
     build_dir
         The Quarto project directory.
+    api_block
+        The API reference configuration.
     cli
         The discovered command-line interface.
     user_guide
@@ -92,21 +86,21 @@ def _write_full(
     :
         The text of the file.
     """
-    path = llms_txt.write_full(build_dir, cli=cli, user_guide=user_guide, report=lambda _: None)
+    path = llms_txt.write_full(
+        build_dir, api_block, cli=cli, user_guide=user_guide, report=lambda _: None
+    )
     assert path is not None
     return path.read_text(encoding="utf-8")
 
 
 SECTION = {"title": "Core", "contents": ["dumps"]}
 
-# Quarto configurations (`None` for a missing file), expected file availability, and
-# whether the index is written.
-GUARD_CASES: dict[str, tuple[object, bool, bool]] = {
-    "no _quarto.yml": (None, False, False),
-    "no api-reference": ({"project": {"type": "website"}}, False, False),
-    "non-mapping root": (["foo", "bar"], False, False),
-    "no sections": ({"api-reference": {"package": "json", "sections": []}}, False, False),
-    "no package": ({"api-reference": {"sections": [SECTION]}}, False, False),
+# API reference configurations (`None` for a site without one), expected file
+# availability, and whether the index is written.
+GUARD_CASES: dict[str, tuple[dict[str, Any] | None, bool, bool]] = {
+    "no API reference": (None, False, False),
+    "no sections": ({"package": "json", "sections": []}, False, False),
+    "no package": ({"sections": [SECTION]}, False, False),
     # The index can list an unimportable package without summaries; the full file
     # requires an importable package.
     "unimportable package": (_api_reference("no_such_package_xyz", SECTION), False, True),
@@ -116,14 +110,14 @@ GUARD_CASES: dict[str, tuple[object, bool, bool]] = {
 
 @pytest.mark.parametrize("label", GUARD_CASES)
 def test_writes_the_full_file_exactly_when_planned(label: str, tmp_path: Path):
-    config, planned, index_written = GUARD_CASES[label]
-    if config is not None:
-        _write_quarto_yml(tmp_path, config)
+    api_block, planned, index_written = GUARD_CASES[label]
 
-    index = llms_txt.write_index(tmp_path, {}, report=lambda _: None)
-    full = llms_txt.write_full(tmp_path, cli=None, user_guide=None, report=lambda _: None)
+    index = llms_txt.write_index(tmp_path, api_block, {}, site_url=None, report=lambda _: None)
+    full = llms_txt.write_full(
+        tmp_path, api_block, cli=None, user_guide=None, report=lambda _: None
+    )
 
-    assert llms_txt.is_planned(tmp_path) is planned
+    assert llms_txt.is_planned(api_block) is planned
     assert (full is not None) is planned
     assert (tmp_path / "llms-full.txt").exists() is planned
     assert (index is not None) is index_written
@@ -131,35 +125,32 @@ def test_writes_the_full_file_exactly_when_planned(label: str, tmp_path: Path):
 
 
 def test_reports_the_written_files(tmp_path: Path):
-    _write_quarto_yml(tmp_path, _api_reference("json", SECTION))
+    api_block = _api_reference("json", SECTION)
     lines: list[str] = []
 
-    llms_txt.write_index(tmp_path, {}, report=lines.append)
-    llms_txt.write_full(tmp_path, cli=None, user_guide=None, report=lines.append)
+    llms_txt.write_index(tmp_path, api_block, {}, site_url=None, report=lines.append)
+    llms_txt.write_full(tmp_path, api_block, cli=None, user_guide=None, report=lines.append)
 
     assert lines == [f"Created {tmp_path / 'llms.txt'}", f"Created {tmp_path / 'llms-full.txt'}"]
 
 
 def test_reports_a_package_that_does_not_import(tmp_path: Path):
-    _write_quarto_yml(tmp_path, _api_reference("no_such_package_xyz", SECTION))
+    api_block = _api_reference("no_such_package_xyz", SECTION)
     lines: list[str] = []
 
-    llms_txt.write_full(tmp_path, cli=None, user_guide=None, report=lines.append)
+    llms_txt.write_full(tmp_path, api_block, cli=None, user_guide=None, report=lines.append)
 
     assert lines == ["Could not import no_such_package_xyz: No module named 'no_such_package_xyz'"]
 
 
 def test_index_lists_each_section_with_links_and_summaries(tmp_path: Path):
-    _write_quarto_yml(
-        tmp_path,
-        _api_reference(
-            "json",
-            {"title": "Encoding", "desc": "Write JSON", "contents": ["dumps"]},
-            {"subtitle": "Decoding", "contents": [{"name": "JSONDecoder", "members": []}]},
-        ),
+    api_block = _api_reference(
+        "json",
+        {"title": "Encoding", "desc": "Write JSON", "contents": ["dumps"]},
+        {"subtitle": "Decoding", "contents": [{"name": "JSONDecoder", "members": []}]},
     )
 
-    text = _write_index(tmp_path, {"description": "A JSON library"})
+    text = _write_index(tmp_path, api_block, {"description": "A JSON library"})
 
     assert text.split("\n") == [
         "# json",
@@ -183,21 +174,20 @@ def test_index_lists_each_section_with_links_and_summaries(tmp_path: Path):
 
 
 def test_index_has_no_section_heading_for_a_single_section(tmp_path: Path):
-    _write_quarto_yml(tmp_path, _api_reference("json", SECTION))
+    api_block = _api_reference("json", SECTION)
 
-    text = _write_index(tmp_path)
+    text = _write_index(tmp_path, api_block)
 
     assert "####" not in text
     assert "> " not in text
 
 
 def test_index_links_a_module_qualified_entry_to_its_page(tmp_path: Path):
-    _write_quarto_yml(
-        tmp_path,
-        _api_reference("pkg", {"title": "Devices", "contents": ["devices.keithley:Keithley2400"]}),
+    api_block = _api_reference(
+        "pkg", {"title": "Devices", "contents": ["devices.keithley:Keithley2400"]}
     )
 
-    text = _write_index(tmp_path)
+    text = _write_index(tmp_path, api_block)
 
     assert "- [devices.keithley:Keithley2400](reference/devices.keithley.Keithley2400.html)" in text
 
@@ -212,10 +202,12 @@ def test_index_links_a_module_qualified_entry_to_its_page(tmp_path: Path):
 def test_index_links_are_absolute_with_a_site_url(
     documentation: str, site_url: str, base: str, tmp_path: Path
 ):
-    config = _api_reference("json", SECTION) | {"website": {"site-url": site_url}}
-    _write_quarto_yml(tmp_path, config)
-
-    text = _write_index(tmp_path, {"urls": {"Documentation": documentation}})
+    text = _write_index(
+        tmp_path,
+        _api_reference("json", SECTION),
+        {"urls": {"Documentation": documentation}},
+        site_url=site_url,
+    )
 
     assert f"- [dumps]({base}reference/dumps.html)" in text
 
@@ -233,17 +225,14 @@ def test_docstring_summary_is_empty_when_the_object_is_not_found(package: str, n
 
 
 def test_full_file_holds_signatures_and_docstrings_by_section(tmp_path: Path):
-    _write_quarto_yml(
-        tmp_path,
-        _api_reference(
-            "json",
-            {"title": "Encoding", "desc": "Write JSON", "contents": ["dumps"]},
-            {"subtitle": "Decoding", "contents": [{"name": "JSONDecoder.decode"}, "missing"]},
-            {"contents": ["decoder"]},
-        ),
+    api_block = _api_reference(
+        "json",
+        {"title": "Encoding", "desc": "Write JSON", "contents": ["dumps"]},
+        {"subtitle": "Decoding", "contents": [{"name": "JSONDecoder.decode"}, "missing"]},
+        {"contents": ["decoder"]},
     )
 
-    text = _write_full(tmp_path)
+    text = _write_full(tmp_path, api_block)
 
     assert text.startswith(
         "-" * 70 + "\nThis is the API documentation for the json library.\n" + "-" * 70 + "\n"
@@ -261,7 +250,7 @@ def test_full_file_holds_signatures_and_docstrings_by_section(tmp_path: Path):
 
 
 def test_full_file_holds_the_help_of_each_visible_command(tmp_path: Path):
-    _write_quarto_yml(tmp_path, _api_reference("json", SECTION))
+    api_block = _api_reference("json", SECTION)
     cli = {
         "entry_point_name": "my-cli",
         "help_text": "Usage: my-cli [OPTIONS]",
@@ -278,7 +267,7 @@ def test_full_file_holds_the_help_of_each_visible_command(tmp_path: Path):
         ],
     }
 
-    text = _write_full(tmp_path, cli=cli)
+    text = _write_full(tmp_path, api_block, cli=cli)
 
     cli_part = text.split("This is the CLI documentation for the package.\n" + "-" * 70 + "\n")[1]
     assert cli_part.split("\n") == [
@@ -305,7 +294,7 @@ def test_full_file_holds_the_help_of_each_visible_command(tmp_path: Path):
 
 
 def test_full_file_holds_the_user_guide_pages_in_order(tmp_path: Path):
-    _write_quarto_yml(tmp_path, _api_reference("json", SECTION))
+    api_block = _api_reference("json", SECTION)
     guide = tmp_path / "guide"
     guide.mkdir()
     (guide / "intro.qmd").write_text("---\ntitle: Intro\n---\n\n# Welcome\n\nHello.\n")
@@ -320,7 +309,7 @@ def test_full_file_holds_the_user_guide_pages_in_order(tmp_path: Path):
         ]
     }
 
-    text = _write_full(tmp_path, user_guide=user_guide)
+    text = _write_full(tmp_path, api_block, user_guide=user_guide)
 
     guide_part = text.split("This is the User Guide documentation for the package.\n")[1]
     assert guide_part.split("\n") == [
@@ -358,22 +347,22 @@ def test_full_file_holds_the_user_guide_pages_in_order(tmp_path: Path):
     ],
 )
 def test_full_file_keeps_a_page_without_closed_front_matter(page: str, body: str, tmp_path: Path):
-    _write_quarto_yml(tmp_path, _api_reference("json", SECTION))
+    api_block = _api_reference("json", SECTION)
     (tmp_path / "page.qmd").write_text(page)
     user_guide = {"files": [{"path": tmp_path / "page.qmd", "title": "Page"}]}
 
-    text = _write_full(tmp_path, user_guide=user_guide)
+    text = _write_full(tmp_path, api_block, user_guide=user_guide)
 
     assert text.endswith(f"\n{body}\n")
 
 
 def test_full_file_keeps_a_page_whose_front_matter_contains_three_dashes(tmp_path: Path):
     """Keep the body and omit front matter containing an embedded `---`"""
-    _write_quarto_yml(tmp_path, _api_reference("json", SECTION))
+    api_block = _api_reference("json", SECTION)
     (tmp_path / "page.qmd").write_text('---\ntitle: "Before --- after"\n---\n\n# Body\n')
     user_guide = {"files": [{"path": tmp_path / "page.qmd", "title": "Page"}]}
 
-    text = _write_full(tmp_path, user_guide=user_guide)
+    text = _write_full(tmp_path, api_block, user_guide=user_guide)
 
     assert text.endswith("\n# Body\n\n")
     assert "after" not in text

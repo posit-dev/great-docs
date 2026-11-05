@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ..._manifest import Manifest
 from ..._translations import get_translation
-from ..ai_agents import llms_txt
 from ..spdx import get_license_info
 
 if TYPE_CHECKING:
@@ -61,6 +60,7 @@ def render(
     metadata: Manifest,
     package_name: str | None,
     community_pages: Sequence[CommunityPage],
+    has_llms_txt: bool,
 ) -> str:
     """
     Render the homepage sidebar as Markdown
@@ -82,6 +82,8 @@ def render(
         The package name, for the PyPI link, the curated skill and the citation link.
     community_pages
         The community pages written for the site.
+    has_llms_txt
+        Whether the build writes `llms.txt` and `llms-full.txt`, which the sidebar links to.
 
     Returns
     -------
@@ -91,7 +93,7 @@ def render(
     lang = config.lang
     sections = [
         *_links(config, metadata, package_name, lang),
-        *_ai_agents(config, build_dir, package_root, package_name, lang),
+        *_ai_agents(config, package_root, package_name, lang, has_llms_txt=has_llms_txt),
         *_developers(config, metadata, lang),
         *_community(build_dir, metadata, package_name, community_pages, lang),
         *_meta(config, build_dir, metadata, lang),
@@ -151,7 +153,12 @@ def _links(config: Config, metadata: Manifest, package_name: str | None, lang: s
 
 
 def _ai_agents(
-    config: Config, build_dir: Path, package_root: Path, package_name: str | None, lang: str
+    config: Config,
+    package_root: Path,
+    package_name: str | None,
+    lang: str,
+    *,
+    has_llms_txt: bool,
 ) -> list[str]:
     """
     Render the AI / Agents section with the Skills page and `llms.txt` files
@@ -163,14 +170,14 @@ def _ai_agents(
     ----------
     config
         The Great Docs configuration.
-    build_dir
-        The Quarto project directory, whose `_quarto.yml` determines whether `llms.txt` is written.
     package_root
         The project directory.
     package_name
         The package name.
     lang
         The site language.
+    has_llms_txt
+        Whether the build writes `llms.txt` and `llms-full.txt`.
 
     Returns
     -------
@@ -195,7 +202,7 @@ def _ai_agents(
             f"{_SPARKLE_PATHS}</svg>"
         )
         items.append(f'<a href="skills.html">Skills{sparkle}</a><br>')
-    if llms_txt.is_planned(build_dir):
+    if has_llms_txt:
         items.append("[llms.txt](llms.txt)<br>")
         items.append("[llms-full.txt](llms-full.txt)<br>")
 

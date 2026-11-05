@@ -39,7 +39,8 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
     Parameters
     ----------
     run
-        Build state containing the package's names and metadata and the discovered user guide.
+        Build state containing the package's names and metadata, the API reference
+        configuration and the discovered user guide.
     config
         The project's configuration.
     layout
@@ -51,9 +52,12 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
         The result line or skip reason.
     """
     build_dir = layout.build_dir
-    if not llms_files.is_planned(build_dir):
+    api_block = run.api_block
+    if not llms_files.is_planned(api_block):
         return Skipped("no API reference")
-    _ = llms_files.write_index(build_dir, run.project.manifest, report=print)
+    _ = llms_files.write_index(
+        build_dir, api_block, run.project.manifest, site_url=config.site_url, report=print
+    )
 
     cli: CliCommand | None = None
     package_name = run.project.name if config.cli_enabled else None
@@ -71,7 +75,9 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
         except ImportError:
             # The CLI reference step reports the import failure. Continue without CLI help.
             pass
-    _ = llms_files.write_full(build_dir, cli=cli, user_guide=run.user_guide, report=print)
+    _ = llms_files.write_full(
+        build_dir, api_block, cli=cli, user_guide=run.user_guide, report=print
+    )
     return "Created llms.txt + llms-full.txt"
 
 
@@ -82,7 +88,8 @@ def skills(run: Run, config: Config, layout: Layout) -> Outcome:
     Parameters
     ----------
     run
-        The current build, which supplies the package's name and metadata.
+        The current build, which supplies the package's name and metadata and the API
+        reference configuration.
     config
         The project's configuration.
     layout
@@ -95,7 +102,9 @@ def skills(run: Run, config: Config, layout: Layout) -> Outcome:
     """
     if not config.skill_enabled:
         return Skipped("disabled in config")
-    SkillsWriter(config, layout, layout.build_dir, run.project.name, run.project.manifest).write()
+    SkillsWriter(config, layout, layout.build_dir, run.project.name, run.project.manifest).write(
+        run.api_block
+    )
     return "Created skill.md"
 
 

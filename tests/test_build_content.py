@@ -171,6 +171,7 @@ def _promote(docs: GreatDocs, guide: UserGuide) -> str | None:
         make_project(docs),
         guide,
         page_authors=make_run(docs).page_authors,
+        api_block=None,
     )
 
 
