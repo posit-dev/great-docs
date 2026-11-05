@@ -20,6 +20,8 @@ from . import quarto
 from .steps import Outcome, StepError
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from .._layout import Layout
     from .._website.seo.structured_data import StructuredData
     from ..config import Config
@@ -57,6 +59,7 @@ def show_settings(config: Config, log: BuildLog) -> Outcome:
 def site(
     config: Config,
     layout: Layout,
+    quarto_config: Mapping[str, Any],
     log: BuildLog,
     jobs: int,
     last_timings: dict[str, float],
@@ -73,6 +76,9 @@ def site(
         The project's configuration, which sets Quarto's environment.
     layout
         The project's directories.
+    quarto_config
+        The site configuration written to the build directory. A parallel render
+        uses it to write each worker project's configuration.
     log
         The build log.
     jobs
@@ -120,6 +126,7 @@ def site(
 
         parallel = parallel_render.render(
             layout.build_dir,
+            quarto_config,
             env,
             jobs,
             last_timings,

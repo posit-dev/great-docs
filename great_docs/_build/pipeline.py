@@ -211,7 +211,7 @@ def run(
 
     def render_site() -> Outcome:
         result, render_timings["render"] = render.site(
-            config, layout, log, render_jobs, last_timings, last_startup
+            config, layout, current.quarto_config, log, render_jobs, last_timings, last_startup
         )
         render_timings["page_timings"] = result.page_timings
         return "Site rendered"
