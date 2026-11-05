@@ -1,9 +1,8 @@
 """
 Site identity and Quarto configuration
 
-Resolve the site's identity, default search description and structured data on each call.
-The identity and structured data use the current title in `_quarto.yml`, which can change
-during a build.
+Resolve the site's identity, default search description and structured data from the
+project's configuration and metadata.
 """
 
 from __future__ import annotations
@@ -36,8 +35,8 @@ def identity(config: Config, layout: Layout, project: Project) -> Identity:
     config
         The project's configuration.
     layout
-        The project's directories. Read the site title from the build directory's
-        `_quarto.yml` when available.
+        The project's directories, searched for a Go or Rust program whose name supplies
+        the fallback site name.
     project
         The package name and GitHub repository used when the site's name or address is not
         configured.
@@ -50,7 +49,7 @@ def identity(config: Config, layout: Layout, project: Project) -> Identity:
     github = project.github
     return Identity.make(
         config,
-        layout.build_dir,
+        layout.package_root,
         github.owner if github else None,
         github.name if github else None,
         project.name,
@@ -77,27 +76,26 @@ def default_description(config: Config, project: Project) -> str | None:
     return seo_description.default_description(config, project.manifest["description"])
 
 
-def structured_data(config: Config, layout: Layout, project: Project) -> StructuredData | None:
+def structured_data(run: Run, config: Config) -> StructuredData | None:
     """
     Build the package's JSON-LD description for homepage and reference pages
 
     Parameters
     ----------
+    run
+        The current build's site identity and package metadata to describe.
     config
         The project's configuration.
-    layout
-        The project's directories.
-    project
-        The package metadata to describe.
 
     Returns
     -------
     :
-        The package description with the current site name and canonical address, or `None`
-        when structured data is disabled.
+        The package description with the site's name and canonical address, or `None` when
+        structured data is disabled.
     """
-    site_identity = identity(config, layout, project)
-    return StructuredData.make(config, project.manifest, site_identity.name, site_identity.base_url)
+    return StructuredData.make(
+        config, run.project.manifest, run.identity.name, run.identity.base_url
+    )
 
 
 def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Remote) -> None:
@@ -147,7 +145,7 @@ def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Re
         build_dir,
         repo=repo,
         facts=run.facts,
-        identity=identity(config, layout, run.project),
+        identity=run.identity,
         package_name=run.project.name,
         metadata=run.project.manifest,
         has_api_reference=run.has_api_reference,

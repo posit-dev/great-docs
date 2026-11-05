@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     from .._content.user_guide import UserGuide
     from .._layout import Layout
     from .._remote import Remote
+    from .._website.identity import Identity
     from .facts import Facts
 
 __all__ = ["Run", "prepare_for_freeze", "preparation_steps", "run"]
@@ -62,6 +63,9 @@ class Run:
     ----------
     project
         The documented project, read from its files when the build starts.
+    identity
+        The site's name and addresses, resolved from configuration and project metadata
+        when the build starts.
     exports
         The package models and exports shared by this build, loaded on demand.
     watch
@@ -84,6 +88,7 @@ class Run:
     """
 
     project: Project
+    identity: Identity
     exports: Exports
     watch: bool
     page_authors: list[dict[str, Any]]
@@ -109,16 +114,17 @@ class Run:
         Returns
         -------
         :
-            The initial build state with the project's name, metadata, GitHub repository
-            and page authors.
+            The initial build state with the project's name, metadata, GitHub repository,
+            site identity and page authors.
         """
         project = Project.make(config, layout)
-        base_url = site.identity(config, layout, project).base_url
+        identity = site.identity(config, layout, project)
         return cls(
             project=project,
+            identity=identity,
             exports=Exports(config, project),
             watch=watch,
-            page_authors=page_dates.site_authors(config, layout.source_dir, base_url),
+            page_authors=page_dates.site_authors(config, layout.source_dir, identity.base_url),
         )
 
 
@@ -205,7 +211,6 @@ def run(
         return "Site rendered"
 
     def render_versions() -> Outcome:
-        # Structured data names the site from `_quarto.yml`, which earlier steps edit
         outcome, result = render.versions(
             current,
             config,
@@ -214,7 +219,7 @@ def run(
             version_tags,
             latest_only,
             default_description=site.default_description(config, current.project),
-            structured_data=site.structured_data(config, layout, current.project),
+            structured_data=site.structured_data(current, config),
         )
         render_timings["timings_by_version"] = result.get("timings_by_version")
         return outcome
@@ -315,13 +320,12 @@ def preparation_steps(
         return outcome
 
     def prepare_freeze_cache() -> Outcome:
-        # Earlier steps can change the site title. Read it when preparing page metadata.
         outcome, frozen_pages[:] = passes.freeze_cache(
             run,
             config,
             layout,
             default_description=site.default_description(config, run.project),
-            structured_data=site.structured_data(config, layout, run.project),
+            structured_data=site.structured_data(run, config),
         )
         return outcome
 
@@ -417,14 +421,13 @@ def preparation_steps(
         ),
         Step(
             "Process custom pages",
-            # Read the site title when the step runs; earlier steps can change it.
             lambda: content.custom_pages(
                 run,
                 config,
                 layout,
                 page_authors=run.page_authors,
-                identity=site.identity(config, layout, run.project),
-                structured_data=site.structured_data(config, layout, run.project),
+                identity=run.identity,
+                structured_data=site.structured_data(run, config),
                 default_description=site.default_description(config, run.project),
             ),
             fails_on=(ValueError,),
@@ -513,9 +516,7 @@ def _finishing_steps(
     steps += [
         Step(
             "Generate SEO files",
-            lambda: finish.seo_files(
-                config, layout, site.identity(config, layout, run.project).base_url
-            ),
+            lambda: finish.seo_files(config, layout, run.identity.base_url),
             warn=Warn((OSError,), "Error generating SEO files", "SEO files had issues"),
         ),
         Step(

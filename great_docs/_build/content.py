@@ -520,8 +520,7 @@ def custom_pages(
     page_authors
         The site's authors, added to published pages.
     identity
-        The site's name and addresses for the `<head>` of raw HTML pages. Earlier steps can
-        change the title in `_quarto.yml`; resolve the identity when this step runs.
+        The site's name and addresses for the `<head>` of raw HTML pages.
     structured_data
         The site's structured data for raw HTML pages, or `None` to omit it.
     default_description

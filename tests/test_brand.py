@@ -110,6 +110,11 @@ class TestSite:
         assert quarto_config["website"]["title"] == "Mine"
         assert quarto_config["website"]["page-navigation"] is False
 
+    def test_leaves_out_the_title_when_the_site_has_no_name(self, tmp_path: Path):
+        quarto_config, _ = _register(tmp_path, identity=Identity(name="", url=None, base_url=None))
+
+        assert "title" not in quarto_config["website"]
+
 
 class TestNavbar:
     def test_creates_the_navbar_with_the_github_widget(self, tmp_path: Path):

@@ -324,9 +324,6 @@ def custom_pages_step(docs: GreatDocs, guide: UserGuide | None = None) -> Outcom
     """
     Run the build's custom pages step on its own
 
-    Read the site's current name and addresses from the build directory's `_quarto.yml`
-    when the step runs.
-
     Parameters
     ----------
     docs
@@ -345,8 +342,6 @@ def custom_pages_step(docs: GreatDocs, guide: UserGuide | None = None) -> Outcom
 def freeze_cache_step(docs: GreatDocs, *, watch: bool = False) -> Outcome:
     """
     Run the build's freeze cache step on its own
-
-    Read the site's current name and description when the step runs.
 
     Parameters
     ----------
