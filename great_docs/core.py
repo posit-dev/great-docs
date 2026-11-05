@@ -223,7 +223,7 @@ class GreatDocs:
         # GitHub and PyPI requests; release warnings print in the build log's format
         self._remote: Remote = HttpRemote(report=lambda message: print(f"   ⚠️  {message}"))
 
-        # Caches for the instance's lifetime; builds do not reset them
+        # Reset these caches at the start of each build or initialisation.
         self._griffe_pkg_cache: dict | None = None  # {normalized_name: griffe Package}
         self._cached_exports: list | None = None
         self._cached_package_name: str | None = None
@@ -232,6 +232,14 @@ class GreatDocs:
             self.layout.source_dir,
             self._identity(Project.make(self._config, self.layout)).base_url,
         )
+
+    def _forget_exports(self) -> None:
+        """
+        Clear cached packages and exports so the next discovery reads the current source
+        """
+        self._griffe_pkg_cache = None
+        self._cached_exports = None
+        self._cached_package_name = None
 
     def _get_griffe_package(self, package_name: str):
         """Load a griffe package, using a per-build cache to avoid redundant loads.
@@ -1148,6 +1156,7 @@ class GreatDocs:
 
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
+        self._forget_exports()
         project = Project.make(self._config, self.layout)
         if not project.name or not (importable_name := project.importable_name):
             print("Warning: Could not detect package name, creating minimal config")
@@ -2855,6 +2864,7 @@ class GreatDocs:
 
         # Share project facts within this build; reread packaging files for each new build.
         run = Run.make(self._config, self.layout, watch=watch)
+        self._forget_exports()
 
         # --- Gather metadata for the build header -------------------------
         package_name = run.project.name or ""

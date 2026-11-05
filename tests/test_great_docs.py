@@ -327,6 +327,32 @@ def test_build_requires_config():
             docs.build()
 
 
+def test_a_second_build_documents_the_exports_the_package_has_then(tmp_path, monkeypatch):
+    """Verify that each build on a reused instance documents the current exports"""
+    write_pyproject(tmp_path, "rebuilt-exports")
+    write_config(tmp_path, "dynamic: false\n")
+    package = tmp_path / "rebuilt_exports"
+    package.mkdir()
+    init = package / "__init__.py"
+    init.write_text('__all__ = ["alpha"]\n\n\ndef alpha():\n    """Alpha."""\n')
+    monkeypatch.setattr(sys, "modules", dict(sys.modules))
+    monkeypatch.syspath_prepend(str(tmp_path))
+    docs = GreatDocs(project_path=str(tmp_path))
+
+    def documented() -> list[str]:
+        quarto = read_yaml(docs.build_dir / "_quarto.yml")
+        sections = quarto["api-reference"]["sections"]
+        return [name for section in sections for name in section["contents"]]
+
+    with stubbed_build(docs, run=["_prepare_build_directory"]):
+        docs.build(refresh=False)
+        assert documented() == ["alpha"]
+        init.write_text('__all__ = ["beta"]\n\n\ndef beta():\n    """Beta."""\n')
+        docs.build(refresh=False)
+
+    assert documented() == ["beta"]
+
+
 def test_init_refuses_when_config_exists():
     """Test that init refuses to run when great-docs.yml already exists (no --force)."""
     with tempfile.TemporaryDirectory() as tmp_dir:
