@@ -103,7 +103,14 @@ def test_version_collisions_precede_output(
     root, source = source_project
     gd = make_docs(root, source)
     with pytest.raises(ValueError):
-        run_versioned_build(gd.build_dir, root, tags, latest_only=latest_only, layout=gd.layout)
+        run_versioned_build(
+            gd.build_dir,
+            root,
+            tags,
+            latest_only=latest_only,
+            layout=gd.layout,
+            quarto_config={},
+        )
     assert not gd.build_dir.exists()
     assert not gd.layout.site_dir.exists()
 
@@ -115,7 +122,9 @@ def test_unsafe_historical_build_names(source_project: tuple[Path, Path], tag: s
         pytest.skip("Legacy sibling prefixes keep these names within the package")
     gd = make_docs(root, source)
     with pytest.raises(ValueError):
-        run_versioned_build(gd.build_dir, root, ["2.0", tag], latest_only=True, layout=gd.layout)
+        run_versioned_build(
+            gd.build_dir, root, ["2.0", tag], latest_only=True, layout=gd.layout, quarto_config={}
+        )
     assert not gd.build_dir.parent.exists()
 
 

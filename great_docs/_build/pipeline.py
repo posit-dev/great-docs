@@ -77,9 +77,10 @@ class Run:
         `False` when the reference is disabled, the project is not a Python project, no
         package name is detected, or the package has nothing to document.
     quarto_config
-        The site's Quarto configuration, empty until build directory preparation creates
-        the initial mapping. Preparation updates it in memory and writes the finished
-        configuration to `_quarto.yml` at the end.
+        The site's Quarto configuration, initially empty and updated in memory during
+        preparation. Preparation writes the finished configuration to `_quarto.yml`
+        unless rendering versions separately. Each version then writes its own
+        configuration.
     api_block
         The `api-reference` block of `quarto_config`, or `None` for a site without an API
         reference.
@@ -229,10 +230,20 @@ def run(
         render_timings["timings_by_version"] = result.get("timings_by_version")
         return outcome
 
-    preparation = preparation_steps(current, config, layout, log, remote=remote, refresh=refresh)
+    # Each version writes its own configuration; preparation only needs the mapping in memory.
+    versioned_render = config.has_versions and not watch
+    preparation = preparation_steps(
+        current,
+        config,
+        layout,
+        log,
+        remote=remote,
+        refresh=refresh,
+        write_quarto_config=not versioned_render,
+    )
     if watch:
         render_step = Step("Build site with Quarto", lambda: "Starting watch mode...")
-    elif config.has_versions:
+    elif versioned_render:
         render_step = Step("Build site with Quarto", render_versions, user_code=True, quiet=False)
     else:
         render_step = Step("Build site with Quarto", render_site, quiet=False)
@@ -288,6 +299,7 @@ def preparation_steps(
     *,
     remote: Remote,
     refresh: bool = True,
+    write_quarto_config: bool = True,
 ) -> list[Step]:
     """
     List the build's preparation steps in execution order
@@ -309,6 +321,10 @@ def preparation_steps(
         The source of GitHub and PyPI data.
     refresh
         Whether to rediscover the package's exports for the API reference.
+    write_quarto_config
+        Whether the last step writes the finished Quarto configuration to `_quarto.yml`.
+        If false, the build directory retains the initial configuration whose header
+        marks it as generated.
 
     Returns
     -------
@@ -339,7 +355,7 @@ def preparation_steps(
             log.detail(f"  - {page}")
         return None
 
-    return [
+    steps = [
         Step(
             "Prepare build directory",
             lambda: prepare.build_directory(
@@ -480,12 +496,16 @@ def preparation_steps(
             quiet=False,
             listed=False,
         ),
-        Step(
-            "Write the site configuration",
-            lambda: site.write_quarto_config(run, layout),
-            listed=False,
-        ),
     ]
+    if write_quarto_config:
+        steps.append(
+            Step(
+                "Write the site configuration",
+                lambda: site.write_quarto_config(run, layout),
+                listed=False,
+            )
+        )
+    return steps
 
 
 def _finishing_steps(

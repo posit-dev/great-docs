@@ -219,7 +219,8 @@ def versions(
     Parameters
     ----------
     run
-        The current build.
+        The current build, with the prepared Quarto configuration used as the starting
+        point for every version.
     config
         The project's configuration, including its `versions`.
     layout
@@ -292,6 +293,7 @@ def versions(
         badge_expiry_raw=config["new_is_old"],
         config=config,
         layout=layout,
+        quarto_config=run.quarto_config,
         default_description=default_description,
         structured_data=structured_data,
         documented_symbols=documented_symbols,

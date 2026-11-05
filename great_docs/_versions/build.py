@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -2071,7 +2072,7 @@ def write_version_map(
 # ---------------------------------------------------------------------------
 
 
-def run_versioned_build(  # pragma: no cover
+def run_versioned_build(
     source_dir: Path,
     project_root: Path,
     versions_config: list[Any],
@@ -2087,6 +2088,7 @@ def run_versioned_build(  # pragma: no cover
     structured_data: StructuredData | None = None,
     *,
     layout: Layout,
+    quarto_config: dict[str, Any],
     documented_symbols: Callable[[str], list[str]] | None = None,
 ) -> dict[str, Any]:
     """
@@ -2127,6 +2129,10 @@ def run_versioned_build(  # pragma: no cover
         `None` when structured data is disabled.
     layout
         Resolved project paths for build directories and the assembled site.
+    quarto_config
+        The prepared site's Quarto configuration. Each version derives its own
+        configuration from a separate copy and writes it to its build directory's
+        `_quarto.yml`. The supplied mapping remains unchanged.
     documented_symbols
         Callable that returns the working tree's documented reference page
         stems for a project name. New snapshots for versions built from tags
@@ -2186,9 +2192,9 @@ def run_versioned_build(  # pragma: no cover
     dir_by_tag: dict[str, Path] = {}
     for entry in ordered_targets:
         ver_dir = _version_build_dir(source_dir, entry, latest_tag, layout)
-        # Historical versions start from the original source configuration. The latest
-        # version runs last and is the only version that overwrites it.
-        quarto_config = quarto_yml.read(source_dir)
+        # Isolate each version's in-place changes so later versions start from the same
+        # prepared configuration.
+        version_config = copy.deepcopy(quarto_config)
         pages = preprocess_version(
             source_dir,
             ver_dir,
@@ -2199,7 +2205,7 @@ def run_versioned_build(  # pragma: no cover
             badge_expiry=badge_expiry,
             config=config,
             layout=layout,
-            quarto_config=quarto_config,
+            quarto_config=version_config,
             documented_symbols=documented_symbols,
         )
         # Describe each version's resolved pages before the version's site title is set. The
@@ -2207,14 +2213,14 @@ def run_versioned_build(  # pragma: no cover
         # name the same site in every version.
         if config is not None:
             _ = page_metadata.write_to_pages(
-                ver_dir, quarto_config, config, default_description, structured_data
+                ver_dir, version_config, config, default_description, structured_data
             )
-        _prune_missing_sidebar_pages(quarto_config, ver_dir)
-        _adjust_quarto_config_for_version(quarto_config, entry, latest_tag)
-        _add_upcoming_status_data(quarto_config, ver_dir)
+        _prune_missing_sidebar_pages(version_config, ver_dir)
+        _adjust_quarto_config_for_version(version_config, entry, latest_tag)
+        _add_upcoming_status_data(version_config, ver_dir)
         # Last, so the trimmed sidebars reflect every change above
-        shared_sidebar.prepare(ver_dir, quarto_config)
-        quarto_yml.write(ver_dir, quarto_config)
+        shared_sidebar.prepare(ver_dir, version_config)
+        quarto_yml.write(ver_dir, version_config)
         pages_by_version[entry.tag] = pages
         dir_by_tag[entry.tag] = ver_dir
 

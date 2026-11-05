@@ -12,7 +12,6 @@ from yaml12 import read_yaml
 
 from great_docs._api_diff import ApiSnapshot, ParameterInfo, SymbolInfo
 from great_docs._layout import Layout
-from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._versions.build import (
     _version_build_dir,
     assemble_site,
@@ -38,10 +37,11 @@ def test_layout_pipeline(tmp_path: Path, directory: str) -> None:
     config.write_text("module: sample\n")
     layout = Layout.make(tmp_path, config)
     layout.build_dir.mkdir(parents=True)
-    (layout.build_dir / "_quarto.yml").write_text(
-        QUARTO_YML_HEADER
-        + "project:\n  type: website\nwebsite:\n  site-url: https://example.com/docs\n"
-    )
+    quarto_config = {
+        "project": {"type": "website"},
+        "website": {"site-url": "https://example.com/docs"},
+    }
+    quarto_yml.write(layout.build_dir, quarto_config)
     (layout.build_dir / "index.qmd").write_text("# Home\n")
     (layout.build_dir / "old.qmd").write_text('---\nversions: ["v1.5.0"]\n---\nOld page\n')
 
@@ -56,6 +56,7 @@ def test_layout_pipeline(tmp_path: Path, directory: str) -> None:
             tmp_path,
             ["2.0", "v1.5.0"],
             layout=layout,
+            quarto_config=quarto_config,
         )
     assert result["success"]
     assert (layout.site_dir / "v/1.5.0/old.html").is_file()

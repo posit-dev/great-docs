@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from yaml12 import format_yaml, parse_yaml
@@ -74,17 +74,21 @@ def _make_source_tree(root: Path, pages: dict[str, str]) -> None:
         )
 
 
+# Baseline site configuration for versioned builds
+_QUARTO_CONFIG: dict[str, Any] = {
+    "project": {"type": "website", "output-dir": "_site"},
+    "format": {"html": {}},
+    "website": {"title": "Test"},
+}
+
+
 def _make_project(tmp_path: Path, pages: dict[str, str]) -> Layout:
     """Create a project layout with `pages` and a generated Quarto configuration"""
     project_root = tmp_path / "project"
     project_root.mkdir()
     layout = Layout.make(project_root)
     layout.build_dir.mkdir()
-    (layout.build_dir / "_quarto.yml").write_text(
-        QUARTO_YML_HEADER + "project:\n  type: website\n  output-dir: _site\n"
-        "format:\n  html: {}\nwebsite:\n  title: Test\n",
-        encoding="utf-8",
-    )
+    quarto_yml.write(layout.build_dir, _QUARTO_CONFIG)
     _make_source_tree(layout.build_dir, pages)
     return layout
 
@@ -3468,6 +3472,7 @@ class TestRunVersionedBuild:
                 source_dir=source,
                 project_root=project_root,
                 layout=layout,
+                quarto_config=_QUARTO_CONFIG,
                 versions_config=["0.3", "0.2"],
             )
 
@@ -3500,6 +3505,7 @@ class TestRunVersionedBuild:
                 source_dir=source,
                 project_root=project_root,
                 layout=layout,
+                quarto_config=_QUARTO_CONFIG,
                 versions_config=["0.3", "0.2"],
                 latest_only=True,
             )
@@ -3530,6 +3536,7 @@ class TestRunVersionedBuild:
                 source_dir=source,
                 project_root=project_root,
                 layout=layout,
+                quarto_config=_QUARTO_CONFIG,
                 versions_config=["0.3", "0.2", "0.1"],
                 version_tags=["0.2"],
             )
@@ -3555,6 +3562,7 @@ class TestRunVersionedBuild:
                 source_dir=source,
                 project_root=project_root,
                 layout=layout,
+                quarto_config=_QUARTO_CONFIG,
                 versions_config=["0.3"],
             )
 
@@ -3588,6 +3596,7 @@ class TestRunVersionedBuild:
                 source_dir=source,
                 project_root=project_root,
                 layout=layout,
+                quarto_config=_QUARTO_CONFIG,
                 versions_config=["0.3"],
                 on_renders_done=callback,
             )
@@ -3626,6 +3635,7 @@ class TestRunVersionedBuild:
                 source_dir=source,
                 project_root=project_root,
                 layout=layout,
+                quarto_config=_QUARTO_CONFIG,
                 versions_config=["0.3", "0.2"],
             )
 
@@ -3651,6 +3661,7 @@ class TestRunVersionedBuild:
                 source_dir=source,
                 project_root=project_root,
                 layout=layout,
+                quarto_config=_QUARTO_CONFIG,
                 versions_config=["0.3", "0.2"],
             )
 
@@ -3671,6 +3682,7 @@ class TestRunVersionedBuild:
                 source_dir=source,
                 project_root=project_root,
                 layout=layout,
+                quarto_config=_QUARTO_CONFIG,
                 versions_config=["0.3", "0.2"],
             )
 
@@ -3703,6 +3715,7 @@ class TestRunVersionedBuild:
                 source_dir=source,
                 project_root=project_root,
                 layout=layout,
+                quarto_config=_QUARTO_CONFIG,
                 versions_config=["0.3", "0.2", "0.1"],
             )
 
@@ -3744,6 +3757,7 @@ class TestRunVersionedBuild:
                 source_dir=source,
                 project_root=project_root,
                 layout=layout,
+                quarto_config=_QUARTO_CONFIG,
                 versions_config=["0.3", "0.2"],
             )
 
@@ -3787,6 +3801,7 @@ class TestRunVersionedBuild:
                 source_dir=source,
                 project_root=project_root,
                 layout=layout,
+                quarto_config=_QUARTO_CONFIG,
                 versions_config=["0.2", "0.1"],
                 config=Config(project_root),
             )
@@ -3821,6 +3836,7 @@ class TestRunVersionedBuild:
                 source_dir=source,
                 project_root=project_root,
                 layout=layout,
+                quarto_config=_QUARTO_CONFIG,
                 versions_config=["0.3", "0.2", "0.1"],
                 badge_expiry_raw="1",
             )
@@ -4356,26 +4372,6 @@ class TestPruneCliPagesFull:
 
 
 # ---------------------------------------------------------------------------
-# Unreadable Quarto configuration
-# ---------------------------------------------------------------------------
-
-
-def test_invalid_quarto_config_stops_the_versioned_build(tmp_path: Path):
-    layout = _make_project(tmp_path, {"index.qmd": "---\ntitle: Home\n---\nHi"})
-    (layout.build_dir / "_quarto.yml").write_text(
-        QUARTO_YML_HEADER + "invalid: yaml: content: [\n  unmatched bracket", encoding="utf-8"
-    )
-
-    with pytest.raises(ValueError):
-        run_versioned_build(
-            source_dir=layout.build_dir,
-            project_root=layout.package_root,
-            layout=layout,
-            versions_config=["0.3", "0.2"],
-        )
-
-
-# ---------------------------------------------------------------------------
 # _prune_sidebar_contents — href dict with missing .qmd file
 # ---------------------------------------------------------------------------
 
@@ -4422,6 +4418,7 @@ class TestRunVersionedBuildEmptyRender:
                 source_dir=source,
                 project_root=project_root,
                 layout=layout,
+                quarto_config=_QUARTO_CONFIG,
                 versions_config=["0.3"],
             )
 
@@ -4455,6 +4452,7 @@ class TestRunVersionedBuildEmptyRender:
                 source_dir=source,
                 project_root=project_root,
                 layout=layout,
+                quarto_config=_QUARTO_CONFIG,
                 versions_config=["0.3", "0.2"],
             )
 
@@ -4487,6 +4485,7 @@ class TestRunVersionedBuildEmptyRender:
                 source_dir=source,
                 project_root=project_root,
                 layout=layout,
+                quarto_config=_QUARTO_CONFIG,
                 versions_config=["0.3"],
             )
 
@@ -4645,14 +4644,16 @@ class TestVersionConfigurationWrite:
                 "legacy/old.qmd": "---\ntitle: Old\n---\nOld",
             },
         )
-        quarto_config = quarto_yml.read(layout.build_dir)
-        quarto_config["website"]["navbar"] = {
+        navbar = {
             "left": [
                 {"text": "Recipes", "href": "recipes/basic.qmd"},
                 {"text": "Legacy", "href": "legacy/old.qmd"},
             ]
         }
-        quarto_yml.write(layout.build_dir, quarto_config)
+        quarto_config = {
+            **_QUARTO_CONFIG,
+            "website": {**_QUARTO_CONFIG["website"], "navbar": navbar},
+        }
         config = cast(
             "Config",
             SimpleNamespace(
@@ -4677,6 +4678,7 @@ class TestVersionConfigurationWrite:
                 source_dir=layout.build_dir,
                 project_root=layout.package_root,
                 layout=layout,
+                quarto_config=quarto_config,
                 versions_config=["0.3", "0.2"],
                 config=config,
             )
