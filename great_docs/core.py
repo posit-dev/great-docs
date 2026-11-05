@@ -268,7 +268,7 @@ class GreatDocs:
         self._remote: Remote = HttpRemote(report=lambda message: print(f"   ⚠️  {message}"))
 
         # Caches for the instance's lifetime; builds do not reset them
-        self._package_metadata_cache: dict | None = None
+        self._package_metadata_cache: dict[str, Any] | None = None
         self._griffe_pkg_cache: dict | None = None  # {normalized_name: griffe Package}
         self._cached_exports: list | None = None
         self._cached_package_name: str | None = None
@@ -761,24 +761,21 @@ class GreatDocs:
 
     def _get_package_metadata(self) -> dict[str, Any]:
         """
-        Read declared project metadata and selected configuration values
+        Read project metadata from packaging files
 
         Read the description, licence, authors, maintainers, URLs, Python requirement,
-        keywords and dependencies from the packaging files, and use the current
-        configuration without reloading it. When `pyproject.toml` exists, cache the first
-        result for later calls. Otherwise, read the packaging files and current configuration
-        on each call.
+        keywords and dependencies from the packaging files. Cache the first result when
+        `pyproject.toml` exists; otherwise, read the files on each call.
 
         Returns
         -------
         :
-            Project fields and configuration values, keyed by name. Ignore an unreadable
-            or invalid `setup.cfg` beside a readable, valid `pyproject.toml`. Other packaging
-            read or parse errors leave the project fields empty.
+            The project fields, keyed by name. Ignore an unreadable or invalid `setup.cfg`
+            beside a readable, valid `pyproject.toml`. Other packaging read or parse errors
+            leave the fields empty.
         """
         if self._package_metadata_cache is not None:
             return self._package_metadata_cache
-
         package_root = self.layout.package_root
         manifest = _read_manifest(package_root)
         metadata: dict[str, Any] = {
@@ -794,63 +791,6 @@ class GreatDocs:
             # The package-information page requires this key for parsed optional dependencies.
             "optional_dependencies_full": manifest["optional_dependencies"],
         }
-
-        # Map config properties to metadata dict for backward compatibility
-        metadata["rich_authors"] = self._config.authors
-        metadata["exclude"] = self._config.exclude
-        metadata["auto_include"] = self._config.auto_include
-        metadata["no_auto_exclude"] = self._config.no_auto_exclude
-
-        # Source link configuration
-        metadata["source_link_enabled"] = self._config.source_enabled
-        metadata["source_link_branch"] = self._config.source_branch
-        metadata["source_link_path"] = self._config.source_path
-
-        # GitHub link style
-        metadata["github_style"] = self._config.github_style
-
-        # Sidebar filter configuration
-        metadata["sidebar_filter_enabled"] = self._config.sidebar_filter_enabled
-        metadata["sidebar_filter_min_items"] = self._config.sidebar_filter_min_items
-
-        # CLI documentation configuration
-        metadata["cli_enabled"] = self._config.cli_enabled
-        metadata["cli_module"] = self._config.cli_module
-        metadata["cli_name"] = self._config.cli_name
-
-        # Go CLI documentation configuration
-        metadata["go_cli_enabled"] = self._config.go_cli_enabled
-
-        # Rust CLI documentation configuration
-        metadata["rust_cli_enabled"] = self._config.rust_cli_enabled
-
-        # MCP documentation configuration
-        metadata["mcp_enabled"] = self._config.mcp_enabled
-
-        # Dark mode toggle
-        metadata["dark_mode_toggle_enabled"] = self._config.dark_mode_toggle
-
-        # Back-to-top button
-        metadata["back_to_top_enabled"] = self._config.back_to_top
-
-        # Wide layout toggle (None when disabled)
-        metadata["wide_layout"] = self._config.wide_layout
-
-        # Keyboard navigation
-        metadata["keyboard_nav_enabled"] = self._config.keyboard_nav
-
-        # Markdown pages (.md generation + copy-page widget)
-        metadata["markdown_pages"] = self._config.markdown_pages
-        metadata["markdown_pages_widget"] = self._config.markdown_pages_widget
-
-        # Funding organization
-        metadata["funding"] = self._config.funding
-
-        # Logo & favicon configuration
-        metadata["logo"] = self._config.logo
-        metadata["logo_show_title"] = self._config.logo_show_title
-        metadata["favicon"] = self._config.favicon
-
         if (package_root / "pyproject.toml").exists():
             self._package_metadata_cache = metadata
         return metadata
@@ -1947,14 +1887,11 @@ class GreatDocs:
         # Include CLI snapshot when CLI documentation is enabled
         if self._config.cli_enabled:
             try:
-                metadata = self._get_package_metadata()
-                found = None
-                if metadata.get("cli_enabled", False):
-                    found = cli_click.find_command(
-                        importable_name,
-                        cli_module=metadata.get("cli_module"),
-                        cli_name=metadata.get("cli_name"),
-                    )
+                found = cli_click.find_command(
+                    importable_name,
+                    cli_module=self._config.cli_module,
+                    cli_name=self._config.cli_name,
+                )
                 if found is not None:
                     snap.cli_commands = cli_click.extract_snapshot(found.command)
             except USER_CODE_ERRORS:
@@ -2145,19 +2082,18 @@ class GreatDocs:
         """
         if not llms_txt.is_planned(self.build_dir):
             return Skipped("no API reference")
-        metadata = self._get_package_metadata()
-        llms_txt.write_index(self.build_dir, metadata, report=print)
+        llms_txt.write_index(self.build_dir, self._get_package_metadata(), report=print)
 
         cli = None
-        package_name = self._detect_package_name() if metadata.get("cli_enabled", False) else None
+        package_name = self._detect_package_name() if self._config.cli_enabled else None
         if package_name:
             # The importable module name can differ from the PyPI project name.
             try:
                 cli = cli_click.discover(
                     self._resolve_importable_name(package_name),
                     self.layout.package_root,
-                    cli_module=metadata.get("cli_module"),
-                    cli_name=metadata.get("cli_name"),
+                    cli_module=self._config.cli_module,
+                    cli_name=self._config.cli_name,
                     display_name=package_name,
                     report=print,
                 )
@@ -2258,8 +2194,7 @@ class GreatDocs:
         :
             The result line or skip reason.
         """
-        metadata = self._get_package_metadata()
-        if not metadata.get("cli_enabled", False):
+        if not self._config.cli_enabled:
             return Skipped("CLI not enabled")
         if not run.package_name:
             return Skipped("no package detected")
@@ -2268,8 +2203,8 @@ class GreatDocs:
         cli_info = cli_click.discover(
             module,
             self.layout.package_root,
-            cli_module=metadata.get("cli_module"),
-            cli_name=metadata.get("cli_name"),
+            cli_module=self._config.cli_module,
+            cli_name=self._config.cli_name,
             display_name=run.package_name,
             report=print,
         )

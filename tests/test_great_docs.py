@@ -1346,7 +1346,7 @@ version = "0.1.0"
 
 
 def test_source_link_config_defaults():
-    """Test that source link configuration has proper defaults."""
+    """Source links are on, with no branch or path, unless configured"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Create pyproject.toml without source config
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -1357,12 +1357,10 @@ version = "0.1.0"
 """)
 
         docs = GreatDocs(project_path=tmp_dir)
-        metadata = docs._get_package_metadata()
 
-        # Defaults should be: enabled=True, branch=None, path=None
-        assert metadata.get("source_link_enabled", True) is True
-        assert metadata.get("source_link_branch") is None
-        assert metadata.get("source_link_path") is None
+        assert docs._config.source_enabled is True
+        assert docs._config.source_branch is None
+        assert docs._config.source_path is None
 
 
 def test_source_link_config_custom():
@@ -1386,11 +1384,10 @@ source:
 """)
 
         docs = GreatDocs(project_path=tmp_dir)
-        metadata = docs._get_package_metadata()
 
-        assert metadata.get("source_link_enabled") is False
-        assert metadata.get("source_link_branch") == "develop"
-        assert metadata.get("source_link_path") == "src/mypackage"
+        assert docs._config.source_enabled is False
+        assert docs._config.source_branch == "develop"
+        assert docs._config.source_path == "src/mypackage"
 
 
 def test_check_links_extracts_urls():
@@ -9055,7 +9052,7 @@ def test_build_sections_from_reference_config_dict_no_name_returns_none():
 
 
 def test_homepage_margin_with_funding():
-    """Verify that the sidebar includes funding details from metadata"""
+    """Verify that the sidebar includes the configured funder"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -12686,25 +12683,6 @@ def test_get_package_metadata_setup_cfg_project_urls():
         assert urls.get("Source") == "https://github.com/user/repo"
 
 
-def test_get_package_metadata_config_mapping():
-    """Test _get_package_metadata maps Config properties to metadata."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
-        metadata = docs._get_package_metadata()
-
-        # Check that config-derived keys are present
-        assert "source_link_enabled" in metadata
-        assert "sidebar_filter_enabled" in metadata
-        assert "cli_enabled" in metadata
-        assert "dark_mode_toggle_enabled" in metadata
-        assert "markdown_pages" in metadata
-        assert "logo" in metadata
-        assert "favicon" in metadata
-        assert "funding" in metadata
-
-
 def test_process_user_guide_returns_false_no_guide():
     """Test _process_user_guide returns False when no user guide."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -13491,24 +13469,6 @@ def test_empty_categories_has_all_keys():
         ]
         for key in expected_keys:
             assert key in cats
-
-
-def test_get_package_metadata_cli_config():
-    """Test _get_package_metadata reads CLI config from great-docs.yml."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        docs._config = write_config(
-            Path(tmp_dir), "cli:\n  enabled: true\n  module: mypkg.cli\n  name: main\n"
-        )
-
-        result = docs._get_package_metadata()
-        assert result.get("cli_enabled") is True
-        assert result.get("cli_module") == "mypkg.cli"
-        assert result.get("cli_name") == "main"
-
-        # Just confirm no crash
 
 
 def test_refresh_api_reference_config_no_api_reference():
@@ -14517,7 +14477,6 @@ def test_build_with_changelog(tmp_path):
     with stubbed_build(
         docs,
         _detect_package_name="mypkg",
-        _get_package_metadata={"cli_enabled": False},
         _get_github_repo_info=("owner", "repo", "https://github.com/owner/repo"),
     ):
         docs.build(watch=False, refresh=False)
@@ -14557,14 +14516,12 @@ def test_build_changelog_error_stops_the_build(tmp_path):
 
 def test_build_with_cli_documentation(tmp_path):
     """Test build() generates CLI docs when cli_enabled."""
-    docs = _buildable_docs(tmp_path)
+    docs = _buildable_docs(tmp_path, cli_enabled=True)
     cli_info = {"name": "mycli", "commands": [], "help_text": "Help"}
     cli_files = ["reference/cli/index.qmd"]
 
     with (
-        stubbed_build(
-            docs, _detect_package_name="mypkg", _get_package_metadata={"cli_enabled": True}
-        ),
+        stubbed_build(docs, _detect_package_name="mypkg"),
         patch("great_docs._cliref.click.discover", return_value=cli_info) as discover,
         patch("great_docs._cliref.render.write_pages", return_value=cli_files) as write_pages,
     ):
@@ -14643,12 +14600,10 @@ def test_build_cli_error_handled(tmp_path, capsys):
     `build()` prints `Error generating CLI docs: click` and still writes page
     metadata.
     """
-    docs = _buildable_docs(tmp_path)
+    docs = _buildable_docs(tmp_path, cli_enabled=True)
 
     with (
-        stubbed_build(
-            docs, _detect_package_name="mypkg", _get_package_metadata={"cli_enabled": True}
-        ) as stubs,
+        stubbed_build(docs, _detect_package_name="mypkg") as stubs,
         patch("great_docs._cliref.click.discover", side_effect=ImportError("click")),
         patch("great_docs._cliref.render.write_pages") as write_pages,
     ):
@@ -27877,24 +27832,22 @@ def test_back_to_top_with_string_include_after_body():
 
 
 def test_back_to_top_metadata_flag():
-    """_get_package_metadata sets back_to_top_enabled in metadata."""
+    """The back-to-top button is on unless configured off"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        metadata = docs._get_package_metadata()
-        assert metadata["back_to_top_enabled"] is True
+        assert docs._config.back_to_top is True
 
 
 def test_back_to_top_metadata_flag_disabled():
-    """_get_package_metadata reflects back_to_top: false."""
+    """`back_to_top: false` turns the back-to-top button off"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(
             tmp_dir,
             gd_yml_content="back_to_top: false\n",
         )
-        metadata = docs._get_package_metadata()
-        assert metadata["back_to_top_enabled"] is False
+        assert docs._config.back_to_top is False
 
 
 def test_back_to_top_js_copied_to_project():
@@ -28083,15 +28036,17 @@ def test_wide_layout_js_copied_to_project():
 
 
 def test_wide_layout_metadata():
-    """_get_package_metadata carries the validated wide layout settings."""
+    """The configuration carries the validated wide layout settings"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, _ = _make_uqc_docs(tmp_dir)
-        assert docs._get_package_metadata()["wide_layout"]["content_scale"] == 1.5
+        wide_layout = docs._config.wide_layout
+        assert wide_layout is not None
+        assert wide_layout["content_scale"] == 1.5
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, _ = _make_uqc_docs(tmp_dir, gd_yml_content="wide_layout: false\n")
-        assert docs._get_package_metadata()["wide_layout"] is None
+        assert docs._config.wide_layout is None
 
 
 def test_wide_layout_assets_have_expected_content():
@@ -28498,24 +28453,22 @@ def test_keyboard_nav_not_duplicated():
 
 
 def test_keyboard_nav_metadata_flag():
-    """_get_package_metadata sets keyboard_nav_enabled in metadata."""
+    """Keyboard navigation is on unless configured off"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        metadata = docs._get_package_metadata()
-        assert metadata["keyboard_nav_enabled"] is True
+        assert docs._config.keyboard_nav is True
 
 
 def test_keyboard_nav_metadata_flag_disabled():
-    """_get_package_metadata reflects keyboard_nav: false."""
+    """`keyboard_nav: false` turns keyboard navigation off"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(
             tmp_dir,
             gd_yml_content="keyboard_nav: false\n",
         )
-        metadata = docs._get_package_metadata()
-        assert metadata["keyboard_nav_enabled"] is False
+        assert docs._config.keyboard_nav is False
 
 
 def test_keyboard_nav_js_copied_to_project():

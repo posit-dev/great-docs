@@ -41,14 +41,14 @@ def write_page(
     Parameters
     ----------
     config
-        The Great Docs configuration.
+        The Great Docs configuration. An author's role comes from the configured author with
+        the same name, or is `"Author"` if there is none or it has no role.
     package_root
         The project directory holding `CITATION.cff`.
     build_dir
         The Quarto project directory to write the page into.
     metadata
-        The project metadata. An author's role comes from the entry with the same name in
-        `rich_authors`, or defaults to `"Author"` if no entry or role key exists.
+        The project metadata, whose `name` the introduction cites, else `this package`.
     authors
         The configured authors, with local portrait paths replaced by site URLs.
     report
@@ -72,14 +72,14 @@ def write_page(
 To cite {package_name} in publications, please use the following citation.
 """
 
-    rich_authors: list[dict[str, Any]] = metadata.get("rich_authors") or []
+    configured_authors: list[dict[str, Any]] = config.authors or []
     authors_section = "## Authors\n\n"
     for author in cff_authors:
         full_name = _full_name(author)
         role = "Author"
-        for rich_author in rich_authors:
-            if rich_author.get("name") == full_name:
-                role = rich_author.get("role", "Author")
+        for configured in configured_authors:
+            if configured.get("name") == full_name:
+                role = configured.get("role", "Author")
                 break
         authors_section += f"{full_name}. {role}.  \n"
 

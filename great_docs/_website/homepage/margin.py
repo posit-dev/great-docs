@@ -76,7 +76,7 @@ def render(
     package_root
         The project directory, which may contain a curated skill.
     metadata
-        The package metadata: URLs, authors, funding, licence, Python requirement and extras.
+        The package metadata: URLs, authors, licence, Python requirement and extras.
     package_name
         The package name, for the PyPI link, the curated skill and the citation link.
     community_pages
@@ -91,7 +91,7 @@ def render(
     sections = [
         *_links(config, metadata, package_name, lang),
         *_ai_agents(config, build_dir, package_root, package_name, lang),
-        *_developers(metadata, lang),
+        *_developers(config, metadata, lang),
         *_community(build_dir, metadata, package_name, community_pages, lang),
         *_meta(config, build_dir, metadata, lang),
     ]
@@ -205,16 +205,19 @@ def _ai_agents(
     return [f"\n#### {get_translation('ai_agents', lang)}\n", *items]
 
 
-def _developers(metadata: Mapping[str, Any], lang: str) -> list[str]:
+def _developers(config: Config, metadata: Mapping[str, Any], lang: str) -> list[str]:
     """
     Render the Developers section: a card per author, then the funder
 
-    An author without a GitHub account links to the owner of a GitHub repository URL.
+    The authors are the configured ones, else those the package declares. An author without
+    a GitHub account links to the owner of a GitHub repository URL.
 
     Parameters
     ----------
+    config
+        The Great Docs configuration, with the authors and the funder.
     metadata
-        The package metadata, with `rich_authors` or `authors`, `funding` and `urls`.
+        The package metadata, with `authors` and `urls`.
     lang
         The site language.
 
@@ -223,8 +226,8 @@ def _developers(metadata: Mapping[str, Any], lang: str) -> list[str]:
     :
         The heading and one `<div>` per card, or no lines if there are no cards.
     """
-    authors: list[Any] = metadata.get("rich_authors") or metadata.get("authors", [])
-    funding: dict[str, Any] | None = metadata.get("funding")
+    authors: list[Any] = config.authors or metadata.get("authors", [])
+    funding: dict[str, Any] | None = config.funding
     if not isinstance(funding, dict) or not funding.get("name"):
         funding = None
     if not (authors or funding):
