@@ -135,7 +135,20 @@ def test_reads_setuptools_find_directories(tmp_path: Path):
     write(tmp_path, "pyproject.toml", '[tool.setuptools.packages.find]\nwhere = ["code"]\n')
     manifest = _manifest.read(tmp_path)
     assert manifest["package_dirs"] == ["code"]
+    assert manifest["discovery_dirs"] == ["code"]
     assert manifest["declared_packages"] == []
+
+
+@pytest.mark.parametrize(
+    ("find", "directories"),
+    [('where = "code"\n', ["code"]), ("include = ['pkg*']\n", ["."])],
+    ids=["string", "absent"],
+)
+def test_setuptools_find_where_may_be_a_string_or_absent(
+    tmp_path: Path, find: str, directories: list[str]
+):
+    write(tmp_path, "pyproject.toml", f"[tool.setuptools.packages.find]\n{find}")
+    assert _manifest.read(tmp_path)["discovery_dirs"] == directories
 
 
 def test_setup_cfg_fills_what_pyproject_leaves_out(tmp_path: Path):
@@ -248,3 +261,20 @@ def test_project_table_wins_over_poetry(tmp_path: Path):
     manifest = _manifest.read(tmp_path)
     assert manifest["name"] == "pep621"
     assert manifest["description"] == "Poetry"
+
+
+def test_unparsable_setup_cfg_may_be_ignored_beside_pyproject(tmp_path: Path):
+    write(tmp_path, "pyproject.toml", '[project]\nname = "pkg"\ndescription = "Summary"\n')
+    write(tmp_path, "setup.cfg", "[flake8]\nignore = E1\nignore = E2\n")
+
+    with pytest.raises(ManifestError, match="setup.cfg"):
+        _manifest.read(tmp_path)
+    manifest = _manifest.read(tmp_path, ignore_unparsable_setup_cfg=True)
+    assert (manifest["name"], manifest["description"]) == ("pkg", "Summary")
+
+
+def test_unparsable_setup_cfg_alone_raises_even_when_ignorable(tmp_path: Path):
+    write(tmp_path, "setup.cfg", "[metadata]\nname = a\nname = b\n")
+
+    with pytest.raises(ManifestError, match="setup.cfg"):
+        _manifest.read(tmp_path, ignore_unparsable_setup_cfg=True)

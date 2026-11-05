@@ -19,7 +19,7 @@ from packaging.requirements import Requirement as _Requirement
 
 from great_docs._yaml import YamlMapping, YamlValue
 
-__all__ = ["Dependency", "Manifest", "ManifestError", "Person", "read"]
+__all__ = ["Dependency", "Manifest", "ManifestError", "Person", "empty", "read"]
 
 _T = TypeVar("_T")
 
@@ -125,11 +125,17 @@ class Manifest(TypedDict):
     package_dirs: list[str]
     """
     Directories the build backend searches for packages, relative to the project root: the
-    setuptools `package-dir` values and `packages.find.where`
+    setuptools `package-dir` values and `discovery_dirs`
+    """
+
+    discovery_dirs: list[str]
+    """
+    Directories that setuptools package discovery (`[tool.setuptools.packages.find]`)
+    searches, relative to the project root: its `where` value, or `.` when it has none
     """
 
 
-def read(root: Path) -> Manifest:
+def read(root: Path, *, ignore_unparsable_setup_cfg: bool = False) -> Manifest:
     """
     Read the metadata declared in a project's packaging files
 
@@ -141,6 +147,10 @@ def read(root: Path) -> Manifest:
     ----------
     root
         The directory holding the packaging files.
+    ignore_unparsable_setup_cfg
+        Whether to ignore an unreadable or invalid `setup.cfg` when `pyproject.toml` can be
+        read and parsed. Some projects use `setup.cfg` only for tool settings that
+        `configparser` rejects.
 
     Returns
     -------
@@ -153,7 +163,7 @@ def read(root: Path) -> Manifest:
     ManifestError
         A packaging file exists but cannot be read or parsed.
     """
-    manifest = _empty()
+    manifest = empty()
     pyproject = root / "pyproject.toml"
     if pyproject.is_file():
         data = YamlMapping(_load(pyproject, _parse_toml))
@@ -161,12 +171,43 @@ def read(root: Path) -> Manifest:
         manifest = _first(_from_pyproject(data), poetry)
     setup_cfg = root / "setup.cfg"
     if setup_cfg.is_file():
-        manifest = _first(manifest, _from_setup_cfg(_load(setup_cfg, _parse_cfg)))
+        try:
+            manifest = _first(manifest, _from_setup_cfg(_load(setup_cfg, _parse_cfg)))
+        except ManifestError:
+            if not (ignore_unparsable_setup_cfg and pyproject.is_file()):
+                raise
     setup_py = root / "setup.py"
     if not manifest["name"] and setup_py.is_file():
         match = _SETUP_PY_NAME.search(_load(setup_py, str))
         manifest["name"] = match[1] if match else None
     return manifest
+
+
+def empty() -> Manifest:
+    """
+    Make an empty project manifest
+
+    Returns
+    -------
+    :
+        A manifest whose name is `None` and whose other values are empty.
+    """
+    return Manifest(
+        name=None,
+        description="",
+        license="",
+        authors=[],
+        maintainers=[],
+        urls={},
+        requires_python="",
+        keywords=[],
+        dependencies=[],
+        optional_dependencies={},
+        scripts={},
+        declared_packages=[],
+        package_dirs=[],
+        discovery_dirs=[],
+    )
 
 
 def _load(path: Path, parse: Callable[[str], _T]) -> _T:
@@ -234,32 +275,6 @@ def _parse_cfg(text: str) -> configparser.ConfigParser:
     return parser
 
 
-def _empty() -> Manifest:
-    """
-    Make an empty project manifest
-
-    Returns
-    -------
-    :
-        A manifest whose name is `None` and whose other values are empty.
-    """
-    return Manifest(
-        name=None,
-        description="",
-        license="",
-        authors=[],
-        maintainers=[],
-        urls={},
-        requires_python="",
-        keywords=[],
-        dependencies=[],
-        optional_dependencies={},
-        scripts={},
-        declared_packages=[],
-        package_dirs=[],
-    )
-
-
 def _first(manifest: Manifest, fallback: Manifest) -> Manifest:
     """
     Fill missing metadata values from a fallback source
@@ -292,6 +307,7 @@ def _first(manifest: Manifest, fallback: Manifest) -> Manifest:
         scripts=manifest["scripts"] or fallback["scripts"],
         declared_packages=manifest["declared_packages"] or fallback["declared_packages"],
         package_dirs=manifest["package_dirs"] or fallback["package_dirs"],
+        discovery_dirs=manifest["discovery_dirs"] or fallback["discovery_dirs"],
     )
 
 
@@ -311,7 +327,7 @@ def _from_pyproject(data: YamlMapping) -> Manifest:
         backends declare under `[tool]`.
     """
     project = data.mapping("project")
-    manifest = _empty()
+    manifest = empty()
     manifest["name"] = project.string("name")
     manifest["description"] = project.string("description") or ""
     manifest["license"] = _licence(project)
@@ -338,14 +354,12 @@ def _from_pyproject(data: YamlMapping) -> Manifest:
     setuptools = tool.mapping("setuptools")
     manifest["package_dirs"] = list(_string_values(setuptools.mapping("package-dir")).values())
     packages = setuptools.get("packages")
-    if isinstance(packages, dict):
-        manifest["package_dirs"] += _strings(
-            YamlMapping(packages).mapping("find").sequence("where")
-        )
-    else:
-        manifest["declared_packages"] += [
-            package.replace(".", "/") for package in _strings(packages)
-        ]
+    manifest["declared_packages"] += [package.replace(".", "/") for package in _strings(packages)]
+    find = setuptools.mapping("packages").mapping("find")
+    if "find" in setuptools.mapping("packages"):
+        # setuptools searches the project root when `where` is absent.
+        manifest["discovery_dirs"] = find.strings("where") if "where" in find else ["."]
+        manifest["package_dirs"] += manifest["discovery_dirs"]
     wheel = tool.mapping("hatch").mapping("build").mapping("targets").mapping("wheel")
     manifest["declared_packages"] += _strings(wheel.sequence("packages"))
     for entry in tool.mapping("poetry").sequence("packages"):
@@ -373,7 +387,7 @@ def _from_poetry(poetry: YamlMapping) -> Manifest:
         URLs. An author written as `Name <email>` supplies both parts; any other string
         supplies only the name.
     """
-    manifest = _empty()
+    manifest = empty()
     manifest["name"] = poetry.string("name")
     manifest["description"] = poetry.string("description") or ""
     for author in _strings(poetry.sequence("authors")):
@@ -424,7 +438,7 @@ def _from_setup_cfg(parser: configparser.ConfigParser) -> Manifest:
         """
         return parser.get("metadata", option, fallback="")
 
-    manifest = _empty()
+    manifest = empty()
     manifest["name"] = metadata("name") or None
     manifest["description"] = metadata("description")
     manifest["license"] = metadata("license")

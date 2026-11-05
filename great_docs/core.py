@@ -9,7 +9,7 @@ from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import _marimo
+from . import _manifest, _marimo
 from ._build import freeze, outputs, quarto, serve, timings
 from ._build.facts import Facts, exact_tag, source_links
 from ._build.pipeline import Run
@@ -41,6 +41,7 @@ from ._contribution import Contribution
 from ._github import GithubRepo
 from ._install import format_authors_yaml, update_gitignore
 from ._layout import PACKAGE_DIRS, Layout
+from ._manifest import Manifest, ManifestError
 from ._reference import block as reference_block
 from ._reference import discovery, documented, probe
 from ._reference import sections as reference_sections
@@ -103,6 +104,28 @@ def _url_label(label: str) -> str:
         The label casefolded, without spaces, hyphens or underscores, such as `sourcecode`.
     """
     return re.sub(r"[\s_-]", "", label).casefold()
+
+
+def _read_manifest(root: Path) -> Manifest:
+    """
+    Read project metadata with an empty fallback for packaging errors
+
+    Parameters
+    ----------
+    root
+        The directory holding the packaging files.
+
+    Returns
+    -------
+    :
+        The declared metadata, ignoring an unreadable or invalid `setup.cfg` when
+        `pyproject.toml` can be read and parsed. Any other packaging read or parse error
+        produces an empty manifest.
+    """
+    try:
+        return _manifest.read(root, ignore_unparsable_setup_cfg=True)
+    except ManifestError:
+        return _manifest.empty()
 
 
 def _print_warning(message: str) -> None:
@@ -1520,10 +1543,12 @@ class GreatDocs:
 
     def _find_package_init(self, package_name: str) -> Path | None:
         """
-        Find the __init__.py file for a package, searching common locations.
+        Find a package's `__init__.py` in declared and common package locations
 
-        This handles packages with non-standard structures like Rust bindings
-        that may have their Python code in subdirectories like python/, src/, etc.
+        Search declared package paths and setuptools discovery directories before common
+        layouts such as `python/`, `src/` and `lib/`. Prefer a matching file containing
+        `__version__` or `__all__`, then any matching file. If neither is found, search
+        common layouts for another package.
 
         Parameters
         ----------
@@ -1532,68 +1557,25 @@ class GreatDocs:
 
         Returns
         -------
-        Path | None
-            Path to the __init__.py file, or None if not found.
+        :
+            The path to `__init__.py`, or `None` if no package is found.
         """
-        # Normalize package name (replace dashes with underscores)
+        # Package directories may use underscores where distribution names use hyphens.
         normalized_name = package_name.replace("-", "_")
 
-        # First, try to get explicit package info from pyproject.toml
         package_root = self.layout.package_root
-        pyproject_path = package_root / "pyproject.toml"
-        explicit_packages = []
+        manifest = _read_manifest(package_root)
 
-        if pyproject_path.exists():
-            import tomllib
-
-            try:
-                with open(pyproject_path, "rb") as f:
-                    data = tomllib.load(f)
-
-                # Check [tool.setuptools.packages] for explicit package list
-                setuptools = data.get("tool", {}).get("setuptools", {})
-                if "packages" in setuptools:
-                    explicit_packages = setuptools["packages"]
-                elif "packages" in setuptools.get("find", {}):  # pragma: no cover
-                    # [tool.setuptools.packages.find] with where
-                    where = setuptools.get("find", {}).get("where", ["."])
-                    if isinstance(where, str):
-                        where = [where]
-                    for base_dir in where:
-                        base_path = package_root / base_dir
-                        if base_path.exists():
-                            # Look for packages in this directory
-                            for item in base_path.iterdir():
-                                if item.is_dir() and (item / "__init__.py").exists():
-                                    if not item.name.startswith((".", "_", "test")):
-                                        explicit_packages.append(item.name)
-
-                # Check [tool.hatch.build.targets.wheel] for hatch projects
-                hatch_packages = (
-                    data.get("tool", {})
-                    .get("hatch", {})
-                    .get("build", {})
-                    .get("targets", {})
-                    .get("wheel", {})
-                    .get("packages", [])
-                )
-                if hatch_packages:
-                    explicit_packages.extend(hatch_packages)
-
-            except Exception:  # pragma: no cover
-                pass
-
-        # Build search paths, prioritizing explicit packages from pyproject.toml
-        search_paths = []
-
-        # Add explicit packages first (from pyproject.toml config)
-        for pkg in explicit_packages:
-            # Handle "src/package" style paths
-            if "/" in pkg:
-                search_paths.append(package_root / pkg)
-            else:
-                search_paths.append(package_root / pkg)
-                search_paths.append(package_root / "src" / pkg)
+        # Declared packages take precedence over candidates in discovery directories.
+        search_paths: list[Path] = []
+        for package in manifest["declared_packages"]:
+            search_paths.append(package_root / package)
+            if "/" not in package:
+                search_paths.append(package_root / "src" / package)
+        for directory in manifest["discovery_dirs"]:
+            search_paths += [
+                package_root / directory / name for name in (package_name, normalized_name)
+            ]
 
         # Handle dotted module names (namespace packages like "firebird.base")
         # by converting dots to path separators
@@ -1631,12 +1613,11 @@ class GreatDocs:
             init_file = package_dir / "__init__.py"
             if init_file.exists():
                 try:
-                    with open(init_file, "r", encoding="utf-8") as f:
-                        content = f.read()
-                        if "__version__" in content or "__all__" in content:
-                            return init_file
-                except Exception:  # pragma: no cover
+                    content = init_file.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
                     continue
+                if "__version__" in content or "__all__" in content:
+                    return init_file
 
         # Second pass: accept any __init__.py in a matching directory
         for package_dir in search_paths:

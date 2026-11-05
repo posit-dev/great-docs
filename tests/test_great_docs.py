@@ -17018,6 +17018,38 @@ def test_find_package_init_pyproject_with_find_where_string():
         assert "src" in str(result)
 
 
+@pytest.mark.parametrize(
+    "hatch",
+    ["", '\n[tool.hatch.build.targets.wheel]\npackages = ["other"]\n'],
+    ids=["find", "find and hatch"],
+)
+def test_find_package_init_searches_setuptools_find_where(tmp_path: Path, hatch: str):
+    """A package under a `[tool.setuptools.packages.find]` directory is found by its name"""
+    (tmp_path / "pyproject.toml").write_text(
+        f'[project]\nname = "mypkg"\n\n[tool.setuptools.packages.find]\nwhere = ["code"]\n{hatch}',
+        encoding="utf-8",
+    )
+    init = tmp_path / "code" / "mypkg" / "__init__.py"
+    init.parent.mkdir(parents=True)
+    init.write_text("", encoding="utf-8")
+
+    assert GreatDocs(project_path=str(tmp_path))._find_package_init("mypkg") == init
+
+
+def test_find_package_init_ignores_unparsable_setup_cfg(tmp_path: Path):
+    """A `setup.cfg` that `configparser` rejects leaves the `pyproject.toml` packages in use"""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "mypkg"\n\n[tool.hatch.build.targets.wheel]\npackages = ["code/mypkg"]\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "setup.cfg").write_text("[flake8]\nignore = E1\nignore = E2\n", encoding="utf-8")
+    init = tmp_path / "code" / "mypkg" / "__init__.py"
+    init.parent.mkdir(parents=True)
+    init.write_text("", encoding="utf-8")
+
+    assert GreatDocs(project_path=str(tmp_path))._find_package_init("mypkg") == init
+
+
 def test_detect_docstring_style_no_indicators():
     """Verify that docstrings without style markers select NumPy"""
 
