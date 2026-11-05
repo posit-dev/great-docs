@@ -20,11 +20,18 @@ The command scans both your documentation files (`.qmd`, `.md`) and Python sourc
 
 ## What Gets Checked
 
-The link checker extracts URLs from:
+The link checker extracts URLs from these documentation sources and Python files:
 
-- **Documentation files**: All `.qmd` and `.md` files in your docs directory
-- **Source code**: Python files in your package directory (docstrings, comments, string literals)
-- **README**: Your project's `README.md` file
+- The homepage source, such as `index.qmd` or `README.md`
+- The `.qmd` and `.md` pages in the [user guide](user-guides.qmd) directory
+- The `.qmd` and `.md` pages in each [custom section](custom-sections.qmd) directory
+- The `.qmd` and `.md` pages in each [custom page](custom-pages.qmd) directory
+- The `README.md` file at the package root, even when another file supplies the homepage
+- The documented package's Python files, including docstrings and string literals
+
+Within page directories, paths with any part starting with `_` or `.` are skipped. Quarto does not render these paths. A `recipes/` directory is read only when a section lists it. Generated pages, such as the API reference and changelog, are not checked.
+
+In Python files, URLs on lines containing only comments are skipped.
 
 Each URL is checked with an HTTP HEAD request (falling back to GET if needed) to verify it returns a successful status code.
 
@@ -134,7 +141,7 @@ The link checker automatically skips certain URLs that are commonly used as exam
 
 ## Excluding URLs in Documentation
 
-In `.qmd` files, you can mark specific URLs for exclusion by adding `{.gd-no-link}` immediately after the URL.
+In `.qmd` and `.md` files, add `{.gd-no-link}` immediately after a URL to exclude it from checking.
 
 ```markdown
 Visit http://fake-example.com{.gd-no-link} for a placeholder example.
@@ -151,7 +158,7 @@ This is useful for:
 The `{.gd-no-link}` directive uses Quarto's attribute syntax but doesn't render any visible styling (it simply tells the link checker to skip that URL).
 
 ::: {.callout-note}
-The `{.gd-no-link}` directive only works in `.qmd` files. For `.md` files or source code, use the `--ignore` command-line option instead.
+For URLs in source code, use the `--ignore` command-line option.
 :::
 
 ## Python API
