@@ -52,7 +52,6 @@ _BUILD_METHODS: tuple[str, ...] = (
     "_prerender_term_player",
     "_default_description",
     "_structured_data",
-    "_auto_save_snapshot",
     "_print_layout_notice",
 )
 

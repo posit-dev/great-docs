@@ -3,14 +3,14 @@ import os
 import shutil
 import subprocess
 import sys
-from functools import cache, partial
+from functools import partial
 from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from . import _marimo
-from ._build import freeze, outputs, quarto, serve, timings
-from ._build.facts import Facts, exact_tag, source_links
+from ._build import finish, outputs, quarto, render, serve
+from ._build.facts import Facts, source_links
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
@@ -42,16 +42,12 @@ from ._layout import Layout
 from ._manifest import Manifest
 from ._project import Project
 from ._reference import block as reference_block
-from ._reference import documented
 from ._reference import sections as reference_sections
 from ._reference.exports import Exports
 from ._remote import HttpRemote, Remote
 from ._subprocess import TEXT_MODE_KWARGS
 from ._term_player import prerender as term_prerender
-from ._utils import (
-    GITIGNORE_CONTENT,
-    record_site_ownership,
-)
+from ._utils import GITIGNORE_CONTENT
 from ._website import (
     assembly,
     changelog,
@@ -73,7 +69,6 @@ from ._website.navigation import navbar as nav_navbar
 from ._website.navigation import shared_sidebar
 from ._website.project_pages import citation, licence, package_info
 from ._website.seo import description as seo_description
-from ._website.seo import site_files
 from ._website.seo.structured_data import StructuredData
 from .config import Config
 
@@ -1133,55 +1128,6 @@ class GreatDocs:
 
         print(f"Updated {quarto_yml.path(self.build_dir)} with great-docs configuration")
 
-    def _auto_save_snapshot(self, project: Project) -> None:
-        """
-        Save an API snapshot after a successful versioned build (Strategy C)
-
-        Save to `.great-docs/snapshots/<version>.json`, using the exact tag at
-        `HEAD` as `<version>`, or `dev` when there is no tag. Retry once if `git`
-        cannot start. Fall back silently to `dev` if it still cannot start or
-        exceeds the 5-second timeout. Other errors propagate.
-
-        Parameters
-        ----------
-        project
-            The project to snapshot. No snapshot is saved without a detected package name.
-        """
-        from great_docs._api_diff import snapshot_from_griffe
-
-        # griffe loads by importable module name, which can differ from the
-        # PyPI project name.
-        importable_name = project.importable_name
-        if not project.name or not importable_name:
-            return
-
-        try:
-            version = exact_tag(self.project_root) or "dev"
-        except (OSError, subprocess.TimeoutExpired):
-            version = "dev"
-
-        snap = snapshot_from_griffe(importable_name, version=version)
-
-        # Include CLI snapshot when CLI documentation is enabled
-        if self._config.cli_enabled:
-            try:
-                found = cli_click.find_command(
-                    importable_name,
-                    cli_module=self._config.cli_module,
-                    cli_name=self._config.cli_name,
-                )
-                if found is not None:
-                    snap.cli_commands = cli_click.extract_snapshot(found.command)
-            except USER_CODE_ERRORS:
-                pass  # CLI snapshot is best-effort
-
-        snap_dir = self.project_root / ".great-docs" / "snapshots"
-        snap.save(snap_dir / f"{version}.json")
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # SEO GENERATION METHODS
-    # ══════════════════════════════════════════════════════════════════════════
-
     def _identity(self, project: Project) -> Identity:
         """
         Resolve the site's name and addresses
@@ -1924,362 +1870,6 @@ class GreatDocs:
                 log.detail("Sharing rendered sidebar(s): " + ", ".join(shared))
         return None
 
-    def _step_render(
-        self,
-        log: "BuildLog",
-        jobs: int,
-        last_timings: dict[str, float],
-        last_startup: float | None,
-    ) -> "tuple[quarto.RenderResult, dict[str, object] | None]":
-        """
-        Render a single-version site with Quarto and show its progress
-
-        Retry a transient failure once in one process, including failures from parallel renders.
-
-        Parameters
-        ----------
-        log
-            The build log.
-        jobs
-            The number of Quarto processes to split the pages among.
-        last_timings
-            The last build's render time of each page, which guides the split.
-        last_startup
-            How long Quarto took to start in the last parallel build, which also guides the
-            split; `None` when unknown.
-
-        Returns
-        -------
-        :
-            The successful render result, and how the parallel render went: its number of
-            processes and groups and how long Quarto took to start. The second is `None`
-            unless a parallel render produced the result.
-
-        Raises
-        ------
-        StepError
-            If Quarto fails to render the site.
-        """
-        import threading
-
-        from great_docs._build import parallel_render
-
-        env = quarto.environment(self._config)
-        result = None
-        render_stats: dict[str, object] | None = None
-        if jobs > 1:
-            # Experimental: split the pages among several Quarto processes
-            bar = log.progress("Rendering pages", 1)
-            bar_lock = threading.Lock()
-            pages_started = [0]
-
-            def on_start(pages: int, groups: int, workers: int) -> None:
-                bar.total = max(pages, 1)
-                log.detail(
-                    f"Rendering {pages} pages in {groups} groups with {workers} Quarto processes"
-                )
-
-            def on_page(_page: str) -> None:
-                with bar_lock:
-                    pages_started[0] = min(pages_started[0] + 1, bar.total)
-                    bar.update(pages_started[0])
-
-            result = parallel_render.render(
-                self.build_dir,
-                env,
-                jobs,
-                last_timings,
-                on_start=on_start,
-                on_page=on_page,
-                overhead=last_startup,
-            )
-            bar.finish()
-            if result.fallback:
-                log.detail(f"Rendering in one process: {result.fallback}")
-                result = None
-            else:
-                for warning in result.warnings:
-                    log.warn(warning)
-                render_stats = {"processes": result.workers, "groups": result.targets}
-                if result.startup is not None:
-                    render_stats["startup_seconds"] = result.startup
-
-        if result is None:
-            result = self._render_with_progress(log, "Rendering pages", env)
-
-        # Retry a transient failure in one process, including failures from parallel renders
-        if result.returncode != 0 and quarto.is_transient_error(result.stderr):
-            log.warn("Quarto hit a transient filesystem error — retrying render...")
-            render_stats = None
-            result = self._render_with_progress(log, "Rendering pages (retry)", env)
-
-        if result.returncode != 0:
-            raise StepError("Quarto render failed", detail=result.stderr)
-        return result, render_stats
-
-    def _render_with_progress(
-        self, log: "BuildLog", label: str, env: dict[str, str]
-    ) -> "quarto.RenderResult":
-        """
-        Render the site with Quarto in one process and show page progress
-
-        Quarto's warnings appear when the bar reaches its last page; warnings reported later
-        are dropped.
-
-        Parameters
-        ----------
-        log
-            The build log.
-        label
-            The progress bar's label.
-        env
-            The environment for Quarto.
-
-        Returns
-        -------
-        :
-            The render result, whether rendering succeeded or failed.
-        """
-        bar = log.progress(label, 1)
-        warnings: list[str] = []
-        finished = False
-
-        def on_page(progress: quarto.Progress) -> None:
-            nonlocal finished
-            if finished:
-                return
-            if progress.total != bar.total:
-                bar.total = progress.total
-            bar.update(progress.current)
-            if progress.current >= progress.total:
-                finished = True
-                bar.finish()
-                for warning in warnings:
-                    log.warn(warning)
-
-        def on_warning(warning: str) -> None:
-            if not finished:
-                warnings.append(warning)
-
-        result = quarto.render(self.build_dir, env, on_page=on_page, on_warning=on_warning)
-        bar.finish()  # The final page may already have finished the bar
-        return result
-
-    def _step_render_versions(
-        self, run: Run, log: "BuildLog", version_tags: list[str] | None, latest_only: bool
-    ) -> "tuple[Outcome, dict[str, Any]]":
-        """
-        Render the selected versions of a versioned site and assemble them
-
-        Parameters
-        ----------
-        run
-            The current build.
-        log
-            The build log.
-        version_tags
-            The versions to render, or `None` for every version.
-        latest_only
-            Whether to render only the latest version.
-
-        Returns
-        -------
-        :
-            The result line and the outcome of the versioned build.
-
-        Raises
-        ------
-        StepError
-            If every version fails to render.
-        """
-        from great_docs._versions.build import run_versioned_build
-        from great_docs._versions.model import get_latest_version, parse_versions_config
-
-        versions = parse_versions_config(self._config.versions)
-        if latest_only:
-            latest = get_latest_version(versions)
-            latest_tag = latest.tag if latest else versions[0].tag
-            targets = [v for v in versions if v.tag == latest_tag]
-        elif version_tags:
-            targets = [v for v in versions if v.tag in set(version_tags)]
-        else:
-            targets = list(versions)
-
-        n_versions = len(targets)
-        log.detail(
-            f"Multi-version build: {'1 version' if n_versions == 1 else f'{n_versions} version(s)'}"
-        )
-
-        bars = log.multi_progress([f"v{v.label}" for v in targets])
-
-        def on_progress(slot: int, current: int, total: int) -> None:
-            bars.set_total(slot, total)
-            bars.update(slot, current)
-
-        # Uncached tag snapshots use the working tree's documented set. Cache the
-        # result so it is resolved at most once per project name per build.
-        @cache
-        def documented_symbols(package_name: str) -> list[str]:
-            return documented.symbol_names(
-                self._config,
-                importable_name=run.project.module or package_name.replace("-", "_"),
-                search_paths=run.project.search_paths(),
-                create_sections=run.exports.sections,
-            )
-
-        result = run_versioned_build(
-            source_dir=self.build_dir,
-            project_root=self.project_root,
-            versions_config=self._config.versions,
-            quarto_env=quarto.environment(self._config),
-            version_tags=version_tags,
-            latest_only=latest_only,
-            progress_callback=on_progress,
-            on_renders_done=bars.finish,
-            badge_expiry_raw=self._config["new_is_old"],
-            config=self._config,
-            layout=self.layout,
-            default_description=self._default_description(run.project.manifest),
-            structured_data=self._structured_data(run.project),
-            documented_symbols=documented_symbols,
-        )
-
-        for warning in result.get("warnings", []):
-            log.warn(warning)
-
-        n_built = len(result["versions_built"])
-        if result["success"]:
-            return f"{n_built} version(s) rendered", result
-        for error in result["errors"]:
-            log.error_detail(error)
-        if not n_built:
-            raise StepError("All version builds failed")
-        return f"{n_built} version(s) rendered ({len(result['errors'])} failed)", result
-
-    def _assemble_separate_site(self) -> Outcome:
-        """
-        Copy the rendered site to a site directory outside the build directory
-
-        Returns
-        -------
-        :
-            `None`; the step has no result line.
-        """
-        if self.layout.site_dir != self.build_dir / "_site":
-            from ._versions.build import assemble_site
-
-            assemble_site(self.build_dir, [], "", self.layout.site_dir, layout=self.layout)
-        return None
-
-    def _step_seo_files(self, run: Run) -> Outcome:
-        """
-        Write `sitemap.xml` and `robots.txt` for the rendered site
-
-        Parameters
-        ----------
-        run
-            The current build.
-
-        Returns
-        -------
-        :
-            The step's result line.
-        """
-        base_url = self._identity(run.project).base_url
-        site_files.write(self.layout.site_dir, self._config, base_url, report=print)
-        return "sitemap.xml + robots.txt"
-
-    def _log_build_timing(
-        self,
-        log: "BuildLog",
-        page_timings: list[dict[str, object]] | None = None,
-        timings_by_version: dict[str, list[dict[str, object]]] | None = None,
-        render: dict[str, object] | None = None,
-    ) -> Outcome:
-        """
-        Write `build-timings.json` to the site
-
-        Parameters
-        ----------
-        log
-            The build log.
-        page_timings
-            The render time of each page of a single-version site.
-        timings_by_version
-            The render time of each page, by version.
-        render
-            How a parallel render of a single-version site went, which the next parallel
-            build plans with.
-
-        Returns
-        -------
-        :
-            `None`; the result is a detail line of the previous step.
-        """
-        path = timings.write(
-            self.layout,
-            page_timings=page_timings,
-            timings_by_version=timings_by_version,
-            render=render,
-        )
-        if path:
-            log.detail(f"Wrote {path.name}")
-        return None
-
-    def _log_freeze_cache_saved(self, log: "BuildLog") -> Outcome:
-        """
-        Save the rendered pages' freeze cache for later builds
-
-        Parameters
-        ----------
-        log
-            The build log.
-
-        Returns
-        -------
-        :
-            `None`; the result is a detail line of the previous step.
-        """
-        n_frozen = freeze.save(self.layout)
-        if n_frozen is not None:
-            log.detail(f"Saved freeze cache ({n_frozen} files)")
-        return None
-
-    def _save_api_snapshot(self, run: Run, log: "BuildLog") -> Outcome:
-        """
-        Save the current API snapshot for version comparisons
-
-        Parameters
-        ----------
-        run
-            The current build.
-        log
-            The build log.
-
-        Returns
-        -------
-        :
-            `None`; handled exceptions become warnings attributed to the previous listed step.
-        """
-        try:
-            self._auto_save_snapshot(run.project)
-        except USER_CODE_ERRORS as e:
-            log.warn(f"Snapshot auto-save failed: {e}")
-        return None
-
-    def _record_site_ownership(self) -> Outcome:
-        """
-        Record the files of a site directory outside the build directory
-
-        Returns
-        -------
-        :
-            `None`; the step has no result line.
-        """
-        if self.layout.site_dir != self.build_dir / "_site":
-            record_site_ownership(self.layout.site_dir)
-        return None
-
     def _preparation_steps(self, run: Run, log: "BuildLog", refresh: bool = True) -> list[Step]:
         """
         Return the build's preparation steps in execution order
@@ -2688,30 +2278,42 @@ class GreatDocs:
         render_timings: dict[str, Any] = {}
 
         def render_site() -> Outcome:
-            result, render_timings["render"] = self._step_render(
-                log, render_jobs, last_timings, last_startup
+            result, render_timings["render"] = render.site(
+                self._config, self.layout, log, render_jobs, last_timings, last_startup
             )
             render_timings["page_timings"] = result.page_timings
             return "Site rendered"
 
         def render_versions() -> Outcome:
-            outcome, result = self._step_render_versions(run, log, version_tags, latest_only)
+            # Structured data names the site from `_quarto.yml`, which earlier steps edit
+            outcome, result = render.versions(
+                run,
+                self._config,
+                self.layout,
+                log,
+                version_tags,
+                latest_only,
+                default_description=self._default_description(run.project.manifest),
+                structured_data=self._structured_data(run.project),
+            )
             render_timings["timings_by_version"] = result.get("timings_by_version")
             return outcome
 
         steps = self._preparation_steps(run, log, refresh)
         if watch:
-            render = Step("Build site with Quarto", lambda: "Starting watch mode...")
+            render_step = Step("Build site with Quarto", lambda: "Starting watch mode...")
         elif self._config.has_versions:
-            render = Step("Build site with Quarto", render_versions, user_code=True, quiet=False)
+            render_step = Step(
+                "Build site with Quarto", render_versions, user_code=True, quiet=False
+            )
         else:
-            render = Step("Build site with Quarto", render_site, quiet=False)
-        steps.append(render)
+            render_step = Step("Build site with Quarto", render_site, quiet=False)
+        steps.append(render_step)
         if not self._config.has_versions:
             steps.append(
                 Step(
                     "Assemble the site",
-                    lambda: self._assemble_separate_site(),
+                    lambda: render.assemble_site(self.layout),
                     quiet=False,
                     listed=False,
                 )
@@ -2719,18 +2321,20 @@ class GreatDocs:
         steps += [
             Step(
                 "Generate SEO files",
-                lambda: self._step_seo_files(run),
+                lambda: finish.seo_files(
+                    self._config, self.layout, self._identity(run.project).base_url
+                ),
                 warn=Warn((OSError,), "Error generating SEO files", "SEO files had issues"),
             ),
             Step(
                 "Write build timings",
-                lambda: self._log_build_timing(log, **render_timings),
+                lambda: finish.write_timings(self.layout, log, **render_timings),
                 quiet=False,
                 listed=False,
             ),
             Step(
                 "Save the freeze cache",
-                lambda: self._log_freeze_cache_saved(log),
+                lambda: finish.save_freeze_cache(self.layout, log),
                 quiet=False,
                 listed=False,
             ),
@@ -2739,7 +2343,7 @@ class GreatDocs:
             steps.append(
                 Step(
                     "Save an API snapshot",
-                    lambda: self._save_api_snapshot(run, log),
+                    lambda: finish.save_api_snapshot(run, self._config, self.layout, log),
                     user_code=True,
                     quiet=False,
                     listed=False,
@@ -2748,7 +2352,7 @@ class GreatDocs:
         steps.append(
             Step(
                 "Record site ownership",
-                lambda: self._record_site_ownership(),
+                lambda: finish.record_site_ownership(self.layout),
                 quiet=False,
                 listed=False,
             )
@@ -2760,7 +2364,7 @@ class GreatDocs:
         if watch:
             # Watch mode starts `quarto preview` after the render step and omits the finishing
             # steps, though the header still counts them.
-            run_steps(steps[: steps.index(render) + 1], log, self.build_dir)
+            run_steps(steps[: steps.index(render_step) + 1], log, self.build_dir)
             log.footer(watch_mode=True)
             self._print_layout_notice()
             preview_env = quarto.environment(self._config)

@@ -5054,50 +5054,6 @@ def test_build_cli_reference_uses_module_name(tmp_path):
     )
 
 
-@patch("great_docs._api_diff.snapshot_from_griffe")
-def test_auto_save_snapshot_uses_module_name(mock_snapshot):
-    """Regression: _auto_save_snapshot loads griffe by the importable module name,
-    not the PyPI project name, when the two diverge."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        root = Path(tmp_dir)
-        (root / "pyproject.toml").write_text('[project]\nname = "my-dist"\n')
-        (root / "great-docs.yml").write_text("module: actual_module\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._auto_save_snapshot(make_project(docs))
-
-        assert mock_snapshot.call_args[0][0] == "actual_module"
-
-
-@pytest.mark.parametrize(
-    ("outcomes", "version"),
-    [
-        ([subprocess.TimeoutExpired(["git"], 5)], "dev"),
-        (
-            [
-                BlockingIOError(11, "Resource temporarily unavailable"),
-                subprocess.CompletedProcess(["git"], 0, stdout="v2.0.0\n", stderr=""),
-            ],
-            "v2.0.0",
-        ),
-    ],
-)
-@patch("great_docs._api_diff.snapshot_from_griffe")
-def test_auto_save_snapshot_names_the_version_after_the_exact_tag(
-    mock_snapshot, tmp_path, outcomes, version
-):
-    """
-    A failed `git` start is retried once; a 5-second timeout names the snapshot `dev`
-    """
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-    docs = GreatDocs(project_path=str(tmp_path))
-
-    with patch("subprocess.run", side_effect=outcomes), patch("time.sleep"):
-        docs._auto_save_snapshot(make_project(docs))
-
-    assert mock_snapshot.call_args.kwargs["version"] == version
-
-
 # An API reference that plans the llms files: the standard library's `json` always imports.
 LLMS_TXT_QUARTO_YML = "api-reference:\n  package: json\n  sections:\n    - contents: [dumps]\n"
 
