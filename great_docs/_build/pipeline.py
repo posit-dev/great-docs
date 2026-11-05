@@ -254,7 +254,15 @@ def run(
     log.header()
 
     if watch:
-        _watch(config, layout, log, [*preparation, render_step], remote=remote, refresh=refresh)
+        _watch(
+            current,
+            config,
+            layout,
+            log,
+            [*preparation, render_step],
+            remote=remote,
+            refresh=refresh,
+        )
         return
 
     run_steps([*preparation, render_step, *finishing], log, layout.build_dir)
@@ -587,6 +595,7 @@ def _finishing_steps(
 
 
 def _watch(
+    run: Run,
     config: Config,
     layout: Layout,
     log: BuildLog,
@@ -602,6 +611,8 @@ def _watch(
 
     Parameters
     ----------
+    run
+        The initial build state populated by `steps`.
     config
         The project's configuration.
     layout
@@ -626,7 +637,7 @@ def _watch(
     preview_env = quarto.environment(config)
     preview_env[shared_sidebar.PREVIEW_ENV] = "1"
 
-    def rebuild(staging: watch.Staging) -> None:
+    def rebuild(staging: watch.Staging) -> dict[str, Any]:
         edited = Config(
             config.project_root, config_path=config.config_path, cache_dir=config.cache_dir
         )
@@ -637,8 +648,9 @@ def _watch(
         )
         rebuild_log.total_steps = count_listed(preparation)
         run_steps(preparation, rebuild_log, staging.build_dir)
+        return current.quarto_config
 
-    watch.serve(layout, preview_env, rebuild)
+    watch.serve(layout, preview_env, rebuild, run.quarto_config)
 
 
 def _make_log(run: Run, config: Config, layout: Layout) -> BuildLog:
