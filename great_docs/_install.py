@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from yaml12 import format_yaml
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -131,6 +133,9 @@ def format_authors_yaml(authors: list[dict[str, str]]) -> str:
     Each author has a `name` and any supplied `role` and `email` fields.
     Commented placeholders mark optional details for the user to fill in.
 
+    Values are quoted only when YAML would otherwise change their meaning. For
+    example, `Doe, Jane: PhD` remains a single string.
+
     Parameters
     ----------
     authors
@@ -147,19 +152,39 @@ def format_authors_yaml(authors: list[dict[str, str]]) -> str:
     lines = ["authors:"]
 
     for author in authors:
-        lines.append(f"  - name: {author['name']}")
+        entry = _yaml_field("name", author["name"])
         if "role" in author:
-            lines.append(f"    role: {author['role']}")
-        lines.append("    # affiliation: ")
+            entry += _yaml_field("role", author["role"])
+        entry.append("# affiliation: ")
         if "email" in author:
-            lines.append(f"    email: {author['email']}")
+            entry += _yaml_field("email", author["email"])
         else:
-            lines.append("    # email: ")
-        lines.append("    # github: ")
-        lines.append("    # orcid: ")
-        lines.append("    # homepage: ")
+            entry.append("# email: ")
+        entry += ["# github: ", "# orcid: ", "# homepage: "]
+        lines.append(f"  - {entry[0]}")
+        lines.extend(f"    {line}" for line in entry[1:])
 
     return "\n".join(lines)
+
+
+def _yaml_field(key: str, value: str) -> list[str]:
+    """
+    Format a key and its value as YAML lines
+
+    Parameters
+    ----------
+    key
+        The YAML field name.
+    value
+        The field value. Quotes or a block scalar preserve its text when YAML
+        would otherwise interpret it differently.
+
+    Returns
+    -------
+    :
+        YAML lines with indentation only for block scalar continuation lines.
+    """
+    return format_yaml({key: value}).splitlines()
 
 
 def _agrees(answer: str) -> bool:

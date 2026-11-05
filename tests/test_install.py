@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yaml12 import parse_yaml
 
 from great_docs._install import format_authors_yaml, update_gitignore
 from great_docs._layout import Layout
@@ -280,3 +281,28 @@ def test_authors_yaml_writes_fields_and_placeholders():
         "    # orcid: ",
         "    # homepage: ",
     ]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Doe, Jane: PhD",
+        "Jane #1",
+        "@jane",
+        "*star",
+        "yes",
+        "no",
+        "true",
+        "123",
+        "Jane\nDoe",
+    ],
+)
+def test_authors_yaml_reads_back_as_written(name: str):
+    authors = [
+        {"name": name, "role": name, "email": f"{name}@example.com"},
+        {"name": name},
+    ]
+
+    parsed = parse_yaml(format_authors_yaml(authors))
+
+    assert parsed == {"authors": authors}
