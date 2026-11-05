@@ -27,7 +27,82 @@ if TYPE_CHECKING:
     from .log import BuildLog
     from .pipeline import Run
 
-__all__ = ["api", "api_config", "cli", "go_cli", "interlinks", "mcp", "rust_cli"]
+__all__ = ["add_api_block", "api", "api_config", "cli", "go_cli", "interlinks", "mcp", "rust_cli"]
+
+
+def add_api_block(run: Run, config: Config, layout: Layout) -> None:
+    """
+    Configure an API reference in `_quarto.yml` unless already present
+
+    Skip the reference when disabled, when the project is not Python, or when no package name
+    is detected. Warn for a missing package name. Use an explicit `reference` configuration
+    when supplied; otherwise discover sections from the package's exports. Skip when neither
+    supplies sections. Record skips and completed export discovery in the build state.
+
+    Parameters
+    ----------
+    run
+        The current build, including API reference availability and export discovery status.
+    config
+        The project's configuration.
+    layout
+        The project's directories.
+
+    Returns
+    -------
+    :
+    """
+    # An explicit `reference: false` disables API reference generation.
+    if not config.reference_enabled:
+        print("API reference disabled (reference: false), skipping")
+        run.has_api_reference = False
+        return
+
+    # Non-Python projects have no importable Python package to introspect.
+    if not config.is_python_project:
+        print("API reference skipped (non-Python project)")
+        run.has_api_reference = False
+        return
+
+    build_dir = layout.build_dir
+    quarto_config = quarto_yml.read(build_dir)
+
+    if "api-reference" in quarto_config:
+        print("API reference configuration already exists, skipping")
+        return
+
+    project = run.project
+    if not project.name or not (importable_name := project.importable_name):
+        print_warning("Could not detect the package name; skipping the API reference")
+        run.has_api_reference = False
+        return
+
+    print(f"Adding API reference configuration for package: {project.name}")
+
+    # Report module names that differ even after hyphens are replaced with underscores.
+    if importable_name not in (project.name, project.name.replace("-", "_")):
+        print(f"Detected module name: {importable_name}")
+
+    if project.compiled_extension:
+        print("Detected compiled extension package (PyO3/Rust/Cython)")
+        print("Note: The package must be installed (`pip install -e .` or `maturin develop`)")
+        print("      for API reference generation.")
+
+    # An explicit `reference` configuration takes precedence over discovered exports.
+    sections = run.exports.sections(importable_name)
+
+    # The API reference configuration step skips rediscovery in this build.
+    run.api_discovery_done = True
+
+    if not sections:
+        print("No documentable exports found — skipping API reference")
+        run.has_api_reference = False
+        return
+
+    reference_block.configure(config, quarto_config, importable_name, sections)
+    quarto_yml.write(build_dir, quarto_config)
+
+    print(f"Added API reference configuration to {quarto_yml.path(build_dir)}")
 
 
 def api_config(run: Run, config: Config, layout: Layout, *, refresh: bool) -> Outcome:

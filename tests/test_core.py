@@ -16,7 +16,7 @@ import pytest
 import yaml
 
 from great_docs import GreatDocs
-from great_docs._build import freeze
+from great_docs._build import freeze, site
 from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
 from great_docs._contribution import Contribution, NavbarLink, Sidebar
@@ -1561,7 +1561,10 @@ class TestCanonicalIntegration:
     def test_base_url_falls_back_to_the_github_pages_address(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
         _put_on_github(tmp_path)
-        assert gd._identity(make_project(gd)).base_url == "https://acme.github.io/mypkg/"
+        assert (
+            site.identity(gd._config, gd.layout, make_project(gd)).base_url
+            == "https://acme.github.io/mypkg/"
+        )
 
     def test_raw_custom_page_gets_a_canonical_link(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
@@ -1720,7 +1723,7 @@ class TestPageDescriptions:
             '[project]\nname = "mypkg"\ndescription = "From `pyproject`"\n', encoding="utf-8"
         )
 
-        assert gd._default_description(make_project(gd).manifest) == "From pyproject"
+        assert site.default_description(gd._config, make_project(gd)) == "From pyproject"
 
     def test_raw_custom_page_gets_the_default(self, tmp_path, monkeypatch):
         gd = self._gd(tmp_path, monkeypatch, default="Tom & Jerry")

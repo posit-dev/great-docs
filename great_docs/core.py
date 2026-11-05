@@ -1,16 +1,23 @@
-import json
 import os
-import shutil
 import subprocess
 import sys
-from functools import partial
 from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import _marimo
-from ._build import content, finish, generated, outputs, passes, quarto, reference, render, serve
-from ._build.facts import Facts
+from ._build import (
+    content,
+    finish,
+    generated,
+    outputs,
+    passes,
+    prepare,
+    quarto,
+    reference,
+    render,
+    serve,
+    site,
+)
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
@@ -26,25 +33,15 @@ from ._build.steps import (
 )
 from ._checks import links, proofread
 from ._checks.proofread import CheckedFile
-from ._content import publish, user_guide
-from ._content.user_guide import UserGuide
+from ._content import user_guide
 from ._install import update_gitignore, write_initial_config
 from ._layout import Layout
-from ._manifest import Manifest
 from ._project import Project
-from ._reference import block as reference_block
-from ._reference import sections as reference_sections
 from ._reference.exports import Exports
 from ._remote import HttpRemote, Remote
 from ._subprocess import TEXT_MODE_KWARGS
-from ._utils import GITIGNORE_CONTENT
-from ._website import assembly, page_dates, quarto_yml, scripts
-from ._website.homepage import page as homepage_page
-from ._website.identity import Identity
+from ._website import page_dates
 from ._website.navigation import shared_sidebar
-from ._website.project_pages import citation, licence, package_info
-from ._website.seo import description as seo_description
-from ._website.seo.structured_data import StructuredData
 from .config import Config
 
 if TYPE_CHECKING:
@@ -151,159 +148,9 @@ class GreatDocs:
         self._page_authors = page_dates.site_authors(
             self._config,
             self.layout.source_dir,
-            self._identity(Project.make(self._config, self.layout)).base_url,
-        )
-
-    def _prepare_build_directory(self, run: Run) -> None:
-        """
-        Prepare the great-docs/ build directory with all necessary assets.
-
-        This method creates the great-docs/ directory (if it doesn't exist) and
-        copies all CSS, JavaScript, and other assets needed for the build.
-        It also creates the _quarto.yml configuration and other necessary files.
-
-        The great-docs/ directory is ephemeral and should not be committed to
-        version control. It will be recreated on each build.
-
-        Parameters
-        ----------
-        run
-            The current build, which records whether the site has an API reference.
-        """
-        print(f"Preparing build directory: {self.build_dir.relative_to(self.project_root)}/")
-
-        outputs.validate(self._config, self.layout)
-
-        hook_names = [Path(path).name for path in self._config.pre_render]
-        if len(hook_names) != len(set(hook_names)) or "restore-freeze.py" in hook_names:
-            raise ValueError("Pre-render scripts must have distinct, non-reserved filenames")
-
-        # Clean any existing build directory to avoid stale artifacts
-        if self.build_dir.exists():
-            shutil.rmtree(self.build_dir)
-
-        # Create the great-docs directory
-        self.build_dir.mkdir(parents=True, exist_ok=True)
-        quarto_yml.write_initial(self.build_dir)
-
-        # Create necessary subdirectories
-        scripts_dir = self.build_dir / "scripts"
-        scripts_dir.mkdir(exist_ok=True)
-
-        reference_dir = self.build_dir / "reference"
-        reference_dir.mkdir(exist_ok=True)
-        # Directory metadata also marks reference pages generated from older snapshots.
-        page_dates.mark_generated(reference_dir, self._config)
-
-        # Copy restore-freeze script when freeze is configured OR _freeze/ exists
-        has_freeze_cache = self.layout.freeze_dir.is_dir()
-        if self._config.freeze or has_freeze_cache:
-            restore_freeze_src = self.assets_path / "restore-freeze.py"
-            restore_freeze_dst = scripts_dir / "restore-freeze.py"
-            shutil.copy2(restore_freeze_src, restore_freeze_dst)
-
-        # Copy user-provided pre-render scripts
-        for script_path in self._config.pre_render:
-            src = self.layout.source_dir / script_path
-            if src.is_file():
-                dst = scripts_dir / src.name
-                shutil.copy2(src, dst)
-            else:
-                print(f"Warning: Pre-render script not found: {script_path}")
-
-        # Copy bibliography and CSL files into the build directory so that
-        # project-level citations resolve (see _update_quarto_config for wiring)
-        for bib_path in self._config.bibliography:
-            src = self.layout.source_dir / bib_path
-            if src.is_file():
-                publish.copy_asset(self.layout, src, self.build_dir / src.name)
-            else:
-                print(f"Warning: Bibliography file not found: {bib_path}")
-        csl_path = self._config.csl
-        if csl_path:
-            csl_src = self.layout.source_dir / csl_path
-            if csl_src.is_file():
-                publish.copy_asset(self.layout, csl_src, self.build_dir / csl_src.name)
-            else:
-                print(f"Warning: CSL file not found: {csl_path}")
-
-        # Copy custom CSS files (site.css) into the build directory
-        # where _quarto.yml will refer to them by basename
-        for css_path in self._config.css:
-            css_src = self.layout.source_dir / css_path
-            if css_src.is_file():
-                publish.copy_asset(self.layout, css_src, self.build_dir / css_src.name)
-            else:
-                print(f"Warning: CSS file not found: {css_path}")
-
-        # Copy SCSS theme file (contains all site styling)
-        scss_src = self.assets_path / "great-docs.scss"
-        shutil.copy2(scss_src, self.build_dir / "great-docs.scss")
-
-        # Quarto resolves the signature grammar relative to the build directory.
-        shutil.copy2(
-            self.assets_path / "pythonsignature.xml", self.build_dir / "pythonsignature.xml"
-        )
-
-        # Copy the evolution demo data file
-        demo_json_src = self.assets_path / "api-evolution-demo.json"
-        if demo_json_src.exists():
-            shutil.copy2(demo_json_src, self.build_dir / "api-evolution-demo.json")
-
-        # Copy the evolution shortcode extension (auto-discovered by Quarto)
-        extensions_src = self.assets_path / "_extensions"
-        if extensions_src.exists():
-            extensions_dst = self.build_dir / "_extensions"
-            shutil.copytree(extensions_src, extensions_dst, dirs_exist_ok=True)
-
-        # Pages that embed marimo notebooks need their island HTML and WASM exports before
-        # Quarto renders them.
-        if self._config.marimo_enabled:
-            _marimo.prepare_notebooks(
-                self.layout.source_dir,
-                self.build_dir,
-                report=print,
-                warn=partial(print, file=sys.stderr),
-            )
-
-        # Copy the site's scripts and stylesheets
-        scripts.copy(
-            self._config,
-            self.build_dir,
-            has_repository=run.project.github is not None,
-        )
-
-        # Create .gitignore for the great-docs directory
-        gitignore_path = self.build_dir / ".gitignore"
-        gitignore_path.write_text(GITIGNORE_CONTENT, encoding="utf-8")
-
-        # The user guide step copies the guide later, stripping numeric prefixes for clean URLs
-
-        # Create _quarto.yml configuration
-        self._update_quarto_config(run)
-
-        page_dates.copy_portraits(self._config, self.layout.source_dir, self.build_dir)
-
-        # Write options JSON for the restore-freeze script
-        gd_options = {
-            "freeze_dir": os.path.relpath(self.layout.freeze_dir, self.build_dir),
-        }
-        gd_options_path = self.build_dir / "_gd_options.json"
-        with open(gd_options_path, "w") as f:
-            json.dump(gd_options, f)
-
-        # Add API reference configuration
-        # (auto-skips if no documentable exports are found)
-        self._add_api_reference_config(run)
-        if run.has_api_reference:
-            reference_sections.update_sidebar(self._config, self.build_dir)
-
-        # Build the homepage after the API reference configuration. Its metadata
-        # margin can then include links to `llms.txt` and `llms-full.txt` when the
-        # build will generate them.
-        run.user_guide = user_guide.discover(self._config, self.layout, report=print_warning)
-        self._create_index_from_readme(
-            run.project, run.user_guide, run.has_api_reference, force_rebuild=True
+            site.identity(
+                self._config, self.layout, Project.make(self._config, self.layout)
+            ).base_url,
         )
 
     def install(self, force: bool = False) -> None:
@@ -378,264 +225,6 @@ class GreatDocs:
         print("  great-docs scan           # Preview API organization")
         print("  great-docs build --watch  # Watch for changes and rebuild")
 
-    def _default_description(self, manifest: Manifest) -> str | None:
-        """
-        Resolve the site's default search description
-
-        Parameters
-        ----------
-        manifest
-            The project's declared metadata, used when no search description is configured.
-
-        Returns
-        -------
-        :
-            The description as plain text, or `None` when neither
-            `seo.default_description` nor the package description is set.
-        """
-        return seo_description.default_description(self._config, manifest["description"])
-
-    def _structured_data(self, project: Project) -> StructuredData | None:
-        """
-        Describe the package as JSON-LD for the homepage and reference pages
-
-        Parameters
-        ----------
-        project
-            The documented project.
-
-        Returns
-        -------
-        :
-            The structured data, or `None` when it is disabled.
-        """
-        identity = self._identity(project)
-        return StructuredData.make(self._config, project.manifest, identity.name, identity.base_url)
-
-    def _create_index_from_readme(
-        self,
-        project: Project,
-        guide: UserGuide | None,
-        has_api_reference: bool,
-        force_rebuild: bool = False,
-        fallback_to_index: bool = False,
-    ) -> None:
-        """
-        Write the licence, citation and package information pages, then the README homepage
-
-        Use the project's index page or README, or generate a landing page from the package
-        metadata. With `homepage: user_guide`, skip the README homepage unless
-        `fallback_to_index` is `True`; the first user guide page supplies the homepage instead.
-
-        Parameters
-        ----------
-        project
-            The project's name and metadata for the homepage and package information pages.
-        guide
-            The discovered user guide, or `None` when it has no pages.
-        has_api_reference
-            Whether the site has an API reference, which a generated landing page links to.
-        force_rebuild
-            If `True`, always rebuild `index.qmd` even if it exists. Used by the build command to
-            sync with source file changes.
-        fallback_to_index
-            If `True`, create `index.qmd` even with `homepage: user_guide`, because the project
-            has no user guide pages to promote.
-
-        Returns
-        -------
-        :
-            `None`.
-        """
-        package_root = self.layout.package_root
-        metadata = project.manifest
-
-        licence.write_page(
-            self._config,
-            package_root,
-            self.build_dir,
-            metadata["license"],
-            self._page_authors,
-            report=print,
-        )
-        citation.write_page(
-            self._config, package_root, self.build_dir, self._page_authors, report=print
-        )
-        package_info.write_page(self._config, self.build_dir, metadata, self._remote, report=print)
-
-        # User guide mode promotes its first page unless no guide pages are available.
-        if self._config.homepage == "user_guide" and not fallback_to_index:
-            return  # pragma: no cover
-
-        if (self.build_dir / "index.qmd").exists() and not force_rebuild:
-            print("index.qmd already exists, skipping creation")
-            return
-
-        homepage_page.write_readme(
-            self._config,
-            self.layout,
-            self.build_dir,
-            metadata=metadata,
-            package_name=project.name,
-            pages=content.page_map(self._config, self.layout, guide),
-            page_authors=self._page_authors,
-            has_api_reference=has_api_reference,
-            has_user_guide=lambda: guide is not None,
-            rebuild=force_rebuild,
-            report=print,
-        )
-
-    def _add_api_reference_config(self, run: Run) -> None:
-        """
-        Add API reference defaults to `_quarto.yml` unless already configured
-
-        Warn and skip the API reference when no package name is detected. Also skip it
-        when no documentable exports are found, unless `great-docs.yml` has an explicit
-        `reference` configuration. Record either skip in the current build's state.
-
-        Parameters
-        ----------
-        run
-            The current build, which records whether the site has an API reference and
-            whether the package's exports were discovered.
-        """
-        # Explicit opt-out via great-docs.yml
-        if not self._config.reference_enabled:
-            print("API reference disabled (reference: false), skipping")
-            run.has_api_reference = False
-            return
-
-        # Non-Python projects have no importable Python package to introspect.
-        if not self._config.is_python_project:
-            print("API reference skipped (non-Python project)")
-            run.has_api_reference = False
-            return
-
-        config = quarto_yml.read(self.build_dir)
-
-        # Check if API reference config already exists
-        if "api-reference" in config:
-            print("API reference configuration already exists, skipping")
-            return
-
-        project = run.project
-        if not project.name or not (importable_name := project.importable_name):
-            print_warning("Could not detect the package name; skipping the API reference")
-            run.has_api_reference = False
-            return
-
-        print(f"Adding API reference configuration for package: {project.name}")
-
-        # Report module names that differ even after hyphens are replaced with underscores.
-        if importable_name not in (project.name, project.name.replace("-", "_")):
-            print(f"Detected module name: {importable_name}")
-
-        if project.compiled_extension:
-            print("Detected compiled extension package (PyO3/Rust/Cython)")
-            print("Note: The package must be installed (`pip install -e .` or `maturin develop`)")
-            print("      for API reference generation.")
-
-        # Try to auto-generate sections from discovered exports
-        # Prioritizes explicit reference config from great-docs.yml over auto-discovery
-        sections = run.exports.sections(importable_name)
-
-        # Mark that discovery was performed this build (so Step 2 can skip re-doing it)
-        run.api_discovery_done = True
-
-        # If no documentable exports were found, skip API reference entirely
-        if not sections:
-            print("No documentable exports found — skipping API reference")
-            run.has_api_reference = False
-            return
-
-        reference_block.configure(self._config, config, importable_name, sections)
-
-        # Write back to file
-        quarto_yml.write(self.build_dir, config)
-
-        print(f"Added API reference configuration to {quarto_yml.path(self.build_dir)}")
-
-    def _update_quarto_config(self, run: Run) -> None:
-        """
-        Merge Great Docs settings into the build directory's `_quarto.yml`
-
-        The file must already exist; build preparation creates it with the website
-        project type. Add render scripts, theme settings, resources and site
-        navigation while preserving unrelated configuration. Repeated calls after
-        later build steps refresh the settings those steps affect. The settings
-        come from `great-docs.yml`, package metadata and the project's GitHub repository.
-
-        Parameters
-        ----------
-        run
-            The build state. Its API reference outcome determines whether the reference
-            switcher offers an API reference. The first call fetches the repository's
-            star and fork counts and latest release into it, and later calls reuse them.
-
-        Returns
-        -------
-        :
-
-        Raises
-        ------
-        FileNotFoundError
-            If the build directory has no `_quarto.yml`, or a header include file
-            does not exist.
-        KeyError
-            If `_quarto.yml` lacks a `project` or `format.html` mapping. An empty file
-            lacks both.
-        """
-        quarto_config = quarto_yml.read(self.build_dir)
-
-        repo = run.project.github
-        if run.facts is None:
-            run.facts = Facts.make(self._config, repo, self._remote)
-
-        assembly.assemble(
-            quarto_config,
-            self._config,
-            self.layout,
-            self.build_dir,
-            repo=repo,
-            facts=run.facts,
-            identity=self._identity(run.project),
-            package_name=run.project.name,
-            metadata=run.project.manifest,
-            has_api_reference=run.has_api_reference,
-            report=print,
-            warn=print_warning,
-        )
-
-        quarto_yml.write(self.build_dir, quarto_config)
-
-        print(f"Updated {quarto_yml.path(self.build_dir)} with great-docs configuration")
-
-    def _identity(self, project: Project) -> Identity:
-        """
-        Resolve the site's name and addresses
-
-        The site title in `_quarto.yml` changes during a build, so each call
-        reads the identity afresh.
-
-        Parameters
-        ----------
-        project
-            The project's name and GitHub repository, used as fallbacks for the site's identity.
-
-        Returns
-        -------
-        :
-            The site's identity.
-        """
-        github = project.github
-        return Identity.make(
-            self._config,
-            self.build_dir,
-            github.owner if github else None,
-            github.name if github else None,
-            project.name,
-        )
-
     def uninstall(self) -> None:
         """
         Remove Great Docs configuration and generated build directories
@@ -684,23 +273,6 @@ class GreatDocs:
             import click
 
             click.echo(notice)
-
-    def _step_prepare_build_directory(self, run: Run) -> Outcome:
-        """
-        Create the build directory and its initial Quarto project
-
-        Parameters
-        ----------
-        run
-            The current build.
-
-        Returns
-        -------
-        :
-            The step's result line.
-        """
-        self._prepare_build_directory(run)
-        return "Ready"
 
     def _log_render_settings(self, log: "BuildLog") -> Outcome:
         """
@@ -759,8 +331,8 @@ class GreatDocs:
                 run,
                 self._config,
                 self.layout,
-                default_description=self._default_description(run.project.manifest),
-                structured_data=self._structured_data(run.project),
+                default_description=site.default_description(self._config, run.project),
+                structured_data=site.structured_data(self._config, self.layout, run.project),
             )
             return outcome
 
@@ -769,17 +341,17 @@ class GreatDocs:
                 log.detail(f"  - {page}")
             return None
 
-        def write_fallback_homepage() -> None:
-            self._create_index_from_readme(
-                run.project,
-                run.user_guide,
-                run.has_api_reference,
-                force_rebuild=True,
-                fallback_to_index=True,
-            )
-
         return [
-            Step("Prepare build directory", lambda: self._step_prepare_build_directory(run)),
+            Step(
+                "Prepare build directory",
+                lambda: prepare.build_directory(
+                    run,
+                    self._config,
+                    self.layout,
+                    remote=self._remote,
+                    page_authors=self._page_authors,
+                ),
+            ),
             Step(
                 "Show render settings",
                 lambda: self._log_render_settings(log),
@@ -858,7 +430,7 @@ class GreatDocs:
                     self._config,
                     self.layout,
                     page_authors=self._page_authors,
-                    write_fallback_homepage=write_fallback_homepage,
+                    remote=self._remote,
                 ),
                 fails_on=(ValueError,),
                 user_code=True,
@@ -878,9 +450,9 @@ class GreatDocs:
                     self._config,
                     self.layout,
                     page_authors=self._page_authors,
-                    identity=self._identity(run.project),
-                    structured_data=self._structured_data(run.project),
-                    default_description=self._default_description(run.project.manifest),
+                    identity=site.identity(self._config, self.layout, run.project),
+                    structured_data=site.structured_data(self._config, self.layout, run.project),
+                    default_description=site.default_description(self._config, run.project),
                 ),
                 fails_on=(ValueError,),
             ),
@@ -894,9 +466,7 @@ class GreatDocs:
             ),
             Step(
                 "Copy assets",
-                lambda: content.assets(
-                    self.layout, update_quarto_config=lambda: self._update_quarto_config(run)
-                ),
+                lambda: content.assets(run, self._config, self.layout, remote=self._remote),
                 fails_on=(ValueError, FileNotFoundError),
             ),
             Step("Generate API reference", generate_api_reference, user_code=True),
@@ -1183,8 +753,8 @@ class GreatDocs:
                 log,
                 version_tags,
                 latest_only,
-                default_description=self._default_description(run.project.manifest),
-                structured_data=self._structured_data(run.project),
+                default_description=site.default_description(self._config, run.project),
+                structured_data=site.structured_data(self._config, self.layout, run.project),
             )
             render_timings["timings_by_version"] = result.get("timings_by_version")
             return outcome
@@ -1212,7 +782,9 @@ class GreatDocs:
             Step(
                 "Generate SEO files",
                 lambda: finish.seo_files(
-                    self._config, self.layout, self._identity(run.project).base_url
+                    self._config,
+                    self.layout,
+                    site.identity(self._config, self.layout, run.project).base_url,
                 ),
                 warn=Warn((OSError,), "Error generating SEO files", "SEO files had issues"),
             ),

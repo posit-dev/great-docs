@@ -41,6 +41,7 @@ from tests.support import (
     make_exports,
     make_project,
     make_run,
+    prepare_build_directory,
     user_guide_step,
     write_config,
 )
@@ -826,7 +827,7 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
     docs = GreatDocs(project_path=str(pkg_dir))
     config = docs._config
     docs.install(force=True)
-    docs._prepare_build_directory(make_run(docs))
+    prepare_build_directory(docs, make_run(docs))
 
     detected_name = make_project(docs).name
     assert detected_name is not None
@@ -881,7 +882,7 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     config = docs._config
     docs.install(force=True)
     run = make_run(docs)
-    docs._prepare_build_directory(run)
+    prepare_build_directory(docs, run)
 
     # Generate CLI docs
     detected_name = make_project(docs).name
@@ -1022,7 +1023,7 @@ def _setup_blended_homepage(pkg_dir: Path, spec: dict) -> GreatDocs:
         docs._config = write_config(docs.layout.package_root, existing)
 
     run = make_run(docs)
-    docs._prepare_build_directory(run)
+    prepare_build_directory(docs, run)
     user_guide_step(docs, run.user_guide)
     return docs
 
@@ -1042,7 +1043,7 @@ def test_L3_bibliography_wired_into_quarto_config(pkg_name: str, tmp_path: Path)
 
     # The generated great-docs.yml already carries the bibliography key, so the
     # build directory prep alone should copy the file and wire the config.
-    docs._prepare_build_directory(make_run(docs))
+    prepare_build_directory(docs, make_run(docs))
 
     bib_file = expected["bibliography_file"]
 
@@ -1078,7 +1079,7 @@ def test_L3_custom_css_wired_into_quarto_config(pkg_name: str, tmp_path: Path):
 
     # The generated great-docs.yml already carries the site.css key, so the
     # build directory prep alone should copy the file and wire the config.
-    docs._prepare_build_directory(make_run(docs))
+    prepare_build_directory(docs, make_run(docs))
 
     css_file = expected["custom_css_file"]
 
@@ -1230,7 +1231,7 @@ def test_L3_code_include_expansion(tmp_path: Path):
     pkg_dir, spec = _make_package("gdtest_code_include", tmp_path)
     docs = GreatDocs(project_path=str(pkg_dir))
     docs.install(force=True)
-    docs._prepare_build_directory(make_run(docs))
+    prepare_build_directory(docs, make_run(docs))
 
     ug_info = discover_user_guide(docs)
     assert ug_info is not None

@@ -12,7 +12,7 @@ import click
 from . import __version__, _manifest
 from ._build import freeze as freeze_cache
 from ._build import from_repo as repository
-from ._build import quarto, serve
+from ._build import quarto, serve, site
 from ._build.steps import BuildError
 from ._content import user_guide
 from ._install import update_gitignore
@@ -23,7 +23,6 @@ from ._reference.exports import Exports
 from ._remote import HttpRemote
 from ._website import changelog as changelog_page
 from ._website import quarto_yml
-from ._website.identity import Identity
 from .config import Config, ConfigError
 from .core import GreatDocs
 
@@ -2835,15 +2834,7 @@ def seo(
         warnings = []
         info = []
 
-        project = Project.make(config, layout)
-        github = project.github
-        identity = Identity.make(
-            config,
-            layout.build_dir,
-            github.owner if github else None,
-            github.name if github else None,
-            project.name,
-        )
+        identity = site.identity(config, layout, Project.make(config, layout))
         canonical_base = identity.base_url
 
         # ── Check sitemap.xml ────────────────────────────────────────────

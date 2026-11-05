@@ -15,7 +15,7 @@ from great_docs._apiref._settings import SourceLinks
 from great_docs._build.facts import Facts, source_links, source_ref
 from great_docs._github import GithubRepo
 from great_docs._website.navigation.release import Release
-from tests.support import StubRemote, make_run, mock_config, write_config
+from tests.support import StubRemote, make_run, mock_config, update_quarto_config, write_config
 
 REPO = GithubRepo(owner="owner", name="repo")
 RELEASE = {"tag_name": "v1.2.0", "published_at": "2025-06-15T10:00:00Z"}
@@ -65,8 +65,8 @@ def test_both_configuration_passes_of_a_build_share_one_fetch(tmp_path: Path):
     )
     run = make_run(docs)
 
-    docs._update_quarto_config(run)
-    docs._update_quarto_config(run)
+    update_quarto_config(docs, run)
+    update_quarto_config(docs, run)
 
     assert remote.calls == ["github_stats", "github_releases"]
 

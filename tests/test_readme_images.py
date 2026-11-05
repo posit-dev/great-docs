@@ -1,10 +1,11 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 from great_docs import GreatDocs
 from great_docs._build import content
-from tests.support import discover_user_guide, make_project
+from tests.support import discover_user_guide, make_project, make_run, write_homepage
 
 
 @pytest.fixture(params=[".", "docs"])
@@ -21,9 +22,7 @@ def docs(tmp_path: Path, request: pytest.FixtureRequest) -> GreatDocs:
 def stage(docs: GreatDocs, content: str | None) -> str:
     if content is not None:
         (docs.project_root / "README.md").write_text(content)
-    docs._create_index_from_readme(
-        make_project(docs), discover_user_guide(docs), has_api_reference=True
-    )
+    write_homepage(docs)
     return (docs.build_dir / "index.qmd").read_text()
 
 
@@ -75,7 +74,8 @@ def test_copy_readme_images_reuses_assets(docs: GreatDocs) -> None:
     source = docs.project_root / "assets/logo.svg"
     source.parent.mkdir()
     source.write_bytes(b"<svg></svg>")
-    content.assets(docs.layout, update_quarto_config=lambda: None)
+    with patch("great_docs._build.site.update_quarto_config"):
+        content.assets(make_run(docs), docs._config, docs.layout, remote=docs._remote)
 
     page = stage(docs, "![Logo](assets/logo.svg)\n")
 

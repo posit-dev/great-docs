@@ -4,8 +4,10 @@ Shared configuration and build setup for `GreatDocs` tests
 `write_config` writes and loads `great-docs.yml`. `mock_config` provides a `Config` double
 with empty defaults. `write_pyproject` declares a project's name. `make_project` reads a
 project's facts as a build does, `make_exports` prepares to find its exports, and `make_run`
-creates build state for testing build methods directly. `user_guide_step`, `sections_step`,
-`custom_pages_step` and `freeze_cache_step` run individual steps with the build's arguments.
+creates build state for testing build methods directly. `prepare_build_directory`,
+`update_quarto_config`, `add_api_block` and `write_homepage` provide the project inputs for
+individual build operations. `user_guide_step`, `sections_step`, `custom_pages_step` and
+`freeze_cache_step` run individual steps with the build's arguments.
 `stubbed_build` stubs Quarto and build steps while preserving the build's control flow.
 `StubRemote` supplies GitHub and PyPI data without network requests. `homepage_hero` and
 `homepage_margin` build the homepage hero and sidebar from the project's configuration and metadata.
@@ -26,12 +28,12 @@ from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from unittest.mock import MagicMock, NonCallableMagicMock, patch
+from unittest.mock import DEFAULT, MagicMock, NonCallableMagicMock, patch
 
 from yaml12 import format_yaml
 
 from great_docs import Config, GreatDocs
-from great_docs._build import content
+from great_docs._build import content, prepare, reference, site
 from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
 from great_docs._build.steps import Outcome, Skipped, print_warning
@@ -49,15 +51,15 @@ if TYPE_CHECKING:
 # Keep names in first-call order. Use a method name for a call on `GreatDocs`, or a dotted
 # path relative to `great_docs._build` for a module function. Update paths when steps move.
 _BUILD_METHODS: tuple[str, ...] = (
-    "_prepare_build_directory",
+    "prepare.build_directory",
     "content.user_guide",
     "content.sections",
     "content.custom_pages",
     "content.assets",
-    "_update_quarto_config",
+    "site.update_quarto_config",
     "passes.terminal_recordings",
-    "_default_description",
-    "_structured_data",
+    "site.default_description",
+    "site.structured_data",
     "_print_layout_notice",
 )
 
@@ -202,6 +204,84 @@ def make_run(docs: GreatDocs, **values: Any) -> Run:
     return replace(Run.make(docs._config, docs.layout, watch=False), **values)
 
 
+def prepare_build_directory(docs: GreatDocs, run: Run) -> Outcome:
+    """
+    Prepare a fresh build directory using the project's build inputs
+
+    Parameters
+    ----------
+    docs
+        The project supplying configuration, directories, remote data and page authors.
+    run
+        The current build.
+
+    Returns
+    -------
+    :
+        The step's outcome.
+    """
+    return prepare.build_directory(
+        run, docs._config, docs.layout, remote=docs._remote, page_authors=docs._page_authors
+    )
+
+
+def update_quarto_config(docs: GreatDocs, run: Run) -> None:
+    """
+    Merge site settings into the project's existing Quarto configuration
+
+    Parameters
+    ----------
+    docs
+        The project.
+    run
+        The current build.
+
+    Returns
+    -------
+    :
+    """
+    site.update_quarto_config(run, docs._config, docs.layout, remote=docs._remote)
+
+
+def add_api_block(docs: GreatDocs, run: Run) -> None:
+    """
+    Configure the project's API reference using the supplied build state
+
+    Parameters
+    ----------
+    docs
+        The project.
+    run
+        The current build.
+
+    Returns
+    -------
+    :
+    """
+    reference.add_api_block(run, docs._config, docs.layout)
+
+
+def write_homepage(docs: GreatDocs, *, has_api_reference: bool = True) -> None:
+    """
+    Write the project's homepage and project pages with a freshly discovered user guide
+
+    Parameters
+    ----------
+    docs
+        The project.
+    has_api_reference
+        Whether homepage links should include an API reference.
+
+    Returns
+    -------
+    :
+    """
+    run = make_run(docs, user_guide=discover_user_guide(docs), has_api_reference=has_api_reference)
+    content.homepage(
+        run, docs._config, docs.layout, page_authors=docs._page_authors, remote=docs._remote
+    )
+
+
 def user_guide_step(docs: GreatDocs, guide: UserGuide | None = None) -> Outcome:
     """
     Run the build's user guide step on its own
@@ -340,8 +420,8 @@ def stubbed_build(
     overridden in `returns`, they return empty values of their declared return types. For an
     `Outcome` return type, they report a skip so the build log counts the step as run.
 
-    Identify a call by its `GreatDocs` method name, such as `_prepare_build_directory`, or
-    its function path relative to `great_docs._build`, such as `content.sections`.
+    Identify a call by its `GreatDocs` method name, such as `_print_layout_notice`, or its
+    function path relative to `great_docs._build`, such as `content.sections`.
 
     Parameters
     ----------
@@ -376,7 +456,7 @@ def stubbed_build(
     both = sorted(real & set(returns))
     if both:
         raise ValueError(f"a method that runs cannot have a stubbed return value: {both}")
-    if api_reference and "_prepare_build_directory" in real:
+    if api_reference and "prepare.build_directory" in real:
         raise ValueError(
             "the real build directory preparation decides whether there is an API reference"
         )
@@ -407,8 +487,8 @@ def stubbed_build(
             steps[name] = stack.enter_context(
                 patch.object(target, attribute, autospec=True, return_value=value)
             )
-        if not api_reference and "_prepare_build_directory" in steps:
-            steps["_prepare_build_directory"].side_effect = _configure_no_api_reference
+        if not api_reference and "prepare.build_directory" in steps:
+            steps["prepare.build_directory"].side_effect = _configure_no_api_reference
         yield BuildStubs(steps=steps, render=render)
 
 
@@ -453,16 +533,26 @@ def _step_owner(cls: type, name: str) -> tuple[object, str]:
     return importlib.import_module(f"great_docs._build.{module}"), function
 
 
-def _configure_no_api_reference(run: Run) -> None:
+def _configure_no_api_reference(run: Run, *args: object, **kwargs: object) -> object:
     """
-    Record a build directory prepared without an API reference
+    Mark a stubbed build as having no API reference and keep its configured return value
 
     Parameters
     ----------
     run
         The current build.
+    *args
+        Additional positional arguments accepted by the preparation stub and ignored here.
+    **kwargs
+        Keyword arguments accepted by the preparation stub and ignored here.
+
+    Returns
+    -------
+    :
+        `DEFAULT`, so the stub returns its configured value.
     """
     run.has_api_reference = False
+    return DEFAULT
 
 
 def _return_type(function: Callable[..., object]) -> object:

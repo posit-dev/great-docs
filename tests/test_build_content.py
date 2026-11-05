@@ -8,6 +8,7 @@ import shutil
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from unittest.mock import patch
 
 import pytest
 from yaml12 import format_yaml, read_yaml, write_yaml
@@ -21,11 +22,14 @@ from great_docs._website.quarto_yml import write as write_quarto_yml
 from great_docs._website.quarto_yml import write_initial as write_initial_quarto_yml
 from great_docs._yaml import split_front_matter
 from tests.support import (
+    StubRemote,
     custom_pages_step,
     discover_user_guide,
     make_project,
     make_run,
+    prepare_build_directory,
     sections_step,
+    update_quarto_config,
     write_config,
 )
 
@@ -118,16 +122,12 @@ def _user_guide(docs: GreatDocs, guide: UserGuide | None) -> Outcome:
     :
         The step's outcome.
     """
-
-    def write_fallback_homepage() -> None:
-        raise AssertionError("the fallback homepage was written")
-
     return content.user_guide(
         make_run(docs, user_guide=guide),
         docs._config,
         docs.layout,
         page_authors=docs._page_authors,
-        write_fallback_homepage=write_fallback_homepage,
+        remote=StubRemote(),
     )
 
 
@@ -209,7 +209,8 @@ def _assets(docs: GreatDocs) -> Outcome:
     :
         The step's outcome.
     """
-    return content.assets(docs.layout, update_quarto_config=lambda: None)
+    with patch("great_docs._build.site.update_quarto_config"):
+        return content.assets(make_run(docs), docs._config, docs.layout, remote=StubRemote())
 
 
 # ---------------------------------------------------------------------------
@@ -245,20 +246,39 @@ def test_the_user_guide_step_skips_a_project_without_a_guide(tmp_path: Path):
 
 
 def test_a_user_guide_homepage_without_guide_pages_falls_back_to_the_readme(tmp_path: Path, capsys):
-    docs = _project(tmp_path, {"great-docs.yml": "homepage: user_guide\n"})
-    fallbacks: list[None] = []
+    docs = _project(
+        tmp_path, {"great-docs.yml": "homepage: user_guide\n", "README.md": "# Demo\n\nHello\n"}
+    )
 
     outcome = content.user_guide(
         make_run(docs, user_guide=discover_user_guide(docs)),
         docs._config,
         docs.layout,
         page_authors=docs._page_authors,
-        write_fallback_homepage=lambda: fallbacks.append(None),
+        remote=StubRemote(),
     )
 
     assert outcome == Skipped("no user guide found")
-    assert fallbacks == [None]
+    assert "Hello" in (docs.build_dir / "index.qmd").read_text(encoding="utf-8")
     assert "falling back to index mode" in capsys.readouterr().out
+
+
+def test_a_user_guide_homepage_writes_the_project_pages_but_not_the_readme(tmp_path: Path):
+    docs = _project(
+        tmp_path,
+        {
+            "great-docs.yml": "homepage: user_guide\n",
+            "README.md": "# Demo\n",
+            "LICENSE": "MIT License\n",
+        },
+    )
+
+    content.homepage(
+        make_run(docs), docs._config, docs.layout, page_authors=[], remote=StubRemote()
+    )
+
+    assert (docs.build_dir / "license.qmd").is_file()
+    assert not (docs.build_dir / "index.qmd").exists()
 
 
 def test_the_user_guide_step_publishes_pages_with_a_sidebar_and_navbar_link(tmp_path: Path):
@@ -516,7 +536,7 @@ def test_user_guide_asset_copy_skips_the_staged_quarto_project():
         (docs_dir / "_quarto/default/_quarto.yml").write_text(QUARTO_YML_HEADER + "project: {}\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._prepare_build_directory(make_run(docs))
+        prepare_build_directory(docs, make_run(docs))
         _publish(docs, discover_user_guide(docs))
 
         assert (docs.build_dir / "user-guide/images/c.png").read_bytes() == b"chart"
@@ -2105,12 +2125,10 @@ def test_the_assets_step_completes_the_quarto_configuration(tmp_path: Path, has_
         _write_files(tmp_path, {"assets/image.png": "fake image"})
     write_initial_quarto_yml(docs.build_dir)
     run = make_run(docs)
-    docs._update_quarto_config(run)
+    update_quarto_config(docs, run)
     assert "assets/**" not in read_quarto_yml(docs.build_dir)["project"]["resources"]
 
-    outcome = content.assets(
-        docs.layout, update_quarto_config=lambda: docs._update_quarto_config(run)
-    )
+    outcome = content.assets(run, docs._config, docs.layout, remote=docs._remote)
 
     assert outcome == ("Assets copied" if has_assets else Skipped("no assets directory"))
     resources = read_quarto_yml(docs.build_dir)["project"]["resources"]

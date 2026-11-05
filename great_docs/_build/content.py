@@ -1,10 +1,10 @@
 """
 Build steps for publishing authored pages and assets
 
-Publish the user guide, configured sections, custom pages and project assets into the build
-directory, with their sidebars, navbar links and Quarto resources. In blended homepage mode,
-the first user guide page becomes the homepage. Map source paths to published paths so links
-between pages point to their published destinations.
+Publish the homepage, user guide, configured sections, custom pages and project assets into
+the build directory, with their sidebars, navbar links and Quarto resources. In blended homepage
+mode, the first user guide page becomes the homepage. Map source paths to published paths so
+links between pages point to their published destinations.
 """
 
 from __future__ import annotations
@@ -23,20 +23,21 @@ from .._website import page_dates, quarto_yml, social_cards
 from .._website.homepage import page as homepage_page
 from .._website.homepage import source as homepage_source
 from .._website.navigation import navbar as nav_navbar
+from .._website.project_pages import citation, licence, package_info
+from . import site
 from .steps import Outcome, Skipped, print_warning
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from .._content.user_guide import UserGuide
     from .._layout import Layout
     from .._project import Project
+    from .._remote import Remote
     from .._website.identity import Identity
     from .._website.seo.structured_data import StructuredData
     from ..config import Config
     from .pipeline import Run
 
-__all__ = ["assets", "custom_pages", "page_map", "sections", "user_guide"]
+__all__ = ["assets", "custom_pages", "homepage", "page_map", "sections", "user_guide"]
 
 
 def _is_mapping(value: object) -> TypeGuard[dict[str, Any]]:
@@ -80,19 +81,86 @@ def page_map(config: Config, layout: Layout, guide: UserGuide | None) -> PageMap
     return PageMap.make(config, layout, guide, homepage)
 
 
+def homepage(
+    run: Run,
+    config: Config,
+    layout: Layout,
+    *,
+    page_authors: list[dict[str, Any]],
+    remote: Remote,
+    fallback: bool = False,
+) -> None:
+    """
+    Write project pages and the homepage from authored content or package metadata
+
+    Write licence, citation and package information pages when enabled and their sources are
+    available. Recreate `index.qmd` from the project's index page or README, or generate a
+    landing page from package metadata. With `homepage: user_guide`, leave the homepage to
+    the user guide step unless `fallback` is `True`.
+
+    Parameters
+    ----------
+    run
+        The current build, including the package name and metadata, discovered user guide
+        and API reference availability for homepage links.
+    config
+        The project's configuration.
+    layout
+        The project's directories.
+    page_authors
+        The site's authors, added to the written pages.
+    remote
+        The source of PyPI release dates for the package information page.
+    fallback
+        Whether to write a homepage from authored content or package metadata even with
+        `homepage: user_guide`. Use when no guide pages can supply the homepage.
+
+    Returns
+    -------
+    :
+    """
+    package_root = layout.package_root
+    build_dir = layout.build_dir
+    metadata = run.project.manifest
+
+    _ = licence.write_page(
+        config, package_root, build_dir, metadata["license"], page_authors, report=print
+    )
+    _ = citation.write_page(config, package_root, build_dir, page_authors, report=print)
+    _ = package_info.write_page(config, build_dir, metadata, remote, report=print)
+
+    if config.homepage == "user_guide" and not fallback:
+        return
+
+    guide = run.user_guide
+    _ = homepage_page.write_readme(
+        config,
+        layout,
+        build_dir,
+        metadata=metadata,
+        package_name=run.project.name,
+        pages=page_map(config, layout, guide),
+        page_authors=page_authors,
+        has_api_reference=run.has_api_reference,
+        has_user_guide=lambda: guide is not None,
+        report=print,
+    )
+
+
 def user_guide(
     run: Run,
     config: Config,
     layout: Layout,
     *,
     page_authors: list[dict[str, Any]],
-    write_fallback_homepage: Callable[[], None],
+    remote: Remote,
 ) -> Outcome:
     """
     Publish the user guide and add its sidebar and navbar link
 
     With `homepage: user_guide`, publish the guide's first page as the homepage. In that mode,
-    warn and call the fallback homepage writer if the guide has no pages.
+    warn and fall back to the project's index page, README or generated landing page if the
+    guide has no pages.
 
     Parameters
     ----------
@@ -105,8 +173,9 @@ def user_guide(
         The project's directories.
     page_authors
         The site's authors, added to published pages.
-    write_fallback_homepage
-        Write the README homepage when `homepage: user_guide` finds no guide pages.
+    remote
+        The source of PyPI release dates for the package information page when writing the
+        fallback homepage and project pages.
 
     Returns
     -------
@@ -120,7 +189,7 @@ def user_guide(
                 "   ⚠️  homepage: user_guide is set but no user guide pages found; "
                 "falling back to index mode"
             )
-            write_fallback_homepage()
+            homepage(run, config, layout, page_authors=page_authors, remote=remote, fallback=True)
         return Skipped("no user guide found")
 
     print("\n📖 Processing User Guide...")
@@ -506,7 +575,7 @@ def custom_pages(
     return f"{published.pages} custom page(s)"
 
 
-def assets(layout: Layout, *, update_quarto_config: Callable[[], None]) -> Outcome:
+def assets(run: Run, config: Config, layout: Layout, *, remote: Remote) -> Outcome:
     """
     Copy the project's `assets/` directory and complete the Quarto configuration
 
@@ -516,10 +585,15 @@ def assets(layout: Layout, *, update_quarto_config: Callable[[], None]) -> Outco
 
     Parameters
     ----------
+    run
+        The current build.
+    config
+        The project's configuration.
     layout
         The project's directories.
-    update_quarto_config
-        Merge the site's settings and resources into `_quarto.yml`.
+    remote
+        The source of repository data for the Quarto configuration when absent from the
+        build state.
 
     Returns
     -------
@@ -537,7 +611,7 @@ def assets(layout: Layout, *, update_quarto_config: Callable[[], None]) -> Outco
         file_count = sum(1 for path in dest_assets.rglob("*") if path.is_file())
         print(f"\n📦 Copied {file_count} asset file(s) to great-docs/assets/")
 
-    update_quarto_config()
+    site.update_quarto_config(run, config, layout, remote=remote)
     if not copied:
         return Skipped("no assets directory")
     return "Assets copied"

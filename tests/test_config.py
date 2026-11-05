@@ -15,7 +15,7 @@ from great_docs.config import (
     create_default_config,
     load_config,
 )
-from tests.support import make_run, write_config
+from tests.support import make_run, update_quarto_config, write_config
 
 
 @pytest.fixture
@@ -1408,7 +1408,9 @@ def test_site_quarto_excludes_css_and_legacy_keys(tmp_path: Path):
 
 
 def _quarto_config_for(tmp_path: Path, gd_yaml: str) -> dict:
-    """Build _quarto.yml via GreatDocs._update_quarto_config and return it parsed."""
+    """
+    Return the Quarto configuration assembled from the supplied project settings
+    """
     from great_docs import GreatDocs
     from great_docs._website import quarto_yml
 
@@ -1419,7 +1421,7 @@ def _quarto_config_for(tmp_path: Path, gd_yaml: str) -> dict:
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir(parents=True, exist_ok=True)
     quarto_yml.write_initial(docs.build_dir)
-    docs._update_quarto_config(make_run(docs))
+    update_quarto_config(docs, make_run(docs))
     return quarto_yml.read(docs.build_dir)
 
 

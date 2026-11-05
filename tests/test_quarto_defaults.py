@@ -11,7 +11,7 @@ import pytest
 from great_docs import GreatDocs
 from great_docs._layout import Layout
 from great_docs._website import inline_data, quarto_defaults, quarto_yml
-from tests.support import make_run, write_config
+from tests.support import make_run, update_quarto_config, write_config
 
 
 def _initial() -> dict[str, Any]:
@@ -188,10 +188,10 @@ class TestSiteIncludes:
         quarto_yml.write_initial(docs.build_dir)
 
         # The build adds tag data between updates, before the script that reads it.
-        docs._update_quarto_config(make_run(docs))
+        update_quarto_config(docs, make_run(docs))
         with quarto_yml.edit(docs.build_dir) as quarto_config:
             inline_data.add(quarto_config, "__GD_TAGS_DATA__", {}, before="page-tags.js")
-        docs._update_quarto_config(make_run(docs))
+        update_quarto_config(docs, make_run(docs))
 
         html = quarto_yml.read(docs.build_dir)["format"]["html"]
         after_body = [str(entry) for entry in html["include-after-body"]]
