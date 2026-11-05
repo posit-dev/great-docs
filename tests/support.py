@@ -416,11 +416,12 @@ def stubbed_build(
     """
     Stub Quarto and selected build calls while preserving the build's control flow
 
-    Within the block, `docs.build()` keeps its control flow: the Quarto installation check
-    passes, the render environment is empty and `quarto render` succeeds silently. Build steps
-    are stubbed except those listed in `run`. Stubs enforce the real call signatures. Unless
-    overridden in `returns`, they return empty values of their declared return types. For an
-    `Outcome` return type, they report a skip so the build log counts the step as run.
+    Within the block, the Quarto installation check passes and the render environment is
+    empty. Stubbed processes, including `quarto render`, exit successfully without output.
+    Build calls are stubbed except those listed in `run`. Stubs enforce the real call
+    signatures and return empty values of their declared return types unless `returns`
+    overrides them. Calls returning `Outcome` report a skip, which counts as a completed
+    step in the build log.
 
     Identify a call by its function path relative to `great_docs._build`, such as
     `content.sections`.
@@ -476,6 +477,11 @@ def stubbed_build(
         render.stdout = iter(())
         render.stderr = iter(())
         render.returncode = 0
+        # Waiting for a process, including the Git lookup, must yield a successful exit.
+        render.__enter__.return_value = render
+        render.args = []
+        render.communicate.return_value = ("", "")
+        render.poll.return_value = 0
 
         steps: dict[str, MagicMock] = {}
         for name in _BUILD_CALLS:

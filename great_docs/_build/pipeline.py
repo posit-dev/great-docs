@@ -576,9 +576,7 @@ def _watch(config: Config, layout: Layout, log: BuildLog, steps: list[Step]) -> 
     finish.print_layout_notice(layout)
     preview_env = quarto.environment(config)
     preview_env[shared_sidebar.PREVIEW_ENV] = "1"
-    _ = subprocess.run(
-        ["quarto", "preview", "--no-browser"], cwd=layout.build_dir, env=preview_env
-    )
+    _ = subprocess.run(["quarto", "preview", "--no-browser"], cwd=layout.build_dir, env=preview_env)
 
 
 def _make_log(run: Run, config: Config, layout: Layout) -> BuildLog:
@@ -625,11 +623,11 @@ def _installed_version(package_name: str) -> str:
     Returns
     -------
     :
-        The version, or `""` if the version lookup fails.
+        The version, or `""` when the distribution is not installed.
     """
     try:
         return metadata.version(package_name)
-    except Exception:
+    except metadata.PackageNotFoundError:
         return ""
 
 
@@ -665,7 +663,8 @@ def _package_location(project: Project, package_name: str, package_root: Path) -
             spec = import_util.find_spec(module_name)
             if spec and spec.origin:
                 location = str(Path(spec.origin).parent)
-        except Exception:
+        except (ImportError, ValueError):
+            # A missing parent or a module without `__spec__` prevents location lookup.
             pass
     # A repository URL identifies a temporary clone more clearly than its local path.
     if location:
@@ -683,7 +682,8 @@ def _package_location(project: Project, package_name: str, package_root: Path) -
                 tmp_prefixes = ("/tmp/", "/var/folders/", tempfile.gettempdir())
                 if any(location.startswith(p) for p in tmp_prefixes):
                     location = remote_url
-        except Exception:
+        except OSError:
+            # Keep the local path if the Git process cannot start.
             pass
     return location
 
@@ -754,8 +754,8 @@ def _estimated_seconds(config: Config, layout: Layout) -> float:
         # Allow ten pages for an enabled CLI reference.
         if config.cli_enabled:
             n_total_pages += 10
-    except Exception:
-        pass  # Keep the counts collected before the scan failed.
+    except OSError:
+        pass  # Keep the counts collected before the filesystem error.
 
     return estimate_build_time(
         n_api_items=n_api_items,
