@@ -6,7 +6,7 @@ import json
 import re
 import shutil
 import subprocess
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 import pytest
@@ -235,6 +235,22 @@ class TestScan:
         dirs = [page_scan.ContentDir(tmp_path / "guide", "Guide")]
 
         assert list(page_scan.scan(dirs, tmp_path, skip_index=True)) == []
+
+    def test_hrefs_use_forward_slashes_on_windows(self, monkeypatch: pytest.MonkeyPatch):
+        """Use `/` in scanned page hrefs for Windows paths"""
+        build_dir = PureWindowsPath("C:/site")
+        page = build_dir / "user-guide" / "advanced" / "intro.qmd"
+
+        class Directory:
+            def rglob(self, pattern: str) -> list[PureWindowsPath]:
+                return [page]
+
+        monkeypatch.setattr(page_scan.Page, "make", lambda path, build_dir: path)
+        dirs = [page_scan.ContentDir(Directory(), "User Guide")]
+
+        scanned = page_scan.scan(dirs, build_dir, skip_index=True)
+
+        assert [p.href for p in scanned] == ["user-guide/advanced/intro.qmd"]
 
 
 # ── Collection ───────────────────────────────────────────────────────────────

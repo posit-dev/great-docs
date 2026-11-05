@@ -41,7 +41,11 @@ class ScannedPage:
     """The page as read"""
 
     href: str
-    """The page's source path relative to the build directory, such as `user-guide/intro.qmd`"""
+    """
+    The page's source path relative to the build directory
+
+    Path separators are always `/`, as in `user-guide/intro.qmd`.
+    """
 
     section: str
     """The section name shown beside the page"""
@@ -120,4 +124,4 @@ def scan(dirs: Iterable[ContentDir], build_dir: Path, *, skip_index: bool) -> It
                 page = Page.make(path, build_dir)
             except (OSError, UnicodeDecodeError):
                 continue
-            yield ScannedPage(page, str(path.relative_to(build_dir)), directory.label)
+            yield ScannedPage(page, path.relative_to(build_dir).as_posix(), directory.label)
