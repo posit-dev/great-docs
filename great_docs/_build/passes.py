@@ -169,8 +169,11 @@ def shared_sidebars(run: Run, config: Config, layout: Layout, log: BuildLog) -> 
     :
         `None`; the result is a detail line of the previous step.
     """
-    if run.watch or not config.has_versions:
-        shared = shared_sidebar.prepare(layout.build_dir)
+    build_dir = layout.build_dir
+    if (run.watch or not config.has_versions) and quarto_yml.path(build_dir).is_file():
+        quarto_config = quarto_yml.read(build_dir)
+        shared = shared_sidebar.prepare(build_dir, quarto_config)
         if shared:
+            quarto_yml.write(build_dir, quarto_config)
             log.detail("Sharing rendered sidebar(s): " + ", ".join(shared))
     return None

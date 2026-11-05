@@ -2212,9 +2212,9 @@ def run_versioned_build(  # pragma: no cover
         _prune_missing_sidebar_pages(quarto_config, ver_dir)
         _adjust_quarto_config_for_version(quarto_config, entry, latest_tag)
         _add_upcoming_status_data(quarto_config, ver_dir)
-        quarto_yml.write(ver_dir, quarto_config)
         # Last, so the trimmed sidebars reflect every change above
-        shared_sidebar.prepare(ver_dir)
+        shared_sidebar.prepare(ver_dir, quarto_config)
+        quarto_yml.write(ver_dir, quarto_config)
         pages_by_version[entry.tag] = pages
         dir_by_tag[entry.tag] = ver_dir
 
