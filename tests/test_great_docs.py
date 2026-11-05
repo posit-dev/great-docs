@@ -12227,6 +12227,15 @@ def test_detect_package_name_from_setup_py_v2():
         assert result == "old-pkg"
 
 
+def test_detect_package_name_reads_setup_py_name_keyword(tmp_path: Path):
+    """A longer name ending in `name`, such as `username`, is not the package name"""
+    (tmp_path / "setup.py").write_text(
+        'username = "bob"\nsetup(name="realpkg")\n', encoding="utf-8"
+    )
+
+    assert GreatDocs(project_path=str(tmp_path))._detect_package_name() == "realpkg"
+
+
 def test_detect_package_name_not_found_empty_dir():
     """Test _detect_package_name returns None when no config found."""
     with tempfile.TemporaryDirectory() as tmp_dir:

@@ -540,8 +540,8 @@ class GreatDocs:
         if setup_py.exists():
             with open(setup_py, "r") as f:
                 content = f.read()
-                # Simple regex to find name="..." in setup()
-                match = re.search(r'name\s*=\s*["\']([^"\']+)["\']', content)
+                # Require a whole `name` word so `username` cannot supply the package name.
+                match = re.search(r'\bname\s*=\s*["\']([^"\']+)["\']', content)
                 if match:
                     return match.group(1)
 
