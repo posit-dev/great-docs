@@ -75,8 +75,7 @@ def set_navbar_item(navbar: dict[str, Any], item: dict[str, str]) -> None:
         in place.
     item
         The repository entry to use in place of every existing GitHub icon or
-        widget on the right, including entries from an earlier configuration pass
-        in the same build. Append it after the other entries if none exists.
+        widget on the right. Append it after the other entries if none exists.
 
     Returns
     -------
