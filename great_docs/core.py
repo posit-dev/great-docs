@@ -84,6 +84,27 @@ if TYPE_CHECKING:
     from ._build.log import BuildLog
 
 
+# Recognised repository URL labels, casefolded without separators, in preference order.
+_REPOSITORY_URL_LABELS = ("repository", "source", "sourcecode", "github", "homepage")
+
+
+def _url_label(label: str) -> str:
+    """
+    Normalise a project URL label for matching
+
+    Parameters
+    ----------
+    label
+        The label as declared, such as `Source Code`.
+
+    Returns
+    -------
+    :
+        The label casefolded, without spaces, hyphens or underscores, such as `sourcecode`.
+    """
+    return re.sub(r"[\s_-]", "", label).casefold()
+
+
 def _print_warning(message: str) -> None:
     """
     Print a warning as a detail line in the current build step
@@ -1033,46 +1054,32 @@ class GreatDocs:
 
     def _get_github_repo_info(self) -> tuple[str | None, str | None, str | None]:
         """
-        Extract GitHub repository information.
+        Find the project's GitHub repository
 
-        Checks `repo` in great-docs.yml first (as an override), then falls
-        back to `[project.urls]` in pyproject.toml.
+        Use the configured `repo`, falling back to project URLs labelled `Repository`,
+        `Source`, `Source Code`, `GitHub` or `Homepage`, in that order. Ignore case,
+        whitespace, hyphens and underscores when matching labels.
 
         Returns
         -------
-        tuple[str | None, str | None, str | None]
-            A tuple of (owner, repo_name, base_url) or (None, None, None) if not found.
+        :
+            The owner, repository name and repository URL, or three `None` values if no URL
+            is selected or the selected URL is not a GitHub repository.
         """
-        metadata = self._get_package_metadata()
-
-        # Check great-docs.yml `repo:` override first
         repo_url = self._config.repo
-
-        # Fall back to pyproject.toml [project.urls]
         if not repo_url:
-            urls = metadata.get("urls", {})
-            for key in [
-                "Repository",
-                "repository",
-                "Source",
-                "source",
-                "GitHub",
-                "github",
-                "Homepage",
-                "homepage",
-            ]:
-                if key in urls:
-                    repo_url = urls[key]
-                    break
-
-        if not repo_url or "github.com" not in repo_url:
-            return None, None, None
-
+            # Reverse insertion order so the first declared label wins after normalisation.
+            urls = {
+                _url_label(label): url
+                for label, url in reversed(self._get_package_metadata().get("urls", {}).items())
+            }
+            repo_url = next(
+                (urls[label] for label in _REPOSITORY_URL_LABELS if label in urls), None
+            )
         repo = GithubRepo.parse(repo_url)
-        if repo:
-            return repo.owner, repo.name, repo.url
-
-        return None, None, None  # pragma: no cover
+        if repo is None:
+            return None, None, None
+        return repo.owner, repo.name, repo.url
 
     # =========================================================================
     # Custom Sections Methods

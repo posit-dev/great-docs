@@ -1187,6 +1187,57 @@ Repository = "https://github.com/primary/repo-repo"
         assert repo == "repo-repo"
 
 
+@pytest.mark.parametrize(
+    "label", ["Source Code", "source-code", "source_code", "REPOSITORY", "Git Hub", "HomePage"]
+)
+def test_get_github_repo_info_url_label_ignores_case_and_separators(tmp_path: Path, label: str):
+    """A URL label matches whatever its case and its spaces, hyphens and underscores"""
+    (tmp_path / "pyproject.toml").write_text(
+        f'[project]\nname = "pkg"\n\n[project.urls]\n"{label}" = "https://github.com/owner/repo"\n',
+        encoding="utf-8",
+    )
+
+    assert GreatDocs(project_path=str(tmp_path))._get_github_repo_info() == (
+        "owner",
+        "repo",
+        "https://github.com/owner/repo",
+    )
+
+
+def test_get_github_repo_info_ignores_other_url_labels(tmp_path: Path):
+    """A GitHub URL under a label outside the recognised ones names no repository"""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\n\n[project.urls]\nChangelog = "https://github.com/owner/repo"\n',
+        encoding="utf-8",
+    )
+
+    assert GreatDocs(project_path=str(tmp_path))._get_github_repo_info() == (None, None, None)
+
+
+def test_get_github_repo_info_source_code_ranks_after_source(tmp_path: Path):
+    """`Source Code` ranks below `Source` and above `GitHub` and `Homepage`"""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\n\n[project.urls]\n'
+        'Homepage = "https://github.com/owner/home"\n'
+        'GitHub = "https://github.com/owner/hub"\n'
+        '"Source Code" = "https://github.com/owner/code"\n'
+        'Source = "https://github.com/owner/source"\n',
+        encoding="utf-8",
+    )
+    docs = GreatDocs(project_path=str(tmp_path))
+
+    assert docs._get_github_repo_info()[1] == "source"
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\n\n[project.urls]\n'
+        'Homepage = "https://github.com/owner/home"\n'
+        'GitHub = "https://github.com/owner/hub"\n'
+        '"Source Code" = "https://github.com/owner/code"\n',
+        encoding="utf-8",
+    )
+
+    assert GreatDocs(project_path=str(tmp_path))._get_github_repo_info()[1] == "code"
+
+
 def test_get_github_repo_info_non_github_url():
     """Test that non-GitHub URLs return None."""
     with tempfile.TemporaryDirectory() as tmp_dir:
