@@ -103,9 +103,10 @@ def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Re
     Merge Great Docs settings into the build directory's `_quarto.yml`
 
     Require an existing `_quarto.yml` with `project` and `format.html` mappings.
-    Apply recorded contributions in build step order, then merge render scripts, theme
-    settings, resources and navigation from `great-docs.yml`, package metadata and GitHub
-    data. Preserve unrelated settings. Call again after publishing content to add its
+    Combine `great-docs.yml`, package metadata and GitHub data with recorded build
+    contributions to configure render scripts, theme, resources and navigation.
+    Apply contributions in build step order.
+    Preserve unrelated settings. Call again after publishing content to add its
     contributions and refresh navigation.
 
     Parameters
@@ -135,8 +136,6 @@ def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Re
     """
     build_dir = layout.build_dir
     quarto_config = quarto_yml.read(build_dir)
-    for contribution in run.contributions:
-        quarto_yml.apply(quarto_config, contribution, config)
 
     repo = run.project.github
     if run.facts is None:
@@ -153,6 +152,7 @@ def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Re
         package_name=run.project.name,
         metadata=run.project.manifest,
         has_api_reference=run.has_api_reference,
+        contributions=run.contributions,
         report=print,
         warn=print_warning,
     )
