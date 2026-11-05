@@ -9382,6 +9382,75 @@ def test_discover_names_the_script_that_runs_the_command(
     assert result["entry_point_name"] == "pkg"
 
 
+def _write_script_package(root: Path, entry_module: str) -> None:
+    """
+    Write `gdscriptpkg` with its only command in the module named by its script
+    """
+    (root / "pyproject.toml").write_text(
+        '[project]\nname = "gdscriptpkg"\n[project.scripts]\ntool = "gdscriptpkg.tools.entry:run"\n'
+    )
+    tools = root / "gdscriptpkg" / "tools"
+    tools.mkdir(parents=True)
+    (root / "gdscriptpkg" / "__init__.py").write_text("")
+    (tools / "__init__.py").write_text("")
+    (tools / "entry.py").write_text(textwrap.dedent(entry_module))
+
+
+def test_discover_finds_command_in_script_module(tmp_path, monkeypatch):
+    """
+    Find a command in the module named by a project script
+    """
+    _write_script_package(
+        tmp_path,
+        """
+        import click
+
+        @click.command()
+        def run():
+            '''Run the tool'''
+        """,
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    with patch.dict(sys.modules):
+        result = cli_click.discover(
+            "gdscriptpkg", tmp_path, cli_module=None, cli_name=None, report=lambda _line: None
+        )
+
+    assert result is not None
+    assert result["entry_point_name"] == "tool"
+    assert result["help"] == "Run the tool"
+
+
+def test_discover_prefers_script_attribute_in_script_module(tmp_path, monkeypatch):
+    """
+    Prefer the script's command over a conventionally named command in the same module
+    """
+    _write_script_package(
+        tmp_path,
+        """
+        import click
+
+        @click.command()
+        def cli():
+            '''Another command'''
+
+        @click.command()
+        def run():
+            '''Run the tool'''
+        """,
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    with patch.dict(sys.modules):
+        result = cli_click.discover(
+            "gdscriptpkg", tmp_path, cli_module=None, cli_name=None, report=lambda _line: None
+        )
+
+    assert result is not None
+    assert result["help"] == "Run the tool"
+
+
 def test_discover_no_command_found(tmp_path):
     """
     Return `None` when the CLI module contains no command
@@ -22264,7 +22333,7 @@ def test_find_command_cli_module_import_fails(tmp_path):
 
     with patch("importlib.import_module", side_effect=ImportError("not found")):
         result = cli_click.find_command(
-            "mypkg", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
+            "mypkg", tmp_path, cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
         )
 
     assert result is None
@@ -22281,7 +22350,7 @@ def test_find_command_with_cli_name(tmp_path):
     docs = GreatDocs(project_path=str(tmp_path))
 
     result = cli_click.find_command(
-        "great_docs", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
+        "great_docs", tmp_path, cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
     )
 
     import click as _click
@@ -22299,7 +22368,7 @@ def test_find_command_attr_loop(tmp_path):
 
     # No cli_name set — falls through to the "cli"/"main"/"app" loop
     result = cli_click.find_command(
-        "great_docs", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
+        "great_docs", tmp_path, cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
     )
 
     import click as _click
@@ -22316,7 +22385,10 @@ def test_find_command_no_module_found_returns_none(tmp_path):
     docs = GreatDocs(project_path=str(tmp_path))
 
     result = cli_click.find_command(
-        "nonexistent_pkg_xyzzy", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
+        "nonexistent_pkg_xyzzy",
+        tmp_path,
+        cli_module=docs._config.cli_module,
+        cli_name=docs._config.cli_name,
     )
 
     assert result is None
@@ -22345,7 +22417,10 @@ def test_find_command_dir_loop(tmp_path):
     with patch.dict(sys.modules, {"fake_cli_module_xyzzy": fake_module}):
         with patch("importlib.import_module", return_value=fake_module):
             result = cli_click.find_command(
-                "mypkg", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
+                "mypkg",
+                tmp_path,
+                cli_module=docs._config.cli_module,
+                cli_name=docs._config.cli_name,
             )
 
     assert isinstance(result.command, (_click.Command, _click.Group))
@@ -22378,7 +22453,7 @@ def test_find_command_discovery_loop_finds_module(tmp_path):
 
     with patch("importlib.import_module", side_effect=fake_import):
         result = cli_click.find_command(
-            "mypkg", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
+            "mypkg", tmp_path, cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
         )
 
     assert isinstance(result.command, (_click.Command, _click.Group))
@@ -22403,7 +22478,10 @@ def test_find_command_no_commands_returns_none(tmp_path):
     with patch.dict(sys.modules, {"fake_empty_module_xyzzy": fake_module}):
         with patch("importlib.import_module", return_value=fake_module):
             result = cli_click.find_command(
-                "mypkg", cli_module=docs._config.cli_module, cli_name=docs._config.cli_name
+                "mypkg",
+                tmp_path,
+                cli_module=docs._config.cli_module,
+                cli_name=docs._config.cli_name,
             )
 
     assert result is None

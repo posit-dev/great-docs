@@ -28,8 +28,8 @@ Great Docs looks for Click commands in these locations:
 
 1. `your_package.cli` — most common
 2. `your_package.__main__` — for `python -m` support
-3. `your_package.main` — alternative
-4. Entry point from `[project.scripts]` in `pyproject.toml`
+3. `your_package.main`, `your_package.console` and `your_package.commands` — alternatives
+4. The modules that scripts in `[project.scripts]` or `[project.gui-scripts]` name
 
 ## Explicit Configuration
 

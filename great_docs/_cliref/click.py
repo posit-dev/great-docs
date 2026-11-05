@@ -176,7 +176,8 @@ def discover(
     module_name
         The package's importable name.
     package_root
-        The directory holding `pyproject.toml`, which supplies the command's script name.
+        The directory holding `pyproject.toml`. Its scripts supply the command's display
+        name and additional modules to search.
     cli_module
         The `cli.module` setting: the module that defines the command line.
     cli_name
@@ -193,7 +194,9 @@ def discover(
         The command tree of the command `find_command` finds, with `entry_point_name` set on the
         root, or `None` when the package has no command line.
     """
-    found = find_command(module_name, cli_module=cli_module, cli_name=cli_name, report=report)
+    found = find_command(
+        module_name, package_root, cli_module=cli_module, cli_name=cli_name, report=report
+    )
     if found is None:
         return None
 
@@ -210,6 +213,7 @@ def discover(
 
 def find_command(
     module_name: str,
+    package_root: Path,
     *,
     cli_module: str | None,
     cli_name: str | None,
@@ -218,16 +222,22 @@ def find_command(
     """
     Find a package's command line as a Click command
 
-    Import `cli_module`, or else the first of the package's `cli`, `__main__`, `main`, `console`
-    and `commands` modules that holds a command. In that module, take the attribute `cli_name`
-    names, or else the first command among `cli`, `main`, `app`, `command` and the module's own
-    name, or else the first public command. When `cli_name` names an attribute that is not a
-    command, the package has no command line.
+    Use `cli_module` when configured. Otherwise, search the package's `cli`, `__main__`,
+    `main`, `console` and `commands` modules in that order, followed by the modules named
+    by scripts in `pyproject.toml`. Search console scripts before GUI scripts, preserving
+    declaration order within each group. Use the first module that contains a command.
+
+    In the selected module, try the attribute named by `cli_name` first. For a module added
+    by a script, next try the script's attribute if it is a command. Then try commands named
+    `cli`, `main`, `app`, `command` and `module_name`, in order, before searching the remaining
+    public attributes. If `cli_name` selects a non-command object, return no command.
 
     Parameters
     ----------
     module_name
         The package's importable name.
+    package_root
+        The directory holding `pyproject.toml`, which declares the scripts to search.
     cli_module
         The `cli.module` setting: the module that defines the command line.
     cli_name
@@ -248,14 +258,23 @@ def find_command(
         is missing. The message names the module.
     """
     cli_module_path = cli_module
+    script_attr: str | None = None
     if not cli_module_path:
-        for candidate in ("cli", "__main__", "main", "console", "commands"):
-            module_path = f"{module_name}.{candidate}"
+        # Keep conventional modules first, with their usual attribute order. For other
+        # modules, prefer the attribute named by the first script that references them.
+        candidates: dict[str, str | None] = {
+            f"{module_name}.{name}": None
+            for name in ("cli", "__main__", "main", "console", "commands")
+        }
+        for module_path, attr_name in _script_targets(package_root):
+            _ = candidates.setdefault(module_path, attr_name)
+        for module_path, attr_name in candidates.items():
             module = _import_candidate(module_path)
             if module is not None and any(
-                is_cli_command(getattr(module, attr_name)) for attr_name in dir(module)
+                is_cli_command(getattr(module, name)) for name in dir(module)
             ):
                 cli_module_path = module_path
+                script_attr = attr_name
                 break
 
     if not cli_module_path:
@@ -271,6 +290,10 @@ def find_command(
     cli_obj = None
     if cli_name:
         cli_obj = getattr(module, cli_name, None)
+
+    if not cli_obj and script_attr and is_cli_command(getattr(module, script_attr, None)):
+        cli_obj = getattr(module, script_attr)
+        cli_name = script_attr
 
     if not cli_obj:
         for attr_name in ["cli", "main", "app", "command", module_name]:
@@ -297,6 +320,54 @@ def find_command(
 
     report(f"Found Click CLI: {cli_name} in {cli_module_path}")
     return FoundCommand(cli_obj, f"{cli_module_path}:{cli_name}")
+
+
+def _script_targets(package_root: Path) -> list[tuple[str, str | None]]:
+    """
+    Read the module and attribute named by each project script
+
+    Parameters
+    ----------
+    package_root
+        The directory holding `pyproject.toml`.
+
+    Returns
+    -------
+    :
+        The `(module, attribute)` pairs in declaration order, console scripts before GUI
+        scripts. The attribute is `None` for an entry point that names only a module.
+        The list is empty when no scripts are declared or a packaging file cannot be read
+        or parsed.
+    """
+    try:
+        scripts = _manifest.read(package_root)["scripts"]
+    except ManifestError:
+        return []
+
+    targets: list[tuple[str, str | None]] = []
+    for reference in scripts.values():
+        module, _, attr = _entry_point_target(reference).partition(":")
+        if module:
+            targets.append((module, attr or None))
+    return targets
+
+
+def _entry_point_target(reference: str) -> str:
+    """
+    Remove extras and whitespace from a script's entry point
+
+    Parameters
+    ----------
+    reference
+        The entry point declared in `pyproject.toml`, such as `pkg.cli:main [extra]`.
+
+    Returns
+    -------
+    :
+        The module reference, optionally followed by `:attribute`. Extras and whitespace
+        do not affect which object the entry point names.
+    """
+    return re.sub(r"\s", "", reference.split("[", 1)[0])
 
 
 def _import_candidate(module_path: str) -> ModuleType | None:
@@ -388,8 +459,7 @@ def entry_point_name(package_root: Path, target: str) -> str | None:
         return None
 
     for name, reference in scripts.items():
-        # Whitespace and optional extras do not change the command an entry point names.
-        if re.sub(r"\s", "", reference.split("[", 1)[0]) == target:
+        if _entry_point_target(reference) == target:
             return name
 
     return next(iter(scripts), None)

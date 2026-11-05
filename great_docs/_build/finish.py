@@ -191,7 +191,10 @@ def _save_snapshot(config: Config, layout: Layout, project: Project) -> None:
     if config.cli_enabled:
         try:
             found = cli_click.find_command(
-                importable_name, cli_module=config.cli_module, cli_name=config.cli_name
+                importable_name,
+                layout.package_root,
+                cli_module=config.cli_module,
+                cli_name=config.cli_name,
             )
             if found is not None:
                 snap.cli_commands = cli_click.extract_snapshot(found.command)

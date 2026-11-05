@@ -62,10 +62,13 @@ Great Docs checks these locations automatically, so you rarely need to tell it w
 
 1. `your_package.cli`: the most common location
 2. `your_package.__main__`: for `python -m your_package` support
-3. `your_package.main`: alternative location
-4. entry point module from `[project.scripts]`
+3. `your_package.main`, `your_package.console` and `your_package.commands`: alternative locations
+4. each module that a script in `[project.scripts]` or `[project.gui-scripts]` names, in the
+   order the scripts are listed, console scripts first
 
 Great Docs tries each location in order and uses the first one that contains a Click command.
+In a module found through a script, it documents the object the script names when that object
+is a Click command or Typer app.
 If a module exists but fails to import, for example because a dependency is missing, Great Docs
 stops the search. The build shows a warning with the module's name and the error, and writes no
 CLI pages.

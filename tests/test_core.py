@@ -74,7 +74,7 @@ class TestFindCommand:
     Command discovery with configured names and fallback searches
     """
 
-    def test_no_cli_module_auto_discovers(self):
+    def test_no_cli_module_auto_discovers(self, tmp_path):
         """
         Return `None` when no candidate CLI module can be imported
         """
@@ -86,10 +86,10 @@ class TestFindCommand:
             return real_import(name, *args, **kwargs)
 
         with patch("importlib.import_module", side_effect=fail_import):
-            result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
+            result = cli_click.find_command("mypkg", tmp_path, cli_module=None, cli_name=None)
         assert result is None
 
-    def test_auto_discovers_module_with_click_obj(self):
+    def test_auto_discovers_module_with_click_obj(self, tmp_path):
         """
         Find a candidate module containing a Click command
         """
@@ -105,10 +105,10 @@ class TestFindCommand:
             return real_import(name, *args, **kwargs)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
+            result = cli_click.find_command("mypkg", tmp_path, cli_module=None, cli_name=None)
         assert result.command is fake_cmd
 
-    def test_explicit_cli_module_import_fails(self):
+    def test_explicit_cli_module_import_fails(self, tmp_path):
         """
         Return `None` when the configured CLI module cannot be imported
         """
@@ -120,10 +120,12 @@ class TestFindCommand:
             return real_import(name, *args, **kwargs)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            result = cli_click.find_command("mypkg", cli_module="mypkg.custom_cli", cli_name=None)
+            result = cli_click.find_command(
+                "mypkg", tmp_path, cli_module="mypkg.custom_cli", cli_name=None
+            )
         assert result is None
 
-    def test_explicit_cli_name_found(self):
+    def test_explicit_cli_name_found(self, tmp_path):
         """
         Find the command named by `cli.name`
         """
@@ -140,11 +142,11 @@ class TestFindCommand:
 
         with patch("importlib.import_module", side_effect=mock_import):
             result = cli_click.find_command(
-                "mypkg", cli_module="mypkg.custom_cli", cli_name="mycmd"
+                "mypkg", tmp_path, cli_module="mypkg.custom_cli", cli_name="mycmd"
             )
         assert result.command is fake_cmd
 
-    def test_common_attr_names_found(self):
+    def test_common_attr_names_found(self, tmp_path):
         """
         Find a command under a conventional attribute name
         """
@@ -160,10 +162,12 @@ class TestFindCommand:
             return real_import(name, *args, **kwargs)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            result = cli_click.find_command("mypkg", cli_module="mypkg.cli_mod", cli_name=None)
+            result = cli_click.find_command(
+                "mypkg", tmp_path, cli_module="mypkg.cli_mod", cli_name=None
+            )
         assert result.command is fake_group
 
-    def test_scan_all_attrs_fallback(self):
+    def test_scan_all_attrs_fallback(self, tmp_path):
         """
         Find a command under a non-standard public attribute name
         """
@@ -179,10 +183,12 @@ class TestFindCommand:
             return real_import(name, *args, **kwargs)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            result = cli_click.find_command("mypkg", cli_module="mypkg.cli_mod", cli_name=None)
+            result = cli_click.find_command(
+                "mypkg", tmp_path, cli_module="mypkg.cli_mod", cli_name=None
+            )
         assert result.command is fake_cmd
 
-    def test_no_click_obj_found_returns_none(self):
+    def test_no_click_obj_found_returns_none(self, tmp_path):
         """
         Return `None` when the module contains no command
         """
@@ -197,11 +203,13 @@ class TestFindCommand:
             return real_import(name, *args, **kwargs)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            result = cli_click.find_command("mypkg", cli_module="mypkg.cli_mod", cli_name=None)
+            result = cli_click.find_command(
+                "mypkg", tmp_path, cli_module="mypkg.cli_mod", cli_name=None
+            )
         assert result is None
 
     @pytest.mark.parametrize("candidate", ["console", "commands"])
-    def test_finds_command_in_late_candidate_module(self, candidate):
+    def test_finds_command_in_late_candidate_module(self, tmp_path, candidate):
         """
         Find a command in `console` or `commands`, matching reference page discovery
         """
@@ -215,10 +223,10 @@ class TestFindCommand:
             raise ModuleNotFoundError(f"No module named {name!r}", name=name)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
+            result = cli_click.find_command("mypkg", tmp_path, cli_module=None, cli_name=None)
         assert result.command is fake_cmd
 
-    def test_candidate_that_exits_on_import_is_skipped(self):
+    def test_candidate_that_exits_on_import_is_skipped(self, tmp_path):
         """
         Skip a `__main__` that runs its command on import and search the next candidate
         """
@@ -235,7 +243,7 @@ class TestFindCommand:
             raise ModuleNotFoundError(f"No module named {name!r}", name=name)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            result = cli_click.find_command("mypkg", cli_module=None, cli_name=None)
+            result = cli_click.find_command("mypkg", tmp_path, cli_module=None, cli_name=None)
         assert result.command is fake_cmd
 
     @pytest.mark.parametrize(
@@ -246,7 +254,7 @@ class TestFindCommand:
             SyntaxError("invalid syntax"),
         ],
     )
-    def test_candidate_that_fails_on_import_raises(self, error):
+    def test_candidate_that_fails_on_import_raises(self, tmp_path, error):
         """
         Name the failing candidate in `ImportError` and preserve the original cause
         """
@@ -261,10 +269,10 @@ class TestFindCommand:
             patch("importlib.import_module", side_effect=mock_import),
             pytest.raises(ImportError, match="mypkg.cli") as raised,
         ):
-            cli_click.find_command("mypkg", cli_module=None, cli_name=None)
+            cli_click.find_command("mypkg", tmp_path, cli_module=None, cli_name=None)
         assert raised.value.__cause__ is error
 
-    def test_configured_module_that_exits_on_import_finds_none(self):
+    def test_configured_module_that_exits_on_import_finds_none(self, tmp_path):
         """
         Report a configured CLI module that exits on import instead of ending the build
         """
@@ -275,7 +283,7 @@ class TestFindCommand:
 
         with patch("importlib.import_module", side_effect=mock_import):
             result = cli_click.find_command(
-                "mypkg", cli_module="mypkg.__main__", cli_name=None, report=lines.append
+                "mypkg", tmp_path, cli_module="mypkg.__main__", cli_name=None, report=lines.append
             )
         assert result is None
         assert lines == [
@@ -283,7 +291,7 @@ class TestFindCommand:
             "importing mypkg.__main__ exited with status 2"
         ]
 
-    def test_cli_name_naming_a_non_command_finds_none(self):
+    def test_cli_name_naming_a_non_command_finds_none(self, tmp_path):
         """
         Return no command when `cli.name` names a non-command despite another command in the module
         """
@@ -300,7 +308,7 @@ class TestFindCommand:
 
         with patch("importlib.import_module", side_effect=mock_import):
             result = cli_click.find_command(
-                "mypkg", cli_module="mypkg.custom_cli", cli_name="helper"
+                "mypkg", tmp_path, cli_module="mypkg.custom_cli", cli_name="helper"
             )
         assert result is None
 

@@ -166,11 +166,11 @@ class TestTyperDiscovery:
 
         return fake_mod, mock_import
 
-    def test_find_command_returns_converted_typer(self, monkeypatch):
+    def test_find_command_returns_converted_typer(self, tmp_path, monkeypatch):
         _fake, mock_import = self._patch_typer_module(monkeypatch)
 
         with patch("importlib.import_module", side_effect=mock_import):
-            found = cli_click.find_command("mypkg", cli_module="mypkg.cli", cli_name=None)
+            found = cli_click.find_command("mypkg", tmp_path, cli_module="mypkg.cli", cli_name=None)
 
         assert found is not None
         obj = found.command
