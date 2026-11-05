@@ -25,16 +25,26 @@ from pathlib import Path
 
 import pytest
 
-from great_docs import GreatDocs
+from great_docs import Config, GreatDocs
 from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
 from great_docs._cliref.model import CliCommand
 from great_docs._content import code_includes
+from great_docs._project import locate_package_init
 from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import discover_exports, parse_dunder_all
 from great_docs._reference.probe import detect_docstring_style
 from great_docs._website import quarto_yml as quarto_yml_file
-from tests.support import StubRemote, discover_user_guide, make_run, write_config
+from tests.support import (
+    StubRemote,
+    discover_user_guide,
+    make_exports,
+    make_project,
+    make_run,
+    prepare_build_directory,
+    user_guide_step,
+    write_config,
+)
 
 # ── Setup: make test-packages/synthetic importable ───────────────────────────
 
@@ -96,7 +106,7 @@ def _make_package(pkg_name: str, tmp_path: Path) -> tuple[Path, dict]:
     return pkg_dir, spec
 
 
-def _discover_cli(docs: GreatDocs, package_name: str) -> CliCommand | None:
+def _discover_cli(docs: GreatDocs, config: Config, package_name: str) -> CliCommand | None:
     """
     Discover a synthetic package's Click CLI as the build does
 
@@ -104,25 +114,46 @@ def _discover_cli(docs: GreatDocs, package_name: str) -> CliCommand | None:
     ----------
     docs
         The installed project.
+    config
+        The package's own configuration, which `great-docs init --force` replaces with one
+        that omits the CLI settings.
     package_name
         The detected package name.
 
     Returns
     -------
     :
-        The command tree, or `None` when CLI documentation is disabled in the project metadata
+        The command tree, or `None` when CLI documentation is disabled in the configuration
         or no command is found.
     """
-    metadata = docs._get_package_metadata()
-    if not metadata.get("cli_enabled", False):
+    if not config.cli_enabled:
         return None
     return cli_click.discover(
-        docs._normalize_package_name(package_name),
+        package_name.replace("-", "_"),
         docs.layout.package_root,
-        cli_module=metadata.get("cli_module"),
-        cli_name=metadata.get("cli_name"),
+        cli_module=config.cli_module,
+        cli_name=config.cli_name,
         report=print,
     )
+
+
+def _package_init(docs: GreatDocs, name: str) -> Path | None:
+    """
+    Find a package's `__init__.py` in a project
+
+    Parameters
+    ----------
+    docs
+        The project.
+    name
+        The package's distribution or import name.
+
+    Returns
+    -------
+    :
+        The path to `__init__.py`, or `None` if no package is found.
+    """
+    return locate_package_init(docs.layout.package_root, make_project(docs).manifest, name)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -139,7 +170,7 @@ def test_L0_package_name_detection(pkg_name: str, tmp_path: Path):
         pytest.skip("No 'detected_name' in spec expected outcomes")
 
     docs = GreatDocs(project_path=str(pkg_dir))
-    detected = docs._detect_package_name()
+    detected = make_project(docs).name
     assert detected == expected["detected_name"], (
         f"Expected package name {expected['detected_name']!r}, got {detected!r}"
     )
@@ -157,7 +188,7 @@ def test_L0_module_name_detection(pkg_name: str, tmp_path: Path):
     module_name = expected["detected_module"]
 
     # Verify the module's __init__.py can be found
-    init_file = docs._find_package_init(module_name)
+    init_file = _package_init(docs, module_name)
     assert init_file is not None, f"Could not find __init__.py for module {module_name!r}"
     assert init_file.exists()
 
@@ -177,13 +208,13 @@ def test_L1_export_discovery(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected.get("detected_module", pkg_name)
-    init_file = docs._find_package_init(module_name)
+    init_file = _package_init(docs, module_name)
     exports = init_file and parse_dunder_all(init_file, docs._config, report=print)
 
     # Packages without __all__ use griffe-based discovery
     if exports is None:
         exports = discover_exports(
-            docs._get_griffe_package(module_name), docs._config, report=print
+            make_exports(docs).package(module_name), docs._config, report=print
         )
 
     assert exports is not None, (
@@ -218,7 +249,7 @@ def test_L1_section_generation(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected.get("detected_module", pkg_name)
-    sections = docs._create_api_sections_with_config(module_name)
+    sections = make_exports(docs).sections(module_name)
 
     if sections is None:
         pytest.skip(
@@ -245,7 +276,7 @@ def test_L1_big_class_method_section(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected.get("detected_module", pkg_name)
-    sections = docs._create_api_sections_with_config(module_name)
+    sections = make_exports(docs).sections(module_name)
     assert sections is not None
 
     big_class = expected["big_class_name"]
@@ -307,10 +338,10 @@ def test_L1_docstring_parser_detection(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected.get("detected_module", pkg_name)
-    init_file = docs._find_package_init(module_name)
+    init_file = _package_init(docs, module_name)
     assert init_file is not None
 
-    detected = detect_docstring_style(docs._get_griffe_package(module_name), report=print)
+    detected = detect_docstring_style(make_exports(docs).package(module_name), report=print)
     assert detected == expected["detected_parser"], (
         f"Expected parser {expected['detected_parser']!r}, got {detected!r}"
     )
@@ -579,7 +610,7 @@ def test_L2_name_module_mismatch(pkg_name: str, tmp_path: Path):
     docs = GreatDocs(project_path=str(pkg_dir))
 
     # Project name detection should find the pyproject.toml name
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name == expected["detected_name"]
 
     # Module should differ from normalized project name
@@ -590,7 +621,7 @@ def test_L2_name_module_mismatch(pkg_name: str, tmp_path: Path):
     )
 
     # The module's __init__.py should still be findable
-    init_file = docs._find_package_init(module_name)
+    init_file = _package_init(docs, module_name)
     assert init_file is not None, f"Could not find __init__.py for {module_name!r}"
 
 
@@ -644,12 +675,13 @@ def test_L3_cli_sidebar_flat_paths(pkg_name: str, tmp_path: Path):
         pytest.skip("This test is for flat (non-grouped) CLIs only")
 
     docs = GreatDocs(project_path=str(pkg_dir))
+    config = docs._config
     docs.install(force=True)
 
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name is not None
 
-    cli_info = _discover_cli(docs, detected_name)
+    cli_info = _discover_cli(docs, config, detected_name)
     assert cli_info is not None
 
     sidebar_items = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
@@ -677,12 +709,13 @@ def test_L3_cli_sidebar_nested_structure(pkg_name: str, tmp_path: Path):
         pytest.skip("No 'cli_has_groups' in spec")
 
     docs = GreatDocs(project_path=str(pkg_dir))
+    config = docs._config
     docs.install(force=True)
 
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name is not None
 
-    cli_info = _discover_cli(docs, detected_name)
+    cli_info = _discover_cli(docs, config, detected_name)
     assert cli_info is not None
 
     sidebar_items = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
@@ -725,12 +758,13 @@ def test_L3_cli_sidebar_no_wrong_level_paths(pkg_name: str, tmp_path: Path):
         pytest.skip("No 'cli_has_groups' in spec")
 
     docs = GreatDocs(project_path=str(pkg_dir))
+    config = docs._config
     docs.install(force=True)
 
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name is not None
 
-    cli_info = _discover_cli(docs, detected_name)
+    cli_info = _discover_cli(docs, config, detected_name)
     assert cli_info is not None
 
     sidebar_items = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
@@ -791,13 +825,14 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
     from yaml12 import format_yaml, parse_yaml, read_yaml
 
     docs = GreatDocs(project_path=str(pkg_dir))
+    config = docs._config
     docs.install(force=True)
-    docs._prepare_build_directory(make_run())
+    prepare_build_directory(docs, make_run(docs))
 
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name is not None
 
-    cli_info = _discover_cli(docs, detected_name)
+    cli_info = _discover_cli(docs, config, detected_name)
     assert cli_info is not None
 
     cli_files = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
@@ -844,21 +879,22 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     from yaml12 import format_yaml, parse_yaml, read_yaml
 
     docs = GreatDocs(project_path=str(pkg_dir))
+    config = docs._config
     docs.install(force=True)
-    run = make_run()
-    docs._prepare_build_directory(run)
+    run = make_run(docs)
+    prepare_build_directory(docs, run)
 
     # Generate CLI docs
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name is not None
-    cli_info = _discover_cli(docs, detected_name)
+    cli_info = _discover_cli(docs, config, detected_name)
     assert cli_info is not None
     cli_files = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
     with quarto_yml_file.edit(docs.build_dir) as quarto_config:
         quarto_yml_file.apply(quarto_config, cli_render.contribution(docs._config, cli_files))
 
     # Process user guide
-    docs._process_user_guide(run.user_guide, run.has_api_reference)
+    user_guide_step(docs, run.user_guide)
 
     quarto_yml = docs.build_dir / "_quarto.yml"
     with open(quarto_yml, encoding="utf-8") as f:
@@ -915,12 +951,13 @@ def test_L2_cli_discovery(pkg_name: str, tmp_path: Path):
 
     # Install the package so imports work
     docs = GreatDocs(project_path=str(pkg_dir))
+    config = docs._config
     docs.install(force=True)
 
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name is not None
 
-    cli_info = _discover_cli(docs, detected_name)
+    cli_info = _discover_cli(docs, config, detected_name)
     assert cli_info is not None, (
         f"CLI discovery returned None for {detected_name!r}; expected a Click CLI to be found"
     )
@@ -938,12 +975,13 @@ def test_L2_cli_nested_groups(pkg_name: str, tmp_path: Path):
         pytest.skip("No 'cli_has_groups' in spec expected outcomes")
 
     docs = GreatDocs(project_path=str(pkg_dir))
+    config = docs._config
     docs.install(force=True)
 
-    detected_name = docs._detect_package_name()
+    detected_name = make_project(docs).name
     assert detected_name is not None
 
-    cli_info = _discover_cli(docs, detected_name)
+    cli_info = _discover_cli(docs, config, detected_name)
     assert cli_info is not None, "CLI discovery returned None for nested groups"
 
     # CLI info should have subcommands
@@ -984,9 +1022,9 @@ def _setup_blended_homepage(pkg_dir: Path, spec: dict) -> GreatDocs:
         existing.update(spec["config"])
         docs._config = write_config(docs.layout.package_root, existing)
 
-    run = make_run()
-    docs._prepare_build_directory(run)
-    docs._process_user_guide(run.user_guide, run.has_api_reference)
+    run = make_run(docs)
+    prepare_build_directory(docs, run)
+    user_guide_step(docs, run.user_guide)
     return docs
 
 
@@ -1005,7 +1043,7 @@ def test_L3_bibliography_wired_into_quarto_config(pkg_name: str, tmp_path: Path)
 
     # The generated great-docs.yml already carries the bibliography key, so the
     # build directory prep alone should copy the file and wire the config.
-    docs._prepare_build_directory(make_run())
+    prepare_build_directory(docs, make_run(docs))
 
     bib_file = expected["bibliography_file"]
 
@@ -1041,7 +1079,7 @@ def test_L3_custom_css_wired_into_quarto_config(pkg_name: str, tmp_path: Path):
 
     # The generated great-docs.yml already carries the site.css key, so the
     # build directory prep alone should copy the file and wire the config.
-    docs._prepare_build_directory(make_run())
+    prepare_build_directory(docs, make_run(docs))
 
     css_file = expected["custom_css_file"]
 
@@ -1193,12 +1231,12 @@ def test_L3_code_include_expansion(tmp_path: Path):
     pkg_dir, spec = _make_package("gdtest_code_include", tmp_path)
     docs = GreatDocs(project_path=str(pkg_dir))
     docs.install(force=True)
-    docs._prepare_build_directory(make_run())
+    prepare_build_directory(docs, make_run(docs))
 
     ug_info = discover_user_guide(docs)
     assert ug_info is not None
 
-    docs._publish_user_guide(ug_info)
+    user_guide_step(docs, ug_info)
 
     built = docs.build_dir / "user-guide" / "includes.qmd"
     assert built.exists(), "includes.qmd not found in build dir"

@@ -14,7 +14,7 @@ from great_docs._layout_migration import analyse
 from great_docs._layout_migration.model import MigrationError, Move, Note, fingerprint
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs.cli import _print_notes, cli
-from tests.support import discover_user_guide, make_run
+from tests.support import discover_user_guide, make_run, prepare_build_directory, user_guide_step
 
 
 def test_note_behaves_as_its_message_string() -> None:
@@ -1775,8 +1775,8 @@ def test_migrated_shared_asset_is_staged_under_the_build(project: Path) -> None:
         move.destination.parent.mkdir(parents=True, exist_ok=True)
         move.source.rename(move.destination)
     gd = GreatDocs(str(project))
-    gd._prepare_build_directory(make_run())
-    gd._publish_user_guide(discover_user_guide(gd))
+    prepare_build_directory(gd, make_run(gd))
+    user_guide_step(gd, discover_user_guide(gd))
     page = gd.build_dir / "user-guide/start.qmd"
     assert "![Chart](../_shared/assets/chart.png)" in page.read_text()
     assert (gd.build_dir / "_shared/assets/chart.png").read_bytes() == b"chart"
@@ -2238,3 +2238,17 @@ def test_select_destination_exhausted_still_returns_website_and_analyse_still_bl
     assert destination == project / "website"
     result = analyse(layout, destination)
     assert any("already contains unrelated content" in message for message in result.blockers)
+
+
+def test_setup_py_name_is_read_from_the_name_keyword(tmp_path: Path):
+    put(tmp_path, "setup.py", 'username = "bob"\nsetup(name="realpkg")\n')
+    put(tmp_path, "great-docs.yml", "")
+    migration = analyse(Layout.make(tmp_path), Path("realpkg"))
+    assert any("overlaps package sources" in message for message in migration.blockers)
+
+
+def test_hatch_wheel_packages_are_package_sources(tmp_path: Path):
+    put(tmp_path, "pyproject.toml", '[tool.hatch.build.targets.wheel]\npackages = ["code/mypkg"]\n')
+    put(tmp_path, "great-docs.yml", "")
+    migration = analyse(Layout.make(tmp_path), Path("code/mypkg/docs"))
+    assert any("overlaps package sources" in message for message in migration.blockers)

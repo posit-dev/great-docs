@@ -10,6 +10,7 @@ from typing import Any, cast
 from yaml12 import format_yaml
 
 from ..._layout import Layout
+from ..._manifest import Manifest
 from ...config import Config
 from . import llms_txt
 
@@ -19,7 +20,7 @@ def compose(
     layout: Layout,
     build_dir: Path,
     distribution_name: str | None,
-    metadata: dict[str, Any],
+    metadata: Manifest,
     quarto_config: dict[str, Any],
 ) -> str:
     """

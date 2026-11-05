@@ -4637,17 +4637,17 @@ class TestGitRefRebuildKeepsSubmodulePages:
 
         entry = VersionEntry(label="0.1.0", tag="0.1.0", git_ref="v0.1.0")
         from great_docs._reference import documented
+        from great_docs._reference.exports import Exports
         from great_docs._versions.build import _rebuild_api_from_git_ref
-        from great_docs.core import GreatDocs
 
-        docs = GreatDocs(project_path=str(tmp_path))
+        exports = Exports.make(Layout.make(tmp_path))
 
         def documented_symbols(package_name: str) -> list[str]:
             return documented.symbol_names(
-                docs._config,
-                importable_name=docs._resolve_importable_name(package_name),
-                search_paths=docs._griffe_search_paths(),
-                create_sections=docs._create_api_sections_with_config,
+                exports.config,
+                importable_name=exports.project.module or package_name.replace("-", "_"),
+                search_paths=exports.project.search_paths(),
+                create_sections=exports.sections,
             )
 
         pages = _rebuild_api_from_git_ref(

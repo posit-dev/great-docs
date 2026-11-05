@@ -7,6 +7,8 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from great_docs import _manifest
+from great_docs._manifest import ManifestError
 from great_docs._subprocess import TEXT_MODE_KWARGS
 from great_docs._translations import get_translation
 
@@ -2184,7 +2186,7 @@ def api_diff(
     new_version
         New git tag (e.g., `"v2.0.0"`). Use `"HEAD"` for the working tree.
     package_name
-        Python package name. Auto-detected from pyproject.toml if omitted.
+        Python package name. Read from the project's metadata if omitted.
 
     Returns
     -------
@@ -2211,27 +2213,25 @@ def api_diff(
 
 
 def _detect_package_name(project_root: Path) -> str | None:
-    """Detect the package name from pyproject.toml."""
-    pyproject = project_root / "pyproject.toml"
-    if not pyproject.exists():
-        return None
+    """
+    Detect the package name from the project's metadata
 
+    Parameters
+    ----------
+    project_root
+        The directory holding the packaging files.
+
+    Returns
+    -------
+    :
+        The distribution name with hyphens replaced by underscores, or `None` when the project
+        declares no name or its metadata cannot be read.
+    """
     try:
-        try:
-            import tomllib
-        except ImportError:  # pragma: no cover
-            import tomli as tomllib  # pragma: no cover
-
-        with open(pyproject, "rb") as f:
-            data = tomllib.load(f)
-
-        name = data.get("project", {}).get("name")
-        if name:
-            return name.replace("-", "_")
-    except Exception:
-        pass
-
-    return None
+        name = _manifest.read(project_root)["name"]
+    except ManifestError:
+        return None
+    return name.replace("-", "_") if name else None
 
 
 # ---------------------------------------------------------------------------

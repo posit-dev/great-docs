@@ -15,7 +15,7 @@ from great_docs.config import (
     create_default_config,
     load_config,
 )
-from tests.support import make_run, write_config
+from tests.support import make_run, update_quarto_config, write_config
 
 
 @pytest.fixture
@@ -1408,7 +1408,9 @@ def test_site_quarto_excludes_css_and_legacy_keys(tmp_path: Path):
 
 
 def _quarto_config_for(tmp_path: Path, gd_yaml: str) -> dict:
-    """Build _quarto.yml via GreatDocs._update_quarto_config and return it parsed."""
+    """
+    Return the Quarto configuration assembled from the supplied project settings
+    """
     from great_docs import GreatDocs
     from great_docs._website import quarto_yml
 
@@ -1419,7 +1421,7 @@ def _quarto_config_for(tmp_path: Path, gd_yaml: str) -> dict:
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir(parents=True, exist_ok=True)
     quarto_yml.write_initial(docs.build_dir)
-    docs._update_quarto_config(make_run())
+    update_quarto_config(docs, make_run(docs))
     return quarto_yml.read(docs.build_dir)
 
 
@@ -1540,6 +1542,36 @@ class TestChangelogShorthand:
     def test_other_scalar_is_rejected(self, tmp_path: Path, value: str):
         with pytest.raises(ConfigError, match="great-docs.yml.*changelog.*true or false"):
             write_config(tmp_path, f"changelog: {value}\n")
+
+
+class TestPackageInfoPage:
+    def test_default_shows_release_dates(self, tmp_path: Path):
+        cfg = Config(tmp_path)
+        assert cfg.package_info_page is True
+        assert cfg.package_info_page_release_dates is True
+
+    @pytest.mark.parametrize("value", [True, False])
+    def test_bool_switches_the_page_and_keeps_release_dates(self, tmp_path: Path, value: bool):
+        cfg = write_config(tmp_path, f"package_info_page: {str(value).lower()}\n")
+        assert cfg.package_info_page is value
+        assert cfg.package_info_page_release_dates is True
+
+    def test_mapping_without_enabled_keeps_the_page(self, tmp_path: Path):
+        cfg = write_config(tmp_path, "package_info_page:\n  release_dates: false\n")
+        assert cfg.package_info_page is True
+        assert cfg.package_info_page_release_dates is False
+
+    def test_mapping_can_disable_the_page(self, tmp_path: Path):
+        cfg = write_config(tmp_path, "package_info_page:\n  enabled: false\n")
+        assert cfg.package_info_page is False
+
+    def test_null_disables_the_page(self, tmp_path: Path):
+        assert write_config(tmp_path, "package_info_page:\n").package_info_page is False
+
+    @pytest.mark.parametrize("value", ["yes please", "5", "[]"])
+    def test_other_value_is_rejected(self, tmp_path: Path, value: str):
+        with pytest.raises(ConfigError, match="great-docs.yml.*package_info_page.*true or false"):
+            write_config(tmp_path, f"package_info_page: {value}\n")
 
 
 class TestSeoShorthandNormalization:
@@ -1687,7 +1719,6 @@ class TestSingleSourceInvariant:
             "github_style",
             "homepage",
             "attribution",
-            "package_info_page",
             "back_to_top",
             "keyboard_nav",
             "dark_mode_toggle",

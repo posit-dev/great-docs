@@ -578,7 +578,12 @@ nav_icons: {}
 keyboard_nav: true
 
 # Auto-generated package-info page (dependency details), linked from homepage Meta.
-package_info_page: true
+# : type(map) - (default) configure page generation and release dates, as below
+# : true - generate the page with release dates
+# : false - disable page generation
+package_info_page:
+  enabled: true # Generate the page
+  release_dates: true # Query PyPI once per dependency on each build for its latest release date
 
 # Back-to-top floating button.
 back_to_top: true

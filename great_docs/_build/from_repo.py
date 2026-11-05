@@ -13,14 +13,15 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import tomllib
 import venv
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from yaml12 import read_yaml
 
+from .. import _manifest
 from .._layout import Layout, LayoutError
+from .._manifest import ManifestError
 from .._subprocess import TEXT_MODE_KWARGS
 from .._utils import record_site_ownership, validate_site_dir
 from .._yaml import YamlMapping, YamlValue
@@ -167,15 +168,13 @@ def install_extras(project_dir: Path) -> str:
     -------
     :
         The groups among `dev`, `docs`, `doc` and `all` that `pyproject.toml` defines, joined
-        by commas, such as `"dev,docs"`. An empty string when none are defined or the file is
-        unreadable or malformed.
+        by commas, such as `"dev,docs"`. An empty string when none are defined or a packaging
+        file cannot be read or parsed.
     """
     try:
-        with (project_dir / "pyproject.toml").open("rb") as file:
-            manifest = YamlMapping(tomllib.load(file))
-    except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError):
+        groups = _manifest.read(project_dir)["optional_dependencies"]
+    except ManifestError:
         return ""
-    groups = manifest.mapping("project").mapping("optional-dependencies")
     return ",".join(group for group in _DOCS_EXTRAS if group in groups)
 
 

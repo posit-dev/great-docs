@@ -24,6 +24,9 @@ from urllib.parse import urlencode
 
 from ._build import serve
 from ._github import GithubRepo, token_from_env
+from ._layout import Layout
+from ._project import Project
+from .config import Config
 
 GITHUB_API = "https://api.github.com"
 DEFAULT_WORKFLOW_NAME = "CI Docs"
@@ -73,17 +76,30 @@ def _git_remote_repo(project_path: str | Path | None) -> tuple[str, str] | None:
 
 
 def _config_repo(project_path: str | Path | None) -> tuple[str, str] | None:
-    """Fall back to repo info from great-docs.yml / pyproject via GreatDocs."""
-    try:
-        from .core import GreatDocs
+    """
+    Read the project's GitHub repository from `great-docs.yml` or its packaging files
 
-        docs = GreatDocs(project_path=project_path)
-        owner, repo, _ = docs._get_github_repo_info()
-        if owner and repo:
-            return owner, repo
-    except Exception:
+    Parameters
+    ----------
+    project_path
+        The project directory, or `None` for the current directory.
+
+    Returns
+    -------
+    :
+        The repository's owner and name, or `None` when no GitHub repository is identified
+        or the project's layout, configuration or files cannot be read.
+    """
+    try:
+        layout = Layout.make(Path(project_path or os.getcwd()))
+        config = Config(
+            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
+        )
+        github = Project.make(config, layout).github
+    except (ValueError, OSError):
+        # `LayoutError` and `ConfigError` are `ValueError`s.
         return None
-    return None
+    return (github.owner, github.name) if github else None
 
 
 def resolve_repo(

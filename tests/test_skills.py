@@ -6,6 +6,7 @@ from pathlib import Path
 
 from great_docs._website.ai_agents.skills import SkillsWriter
 from great_docs.core import GreatDocs
+from tests.support import make_project
 
 
 def test_skill_md_comes_from_first_published_skill_when_first_entry_is_skipped(tmp_path: Path):
@@ -28,8 +29,8 @@ def test_skill_md_comes_from_first_published_skill_when_first_entry_is_skipped(t
         docs._config,
         docs.layout,
         docs.build_dir,
-        docs._detect_package_name(),
-        docs._get_package_metadata(),
+        make_project(docs).name,
+        make_project(docs).manifest,
     ).write()
 
     page = (docs.build_dir / "skills.qmd").read_text(encoding="utf-8")

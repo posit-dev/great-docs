@@ -14,10 +14,10 @@ from yaml12 import format_yaml
 from .._source_refs import source_reference_spans
 from .._yaml import YamlMapping, locate_front_matter, set_front_matter_option, split_front_matter
 from . import code_includes
-from .naming import fix_numeric_prefix_links
+from .naming import fix_numeric_prefix_links, published_path
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
     from .._layout import Layout
     from .pages import PageMap
@@ -120,6 +120,68 @@ def copy_asset(layout: Layout, source: Path, destination: Path) -> Path:
         destination.parent.mkdir(parents=True, exist_ok=True)
         _ = shutil.copy2(source, destination)
     return destination
+
+
+def copy_directory_metadata(
+    layout: Layout,
+    pages: Iterable[Path],
+    source_dir: Path,
+    dest_dir: Path,
+    *,
+    strip_prefix: bool,
+    report: Callable[[str], None],
+) -> None:
+    """
+    Copy directory metadata alongside published pages
+
+    Quarto applies directory metadata to the pages beneath it. Copy `_metadata.yml`
+    and `_metadata.yaml` from `source_dir` and each ancestor directory of a page
+    within that tree. Skip paths with directory names beginning with `_` or `.`,
+    where Quarto renders no pages. Keep existing destination files to preserve
+    metadata written by the build, and report each skipped source file.
+
+    Parameters
+    ----------
+    layout
+        The project's directories.
+    pages
+        Source pages that were copied into `dest_dir`.
+    source_dir
+        Root of the source tree the pages came from.
+    dest_dir
+        Build directory that mirrors `source_dir`.
+    strip_prefix
+        Whether to strip numeric prefixes from directory names to match the
+        published page paths.
+    report
+        A callable that shows a warning for each skipped source file.
+
+    Returns
+    -------
+    :
+    """
+    directories = {Path()}
+    for page in pages:
+        if page.is_relative_to(source_dir):
+            directories.update(page.relative_to(source_dir).parents)
+
+    for rel_dir in sorted(directories):
+        if any(part.startswith(("_", ".")) for part in rel_dir.parts):
+            continue
+        dest_rel = published_path(rel_dir, strip_prefix=strip_prefix)
+        for name in ("_metadata.yml", "_metadata.yaml"):
+            src_file = source_dir / rel_dir / name
+            if not src_file.is_file():
+                continue
+            dst_file = dest_dir / dest_rel / name
+            if dst_file.exists():
+                report(
+                    f"Skipping {src_file}: the build already wrote "
+                    f"{dst_file.relative_to(layout.build_dir).as_posix()}"
+                )
+                continue
+            dst_file.parent.mkdir(parents=True, exist_ok=True)
+            _ = shutil.copy2(src_file, dst_file)
 
 
 def rebase_references(

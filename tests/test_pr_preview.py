@@ -560,50 +560,26 @@ def test_git_remote_repo_none_path(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_config_repo_success(monkeypatch):
-    class FakeGreatDocs:
-        def __init__(self, project_path=None):
-            pass
-
-        def _get_github_repo_info(self):
-            return ("posit-dev", "great-docs", "main")
-
-    monkeypatch.setattr(
-        "great_docs._pr_preview.GreatDocs",
-        FakeGreatDocs,
-        raising=False,
+def test_config_repo_reads_the_project_urls(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\n\n[project.urls]\n'
+        'Repository = "https://github.com/posit-dev/great-docs"\n',
+        encoding="utf-8",
     )
-    # We need to mock the import that happens inside _config_repo
-    import great_docs.core
-
-    monkeypatch.setattr(great_docs.core, "GreatDocs", FakeGreatDocs)
-    result = pp._config_repo("/some/path")
-    assert result == ("posit-dev", "great-docs")
+    assert pp._config_repo(tmp_path) == ("posit-dev", "great-docs")
 
 
-def test_config_repo_returns_none_on_exception(monkeypatch):
-    import great_docs.core
-
-    class BadGreatDocs:
-        def __init__(self, project_path=None):
-            raise RuntimeError("can't load")
-
-    monkeypatch.setattr(great_docs.core, "GreatDocs", BadGreatDocs)
-    assert pp._config_repo("/some/path") is None
+def test_config_repo_returns_none_for_an_ambiguous_layout(tmp_path: Path):
+    # Configuration files in the root and in `docs/` make the layout unreadable.
+    (tmp_path / "great-docs.yml").write_text("repo: https://github.com/a/b\n", encoding="utf-8")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "great-docs.yml").write_text("", encoding="utf-8")
+    assert pp._config_repo(tmp_path) is None
 
 
-def test_config_repo_returns_none_when_empty(monkeypatch):
-    import great_docs.core
-
-    class EmptyGreatDocs:
-        def __init__(self, project_path=None):
-            pass
-
-        def _get_github_repo_info(self):
-            return ("", "", "")
-
-    monkeypatch.setattr(great_docs.core, "GreatDocs", EmptyGreatDocs)
-    assert pp._config_repo("/some/path") is None
+def test_config_repo_returns_none_without_a_github_repository(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n', encoding="utf-8")
+    assert pp._config_repo(tmp_path) is None
 
 
 # ---------------------------------------------------------------------------

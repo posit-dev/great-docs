@@ -24,6 +24,7 @@ __all__ = [
     "StepError",
     "Warn",
     "count_listed",
+    "print_warning",
     "run_steps",
 ]
 
@@ -160,6 +161,22 @@ def count_listed(steps: Sequence[Step]) -> int:
         The total that the build log shows in each heading.
     """
     return sum(step.listed for step in steps)
+
+
+def print_warning(message: str) -> None:
+    """
+    Print a warning as a detail line in the current build step
+
+    Parameters
+    ----------
+    message
+        The warning text.
+
+    Returns
+    -------
+    :
+    """
+    print(f"   ⚠️  {message}")
 
 
 def run_steps(steps: Sequence[Step], log: BuildLog, build_dir: Path) -> None:

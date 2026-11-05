@@ -17,7 +17,7 @@ from great_docs._build.quarto import QuartoVersionError
 from great_docs.cli import (
     _detect_current_package,
     _detect_optional_dependencies,
-    _detect_python_version_from_pyproject,
+    _detect_python_version,
     _find_build_timing,
     _format_seconds,
     _freeze_info,
@@ -303,7 +303,6 @@ def test_layout_notice_once_per_build_or_preview_session(
         page = "---\nresources:\n  - missing.png\n---\n" + page
     (source / "index.qmd").write_text(page)
     docs = GreatDocs(str(tmp_path))
-    run = subprocess.run
     popen = subprocess.Popen
     rendered: list[Path] = []
 
@@ -313,16 +312,11 @@ def test_layout_notice_once_per_build_or_preview_session(
         (site / "index.html").write_text("<html>Documentation</html>")
         rendered.append(build_dir)
 
-    def run_quarto(
-        command: list[str], *args: object, **kwargs: object
-    ) -> subprocess.CompletedProcess:
+    def start_quarto(command: list[str], *args: object, **kwargs: object) -> object:
         if command[:2] == ["quarto", "preview"]:
             for _ in range(3):
                 render(Path(str(kwargs["cwd"])))
-            return subprocess.CompletedProcess(command, 0)
-        return run(command, *args, **kwargs)
-
-    def start_quarto(command: list[str], *args: object, **kwargs: object) -> object:
+            return MagicMock(**{"poll.return_value": 0, "wait.return_value": 0})
         if command[:2] == ["quarto", "render"]:
             if mode == "render-error":
                 return MagicMock(stdout=iter([]), stderr=iter(["Render failed"]), returncode=1)
@@ -337,8 +331,8 @@ def test_layout_notice_once_per_build_or_preview_session(
             render(build_dir)
         return [(str(build_dir), 0, "", "", []) for build_dir in build_dirs]
 
-    monkeypatch.setattr(subprocess, "run", run_quarto)
     monkeypatch.setattr(subprocess, "Popen", start_quarto)
+    monkeypatch.setattr("great_docs._build.watch.source_changes", lambda *_: iter(()))
     monkeypatch.setattr("great_docs._versions.build.render_versions_parallel", render_versions)
     monkeypatch.setattr("http.server.ThreadingHTTPServer", MagicMock())
     monkeypatch.setattr("threading.Timer", MagicMock())
@@ -803,55 +797,55 @@ def test_detect_python_version_ge():
     """Parses >=3.12 and returns '3.12'."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text('[project]\nrequires-python = ">=3.12"\n')
-        assert _detect_python_version_from_pyproject(Path(tmp)) == "3.12"
+        assert _detect_python_version(Path(tmp)) == "3.12"
 
 
 def test_detect_python_version_tilde():
     """Parses ~=3.11 and returns '3.11'."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text('[project]\nrequires-python = "~=3.11"\n')
-        assert _detect_python_version_from_pyproject(Path(tmp)) == "3.11"
+        assert _detect_python_version(Path(tmp)) == "3.11"
 
 
 def test_detect_python_version_range():
     """Parses >=3.10,<3.13 and returns '3.10'."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text('[project]\nrequires-python = ">=3.10,<3.13"\n')
-        assert _detect_python_version_from_pyproject(Path(tmp)) == "3.10"
+        assert _detect_python_version(Path(tmp)) == "3.10"
 
 
 def test_detect_python_version_no_pyproject():
     """Returns None when pyproject.toml doesn't exist."""
     with tempfile.TemporaryDirectory() as tmp:
-        assert _detect_python_version_from_pyproject(Path(tmp)) is None
+        assert _detect_python_version(Path(tmp)) is None
 
 
 def test_detect_python_version_no_requires():
     """Returns None when requires-python is absent."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text('[project]\nname = "x"\n')
-        assert _detect_python_version_from_pyproject(Path(tmp)) is None
+        assert _detect_python_version(Path(tmp)) is None
 
 
 def test_detect_python_version_no_version_match():
     """Returns None when requires-python doesn't contain a valid version."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text('[project]\nrequires-python = "no-version"\n')
-        assert _detect_python_version_from_pyproject(Path(tmp)) is None
+        assert _detect_python_version(Path(tmp)) is None
 
 
 def test_detect_python_version_other_specifier():
     """For non->=, non-~= specifiers, returns the highest version."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text('[project]\nrequires-python = "==3.11"\n')
-        assert _detect_python_version_from_pyproject(Path(tmp)) == "3.11"
+        assert _detect_python_version(Path(tmp)) == "3.11"
 
 
 def test_detect_python_version_malformed_toml():
     """Returns None on invalid TOML."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "pyproject.toml").write_text("not valid {{toml")
-        assert _detect_python_version_from_pyproject(Path(tmp)) is None
+        assert _detect_python_version(Path(tmp)) is None
 
 
 def test_detect_optional_deps_with_dev():
@@ -1042,6 +1036,44 @@ def test_seo_fix_missing_files(tmp_path, monkeypatch):
     result = runner.invoke(cli, ["seo", "--fix", "--project-path", "."])
     # Should attempt fix operations
     assert result.exit_code in (0, 1)
+
+
+@pytest.fixture
+def bare_name_author(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A GitHub-hosted project whose `authors` entry is a bare name instead of a mapping"""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\n\n[project.urls]\nRepository = "https://github.com/owner/pkg"\n'
+    )
+    (tmp_path / "great-docs.yml").write_text("authors:\n  - Jane Doe\n")
+    (tmp_path / "README.md").write_text("# Pkg\n\nPerfect text.\n")
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+def test_seo_runs_with_a_bare_name_author(bare_name_author: Path):
+    site = bare_name_author / "great-docs" / "_site"
+    site.mkdir(parents=True)
+    (site / "index.html").write_text("<html><head><title>Pkg</title></head></html>")
+
+    result = CliRunner().invoke(cli, ["seo", "--project-path", "."])
+    assert "sitemap.xml not found" in result.output
+
+
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+def test_proofread_runs_with_a_bare_name_author(
+    mock_check: MagicMock, mock_run: MagicMock, bare_name_author: Path
+):
+    result = CliRunner().invoke(cli, ["proofread", "README.md", "--project-path", "."])
+    assert result.exit_code == 0, result.output
+    assert "No issues" in result.output
+
+
+@patch("great_docs._website.changelog.write_page", return_value=None)
+def test_changelog_runs_with_a_bare_name_author(mock_write: MagicMock, bare_name_author: Path):
+    result = CliRunner().invoke(cli, ["changelog", "--project-path", "."])
+    assert result.exit_code == 0, result.output
+    assert "No published releases" in result.output
 
 
 def test_lint_help():
@@ -2379,6 +2411,33 @@ def test_api_snapshot_all_tags_differ(tmp_path: Path):
     assert set(s1) != set(s2)
 
 
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["scan"],
+        ["lint"],
+        ["api-snapshot", "v0.1.0"],
+        ["api-diff", "v0.1.0", "v0.1.0", "--graph"],
+    ],
+)
+def test_export_commands_run_with_a_bare_name_author(tmp_path: Path, args: list[str]):
+    _git(tmp_path, "init")
+    _git(tmp_path, "config", "user.email", "t@t.co")
+    _git(tmp_path, "config", "user.name", "t")
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+    (tmp_path / "mypkg").mkdir()
+    (tmp_path / "mypkg" / "__init__.py").write_text(
+        '"""A package."""\n\n__all__ = ["f"]\n\n\ndef f() -> None:\n    """Do nothing."""\n'
+    )
+    (tmp_path / "great-docs.yml").write_text("authors:\n  - Jane Doe\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-m", "v010")
+    _git(tmp_path, "tag", "v0.1.0")
+
+    result = CliRunner().invoke(cli, [*args, "--project-path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+
+
 class TestFormatSeconds:
     def test_under_sixty(self):
         assert _format_seconds(5.0) == "5.0s"
@@ -3188,15 +3247,11 @@ class TestProofreadMissedBranches:
         user_guide.mkdir()
         (user_guide / "page.qmd").write_text("This text has no errors.")
 
-    @patch("great_docs.cli.GreatDocs")
     @patch("great_docs._checks.harper.run_harper")
-    def test_auto_discover_user_guide(self, mock_harper, mock_gd_cls, tmp_path, monkeypatch):
+    def test_auto_discover_user_guide(self, mock_harper, tmp_path, monkeypatch):
         """Without --file, auto-discovers user_guide/*.qmd."""
         monkeypatch.chdir(tmp_path)
         self._make_project(tmp_path)
-        mock_docs = MagicMock()
-        mock_docs.project_root = tmp_path
-        mock_gd_cls.return_value = mock_docs
         mock_harper.return_value = []
         runner = CliRunner()
         result = runner.invoke(
@@ -3205,17 +3260,13 @@ class TestProofreadMissedBranches:
         )
         assert result.exit_code in (0, 1, 3)  # 3 = harper not found, 1 = issues found
 
-    @patch("great_docs.cli.GreatDocs")
     @patch("great_docs._checks.harper.run_harper")
-    def test_dictionary_file_read(self, mock_harper, mock_gd_cls, tmp_path, monkeypatch):
+    def test_dictionary_file_read(self, mock_harper, tmp_path, monkeypatch):
         """--dictionary file is read line by line, skipping comments."""
         monkeypatch.chdir(tmp_path)
         self._make_project(tmp_path)
         dict_file = tmp_path / "custom.txt"
         dict_file.write_text("# comment\nmyword\nanother\n")
-        mock_docs = MagicMock()
-        mock_docs.project_root = tmp_path
-        mock_gd_cls.return_value = mock_docs
         mock_harper.return_value = []
         runner = CliRunner()
         result = runner.invoke(
@@ -3224,15 +3275,11 @@ class TestProofreadMissedBranches:
         )
         assert result.exit_code in (0, 3)
 
-    @patch("great_docs.cli.GreatDocs")
     @patch("great_docs._checks.harper.run_harper")
-    def test_spelling_only_flag(self, mock_harper, mock_gd_cls, tmp_path, monkeypatch):
+    def test_spelling_only_flag(self, mock_harper, tmp_path, monkeypatch):
         """--spelling-only sets only_rules=["SpellCheck"]."""
         monkeypatch.chdir(tmp_path)
         self._make_project(tmp_path)
-        mock_docs = MagicMock()
-        mock_docs.project_root = tmp_path
-        mock_gd_cls.return_value = mock_docs
         mock_harper.return_value = []
         runner = CliRunner()
         result = runner.invoke(
@@ -3262,17 +3309,11 @@ class TestProofreadMissedBranches:
         assert mock_text.call_count == 2
         assert "Spelling::SpellCheck: Misspelled" in result.output
 
-    @patch("great_docs.cli.GreatDocs")
     @patch("great_docs._checks.harper.run_harper")
-    def test_verbose_no_issues_shows_checkmark(
-        self, mock_harper, mock_gd_cls, tmp_path, monkeypatch
-    ):
+    def test_verbose_no_issues_shows_checkmark(self, mock_harper, tmp_path, monkeypatch):
         """--verbose with no issues shows ✅ per file."""
         monkeypatch.chdir(tmp_path)
         self._make_project(tmp_path)
-        mock_docs = MagicMock()
-        mock_docs.project_root = tmp_path
-        mock_gd_cls.return_value = mock_docs
 
         from great_docs._checks.harper import HarperFileResult
 
@@ -3353,17 +3394,17 @@ class TestSeoMissedBranches:
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
         runner = CliRunner()
-        with patch("great_docs.cli.GreatDocs", side_effect=RuntimeError("boom")):
+        with patch("great_docs.cli.Config", side_effect=RuntimeError("boom")):
             result = runner.invoke(cli, ["seo", "--project-path", str(tmp_path)])
         assert result.exit_code == 1
-        assert "Error" in result.output
+        assert "Error: boom" in result.output
 
     def test_seo_json_exception_path(self, tmp_path, monkeypatch):
         """An exception with --json outputs JSON error object."""
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
         runner = CliRunner()
-        with patch("great_docs.cli.GreatDocs", side_effect=RuntimeError("boom")):
+        with patch("great_docs.cli.Config", side_effect=RuntimeError("boom")):
             result = runner.invoke(cli, ["seo", "--json", "--project-path", str(tmp_path)])
         assert result.exit_code == 1
         assert "error" in result.output
@@ -3670,20 +3711,14 @@ class TestTermshowMissedBranches:
 
 
 class TestProofreadDictFileException:
-    @patch("great_docs.cli.GreatDocs")
     @patch("great_docs._checks.harper.run_harper")
-    def test_dict_file_read_exception_shows_warning(
-        self, mock_harper, mock_gd_cls, tmp_path, monkeypatch
-    ):
+    def test_dict_file_read_exception_shows_warning(self, mock_harper, tmp_path, monkeypatch):
         """Exception reading --dictionary file shows a warning and continues."""
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
         ug = tmp_path / "user_guide"
         ug.mkdir()
         (ug / "page.qmd").write_text("This text has no errors.")
-        mock_docs = MagicMock()
-        mock_docs.project_root = tmp_path
-        mock_gd_cls.return_value = mock_docs
         mock_harper.return_value = []
         # Use a dict file that doesn't exist → triggers the except block
         runner = CliRunner()
@@ -3858,29 +3893,13 @@ class TestDetectCurrentPackage:
         (tmp_path / "pyproject.toml").write_text("{{invalid toml content")
         assert _detect_current_package(tmp_path) is None
 
-    def test_tomllib_import_fallback(self, tmp_path):
-        """When tomllib import fails, falls back to tomli."""
-        import sys
+    def test_returns_name_from_setup_cfg(self, tmp_path):
+        (tmp_path / "setup.cfg").write_text("[metadata]\nname = cfg-pkg\n")
+        assert _detect_current_package(tmp_path) == "cfg-pkg"
 
-        (tmp_path / "pyproject.toml").write_text('[project]\nname = "fallback-pkg"\n')
-        # Temporarily hide tomllib to force the ImportError fallback
-        real_tomllib = sys.modules.get("tomllib")
-        sys.modules["tomllib"] = None  # type: ignore[assignment]
-        try:
-            # Force re-import by calling the function (the try/except inside
-            # uses a local import so we need to trigger the ImportError)
-            import importlib
-
-            # The function uses a local `import tomllib` which will check
-            # sys.modules first. Setting to None triggers ImportError.
-            result = _detect_current_package(tmp_path)
-            # Either succeeds via tomli or returns None (no tomli installed)
-            # Either way, lines 3371-3372 are exercised
-        finally:
-            if real_tomllib is not None:
-                sys.modules["tomllib"] = real_tomllib
-            else:
-                del sys.modules["tomllib"]
+    def test_returns_name_from_poetry(self, tmp_path):
+        (tmp_path / "pyproject.toml").write_text('[tool.poetry]\nname = "poetry-pkg"\n')
+        assert _detect_current_package(tmp_path) == "poetry-pkg"
 
 
 class TestPrintTimingTableVersionedTop:
@@ -3925,7 +3944,7 @@ class TestFreezeFileSearchFallback:
 
         runner = CliRunner()
         with (
-            patch("great_docs.cli.GreatDocs") as mock_gd,
+            patch("great_docs._build.pipeline.prepare_for_freeze"),
             patch("subprocess.run") as mock_run,
         ):
             mock_run.return_value = MagicMock(returncode=0, stderr="")
@@ -3944,7 +3963,7 @@ class TestFreezeFileSearchFallback:
 
         runner = CliRunner()
         with (
-            patch("great_docs.cli.GreatDocs") as mock_gd,
+            patch("great_docs._build.pipeline.prepare_for_freeze"),
             patch("subprocess.run") as mock_run,
         ):
             mock_run.return_value = MagicMock(returncode=0, stderr="")
@@ -3963,7 +3982,7 @@ class TestFreezeFileSearchFallback:
 
         runner = CliRunner()
         with (
-            patch("great_docs.cli.GreatDocs") as mock_gd,
+            patch("great_docs._build.pipeline.prepare_for_freeze"),
             patch("subprocess.run") as mock_run,
         ):
             mock_run.return_value = MagicMock(returncode=0, stderr="")
@@ -3981,7 +4000,7 @@ class TestFreezeFileSearchFallback:
         self._setup_project(tmp_path, None)
 
         runner = CliRunner()
-        with patch("great_docs.cli.GreatDocs") as mock_gd:
+        with patch("great_docs._build.pipeline.prepare_for_freeze"):
             result = runner.invoke(
                 cli,
                 ["freeze", "missing.qmd", "--project-path", str(tmp_path)],
@@ -4010,7 +4029,7 @@ class TestFreezePersistCache:
         other.write_text('{"page": "other"}')
 
         with (
-            patch("great_docs.cli.GreatDocs"),
+            patch("great_docs._build.pipeline.prepare_for_freeze"),
             patch("subprocess.run", return_value=MagicMock(returncode=0, stderr="")),
         ):
             result = CliRunner().invoke(
@@ -4049,7 +4068,7 @@ class TestFreezePersistCache:
 
         runner = CliRunner()
         with (
-            patch("great_docs.cli.GreatDocs") as mock_gd,
+            patch("great_docs._build.pipeline.prepare_for_freeze"),
             patch("subprocess.run") as mock_run,
         ):
             mock_run.return_value = MagicMock(returncode=0, stderr="")
@@ -4079,7 +4098,7 @@ class TestFreezePersistCache:
 
         runner = CliRunner()
         with (
-            patch("great_docs.cli.GreatDocs") as mock_gd,
+            patch("great_docs._build.pipeline.prepare_for_freeze"),
             patch("subprocess.run") as mock_run,
         ):
             mock_run.return_value = MagicMock(returncode=0, stderr="")
@@ -4524,10 +4543,7 @@ class TestApiDiffGraphHead:
         mock_graph.return_value = graph_result
 
         runner = CliRunner()
-        with (
-            patch("great_docs.core.GreatDocs"),
-            patch("great_docs._reference.documented.symbol_names", return_value=["A"]),
-        ):
+        with patch("great_docs._reference.documented.symbol_names", return_value=["A"]):
             result = runner.invoke(
                 cli,
                 [

@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
+from .._manifest import Manifest
 from .._versions import selector as version_selector
 from . import (
     appearance,
@@ -50,7 +51,7 @@ def assemble(
     facts: Facts,
     identity: Identity,
     package_name: str | None,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     has_api_reference: bool,
     report: Callable[[str], None],
     warn: Callable[[str], None],

@@ -15,13 +15,14 @@ from typing import TYPE_CHECKING, Any
 from yaml12 import format_yaml
 
 from ..._content import publish
+from ..._manifest import Manifest
 from ..._yaml import YamlValue, locate_front_matter, set_front_matter_option
 from ..project_pages import community
 from ..seo import description as seo_description
 from . import hero, landing, margin, readme, source
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable
     from pathlib import Path
 
     from ..._content.pages import PageMap
@@ -121,13 +122,12 @@ def write_readme(
     layout: Layout,
     build_dir: Path,
     *,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     package_name: str | None,
     pages: PageMap,
     page_authors: list[dict[str, Any]],
     has_api_reference: bool,
     has_user_guide: Callable[[], bool],
-    rebuild: bool,
     report: Callable[[str], None],
 ) -> Path:
     """
@@ -160,8 +160,6 @@ def write_readme(
         A callback that reports whether the site has a user guide. User guide discovery
         reports directory problems, so the callback is called only for a landing page,
         which links to the guide when present.
-    rebuild
-        Whether to report that `index.qmd` is being rebuilt rather than created.
     report
         A callback that receives progress messages and warnings.
 
@@ -193,10 +191,7 @@ def write_readme(
         )
     else:
         source_file = sources[0]
-        if rebuild:
-            report(f"Rebuilding index.qmd from {source_file.name}...")
-        else:
-            report(f"Creating index.qmd from {source_file.name}...")
+        report(f"Rebuilding index.qmd from {source_file.name}...")
         authored = source.read(source_file, report=report)
         title = authored.title
         page_description = dict(authored.description)
@@ -281,7 +276,7 @@ def write_blended(
     build_dir: Path,
     content: str,
     *,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     package_name: str | None,
     pages: PageMap,
     page_authors: list[dict[str, Any]],
@@ -367,7 +362,7 @@ def _hero(
     build_dir: Path,
     readme_text: str | None,
     *,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     package_name: str | None,
     pages: PageMap,
 ) -> tuple[str, str | None]:
@@ -417,7 +412,7 @@ def _sidebar(
     layout: Layout,
     build_dir: Path,
     *,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     package_name: str | None,
     page_authors: list[dict[str, Any]],
 ) -> str:

@@ -278,3 +278,40 @@ def test_a_link_to_a_missing_page_loses_its_numeric_prefixes(tmp_path: Path, lay
     )
 
     assert destination.read_text() == "[Gone](basics/missing.qmd#top)\n"
+
+
+def test_directory_metadata_follows_its_pages_and_keeps_the_build_s_files(
+    tmp_path: Path, layout: Layout
+):
+    source = tmp_path / "guide"
+    files = {
+        "_metadata.yml": "toc: false\n",
+        "01-part/_metadata.yaml": "number-sections: true\n",
+        "01-part/01-page.qmd": "# Page\n",
+        "_drafts/_metadata.yml": "draft: true\n",
+        "_drafts/draft.qmd": "# Draft\n",
+    }
+    for name, text in files.items():
+        (source / name).parent.mkdir(parents=True, exist_ok=True)
+        (source / name).write_text(text)
+    destination = layout.build_dir / "guide"
+    (destination / "part").mkdir(parents=True)
+    (destination / "part/_metadata.yaml").write_text("written: by the build\n")
+    reports: list[str] = []
+
+    publish.copy_directory_metadata(
+        layout,
+        [source / "01-part/01-page.qmd", source / "_drafts/draft.qmd"],
+        source,
+        destination,
+        strip_prefix=True,
+        report=reports.append,
+    )
+
+    assert (destination / "_metadata.yml").read_text() == "toc: false\n"
+    assert (destination / "part/_metadata.yaml").read_text() == "written: by the build\n"
+    assert not (destination / "_drafts").exists()
+    assert reports == [
+        f"Skipping {source / '01-part/_metadata.yaml'}: the build already wrote "
+        "guide/part/_metadata.yaml"
+    ]

@@ -12,6 +12,7 @@ from html import escape
 from typing import TYPE_CHECKING, Any
 
 from ..._content import publish
+from ..._manifest import Manifest
 from .. import branding
 from ..scripts import script_tag
 from .readme import Badge, HeroElements, extract_hero_elements
@@ -118,7 +119,7 @@ def render(
     layout: Layout,
     build_dir: Path,
     *,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     package_name: str | None,
     pages: PageMap,
 ) -> str:

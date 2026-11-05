@@ -9,18 +9,21 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import click
 
-from . import __version__
+from . import __version__, _manifest
 from ._build import freeze as freeze_cache
 from ._build import from_repo as repository
-from ._build import quarto, serve
-from ._build.steps import BuildError
+from ._build import quarto, serve, site
+from ._build.steps import BuildError, print_warning
 from ._content import user_guide
-from ._github import GithubRepo
 from ._install import update_gitignore
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
+from ._manifest import ManifestError
+from ._project import Project
+from ._reference.exports import Exports
+from ._remote import HttpRemote
 from ._website import changelog as changelog_page
 from ._website import quarto_yml
-from .config import ConfigError
+from .config import Config, ConfigError
 from .core import GreatDocs
 
 if TYPE_CHECKING:
@@ -62,55 +65,42 @@ def _config_option(function: Callable[..., Any]) -> Callable[..., Any]:
     return selected
 
 
-def _detect_python_version_from_pyproject(project_root: Path) -> str | None:
-    """Detect the minimum Python version from pyproject.toml.
-
-    Parses the `requires-python` field (e.g., '>=3.12', '>=3.10,<3.13')
-    and returns a suitable Python version string for CI (e.g., '3.12').
-
-    Returns None if pyproject.toml doesn't exist or has no version requirement.
+def _detect_python_version(project_root: Path) -> str | None:
     """
-    pyproject_path = project_root / "pyproject.toml"
-    if not pyproject_path.exists():
-        return None
+    Choose the Python version a documentation workflow runs on
 
+    Parameters
+    ----------
+    project_root
+        The directory holding the packaging files.
+
+    Returns
+    -------
+    :
+        A `major.minor` version from the project's Python requirement. For a requirement
+        containing `>=` or `~=`, the first version (the lower bound), such as `3.10` for
+        `>=3.10,<3.13`; otherwise, the highest version named. `None` when the project declares
+        no requirement, the requirement names no version, or the metadata cannot be read.
+    """
     try:
-        # Use tomllib (Python 3.11+) or tomli as fallback
-        try:
-            import tomllib
-        except ImportError:  # pragma: no cover
-            import tomli as tomllib  # pragma: no cover
-
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-
-        requires_python = data.get("project", {}).get("requires-python")
-        if not requires_python:
-            return None
-
-        # Parse version specifier to find minimum version
-        # Common patterns: ">=3.12", ">=3.10,<3.13", "~=3.11", ">=3.9"
-        # Extract versions from specifiers
-        version_pattern = r"(\d+\.\d+)"
-        matches = re.findall(version_pattern, requires_python)
-
-        if not matches:
-            return None
-
-        # For >= specifiers, use the specified version
-        if ">=" in requires_python or "~=" in requires_python:
-            # Return the first (minimum) version found
-            return matches[0]
-
-        # For other specifiers, try to pick a reasonable version
-        # Find the highest version mentioned (likely the target)
-        versions = [tuple(map(int, v.split("."))) for v in matches]
-        max_version = max(versions)
-        return f"{max_version[0]}.{max_version[1]}"
-
-    except Exception:
-        # If parsing fails, return None to use default
+        requires_python = _manifest.read(project_root)["requires_python"]
+    except ManifestError:
         return None
+
+    # CI uses major.minor versions, for example from `>=3.12`, `>=3.10,<3.13`,
+    # `~=3.11` or `>=3.9`.
+    matches = re.findall(r"(\d+\.\d+)", requires_python)
+    if not matches:
+        return None
+
+    # Treat the first version as the lower bound for `>=` and `~=` requirements.
+    if ">=" in requires_python or "~=" in requires_python:
+        return matches[0]
+
+    # Other specifiers use the highest named version as the likely CI target.
+    versions = [tuple(map(int, v.split("."))) for v in matches]
+    max_version = max(versions)
+    return f"{max_version[0]}.{max_version[1]}"
 
 
 def _detect_package_manager(project_root: Path) -> str:
@@ -132,43 +122,29 @@ def _detect_package_manager(project_root: Path) -> str:
 
 
 def _detect_optional_dependencies(project_root: Path) -> list[str]:
-    """Detect optional dependency groups from pyproject.toml.
-
-    Returns a list of optional dependency group names that are likely
-    related to documentation or development (e.g., 'dev', 'docs', 'test').
-
-    This helps generate appropriate pip install commands like:
-    pip install -e ".[dev,docs]"
     """
-    pyproject_path = project_root / "pyproject.toml"
-    if not pyproject_path.exists():
-        return []
+    Choose the extras a documentation workflow installs
 
+    Parameters
+    ----------
+    project_root
+        The directory holding the packaging files.
+
+    Returns
+    -------
+    :
+        The sorted names of extras related to documentation, development or testing, such
+        as `dev`, `docs` or `test`, for a command like `pip install -e ".[dev,docs]"`. An empty
+        list when there are none or the project's metadata cannot be read.
+    """
     try:
-        try:
-            import tomllib
-        except ImportError:  # pragma: no cover
-            import tomli as tomllib  # pragma: no cover
-
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-
-        optional_deps = data.get("project", {}).get("optional-dependencies", {})
-        if not optional_deps:
-            return []
-
-        # Look for common dev/docs dependency group names
-        doc_related_extras = []
-        for key in optional_deps.keys():
-            key_lower = key.lower()
-            # Include extras that are likely needed for documentation builds
-            if any(term in key_lower for term in ["dev", "doc", "notebook", "test", "all", "full"]):
-                doc_related_extras.append(key)
-
-        return sorted(doc_related_extras)
-
-    except Exception:
+        extras = _manifest.read(project_root)["optional_dependencies"]
+    except ManifestError:
         return []
+
+    # Documentation workflows may also need development, notebook or test dependencies.
+    terms = ["dev", "doc", "notebook", "test", "all", "full"]
+    return sorted(extra for extra in extras if any(term in extra.lower() for term in terms))
 
 
 class OrderedGroup(click.Group):
@@ -329,7 +305,8 @@ def build(
     Use '--config website/great-docs.yml' for a custom source directory.
 
     Use '--project-path' to point to a project in a different directory.
-    Use '--watch' to automatically rebuild when source files change.
+    Use '--watch' to serve the site with 'quarto preview' and rebuild after
+    changes to the documentation sources or 'great-docs.yml'.
 
     Use '--no-refresh' to skip API discovery for faster rebuilds when your
     package's public API hasn't changed.
@@ -1124,22 +1101,17 @@ def scan(
     """
 
     try:
-        docs = GreatDocs(project_path=project_path, config_path=config_path)
-
-        # Detect package name
-        package_name = docs._detect_package_name()
-        if not package_name:
+        package_exports = Exports.make(
+            Layout.make(
+                Path(project_path) if project_path else Path.cwd(),
+                Path(config_path) if config_path else None,
+            )
+        )
+        project = package_exports.project
+        importable_name = project.importable_name
+        if not project.name or not importable_name:
             click.echo("Error: Could not detect package name.", err=True)
             sys.exit(1)
-
-        # Use explicit module name from great-docs.yml (or auto-detection) when
-        # available; this handles namespace packages like "firebird.base" where
-        # the importable module name differs from the PyPI project name.
-        module_name = docs._detect_module_name()
-        if module_name:
-            importable_name = module_name
-        else:
-            importable_name = docs._normalize_package_name(package_name)
 
         # Section 1: Discovery
         click.echo("─" * 50)
@@ -1148,16 +1120,16 @@ def scan(
         click.echo(f"Package: {importable_name}\n")
 
         # Get discovered exports
-        exports = docs._get_package_exports(importable_name)
+        exports = package_exports.names(importable_name)
         if not exports:
             click.echo("No exports discovered.")
             sys.exit(0)
 
         # Group exports for comparison with the configured reference.
-        categories = docs._categorise_exports(importable_name, exports)
+        categories = package_exports.categorise(importable_name, exports)
 
         # Build sets of what's in the reference config
-        reference_config = docs._config.reference
+        reference_config = package_exports.config.reference
         ref_items = set()  # Items explicitly listed
         ref_classes_with_members = set()  # Classes with members: true (or default)
         ref_classes_without_members = set()  # Classes with members: false
@@ -1475,16 +1447,14 @@ def freeze(
         if build_freeze.exists():
             shutil.rmtree(build_freeze)
 
-    # Quarto requires matching page sources to reuse cached results. Use the build's
-    # preparation steps to keep those sources consistent.
+    from ._build import pipeline
     from ._build.log import BuildLog
-    from ._build.pipeline import Run
 
-    docs = GreatDocs(project_path=project_path, config_path=config_path)
-    log = BuildLog()
-    run = Run(package_name=docs._detect_package_name() or "", watch=False)
+    config = Config(layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir)
     try:
-        freeze_cache.prepare(docs._preparation_steps(run, log), log, docs.build_dir)
+        pipeline.prepare_for_freeze(
+            config, layout, BuildLog(), remote=HttpRemote(report=print_warning)
+        )
     except BuildError:
         # Exit without repeating the preparation failure report
         sys.exit(1)
@@ -1506,7 +1476,7 @@ def freeze(
             continue
 
         click.echo(f"  Rendering {page} → {target.relative_to(build_dir)} ...")
-        result = freeze_cache.render_page(docs._config, build_dir, target)
+        result = freeze_cache.render_page(config, build_dir, target)
 
         if result.returncode != 0:
             click.echo(f"  ✗ {page} — render failed", err=True)
@@ -1831,7 +1801,7 @@ def setup_github_pages(
         # Great Docs requires Python 3.11+, so we enforce that as the floor
         min_great_docs_version = (3, 11)
         if python_version is None:
-            detected_version = _detect_python_version_from_pyproject(project_root)
+            detected_version = _detect_python_version(project_root)
             if detected_version:
                 detected_tuple = tuple(int(x) for x in detected_version.split("."))
                 if detected_tuple < min_great_docs_version:
@@ -2383,10 +2353,16 @@ def changelog(
     Set 'GITHUB_TOKEN' or 'GH_TOKEN' to avoid API rate limits.
     """
     try:
-        docs = GreatDocs(project_path=project_path, config_path=config_path)
+        layout = Layout.make(
+            Path(project_path) if project_path else Path.cwd(),
+            Path(config_path) if config_path else None,
+        )
+        config = Config(
+            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
+        )
 
-        owner, repo, _base_url = docs._get_github_repo_info()
-        if not owner or not repo:
+        repo = Project.make(config, layout).github
+        if repo is None:
             click.echo(
                 "Error: No GitHub repository URL found in pyproject.toml. "
                 "Add a [project.urls] entry like:\n\n"
@@ -2396,10 +2372,10 @@ def changelog(
             sys.exit(1)
 
         contribution = changelog_page.write_page(
-            docs._config,
-            docs.build_dir,
-            GithubRepo(owner, repo),
-            docs._remote,
+            config,
+            layout.build_dir,
+            repo,
+            HttpRemote(report=lambda message: print(f"   ⚠️  {message}")),
             max_releases=max_releases,
             report=click.echo,
         )
@@ -2407,10 +2383,10 @@ def changelog(
             click.echo("No published releases found on GitHub.")
         else:
             # Link the page from a site that has been built
-            if quarto_yml.path(docs.build_dir).exists():
-                with quarto_yml.edit(docs.build_dir) as quarto_config:
+            if quarto_yml.path(layout.build_dir).exists():
+                with quarto_yml.edit(layout.build_dir) as quarto_config:
                     quarto_yml.apply(quarto_config, contribution)
-            click.echo(f"✅ Changelog generated: {docs.build_dir / changelog_page.FILENAME}")
+            click.echo(f"✅ Changelog generated: {layout.build_dir / changelog_page.FILENAME}")
 
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
@@ -2577,25 +2553,32 @@ def proofread(
                 click.echo("Using smart defaults for technical docs. Use --strict to disable.\n")
 
         # Determine files to check
-        docs = GreatDocs(project_path=project_path, config_path=config_path)
+        layout = Layout.make(
+            Path(project_path) if project_path else Path.cwd(),
+            Path(config_path) if config_path else None,
+        )
+        config = Config(
+            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
+        )
 
         if files:
             files_to_check = [Path(f) for f in files]
         else:
             if docs_dir:
                 files_to_check = [*Path(docs_dir).rglob("*.qmd"), *Path(docs_dir).rglob("*.md")]
-                readme = docs.project_root / "README.md"
+                readme = layout.package_root / "README.md"
                 if readme.exists():
                     files_to_check.append(readme)
             else:
                 files_to_check = proofreading.find_pages(
-                    docs._config,
-                    docs.layout,
+                    config,
+                    layout,
                     report=lambda message: click.echo(f"⚠️  {message}", err=True),
                 )
-            if include_docstrings and (package_name := docs._detect_package_name()):
-                module = docs._resolve_importable_name(package_name)
-                files_to_check += proofreading.find_modules(docs.layout, module)
+            if include_docstrings:
+                project = Project.make(config, layout)
+                if project.name and project.importable_name:
+                    files_to_check += proofreading.find_modules(layout, project.importable_name)
 
         if not files_to_check:
             click.echo("No documentation files found to check.", err=True)
@@ -2630,7 +2613,7 @@ def proofread(
         # Exclude Python files unless docstring checking is requested.
         all_results = proofreading.check(
             [f for f in files_to_check if include_docstrings or f.suffix != ".py"],
-            docs.project_root,
+            layout.package_root,
             options,
             report=click.echo if show_progress else lambda _line: None,
         )
@@ -2820,14 +2803,20 @@ def seo(
     from ._website.seo import robots, sitemap
 
     try:
-        docs = GreatDocs(project_path=project_path, config_path=config_path)
-        site_dir = docs.layout.site_dir
+        layout = Layout.make(
+            Path(project_path) if project_path else Path.cwd(),
+            Path(config_path) if config_path else None,
+        )
+        config = Config(
+            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
+        )
+        site_dir = layout.site_dir
 
         if not site_dir.exists():
             click.echo("Error: Site not built. Run 'great-docs build' first.", err=True)
             sys.exit(1)
 
-        separate_site = docs.layout.source_dir != docs.layout.package_root
+        separate_site = layout.source_dir != layout.package_root
         if fix and separate_site:
             from ._utils import validate_site_dir
 
@@ -2844,7 +2833,7 @@ def seo(
         warnings = []
         info = []
 
-        identity = docs._identity()
+        identity = site.identity(config, layout, Project.make(config, layout))
         canonical_base = identity.base_url
 
         # ── Check sitemap.xml ────────────────────────────────────────────
@@ -2865,7 +2854,7 @@ def seo(
         else:
             issues.append("❌ sitemap.xml not found")
             if fix:
-                sitemap.write(site_dir, docs._config, canonical_base, report=click.echo)
+                sitemap.write(site_dir, config, canonical_base, report=click.echo)
                 record_generated_file("sitemap.xml")
                 info.append("   → Generated sitemap.xml")
 
@@ -2882,7 +2871,7 @@ def seo(
         else:
             issues.append("❌ robots.txt not found")
             if fix:
-                robots.write(site_dir, docs._config, canonical_base, report=click.echo)
+                robots.write(site_dir, config, canonical_base, report=click.echo)
                 record_generated_file("robots.txt")
                 info.append("   → Generated robots.txt")
 
@@ -2898,7 +2887,7 @@ def seo(
         # The audit requires the site name only when a string template contains
         # `{site_name}`. A missing placeholder or non-string value skips this
         # check.
-        title_template = docs._config.seo_title_template
+        title_template = config.seo_title_template
         site_name = identity.name
         if not isinstance(title_template, str) or "{site_name}" not in title_template:
             site_name = ""
@@ -3398,15 +3387,17 @@ def api_diff_cmd(
         # --- Graph mode ---
         if graph:
             from great_docs._reference import documented as documented_reference
-            from great_docs.core import GreatDocs
 
-            docs = GreatDocs(project_path=str(project_root), config_path=config_path)
+            package_exports = Exports.make(
+                Layout.make(project_root, Path(config_path) if config_path else None)
+            )
+            project = package_exports.project
             documented = (
                 documented_reference.symbol_names(
-                    docs._config,
-                    importable_name=docs._resolve_importable_name(result.package_name),
-                    search_paths=docs._griffe_search_paths(),
-                    create_sections=docs._create_api_sections_with_config,
+                    package_exports.config,
+                    importable_name=project.module or result.package_name.replace("-", "_"),
+                    search_paths=project.search_paths(),
+                    create_sections=package_exports.sections,
                 )
                 or None
             )
@@ -3679,16 +3670,18 @@ def api_snapshot_cmd(
         sys.exit(1)
 
     from great_docs._reference import documented as documented_reference
-    from great_docs.core import GreatDocs
 
     try:
-        docs = GreatDocs(project_path=str(project_root), config_path=config_path)
+        package_exports = Exports.make(
+            Layout.make(project_root, Path(config_path) if config_path else None)
+        )
+        project = package_exports.project
         documented = (
             documented_reference.symbol_names(
-                docs._config,
-                importable_name=docs._resolve_importable_name(pkg_name),
-                search_paths=docs._griffe_search_paths(),
-                create_sections=docs._create_api_sections_with_config,
+                package_exports.config,
+                importable_name=project.module or pkg_name.replace("-", "_"),
+                search_paths=project.search_paths(),
+                create_sections=package_exports.sections,
             )
             or None
         )
@@ -3854,7 +3847,7 @@ def skill_install(
         else:
             kwargs["package"] = source
     else:
-        # Try to detect current package from pyproject.toml
+        # Use the current project's declared package name when no source is supplied.
         project_root = Path.cwd()
         pkg_name = _detect_current_package(project_root)
         if pkg_name:
@@ -3990,22 +3983,23 @@ def skill_list(source: str | None, url: str | None) -> None:
 
 
 def _detect_current_package(project_root: Path) -> str | None:
-    """Detect the current package name from pyproject.toml."""
-    pyproject_path = project_root / "pyproject.toml"
-    if not pyproject_path.exists():
-        return None
+    """
+    Read the package name declared by a project
 
+    Parameters
+    ----------
+    project_root
+        The directory holding the packaging files.
+
+    Returns
+    -------
+    :
+        The distribution name as written, or `None` when the project declares no name or its
+        metadata cannot be read.
+    """
     try:
-        try:
-            import tomllib
-        except ImportError:
-            import tomli as tomllib  # type: ignore[no-redef]
-
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-
-        return data.get("project", {}).get("name")
-    except Exception:
+        return _manifest.read(project_root)["name"]
+    except ManifestError:
         return None
 
 

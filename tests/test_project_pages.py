@@ -54,7 +54,7 @@ def _metadata(
     """
     return {
         "dependencies": runtime or [],
-        "optional_dependencies_full": optional or {},
+        "optional_dependencies": optional or {},
         "requires_python": requires_python,
     }
 
@@ -75,6 +75,7 @@ def _config(**values: object) -> Any:
     """
     settings: dict[str, object] = {
         "package_info_page": True,
+        "package_info_page_release_dates": True,
         "is_python_project": True,
         "lang": "en",
     }
@@ -152,6 +153,31 @@ def test_package_info_shows_a_dash_for_unknown_dates(tmp_path: Path):
 
     assert path is not None
     assert "<td>—</td>" in path.read_text(encoding="utf-8")
+
+
+def test_package_info_without_release_dates_skips_pypi(tmp_path: Path):
+    """Check that disabling release dates omits PyPI requests and the date column"""
+    metadata = _metadata(
+        [_dep("numpy", ">=1.24")],
+        {"dev": [_dep("typing-extensions", ">=4.0", "python_version<'3.12'")]},
+    )
+    remote = StubRemote(release_dates={"numpy": "2026-05-01"})
+
+    path = package_info.write_page(
+        _config(package_info_page_release_dates=False), tmp_path, metadata, remote, report=print
+    )
+
+    assert path is not None
+    content = path.read_text(encoding="utf-8")
+    runtime, optional = content.split("## Optional Dependencies")
+    assert remote.calls == []
+    assert "Last Published" not in content
+    assert "2026-05-01" not in content
+    assert "<td>—</td>" not in content
+    assert runtime.count("<th ") == 3
+    assert optional.count("<th ") == 4
+    assert 'href="https://pypi.org/project/numpy/"' in runtime
+    assert "Environment Marker" in optional
 
 
 def test_package_info_is_skipped_when_disabled_or_empty(tmp_path: Path):

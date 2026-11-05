@@ -10,6 +10,7 @@ from __future__ import annotations
 import html
 from typing import TYPE_CHECKING, Any, cast
 
+from ..._manifest import Manifest
 from ..._translations import get_translation
 from ..ai_agents import llms_txt
 from ..spdx import get_license_info
@@ -57,7 +58,7 @@ def render(
     build_dir: Path,
     *,
     package_root: Path,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     package_name: str | None,
     community_pages: Sequence[CommunityPage],
 ) -> str:
@@ -76,7 +77,7 @@ def render(
     package_root
         The project directory, which may contain a curated skill.
     metadata
-        The package metadata: URLs, authors, funding, licence, Python requirement and extras.
+        The package metadata: URLs, authors, licence, Python requirement and extras.
     package_name
         The package name, for the PyPI link, the curated skill and the citation link.
     community_pages
@@ -91,16 +92,14 @@ def render(
     sections = [
         *_links(config, metadata, package_name, lang),
         *_ai_agents(config, build_dir, package_root, package_name, lang),
-        *_developers(metadata, lang),
+        *_developers(config, metadata, lang),
         *_community(build_dir, metadata, package_name, community_pages, lang),
         *_meta(config, build_dir, metadata, lang),
     ]
     return "\n".join(sections)
 
 
-def _links(
-    config: Config, metadata: Mapping[str, Any], package_name: str | None, lang: str
-) -> list[str]:
+def _links(config: Config, metadata: Manifest, package_name: str | None, lang: str) -> list[str]:
     """
     Render the Links section: PyPI and the project URLs
 
@@ -205,16 +204,19 @@ def _ai_agents(
     return [f"\n#### {get_translation('ai_agents', lang)}\n", *items]
 
 
-def _developers(metadata: Mapping[str, Any], lang: str) -> list[str]:
+def _developers(config: Config, metadata: Manifest, lang: str) -> list[str]:
     """
     Render the Developers section: a card per author, then the funder
 
-    An author without a GitHub account links to the owner of a GitHub repository URL.
+    The authors are the configured ones, else those the package declares. An author without
+    a GitHub account links to the owner of a GitHub repository URL.
 
     Parameters
     ----------
+    config
+        The Great Docs configuration, with the authors and the funder.
     metadata
-        The package metadata, with `rich_authors` or `authors`, `funding` and `urls`.
+        The package metadata, with `authors` and `urls`.
     lang
         The site language.
 
@@ -223,8 +225,8 @@ def _developers(metadata: Mapping[str, Any], lang: str) -> list[str]:
     :
         The heading and one `<div>` per card, or no lines if there are no cards.
     """
-    authors: list[Any] = metadata.get("rich_authors") or metadata.get("authors", [])
-    funding: dict[str, Any] | None = metadata.get("funding")
+    authors: list[Any] = config.authors or metadata.get("authors", [])
+    funding: dict[str, Any] | None = config.funding
     if not isinstance(funding, dict) or not funding.get("name"):
         funding = None
     if not (authors or funding):
@@ -394,7 +396,7 @@ def _icon_row(icons: list[str]) -> str:
 
 def _community(
     build_dir: Path,
-    metadata: Mapping[str, Any],
+    metadata: Manifest,
     package_name: str | None,
     community_pages: Sequence[CommunityPage],
     lang: str,
@@ -447,7 +449,7 @@ def _community(
     return [f"\n#### {get_translation('community', lang)}\n", *items]
 
 
-def _meta(config: Config, build_dir: Path, metadata: Mapping[str, Any], lang: str) -> list[str]:
+def _meta(config: Config, build_dir: Path, metadata: Manifest, lang: str) -> list[str]:
     """
     Render the Meta section: Python requirement, extras, tags and package information
 

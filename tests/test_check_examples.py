@@ -729,6 +729,10 @@ class TestDetectPackage:
         (tmp_path / "pyproject.toml").write_text("[tool.ruff]\nline-length = 88\n")
         assert _detect_package(tmp_path) is None
 
+    def test_name_from_setup_py(self, tmp_path):
+        (tmp_path / "setup.py").write_text('setup(name="my-package")\n')
+        assert _detect_package(tmp_path) == "my_package"
+
 
 # ===================================================================
 # Quarto availability check

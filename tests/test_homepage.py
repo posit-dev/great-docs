@@ -8,6 +8,7 @@ from typing import NoReturn
 import pytest
 
 from great_docs import GreatDocs
+from great_docs._build import content as content_steps
 from great_docs._layout import Layout
 from great_docs._website.homepage import landing, page, readme, source
 from great_docs._website.homepage.readme import Badge
@@ -388,7 +389,7 @@ def test_blended_homepage_keeps_front_matter_whose_title_contains_three_dashes(t
         content,
         metadata={},
         package_name="pkg",
-        pages=docs._page_map(None),
+        pages=content_steps.page_map(docs._config, docs.layout, None),
         page_authors=[],
     )
 

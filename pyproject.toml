@@ -43,6 +43,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "Pillow>=9.0.0",
     "ruff>=0.9.9",
+    "watchfiles>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -193,8 +194,10 @@ include = [
     "great_docs/_interlinks",
     "great_docs/_layout.py",
     "great_docs/_layout_migration",
+    "great_docs/_manifest.py",
     "great_docs/_marimo.py",
     "great_docs/_mcpref",
+    "great_docs/_project.py",
     "great_docs/_reference",
     "great_docs/_remote.py",
     "great_docs/_source_refs.py",

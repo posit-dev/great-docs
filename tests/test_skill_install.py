@@ -16,6 +16,7 @@ from great_docs._skill_install import (
 )
 from great_docs._website.ai_agents.skills import SkillsWriter
 from great_docs._yaml import split_front_matter
+from tests.support import make_project
 
 # ---------------------------------------------------------------------------
 # detect_agents
@@ -498,8 +499,8 @@ class TestMultiSkillWellKnown:
                 docs._config,
                 docs.layout,
                 docs.build_dir,
-                docs._detect_package_name(),
-                docs._get_package_metadata(),
+                make_project(docs).name,
+                make_project(docs).manifest,
             ).write()
 
             # Check primary skill.md was created

@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from great_docs._build import generated
 from great_docs._build.steps import Skipped
 from great_docs._contribution import Contribution, NavbarLink
 from great_docs._layout import Layout
@@ -826,13 +827,13 @@ def _docs(tmp_path: Path, yaml_text: str = "tags: true\n") -> GreatDocs:
     return docs
 
 
-class TestStepTags:
+class TestTagsStep:
     def test_embeds_the_page_data(self, tmp_path: Path):
         """Embed tag data before its script and preserve the generated configuration header"""
         docs = _docs(tmp_path)
         _make_qmd(docs.build_dir / "user-guide" / "page.qmd", "Page", tags=["Python"])
 
-        assert docs._step_tags() == "Tags processed"
+        assert generated.tags(docs._config, docs.layout) == "Tags processed"
 
         entries = quarto_yml.read(docs.build_dir)["format"]["html"]["include-after-body"]
         assert entries[0]["text"].startswith("<script>window.__GD_TAGS_DATA__=")
@@ -844,16 +845,18 @@ class TestStepTags:
         docs = _docs(tmp_path, "tags: true\nsite:\n  lang: fr\n")
         _make_qmd(docs.build_dir / "user-guide" / "page.qmd", "Page", tags=["Python"])
 
-        _ = docs._step_tags()
-        _ = docs._step_tags()
+        _ = generated.tags(docs._config, docs.layout)
+        _ = generated.tags(docs._config, docs.layout)
 
         left = quarto_yml.read(docs.build_dir)["website"]["navbar"]["left"]
         assert left == [{"text": "Étiquettes", "href": "tags/index.qmd"}, REFERENCE]
 
     def test_skips_without_tagged_pages(self, tmp_path: Path):
         """Report a skipped step when the project has no tagged pages"""
-        assert _docs(tmp_path)._step_tags() == Skipped("no tagged pages found")
+        docs = _docs(tmp_path)
+        assert generated.tags(docs._config, docs.layout) == Skipped("no tagged pages found")
 
     def test_skips_when_disabled(self, tmp_path: Path):
         """Report a skipped step when tags are disabled"""
-        assert _docs(tmp_path, "tags: false\n")._step_tags() == Skipped("tags not enabled")
+        docs = _docs(tmp_path, "tags: false\n")
+        assert generated.tags(docs._config, docs.layout) == Skipped("tags not enabled")

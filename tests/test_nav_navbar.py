@@ -8,7 +8,7 @@ from great_docs._cliref import render as cli_render
 from great_docs._contribution import NavbarLink
 from great_docs._website import quarto_yml
 from great_docs._website.navigation import navbar
-from tests.support import discover_user_guide, write_config
+from tests.support import discover_user_guide, sections_step, user_guide_step, write_config
 
 DEMOS = NavbarLink(text="Demos", href="demos/index.qmd")
 DEMOS_ITEM = {"text": "Demos", "href": "demos/index.qmd"}
@@ -238,7 +238,7 @@ def test_user_guide_link_precedes_the_translated_reference(tmp_path: Path):
     guide = discover_user_guide(docs)
     assert guide is not None
 
-    docs._update_config_with_user_guide(guide)
+    user_guide_step(docs, guide)
 
     assert _built_labels(docs) == ["Demos", "Guide d'utilisation", "Référence"]
 
@@ -262,6 +262,6 @@ def test_a_section_titled_recipes_is_labelled_in_the_site_language(
     (tmp_path / "recipes").mkdir()
     (tmp_path / "recipes" / "first.qmd").write_text("---\ntitle: First\n---\n")
 
-    docs._process_sections(discover_user_guide(docs))
+    sections_step(docs, discover_user_guide(docs))
 
     assert _built_labels(docs) == [label, "Référence"]

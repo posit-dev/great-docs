@@ -6,7 +6,7 @@ import textwrap
 
 import pytest
 
-from great_docs._apiref._settings import Settings, active_settings
+from great_docs._apiref._settings import Settings, SourceLinks, active_settings
 from great_docs._apiref._tools import render_code_variable
 
 FUNCTION = '''
@@ -132,13 +132,10 @@ def test_usage_label_is_translated():
     assert "Usage" not in qmd
 
 
-def test_source_link_is_translated(monkeypatch: pytest.MonkeyPatch):
-    from great_docs._apiref._render import doc
-
-    info = {"GITHUB_REPO_URL": "https://github.com/org/repo", "GIT_REF": "main"}
-    monkeypatch.setattr(doc, "package_info", info.get)
-
-    qmd = _render(FUNCTION, "f", "ja")
+def test_source_link_is_translated():
+    links = SourceLinks(repo_url="https://github.com/org/repo")
+    with active_settings(Settings(lang="ja", source_links=links)):
+        qmd = render_code_variable(textwrap.dedent(FUNCTION), "f")
 
     assert "[ソースコード](https://github.com/org/repo/blob/main/" in qmd
 

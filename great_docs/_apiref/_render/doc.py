@@ -25,7 +25,7 @@ from great_docs.pandoc.blocks import (
 from great_docs.pandoc.components import Attr
 from great_docs.pandoc.inlines import Code, Inline, Inlines, Inlines0, Link, Span
 
-from .. import content
+from .. import _globals, content
 from .._docstring_sections import (
     DocstringSectionNotes,
     DocstringSectionSeeAlso,
@@ -45,7 +45,7 @@ from .._format import (
     render_formatted_expr,
     repr_obj,
 )
-from .._globals import package_info, translate, translate_versioned
+from .._globals import translate, translate_versioned
 from ._section_dispatch import SECTION_METHOD
 from .base import RenderBase
 
@@ -770,12 +770,18 @@ class __RenderDoc(RenderBase):
     @cached_property
     def source_link(self) -> Link | None:
         """
-        Link to source code where the object is described
+        Build a link to the object's source code
+
+        Returns
+        -------
+        :
+            The source link, or `None` when no repository URL or source path is
+            available, the file is a compiled extension, or the starting line
+            is unknown.
         """
-        base_url = package_info("GITHUB_REPO_URL")
-        if not base_url or base_url == "None":
+        links = _globals.SETTINGS.source_links
+        if not links.repo_url:
             return None
-        branch = package_info("GIT_REF")
         rel_str = self._source_relative_path()
         if rel_str is None:
             return None
@@ -788,30 +794,33 @@ class __RenderDoc(RenderBase):
         if start is None:
             return None
         anchor = f"#L{start}-L{end}" if end is not None and start != end else f"#L{start}"
-        url = f"{base_url}/blob/{branch}/{rel_str}{anchor}"
+        url = f"{links.repo_url}/blob/{links.ref}/{rel_str}{anchor}"
         return Link(
             translate("source"), url, attr=Attr(attributes={"target": "_blank", "rel": "noopener"})
         )
 
     def _source_relative_path(self) -> str | None:
         """
-        Compute the path of the object's source file, relative to the repository root.
+        Resolve the object's source path for a repository link
 
-        griffe's ``relative_package_filepath`` is relative to the package's
-        *parent* directory (a griffe search path), so for ``src/`` layouts and
-        other non-flat layouts it drops the leading directory (e.g. ``src/``),
-        producing a GitHub blob URL that 404s. To match the repository layout we
-        instead:
+        Griffe's `relative_package_filepath` is relative to the package's parent
+        directory, a Griffe search path. For `src/` and other non-flat layouts,
+        it drops the leading directory, producing GitHub blob URLs that return
+        404. Resolve the path in this order to preserve the repository layout:
 
-        1. honour an explicit ``source.path`` override for monorepos, then
-        2. compute the path relative to the repository root from the object's
-           absolute filepath (preserving ``src/`` etc.), and only
-        3. fall back to griffe's package-parent-relative path when neither the
-           override nor the repository root is available.
+        1. Honour an explicit `source.path` override for monorepos.
+        2. Compute the path relative to the repository root from the object's
+           absolute file path, preserving directories such as `src/`.
+        3. Fall back to Griffe's package-parent-relative path when the override
+           and repository root cannot resolve a path.
+
+        Returns
+        -------
+        :
+            The source path, or `None` when no path can be determined.
         """
-        # griffe's `filepath` is a property that raises ValueError for objects
-        # without a parent module (e.g. synthetic objects), so a bare getattr
-        # default won't shield us — catch it explicitly.
+        # Griffe raises `ValueError` for objects without a parent module, such
+        # as synthetic objects. A `getattr` default only handles missing attributes.
         try:
             filepath = self.obj.filepath
         except (ValueError, AttributeError):
@@ -822,16 +831,16 @@ class __RenderDoc(RenderBase):
         if isinstance(filepath, list):
             filepath = None
 
+        links = _globals.SETTINGS.source_links
+
         # 1. Explicit override for monorepos: `<source.path>/<filename>`.
-        source_path = package_info("SOURCE_PATH")
-        if source_path and filepath is not None:
-            return f"{source_path}/{Path(filepath).name}"
+        if links.path and filepath is not None:
+            return f"{links.path}/{Path(filepath).name}"
 
         # 2. Path relative to the repository root, preserving the real layout.
-        package_root = package_info("PACKAGE_ROOT")
-        if package_root and filepath is not None:
+        if links.package_root and filepath is not None:
             try:
-                rel = Path(filepath).resolve().relative_to(Path(package_root).resolve())
+                rel = Path(filepath).resolve().relative_to(links.package_root.resolve())
                 return rel.as_posix()
             except (ValueError, OSError):
                 pass

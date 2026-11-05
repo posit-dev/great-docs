@@ -12,13 +12,12 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from .._manifest import Manifest
 from .._subprocess import TEXT_MODE_KWARGS
 from .._translations import get_translation
 from . import quarto_yml
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from ..config import Config
 
 _ATTRIBUTION_MARKER = "Great&nbsp;Docs"
@@ -32,7 +31,7 @@ _POSIT_BADGE = (
 _SOURCE_DIR = Path(__file__).resolve().parents[2]
 
 
-def register(quarto_config: dict[str, Any], config: Config, metadata: Mapping[str, Any]) -> None:
+def register(quarto_config: dict[str, Any], config: Config, metadata: Manifest) -> None:
     """
     Add the page footer and the Posit badge
 
@@ -86,7 +85,7 @@ def register(quarto_config: dict[str, Any], config: Config, metadata: Mapping[st
         )
 
 
-def _credits(config: Config, metadata: Mapping[str, Any], funder: str | None) -> str:
+def _credits(config: Config, metadata: Manifest, funder: str | None) -> str:
     """
     Build credit sentences for the developers and the funder
 
@@ -123,7 +122,7 @@ def _credits(config: Config, metadata: Mapping[str, Any], funder: str | None) ->
     return " ".join(sentences)
 
 
-def _developer_names(config: Config, metadata: Mapping[str, Any]) -> list[str]:
+def _developer_names(config: Config, metadata: Manifest) -> list[str]:
     """
     List the developers' names: authors, then maintainers, then configured authors
 
