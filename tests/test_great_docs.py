@@ -84,6 +84,7 @@ from great_docs._apiref._render.mixin_members import (
 from great_docs._apiref._render.mixin_page import RenderPageMixin
 from great_docs._apiref._render.reference_page import RenderReferencePage
 from great_docs._apiref._render.reference_section import RenderReferenceSection
+from great_docs._apiref._settings import SourceLinks, active_settings
 from great_docs._apiref._signature import make_call_signature_text
 from great_docs._apiref._tools import render_code_variable, render_type_object
 from great_docs._apiref._type_checks import (
@@ -6988,68 +6989,6 @@ def test_publish_user_guide_copies_directory_metadata(explicit, subdir):
         assert (target / subdir / "_metadata.yaml").read_text() == "number-sections: true\n"
 
 
-def test_detect_git_ref_configured():
-    """_detect_git_ref returns configured source branch."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
-        (tmp / "great-docs.yml").write_text("source:\n  branch: develop\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert docs._detect_git_ref() == "develop"
-
-
-def test_detect_git_ref_fallback_permissive():
-    """_detect_git_ref defaults to 'main' when git not available."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # In a temp dir without git, should fallback
-        ref = docs._detect_git_ref()
-
-        # Should be either the actual git branch or 'main' fallback
-        assert isinstance(ref, str) and len(ref) > 0
-
-
-def test_detect_git_ref_retries_a_failed_git_start():
-    """A git process that fails to start once is retried before falling back."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        side_effect = [
-            BlockingIOError(11, "Resource temporarily unavailable"),
-            subprocess.CompletedProcess(["git"], 0, stdout="2.0.0\n", stderr=""),
-        ]
-        with patch("subprocess.run", side_effect=side_effect), patch("time.sleep"):
-            ref = docs._detect_git_ref()
-
-        assert ref == "2.0.0"
-
-
-def test_detect_git_ref_warns_before_falling_back(capsys):
-    """A git process that never starts produces a warning naming the error."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-        capsys.readouterr()
-
-        error = BlockingIOError(11, "Resource temporarily unavailable")
-        with patch("subprocess.run", side_effect=error), patch("time.sleep"):
-            ref = docs._detect_git_ref()
-
-        assert ref == "main"
-        assert "Resource temporarily unavailable" in capsys.readouterr().out
-
-
 def test_process_sections_default_section():
     """_process_sections processes a default-type section end-to-end."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -9234,34 +9173,6 @@ def test_homepage_margin_citation_section():
         assert "citation.qmd" in result
 
 
-def test_detect_git_ref_configured_branch_via_yaml():
-    """_detect_git_ref returns configured branch from metadata."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text(
-            format_yaml({"source": {"branch": "develop"}}),
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_git_ref()
-
-        assert result == "develop"
-
-
-def test_detect_git_ref_fallback_v2():
-    """_detect_git_ref returns 'main' when no git info available."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_git_ref()
-
-        # Either returns actual git branch or "main" fallback
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-
 def test_create_index_from_readme_with_license():
     """_create_index_from_readme creates license.qmd when LICENSE exists."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -9675,16 +9586,31 @@ def test_quarto_environment_venv_alternative_name():
         assert env["QUARTO_PYTHON"] == str(venv_python.resolve())
 
 
-def _render_doc_source_relative_path(obj):
-    """Invoke the renderer's `_source_relative_path` with a stand-in griffe object."""
+def _render_doc_source_relative_path(obj, links: SourceLinks):
+    """
+    Resolve a stand-in object's source path with the supplied link settings
+
+    Parameters
+    ----------
+    obj
+        The stand-in Griffe object.
+    links
+        The source-link settings.
+
+    Returns
+    -------
+    :
+        The source path, or `None` when no path can be determined.
+    """
     import great_docs._apiref._render.doc as docmod
 
     cls = vars(docmod)["__RenderDoc"]
     fake_self = types.SimpleNamespace(obj=obj)
-    return cls.__dict__["_source_relative_path"](fake_self)
+    with active_settings(Settings(source_links=links)):
+        return cls.__dict__["_source_relative_path"](fake_self)
 
 
-def test_render_source_relative_path_preserves_src_layout(monkeypatch):
+def test_render_source_relative_path_preserves_src_layout():
     """Renderer source links must keep the `src/` prefix for src-layout packages.
 
     Regression test: griffe's `relative_package_filepath` is relative to the
@@ -9698,121 +9624,35 @@ def test_render_source_relative_path_preserves_src_layout(monkeypatch):
         src_file.parent.mkdir(parents=True)
         src_file.write_text("x = 1", encoding="utf-8")
 
-        monkeypatch.delenv("SOURCE_PATH", raising=False)
-        monkeypatch.setenv("PACKAGE_ROOT", str(root))
-
         # griffe would report the path relative to the `src/` search path.
         obj = types.SimpleNamespace(
             filepath=src_file,
             relative_package_filepath=Path("raghilda/embedding.py"),
         )
 
-        assert _render_doc_source_relative_path(obj) == "src/raghilda/embedding.py"
+        links = SourceLinks(package_root=root)
+        assert _render_doc_source_relative_path(obj, links) == "src/raghilda/embedding.py"
 
 
-def test_render_source_relative_path_source_path_override(monkeypatch):
+def test_render_source_relative_path_source_path_override():
     """An explicit `source.path` override is used verbatim for monorepos."""
     obj = types.SimpleNamespace(
         filepath=Path("/anywhere/embedding.py"),
         relative_package_filepath=Path("raghilda/embedding.py"),
     )
-    monkeypatch.setenv("SOURCE_PATH", "packages/raghilda/src")
-    monkeypatch.setenv("PACKAGE_ROOT", "/some/root")
+    links = SourceLinks(package_root=Path("/some/root"), path="packages/raghilda/src")
 
-    assert _render_doc_source_relative_path(obj) == "packages/raghilda/src/embedding.py"
+    assert _render_doc_source_relative_path(obj, links) == "packages/raghilda/src/embedding.py"
 
 
-def test_render_source_relative_path_falls_back_to_griffe(monkeypatch):
+def test_render_source_relative_path_falls_back_to_griffe():
     """Without repo root or override, fall back to griffe's package-relative path."""
     obj = types.SimpleNamespace(
         filepath=Path("/anywhere/raghilda/embedding.py"),
         relative_package_filepath=Path("raghilda/embedding.py"),
     )
-    monkeypatch.delenv("SOURCE_PATH", raising=False)
-    monkeypatch.delenv("PACKAGE_ROOT", raising=False)
 
-    assert _render_doc_source_relative_path(obj) == "raghilda/embedding.py"
-
-
-def test_init_exports_package_root_env(monkeypatch):
-    """GreatDocs.__init__ exports PACKAGE_ROOT so the renderer can resolve paths."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        # Register the vars so monkeypatch restores them even though __init__
-        # writes os.environ directly.
-        monkeypatch.setenv("PACKAGE_ROOT", "sentinel")
-        monkeypatch.delenv("SOURCE_PATH", raising=False)
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        assert os.environ.get("PACKAGE_ROOT") == str(docs.layout.package_root)
-        # No source.path configured -> SOURCE_PATH stays unset.
-        assert "SOURCE_PATH" not in os.environ
-
-
-def test_init_exports_source_path_env(monkeypatch):
-    """A configured source.path is exported as SOURCE_PATH for the renderer."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("source:\n  path: packages/mypkg/src\n", encoding="utf-8")
-        # Register so monkeypatch restores it after __init__ writes os.environ.
-        monkeypatch.setenv("SOURCE_PATH", "sentinel")
-
-        GreatDocs(project_path=tmp_dir)
-
-        assert os.environ.get("SOURCE_PATH") == "packages/mypkg/src"
-
-
-@pytest.mark.parametrize(
-    ("source_yml", "exported"), [("", True), ("source:\n  enabled: false\n", False)]
-)
-def test_init_exports_repo_url_only_when_source_enabled(monkeypatch, source_yml, exported):
-    """The renderer links to source only when source.enabled leaves it on."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n\n'
-            '[project.urls]\nRepository = "https://github.com/owner/mypkg"\n',
-            encoding="utf-8",
-        )
-        (Path(tmp_dir) / "great-docs.yml").write_text(source_yml, encoding="utf-8")
-        # Register so monkeypatch restores it after __init__ writes os.environ.
-        monkeypatch.setenv("GITHUB_REPO_URL", "sentinel")
-
-        GreatDocs(project_path=tmp_dir)
-
-        expected = "https://github.com/owner/mypkg" if exported else None
-        assert os.environ.get("GITHUB_REPO_URL") == expected
-
-
-def test_detect_git_ref_configured_branch():
-    """Test _detect_git_ref uses configured branch from metadata."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        docs._config = write_config(Path(tmp_dir), "source:\n  branch: release-2.0\n")
-
-        result = docs._detect_git_ref()
-
-        assert result == "release-2.0"
-
-
-def test_detect_git_ref_fallback():
-    """Test _detect_git_ref falls back to 'main' when no git repo."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # No git repo, no config
-        result = docs._detect_git_ref()
-
-        assert result == "main"
+    assert _render_doc_source_relative_path(obj, SourceLinks()) == "raghilda/embedding.py"
 
 
 def test_update_sidebar_from_sections_basic():
@@ -12853,16 +12693,6 @@ def test_get_package_metadata_config_mapping():
         assert "funding" in metadata
 
 
-def test_detect_git_ref_no_git():
-    """Test _detect_git_ref returns fallback when not in a git repo."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._detect_git_ref()
-        assert isinstance(result, str)
-        # Should return "main" or some default
-        assert len(result) > 0
-
-
 def test_process_user_guide_returns_false_no_guide():
     """Test _process_user_guide returns False when no user guide."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -14127,14 +13957,6 @@ def test_normalize_package_name():
         assert docs._normalize_package_name("my-cool-pkg") == "my_cool_pkg"
         assert docs._normalize_package_name("simple") == "simple"
         assert docs._normalize_package_name("already_under") == "already_under"
-
-
-def test_detect_git_ref():
-    """Test _detect_git_ref returns a string."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        ref = docs._detect_git_ref()
-        assert isinstance(ref, str)
 
 
 def test_strip_numeric_prefix_basic():
@@ -20664,10 +20486,8 @@ def test_mixin_render_body_with_doc_members():
     _, doc_cls = _build_class_with_members()
     render = RenderDocClass(doc_cls, level=1)
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        body = render.render_body()
-        body_str = str(body)
+    body = render.render_body()
+    body_str = str(body)
     assert "Attributes" in body_str
     assert "Methods" in body_str
     assert "Classes" in body_str
@@ -20679,10 +20499,8 @@ def test_mixin_render_body_with_member_pages():
     _, doc_cls = _build_class_with_member_pages()
     render = RenderDocClass(doc_cls, level=1)
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        body = render.render_body()
-        body_str = str(body)
+    body = render.render_body()
+    body_str = str(body)
     assert "Attributes" in body_str
 
 
@@ -21442,9 +21260,7 @@ def test_mixin_render_members_module_uses_functions_slug():
 
     members = render.render_members()
     assert len(members) == 4
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        body_str = str(render.render_body())
+    body_str = str(render.render_body())
     assert "Functions" in body_str
     assert "Classes" in body_str
     assert "Attributes" in body_str
@@ -21908,17 +21724,15 @@ def test_docclass_attributes_excludes_dataclass_params():
     doc_attr_y = content.DocAttribute(name="y", obj=attr_y)
     doc_cls = content.DocClass(name="DC", obj=cls_obj, members=[doc_attr_x, doc_attr_y])
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
-        # is_dataclass should be True
-        assert render.is_dataclass is True
+    # is_dataclass should be True
+    assert render.is_dataclass is True
 
-        # attributes should exclude "x" (which is a parameter)
-        attr_names = [a.name for a in render.attributes]
-        assert "x" not in attr_names
-        assert "y" in attr_names
+    # attributes should exclude "x" (which is a parameter)
+    attr_names = [a.name for a in render.attributes]
+    assert "x" not in attr_names
+    assert "y" in attr_names
 
 
 def test_docclass_parameter_attributes_with_dataclass():
@@ -21943,12 +21757,10 @@ def test_docclass_parameter_attributes_with_dataclass():
     doc_attr_a = content.DocAttribute(name="a", obj=attr_a)
     doc_cls = content.DocClass(name="DC2", obj=cls_obj, members=[doc_attr_a])
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocClass(doc_cls, level=1)
-        pa = render.parameter_attributes
-        assert len(pa) == 1
-        assert pa[0].name == "a"
+    render = RenderDocClass(doc_cls, level=1)
+    pa = render.parameter_attributes
+    assert len(pa) == 1
+    assert pa[0].name == "a"
 
 
 def test_docclass_init_parameters_with_dataclass():
@@ -21977,16 +21789,14 @@ def test_docclass_init_parameters_with_dataclass():
     doc_attr_a = content.DocAttribute(name="a", obj=attr_a)
     doc_cls = content.DocClass(name="DC3", obj=cls_obj, members=[doc_attr_a])
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocClass(doc_cls, level=1)
-        ip = render.init_parameters
+    render = RenderDocClass(doc_cls, level=1)
+    ip = render.init_parameters
 
-        # "self" and "b" are not in class attributes; "a" is
-        param_names = [p.name for p in ip]
+    # "self" and "b" are not in class attributes; "a" is
+    param_names = [p.name for p in ip]
 
-        assert "b" in param_names
-        assert "a" not in param_names
+    assert "b" in param_names
+    assert "a" not in param_names
 
 
 def test_docmodule_render_signature_no_signature_name():
@@ -21995,12 +21805,10 @@ def test_docmodule_render_signature_no_signature_name():
     mod_obj = gf.Module(name="my_module")
     doc_mod = content.DocModule(name="my_module", obj=mod_obj)
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocModule(doc_mod, level=1)
-        # Override the cached_property by setting in instance __dict__
-        render.__dict__["signature_name"] = ""
-        result = render.render_signature()
+    render = RenderDocModule(doc_mod, level=1)
+    # Override the cached_property by setting in instance __dict__
+    render.__dict__["signature_name"] = ""
+    result = render.render_signature()
     assert result is None
 
 
@@ -22010,12 +21818,10 @@ def test_docmodule_render_signature_with_name():
     mod_obj = gf.Module(name="my_module")
     doc_mod = content.DocModule(name="my_module", obj=mod_obj)
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocModule(doc_mod, level=1)
-        # Ensure signature_name is non-empty
-        render.__dict__["signature_name"] = "my_module"
-        result = render.render_signature()
+    render = RenderDocModule(doc_mod, level=1)
+    # Ensure signature_name is non-empty
+    render.__dict__["signature_name"] = "my_module"
+    result = render.render_signature()
 
     assert result is not None
     assert "my_module" in str(result)
@@ -22027,9 +21833,7 @@ def test_docmodule_post_init_narrows_types():
     mod_obj = gf.Module(name="test_mod")
     doc_mod = content.DocModule(name="test_mod", obj=mod_obj)
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocModule(doc_mod, level=1)
+    render = RenderDocModule(doc_mod, level=1)
 
     # After __post_init__, self.doc and self.obj should be set
     assert render.doc is doc_mod
@@ -22052,12 +21856,10 @@ def test_renderbase_title_property():
     mod_obj = gf.Module(name="tmod")
     doc_mod = content.DocModule(name="tmod", obj=mod_obj)
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocModule(doc_mod, level=1)
+    render = RenderDocModule(doc_mod, level=1)
 
-        # Access the 'title' cached property, which calls render_title()
-        title = render.title
+    # Access the 'title' cached property, which calls render_title()
+    title = render.title
 
     # render_title for a module returns a Header or None; just verify it ran
     assert title is not None or title is None  # doesn't raise
@@ -22084,16 +21886,14 @@ def test_docattribute_render_signature_type_kind():
 
     doc_attr = content.DocAttribute(name="MyType", obj=attr_obj)
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocAttribute(doc_attr, level=1)
+    render = RenderDocAttribute(doc_attr, level=1)
 
-        assert "type" in render.kind
+    assert "type" in render.kind
 
-        sig = render.render_signature()
-        sig_str = str(sig)
+    sig = render.render_signature()
+    sig_str = str(sig)
 
-        assert isinstance(sig_str, str)
+    assert isinstance(sig_str, str)
 
 
 def test_mixin_page_render_title():
@@ -22158,13 +21958,11 @@ def test_docclass_attribute_member_pages_dataclass():
     page_y = content.MemberPage(path="y", contents=[doc_attr_y])
     doc_cls = content.DocClass(name="DC4", obj=cls_obj, members=[page_x, page_y])
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocClass(doc_cls, level=1)
-        pages = render.attribute_member_pages
-        page_names = [p.obj.name for p in pages]
-        assert "x" not in page_names
-        assert "y" in page_names
+    render = RenderDocClass(doc_cls, level=1)
+    pages = render.attribute_member_pages
+    page_names = [p.obj.name for p in pages]
+    assert "x" not in page_names
+    assert "y" in page_names
 
 
 def test_docclass_parameter_attributes_non_dataclass():
@@ -22173,12 +21971,10 @@ def test_docclass_parameter_attributes_non_dataclass():
     cls_obj = gf.Class(name="RegularClass", lineno=1)
     doc_cls = content.DocClass(name="RegularClass", obj=cls_obj, members=[])
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocClass(doc_cls, level=1)
-        assert render.is_dataclass is False
-        pa = render.parameter_attributes
-        assert len(pa) == 0
+    render = RenderDocClass(doc_cls, level=1)
+    assert render.is_dataclass is False
+    pa = render.parameter_attributes
+    assert len(pa) == 0
 
 
 def test_docclass_init_parameters_non_dataclass():
@@ -22187,12 +21983,10 @@ def test_docclass_init_parameters_non_dataclass():
     cls_obj = gf.Class(name="RegularClass2", lineno=1)
     doc_cls = content.DocClass(name="RegularClass2", obj=cls_obj, members=[])
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocClass(doc_cls, level=1)
-        assert render.is_dataclass is False
-        ip = render.init_parameters
-        assert len(ip) == 0
+    render = RenderDocClass(doc_cls, level=1)
+    assert render.is_dataclass is False
+    ip = render.init_parameters
+    assert len(ip) == 0
 
 
 def test_dc_docstring_section_bool():
@@ -23443,10 +23237,8 @@ def test_render_reference_page_render_body():
     section = content.Section(title="Functions", contents=[doc_func])
     ref = _make_render_ref(title="API")
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        rp = RenderReferencePage(ref, [section], level=1)
-        body = rp.render_body()
+    rp = RenderReferencePage(ref, [section], level=1)
+    body = rp.render_body()
 
     assert body is not None
 
@@ -23463,10 +23255,8 @@ def test_render_reference_section_body_with_contents():
 
     section = content.Section(title="Functions", contents=[doc_func])
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        rs = RenderReferenceSection(node=section, level=1)
-        body = rs.render_body()
+    rs = RenderReferenceSection(node=section, level=1)
+    body = rs.render_body()
 
     assert body is not None
 
@@ -23510,32 +23300,30 @@ def test_render_api_page_full_lifecycle():
 
     page = content.Page(path="reference/my_func", contents=[doc_func])
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        ap = RenderAPIPage(node=page, level=1)
+    ap = RenderAPIPage(node=page, level=1)
 
-        # Test __post_init__
-        assert ap.page is page
-        assert ap.path == "reference/my_func.qmd"
+    # Test __post_init__
+    assert ap.page is page
+    assert ap.path == "reference/my_func.qmd"
 
-        # Test _has_one_object
-        assert ap._has_one_object is True
+    # Test _has_one_object
+    assert ap._has_one_object is True
 
-        # Test render_objs
-        objs = ap.render_objs
-        assert len(objs) == 1
+    # Test render_objs
+    objs = ap.render_objs
+    assert len(objs) == 1
 
-        # Test render_metadata
-        meta = ap.render_metadata()
-        assert meta is not None
+    # Test render_metadata
+    meta = ap.render_metadata()
+    assert meta is not None
 
-        # Test render_body
-        body = ap.render_body()
-        assert body is not None
+    # Test render_body
+    body = ap.render_body()
+    assert body is not None
 
-        # Test render_summary (flatten default)
-        summary = ap.render_summary()
-        assert len(summary) >= 1
+    # Test render_summary (flatten default)
+    summary = ap.render_summary()
+    assert len(summary) >= 1
 
 
 def test_render_api_page_with_summary_details():
@@ -23550,10 +23338,8 @@ def test_render_api_page_with_summary_details():
         summary=content.SummaryItem(name="fn()", desc="Do something"),
     )
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        ap = RenderAPIPage(node=page, level=1)
-        summary = ap.render_summary()
+    ap = RenderAPIPage(node=page, level=1)
+    summary = ap.render_summary()
     assert len(summary) == 1
     assert "fn()" in str(summary[0][0])
     assert "Do something" in str(summary[0][1])
@@ -23597,10 +23383,8 @@ def test_render_api_page_suppresses_inner_title_at_level_1():
     """At level=1, RenderAPIPage flips the inner object's show_title off."""
     page = _make_function_page()
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        ap = RenderAPIPage(node=page, level=1)
-        inner = ap.render_objs[0]
+    ap = RenderAPIPage(node=page, level=1)
+    inner = ap.render_objs[0]
 
     assert inner.show_title is False
     assert ap.show_title is True
@@ -23615,9 +23399,7 @@ def test_render_api_page_single_object_renders_title_once():
     """
     page = _make_function_page()
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        rendered = str(RenderAPIPage(node=page, level=1))
+    rendered = str(RenderAPIPage(node=page, level=1))
 
     assert "[my_func()]" in _front_matter_title(rendered)
     assert "\n# [my_func()]" not in rendered
@@ -23629,9 +23411,7 @@ def test_render_api_page_class_with_members_renders_title_once():
     """Class pages avoid the duplicate heading and keep member sections."""
     page = _make_class_page_with_members()
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        rendered = str(RenderAPIPage(node=page, level=1))
+    rendered = str(RenderAPIPage(node=page, level=1))
 
     assert "[MyClass]" in _front_matter_title(rendered)
     assert "\n# [MyClass]" not in rendered
@@ -23643,9 +23423,7 @@ def test_render_api_page_renders_body_header_at_level_2():
     """At level=2, the body header is H2 and coexists with the H1 title."""
     page = _make_function_page()
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        rendered = str(RenderAPIPage(node=page, level=2))
+    rendered = str(RenderAPIPage(node=page, level=2))
 
     assert "[my_func()]" in _front_matter_title(rendered)
     assert "\n## [my_func()]" in rendered
@@ -23669,9 +23447,7 @@ def test_render_api_page_multi_object_renders_all_inner_headers():
         flatten=True,
     )
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        rendered = str(RenderAPIPage(node=page, level=1))
+    rendered = str(RenderAPIPage(node=page, level=1))
 
     assert "\n## [func1()]" in rendered
     assert "\n## [func2()]" in rendered
@@ -23683,10 +23459,8 @@ def test_renderdoc_display_name_relative_level_gt1():
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_func = content.DocFunction(name="my_func", obj=func_obj)
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocFunction(doc_func, level=2, display_name_format="relative")
-        name = render.display_name
+    render = RenderDocFunction(doc_func, level=2, display_name_format="relative")
+    name = render.display_name
     # At level > 1 with "relative" format, it switches to "name"
     assert isinstance(name, str)
 
@@ -23697,11 +23471,9 @@ def test_renderdoc_render_annotation_non_attribute_raises():
     func_obj = gf.Function(name="fn", lineno=1)
     doc_func = content.DocFunction(name="fn", obj=func_obj)
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocFunction(doc_func, level=1)
-        with pytest.raises(TypeError, match="Cannot render annotation"):
-            render.render_annotation()
+    render = RenderDocFunction(doc_func, level=1)
+    with pytest.raises(TypeError, match="Cannot render annotation"):
+        render.render_annotation()
 
 
 def test_renderdoc_render_annotation_attribute():
@@ -23711,10 +23483,8 @@ def test_renderdoc_render_annotation_attribute():
     attr_obj.annotation = gf.ExprName("int")
     doc_attr = content.DocAttribute(name="x", obj=attr_obj)
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocAttribute(doc_attr, level=1)
-        result = render.render_annotation()
+    render = RenderDocAttribute(doc_attr, level=1)
+    result = render.render_annotation()
     assert isinstance(result, str)
     assert "int" in result
 
@@ -23726,10 +23496,8 @@ def test_renderdoc_render_annotation_none():
     attr_obj.annotation = None
     doc_attr = content.DocAttribute(name="y", obj=attr_obj)
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocAttribute(doc_attr, level=1)
-        result = render.render_annotation()
+    render = RenderDocAttribute(doc_attr, level=1)
+    result = render.render_annotation()
     assert result == ""
 
 
@@ -23744,10 +23512,8 @@ def test_renderdoc_docstring_section_deprecated():
     )
     doc_func = content.DocFunction(name="old_fn", obj=func_obj)
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocFunction(doc_func, level=1)
-        body = render.render_body()
+    render = RenderDocFunction(doc_func, level=1)
+    body = render.render_body()
     body_str = str(body)
     assert "Deprecated" in body_str or "deprecated" in body_str
 
@@ -23763,10 +23529,8 @@ def test_renderdoc_docstring_section_examples():
     )
     doc_func = content.DocFunction(name="ex_fn", obj=func_obj)
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocFunction(doc_func, level=1)
-        body = render.render_body()
+    render = RenderDocFunction(doc_func, level=1)
+    body = render.render_body()
     body_str = str(body)
     assert "1 + 1" in body_str or "Examples" in body_str
 
@@ -23782,15 +23546,13 @@ def test_renderdoc_docstring_section_text_in_div():
     )
     doc_func = content.DocFunction(name="txt_fn", obj=func_obj)
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocFunction(doc_func, level=1)
-        body = render.render_body()
+    render = RenderDocFunction(doc_func, level=1)
+    body = render.render_body()
     assert body is not None
 
 
 def test_renderdoc_source_link_with_github_url():
-    """RenderDoc.source_link returns Link when GITHUB_REPO_URL is set."""
+    """A configured repository URL produces a source link"""
 
     mod = gf.Module(name="mymod", filepath=Path("/fake/pkg/mymod.py"))
     func_obj = gf.Function(name="linked_fn", lineno=5)
@@ -23798,14 +23560,8 @@ def test_renderdoc_source_link_with_github_url():
     mod.set_member("linked_fn", func_obj)
     doc_func = content.DocFunction(name="linked_fn", obj=func_obj)
 
-    # Patch package_info directly so we don't depend on os.environ ordering
-    with patch(
-        "great_docs._apiref._render.doc.package_info",
-        side_effect=lambda key: {
-            "GITHUB_REPO_URL": "https://github.com/test/repo",
-            "GIT_REF": "main",
-        }.get(key),
-    ):
+    links = SourceLinks(repo_url="https://github.com/test/repo")
+    with active_settings(Settings(source_links=links)):
         render = RenderDocFunction(doc_func, level=1)
         link = render.source_link
     assert link is not None
@@ -23825,10 +23581,8 @@ def test_renderdoc_see_also_section():
     )
     doc_func = content.DocFunction(name="sa_fn", obj=func_obj)
 
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocFunction(doc_func, level=1)
-        body = render.render_body()
+    render = RenderDocFunction(doc_func, level=1)
+    body = render.render_body()
     body_str = str(body) if body else ""
     assert isinstance(body_str, str)
 
@@ -23858,62 +23612,6 @@ def test_prepare_build_directory_config_js_branches():
         assert (docs.build_dir / "announcement-banner.js").exists()
         assert (docs.build_dir / "navbar-style.js").exists()
         assert (docs.build_dir / "content-style.js").exists()
-
-
-def test_detect_git_ref_git_describe_tag():
-    """_detect_git_ref returns tag when git describe succeeds."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        with patch("subprocess.run") as mock_run:
-            # First subprocess call (git describe) succeeds with a tag name
-            tag_result = MagicMock()
-            tag_result.returncode = 0
-            tag_result.stdout = "v1.2.3\n"
-            mock_run.return_value = tag_result
-
-            ref = docs._detect_git_ref()
-
-        assert ref == "v1.2.3"
-
-
-def test_detect_git_ref_branch_fallback():
-    """_detect_git_ref returns branch name when tag not found."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        with patch("subprocess.run") as mock_run:
-            # First call (git describe) fails; second call (git rev-parse) succeeds
-            tag_fail = MagicMock()
-            tag_fail.returncode = 128
-            branch_ok = MagicMock()
-            branch_ok.returncode = 0
-            branch_ok.stdout = "feature-branch\n"
-            mock_run.side_effect = [tag_fail, branch_ok]
-
-            ref = docs._detect_git_ref()
-
-        assert ref == "feature-branch"
-
-
-def test_detect_git_ref_exception_fallback():
-    """_detect_git_ref returns 'main' when subprocess raises."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        with patch("subprocess.run", side_effect=FileNotFoundError("git not found")):
-            ref = docs._detect_git_ref()
-
-        assert ref == "main"
 
 
 def test_get_github_repo_info_git_suffix():

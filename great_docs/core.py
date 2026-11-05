@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from . import _marimo
 from ._build import freeze, outputs, quarto, serve, timings
-from ._build.facts import Facts
+from ._build.facts import Facts, source_links
 from ._build.pipeline import Run
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
@@ -204,27 +204,6 @@ class GreatDocs:
         self._page_authors = page_dates.site_authors(
             self._config, self.layout.source_dir, self._identity().base_url
         )
-
-        # Set environment variables needed by the qrenderer. The renderer links
-        # to source only when it has a repository URL, so `source.enabled: false`
-        # withholds it.
-        _, _, url = self._get_github_repo_info()
-        if url and self._config.source_enabled:
-            os.environ["GITHUB_REPO_URL"] = str(url)
-        else:
-            os.environ.pop("GITHUB_REPO_URL", None)
-        os.environ["GIT_REF"] = self._detect_git_ref()
-        # The repository root, so the renderer can build source-link paths
-        # relative to it (preserving `src/` and other non-flat layouts)
-        # instead of griffe's package-parent-relative path, which 404s.
-        os.environ["PACKAGE_ROOT"] = str(self.layout.package_root)
-        # Optional explicit source-path override for monorepos (source.path).
-        # Cleared when unset so a previous project's override (same process) can't leak
-        source_path = self._config.source_path
-        if source_path:
-            os.environ["SOURCE_PATH"] = str(source_path)
-        else:
-            os.environ.pop("SOURCE_PATH", None)
 
     def _get_griffe_package(self, package_name: str):
         """Load a griffe package, using a per-build cache to avoid redundant loads.
@@ -1531,84 +1510,6 @@ class GreatDocs:
 
         print("   📄 Blended homepage: first UG page → index.qmd")
         return f"user-guide/{dest_rel}"
-
-    def _detect_git_ref(self) -> str:
-        """
-        Detect the current git tag or branch
-
-        A configured source branch takes precedence. Otherwise the exact tag at
-        `HEAD` wins over the branch name. When `git` cannot start, even after one
-        retry, a warning names the error before the function falls back to
-        `main`. A non-zero exit from `git`, as outside a repository, falls back
-        silently.
-
-        Returns
-        -------
-        :
-            The tag or branch name, or `main` as the fallback.
-        """
-        import time
-
-        package_root = self.layout.package_root
-
-        # First check if there's a configured branch in metadata
-        metadata = self._get_package_metadata()
-        configured_branch = metadata.get("source_link_branch")
-        if configured_branch:
-            return configured_branch
-
-        start_error: OSError | None = None
-
-        def run_git(*args: str) -> subprocess.CompletedProcess[str] | None:
-            """
-            Run a git command, retrying once if the process cannot start
-
-            Parameters
-            ----------
-            *args
-                Arguments passed to `git`.
-
-            Returns
-            -------
-            :
-                The completed process, or `None` when both attempts fail to start.
-            """
-            nonlocal start_error
-            for attempt in range(2):
-                if attempt:
-                    # Under heavy load an immediate retry can hit the same EAGAIN.
-                    time.sleep(0.2)
-                try:
-                    return subprocess.run(
-                        ["git", *args],
-                        cwd=package_root,
-                        capture_output=True,
-                        **TEXT_MODE_KWARGS,
-                    )
-                except OSError as error:
-                    start_error = error
-            return None
-
-        # Try to get the current tag first (for versioned docs)
-        result = run_git("describe", "--tags", "--exact-match")
-        if result is not None and result.returncode == 0:
-            return result.stdout.strip()
-
-        # Fall back to branch name
-        if result is not None:
-            result = run_git("rev-parse", "--abbrev-ref", "HEAD")
-            if result is not None and result.returncode == 0:
-                branch = result.stdout.strip()
-                if branch != "HEAD":
-                    return branch
-
-        if result is None:
-            print(
-                f"   ⚠️  Could not run git to detect the source-link ref ({start_error}); using 'main'"
-            )
-
-        # Default fallback
-        return "main"
 
     def _find_package_init(self, package_name: str) -> Path | None:
         """
@@ -2941,8 +2842,10 @@ class GreatDocs:
 
         failures = (*USER_CODE_ERRORS, ObjectNotFoundError)
         quarto_yml_path = str(quarto_yml.path(self.build_dir))
+        _, _, repo_url = self._get_github_repo_info()
+        links = source_links(self._config, self.layout.package_root, repo_url, warn=_print_warning)
         try:
-            ref = APIReference(quarto_yml_path)
+            ref = APIReference(quarto_yml_path, links)
             ref.build()
             return "API reference generated", ref
         except failures as e:
@@ -2957,7 +2860,7 @@ class GreatDocs:
                 if "api-reference" in quarto_config:
                     quarto_config["api-reference"]["dynamic"] = False
         try:
-            ref = APIReference(quarto_yml_path)
+            ref = APIReference(quarto_yml_path, links)
             ref.build()
         except failures as e:
             raise StepError(f"API reference build failed: {e}") from e

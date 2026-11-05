@@ -2025,7 +2025,17 @@ def _source_linked_project(root: Path, name: str, branch: str) -> GreatDocs:
 
 
 class TestStepApiReference:
-    def test_each_project_in_a_process_links_to_its_own_source(self, tmp_path, monkeypatch):
+    def test_constructing_a_project_runs_no_git(self, tmp_path: Path):
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        with patch("subprocess.run") as run:
+            GreatDocs(project_path=str(tmp_path))
+
+        run.assert_not_called()
+
+    def test_each_project_in_a_process_links_to_its_own_source(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         pages: list[str] = []
         for name, branch in [("srclinks_a", "branch-a"), ("srclinks_b", "branch-b")]:
             docs = _source_linked_project(tmp_path / name, name, branch)

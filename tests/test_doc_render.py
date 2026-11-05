@@ -10,6 +10,7 @@ import griffe as gf
 
 import great_docs._apiref._render.doc as docmod
 from great_docs._apiref._render.doc import RenderDoc
+from great_docs._apiref._settings import Settings, SourceLinks, active_settings
 
 
 def _get_private_cls():
@@ -123,46 +124,42 @@ class TestRenderSeeAlsoSectionSkipEmpty:
         assert "bar" in result_str
 
 
+LINKED = SourceLinks(repo_url="https://github.com/user/repo")
+
+
 class TestSourceLinkCompiledExtension:
-    def test_so_extension_returns_none(self, monkeypatch):
+    def test_so_extension_returns_none(self):
         """When source path ends with .so, returns None."""
 
         cls = _get_private_cls()
-
-        monkeypatch.setenv("GITHUB_REPO_URL", "https://github.com/user/repo")
-        monkeypatch.setenv("GIT_REF", "main")
 
         fake_self = types.SimpleNamespace(
             _source_relative_path=lambda: "mymod.cpython-313-x86_64-linux-gnu.so"
         )
 
-        result = cls.__dict__["source_link"].func(fake_self)
+        with active_settings(Settings(source_links=LINKED)):
+            result = cls.__dict__["source_link"].func(fake_self)
 
         assert result is None
 
-    def test_pyd_extension_returns_none(self, monkeypatch):
+    def test_pyd_extension_returns_none(self):
         """When source path ends with .pyd, returns None."""
 
         cls = _get_private_cls()
 
-        monkeypatch.setenv("GITHUB_REPO_URL", "https://github.com/user/repo")
-        monkeypatch.setenv("GIT_REF", "main")
-
         fake_self = types.SimpleNamespace(_source_relative_path=lambda: "mymod.pyd")
 
-        result = cls.__dict__["source_link"].func(fake_self)
+        with active_settings(Settings(source_links=LINKED)):
+            result = cls.__dict__["source_link"].func(fake_self)
 
         assert result is None
 
 
 class TestSourceRelativePathValueError:
-    def test_relative_to_raises_value_error(self, monkeypatch):
-        """When filepath is not relative to PACKAGE_ROOT, falls through."""
+    def test_relative_to_raises_value_error(self):
+        """A file outside the repository root uses its package-relative path"""
 
         cls = _get_private_cls()
-
-        monkeypatch.delenv("SOURCE_PATH", raising=False)
-        monkeypatch.setenv("PACKAGE_ROOT", "/completely/different/root")
 
         obj = types.SimpleNamespace(
             filepath="/unrelated/path/to/mod.py",
@@ -170,19 +167,18 @@ class TestSourceRelativePathValueError:
         )
         fake_self = types.SimpleNamespace(obj=obj)
 
-        result = cls.__dict__["_source_relative_path"](fake_self)
+        links = SourceLinks(package_root=Path("/completely/different/root"))
+        with active_settings(Settings(source_links=links)):
+            result = cls.__dict__["_source_relative_path"](fake_self)
 
         assert result == "mod.py"
 
 
 class TestSourceRelativePathNamespacePackage:
-    def test_list_filepath_falls_back_to_package_relative_path(self, monkeypatch):
+    def test_list_filepath_falls_back_to_package_relative_path(self):
         """Verify that a namespace package uses its package-relative source path"""
 
         cls = _get_private_cls()
-
-        monkeypatch.delenv("SOURCE_PATH", raising=False)
-        monkeypatch.setenv("PACKAGE_ROOT", "/repo")
 
         obj = types.SimpleNamespace(
             filepath=[Path("/repo/a/ns"), Path("/repo/b/ns")],
@@ -190,6 +186,7 @@ class TestSourceRelativePathNamespacePackage:
         )
         fake_self = types.SimpleNamespace(obj=obj)
 
-        result = cls.__dict__["_source_relative_path"](fake_self)
+        with active_settings(Settings(source_links=SourceLinks(package_root=Path("/repo")))):
+            result = cls.__dict__["_source_relative_path"](fake_self)
 
         assert result == "ns"

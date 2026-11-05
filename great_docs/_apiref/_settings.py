@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+    from pathlib import Path
 
 
 @dataclass
@@ -24,13 +25,40 @@ class CallableSignatures:
     """`per_parameter` for one parameter per line, `width` to break only when long"""
 
 
+@dataclass(frozen=True)
+class SourceLinks:
+    """
+    GitHub source-link destinations for documented objects
+
+    The default settings produce no source links.
+    """
+
+    repo_url: str | None = None
+    """The GitHub repository's URL, or `None` when objects have no source links"""
+
+    ref: str = "main"
+    """The tag or branch targeted by source links"""
+
+    package_root: Path | None = None
+    """The repository root for relative source file paths"""
+
+    path: str | None = None
+    """
+    The source directory override, relative to the repository root
+
+    Links use each file's name within this directory, regardless of its actual
+    location. `None` preserves paths relative to `package_root`.
+    """
+
+
 @dataclass
 class Settings:
     """
     Settings for generating an API reference
 
-    Read generation options from the `api-reference:` block and the language
-    from the site configuration. Exclude `version` from block options.
+    Generation options come from the `api-reference:` block, the language from
+    the site configuration and the source links from the project. Block options
+    exclude `version`.
     """
 
     parser: str = "numpy"
@@ -48,11 +76,18 @@ class Settings:
     version: str | None = None
     lang: str = "en"
     """The reference language as a BCP 47 tag"""
+    source_links: SourceLinks = field(default_factory=SourceLinks)
+    """The source-link destinations for documented objects"""
 
     @classmethod
-    def make(cls, block: dict[str, Any], lang: str = "en") -> Settings:
+    def make(
+        cls,
+        block: dict[str, Any],
+        lang: str = "en",
+        source_links: SourceLinks | None = None,
+    ) -> Settings:
         """
-        Build reference settings from generation options and the site language
+        Build reference settings from generation options, the site language and source links
 
         Parameters
         ----------
@@ -60,10 +95,13 @@ class Settings:
             The `api-reference:` block.
         lang
             The reference language as a BCP 47 tag.
+        source_links
+            The source-link destinations, or `None` to disable source links.
 
         Returns
         -------
-        Settings with the supplied generation options and language.
+        :
+            Settings with the supplied generation options, language and source links.
         """
         kwargs: dict[str, Any] = {
             k: block[k]
@@ -80,7 +118,7 @@ class Settings:
         elif isinstance(sidebar, dict) and "file" not in sidebar:
             # Copy so the caller's config dict is not mutated.
             kwargs["sidebar"] = {**sidebar, "file": "_api-reference-sidebar.yml"}
-        return cls(**kwargs, lang=lang)
+        return cls(**kwargs, lang=lang, source_links=source_links or SourceLinks())
 
 
 # Parity quirk preserved deliberately (do NOT "fix" here): `version` is not
@@ -88,8 +126,8 @@ class Settings:
 # its __init__ forced `self.version = None`, so the inventory was always built
 # with "0.0.9999". (`interlinks.fast` / `_fast_inventory` was confirmed dead
 # and dropped, per spec.)
-# Read the language from the site configuration.
-_SETTINGS_KEYS = {f.name for f in dc_fields(Settings)} - {"version", "lang"}
+# The site configuration supplies the language; the project supplies source links.
+_SETTINGS_KEYS = {f.name for f in dc_fields(Settings)} - {"version", "lang", "source_links"}
 
 
 @contextmanager
