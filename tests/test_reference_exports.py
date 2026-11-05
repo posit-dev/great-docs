@@ -100,6 +100,8 @@ class TestSectionsFromTheReferenceSetting:
     def test_no_reference_returns_none(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
         _patch_cfg(monkeypatch, gd, "reference", None)
+        # An earlier test in the same process may leave an importable `mypkg` behind.
+        monkeypatch.setattr(Exports, "names", lambda self, name: [])
         assert make_exports(gd).sections("mypkg") is None
 
     def test_include_inherited_on_explicit_members(self, tmp_path, monkeypatch):

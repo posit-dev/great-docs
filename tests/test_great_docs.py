@@ -9947,6 +9947,7 @@ def test_prepare_build_directory_adds_llms_links_after_api_reference_setup():
             assert "llms-full.txt" in index_content
         finally:
             sys.path.remove(tmp_dir)
+            sys.modules.pop("mypkg", None)
 
 
 def test_prepare_build_directory_copies_js_files():
