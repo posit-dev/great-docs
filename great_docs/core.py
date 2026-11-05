@@ -7,6 +7,7 @@ from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
 from ._build.steps import print_warning
 from ._checks import inputs, links, proofread
+from ._checks.links import LinkReport
 from ._checks.proofread import CheckedFile
 from ._install import update_gitignore, write_initial_config
 from ._layout import Layout
@@ -363,7 +364,7 @@ class GreatDocs:
         timeout: float = 10.0,
         ignore_patterns: list[str] | None = None,
         verbose: bool = False,
-    ) -> dict:
+    ) -> LinkReport:
         """
         Check source code and documentation for broken links
 
@@ -412,10 +413,12 @@ class GreatDocs:
         :
             A dictionary containing:
 
-            - `total`: total number of unique links checked
+            - `total`: number of unique links found, including skipped ones
             - `ok`: list of links that returned 2xx status
-            - `redirects`: list of dicts with `url`, `status`, `location` for 3xx responses
-            - `broken`: list of dicts with `url`, `status`, `error` for 4xx/5xx or errors
+            - `redirects`: list of dicts with `url`, `status`, `location` and `files` for 3xx
+              responses
+            - `broken`: list of dicts with `url`, `status`, `error` and `files` for 4xx/5xx or
+              errors
             - `skipped`: list of URLs that were skipped (matched ignore patterns)
             - `by_file`: dict mapping file paths to lists of links found in each file
 
