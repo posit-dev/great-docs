@@ -44,7 +44,7 @@ def path(build_dir: Path) -> Path:
     return build_dir / FILENAME
 
 
-def read(build_dir: Path, *, seed_website: bool = False) -> dict[str, Any]:
+def read(build_dir: Path) -> dict[str, Any]:
     """
     Parse a build directory's Quarto configuration
 
@@ -54,10 +54,6 @@ def read(build_dir: Path, *, seed_website: bool = False) -> dict[str, Any]:
     ----------
     build_dir
         The Quarto project directory.
-    seed_website
-        Whether to treat a missing file as an empty mapping and supply missing
-        `website` defaults: an empty `sidebar` list and a `navbar` mapping with
-        an empty `left` list.
 
     Returns
     -------
@@ -67,18 +63,10 @@ def read(build_dir: Path, *, seed_website: bool = False) -> dict[str, Any]:
     Raises
     ------
     FileNotFoundError
-        If the file is missing and `seed_website` is false.
+        If `_quarto.yml` is missing.
     """
-    file = path(build_dir)
-    if seed_website and not file.exists():
-        quarto_config: dict[str, Any] = {}
-    else:
-        quarto_config = cast("dict[str, Any]", parse_yaml(file.read_text(encoding="utf-8")) or {})
-    if seed_website:
-        website = cast("dict[str, Any]", quarto_config.setdefault("website", {}))
-        website.setdefault("sidebar", [])
-        website.setdefault("navbar", {"left": []})
-    return quarto_config
+    text = path(build_dir).read_text(encoding="utf-8")
+    return cast("dict[str, Any]", parse_yaml(text) or {})
 
 
 def write(build_dir: Path, quarto_config: dict[str, Any]) -> None:
@@ -127,7 +115,7 @@ def write_initial(build_dir: Path) -> dict[str, Any]:
 
 
 @contextmanager
-def edit(build_dir: Path, *, seed_website: bool = False) -> Generator[dict[str, Any]]:
+def edit(build_dir: Path) -> Generator[dict[str, Any]]:
     """
     Read the Quarto configuration for in-place changes and write it back
 
@@ -138,10 +126,6 @@ def edit(build_dir: Path, *, seed_website: bool = False) -> Generator[dict[str, 
     ----------
     build_dir
         The Quarto project directory.
-    seed_website
-        Whether to treat a missing file as an empty mapping and supply missing
-        `website` defaults: an empty `sidebar` list and a `navbar` mapping with
-        an empty `left` list.
 
     Yields
     ------
@@ -151,9 +135,9 @@ def edit(build_dir: Path, *, seed_website: bool = False) -> Generator[dict[str, 
     Raises
     ------
     FileNotFoundError
-        If the file is missing and `seed_website` is false.
+        If `_quarto.yml` is missing.
     """
-    quarto_config = read(build_dir, seed_website=seed_website)
+    quarto_config = read(build_dir)
     yield quarto_config
     write(build_dir, quarto_config)
 

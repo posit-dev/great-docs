@@ -274,9 +274,37 @@ def apply_contributions(docs: GreatDocs, run: Run) -> None:
     """
     if not run.contributions:
         return
-    with quarto_yml.edit(docs.build_dir, seed_website=True) as quarto_config:
-        for contribution in run.contributions:
-            quarto_yml.apply(quarto_config, contribution, docs._config)
+    quarto_config = _seeded_quarto_config(docs.build_dir)
+    for contribution in run.contributions:
+        quarto_yml.apply(quarto_config, contribution, docs._config)
+    quarto_yml.write(docs.build_dir, quarto_config)
+
+
+def _seeded_quarto_config(build_dir: Path) -> dict[str, Any]:
+    """
+    Read a test's Quarto configuration and supply missing navigation defaults
+
+    Use an empty configuration if `_quarto.yml` is missing. Supply an empty `sidebar`
+    list if absent and a `navbar` mapping with an empty `left` list if `navbar` is
+    absent, so contributions can extend a partial test configuration.
+
+    Parameters
+    ----------
+    build_dir
+        The Quarto project directory.
+
+    Returns
+    -------
+    :
+        The parsed configuration with navigation defaults. A missing file starts with
+        an empty configuration.
+    """
+    file_exists = quarto_yml.path(build_dir).exists()
+    quarto_config = quarto_yml.read(build_dir) if file_exists else {}
+    website = quarto_config.setdefault("website", {})
+    website.setdefault("sidebar", [])
+    website.setdefault("navbar", {"left": []})
+    return quarto_config
 
 
 def add_api_block(docs: GreatDocs, run: Run) -> None:
@@ -442,7 +470,7 @@ def _preparation_step(docs: GreatDocs, title: str, run: Run) -> Outcome:
     :
         The step's outcome.
     """
-    run.quarto_config = quarto_yml.read(docs.build_dir, seed_website=True)
+    run.quarto_config = _seeded_quarto_config(docs.build_dir)
     steps = pipeline.preparation_steps(
         run, docs._config, docs.layout, BuildLog(stream=io.StringIO()), remote=docs._remote
     )

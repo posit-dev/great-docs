@@ -333,9 +333,7 @@ class TestPreprocessVersion:
                 layout=Layout.make(tmp_path),
                 quarto_config={},
             )
-            page_metadata.write_to_pages(
-                dest, quarto_yml.read(dest, seed_website=True), config, None, None
-            )
+            page_metadata.write_to_pages(dest, {}, config, None, None)
             front_matter = (dest / "page.qmd").read_text().split("---")[1]
             descriptions.append(parse_yaml(front_matter)["description-meta"])
 

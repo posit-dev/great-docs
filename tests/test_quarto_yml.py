@@ -59,23 +59,6 @@ def test_read_empty_file(tmp_path: Path):
     assert quarto_yml.read(tmp_path) == {}
 
 
-def test_read_seeds_missing_file(tmp_path: Path):
-    assert quarto_yml.read(tmp_path, seed_website=True) == {
-        "website": {"sidebar": [], "navbar": {"left": []}}
-    }
-
-
-def test_read_seeds_only_absent_website_keys(tmp_path: Path):
-    (tmp_path / "_quarto.yml").write_text(
-        "project:\n  type: website\nwebsite:\n  navbar:\n    right: []\n", encoding="utf-8"
-    )
-
-    assert quarto_yml.read(tmp_path, seed_website=True) == {
-        "project": {"type": "website"},
-        "website": {"navbar": {"right": []}, "sidebar": []},
-    }
-
-
 def test_edit_writes_on_clean_exit(tmp_path: Path):
     quarto_yml.write_initial(tmp_path)
 
