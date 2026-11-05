@@ -114,12 +114,14 @@ def d2_diagrams(layout: Layout, log: BuildLog) -> Outcome:
     return None
 
 
-def terminal_recordings(layout: Layout, log: BuildLog) -> None:
+def terminal_recordings(config: Config, layout: Layout, log: BuildLog) -> None:
     """
     Render the source directory's `.termshow` recordings for the `termshow` shortcode
 
     Parameters
     ----------
+    config
+        The project's configuration.
     layout
         The project's directories.
     log
@@ -139,7 +141,7 @@ def terminal_recordings(layout: Layout, log: BuildLog) -> None:
             f"({done.manifest_bytes / 1024:.0f} KB of player data)"
         )
         with quarto_yml.edit(build_dir, seed_website=True) as quarto_config:
-            quarto_yml.apply(quarto_config, done.contribution)
+            quarto_yml.apply(quarto_config, done.contribution, config)
 
 
 def shared_sidebars(run: Run, config: Config, layout: Layout, log: BuildLog) -> Outcome:

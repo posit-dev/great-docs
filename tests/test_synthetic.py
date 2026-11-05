@@ -839,7 +839,9 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
     assert cli_files, "No CLI files generated"
 
     with quarto_yml_file.edit(docs.build_dir) as quarto_config:
-        quarto_yml_file.apply(quarto_config, cli_render.contribution(docs._config, cli_files))
+        quarto_yml_file.apply(
+            quarto_config, cli_render.contribution(docs._config, cli_files), docs._config
+        )
 
     quarto_yml = docs.build_dir / "_quarto.yml"
     assert quarto_yml.exists(), "_quarto.yml was not created"
@@ -891,7 +893,9 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     assert cli_info is not None
     cli_files = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
     with quarto_yml_file.edit(docs.build_dir) as quarto_config:
-        quarto_yml_file.apply(quarto_config, cli_render.contribution(docs._config, cli_files))
+        quarto_yml_file.apply(
+            quarto_config, cli_render.contribution(docs._config, cli_files), docs._config
+        )
 
     # Process user guide
     user_guide_step(docs, run.user_guide)

@@ -166,7 +166,7 @@ def changelog(run: Run, config: Config, layout: Layout, *, remote: Remote) -> Ou
     if contribution is None:
         return "No releases found; skipped"
     with quarto_yml.edit(build_dir) as quarto_config:
-        quarto_yml.apply(quarto_config, contribution)
+        quarto_yml.apply(quarto_config, contribution, config)
     return "Changelog from GitHub Releases"
 
 
@@ -196,7 +196,7 @@ def tags(config: Config, layout: Layout) -> Outcome:
             inline_data.add(
                 quarto_config, "__GD_TAGS_DATA__", output.page_data, before="page-tags.js"
             )
-        quarto_yml.apply(quarto_config, output.contribution)
+        quarto_yml.apply(quarto_config, output.contribution, config)
     return "Tags processed"
 
 

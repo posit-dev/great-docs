@@ -568,7 +568,7 @@ def custom_pages(
             render_excludes=tuple(published.render_excludes),
         )
         with quarto_yml.edit(build_dir, seed_website=True) as quarto_config:
-            quarto_yml.apply(quarto_config, contribution)
+            quarto_yml.apply(quarto_config, contribution, config)
     if not published.pages:
         return Skipped("no custom pages")
     return f"{published.pages} custom page(s)"

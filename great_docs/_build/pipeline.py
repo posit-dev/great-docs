@@ -462,7 +462,7 @@ def preparation_steps(
         ),
         Step(
             "Pre-render terminal recordings",
-            lambda: passes.terminal_recordings(layout, log),
+            lambda: passes.terminal_recordings(config, layout, log),
             quiet=False,
             listed=False,
         ),

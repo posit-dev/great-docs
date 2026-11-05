@@ -5,9 +5,16 @@ from typing import Any
 import pytest
 from yaml12 import parse_yaml
 
-from great_docs._contribution import Contribution, NavbarLink, Sidebar
+from great_docs import GreatDocs
+from great_docs._content import user_guide
+from great_docs._contribution import Contribution, InlineData, NavbarLink, Sidebar
 from great_docs._utils import QUARTO_YML_HEADER, validate_build_dir
-from great_docs._website import quarto_yml
+from great_docs._website import inline_data, quarto_yml
+from great_docs._website.navigation import navbar
+from tests.support import discover_user_guide, mock_config, user_guide_step, write_config
+
+CONFIG = mock_config()
+"""A configuration for contributions with language-independent placement"""
 
 
 def test_write_adds_generated_header(tmp_path: Path):
@@ -211,7 +218,7 @@ def test_apply_appends_navbar_links_in_order():
     quarto_config = {"website": {"navbar": {"left": [reference]}}}
     links = (NavbarLink("Changelog", "changelog.qmd"), NavbarLink("Blog", "blog/index.qmd"))
 
-    quarto_yml.apply(quarto_config, Contribution(navbar=links))
+    quarto_yml.apply(quarto_config, Contribution(navbar=links), CONFIG)
 
     assert quarto_config["website"]["navbar"]["left"] == [
         reference,
@@ -224,7 +231,7 @@ def test_apply_appends_navbar_links_in_order():
 def test_apply_skips_a_link_whose_href_is_in_the_navbar(text: str):
     left = [{"text": text, "href": "changelog.qmd"}]
 
-    quarto_yml.apply({"website": {"navbar": {"left": left}}}, CHANGELOG)
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, CHANGELOG, CONFIG)
 
     assert left == [{"text": text, "href": "changelog.qmd"}]
 
@@ -233,7 +240,7 @@ def test_apply_adds_a_link_whose_text_is_in_the_navbar_with_another_href():
     news = {"text": "Changelog", "href": "https://example.com/news"}
     left = [news]
 
-    quarto_yml.apply({"website": {"navbar": {"left": left}}}, CHANGELOG)
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, CHANGELOG, CONFIG)
 
     assert left == [news, {"text": "Changelog", "href": "changelog.qmd"}]
 
@@ -243,7 +250,7 @@ def test_apply_skips_a_link_whose_own_item_is_in_the_navbar():
     left = [{"text": "Référence", "href": "reference/index.qmd"}]
     cli = Contribution(navbar=(NavbarLink("Référence", "reference/cli/index.qmd"),))
 
-    quarto_yml.apply({"website": {"navbar": {"left": left}}}, cli)
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, cli, CONFIG)
 
     assert left == [{"text": "Référence", "href": "reference/index.qmd"}]
 
@@ -253,7 +260,7 @@ def test_apply_adds_a_link_beside_another_own_item():
     left = [guide]
     cli = Contribution(navbar=(NavbarLink("Reference", "reference/cli/index.qmd"),))
 
-    quarto_yml.apply({"website": {"navbar": {"left": left}}}, cli)
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, cli, CONFIG)
 
     assert left == [guide, {"text": "Reference", "href": "reference/cli/index.qmd"}]
 
@@ -265,7 +272,7 @@ def test_apply_adds_a_link_beside_another_own_item():
 def test_apply_without_a_left_navbar_changes_nothing(quarto_config: dict[str, Any]):
     before = copy.deepcopy(quarto_config)
 
-    quarto_yml.apply(quarto_config, CHANGELOG)
+    quarto_yml.apply(quarto_config, CHANGELOG, CONFIG)
 
     assert quarto_config == before
 
@@ -279,7 +286,7 @@ def test_apply_inserts_a_link_before_its_anchor():
     reference = {"text": "API", "href": "reference/index.qmd"}
     left = [guide, reference]
 
-    quarto_yml.apply({"website": {"navbar": {"left": left}}}, TAGS)
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, TAGS, CONFIG)
 
     assert left == [guide, {"text": "Tags", "href": "tags/index.qmd"}, reference]
 
@@ -289,7 +296,7 @@ def test_apply_appends_a_link_whose_anchor_is_missing():
     guide = {"text": "User Guide", "href": "user-guide/index.qmd"}
     left = [guide]
 
-    quarto_yml.apply({"website": {"navbar": {"left": left}}}, TAGS)
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, TAGS, CONFIG)
 
     assert left == [guide, {"text": "Tags", "href": "tags/index.qmd"}]
 
@@ -299,8 +306,8 @@ def test_apply_inserts_an_anchored_link_once():
     reference = {"text": "Reference", "href": "reference/index.qmd"}
     left = [reference]
 
-    quarto_yml.apply({"website": {"navbar": {"left": left}}}, TAGS)
-    quarto_yml.apply({"website": {"navbar": {"left": left}}}, TAGS)
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, TAGS, CONFIG)
+    quarto_yml.apply({"website": {"navbar": {"left": left}}}, TAGS, CONFIG)
 
     assert left == [{"text": "Tags", "href": "tags/index.qmd"}, reference]
 
@@ -311,7 +318,7 @@ CLI_ENTRY = {"id": "cli-reference", "title": "CLI Reference", "contents": ["refe
 
 @pytest.mark.parametrize("quarto_config", [{}, {"website": {}}, {"website": {"sidebar": None}}])
 def test_apply_creates_the_sidebar_list(quarto_config: dict[str, Any]):
-    quarto_yml.apply(quarto_config, Contribution(sidebars=(CLI_SIDEBAR,)))
+    quarto_yml.apply(quarto_config, Contribution(sidebars=(CLI_SIDEBAR,)), CONFIG)
 
     assert quarto_config["website"]["sidebar"] == [CLI_ENTRY]
 
@@ -320,7 +327,7 @@ def test_apply_appends_a_sidebar_after_the_others():
     reference = {"id": "reference", "contents": ["reference/index.qmd"]}
     quarto_config = {"website": {"sidebar": [reference]}}
 
-    quarto_yml.apply(quarto_config, Contribution(sidebars=(CLI_SIDEBAR,)))
+    quarto_yml.apply(quarto_config, Contribution(sidebars=(CLI_SIDEBAR,)), CONFIG)
 
     assert quarto_config["website"]["sidebar"] == [reference, CLI_ENTRY]
 
@@ -331,7 +338,7 @@ def test_apply_replaces_the_sidebar_with_the_same_id_in_place():
     mcp = {"id": "mcp-reference", "contents": ["reference/mcp/index.qmd"]}
     quarto_config = {"website": {"sidebar": [reference, old, mcp]}}
 
-    quarto_yml.apply(quarto_config, Contribution(sidebars=(CLI_SIDEBAR,)))
+    quarto_yml.apply(quarto_config, Contribution(sidebars=(CLI_SIDEBAR,)), CONFIG)
 
     assert quarto_config["website"]["sidebar"] == [reference, CLI_ENTRY, mcp]
 
@@ -339,7 +346,7 @@ def test_apply_replaces_the_sidebar_with_the_same_id_in_place():
 def test_apply_without_sidebars_leaves_the_sidebar_key_absent():
     quarto_config: dict[str, Any] = {"website": {"navbar": {"left": []}}}
 
-    quarto_yml.apply(quarto_config, CHANGELOG)
+    quarto_yml.apply(quarto_config, CHANGELOG, CONFIG)
 
     assert "sidebar" not in quarto_config["website"]
 
@@ -348,8 +355,8 @@ def test_apply_adds_resources_and_render_excludes_once():
     contribution = Contribution(resources=("raw.html", "logo.png"), render_excludes=("raw.html",))
     quarto_config: dict[str, Any] = {"project": {"resources": ["logo.png"]}}
 
-    quarto_yml.apply(quarto_config, contribution)
-    quarto_yml.apply(quarto_config, contribution)
+    quarto_yml.apply(quarto_config, contribution, CONFIG)
+    quarto_yml.apply(quarto_config, contribution, CONFIG)
 
     assert quarto_config["project"]["resources"] == ["logo.png", "raw.html"]
     assert quarto_config["project"]["render"] == [*quarto_yml.RENDER_GLOBS, "!raw.html"]
@@ -358,6 +365,144 @@ def test_apply_adds_resources_and_render_excludes_once():
 def test_apply_without_project_files_leaves_the_project_absent():
     quarto_config: dict[str, Any] = {"website": {"navbar": {"left": []}}}
 
-    quarto_yml.apply(quarto_config, CHANGELOG)
+    quarto_yml.apply(quarto_config, CHANGELOG, CONFIG)
 
     assert "project" not in quarto_config
+
+
+UNTITLED_SIDEBAR = Sidebar("reference", None, ({"text": "Index", "href": "reference/index.qmd"},))
+
+
+def test_apply_writes_a_sidebar_without_a_title_key():
+    """Omit the title key for an untitled sidebar, as in the API reference sidebar"""
+    quarto_config: dict[str, Any] = {"website": {"sidebar": []}}
+
+    quarto_yml.apply(quarto_config, Contribution(sidebars=(UNTITLED_SIDEBAR,)), CONFIG)
+
+    assert quarto_config["website"]["sidebar"] == [
+        {"id": "reference", "contents": [{"text": "Index", "href": "reference/index.qmd"}]}
+    ]
+
+
+TAGS_SCRIPT = {"file": "page-tags.js"}
+OTHER_SCRIPT = {"file": "other.js"}
+
+
+@pytest.mark.parametrize(
+    "quarto_config",
+    [
+        {},
+        {"format": {"html": {}}},
+        {"format": {"html": {"include-after-body": "page-tags.js"}}},
+        {"format": {"html": {"include-after-body": [OTHER_SCRIPT, TAGS_SCRIPT, TAGS_SCRIPT]}}},
+        {"format": {"html": {"include-after-body": [OTHER_SCRIPT]}}},
+        {"format": {"html": {"include-after-body": [{"text": "<script>window.__GD_X__=1;"}]}}},
+        {"website": {"navbar": {"left": []}}},
+    ],
+    ids=["empty", "no-includes", "string", "script-twice", "script-missing", "assigned", "website"],
+)
+@pytest.mark.parametrize("data", [{"n": 1}, {"svg": "</svg>"}], ids=["plain", "closing-tag"])
+def test_apply_adds_inline_data_as_inline_data_add_does(
+    quarto_config: dict[str, Any], data: dict[str, Any]
+):
+    """Assign data before other additions to preserve the tags step's configuration key order"""
+    expected = copy.deepcopy(quarto_config)
+    inline_data.add(expected, "__GD_X__", data, before="page-tags.js")
+    quarto_yml.apply(expected, CHANGELOG, CONFIG)
+    contribution = Contribution(
+        navbar=CHANGELOG.navbar,
+        inline_data=(InlineData("__GD_X__", data, before="page-tags.js"),),
+    )
+
+    quarto_yml.apply(quarto_config, contribution, CONFIG)
+
+    assert quarto_config == expected
+    assert list(quarto_config) == list(expected)
+
+
+GUIDE_ITEM = {"text": "User Guide", "href": "user-guide/index.qmd"}
+REFERENCE_ITEM = {"text": "Reference", "href": "reference/index.qmd"}
+BLOG_ITEM = {"text": "Blog", "href": "blog/index.qmd"}
+
+NAVBARS: dict[str, list[dict[str, str]]] = {
+    "with-reference": [GUIDE_ITEM, REFERENCE_ITEM, BLOG_ITEM],
+    "cli-reference": [BLOG_ITEM, {"text": "Reference", "href": "reference/cli/index.qmd"}],
+    "without-reference": [BLOG_ITEM, GUIDE_ITEM],
+    "empty": [],
+    "translated": [
+        {"text": "Guide d'utilisation", "href": "user-guide/index.qmd"},
+        {"text": "Référence", "href": "reference/index.qmd"},
+    ],
+    "same-href": [{"text": "Cookbook", "href": "recipes/cookbook.qmd"}, REFERENCE_ITEM],
+    "same-own-item": [{"text": "Recipes", "href": "recipes/index.qmd"}, REFERENCE_ITEM],
+}
+
+
+@pytest.mark.parametrize("lang", ["en", "fr"])
+@pytest.mark.parametrize("after", [None, "Blog", "User Guide", "Guide d'utilisation", "Missing"])
+@pytest.mark.parametrize("left", NAVBARS.values(), ids=NAVBARS.keys())
+def test_apply_places_an_authored_link_as_add_link_does(
+    tmp_path: Path, left: list[dict[str, str]], after: str | None, lang: str
+):
+    """Skip an authored link under `recipes/` only when its exact `href` is present"""
+    config = write_config(tmp_path, {"site": {"lang": lang}})
+    link = NavbarLink("Cookbook", "recipes/cookbook.qmd", kind="authored", after=after)
+    quarto_config = {"website": {"navbar": {"left": copy.deepcopy(left)}}}
+    expected = copy.deepcopy(quarto_config)
+    navbar.add_link(expected, link, config, after=after)
+
+    quarto_yml.apply(quarto_config, Contribution(navbar=(link,)), config)
+
+    assert quarto_config == expected
+
+
+GUIDE_NAVBARS = {
+    **NAVBARS,
+    "same-href": [BLOG_ITEM, {"text": "Start", "href": "user-guide/intro.qmd"}, REFERENCE_ITEM],
+    "other-guide-page": [{"text": "FAQ", "href": "user-guide/faq.qmd"}, REFERENCE_ITEM],
+}
+
+
+@pytest.mark.parametrize("lang", ["en", "fr"])
+@pytest.mark.parametrize("left", GUIDE_NAVBARS.values(), ids=GUIDE_NAVBARS.keys())
+def test_apply_places_the_user_guide_as_the_user_guide_step_does(
+    tmp_path: Path, left: list[dict[str, str]], lang: str
+):
+    """Add the guide's link despite links to other guide pages, unlike a generated link"""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+    (tmp_path / "user_guide").mkdir()
+    (tmp_path / "user_guide" / "intro.qmd").write_text("---\ntitle: Intro\n---\n")
+    config = write_config(tmp_path, {"site": {"lang": lang}})
+    docs = GreatDocs(project_path=str(tmp_path))
+    guide = discover_user_guide(docs)
+    assert guide is not None
+    quarto_config: dict[str, Any] = {
+        "website": {"navbar": {"left": copy.deepcopy(left)}, "sidebar": []}
+    }
+    docs.build_dir.mkdir(parents=True)
+    quarto_yml.write(docs.build_dir, copy.deepcopy(quarto_config))
+    user_guide_step(docs, guide)
+    sidebar = user_guide.sidebar(guide)
+    link = NavbarLink(navbar.USER_GUIDE.label(config), user_guide.entry(guide), kind="user_guide")
+    contribution = Contribution(
+        navbar=(link,),
+        sidebars=(Sidebar(sidebar["id"], sidebar["title"], tuple(sidebar["contents"])),),
+    )
+
+    quarto_yml.apply(quarto_config, contribution, config)
+
+    assert quarto_config == quarto_yml.read(docs.build_dir)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"kind": "authored", "before": "reference/index.qmd"},
+        {"kind": "user_guide", "before": "reference/index.qmd"},
+        {"after": "Blog"},
+        {"kind": "user_guide", "after": "Blog"},
+    ],
+)
+def test_navbar_link_rejects_a_placement_its_kind_ignores(fields: dict[str, Any]):
+    with pytest.raises(ValueError, match="placement"):
+        NavbarLink("Demos", "demos/index.qmd", **fields)

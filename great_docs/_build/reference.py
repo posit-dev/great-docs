@@ -385,7 +385,7 @@ def _write_cli_pages(
     if not cli_files:
         return f"No {kind} pages generated"
     with quarto_yml.edit(build_dir) as quarto_config:
-        quarto_yml.apply(quarto_config, cli_render.contribution(config, cli_files))
+        quarto_yml.apply(quarto_config, cli_render.contribution(config, cli_files), config)
     n_pages = cli_render.count_pages(cli_files)
     print(f"Updated sidebar with {n_pages} CLI reference page(s)")
     return f"{n_pages} {kind} reference page(s){suffix}"
@@ -424,6 +424,6 @@ def mcp(run: Run, config: Config, layout: Layout) -> Outcome:
     if not mcp_files:
         return "No MCP pages generated"
     with quarto_yml.edit(build_dir) as quarto_config:
-        quarto_yml.apply(quarto_config, mcp_build.contribution(config, mcp_files))
+        quarto_yml.apply(quarto_config, mcp_build.contribution(config, mcp_files), config)
     print(f"Updated sidebar with {cli_render.count_pages(mcp_files)} MCP reference page(s)")
     return f"{len(mcp_info.get('tools', []))} MCP tool page(s) + manifest"
