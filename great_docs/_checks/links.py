@@ -21,10 +21,11 @@ if TYPE_CHECKING:
 
 __all__ = ["check"]
 
-_URL = re.compile(r'https?://[^\s<>"\')\]}`\\]+', re.IGNORECASE)
+# Balanced parentheses can be part of a URL, as in Wikipedia links.
+_URL = re.compile(r'https?://[^\s<>"\'\]}`\\]+', re.IGNORECASE)
 
 # Matches `http://example.com{.gd-no-link}` and `` `http://example.com`{.gd-no-link} ``
-_NO_LINK = re.compile(r'`?(https?://[^\s<>"\')\]}`\\{]+)`?\{\.gd-no-link\}', re.IGNORECASE)
+_NO_LINK = re.compile(r'`?(https?://[^\s<>"\'\]}`\\{]+)`?\{\.gd-no-link\}', re.IGNORECASE)
 
 _HEADERS = {"User-Agent": "great-docs-link-checker/1.0"}
 
@@ -63,10 +64,14 @@ def check(
     Check the URLs found in files
 
     URLs in whole-line Python comments and in fenced or inline code in `.qmd` and `.md`
-    files are excluded. URLs containing `{`, including f-string placeholders and
-    `{.gd-no-link}` markers, are also excluded. Each unique URL that matches no ignore
-    pattern is probed with `HEAD` and retried with `GET` on a 405 response. Redirects are
-    not followed.
+    files are excluded. URLs containing `{`, such as f-string placeholders, are also
+    excluded. In `.qmd` and `.md` files, `{.gd-no-link}` excludes the preceding URL throughout
+    the file, including unmarked repeats.
+
+    URLs retain balanced parentheses. Trailing punctuation and closing parentheses without
+    matching opening parentheses in the URL are removed repeatedly from the end of the URL.
+    Each unique URL that matches no ignore pattern is probed with `HEAD` and retried with
+    `GET` on a 405 response. Redirects are not followed.
 
     File reads that raise `OSError` produce a warning through `report`. Requests that raise
     `requests.RequestException` mark the URL as broken. Other errors propagate.
@@ -200,6 +205,7 @@ def _urls_in(content: str, suffix: str) -> list[str]:
     """
     excluded: set[str] = set()
     if suffix in (".qmd", ".md"):
+        # `{.gd-no-link}` excludes the same URL throughout the file, including unmarked repeats.
         excluded = {match.group(1) for match in _NO_LINK.finditer(content)}
         # Read markers before removing example code: a marker may follow a URL in inline code.
         content = re.sub(r"```[^`]*```", "", content, flags=re.DOTALL)
@@ -212,14 +218,37 @@ def _urls_in(content: str, suffix: str) -> list[str]:
         )
 
     urls: list[str] = []
-    for url in _URL.findall(content):
-        url = url.rstrip(".,;:!?")
-        while url.endswith(")") and url.count(")") > url.count("("):
-            url = url[:-1]
+    for url in map(_trim, _URL.findall(content)):
         if "{" in url or url in excluded:
             continue
         urls.append(url)
     return urls
+
+
+def _trim(url: str) -> str:
+    """
+    Remove trailing punctuation and unmatched closing parentheses from a URL
+
+    Balanced parentheses are preserved. Trimming repeats until no trailing punctuation
+    or unmatched closing parenthesis remains.
+
+    Parameters
+    ----------
+    url
+        The URL extracted from the text.
+
+    Returns
+    -------
+    :
+        The URL with trailing punctuation and unmatched closing parentheses removed.
+    """
+    while True:
+        trimmed = url.rstrip(".,;:!?")
+        if trimmed.endswith(")") and trimmed.count(")") > trimmed.count("("):
+            trimmed = trimmed[:-1]
+        if trimmed == url:
+            return url
+        url = trimmed
 
 
 def _probe(url: str, timeout: float) -> _Probe:

@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from great_docs import GreatDocs
+from great_docs._checks import links
 from tests.support import AUTHORED_PAGES, write_authored_pages, write_config
 
 # ============================================================================
@@ -358,9 +359,44 @@ class TestURLCleaning:
                 ignore_patterns=["example.com"],
             )
 
-            # Should have found a URL with the parentheses (possibly truncated)
-            # The important thing is it doesn't crash
-            assert results["total"] == 1
+            assert results["skipped"] == ["https://example.com/wiki/Page_(disambiguation)"]
+
+
+def _urls_found(tmp_path: Path, text: str) -> list[str]:
+    """
+    Find URLs in a Markdown page without making HTTP requests
+
+    Parameters
+    ----------
+    tmp_path
+        A directory to write the page in.
+    text
+        The page's content.
+
+    Returns
+    -------
+    :
+        The URLs found, in the order they appear.
+    """
+    page = tmp_path / "page.md"
+    page.write_text(text)
+    results = links.check(
+        [page], tmp_path, timeout=1.0, ignore_patterns=["."], report=lambda _line: None
+    )
+    return results["by_file"].get("page.md", [])
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "[docs](https://docs.test/page)",
+        "(see https://docs.test/page).",
+        "(https://docs.test/page.)",
+    ],
+    ids=["markdown-link", "parenthesised", "punctuation-inside"],
+)
+def test_check_links_drops_the_parenthesis_that_closes_around_a_url(tmp_path: Path, text: str):
+    assert _urls_found(tmp_path, text) == ["https://docs.test/page"]
 
 
 # ============================================================================
@@ -825,6 +861,15 @@ Real link: http://real-example.com
             # Only the real URL should be found (fake one excluded via {.gd-no-link})
             assert results["total"] == 1
             assert "http://real-example.com" in results["skipped"]
+
+
+def test_check_links_skips_a_marked_url_wherever_it_appears_in_the_page(tmp_path: Path):
+    text = (
+        "Try https://fake.test{.gd-no-link} or https://fake.test/a_(b){.gd-no-link}.\n"
+        "Again: https://fake.test and https://fake.test/a_(b), but https://real.test.\n"
+    )
+
+    assert _urls_found(tmp_path, text) == ["https://real.test"]
 
 
 # ============================================================================
