@@ -37,7 +37,6 @@ from ._build import outputs
 from ._build.steps import BuildError
 from ._content import user_guide
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, LayoutError
-from ._project import Project
 from ._utils import is_in_great_docs_build_dir, recognised_build_dirs
 from .config import Config
 
@@ -482,7 +481,14 @@ async def _handle_build(arguments: dict) -> list[TextContent]:
     if clean:
         import shutil
 
-        outputs.validate(docs._config, docs.layout)
+        outputs.validate(
+            Config(
+                docs.layout.package_root,
+                config_path=docs.layout.config_path,
+                cache_dir=docs.layout.cache_dir,
+            ),
+            docs.layout,
+        )
         for ver_dir in _sibling_build_dirs(_get_project_root(project_path), _get_layout(arguments)):
             shutil.rmtree(ver_dir)
 
@@ -695,13 +701,13 @@ async def _handle_status(arguments: dict) -> list[TextContent]:
     config_path = layout.config_path
     if config_path.exists():
         lines.append(f"Configuration: {config_path.relative_to(root)} ✓")
-        docs = _get_great_docs(project_path, arguments.get("config_path"))
-        pkg = Project.make(docs._config, docs.layout).name
+        exports = _get_exports(project_path, arguments.get("config_path"))
+        pkg = exports.project.name
         if pkg:
             lines.append(f"Package: {pkg}")
 
         # Check features
-        cfg = docs._config
+        cfg = exports.config
         features = []
         if cfg.cli_enabled:
             features.append("CLI docs")
@@ -798,8 +804,7 @@ async def _handle_api_diff(arguments: dict) -> list[TextContent]:
     base_ref = arguments.get("base")
     head_ref = arguments.get("head")
 
-    docs = _get_great_docs(project_path, arguments.get("config_path"))
-    project = Project.make(docs._config, docs.layout)
+    project = _get_exports(project_path, arguments.get("config_path")).project
     importable_name = project.importable_name
     if not project.name or not importable_name:
         return [TextContent(type="text", text="Error: Could not detect package name.")]
@@ -1252,8 +1257,9 @@ async def read_resource(uri: AnyUrl) -> str:
         # Dynamic reference page resource (from template)
         symbol = uri_str.removeprefix("gd://reference/")
         try:
-            docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
-            importable_name = Project.make(docs._config, docs.layout).importable_name
+            importable_name = _get_exports(
+                arguments.get("project_path"), arguments.get("config_path")
+            ).project.importable_name
             if not importable_name:
                 return "Error: Could not detect package name."
             # Try to get docstring for the symbol
