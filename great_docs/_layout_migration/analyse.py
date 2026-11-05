@@ -321,7 +321,7 @@ def _package_metadata(root: Path) -> tuple[str, list[Path]]:
         name = config.get("metadata", "name", fallback="")
     if not name and (root / "setup.py").is_file():
         match = re.search(
-            r"name\s*=\s*[\"']([^\"']+)[\"']", (root / "setup.py").read_bytes().decode("utf-8")
+            r"\bname\s*=\s*[\"']([^\"']+)[\"']", (root / "setup.py").read_bytes().decode("utf-8")
         )
         if match:
             name = match[1]

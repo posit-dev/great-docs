@@ -2238,3 +2238,10 @@ def test_select_destination_exhausted_still_returns_website_and_analyse_still_bl
     assert destination == project / "website"
     result = analyse(layout, destination)
     assert any("already contains unrelated content" in message for message in result.blockers)
+
+
+def test_setup_py_name_is_read_from_the_name_keyword(tmp_path: Path):
+    put(tmp_path, "setup.py", 'username = "bob"\nsetup(name="realpkg")\n')
+    put(tmp_path, "great-docs.yml", "")
+    migration = analyse(Layout.make(tmp_path), Path("realpkg"))
+    assert any("overlaps package sources" in message for message in migration.blockers)
