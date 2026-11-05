@@ -22,7 +22,7 @@ from .._content import user_guide as authored_guide
 from .._reference import sections as reference_sections
 from .._utils import GITIGNORE_CONTENT
 from .._website import page_dates, quarto_yml, scripts
-from . import content, outputs, reference, site
+from . import content, outputs, reference
 from .steps import Outcome, print_warning
 
 if TYPE_CHECKING:
@@ -60,8 +60,7 @@ def build_directory(
     layout
         The project's directories.
     remote
-        The source of repository data for the site configuration and PyPI release dates for
-        the package information page.
+        The source of PyPI release dates for the package information page.
     page_authors
         The site's authors, added to the homepage and project pages.
 
@@ -156,8 +155,6 @@ def build_directory(
     scripts.copy(config, build_dir, has_repository=run.project.github is not None)
 
     _ = (build_dir / ".gitignore").write_text(GITIGNORE_CONTENT, encoding="utf-8")
-
-    site.update_quarto_config(run, config, layout, remote=remote)
 
     page_dates.copy_portraits(config, layout.source_dir, build_dir)
 

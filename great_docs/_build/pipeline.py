@@ -48,7 +48,6 @@ if TYPE_CHECKING:
     from .._layout import Layout
     from .._remote import Remote
     from .._website.identity import Identity
-    from .facts import Facts
 
 __all__ = ["Run", "prepare_for_freeze", "preparation_steps", "run"]
 
@@ -83,10 +82,6 @@ class Run:
     user_guide
         The user guide discovered during build preparation, or `None` when no guide
         pages were found.
-    facts
-        The navbar's GitHub data, fetched when the Quarto configuration is first
-        written and reused on later writes within the build. `None` before the
-        first write.
     contributions
         The navigation, resources, render exclusions and script data recorded for the
         Quarto configuration, in preparation step order.
@@ -100,7 +95,6 @@ class Run:
     has_api_reference: bool = True
     api_block: dict[str, Any] | None = None
     user_guide: UserGuide | None = None
-    facts: Facts | None = None
     contributions: list[Contribution] = field(default_factory=lambda: list[Contribution]())
 
     @classmethod

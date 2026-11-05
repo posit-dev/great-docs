@@ -7464,11 +7464,15 @@ def test_prepare_build_directory_can_retry_after_missing_header_include(tmp_path
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch("great_docs._build.reference.add_api_block"):
+        run = make_run(docs)
+        prepare_build_directory(docs, run)
         with pytest.raises(FileNotFoundError, match="Header include file not found"):
-            prepare_build_directory(docs, make_run(docs))
+            update_quarto_config(docs, run)
 
         (tmp_path / "header.html").write_text('<meta name="retry">\n')
-        prepare_build_directory(docs, make_run(docs))
+        run = make_run(docs)
+        prepare_build_directory(docs, run)
+        update_quarto_config(docs, run)
 
     assert (docs.build_dir / "_quarto.yml").exists()
     assert (docs.build_dir / "_includes" / "header.html").read_text() == ('<meta name="retry">\n')
@@ -7485,7 +7489,6 @@ def test_prepare_build_directory_writes_website_project(tmp_path):
 
     config = read_yaml(docs.build_dir / "_quarto.yml")
     assert config["project"]["type"] == "website"
-    assert "navbar" in config["website"]
 
 
 def test_prepare_build_directory_adds_llms_links_after_api_reference_setup():
@@ -7598,7 +7601,9 @@ def test_prepare_build_directory_copies_bibliography():
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch("great_docs._build.reference.add_api_block"):
-            prepare_build_directory(docs, make_run(docs))
+            run = make_run(docs)
+            prepare_build_directory(docs, run)
+            update_quarto_config(docs, run)
 
         # .bib copied into build dir by basename
         assert (docs.build_dir / "references.bib").exists()
@@ -7634,7 +7639,9 @@ def test_prepare_build_directory_copies_multiple_bib_and_csl():
         docs = GreatDocs(project_path=tmp_dir)
 
         with patch("great_docs._build.reference.add_api_block"):
-            prepare_build_directory(docs, make_run(docs))
+            run = make_run(docs)
+            prepare_build_directory(docs, run)
+            update_quarto_config(docs, run)
 
         assert (docs.build_dir / "refs.bib").exists()
         assert (docs.build_dir / "software.bib").exists()
@@ -7692,8 +7699,11 @@ def test_bibliography_does_not_set_reference_section_title():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
+
         with patch("great_docs._build.reference.add_api_block"):
-            prepare_build_directory(docs, make_run(docs))
+            run = make_run(docs)
+            prepare_build_directory(docs, run)
+            update_quarto_config(docs, run)
 
         with open(docs.build_dir / "_quarto.yml", encoding="utf-8") as f:
             config = read_yaml(f)
@@ -7718,8 +7728,11 @@ def _prepared_quarto_config(lang: str) -> dict:
         )
 
         docs = GreatDocs(project_path=tmp_dir)
+
         with patch("great_docs._build.reference.add_api_block"):
-            prepare_build_directory(docs, make_run(docs))
+            run = make_run(docs)
+            prepare_build_directory(docs, run)
+            update_quarto_config(docs, run)
 
         with open(docs.build_dir / "_quarto.yml", encoding="utf-8") as f:
             return read_yaml(f)

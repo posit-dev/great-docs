@@ -106,22 +106,19 @@ def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Re
     Combine `great-docs.yml`, package metadata and GitHub data with recorded build
     contributions to configure render scripts, theme, resources and navigation.
     Apply contributions in build step order.
-    Preserve unrelated settings. Call again after publishing content to add its
-    contributions and refresh navigation.
+    Preserve unrelated settings.
 
     Parameters
     ----------
     run
-        The build state, including the recorded contributions and API reference availability
-        for the reference switcher. Fetch and store repository data if absent; reuse it on
-        later calls.
+        The build state: the recorded contributions, and the API reference availability
+        that the reference switcher needs.
     config
         The project's configuration.
     layout
         The project's directories.
     remote
-        The source of GitHub star and fork counts and the latest release when not already
-        stored in the build state.
+        The source of GitHub star and fork counts and the latest release.
 
     Returns
     -------
@@ -138,8 +135,6 @@ def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Re
     quarto_config = quarto_yml.read(build_dir)
 
     repo = run.project.github
-    if run.facts is None:
-        run.facts = Facts.make(config, repo, remote)
 
     assembly.assemble(
         quarto_config,
@@ -147,7 +142,7 @@ def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Re
         layout,
         build_dir,
         repo=repo,
-        facts=run.facts,
+        facts=Facts.make(config, repo, remote),
         identity=run.identity,
         package_name=run.project.name,
         metadata=run.project.manifest,

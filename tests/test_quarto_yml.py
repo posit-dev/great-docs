@@ -25,6 +25,19 @@ def test_write_adds_generated_header(tmp_path: Path):
     assert parse_yaml(text) == {"project": {"type": "website"}}
 
 
+def test_write_puts_the_api_reference_last(tmp_path: Path):
+    quarto_config = {
+        "project": {"type": "website"},
+        "api-reference": {"package": "pkg"},
+        "format": {"html": {"theme": "flatly"}},
+    }
+
+    quarto_yml.write(tmp_path, quarto_config)
+
+    assert list(quarto_yml.read(tmp_path)) == ["project", "format", "api-reference"]
+    assert list(quarto_config) == ["project", "api-reference", "format"]
+
+
 def test_write_initial_marks_build_directory_as_generated(tmp_path: Path):
     quarto_yml.write_initial(tmp_path)
 
