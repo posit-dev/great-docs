@@ -1974,3 +1974,65 @@ class TestStepApiReferenceConfig:
         with patch.object(reference_block, "refresh") as refresh:
             gd._step_api_reference_config(make_run(api_discovery_done=True), refresh=True)
         refresh.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Source links for each project in a shared process
+# ---------------------------------------------------------------------------
+
+
+def _source_linked_project(root: Path, name: str, branch: str) -> GreatDocs:
+    """
+    Create a project whose API reference links to a branch of its GitHub repository
+
+    Parameters
+    ----------
+    root
+        The directory in which to create the project.
+    name
+        The package name, unique within the test.
+    branch
+        The configured source-link branch.
+
+    Returns
+    -------
+    :
+        The project with its build directory's Quarto configuration written.
+    """
+    root.mkdir()
+    (root / "pyproject.toml").write_text(
+        f'[project]\nname = "{name}"\n\n'
+        f'[project.urls]\nRepository = "https://github.com/owner/{name}"\n',
+        encoding="utf-8",
+    )
+    (root / "great-docs.yml").write_text(f"source:\n  branch: {branch}\n", encoding="utf-8")
+    (root / name).mkdir()
+    (root / name / "__init__.py").write_text(
+        'def greet():\n    """Say hello."""\n    return "hi"\n', encoding="utf-8"
+    )
+    docs = GreatDocs(project_path=str(root))
+    docs.build_dir.mkdir(parents=True)
+    block = {
+        "package": name,
+        "dynamic": False,
+        "dir": "reference",
+        "sections": [{"title": "Functions", "contents": [{"name": "greet"}]}],
+    }
+    (docs.build_dir / "_quarto.yml").write_text(
+        yaml.safe_dump({"api-reference": block}), encoding="utf-8"
+    )
+    return docs
+
+
+class TestStepApiReference:
+    def test_each_project_in_a_process_links_to_its_own_source(self, tmp_path, monkeypatch):
+        pages: list[str] = []
+        for name, branch in [("srclinks_a", "branch-a"), ("srclinks_b", "branch-b")]:
+            docs = _source_linked_project(tmp_path / name, name, branch)
+            monkeypatch.syspath_prepend(str(docs.layout.package_root))
+            monkeypatch.chdir(docs.build_dir)
+            docs._step_api_reference(make_run(), MagicMock())
+            pages.append((docs.build_dir / "reference" / "greet.qmd").read_text(encoding="utf-8"))
+
+        assert "github.com/owner/srclinks_a/blob/branch-a/srclinks_a/__init__.py" in pages[0]
+        assert "github.com/owner/srclinks_b/blob/branch-b/srclinks_b/__init__.py" in pages[1]

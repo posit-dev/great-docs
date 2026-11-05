@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from great_docs._translations import get_translation
@@ -85,7 +84,6 @@ def translate_versioned(key: str, version: str) -> str:
     return f"{label} {version}"
 
 
-@lru_cache(4)
 def package_info(
     key: Literal["GITHUB_REPO_URL", "GIT_REF", "PACKAGE_ROOT", "SOURCE_PATH"],
 ) -> str | None:

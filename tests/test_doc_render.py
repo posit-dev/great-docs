@@ -126,13 +126,11 @@ class TestRenderSeeAlsoSectionSkipEmpty:
 class TestSourceLinkCompiledExtension:
     def test_so_extension_returns_none(self, monkeypatch):
         """When source path ends with .so, returns None."""
-        from great_docs._apiref import _globals
 
         cls = _get_private_cls()
 
         monkeypatch.setenv("GITHUB_REPO_URL", "https://github.com/user/repo")
         monkeypatch.setenv("GIT_REF", "main")
-        _globals.package_info.cache_clear()
 
         fake_self = types.SimpleNamespace(
             _source_relative_path=lambda: "mymod.cpython-313-x86_64-linux-gnu.so"
@@ -142,17 +140,13 @@ class TestSourceLinkCompiledExtension:
 
         assert result is None
 
-        _globals.package_info.cache_clear()
-
     def test_pyd_extension_returns_none(self, monkeypatch):
         """When source path ends with .pyd, returns None."""
-        from great_docs._apiref import _globals
 
         cls = _get_private_cls()
 
         monkeypatch.setenv("GITHUB_REPO_URL", "https://github.com/user/repo")
         monkeypatch.setenv("GIT_REF", "main")
-        _globals.package_info.cache_clear()
 
         fake_self = types.SimpleNamespace(_source_relative_path=lambda: "mymod.pyd")
 
@@ -160,19 +154,15 @@ class TestSourceLinkCompiledExtension:
 
         assert result is None
 
-        _globals.package_info.cache_clear()
-
 
 class TestSourceRelativePathValueError:
     def test_relative_to_raises_value_error(self, monkeypatch):
         """When filepath is not relative to PACKAGE_ROOT, falls through."""
-        from great_docs._apiref import _globals
 
         cls = _get_private_cls()
 
         monkeypatch.delenv("SOURCE_PATH", raising=False)
         monkeypatch.setenv("PACKAGE_ROOT", "/completely/different/root")
-        _globals.package_info.cache_clear()
 
         obj = types.SimpleNamespace(
             filepath="/unrelated/path/to/mod.py",
@@ -184,19 +174,15 @@ class TestSourceRelativePathValueError:
 
         assert result == "mod.py"
 
-        _globals.package_info.cache_clear()
-
 
 class TestSourceRelativePathNamespacePackage:
     def test_list_filepath_falls_back_to_package_relative_path(self, monkeypatch):
         """Verify that a namespace package uses its package-relative source path"""
-        from great_docs._apiref import _globals
 
         cls = _get_private_cls()
 
         monkeypatch.delenv("SOURCE_PATH", raising=False)
         monkeypatch.setenv("PACKAGE_ROOT", "/repo")
-        _globals.package_info.cache_clear()
 
         obj = types.SimpleNamespace(
             filepath=[Path("/repo/a/ns"), Path("/repo/b/ns")],
@@ -207,5 +193,3 @@ class TestSourceRelativePathNamespacePackage:
         result = cls.__dict__["_source_relative_path"](fake_self)
 
         assert result == "ns"
-
-        _globals.package_info.cache_clear()

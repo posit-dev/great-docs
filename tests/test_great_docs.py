@@ -9678,9 +9678,7 @@ def test_quarto_environment_venv_alternative_name():
 def _render_doc_source_relative_path(obj):
     """Invoke the renderer's `_source_relative_path` with a stand-in griffe object."""
     import great_docs._apiref._render.doc as docmod
-    from great_docs._apiref import _globals
 
-    _globals.package_info.cache_clear()
     cls = vars(docmod)["__RenderDoc"]
     fake_self = types.SimpleNamespace(obj=obj)
     return cls.__dict__["_source_relative_path"](fake_self)
