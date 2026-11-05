@@ -6,7 +6,7 @@ from ._build import finish, outputs, pipeline, serve
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
 from ._build.steps import print_warning
-from ._checks import links, proofread
+from ._checks import inputs, links, proofread
 from ._checks.proofread import CheckedFile
 from ._install import update_gitignore, write_initial_config
 from ._layout import Layout
@@ -448,9 +448,9 @@ class GreatDocs:
         if include_source:
             project = Project.make(self._config, self.layout)
             if project.importable_name:
-                files += proofread.find_modules(self.layout, project.importable_name)
+                files += inputs.find_modules(self.layout, project.importable_name)
         if include_docs:
-            files += proofread.find_pages(self._config, self.layout, report=print_warning)
+            files += inputs.find_pages(self._config, self.layout, report=print_warning)
 
         return links.check(
             files,
@@ -556,11 +556,11 @@ class GreatDocs:
 
         files: list[Path] = []
         if include_docs:
-            files = proofread.find_pages(self._config, self.layout, report=print_warning)
+            files = inputs.find_pages(self._config, self.layout, report=print_warning)
         if include_docstrings:
             project = Project.make(self._config, self.layout)
             if project.importable_name:
-                files += proofread.find_modules(self.layout, project.importable_name)
+                files += inputs.find_modules(self.layout, project.importable_name)
 
         options = proofread.Options(
             dialect=dialect,

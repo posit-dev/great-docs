@@ -14,18 +14,14 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .._content import authored
-from .._layout import PACKAGE_DIRS
 from . import harper
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from .._layout import Layout
-    from ..config import Config
     from .harper import HarperFileResult, HarperLint
 
-__all__ = ["CheckedFile", "Options", "check", "find_modules", "find_pages"]
+__all__ = ["CheckedFile", "Options", "check"]
 
 
 @dataclass(frozen=True)
@@ -63,59 +59,6 @@ class CheckedFile:
 
     error: str | None = None
     """Reason the file could not be checked, or `None` after a successful check"""
-
-
-def find_pages(config: Config, layout: Layout, *, report: Callable[[str], None]) -> list[Path]:
-    """
-    Find documentation pages for proofreading and link checking
-
-    Parameters
-    ----------
-    config
-        The project's configuration.
-    layout
-        The project's paths.
-    report
-        Receives warnings about the user guide and custom page directories.
-
-    Returns
-    -------
-    :
-        The published authored `.qmd` and `.md` pages: the homepage source, followed by
-        pages in the user guide, sections and custom page directories. An existing
-        `README.md` at the package root comes last unless it is already included.
-    """
-    pages = authored.find_pages(config, layout, report=report)
-    readme = layout.package_root / "README.md"
-    if readme.exists() and readme not in pages:
-        pages.append(readme)
-    return pages
-
-
-def find_modules(layout: Layout, module: str) -> list[Path]:
-    """
-    Find the Python files of an importable module in the project
-
-    Parameters
-    ----------
-    layout
-        The project's paths.
-    module
-        The importable module name. Dotted names such as `firebird.base` map to nested
-        directories.
-
-    Returns
-    -------
-    :
-        The `.py` files found recursively under the first matching module directory, or an
-        empty list if no directory matches. The search starts at the package root, then
-        tries its `src/`, `python/` and `lib/` directories, as the build does.
-    """
-    for root in (layout.package_root, *(layout.package_root / name for name in PACKAGE_DIRS)):
-        module_dir = root.joinpath(*module.split("."))
-        if module_dir.is_dir():
-            return list(module_dir.rglob("*.py"))
-    return []
 
 
 def check(
