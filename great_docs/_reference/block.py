@@ -4,12 +4,7 @@ Build API reference configuration and navigation
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
-
-from .._website import quarto_yml
-from . import sections as reference_sections
 
 if TYPE_CHECKING:
     from ..config import Config
@@ -106,91 +101,6 @@ def reference_yaml(config: Config, categories: Categories) -> str:
         has_prev_section = True
 
     return "\n".join(lines)
-
-
-def refresh(
-    site_config: Config,
-    build_dir: Path,
-    create_sections: Callable[[str], list[dict[str, Any]] | None],
-) -> None:
-    """
-    Refresh API sections and related settings in `_quarto.yml`
-
-    Rediscover package exports. Preserve unrelated Quarto configuration and
-    apply an explicit reference configuration if discovery yields no sections.
-    """
-    if not quarto_yml.path(build_dir).exists():
-        print("Error: _quarto.yml not found. Run 'great-docs init' first.")
-        return
-
-    quarto_config = quarto_yml.read(build_dir)
-
-    if "api-reference" not in quarto_config:
-        print("Error: No API reference configuration found. Run 'great-docs init' first.")
-        return
-
-    package_name = quarto_config["api-reference"].get("package")
-    if not package_name:
-        print("Error: No package name in API reference config.")
-        return
-
-    print(f"Re-discovering exports for package: {package_name}")
-
-    sections = create_sections(package_name)
-
-    parser = site_config.parser
-    if parser:
-        quarto_config["api-reference"]["parser"] = parser
-
-    dynamic = site_config.dynamic
-    quarto_config["api-reference"]["dynamic"] = dynamic
-
-    ref_title = site_config.reference_title
-    if ref_title:
-        quarto_config["api-reference"]["title"] = ref_title  # pragma: no cover
-    ref_desc = site_config.reference_desc
-    if ref_desc:
-        quarto_config["api-reference"]["desc"] = ref_desc  # pragma: no cover
-    elif "desc" in quarto_config["api-reference"]:
-        del quarto_config["api-reference"]["desc"]  # pragma: no cover
-
-    jupyter_kernel = site_config.jupyter
-    if jupyter_kernel:
-        quarto_config["jupyter"] = jupyter_kernel
-
-    if sections:
-        quarto_config["api-reference"]["sections"] = sections
-        print(f"Updated API reference config with {len(sections)} section(s)")
-
-        # The sidebar reads the saved sections from `_quarto.yml`.
-        quarto_yml.write(build_dir, quarto_config)
-
-        reference_sections.update_sidebar(site_config, build_dir)
-
-        print(f"✅ Refreshed API reference configuration in {quarto_yml.path(build_dir)}")
-    else:
-        reference_config = site_config.reference
-        if reference_config:
-            print(
-                "Auto-discovery failed, but applying explicit reference config from great-docs.yml"
-            )
-            user_sections = reference_sections.from_reference_config(reference_config)
-            if user_sections:
-                quarto_config["api-reference"]["sections"] = user_sections
-                quarto_yml.write(build_dir, quarto_config)
-                reference_sections.update_sidebar(site_config, build_dir)
-                print(f"✅ Applied {len(user_sections)} section(s) from great-docs.yml")
-            else:
-                print(
-                    "Warning: reference config in great-docs.yml produced no sections"
-                )  # pragma: no cover
-        else:
-            print(
-                "Warning: Could not discover package exports. Config unchanged."
-            )  # pragma: no cover
-            print(  # pragma: no cover
-                "Tip: Add a 'reference' section to great-docs.yml to manually specify your API structure."
-            )
 
 
 def configure(

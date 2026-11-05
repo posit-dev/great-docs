@@ -76,8 +76,6 @@ class Run:
         Whether the site has an API reference. Preparing the build directory sets it to
         `False` when the reference is disabled, the project is not a Python project, no
         package name is detected, or the package has nothing to document.
-    api_discovery_done
-        Whether this build has already discovered the package's exports.
     user_guide
         The user guide discovered during build preparation, or `None` when no guide
         pages were found.
@@ -93,7 +91,6 @@ class Run:
     watch: bool
     page_authors: list[dict[str, Any]]
     has_api_reference: bool = True
-    api_discovery_done: bool = False
     user_guide: UserGuide | None = None
     facts: Facts | None = None
 
@@ -349,7 +346,7 @@ def preparation_steps(
         ),
         Step(
             "Configure API reference",
-            lambda: reference.api_config(run, config, layout, refresh=refresh),
+            lambda: reference.api_config(run, refresh=refresh),
             user_code=True,
         ),
         Step(

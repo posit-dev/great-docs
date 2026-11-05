@@ -37,12 +37,12 @@ def add_api_block(run: Run, config: Config, layout: Layout) -> None:
     Skip the reference when disabled, when the project is not Python, or when no package name
     is detected. Warn for a missing package name. Use an explicit `reference` configuration
     when supplied; otherwise discover sections from the package's exports. Skip when neither
-    supplies sections. Record skips and completed export discovery in the build state.
+    supplies sections. Record skipped references in the build state.
 
     Parameters
     ----------
     run
-        The current build, including API reference availability and export discovery status.
+        The current build, including API reference availability.
     config
         The project's configuration.
     layout
@@ -83,10 +83,6 @@ def add_api_block(run: Run, config: Config, layout: Layout) -> None:
 
     # An explicit `reference` configuration takes precedence over discovered exports.
     sections = run.exports.sections(importable_name)
-
-    # The API reference configuration step skips rediscovery in this build.
-    run.api_discovery_done = True
-
     if not sections:
         print("No documentable exports found — skipping API reference")
         run.has_api_reference = False
@@ -100,23 +96,19 @@ def add_api_block(run: Run, config: Config, layout: Layout) -> None:
     print(f"Added API reference configuration to {quarto_yml.path(build_dir)}")
 
 
-def api_config(run: Run, config: Config, layout: Layout, *, refresh: bool) -> Outcome:
+def api_config(run: Run, *, refresh: bool) -> Outcome:
     """
-    Update the API reference configuration from the package's exports
+    Report the API reference configuration prepared for this build
 
-    Reuse the configuration if this build already discovered the exports during preparation.
+    Build preparation has already discovered the package's exports. Report the
+    configuration status without repeating discovery.
 
     Parameters
     ----------
     run
-        Build state recording whether the site has an API reference and whether its exports
-        have already been discovered.
-    config
-        The project's configuration.
-    layout
-        The project's directories.
+        The build state, including API reference availability.
     refresh
-        Whether to rediscover package exports.
+        Whether the build was asked to rediscover the package's exports.
 
     Returns
     -------
@@ -127,10 +119,7 @@ def api_config(run: Run, config: Config, layout: Layout, *, refresh: bool) -> Ou
         return Skipped("no API reference")
     if not refresh:
         return "Using existing config"
-    if run.api_discovery_done:
-        print("API reference already configured in this build, skipping re-discovery")
-    else:
-        reference_block.refresh(config, layout.build_dir, run.exports.sections)
+    print("API reference already configured in this build, skipping re-discovery")
     return "API reference refreshed"
 
 

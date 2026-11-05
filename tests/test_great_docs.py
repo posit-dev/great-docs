@@ -7326,42 +7326,6 @@ def test_write_homepage_hero_name_true_keeps_title(tmp_path: Path):
     assert "## testpkg" in (docs.build_dir / "index.qmd").read_text(encoding="utf-8")
 
 
-def test_refresh_api_reference_config_updates_sections():
-    """Test _refresh_api_reference_config updates sections from package exports."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-
-        config = {
-            "project": {"type": "website"},
-            "website": {"sidebar": []},
-            "api-reference": {
-                "package": "mypkg",
-                "parser": "numpy",
-                "dynamic": True,
-                "sections": [{"title": "Old", "contents": ["OldClass"]}],
-            },
-        }
-
-        with open(quarto_yml, "w") as f:
-            write_yaml(config, f)
-
-        new_sections = [{"title": "New", "desc": "", "contents": ["NewClass", "new_func"]}]
-        with patch.object(Exports, "sections", return_value=new_sections):
-            reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
-
-        with open(quarto_yml, "r") as f:
-            result = read_yaml(f)
-
-        assert result["api-reference"]["sections"] == new_sections
-
-
 def test_add_api_block_non_python_project():
     """
     Skip the API reference for a Go project without prompting for a package name
@@ -8645,35 +8609,6 @@ def test_empty_categories_has_all_keys():
         ]
         for key in expected_keys:
             assert key in cats
-
-
-def test_refresh_api_reference_config_no_api_reference():
-    """Test _refresh_api_reference_config does nothing without api-reference config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir(parents=True)
-        quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text("website:\n  title: Test\n", encoding="utf-8")
-
-        reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
-        # Should not crash
-
-
-def test_refresh_api_reference_config_no_package():
-    """Test _refresh_api_reference_config does nothing without package name."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir(parents=True)
-        quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "api-reference:\n  dir: reference\n",
-            encoding="utf-8",
-        )
-
-        reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
-        # Should not crash
 
 
 def test_write_homepage_with_badges():
@@ -10512,67 +10447,6 @@ def test_add_api_block_success():
         assert run.has_api_reference is True
         written = read_yaml(docs.build_dir / "_quarto.yml")
         assert written["api-reference"]["sections"] == sections
-
-
-def test_refresh_api_reference_config_no_quarto_yml():
-    """Test _refresh_api_reference_config when no _quarto.yml."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir = Path(tmp_dir) / "great-docs"
-        docs.build_dir.mkdir()
-
-        # No _quarto.yml — should return early
-        reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
-
-
-def test_refresh_api_reference_config_no_api_ref():
-    """Test _refresh_api_reference_config when no api-reference in config."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir = Path(tmp_dir) / "great-docs"
-        docs.build_dir.mkdir()
-        (docs.build_dir / "_quarto.yml").write_text(format_yaml({"project": {}}), encoding="utf-8")
-
-        reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
-
-
-def test_refresh_api_reference_config_fallback_to_explicit():
-    """Test _refresh_api_reference_config falls back to explicit reference config."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir = Path(tmp_dir) / "great-docs"
-        docs.build_dir.mkdir()
-
-        config = {"api-reference": {"package": "mypkg"}}
-        (docs.build_dir / "_quarto.yml").write_text(format_yaml(config), encoding="utf-8")
-
-        docs._config = mock_config(
-            parser="numpy",
-            dynamic=True,
-            reference_title=None,
-            reference_desc=None,
-            jupyter=None,
-            reference=[{"title": "API", "contents": ["ClassA"]}],
-        )
-
-        user_sections = [{"title": "API", "contents": ["ClassA"]}]
-
-        with (
-            patch.object(Exports, "sections", return_value=None),
-            patch.object(
-                reference_sections,
-                "from_reference_config",
-                return_value=user_sections,
-            ),
-            patch.object(reference_sections, "update_sidebar"),
-        ):
-            reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
-
-        written = read_yaml(docs.build_dir / "_quarto.yml")
-        assert written["api-reference"]["sections"] == user_sections
 
 
 def test_discover_exports_submodule_detection():
@@ -18405,66 +18279,6 @@ class TestBuildSectionsFromReferenceConfigBatch9:
             result = reference_sections.from_reference_config(config)
             # Section should be empty (no valid contents) so result is None
             assert result is None
-
-
-class TestRefreshApiReferenceConfigBatch9:
-    """Tests for _refresh_api_reference_config edge cases."""
-
-    def test_fallback_to_explicit_reference_config(self):
-        """Falls back to user's reference config when auto-discovery fails."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            with open(tmp / "great-docs.yml", "w") as f:
-                write_yaml(
-                    {"reference": [{"title": "API", "contents": ["func_a", "func_b"]}]},
-                    f,
-                )
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.build_dir / "_quarto.yml"
-            config = {
-                "project": {"type": "website"},
-                "website": {"sidebar": []},
-                "api-reference": {
-                    "package": "mypkg",
-                    "sections": [{"title": "Old", "contents": ["old_func"]}],
-                },
-                "format": {"html": {}},
-            }
-            with open(quarto_yml, "w") as f:
-                write_yaml(config, f)
-            # Module doesn't exist, so auto-discovery will fail.
-            # Method should fall back to explicit config.
-            reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
-            with open(quarto_yml) as f:
-                result = read_yaml(f)
-            sections = result.get("api-reference", {}).get("sections", [])
-            # Should have applied the explicit config
-            if sections:
-                assert sections[0]["title"] == "API"
-
-    def test_no_exports_no_config_warns(self):
-        """Warns when neither exports nor explicit config available."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.build_dir / "_quarto.yml"
-            config = {
-                "project": {"type": "website"},
-                "website": {"sidebar": []},
-                "api-reference": {
-                    "package": "mypkg",
-                    "sections": [{"title": "Old", "contents": ["old_func"]}],
-                },
-                "format": {"html": {}},
-            }
-            with open(quarto_yml, "w") as f:
-                write_yaml(config, f)
-            reference_block.refresh(docs._config, docs.build_dir, make_exports(docs).sections)
-            # Should not crash — just warn and keep config unchanged
 
 
 class TestUpdateQuartoConfigStrNormalizationBatch10:

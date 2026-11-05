@@ -16,7 +16,6 @@ from great_docs import GreatDocs
 from great_docs._build import reference
 from great_docs._build.log import BuildLog
 from great_docs._build.steps import Outcome
-from great_docs._reference import block as reference_block
 from great_docs._utils import QUARTO_YML_HEADER
 from tests.support import make_run, write_config
 
@@ -84,20 +83,32 @@ def _write_api_reference(docs: GreatDocs) -> Outcome:
     return outcome
 
 
-def test_api_config_skips_discovery_already_done_in_this_build(tmp_path: Path):
+def test_api_config_reuses_the_exports_discovered_during_preparation(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
     """
     Reuse the API reference configuration discovered during build preparation
     """
     write_config(tmp_path, "module: mypkg\n")
     docs = GreatDocs(project_path=str(tmp_path))
+    run = make_run(docs)
 
-    with patch.object(reference_block, "refresh") as refresh:
-        outcome = reference.api_config(
-            make_run(docs, api_discovery_done=True), docs._config, docs.layout, refresh=True
-        )
+    with patch.object(run.exports, "sections") as sections:
+        outcome = reference.api_config(run, refresh=True)
 
-    refresh.assert_not_called()
+    sections.assert_not_called()
     assert outcome == "API reference refreshed"
+    assert "API reference already configured in this build" in capsys.readouterr().out
+
+
+def test_api_config_without_refresh_uses_the_existing_configuration(tmp_path: Path):
+    """
+    Report the existing API reference configuration when the build skips refreshing
+    """
+    write_config(tmp_path, "module: mypkg\n")
+    docs = GreatDocs(project_path=str(tmp_path))
+
+    assert reference.api_config(make_run(docs), refresh=False) == "Using existing config"
 
 
 def test_api_links_each_project_in_a_process_to_its_own_source(
