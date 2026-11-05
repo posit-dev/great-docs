@@ -332,15 +332,16 @@ def test_apply_appends_a_sidebar_after_the_others():
     assert quarto_config["website"]["sidebar"] == [reference, CLI_ENTRY]
 
 
-def test_apply_replaces_the_sidebar_with_the_same_id_in_place():
+def test_apply_moves_a_sidebar_with_the_same_id_last():
+    """Replace all sidebars with the same `id` and append the new sidebar"""
     reference = {"id": "reference", "contents": ["reference/index.qmd"]}
     old = {"id": "cli-reference", "title": "Old", "contents": ["old.qmd"]}
     mcp = {"id": "mcp-reference", "contents": ["reference/mcp/index.qmd"]}
-    quarto_config = {"website": {"sidebar": [reference, old, mcp]}}
+    quarto_config = {"website": {"sidebar": [reference, old, mcp, old]}}
 
     quarto_yml.apply(quarto_config, Contribution(sidebars=(CLI_SIDEBAR,)), CONFIG)
 
-    assert quarto_config["website"]["sidebar"] == [reference, CLI_ENTRY, mcp]
+    assert quarto_config["website"]["sidebar"] == [reference, mcp, CLI_ENTRY]
 
 
 def test_apply_without_sidebars_leaves_the_sidebar_key_absent():

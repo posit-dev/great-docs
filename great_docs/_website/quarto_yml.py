@@ -378,9 +378,8 @@ def apply(quarto_config: dict[str, Any], contribution: Contribution, config: Con
     Repeated contributions add each link only once. Configurations without
     `website.navbar.left` get no links.
 
-    Each sidebar replaces the entry with the same `id` in `website.sidebar`, keeping
-    its position. A sidebar with no matching entry is appended. The sidebar list is
-    created when missing. A sidebar without a title gets no `title` key.
+    Append each sidebar to `website.sidebar` after removing every entry with the same
+    `id`. Create the list if missing, and omit the `title` key for untitled sidebars.
 
     Add resources to `project.resources` and render exclusions to `project.render`,
     each once, as `add_resources` and `add_render_excludes` do.
@@ -455,7 +454,7 @@ def _add_navbar_links(
 
 def _add_sidebars(quarto_config: dict[str, Any], sidebars: Iterable[Sidebar]) -> None:
     """
-    Replace sidebars with the same `id` or append new sidebars
+    Append sidebars, removing earlier entries with the same `id`
 
     Parameters
     ----------
@@ -475,11 +474,9 @@ def _add_sidebars(quarto_config: dict[str, Any], sidebars: Iterable[Sidebar]) ->
         if sidebar.title is not None:
             entry["title"] = sidebar.title
         entry["contents"] = list(sidebar.contents)
-        ids = [
-            cast("dict[str, Any]", item).get("id") if isinstance(item, dict) else None
+        existing[:] = [
+            item
             for item in existing
+            if not (isinstance(item, dict) and cast("dict[str, Any]", item).get("id") == sidebar.id)
         ]
-        if sidebar.id in ids:
-            existing[ids.index(sidebar.id)] = entry
-        else:
-            existing.append(entry)
+        existing.append(entry)
