@@ -32,7 +32,7 @@ __all__ = ["add_api_block", "api", "api_config", "cli", "go_cli", "interlinks", 
 
 def add_api_block(run: Run, config: Config, layout: Layout) -> None:
     """
-    Configure an API reference in `_quarto.yml` unless already present
+    Write the API reference configuration to `_quarto.yml`
 
     Skip the reference when disabled, when the project is not Python, or when no package name
     is detected. Warn for a missing package name. Use an explicit `reference` configuration
@@ -64,13 +64,6 @@ def add_api_block(run: Run, config: Config, layout: Layout) -> None:
         run.has_api_reference = False
         return
 
-    build_dir = layout.build_dir
-    quarto_config = quarto_yml.read(build_dir)
-
-    if "api-reference" in quarto_config:
-        print("API reference configuration already exists, skipping")
-        return
-
     project = run.project
     if not project.name or not (importable_name := project.importable_name):
         print_warning("Could not detect the package name; skipping the API reference")
@@ -99,6 +92,8 @@ def add_api_block(run: Run, config: Config, layout: Layout) -> None:
         run.has_api_reference = False
         return
 
+    build_dir = layout.build_dir
+    quarto_config = quarto_yml.read(build_dir)
     reference_block.configure(config, quarto_config, importable_name, sections)
     quarto_yml.write(build_dir, quarto_config)
 

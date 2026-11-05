@@ -10415,26 +10415,6 @@ def test_add_api_block_disabled():
         assert run.has_api_reference is False
 
 
-def test_add_api_block_already_exists():
-    """
-    Leave an existing API reference configuration unchanged
-    """
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs._config = mock_config(reference_enabled=True, is_python_project=True)
-
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-        (docs.build_dir / "_quarto.yml").write_text(
-            format_yaml({"api-reference": {"package": "existing"}}),
-            encoding="utf-8",
-        )
-
-        # Should not modify anything
-        run = make_run(docs)
-        add_api_block(docs, run)
-
-
 def test_add_api_block_without_package_name_warns_and_skips(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ):
