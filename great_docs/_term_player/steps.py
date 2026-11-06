@@ -352,15 +352,15 @@ class _Session:
         winsize = struct.pack("HHHH", self.settings.rows, self.settings.cols, 0, 0)
 
         pid, fd = pty.fork()
-        if pid == 0:  # pragma: no cover - the child process
-            # fd 1 is the terminal here (`sys.stdout` may have been replaced, as under pytest)
+        if pid == 0:
+            # Descriptor 1 is the PTY even when a test replaces `sys.stdout`.
             try:
                 fcntl.ioctl(1, termios.TIOCSWINSZ, winsize)
                 if self.settings.cwd is not None:
                     os.chdir(self.settings.cwd)
                 os.execvpe(argv[0], argv, env)
             except OSError as e:
-                # Shown on the screen, which the error message includes
+                # Write to the PTY so the recording includes the shell start-up error.
                 os.write(1, f"{argv[0]}: {e.strerror}\r\n".encode())
             os._exit(127)
 
