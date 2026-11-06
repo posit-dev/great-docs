@@ -1132,6 +1132,25 @@ class TestCheckContentFreshness:
 
 
 # ---------------------------------------------------------------------------
+# _get_package_version
+# ---------------------------------------------------------------------------
+
+
+class TestGetPackageVersion:
+    def test_installed_package(self):
+        """Return a version for an installed package"""
+        from great_docs._skill_install import _get_package_version
+
+        assert _get_package_version("pytest")
+
+    def test_missing_package_is_none(self):
+        """Return `None` for a missing package"""
+        from great_docs._skill_install import _get_package_version
+
+        assert _get_package_version("no-such-package-k91s") is None
+
+
+# ---------------------------------------------------------------------------
 # _compare_versions
 # ---------------------------------------------------------------------------
 

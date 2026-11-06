@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Literal
 
@@ -185,12 +186,10 @@ def detect_agents_global() -> list[AgentFormat]:
 
 
 def _get_package_version(package: str) -> str | None:
-    """Get the installed version of a Python package."""
+    """Return the installed package version, or `None` if the package is missing"""
     try:
-        from importlib.metadata import version
-
         return version(package)
-    except Exception:
+    except PackageNotFoundError:
         return None
 
 
@@ -677,20 +676,20 @@ def _check_content_freshness(
 
 
 def _compare_versions(installed: str, current: str) -> str:
-    """Compare two version strings, returning a status.
-
-    Returns `"current"` if the installed version is equal to or newer than the current package
-    version, `"outdated"` if it is older.
-
-    Used as a fallback when no content hash is available (e.g., URL installs).
     """
-    try:
-        from packaging.version import Version
+    Compare package versions when no content hash is available
 
+    Return `"current"` if the installed version is equal to or newer than the current
+    version, or `"outdated"` if it is older. If either version string is invalid,
+    return `"current"` only when the strings are equal.
+    """
+    from packaging.version import InvalidVersion, Version
+
+    try:
         if Version(installed) >= Version(current):
             return "current"
         return "outdated"
-    except Exception:
+    except InvalidVersion:
         if installed == current:
             return "current"
         return "outdated"

@@ -22,6 +22,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
+from dotenv import dotenv_values, find_dotenv
+
 from ._build import serve
 from ._github import GithubRepo, token_from_env
 from ._layout import Layout
@@ -157,14 +159,10 @@ def _gh_token(gh: str) -> str | None:
 
 
 def _token_from_dotenv(path: str | Path) -> str | None:
-    """Read GITHUB_TOKEN / GH_TOKEN from a specific `.env` file."""
-    try:
-        from dotenv import dotenv_values
-    except Exception:  # pragma: no cover - python-dotenv is a hard dependency
-        return None
+    """Read `GITHUB_TOKEN` or `GH_TOKEN` from a `.env` file, ignoring read and decoding errors"""
     try:
         values = dotenv_values(str(path))
-    except Exception:
+    except (OSError, UnicodeDecodeError):
         return None
     token = values.get("GITHUB_TOKEN") or values.get("GH_TOKEN")
     return token.strip() if token else None
@@ -194,14 +192,9 @@ def resolve_token(
     candidates: list[Path] = []
     if project_path:
         candidates.append(Path(project_path) / ".env")
-    try:
-        from dotenv import find_dotenv
-
-        found = find_dotenv(usecwd=True)
-        if found:
-            candidates.append(Path(found))
-    except Exception:  # pragma: no cover
-        pass
+    found = find_dotenv(usecwd=True)
+    if found:
+        candidates.append(Path(found))
     seen: set[str] = set()
     for candidate in candidates:
         key = str(candidate)

@@ -7,6 +7,7 @@ annotations, and cuts to termshow recordings.
 from __future__ import annotations
 
 import json
+import subprocess
 import threading
 import webbrowser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -287,6 +288,16 @@ def _serialize_script(script_data: dict[str, Any], source_path: str, kept: str =
     return "\n".join(lines) + "\n"
 
 
+# What a request body can raise while being read as a script: invalid JSON, a body that is not
+# an object, an item missing a field, a value of the wrong type, and a script file that cannot
+# be read or written.
+_BAD_REQUEST_ERRORS = (ValueError, KeyError, TypeError, AttributeError, OSError)
+
+# The same, plus a preview that Quarto cannot render: missing or too old (`BuildError`, a
+# `RuntimeError`), failed or without output (`RuntimeError`), or timed out.
+_PREVIEW_ERRORS = (*_BAD_REQUEST_ERRORS, RuntimeError, subprocess.SubprocessError)
+
+
 class EditorHandler(SimpleHTTPRequestHandler):
     """HTTP handler for the Termshow Editor."""
 
@@ -315,7 +326,7 @@ class EditorHandler(SimpleHTTPRequestHandler):
                 yaml_str = _serialize_script(script_data, self.source_path, self._kept())
                 self.script_path.write_text(yaml_str, encoding="utf-8")
                 self._json_response({"ok": True, "path": str(self.script_path)})
-            except Exception as e:
+            except _BAD_REQUEST_ERRORS as e:
                 self._json_response({"ok": False, "error": str(e)}, status=400)
         elif self.path == "/api/preview-yaml":
             content_length = int(self.headers.get("Content-Length", 0))
@@ -324,7 +335,7 @@ class EditorHandler(SimpleHTTPRequestHandler):
                 script_data = json.loads(body)
                 yaml_str = _serialize_script(script_data, self.source_path, self._kept())
                 self._json_response({"yaml": yaml_str})
-            except Exception as e:
+            except _BAD_REQUEST_ERRORS as e:
                 self._json_response({"error": str(e)}, status=400)
         elif self.path == "/api/preview":
             content_length = int(self.headers.get("Content-Length", 0))
@@ -338,7 +349,7 @@ class EditorHandler(SimpleHTTPRequestHandler):
                 self.send_header("Content-Length", str(len(encoded)))
                 self.end_headers()
                 self.wfile.write(encoded)
-            except Exception as e:
+            except _PREVIEW_ERRORS as e:
                 self._json_response({"error": str(e)}, status=500)
         else:
             self.send_error(404)
@@ -435,7 +446,6 @@ def _generate_preview_html(editor_data: dict, script_data: dict) -> str:
     runs Quarto to produce a production-accurate HTML page.
     """
     import shutil
-    import subprocess
     import tempfile
 
     quarto.ensure_installed()

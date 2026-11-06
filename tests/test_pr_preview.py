@@ -85,7 +85,7 @@ def test_resolve_token_none(monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GH_TOKEN", raising=False)
     monkeypatch.setattr(pp, "_gh_path", lambda: None)
-    monkeypatch.setattr(pp, "find_dotenv", lambda usecwd=True: "", raising=False)
+    monkeypatch.setattr(pp, "find_dotenv", lambda usecwd=True: "")
     # No env, no gh, no discoverable .env in an isolated dir.
     token, source = pp.resolve_token(None, None)
     # A stray .env in the repo working dir shouldn't matter for this assertion's intent;
@@ -671,9 +671,7 @@ def test_resolve_token_find_dotenv_path(monkeypatch, tmp_path):
     monkeypatch.setattr(pp, "_gh_path", lambda: None)
     env_file = tmp_path / ".env"
     env_file.write_text("GITHUB_TOKEN=found_it\n")
-    import dotenv
-
-    monkeypatch.setattr(dotenv, "find_dotenv", lambda usecwd=True: str(env_file))
+    monkeypatch.setattr(pp, "find_dotenv", lambda usecwd=True: str(env_file))
     token, source = pp.resolve_token(None, None)
     assert token == "found_it"
 
@@ -684,9 +682,7 @@ def test_resolve_token_skips_duplicates(monkeypatch, tmp_path):
     monkeypatch.setattr(pp, "_gh_path", lambda: None)
     env_file = tmp_path / ".env"
     env_file.write_text("GITHUB_TOKEN=tok\n")
-    import dotenv
-
-    monkeypatch.setattr(dotenv, "find_dotenv", lambda usecwd=True: str(env_file))
+    monkeypatch.setattr(pp, "find_dotenv", lambda usecwd=True: str(env_file))
     token, source = pp.resolve_token(tmp_path, None)
     assert token == "tok"
 
@@ -1642,14 +1638,22 @@ def test_cache_root_darwin(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_token_from_dotenv_parse_error(monkeypatch, tmp_path):
-    import dotenv
+def test_token_from_dotenv_undecodable_file(tmp_path):
+    """Ignore a token file that cannot be decoded"""
+    env = tmp_path / ".env"
+    env.write_bytes(b"GITHUB_TOKEN=\xff\xfe\x00\n")
+    assert pp._token_from_dotenv(env) is None
 
-    def bad_dotenv_values(path):
-        raise ValueError("parse failed")
 
-    monkeypatch.setattr(dotenv, "dotenv_values", bad_dotenv_values)
-    assert pp._token_from_dotenv(tmp_path / ".env") is None
+def test_token_from_dotenv_bug_propagates(monkeypatch, tmp_path):
+    """Propagate an unexpected error while reading a token file"""
+
+    def broken_dotenv_values(path):
+        raise TypeError("bug")
+
+    monkeypatch.setattr(pp, "dotenv_values", broken_dotenv_values)
+    with pytest.raises(TypeError):
+        pp._token_from_dotenv(tmp_path / ".env")
 
 
 # ---------------------------------------------------------------------------
