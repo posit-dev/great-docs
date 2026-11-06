@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, TypeAlias
 
-from yaml12 import Yaml, parse_yaml
+from yaml12 import Yaml, format_yaml, parse_yaml
 
 YamlScalar: TypeAlias = None | bool | int | float | str | Yaml
 """A parsed YAML scalar or tagged node"""
@@ -172,6 +172,11 @@ class YamlMapping:
 FRONT_MATTER_OPENING = re.compile(r"---[ \t]*\n")
 """The first line of a page that opens front matter"""
 
+_ONE_LINE_BODY_CLASSES = re.compile(
+    r"^body-classes:[ \t]*[^\s|>&!*][^\n]*\n(?![ \t])", re.MULTILINE
+)
+"""A `body-classes` option whose value is a plain or quoted scalar on its own line"""
+
 
 @dataclass(frozen=True)
 class FrontMatterBlock:
@@ -305,3 +310,45 @@ def set_front_matter_option(content: str, key: str, value: bool | int | str) -> 
     else:
         front_matter = f"{line}\n"
     return content[:start] + front_matter + content[closing:]
+
+
+def add_body_class(content: str, cls: str) -> str:
+    """
+    Add a class to a page's `body-classes`
+
+    When `body-classes` is absent or a string on one line, the page's other lines keep
+    their text. Any other form, such as a list, becomes a string of its classes, and the
+    front matter is rewritten without its comments.
+
+    Parameters
+    ----------
+    content
+        The page source.
+    cls
+        The class to add.
+
+    Returns
+    -------
+    :
+        The page with `cls` among its body classes. A page that already has the class, or
+        whose front matter is not a YAML mapping, is unchanged. A page without front matter
+        gains a block.
+    """
+    block = locate_front_matter(content)
+    span = _front_matter_span(content)
+    if block is None or span is None:
+        return set_front_matter_option(content, "body-classes", cls)
+    mapping = block.mapping
+    yaml_text = content[span[0] : span[1]]
+    if not mapping and yaml_text.strip():
+        return content
+    classes = " ".join(mapping.strings("body-classes")).split()
+    if cls in classes:
+        return content
+    joined = " ".join([*classes, cls])
+    if "body-classes" not in mapping or (
+        isinstance(mapping.get("body-classes"), str) and _ONE_LINE_BODY_CLASSES.search(yaml_text)
+    ):
+        return set_front_matter_option(content, "body-classes", joined)
+    updated = {**mapping.data, "body-classes": joined}
+    return f"---\n{format_yaml(updated)}\n---\n{content[block.end :]}"
