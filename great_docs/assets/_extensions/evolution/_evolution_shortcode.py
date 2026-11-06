@@ -4,10 +4,17 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 
 def _bool_arg(value: str) -> bool:
     return value.lower() not in ("false", "no", "0")
+
+
+def _fail(symbol: str, error: Exception) -> NoReturn:
+    """Print an HTML error comment to standard error and exit with status 1"""
+    print(f"<!-- evolution shortcode error for {symbol}: {error} -->", file=sys.stderr)
+    sys.exit(1)
 
 
 def main() -> None:
@@ -25,13 +32,19 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        if args.json_file:
-            # Render from a JSON file instead of live git history
-            from great_docs._api_diff import render_evolution_table_from_dict
+        from great_docs._api_diff import (
+            EVOLUTION_ERRORS,
+            render_evolution_table,
+            render_evolution_table_from_dict,
+        )
+    except ImportError as exc:
+        _fail(args.symbol, exc)
 
+    try:
+        if args.json_file:
             json_path = Path(args.json_file)
             if not json_path.is_absolute():
-                # Resolve relative to cwd (Quarto runs from great-docs/)
+                # Quarto runs from `great-docs/`, so relative paths use that directory.
                 json_path = Path(".").resolve() / json_path
             data = json.loads(json_path.read_text(encoding="utf-8"))
             html = render_evolution_table_from_dict(
@@ -41,11 +54,7 @@ def main() -> None:
                 include_css=_bool_arg(args.css),
             )
         else:
-            # Live git history mode
-            from great_docs._api_diff import render_evolution_table
-
-            # Quarto runs from the project directory (great-docs/), the git root
-            # is one level up.
+            # Quarto runs from `great-docs/`, one level below the Git root.
             project_root = Path(".").resolve().parent
 
             html = render_evolution_table(
@@ -59,13 +68,9 @@ def main() -> None:
                 summary_text=args.summary,
                 include_css=_bool_arg(args.css),
             )
-        print(html)
-    except Exception as exc:
-        print(
-            f"<!-- evolution shortcode error for {args.symbol}: {exc} -->",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    except (*EVOLUTION_ERRORS, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        _fail(args.symbol, exc)
+    print(html)
 
 
 if __name__ == "__main__":

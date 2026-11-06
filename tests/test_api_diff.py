@@ -2004,6 +2004,23 @@ def test_python_bridge_parses_args():
     assert "symbol" in result.stdout.lower()
 
 
+def test_python_bridge_reports_a_missing_json_file(tmp_path: Path):
+    """Report a missing JSON file as an error comment without a traceback"""
+    import sys
+
+    bridge = _ext_dir() / "_evolution_shortcode.py"
+    result = subprocess.run(
+        [sys.executable, str(bridge), "build", "--json_file", str(tmp_path / "missing.json")],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 1
+    assert result.stderr.startswith("<!-- evolution shortcode error for build: ")
+    assert "Traceback" not in result.stderr
+
+
 def _base_data() -> dict:
     return {
         "symbol": "build",
