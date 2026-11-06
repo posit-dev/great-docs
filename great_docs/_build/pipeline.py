@@ -466,6 +466,7 @@ def preparation_steps(
             "Process page status badges",
             lambda: generated.page_statuses(run, config, layout),
         ),
+        Step("Prepare WebMCP pages", lambda: generated.webmcp_pages(config, layout)),
         Step(
             "Copy assets",
             lambda: content.assets(run, config, layout, remote=remote),

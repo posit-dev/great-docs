@@ -2,8 +2,8 @@
 Build steps for generated site files and page data
 
 Write `llms.txt` files, agent skills, a changelog from GitHub Releases, a tags index and page
-status badges, with their navbar links and page data. Warn if skill installation
-instructions lack a site URL.
+status badges, with their navbar links and page data. Prepare pages for the WebMCP tools. Warn
+if skill installation instructions lack a site URL.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from .._website import changelog as changelog_page
 from .._website import page_status
 from .._website import tags as page_tags
 from .._website.ai_agents import llms_txt as llms_files
+from .._website.ai_agents import webmcp_pages as webmcp_page_data
 from .._website.ai_agents.skills import SkillsWriter
 from .steps import Outcome, Skipped
 
@@ -26,7 +27,15 @@ if TYPE_CHECKING:
     from .log import BuildLog
     from .pipeline import Run
 
-__all__ = ["changelog", "check_site_url", "llms_txt", "page_statuses", "skills", "tags"]
+__all__ = [
+    "changelog",
+    "check_site_url",
+    "llms_txt",
+    "page_statuses",
+    "skills",
+    "tags",
+    "webmcp_pages",
+]
 
 
 def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
@@ -222,3 +231,28 @@ def page_statuses(run: Run, config: Config, layout: Layout) -> Outcome:
         return Skipped("no pages with status")
     run.contributions.append(contribution)
     return "Status badges processed"
+
+
+def webmcp_pages(config: Config, layout: Layout) -> Outcome:
+    """
+    Mark the pages that opt out of WebMCP and write the authored pages' facts
+
+    Parameters
+    ----------
+    config
+        The project's configuration.
+    layout
+        The project's directories.
+
+    Returns
+    -------
+    :
+        The result line or skip reason.
+    """
+    if not config.webmcp_enabled:
+        return Skipped("WebMCP not enabled")
+    facts = webmcp_page_data.prepare(config, layout)
+    opted_out = sum(not page.webmcp for page in facts)
+    if opted_out:
+        return f"WebMCP pages prepared ({opted_out} opted out)"
+    return "WebMCP pages prepared"
