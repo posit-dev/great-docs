@@ -9127,6 +9127,27 @@ def test_build_watch_mode(tmp_path):
     assert quarto_calls == [["quarto", "preview", "--no-browser"]]
 
 
+def test_build_watch_mode_counts_only_the_steps_it_runs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    """
+    Announce in the header as many steps as the footer reports complete
+
+    Watch mode stops after starting the preview, so the steps that follow a full render
+    are not counted.
+    """
+    docs = _buildable_docs(tmp_path)
+
+    with stubbed_build(), patch("great_docs._build.watch.source_changes", return_value=iter(())):
+        docs.build(watch=True, refresh=False)
+
+    out = capsys.readouterr().out
+    announced = re.search(r"(\d+) steps", out)
+    completed = re.search(r"Build complete . (\d+)/(\d+) steps", out)
+    assert announced is not None and completed is not None
+    assert completed.group(1) == completed.group(2) == announced.group(1)
+
+
 def test_build_quarto_render_failure(tmp_path):
     """Raise `BuildError` when Quarto fails to render"""
     docs = _buildable_docs(tmp_path)
