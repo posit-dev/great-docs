@@ -1760,10 +1760,10 @@ class TestExtractDocstringExamples:
         (tmp_path / "docs" / "great-docs.yml").write_text("display_name: Test\n")
         layout = Layout.make(tmp_path)
         config = mock_config(reference_enabled=False)
-        with patch("great_docs.config.Config", return_value=config) as config_cls:
+        with patch.object(Layout, "load_config", autospec=True, return_value=config) as load:
             result = extract_docstring_examples(tmp_path, layout=layout)
         assert result == []
-        assert config_cls.call_args.kwargs["config_path"] == layout.config_path
+        load.assert_called_once_with(layout)
 
 
 # ===================================================================

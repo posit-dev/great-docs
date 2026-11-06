@@ -2609,7 +2609,7 @@ class TestFreezeInfo:
         persist_dir = tmp_path / "_freeze"
 
         # persist_dir does not exist
-        with patch("great_docs.config.Config", return_value=self._make_mock_config()):
+        with patch("great_docs._layout.Layout.load_config", return_value=self._make_mock_config()):
             _freeze_info(tmp_path, persist_dir)
         out = capsys.readouterr().out
 
@@ -2618,7 +2618,7 @@ class TestFreezeInfo:
     def test_cache_dir_empty(self, tmp_path, capsys):
         persist_dir = tmp_path / "_freeze"
         persist_dir.mkdir()
-        with patch("great_docs.config.Config", return_value=self._make_mock_config()):
+        with patch("great_docs._layout.Layout.load_config", return_value=self._make_mock_config()):
             _freeze_info(tmp_path, persist_dir)
         out = capsys.readouterr().out
 
@@ -2632,7 +2632,7 @@ class TestFreezeInfo:
         cache_json.write_text(
             json.dumps({"result": {"markdown": "Executed at: 2024-01-15 10:30:00\nsome content"}})
         )
-        with patch("great_docs.config.Config", return_value=self._make_mock_config()):
+        with patch("great_docs._layout.Layout.load_config", return_value=self._make_mock_config()):
             _freeze_info(tmp_path, persist_dir)
         out = capsys.readouterr().out
 
@@ -2644,7 +2644,7 @@ class TestFreezeInfo:
         page_dir.mkdir(parents=True)
         cache_json = page_dir / "html.json"
         cache_json.write_text("not valid json{{")
-        with patch("great_docs.config.Config", return_value=self._make_mock_config()):
+        with patch("great_docs._layout.Layout.load_config", return_value=self._make_mock_config()):
             _freeze_info(tmp_path, persist_dir)
         out = capsys.readouterr().out
 
@@ -2659,7 +2659,7 @@ class TestFreezeInfo:
         persist_dir = tmp_path / "_freeze"
 
         # persist_dir does not exist (we just want the per-page section)
-        with patch("great_docs.config.Config", return_value=self._make_mock_config()):
+        with patch("great_docs._layout.Layout.load_config", return_value=self._make_mock_config()):
             _freeze_info(tmp_path, persist_dir)
         out = capsys.readouterr().out
 
@@ -2669,7 +2669,7 @@ class TestFreezeInfo:
     def test_project_freeze_auto(self, tmp_path, capsys):
         persist_dir = tmp_path / "_freeze"
         with patch(
-            "great_docs.config.Config",
+            "great_docs._layout.Layout.load_config",
             return_value=self._make_mock_config(freeze_value="auto"),
         ):
             _freeze_info(tmp_path, persist_dir)
@@ -2679,7 +2679,7 @@ class TestFreezeInfo:
     def test_project_freeze_disabled(self, tmp_path, capsys):
         persist_dir = tmp_path / "_freeze"
         with patch(
-            "great_docs.config.Config",
+            "great_docs._layout.Layout.load_config",
             return_value=self._make_mock_config(freeze_value=None),
         ):
             _freeze_info(tmp_path, persist_dir)
@@ -2869,7 +2869,7 @@ class TestVersionsCommandMissedBranches:
         runner = CliRunner()
         cfg = self._make_cfg(has_versions=True, versions_data=[{"bad": "entry"}])
         with (
-            patch("great_docs.config.Config", return_value=cfg),
+            patch("great_docs._layout.Layout.load_config", return_value=cfg),
             patch(
                 "great_docs._versions.model.parse_versions_config",
                 side_effect=ValueError("bad config"),
@@ -2890,7 +2890,7 @@ class TestVersionsCommandMissedBranches:
         entry = VersionEntry(tag="v1.0", label="1.0")
         cfg = self._make_cfg(has_versions=True, versions_data=[{"tag": "v1.0"}])
         with (
-            patch("great_docs.config.Config", return_value=cfg),
+            patch("great_docs._layout.Layout.load_config", return_value=cfg),
             patch(
                 "great_docs._versions.model.parse_versions_config",
                 return_value=[entry],
@@ -2932,7 +2932,7 @@ class TestVersionsCommandMissedBranches:
 
         cfg = self._make_cfg(has_versions=True, versions_data=[{}])
         with (
-            patch("great_docs.config.Config", return_value=cfg),
+            patch("great_docs._layout.Layout.load_config", return_value=cfg),
             patch(
                 "great_docs._versions.model.parse_versions_config",
                 return_value=[e1, e2, e3],
@@ -3394,7 +3394,7 @@ class TestSeoMissedBranches:
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
         runner = CliRunner()
-        with patch("great_docs.cli.Config", side_effect=RuntimeError("boom")):
+        with patch("great_docs._layout.Layout.load_config", side_effect=RuntimeError("boom")):
             result = runner.invoke(cli, ["seo", "--project-path", str(tmp_path)])
         assert result.exit_code == 1
         assert "Error: boom" in result.output
@@ -3404,7 +3404,7 @@ class TestSeoMissedBranches:
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
         runner = CliRunner()
-        with patch("great_docs.cli.Config", side_effect=RuntimeError("boom")):
+        with patch("great_docs._layout.Layout.load_config", side_effect=RuntimeError("boom")):
             result = runner.invoke(cli, ["seo", "--json", "--project-path", str(tmp_path)])
         assert result.exit_code == 1
         assert "error" in result.output
@@ -3523,7 +3523,7 @@ class TestVersionsExceptionPath:
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
         runner = CliRunner()
-        with patch("great_docs.config.Config", side_effect=RuntimeError("boom")):
+        with patch("great_docs._layout.Layout.load_config", side_effect=RuntimeError("boom")):
             result = runner.invoke(cli, ["versions", "--project-path", str(tmp_path)])
         assert result.exit_code == 1
         assert "Error" in result.output

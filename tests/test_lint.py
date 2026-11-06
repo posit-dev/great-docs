@@ -2135,7 +2135,7 @@ def _read_project(root: Path) -> tuple[Config, Layout]:
         The configuration and the directories.
     """
     layout = Layout.make(root)
-    config = Config(layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir)
+    config = layout.load_config()
     return config, layout
 
 

@@ -13487,7 +13487,9 @@ def test_cli_changelog_error():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.Config", side_effect=RuntimeError("changelog failed")):
+        with patch(
+            "great_docs._layout.Layout.load_config", side_effect=RuntimeError("changelog failed")
+        ):
             result = runner.invoke(changelog, ["--project-path", tmp_dir])
             assert result.exit_code == 1
             assert "Error: changelog failed" in result.output

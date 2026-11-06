@@ -61,9 +61,7 @@ class Exports:
         ConfigError
             If the configuration names an unsupported docstring parser.
         """
-        config = Config(
-            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
-        )
+        config = layout.load_config()
         return cls(config, Project.make(config, layout))
 
     def package(self, name: str) -> gf.Module:
