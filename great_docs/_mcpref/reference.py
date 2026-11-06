@@ -255,7 +255,7 @@ async def _call_list(method: Any, cursor: str | None) -> dict[str, Any]:
     return _dump(await asyncio.wait_for(method(params=params), _PROTOCOL_TIMEOUT))
 
 
-async def _list_tools(session: Any) -> list[dict[str, Any]]:  # pragma: no cover
+async def _list_tools(session: Any) -> list[dict[str, Any]]:
     """Fetch all tools, following pagination cursors."""
     tools: list[dict[str, Any]] = []
     cursor: str | None = None
@@ -275,14 +275,16 @@ async def _list_tools(session: Any) -> list[dict[str, Any]]:  # pragma: no cover
     return tools
 
 
-async def _list_resources(session: Any) -> list[dict[str, Any]]:  # pragma: no cover
+async def _list_resources(session: Any) -> list[dict[str, Any]]:
     """Fetch all resources, following pagination cursors."""
+    from mcp.shared.exceptions import MCPError
+
     resources: list[dict[str, Any]] = []
     cursor: str | None = None
     while True:
         try:
             result = await _call_list(session.list_resources, cursor)
-        except Exception:
+        except (MCPError, TimeoutError):
             break
         for r in result.get("resources", []) or []:
             resources.append(
@@ -299,12 +301,14 @@ async def _list_resources(session: Any) -> list[dict[str, Any]]:  # pragma: no c
     return resources
 
 
-async def _list_resource_templates(session: Any) -> list[dict[str, Any]]:  # pragma: no cover
+async def _list_resource_templates(session: Any) -> list[dict[str, Any]]:
     """Fetch all resource templates."""
+    from mcp.shared.exceptions import MCPError
+
     templates: list[dict[str, Any]] = []
     try:
         result = await _call_list(session.list_resource_templates, None)
-    except Exception:
+    except (MCPError, TimeoutError):
         return templates
     for t in result.get("resourceTemplates", []) or []:
         templates.append(
@@ -318,12 +322,14 @@ async def _list_resource_templates(session: Any) -> list[dict[str, Any]]:  # pra
     return templates
 
 
-async def _list_prompts(session: Any) -> list[dict[str, Any]]:  # pragma: no cover
+async def _list_prompts(session: Any) -> list[dict[str, Any]]:
     """Fetch all prompts along with their expanded message content."""
+    from mcp.shared.exceptions import MCPError
+
     prompts: list[dict[str, Any]] = []
     try:
         result = await _call_list(session.list_prompts, None)
-    except Exception:
+    except (MCPError, TimeoutError):
         return prompts
 
     for p in result.get("prompts", []) or []:
@@ -356,10 +362,12 @@ async def _list_prompts(session: Any) -> list[dict[str, Any]]:  # pragma: no cov
     return prompts
 
 
-async def _get_prompt_messages(  # pragma: no cover
+async def _get_prompt_messages(
     session: Any, name: str, required_names: list[str]
 ) -> list[dict[str, Any]]:
     """Call `prompts/get` for a prompt, tolerating required-argument servers."""
+    from mcp.shared.exceptions import MCPError
+
     # Try with no arguments first; if the server rejects that because arguments
     # are required, retry with placeholder values so we can still show a preview.
     attempts: list[dict[str, str]] = [{}]
@@ -369,9 +377,9 @@ async def _get_prompt_messages(  # pragma: no cover
     for args in attempts:
         try:
             result = await asyncio.wait_for(session.get_prompt(name, args), _PROTOCOL_TIMEOUT)
-            return _dump(result).get("messages", []) or []
-        except Exception:
+        except (MCPError, TimeoutError):
             continue
+        return _dump(result).get("messages", []) or []
     return []
 
 

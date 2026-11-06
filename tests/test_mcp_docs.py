@@ -965,8 +965,24 @@ async def get_prompt(ctx, params):
     return types.GetPromptResult(messages=[types.PromptMessage(role="user", content=content)])
 
 
+async def list_resources(ctx, params=None):
+    resource = types.Resource(uri="probe://config", name="config", mime_type="text/plain")
+    return types.ListResourcesResult(resources=[resource])
+
+
+async def list_resource_templates(ctx, params=None):
+    template = types.ResourceTemplate(uri_template="probe://items/{id}", name="item")
+    return types.ListResourceTemplatesResult(resource_templates=[template])
+
+
 server = Server(
-    "probe", on_list_tools=list_tools, on_list_prompts=list_prompts, on_get_prompt=get_prompt
+    "probe",
+    instructions="  Start here.  ",
+    on_list_tools=list_tools,
+    on_list_prompts=list_prompts,
+    on_get_prompt=get_prompt,
+    on_list_resources=list_resources,
+    on_list_resource_templates=list_resource_templates,
 )
 """
 
@@ -982,13 +998,13 @@ class TestIntrospectViaProtocol:
 
         info = _introspect_via_protocol("probe_server", "server")
 
-        # The server exposes no resources. Its required prompt argument makes
-        # the preview use a placeholder value.
         assert info is not None
         assert info["name"] == "probe"
+        assert info["instructions"] == "Start here."
         assert [tool["name"] for tool in info["tools"]] == ["add"]
-        assert info["resources"] == []
-        assert info["resource_templates"] == []
+        assert info["resources"][0]["mime_type"] == "text/plain"
+        assert info["resource_templates"][0]["uri_template"] == "probe://items/{id}"
+        # The required prompt argument makes the preview use a placeholder value.
         assert info["prompts"][0]["messages"] == [{"role": "user", "text": "Explain <topic>"}]
 
     @pytest.mark.parametrize(
@@ -1067,6 +1083,69 @@ class TestListHelpers:
         assert [tool["name"] for tool in tools] == ["first", "second"]
         assert session.list_tools.await_args_list[0].kwargs == {"params": None}
         assert session.list_tools.await_args_list[1].kwargs["params"].cursor == "page-2"
+
+    @pytest.mark.parametrize(
+        "method", ["list_resources", "list_resource_templates", "list_prompts"]
+    )
+    @pytest.mark.parametrize(
+        "error",
+        [MCPError(-32601, "Method not found"), TimeoutError()],
+        ids=["protocol-error", "timeout"],
+    )
+    def test_protocol_error_or_timeout_lists_nothing(self, method: str, error: Exception):
+        from great_docs._mcpref import reference
+
+        session = MagicMock()
+        setattr(session, method, AsyncMock(side_effect=error))
+
+        assert asyncio.run(getattr(reference, f"_{method}")(session)) == []
+
+    @pytest.mark.parametrize(
+        "method", ["list_resources", "list_resource_templates", "list_prompts"]
+    )
+    def test_unexpected_error_from_a_list_call_propagates(self, method: str):
+        from great_docs._mcpref import reference
+
+        session = MagicMock()
+        setattr(session, method, AsyncMock(side_effect=RuntimeError("bug")))
+
+        with pytest.raises(RuntimeError, match="bug"):
+            asyncio.run(getattr(reference, f"_{method}")(session))
+
+    @pytest.mark.parametrize(
+        "error",
+        [MCPError(-32602, "topic is required"), TimeoutError()],
+        ids=["protocol-error", "timeout"],
+    )
+    def test_prompt_preview_retries_with_placeholder_arguments(self, error: Exception):
+        from great_docs._mcpref.reference import _get_prompt_messages
+
+        message = {"role": "user", "content": {"type": "text", "text": "Explain <topic>"}}
+        session = MagicMock()
+        session.get_prompt = AsyncMock(side_effect=[error, {"messages": [message]}])
+
+        messages = asyncio.run(_get_prompt_messages(session, "explain", ["topic"]))
+
+        assert messages == [message]
+        assert session.get_prompt.await_args_list[1].args == ("explain", {"topic": "<topic>"})
+
+    def test_prompt_preview_is_empty_when_every_attempt_fails(self):
+        from great_docs._mcpref.reference import _get_prompt_messages
+
+        session = MagicMock()
+        session.get_prompt = AsyncMock(side_effect=MCPError(-32602, "topic is required"))
+
+        assert asyncio.run(_get_prompt_messages(session, "explain", ["topic"])) == []
+        assert session.get_prompt.await_count == 2
+
+    def test_unexpected_error_from_a_prompt_preview_propagates(self):
+        from great_docs._mcpref.reference import _get_prompt_messages
+
+        session = MagicMock()
+        session.get_prompt = AsyncMock(side_effect=RuntimeError("bug"))
+
+        with pytest.raises(RuntimeError, match="bug"):
+            asyncio.run(_get_prompt_messages(session, "explain", []))
 
 
 # ---------------------------------------------------------------------------
