@@ -14,7 +14,7 @@ Run it from the repository root of a checkout whose `.venv` was created with
 `env -u VIRTUAL_ENV uv sync --extra dev --frozen`:
 
 ```sh
-make quarto-project-diff          # base `main`, 40 cases
+make quarto-project-diff          # base: where HEAD branched from `main`; 40 cases
 make quarto-project-diff-full     # every Gauntlet package and its variants
 make quarto-project-diff QUARTO_PROJECT_DIFF_ARGS="--base HEAD~1 --only gdtest_minimal"
 make quarto-project-diff QUARTO_PROJECT_DIFF_ARGS="--fail-on difference"
