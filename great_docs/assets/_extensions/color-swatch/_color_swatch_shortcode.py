@@ -49,12 +49,12 @@ def _load_contrast_module() -> None:
         _apca_contrast = _ac
         _relative_luminance_apca = _rl
         return
-    except Exception:  # pragma: no cover
+    except ImportError:
         pass
 
-    # Walk ancestors to find contrast.py  (only reached outside an installed package)
-    cur = Path(__file__).resolve().parent  # pragma: no cover
-    for ancestor in cur.parents:  # pragma: no cover
+    # Quarto may use an interpreter without Great Docs installed.
+    cur = Path(__file__).resolve().parent
+    for ancestor in cur.parents:
         contrast_path = ancestor / "great_docs" / "contrast.py"
         if contrast_path.exists():
             spec = importlib.util.spec_from_file_location("contrast", contrast_path)
@@ -66,7 +66,7 @@ def _load_contrast_module() -> None:
             _relative_luminance_apca = mod._relative_luminance_apca
             return
 
-    raise ImportError("Cannot locate great_docs/contrast.py")  # pragma: no cover
+    raise ImportError("Cannot locate great_docs/contrast.py")
 
 
 _load_contrast_module()
@@ -335,7 +335,7 @@ try:
             return data
         return []
 
-except ImportError:  # pragma: no cover
+except ImportError:
     # Minimal YAML-subset parser for simple list-of-dicts (no external dep)
 
     def _parse_yaml(text: str) -> list[dict[str, Any]]:  # type: ignore[misc]
@@ -380,8 +380,12 @@ def parse_colors(body: str, palette: str) -> list[dict[str, Any]]:
     if body.strip():
         parsed = _parse_yaml(body)
         for entry in parsed:
-            if "hex" not in entry or "name" not in entry:
+            if not isinstance(entry, dict) or "hex" not in entry or "name" not in entry:
                 continue
+            if not isinstance(entry["name"], str) or not isinstance(entry["hex"], str):
+                raise ValueError(
+                    f'name and hex must be text (quote a hex value: "#ff0000"): {entry!r}'
+                )
             colors.append(entry)
 
     return colors
@@ -668,7 +672,7 @@ def main() -> None:
 
         print(html_out, end="")
 
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(
             f"<!-- color-swatch error: {exc} -->",
             file=sys.stderr,

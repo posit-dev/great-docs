@@ -1863,15 +1863,28 @@ def test_no_markers_returns_unchanged(mock_render):
     mock_render.assert_not_called()
 
 
-@patch("great_docs._api_diff.render_evolution_table")
-def test_exception_gives_error_comment(mock_render):
-    mock_render.side_effect = RuntimeError("boom")
-    content = '<!-- %evolution symbol="build" -->'
-    result = process_evolution_markers(content, "/fake")
+def test_package_that_fails_to_load_gives_error_comment(tmp_path: Path):
+    """Replace a marker with an error comment when a release contains invalid Python"""
+    _git(tmp_path, "init")
+    _git(tmp_path, "config", "user.email", "t@t.co")
+    _git(tmp_path, "config", "user.name", "t")
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+    (tmp_path / "mypkg").mkdir()
+    (tmp_path / "mypkg" / "__init__.py").write_text("def build(a:\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-m", "broken")
+    _git(tmp_path, "tag", "v0.1.0")
 
-    assert "error for build" in result
-    assert "boom" in result
-    assert result.startswith("<!--")
+    result = process_evolution_markers('<!-- %evolution symbol="build" -->', tmp_path)
+
+    assert result.startswith("<!-- %evolution error for build: Syntax error")
+
+
+@patch("great_docs._api_diff.render_evolution_table", side_effect=TypeError("bug"))
+def test_unexpected_error_propagates(mock_render):
+    """Propagate unexpected errors raised while rendering an evolution table"""
+    with pytest.raises(TypeError, match="bug"):
+        process_evolution_markers('<!-- %evolution symbol="build" -->', "/fake")
 
 
 @patch("great_docs._api_diff.render_evolution_table")
@@ -1987,6 +2000,23 @@ def test_python_bridge_parses_args():
 
     assert result.returncode == 0
     assert "symbol" in result.stdout.lower()
+
+
+def test_python_bridge_reports_a_missing_json_file(tmp_path: Path):
+    """Report a missing JSON file as an error comment without a traceback"""
+    import sys
+
+    bridge = _ext_dir() / "_evolution_shortcode.py"
+    result = subprocess.run(
+        [sys.executable, str(bridge), "build", "--json_file", str(tmp_path / "missing.json")],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 1
+    assert result.stderr.startswith("<!-- evolution shortcode error for build: ")
+    assert "Traceback" not in result.stderr
 
 
 def _base_data() -> dict:
