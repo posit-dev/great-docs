@@ -946,7 +946,7 @@ class TestRenderPageWithQuarto:
         qmd.write_text("---\ntitle: Test\n---\n\n```{python}\nx = 1 + 2\n```\n")
         cells = [Cell(0, "x = 1 + 2")]
         result = _render_page_with_quarto(qmd, "good.qmd", cells, 30)
-        assert result.status == "pass"
+        assert result.status == "pass", result
         assert result.cells_checked == 1
         assert result.errors == []
 
@@ -955,7 +955,7 @@ class TestRenderPageWithQuarto:
         qmd.write_text('```{python}\nraise ValueError("boom")\n```\n')
         cells = [Cell(0, 'raise ValueError("boom")')]
         result = _render_page_with_quarto(qmd, "bad.qmd", cells, 30)
-        assert result.status == "fail"
+        assert result.status == "fail", result
         assert len(result.errors) == 1
         assert result.errors[0].error_type == "ValueError"
 
@@ -970,7 +970,7 @@ class TestRenderPageWithQuarto:
             Cell(1, 'raise ValueError("second")'),
         ]
         result = _render_page_with_quarto(qmd, "multi.qmd", cells, 30)
-        assert result.status == "fail"
+        assert result.status == "fail", result
         assert len(result.errors) == 2
 
     def test_error_true_cell_not_reported(self, tmp_path):
@@ -981,7 +981,7 @@ class TestRenderPageWithQuarto:
         )
         cells = extract_cells(qmd.read_text())
         result = _render_page_with_quarto(qmd, "expected.qmd", cells, 30)
-        assert result.status == "pass"
+        assert result.status == "pass", result
         assert result.errors == []
 
     def test_sequential_state_shared(self, tmp_path):
@@ -989,7 +989,7 @@ class TestRenderPageWithQuarto:
         qmd.write_text("```{python}\nshared = 42\n```\n\n```{python}\nassert shared == 42\n```\n")
         cells = [Cell(0, "shared = 42"), Cell(1, "assert shared == 42")]
         result = _render_page_with_quarto(qmd, "state.qmd", cells, 30)
-        assert result.status == "pass"
+        assert result.status == "pass", result
 
 
 # ===================================================================
@@ -1006,7 +1006,7 @@ class TestRunPage:
         cells_json = json.dumps([asdict(c) for c in cells])
         result_json = _run_page("test.qmd", cells_json, 30, str(tmp_path))
         result = json.loads(result_json)
-        assert result["status"] == "pass"
+        assert result["status"] == "pass", result
         assert result["cells_checked"] == 1
 
     def test_failing_page(self, tmp_path):
@@ -1016,7 +1016,7 @@ class TestRunPage:
         cells_json = json.dumps([asdict(c) for c in cells])
         result_json = _run_page("fail.qmd", cells_json, 30, str(tmp_path))
         result = json.loads(result_json)
-        assert result["status"] == "fail"
+        assert result["status"] == "fail", result
         assert len(result["errors"]) == 1
 
     def test_docstring_mode(self, tmp_path):
@@ -1026,7 +1026,7 @@ class TestRunPage:
             "docstring:pkg.Foo", cells_json, 30, str(tmp_path), is_docstring=True
         )
         result = json.loads(result_json)
-        assert result["status"] == "pass"
+        assert result["status"] == "pass", result
 
 
 # ===================================================================
@@ -1425,6 +1425,8 @@ class TestLogContent:
         )
         log_path = tmp_path / "check.log"
         result = check_examples(tmp_path, no_docstrings=True)
+        [page] = result.pages
+        assert page.status == "fail", page
         write_log_file(result, log_path)
         assert log_path.exists()
         content = log_path.read_text()
@@ -1701,7 +1703,7 @@ class TestCheckExamplesParallel:
         self._write_qmd(tmp_path / "b.qmd", "```{python}\ny = 2\n```\n")
         result = check_examples(tmp_path, parallel=True, jobs=2, no_docstrings=True)
         assert result.pages_checked == 2
-        assert result.pages_passed == 2
+        assert result.pages_passed == 2, result.pages
 
     def test_parallel_with_failure(self, tmp_path):
         self._write_qmd(tmp_path / "good.qmd", "```{python}\nx = 1\n```\n")
@@ -1710,7 +1712,7 @@ class TestCheckExamplesParallel:
             "```{python}\nraise ValueError('boom')\n```\n",
         )
         result = check_examples(tmp_path, parallel=True, jobs=2, no_docstrings=True)
-        assert result.pages_passed == 1
+        assert result.pages_passed == 1, result.pages
         assert result.pages_failed == 1
 
     def test_jobs_gt_1_implies_parallel(self, tmp_path):
@@ -1718,14 +1720,14 @@ class TestCheckExamplesParallel:
         self._write_qmd(tmp_path / "b.qmd", "```{python}\ny = 2\n```\n")
         result = check_examples(tmp_path, jobs=2, no_docstrings=True)
         assert result.pages_checked == 2
-        assert result.pages_passed == 2
+        assert result.pages_passed == 2, result.pages
 
     def test_parallel_pages_isolated(self, tmp_path):
         self._write_qmd(tmp_path / "a.qmd", "```{python}\nparallel_var = 99\n```\n")
         self._write_qmd(tmp_path / "b.qmd", "```{python}\nprint(parallel_var)\n```\n")
         result = check_examples(tmp_path, parallel=True, jobs=2, no_docstrings=True)
         b_result = next(p for p in result.pages if p.path == "b.qmd")
-        assert b_result.status == "fail"
+        assert b_result.status == "fail", b_result
         assert any("NameError" in e.error_type for e in b_result.errors)
 
 
