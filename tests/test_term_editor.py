@@ -1000,6 +1000,41 @@ class TestEditorHandler:
         assert responses[0][0]["ok"] is False
         assert "error" in responses[0][0]
 
+    @pytest.mark.parametrize(
+        "body", [b"[]", b'{"chapters": [{}]}', b'{"chapters": [{"time": "a"}]}']
+    )
+    def test_do_post_api_save_wrong_shape_is_400(self, body):
+        """POST /api/save with a body of the wrong shape is a 400 error response."""
+        handler = self._make_handler("POST", "/api/save", body)
+        responses = []
+        handler._json_response = lambda d, **kw: responses.append((d, kw))
+        handler.do_POST()
+        assert responses[0][0]["ok"] is False
+        assert responses[0][1] == {"status": 400}
+
+    def test_do_post_api_save_unwritable_path_is_400(self, tmp_path):
+        """POST /api/save to a script path that cannot be written is a 400 error response."""
+        handler = self._make_handler("POST", "/api/save", b"{}")
+        handler.script_path = tmp_path / "missing-dir" / "demo.termshow.yml"
+        responses = []
+        handler._json_response = lambda d, **kw: responses.append((d, kw))
+        handler.do_POST()
+        assert responses[0][0]["ok"] is False
+        assert responses[0][1] == {"status": 400}
+
+    def test_do_post_api_save_bug_propagates(self):
+        """POST /api/save does not turn an editor bug into a 400 response."""
+        from unittest.mock import patch
+
+        handler = self._make_handler("POST", "/api/save", b"{}")
+        handler._json_response = lambda d, **kw: None
+        with patch(
+            "great_docs._term_player.editor._serialize_script",
+            side_effect=ZeroDivisionError("bug"),
+        ):
+            with pytest.raises(ZeroDivisionError):
+                handler.do_POST()
+
     def test_do_post_api_preview_yaml_success(self):
         """POST /api/preview-yaml returns the YAML string."""
         import json, io
@@ -1096,6 +1131,22 @@ class TestEditorHandler:
             handler.do_POST()
 
         assert "error" in responses[0]
+
+    def test_do_post_api_preview_quarto_missing_is_500(self):
+        """POST /api/preview without Quarto on the PATH is a 500 error response."""
+        from unittest.mock import patch
+
+        from great_docs._build.quarto import QuartoNotFoundError
+
+        handler = self._make_handler("POST", "/api/preview", b"{}")
+        responses = []
+        handler._json_response = lambda d, **kw: responses.append((d, kw))
+        with patch(
+            "great_docs._term_player.editor.quarto.ensure_installed",
+            side_effect=QuartoNotFoundError("no quarto"),
+        ):
+            handler.do_POST()
+        assert responses[0] == ({"error": "no quarto"}, {"status": 500})
 
     def test_do_post_unknown_path_sends_404(self):
         """POST /other sends a 404 error."""
