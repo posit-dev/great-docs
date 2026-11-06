@@ -6,6 +6,7 @@ import asyncio
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -329,6 +330,77 @@ class TestOnCallToolIsError:
         assert result.is_error is False
 
 
+class TestServerRequests:
+    """MCP request handling through an in-process client"""
+
+    def _ask(self, request: Callable[[Any], Any]) -> Any:
+        """Send a client request and return the protocol result"""
+        from mcp.client import Client
+
+        async def run() -> Any:
+            # Legacy mode exercises the initialisation handshake and JSON-RPC
+            # messages used over stdio.
+            async with Client(mcp_module.server, mode="legacy") as client:
+                return await request(client)
+
+        return asyncio.run(run())
+
+    def test_lists_capabilities(self):
+        async def names(client: Any) -> dict[str, list[str]]:
+            return {
+                "tools": [tool.name for tool in (await client.list_tools()).tools],
+                "prompts": [prompt.name for prompt in (await client.list_prompts()).prompts],
+                "resources": [
+                    str(resource.uri) for resource in (await client.list_resources()).resources
+                ],
+                "templates": [
+                    template.uri_template
+                    for template in (await client.list_resource_templates()).resource_templates
+                ],
+            }
+
+        result = self._ask(names)
+        assert result["tools"] == [tool.name for tool in asyncio.run(list_tools())]
+        assert result["prompts"] == [prompt.name for prompt in asyncio.run(list_prompts())]
+        assert result["resources"] == [str(r.uri) for r in asyncio.run(list_resources())]
+        assert result["templates"] == [
+            template.uri_template for template in asyncio.run(list_resource_templates())
+        ]
+
+    def test_call_tool_reports_whether_the_call_failed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        unknown = self._ask(lambda client: client.call_tool("bogus_tool_name", {}))
+        status = self._ask(lambda client: client.call_tool("gd_status", {}))
+        assert unknown.is_error is True
+        assert unknown.content[0].text == "Unknown tool: bogus_tool_name"
+        assert status.is_error is False
+        assert status.content[0].text.startswith(f"Project: {tmp_path.name}")
+
+    def test_get_prompt_returns_the_prompt(self):
+        result = self._ask(
+            lambda client: client.get_prompt("write-user-guide", {"topic": "Installation"})
+        )
+        assert "Installation" in result.messages[0].content.text
+
+    def test_read_resource_returns_text(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.chdir(tmp_path)
+        result = self._ask(lambda client: client.read_resource("gd://config"))
+        expected = asyncio.run(read_resource(AnyUrl("gd://config")))
+        assert [(str(c.uri), c.text) for c in result.contents] == [("gd://config", expected)]
+
+    def test_completion_returns_suggestions(self):
+        ref = PromptReference(type="ref/prompt", name="write-user-guide")
+        result = self._ask(lambda client: client.complete(ref, {"name": "audience", "value": "b"}))
+        assert result.completion.values == ["beginner"]
+
+    def test_completion_without_suggestions_is_empty(self):
+        ref = PromptReference(type="ref/prompt", name="no-such-prompt")
+        result = self._ask(lambda client: client.complete(ref, {"name": "topic", "value": ""}))
+        assert result.completion.values == []
+
+
 # ---------------------------------------------------------------------------
 # Server entry point
 # ---------------------------------------------------------------------------
@@ -346,6 +418,35 @@ def test_server_answers_a_client_over_stdio():
             async with ClientSession(read_stream, write_stream) as session:
                 await asyncio.wait_for(session.initialize(), 30)
                 result = await asyncio.wait_for(session.list_tools(), 30)
+        return [tool.name for tool in result.tools]
+
+    assert "gd_build" in asyncio.run(list_tool_names())
+
+
+def test_run_mcp_server_serves_stdio_until_input_ends(monkeypatch: pytest.MonkeyPatch):
+    from contextlib import asynccontextmanager
+
+    import anyio
+    from mcp import ClientSession
+    from mcp.shared.memory import create_client_server_memory_streams
+
+    async def list_tool_names() -> list[str]:
+        async with create_client_server_memory_streams() as (client_streams, server_streams):
+
+            @asynccontextmanager
+            async def memory_stdio():
+                yield server_streams
+
+            monkeypatch.setattr(mcp_module, "stdio_server", memory_stdio)
+            with anyio.fail_after(30):
+                async with anyio.create_task_group() as task_group:
+                    task_group.start_soon(mcp_module.run_mcp_server)
+                    async with ClientSession(*client_streams) as session:
+                        await session.initialize()
+                        result = await session.list_tools()
+                    # The server returns on end-of-input; close the client's output
+                    # to let it finish.
+                    await client_streams[1].aclose()
         return [tool.name for tool in result.tools]
 
     assert "gd_build" in asyncio.run(list_tool_names())

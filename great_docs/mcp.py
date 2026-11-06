@@ -1533,59 +1533,57 @@ from mcp.types import (
 )
 
 
-async def _on_list_tools(ctx: Any, params: Any = None) -> Any:  # pragma: no cover
-    return ListToolsResult(tools=await _HANDLERS["list_tools"]())  # pragma: no cover
+async def _on_list_tools(ctx: Any, params: Any = None) -> Any:
+    return ListToolsResult(tools=await _HANDLERS["list_tools"]())
 
 
-async def _on_call_tool(ctx: Any, params: Any) -> Any:  # pragma: no cover
-    content = await _HANDLERS["call_tool"](  # pragma: no cover
+async def _on_call_tool(ctx: Any, params: Any) -> Any:
+    content = await _HANDLERS["call_tool"](
         getattr(params, "name", ""),
         getattr(params, "arguments", {}) or {},
     )
-    return CallToolResult(  # pragma: no cover
+    return CallToolResult(
         content=list(content or []),
         is_error=getattr(content, "is_error", False),
     )
 
 
-async def _on_list_prompts(ctx: Any, params: Any = None) -> Any:  # pragma: no cover
-    return ListPromptsResult(prompts=await _HANDLERS["list_prompts"]())  # pragma: no cover
+async def _on_list_prompts(ctx: Any, params: Any = None) -> Any:
+    return ListPromptsResult(prompts=await _HANDLERS["list_prompts"]())
 
 
-async def _on_get_prompt(ctx: Any, params: Any) -> Any:  # pragma: no cover
+async def _on_get_prompt(ctx: Any, params: Any) -> Any:
     # The handler already returns a `GetPromptResult`.
-    return await _HANDLERS["get_prompt"](  # pragma: no cover
+    return await _HANDLERS["get_prompt"](
         getattr(params, "name", ""),
         getattr(params, "arguments", None),
     )
 
 
-async def _on_list_resources(ctx: Any, params: Any = None) -> Any:  # pragma: no cover
-    return ListResourcesResult(resources=await _HANDLERS["list_resources"]())  # pragma: no cover
+async def _on_list_resources(ctx: Any, params: Any = None) -> Any:
+    return ListResourcesResult(resources=await _HANDLERS["list_resources"]())
 
 
-async def _on_read_resource(ctx: Any, params: Any) -> Any:  # pragma: no cover
-    uri = getattr(params, "uri", "")  # pragma: no cover
+async def _on_read_resource(ctx: Any, params: Any) -> Any:
+    uri = getattr(params, "uri", "")
     text = await _HANDLERS["read_resource"](uri)
-    return ReadResourceResult(
-        contents=[TextResourceContents(uri=uri, text=text or "")]
-    )  # pragma: no cover
+    return ReadResourceResult(contents=[TextResourceContents(uri=uri, text=text or "")])
 
 
-async def _on_list_resource_templates(ctx: Any, params: Any = None) -> Any:  # pragma: no cover
-    return ListResourceTemplatesResult(  # pragma: no cover
+async def _on_list_resource_templates(ctx: Any, params: Any = None) -> Any:
+    return ListResourceTemplatesResult(
         resourceTemplates=await _HANDLERS["list_resource_templates"]()
     )
 
 
-async def _on_completion(ctx: Any, params: Any) -> Any:  # pragma: no cover
-    completion = await _HANDLERS["completion"](  # pragma: no cover
+async def _on_completion(ctx: Any, params: Any) -> Any:
+    completion = await _HANDLERS["completion"](
         getattr(params, "ref", None),
         getattr(params, "argument", None),
     )
-    if completion is None:  # pragma: no cover
-        completion = _Completion(values=[])  # pragma: no cover
-    return CompleteResult(completion=completion)  # pragma: no cover
+    if completion is None:
+        completion = _Completion(values=[])
+    return CompleteResult(completion=completion)
 
 
 server = Server(
@@ -1610,13 +1608,13 @@ except AttributeError:  # pragma: no cover
 # ---------------------------------------------------------------------------
 
 
-async def run_mcp_server():  # pragma: no cover
+async def run_mcp_server() -> None:
     """Run the Great Docs MCP server over stdio."""
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, server.create_initialization_options())
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     import asyncio
 
     asyncio.run(run_mcp_server())
