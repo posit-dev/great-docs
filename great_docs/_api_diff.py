@@ -601,12 +601,10 @@ def snapshot_from_griffe(
     if hasattr(pkg, "exports") and pkg.exports is not None:
         exports = list(pkg.exports)
     elif "__all__" in pkg.members:
-        try:
-            all_obj = pkg.members["__all__"]
-            if hasattr(all_obj, "value"):
-                exports = list(all_obj.value)
-        except Exception:
-            pass
+        all_obj = pkg.members["__all__"]
+        # An `__all__` imported from a missing or cyclic import has kind `alias` and no value
+        if all_obj.kind.value != "alias" and all_obj.value is not None:
+            exports = list(all_obj.value)
 
     if not exports:
         # Fallback: public members (no leading underscore)
@@ -621,25 +619,24 @@ def snapshot_from_griffe(
         if name not in pkg.members:
             continue
 
-        try:
-            obj = pkg.members[name]
-            kind = obj.kind.value  # "class", "function", "module", "attribute"
-
-            info = SymbolInfo(
-                name=name,
-                kind=kind,
-                parameters=_extract_parameters(obj) if kind in ("function", "class") else [],
-                bases=_extract_bases(obj) if kind == "class" else [],
-                decorators=_extract_decorators(obj) if kind in ("function", "class") else [],
-                is_async=getattr(obj, "is_async", False),
-                return_annotation=_annotation_str(
-                    getattr(obj, "annotation", None) or getattr(obj, "returns", None)
-                ),
-            )
-            symbols[name] = info
-        except Exception:
-            # Skip symbols that fail to introspect (cyclic alias, etc.)
+        obj = pkg.members[name]
+        kind = obj.kind.value  # "class", "function", "module", "attribute"
+        if kind == "alias":
+            # griffe reports this kind for an export whose target is missing or cyclic. Reading
+            # its parameters, decorators or annotation would raise, so it has no API to record
             continue
+
+        symbols[name] = SymbolInfo(
+            name=name,
+            kind=kind,
+            parameters=_extract_parameters(obj) if kind in ("function", "class") else [],
+            bases=_extract_bases(obj) if kind == "class" else [],
+            decorators=_extract_decorators(obj) if kind in ("function", "class") else [],
+            is_async=getattr(obj, "is_async", False),
+            return_annotation=_annotation_str(
+                getattr(obj, "annotation", None) or getattr(obj, "returns", None)
+            ),
+        )
 
     return ApiSnapshot(version=version, package_name=normalized, symbols=symbols)
 

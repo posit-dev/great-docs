@@ -2496,6 +2496,17 @@ def test_snapshot_from_griffe_skips_unresolved_exports(tmp_path: Path):
     assert snap.symbols["Widget"].bases == ["int"]
 
 
+def test_snapshot_from_griffe_unresolved_all_falls_back(tmp_path: Path):
+    """An `__all__` imported from a missing module gives way to the public members"""
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("from ext_missing import __all__\ndef fit(): ...\n")
+
+    snap = snapshot_from_griffe("mypkg", version="dev", search_paths=[str(tmp_path)])
+
+    assert set(snap.symbols) == {"fit"}
+
+
 def _write_griffe_pkg(root: Path) -> None:
     """A package whose public API lives under a submodule, for snapshot tests"""
     pkg = root / "mypkg"
@@ -2884,34 +2895,6 @@ def test_snapshot_from_griffe_skip_missing_member():
 
     assert "missing_fn" not in snap.symbols
     assert "present_fn" in snap.symbols
-
-
-def test_snapshot_from_griffe_exception_in_member_introspection():
-    """snapshot_from_griffe skips members that raise during introspection."""
-
-    class BadMember:
-        @property
-        def kind(self):
-            raise RuntimeError("bad introspection")
-
-    mock_pkg = MagicMock()
-    mock_pkg.exports = ["bad_fn", "good_fn"]
-
-    mock_good = MagicMock()
-    mock_good.kind.value = "function"
-    mock_good.is_async = False
-    mock_good.parameters = []
-    mock_good.annotation = None
-    mock_good.returns = None
-    mock_good.decorators = []
-
-    mock_pkg.members = {"bad_fn": BadMember(), "good_fn": mock_good}
-
-    with patch("griffe.load", return_value=mock_pkg):
-        snap = snapshot_from_griffe("mypkg", "v1.0")
-
-    assert "bad_fn" not in snap.symbols
-    assert "good_fn" in snap.symbols
 
 
 # --- _get_tag_date success path ---
@@ -3795,71 +3778,6 @@ def test_snapshot_from_source_import_error(tmp_path):
         result = snapshot_from_source(tmp_path, "nonexistent_module")
 
     assert result is None
-
-
-# --- snapshot_from_griffe: __all__.value not present ---
-
-
-def test_snapshot_from_griffe_all_without_value():
-    """snapshot_from_griffe falls through when __all__ member has no .value attribute."""
-    # __all__ member exists in members but has no .value attribute
-    # -> falls through to public members fallback
-
-    class AllWithoutValue:
-        pass  # no .value attribute
-
-    mock_member = MagicMock()
-    mock_member.kind.value = "function"
-    mock_member.is_async = False
-    mock_member.parameters = []
-    mock_member.annotation = None
-    mock_member.returns = None
-    mock_member.decorators = []
-
-    mock_pkg = MagicMock()
-    mock_pkg.exports = None
-    mock_pkg.members = {
-        "__all__": AllWithoutValue(),
-        "public_fn": mock_member,
-        "_private": MagicMock(),
-    }
-
-    with patch("griffe.load", return_value=mock_pkg):
-        snap = snapshot_from_griffe("mypkg", "v1.0")
-
-    # Falls through to public members (non-underscore)
-    assert "public_fn" in snap.symbols
-
-
-def test_snapshot_from_griffe_all_value_raises():
-    """snapshot_from_griffe handles exception when accessing __all__.value."""
-
-    class AllWithBadValue:
-        @property
-        def value(self):
-            raise RuntimeError("bad value")
-
-    mock_member = MagicMock()
-    mock_member.kind.value = "function"
-    mock_member.is_async = False
-    mock_member.parameters = []
-    mock_member.annotation = None
-    mock_member.returns = None
-    mock_member.decorators = []
-
-    mock_pkg = MagicMock()
-    mock_pkg.exports = None
-    mock_pkg.members = {
-        "__all__": AllWithBadValue(),
-        "public_fn": mock_member,
-        "_private": MagicMock(),
-    }
-
-    with patch("griffe.load", return_value=mock_pkg):
-        snap = snapshot_from_griffe("mypkg", "v1.0")
-
-    # Exception caught, falls through to public members
-    assert "public_fn" in snap.symbols
 
 
 # --- _extract_package_at_tag: exception in inner loop ---
