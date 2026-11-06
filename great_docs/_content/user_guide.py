@@ -228,7 +228,8 @@ def _discover_explicit(
     explicit_config
         The configured sections and their page lists, in reading order.
     report
-        Receives a warning for each listed page that does not exist.
+        Receives a warning for each missing page, absolute path, or path with a `..`
+        component.
 
     Returns
     -------
@@ -252,6 +253,13 @@ def _discover_explicit(
         for item in section_contents:
             filename, custom_text = _listed_page(item)
             if not filename or filename in seen_files:
+                continue
+
+            if not _is_inside_guide(filename):
+                report(
+                    f"User guide file '{filename}' referenced in config "
+                    "must be a path inside the user guide directory"
+                )
                 continue
 
             file_path = user_guide_dir / filename
@@ -287,6 +295,25 @@ def _discover_explicit(
         "explicit": True,
         "explicit_config": explicit_config,
     }
+
+
+def _is_inside_guide(filename: str) -> bool:
+    """
+    Check whether a listed page path is allowed in an explicit guide
+
+    Parameters
+    ----------
+    filename
+        A page path from the `user_guide` setting.
+
+    Returns
+    -------
+    :
+        `True` for a relative path with no `..` components; `False` otherwise.
+        Symbolic links are not resolved.
+    """
+    path = Path(filename)
+    return not (path.is_absolute() or ".." in path.parts)
 
 
 def _listed_page(item: object) -> tuple[str, str | None]:
@@ -358,10 +385,7 @@ def published(guide: UserGuide, page: GuidePage) -> Path:
         The relative path. Explicit guides retain listed file names; automatic guides
         omit numeric ordering prefixes from every path component.
     """
-    try:
-        rel_path = page["path"].relative_to(guide["source_dir"])
-    except ValueError:
-        rel_path = Path(page["path"].name)
+    rel_path = page["path"].relative_to(guide["source_dir"])
     return published_path(rel_path, strip_prefix=not guide.get("explicit", False))
 
 
@@ -488,7 +512,7 @@ def _explicit_contents(guide: UserGuide) -> list[Any]:
         items: list[Any] = []
         for item in section_contents:
             filename, custom_text = _listed_page(item)
-            if not filename:
+            if not filename or not _is_inside_guide(filename):
                 continue
             if not (source_dir / filename).exists():
                 continue
