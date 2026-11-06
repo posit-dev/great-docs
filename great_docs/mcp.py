@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlsplit
 
+from jsonschema import Draft202012Validator
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
@@ -414,12 +415,14 @@ class _ToolCallContent(list[TextContent]):
     is_error: bool = False
 
 
-async def _missing_arguments(name: str, arguments: dict[str, Any]) -> list[str]:
+async def _argument_errors(name: str, arguments: dict[str, Any]) -> list[str]:
     """
-    List required argument names missing from a tool call
+    List violations of a tool's input schema
 
-    The server does not validate tool calls against their input schemas. Check for
-    missing arguments before dispatch so the client receives a failed tool result.
+    MCP validates request parameters but does not check tool arguments against
+    the tool's schema. Report argument errors before dispatch so clients receive
+    a failed tool result they can correct. Allow arguments the schema does not
+    declare.
 
     Parameters
     ----------
@@ -431,13 +434,26 @@ async def _missing_arguments(name: str, arguments: dict[str, Any]) -> list[str]:
     Returns
     -------
     :
-        Missing names in schema order, or an empty list for an unknown tool.
+        One message listing any missing required arguments in schema order,
+        followed by one message per other schema violation. Each later message
+        names the argument or list item, such as `checks` or `checks[1]`.
+        The list is empty for valid arguments or an unknown tool.
     """
-    for tool in await list_tools():
-        if tool.name == name:
-            required: list[str] = tool.input_schema.get("required", [])
-            return [argument for argument in required if argument not in arguments]
-    return []
+    schema = next((tool.input_schema for tool in await list_tools() if tool.name == name), None)
+    if schema is None:
+        return []
+    errors: list[str] = []
+    required: list[str] = schema.get("required", [])
+    if missing := [argument for argument in required if argument not in arguments]:
+        errors.append(f"Error: missing required argument: {', '.join(missing)}")
+    for error in Draft202012Validator(schema).iter_errors(arguments):
+        if error.validator == "required" and not error.absolute_path:
+            continue
+        path = "".join(
+            f"[{part}]" if isinstance(part, int) else f".{part}" for part in error.absolute_path
+        )
+        errors.append(f"Error: invalid argument {path.removeprefix('.')}: {error.message}")
+    return errors
 
 
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
@@ -454,17 +470,11 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     Returns
     -------
     :
-        The tool output. Unknown tools, missing required arguments and handled
+        The tool output. Unknown tools, invalid arguments and handled
         project errors return error text with `is_error=True`.
     """
-    if missing := await _missing_arguments(name, arguments):
-        result = _ToolCallContent(
-            [
-                TextContent(
-                    type="text", text=f"Error: missing required argument: {', '.join(missing)}"
-                )
-            ]
-        )
+    if errors := await _argument_errors(name, arguments):
+        result = _ToolCallContent([TextContent(type="text", text="\n".join(errors))])
         result.is_error = True
         return result
     try:

@@ -298,6 +298,33 @@ class TestCallTool:
         assert result.is_error is True
         assert result[0].text == "Error: missing required argument: title"
 
+    def test_wrongly_typed_argument_returns_error_text(self):
+        with patch("great_docs.mcp._handle_lint") as handler:
+            result = asyncio.run(call_tool("gd_lint", {"checks": 5}))
+        handler.assert_not_called()
+        assert result.is_error is True
+        assert result[0].text == "Error: invalid argument checks: 5 is not of type 'array'"
+
+    def test_wrongly_typed_item_names_its_position(self):
+        result = asyncio.run(call_tool("gd_lint", {"checks": ["style", 5]}))
+        assert result.is_error is True
+        assert result[0].text.splitlines() == [
+            "Error: invalid argument checks[1]: 5 is not of type 'string'",
+            "Error: invalid argument checks[1]: 5 is not one of "
+            "['docstrings', 'cross-refs', 'style', 'directives', 'stale-versions']",
+        ]
+
+    def test_every_invalid_argument_is_reported(self):
+        with patch("great_docs.mcp._handle_add_page") as handler:
+            result = asyncio.run(call_tool("gd_add_page", {"section": "bogus"}))
+        handler.assert_not_called()
+        assert result.is_error is True
+        assert result[0].text.splitlines() == [
+            "Error: missing required argument: title",
+            "Error: invalid argument section: 'bogus' is not one of "
+            "['user_guide', 'recipes', 'custom']",
+        ]
+
     def test_successful_call_does_not_mark_is_error(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
@@ -316,6 +343,11 @@ class TestOnCallToolIsError:
         result = asyncio.run(mcp_module._on_call_tool(None, self._params("bogus_tool_name", {})))
         assert result.is_error is True
         assert "Unknown tool" in result.content[0].text
+
+    def test_invalid_argument_sets_is_error(self):
+        result = asyncio.run(mcp_module._on_call_tool(None, self._params("gd_lint", {"checks": 5})))
+        assert result.is_error is True
+        assert "checks" in result.content[0].text
 
     def test_handler_exception_sets_is_error(self):
         params = self._params("gd_build", {"project_path": "/does/not/exist"})
