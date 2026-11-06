@@ -43,6 +43,7 @@ def build_directory(
     *,
     remote: Remote,
     page_authors: list[dict[str, Any]],
+    refresh: bool,
 ) -> Outcome:
     """
     Create the build directory and its initial Quarto project
@@ -63,6 +64,8 @@ def build_directory(
         The source of PyPI release dates for the package information page.
     page_authors
         The site's authors, added to the homepage and project pages.
+    refresh
+        Whether to discover API reference sections even when the cached sections are valid.
 
     Returns
     -------
@@ -163,7 +166,7 @@ def build_directory(
     with open(build_dir / "_gd_options.json", "w") as f:
         json.dump(gd_options, f)
 
-    reference.add_api_block(run, config)
+    reference.add_api_block(run, config, refresh=refresh)
     if run.api_block is not None:
         run.contributions.append(reference_sections.contribution(config, run.api_block))
 

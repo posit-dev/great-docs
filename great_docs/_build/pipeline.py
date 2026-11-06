@@ -84,6 +84,8 @@ class Run:
     api_block
         The `api-reference` block of `quarto_config`, or `None` for a site without an API
         reference.
+    api_discovery_reused
+        Whether this build reused cached API reference sections.
     user_guide
         The user guide discovered during build preparation, or `None` when no guide
         pages were found.
@@ -100,6 +102,7 @@ class Run:
     has_api_reference: bool = True
     quarto_config: dict[str, Any] = field(default_factory=lambda: dict[str, Any]())
     api_block: dict[str, Any] | None = None
+    api_discovery_reused: bool = False
     user_guide: UserGuide | None = None
     contributions: list[Contribution] = field(default_factory=lambda: list[Contribution]())
 
@@ -328,7 +331,7 @@ def preparation_steps(
     remote
         The source of GitHub and PyPI data.
     refresh
-        Whether to rediscover the package's exports for the API reference.
+        Whether to discover API reference sections even when the cached sections are valid.
     write_quarto_config
         Whether the last step writes the finished Quarto configuration to `_quarto.yml`.
         If false, the build directory retains the initial configuration whose header
@@ -367,7 +370,12 @@ def preparation_steps(
         Step(
             "Prepare build directory",
             lambda: prepare.build_directory(
-                run, config, layout, remote=remote, page_authors=run.page_authors
+                run,
+                config,
+                layout,
+                remote=remote,
+                page_authors=run.page_authors,
+                refresh=refresh,
             ),
         ),
         Step(
@@ -378,7 +386,7 @@ def preparation_steps(
         ),
         Step(
             "Configure API reference",
-            lambda: reference.api_config(run, refresh=refresh),
+            lambda: reference.api_config(run),
             user_code=True,
         ),
         Step(

@@ -5,9 +5,11 @@ Tests for reference page generation and source links
 from __future__ import annotations
 
 import io
+import json
 import sys
+from contextlib import AbstractContextManager
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
@@ -16,10 +18,13 @@ from great_docs import GreatDocs
 from great_docs._apiref.api_reference import APIReference
 from great_docs._build import reference
 from great_docs._build.log import BuildLog
-from great_docs._build.steps import Outcome
+from great_docs._build.pipeline import Run
+from great_docs._build.steps import Outcome, Skipped
+from great_docs._reference import discovery_cache
+from great_docs._reference.exports import Exports
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website import quarto_yml
-from tests.support import make_run, write_config
+from tests.support import make_run, write_config, write_pyproject
 
 
 def _source_linked_project(root: Path, name: str, branch: str) -> GreatDocs:
@@ -85,32 +90,184 @@ def _write_api_reference(docs: GreatDocs) -> Outcome:
     return outcome
 
 
-def test_api_config_reuses_the_exports_discovered_during_preparation(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-):
+def _discoverable_project(root: Path, name: str) -> GreatDocs:
     """
-    Reuse the API reference configuration discovered during build preparation
-    """
-    write_config(tmp_path, "module: mypkg\n")
-    docs = GreatDocs(project_path=str(tmp_path))
-    run = make_run(docs)
+    Create a project whose package exports one documented function
 
-    with patch.object(run.exports, "sections") as sections:
-        outcome = reference.api_config(run, refresh=True)
+    Parameters
+    ----------
+    root
+        The project directory.
+    name
+        The package name, unique within the test session.
+
+    Returns
+    -------
+    :
+        The project.
+    """
+    _ = write_pyproject(root, name)
+    (root / name).mkdir()
+    (root / name / "__init__.py").write_text(
+        '__all__ = ["greet"]\n\n\ndef greet():\n    """Say hello."""\n',
+        encoding="utf-8",
+    )
+    _ = write_config(root)
+    return GreatDocs(project_path=str(root))
+
+
+def _configure(docs: GreatDocs, *, refresh: bool) -> Run:
+    """
+    Configure the API reference as build preparation does
+
+    Parameters
+    ----------
+    docs
+        The project.
+    refresh
+        Whether to rediscover the package's exports.
+
+    Returns
+    -------
+    :
+        The build state holding the API reference block.
+    """
+    run = make_run(docs)
+    reference.add_api_block(run, docs._config, refresh=refresh)
+    return run
+
+
+def _cache_file(docs: GreatDocs) -> Path:
+    """
+    Locate the project's cached API discovery
+
+    Parameters
+    ----------
+    docs
+        The project.
+
+    Returns
+    -------
+    :
+        The cache file's path.
+    """
+    return docs._config.cache_dir / discovery_cache.PATH
+
+
+def _spy_on_discovery() -> AbstractContextManager[MagicMock]:
+    """
+    Record calls to export discovery while letting it run
+
+    Returns
+    -------
+    :
+        A context manager yielding the recording mock.
+    """
+    return patch.object(Exports, "sections", autospec=True, side_effect=Exports.sections)
+
+
+def test_no_refresh_reuses_the_discovery_of_the_last_build(tmp_path: Path):
+    """
+    Reuse the last build's discovery while the package and configuration are unchanged
+    """
+    docs = _discoverable_project(tmp_path, "cache_reuse")
+    discovered = _configure(docs, refresh=True)
+
+    with _spy_on_discovery() as sections:
+        reused = _configure(docs, refresh=False)
 
     sections.assert_not_called()
-    assert outcome == "API reference refreshed"
-    assert "API reference already configured in this build" in capsys.readouterr().out
+    assert reused.has_api_reference
+    assert reused.api_block == discovered.api_block
+    assert reference.api_config(reused) == "Reused cached API discovery"
 
 
-def test_api_config_without_refresh_uses_the_existing_configuration(tmp_path: Path):
+def test_no_refresh_discovers_when_a_package_file_changes(tmp_path: Path):
     """
-    Report the existing API reference configuration when the build skips refreshing
+    Rediscover the exports after a package file changes
+    """
+    docs = _discoverable_project(tmp_path, "cache_edit")
+    _ = _configure(docs, refresh=True)
+    (tmp_path / "cache_edit" / "__init__.py").write_text(
+        '__all__ = ["greet", "part"]\n\n\n'
+        'def greet():\n    """Say hello."""\n\n\n'
+        'def part():\n    """Say goodbye."""\n',
+        encoding="utf-8",
+    )
+
+    with _spy_on_discovery() as sections:
+        run = _configure(docs, refresh=False)
+
+    sections.assert_called_once()
+    assert run.api_block is not None
+    assert "part" in str(run.api_block["sections"])
+    assert reference.api_config(run) == "API reference discovered"
+
+
+def test_no_refresh_discovers_when_the_configuration_changes(tmp_path: Path):
+    """
+    Rediscover the exports after `great-docs.yml` changes
+    """
+    docs = _discoverable_project(tmp_path, "cache_config")
+    _ = _configure(docs, refresh=True)
+    docs._config = write_config(tmp_path, "exclude:\n  - greet\n")
+
+    with _spy_on_discovery() as sections:
+        _ = _configure(docs, refresh=False)
+
+    sections.assert_called_once()
+
+
+def test_refresh_rediscovers_and_rewrites_the_cache(tmp_path: Path):
+    """
+    Rediscover the exports with `refresh` even when the cache matches, and save the result
+    """
+    docs = _discoverable_project(tmp_path, "cache_refresh")
+    discovered = _configure(docs, refresh=True)
+    # A cache entry under the current key, with sections no discovery would produce
+    cache_file = _cache_file(docs)
+    saved = json.loads(cache_file.read_text(encoding="utf-8"))
+    saved["sections"] = [{"title": "Stale", "contents": ["greet"]}]
+    _ = cache_file.write_text(json.dumps(saved), encoding="utf-8")
+
+    with _spy_on_discovery() as sections:
+        refreshed = _configure(docs, refresh=True)
+
+    sections.assert_called_once()
+    assert refreshed.api_block == discovered.api_block
+    assert _configure(docs, refresh=False).api_block == discovered.api_block
+
+
+@pytest.mark.parametrize(
+    "content",
+    ["{not json", '["a", "list"]', '{"key": 1}', '{"key": "abc", "sections": "text"}'],
+)
+def test_no_refresh_discovers_when_the_cache_is_unusable(tmp_path: Path, content: str):
+    """
+    Treat an unreadable or malformed cache as absent and replace it
+    """
+    docs = _discoverable_project(tmp_path, "cache_corrupt")
+    discovered = _configure(docs, refresh=True)
+    _ = _cache_file(docs).write_text(content, encoding="utf-8")
+
+    with _spy_on_discovery() as sections:
+        run = _configure(docs, refresh=False)
+
+    sections.assert_called_once()
+    assert run.api_block == discovered.api_block
+    assert reference.api_config(_configure(docs, refresh=False)) == "Reused cached API discovery"
+
+
+def test_api_config_skips_a_site_without_an_api_reference(tmp_path: Path):
+    """
+    Skip the step when build preparation found no API reference
     """
     write_config(tmp_path, "module: mypkg\n")
     docs = GreatDocs(project_path=str(tmp_path))
 
-    assert reference.api_config(make_run(docs), refresh=False) == "Using existing config"
+    assert reference.api_config(make_run(docs, has_api_reference=False)) == Skipped(
+        "no API reference"
+    )
 
 
 def test_api_links_each_project_in_a_process_to_its_own_source(

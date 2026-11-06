@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, cast
 from .._cliref import click as cli_click
 from .._cliref import render as cli_render
 from .._reference import block as reference_block
+from .._reference import discovery_cache
 from . import quarto
 from .facts import source_links
 from .steps import USER_CODE_ERRORS, Outcome, Skipped, StepError, print_warning
@@ -29,15 +30,15 @@ if TYPE_CHECKING:
 __all__ = ["add_api_block", "api", "api_config", "cli", "go_cli", "interlinks", "mcp", "rust_cli"]
 
 
-def add_api_block(run: Run, config: Config) -> None:
+def add_api_block(run: Run, config: Config, *, refresh: bool) -> None:
     """
     Add the API reference configuration to the build's Quarto configuration
 
     Skip the reference when disabled, when the project is not Python, or when no package name
     is detected. Warn for a missing package name. Use an explicit `reference` configuration
-    when supplied; otherwise discover sections from the package's exports. Skip when neither
-    supplies sections. Record the configuration or mark the reference as skipped in
-    the build state.
+    when supplied; otherwise discover sections from the package's exports. When `refresh`
+    is false, reuse valid cached sections. Skip when no sections are found. Record the
+    configuration or mark the reference as skipped in the build state.
 
     Parameters
     ----------
@@ -46,6 +47,8 @@ def add_api_block(run: Run, config: Config) -> None:
         in the Quarto configuration.
     config
         The project's configuration.
+    refresh
+        Whether to discover sections even when the cached sections are valid.
 
     Returns
     -------
@@ -80,8 +83,9 @@ def add_api_block(run: Run, config: Config) -> None:
         print("Note: The package must be installed (`pip install -e .` or `maturin develop`)")
         print("      for API reference generation.")
 
-    # An explicit `reference` configuration takes precedence over discovered exports.
-    sections = run.exports.sections(importable_name)
+    discovery = discovery_cache.sections(run.exports, importable_name, reuse=not refresh)
+    run.api_discovery_reused = discovery.reused
+    sections = discovery.sections
     if not sections:
         print("No documentable exports found — skipping API reference")
         run.has_api_reference = False
@@ -91,19 +95,14 @@ def add_api_block(run: Run, config: Config) -> None:
     print("Added API reference configuration")
 
 
-def api_config(run: Run, *, refresh: bool) -> Outcome:
+def api_config(run: Run) -> Outcome:
     """
-    Report the API reference configuration prepared for this build
-
-    Build preparation has already discovered the package's exports. Report the
-    configuration status without repeating discovery.
+    Report whether API reference discovery ran, reused the cache or was skipped
 
     Parameters
     ----------
     run
-        The build state, including API reference availability.
-    refresh
-        Whether the build was asked to rediscover the package's exports.
+        The build state, including API reference availability and cache reuse.
 
     Returns
     -------
@@ -112,10 +111,9 @@ def api_config(run: Run, *, refresh: bool) -> Outcome:
     """
     if not run.has_api_reference:
         return Skipped("no API reference")
-    if not refresh:
-        return "Using existing config"
-    print("API reference already configured in this build, skipping re-discovery")
-    return "API reference refreshed"
+    if run.api_discovery_reused:
+        return "Reused cached API discovery"
+    return "API reference discovered"
 
 
 def api(

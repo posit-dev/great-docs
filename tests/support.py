@@ -228,7 +228,12 @@ def prepare_build_directory(docs: GreatDocs, run: Run) -> Outcome:
         The step's outcome.
     """
     outcome = prepare.build_directory(
-        run, docs._config, docs.layout, remote=docs._remote, page_authors=run.page_authors
+        run,
+        docs._config,
+        docs.layout,
+        remote=docs._remote,
+        page_authors=run.page_authors,
+        refresh=True,
     )
     quarto_yml.write(docs.build_dir, run.quarto_config)
     return outcome
@@ -323,7 +328,7 @@ def add_api_block(docs: GreatDocs, run: Run) -> None:
     :
     """
     with _quarto_config_in(docs.build_dir, run):
-        reference.add_api_block(run, docs._config)
+        reference.add_api_block(run, docs._config, refresh=True)
 
 
 @contextmanager
