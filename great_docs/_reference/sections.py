@@ -285,14 +285,14 @@ def from_explicit_config(
     for section_config in reference_config:
         if not isinstance(section_config, dict):
             continue
-        section_config = cast("dict[str, Any]", section_config)  # pragma: no cover
+        section_config = cast("dict[str, Any]", section_config)
         title = section_config.get("title")
         subtitle = section_config.get("subtitle")
         desc = section_config.get("desc", "")
         contents_config = section_config.get("contents", [])
 
         if not contents_config:
-            continue  # pragma: no cover
+            continue
 
         section_contents: list[Any] = []
         large_classes_in_section: list[str] = []
@@ -303,10 +303,8 @@ def from_explicit_config(
                     for member in module_members[item]:
                         method_count = categories["class_methods"].get(member, 0)
                         if config.should_split_methods(method_count):
-                            section_contents.append(
-                                {"name": member, "members": []}
-                            )  # pragma: no cover
-                            large_classes_in_section.append(member)  # pragma: no cover
+                            section_contents.append({"name": member, "members": []})
+                            large_classes_in_section.append(member)
                         else:
                             section_contents.append(member)
                 else:
@@ -320,7 +318,7 @@ def from_explicit_config(
                 item = cast("dict[str, Any]", item)
                 name = item.get("name", "")
                 if not name:
-                    continue  # pragma: no cover
+                    continue
 
                 members = item.get("members", True)
                 include_inherited = item.get("include_inherited", None)

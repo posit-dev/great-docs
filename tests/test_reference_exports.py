@@ -192,6 +192,54 @@ class TestSectionsFromTheReferenceSetting:
         raise AssertionError("Expected plain string 'my_func' in contents")
 
 
+class TestFromExplicitConfig:
+    @staticmethod
+    def _config():
+        return mock_config(should_split_methods=lambda count: count > 5)
+
+    def test_section_without_contents_is_skipped(self):
+        """Verify that empty or missing contents exclude a reference section"""
+        reference = [
+            {"title": "Empty", "contents": []},
+            {"title": "Missing"},
+            {"title": "Funcs", "contents": ["helper"]},
+        ]
+        result = reference_sections.from_explicit_config(
+            self._config(), reference, empty_categories()
+        )
+        assert result == [{"title": "Funcs", "desc": "", "contents": ["helper"]}]
+
+    def test_item_without_name_is_skipped(self):
+        """Verify that unnamed items are omitted while named items are retained"""
+        reference = [{"title": "Funcs", "contents": [{"members": False}, {"name": "helper"}]}]
+        result = reference_sections.from_explicit_config(
+            self._config(), reference, empty_categories()
+        )
+        assert result == [{"title": "Funcs", "desc": "", "contents": ["helper"]}]
+
+    def test_module_entry_splits_large_class_methods(self):
+        """Verify that module entries give large classes separate method sections"""
+        categories = empty_categories()
+        categories["classes"] = ["pkg.Big", "pkg.Small"]
+        categories["class_methods"] = {"pkg.Big": 8, "pkg.Small": 2}
+        categories["class_method_names"] = {"pkg.Big": ["a", "b"]}
+        result = reference_sections.from_explicit_config(
+            self._config(), [{"title": "API", "contents": ["pkg"]}], categories
+        )
+        assert result == [
+            {
+                "title": "API",
+                "desc": "",
+                "contents": [{"name": "pkg.Big", "members": []}, "pkg.Small"],
+            },
+            {
+                "title": "pkg.Big Methods",
+                "desc": "Methods for the pkg.Big class",
+                "contents": ["pkg.Big.a", "pkg.Big.b"],
+            },
+        ]
+
+
 class TestSectionsWithoutGriffe:
     def test_griffe_load_failure_keeps_listed_names(self, tmp_path, monkeypatch):
         """Verify that a load failure preserves configured reference sections"""
