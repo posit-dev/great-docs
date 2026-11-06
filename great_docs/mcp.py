@@ -41,6 +41,8 @@ from ._utils import is_in_great_docs_build_dir, recognised_build_dirs
 from .config import Config
 
 if TYPE_CHECKING:
+    from ._api_diff import ApiSnapshot
+    from ._project import Project
     from ._reference.exports import Exports
 
 server = Server("great-docs")
@@ -400,7 +402,7 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": (
                             "Base version/ref to compare from (git tag, branch, or commit). "
-                            "Defaults to the previous release tag."
+                            "Without it, the tool lists the current API surface."
                         ),
                     },
                     "head": {
@@ -796,9 +798,55 @@ async def _handle_add_page(arguments: dict) -> list[TextContent]:
     ]
 
 
+def _api_snapshot(
+    project: Project, importable_name: str, root: Path, ref: str | None
+) -> ApiSnapshot | None:
+    """
+    Capture the project's public API from a git ref or the working tree
+
+    Parameters
+    ----------
+    project
+        The documented project.
+    importable_name
+        Importable name of the project's package.
+    root
+        Git repository containing the project.
+    ref
+        Git tag, branch or commit; `None` and `HEAD` select the working tree.
+
+    Returns
+    -------
+    :
+        The snapshot, or `None` when the package source cannot be read at `ref`.
+    """
+    from ._api_diff import snapshot_at_tag, snapshot_from_griffe
+
+    if ref is None or ref.upper() == "HEAD":
+        # Read the project source even when the package is uninstalled.
+        search_paths = [str(path) for path in project.search_paths()]
+        return snapshot_from_griffe(importable_name, version="HEAD", search_paths=search_paths)
+    return snapshot_at_tag(root, ref, importable_name)
+
+
 async def _handle_api_diff(arguments: dict) -> list[TextContent]:
-    """Compare API between versions."""
-    from ._api_diff import ApiSnapshot
+    """
+    List the current public API or compare API snapshots
+
+    Omit both refs to list the working tree's API. Supply `base` to compare
+    that ref with the working tree or an explicit `head` ref.
+
+    Parameters
+    ----------
+    arguments
+        Tool arguments selecting the project and optional `base` and `head` refs.
+
+    Returns
+    -------
+    :
+        MCP text responses containing the API listing, comparison or error message.
+    """
+    from ._api_diff import diff_snapshots
 
     project_path = arguments.get("project_path")
     base_ref = arguments.get("base")
@@ -809,52 +857,46 @@ async def _handle_api_diff(arguments: dict) -> list[TextContent]:
     if not project.name or not importable_name:
         return [TextContent(type="text", text="Error: Could not detect package name.")]
 
-    # Take current snapshot
-    current = ApiSnapshot.from_live(importable_name)
+    if not base_ref and head_ref:
+        return [TextContent(type="text", text="Provide a base ref to compare against.")]
 
-    if not base_ref and not head_ref:
-        # Just show current API surface
+    root = _get_layout(arguments).package_root
+    head = _api_snapshot(project, importable_name, root, head_ref)
+    if head is not None and not base_ref:
         lines = [f"Current API surface for {importable_name}:", ""]
-        for symbol in sorted(current.symbols.keys()):
-            info = current.symbols[symbol]
-            lines.append(f"  {info.kind}: {symbol}")
+        for symbol in sorted(head.symbols):
+            lines.append(f"  {head.symbols[symbol].kind}: {symbol}")
         return [TextContent(type="text", text="\n".join(lines))]
 
-    # If base_ref provided, try to compare
-    if base_ref:
-        root = _get_project_root(project_path)
-        base_snapshot_path = root / ".great-docs-snapshots" / f"{base_ref}.json"
-        if base_snapshot_path.exists():
-            base = ApiSnapshot.from_json(base_snapshot_path)
-            diff = base.diff(current)
-            lines = [f"API diff: {base_ref} → {'HEAD' if not head_ref else head_ref}", ""]
-            if diff.added:
-                lines.append(f"Added ({len(diff.added)}):")
-                for s in sorted(diff.added, key=lambda x: x.name):
-                    lines.append(f"  + {s.kind}: {s.name}")
-            if diff.removed:
-                lines.append(f"\nRemoved ({len(diff.removed)}):")
-                for s in sorted(diff.removed, key=lambda x: x.name):
-                    lines.append(f"  - {s.kind}: {s.name}")
-            if diff.changed:
-                lines.append(f"\nChanged ({len(diff.changed)}):")
-                for s in sorted(diff.changed, key=lambda x: x.name):
-                    lines.append(f"  ~ {s.name}: {s.change_type}")
-            if not diff.added and not diff.removed and not diff.changed:
-                lines.append("No API changes detected.")
-            return [TextContent(type="text", text="\n".join(lines))]
-        else:
-            return [
-                TextContent(
-                    type="text",
-                    text=(
-                        f"No snapshot found for '{base_ref}'. "
-                        f"Available: run a build for that version first."
-                    ),
-                )
-            ]
+    base = _api_snapshot(project, importable_name, root, base_ref)
+    if base is None or head is None:
+        ref = base_ref if base is None else head_ref
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    f"Could not build an API snapshot at '{ref}'. Check that the ref exists "
+                    "and the package source is present at it."
+                ),
+            )
+        ]
+    diff = diff_snapshots(base, head)
 
-    return [TextContent(type="text", text="Provide a base ref to compare against.")]
+    lines = [f"API diff: {diff.old_version} → {diff.new_version}"]
+    if diff.added:
+        lines += ["", f"Added ({len(diff.added)}):"]
+        lines.extend(f"  + {change.symbol}" for change in diff.added)
+    if diff.removed:
+        lines += ["", f"Removed ({len(diff.removed)}):"]
+        lines.extend(f"  - {change.symbol}" for change in diff.removed)
+    if diff.changed:
+        lines += ["", f"Changed ({len(diff.changed)}):"]
+        for change in diff.changed:
+            lines.append(f"  ~ {change.symbol}")
+            lines.extend(f"      {detail}" for detail in change.details)
+    if not diff.added and not diff.removed and not diff.changed:
+        lines += ["", "No API changes detected."]
+    return [TextContent(type="text", text="\n".join(lines))]
 
 
 # ---------------------------------------------------------------------------
