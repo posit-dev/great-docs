@@ -581,10 +581,10 @@ def preprocess_version(
 
     # The latest version uses `source_dir` directly; only historical versions
     # need a copy.
-    if dest_dir.resolve() != source_dir.resolve():  # pragma: no cover
-        if dest_dir.exists():  # pragma: no cover
-            shutil.rmtree(dest_dir)  # pragma: no cover
-        shutil.copytree(source_dir, dest_dir, dirs_exist_ok=False)  # pragma: no cover
+    if dest_dir.resolve() != source_dir.resolve():
+        if dest_dir.exists():
+            shutil.rmtree(dest_dir)
+        shutil.copytree(source_dir, dest_dir, dirs_exist_ok=False)
 
     included_pages: list[str] = []
     upcoming_pages: list[tuple[str, str | None]] = []
@@ -593,8 +593,8 @@ def preprocess_version(
         rel = qmd_file.relative_to(dest_dir)
 
         # Skip internal files
-        if str(rel).startswith("_"):  # pragma: no cover
-            continue  # pragma: no cover
+        if str(rel).startswith("_"):
+            continue
 
         # 0. Section-level version scoping
         if _in_excluded_section(rel, excluded_dirs):
@@ -870,10 +870,10 @@ def _rebuild_api_from_snapshot(
     # --- Prune existing pages not in the snapshot ---
     if ref_dir.exists():
         for qmd_file in list(ref_dir.iterdir()):
-            if qmd_file.is_dir():  # pragma: no cover
-                continue  # pragma: no cover
-            if qmd_file.suffix not in (".qmd", ".md"):  # pragma: no cover
-                continue  # pragma: no cover
+            if qmd_file.is_dir():
+                continue
+            if qmd_file.suffix not in (".qmd", ".md"):
+                continue
             stem = qmd_file.stem
             if stem == "index":
                 continue
@@ -1658,18 +1658,9 @@ def expand_version_badges(
         if is_upcoming:
             css_class = "gd-badge gd-badge-upcoming"
             label = f"Upcoming in {version}"
-        elif badge_type == "new":
-            css_class = "gd-badge gd-badge-new"
-            label = f"New in {version}"
-        elif badge_type == "changed":
-            css_class = "gd-badge gd-badge-changed"
-            label = f"Changed in {version}"
-        elif badge_type == "deprecated":
-            css_class = "gd-badge gd-badge-deprecated"
-            label = f"Deprecated in {version}"
-        else:  # pragma: no cover
-            css_class = f"gd-badge gd-badge-{badge_type}"  # pragma: no cover
-            label = f"{badge_type} in {version}"  # pragma: no cover
+        else:
+            css_class = f"gd-badge gd-badge-{badge_type}"
+            label = f"{badge_type.capitalize()} in {version}"
 
         return f'<span class="{css_class}">{label}</span>'
 
