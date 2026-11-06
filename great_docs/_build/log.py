@@ -296,22 +296,19 @@ class ProgressBar:
         """Advance the bar to *current* (1-based)."""
         self._current = current
 
-        try:
-            if self.is_tty:
-                now = time.monotonic()
-                if now - self._last_draw_time < 1.0 and current < self.total:
-                    return  # throttle to 1 Hz
-                self._last_draw_time = now
-                line = self._render_bar(current)
-                _safe_stream_write(self.stream, f"\r{line}")
-            else:
-                # CI mode: emit at every 10 % boundary
-                bucket = min(current * 100 // self.total, 100) // 10
-                if bucket > self._last_pct_bucket:
-                    self._last_pct_bucket = bucket
-                    _safe_stream_write(self.stream, self._render_bar_plain(current) + "\n")
-        except (BrokenPipeError, OSError):  # pragma: no cover
-            pass
+        if self.is_tty:
+            now = time.monotonic()
+            if now - self._last_draw_time < 1.0 and current < self.total:
+                return  # throttle to 1 Hz
+            self._last_draw_time = now
+            line = self._render_bar(current)
+            _safe_stream_write(self.stream, f"\r{line}")
+        else:
+            # CI mode: emit at every 10 % boundary
+            bucket = min(current * 100 // self.total, 100) // 10
+            if bucket > self._last_pct_bucket:
+                self._last_pct_bucket = bucket
+                _safe_stream_write(self.stream, self._render_bar_plain(current) + "\n")
 
     def finish(self, summary: str | None = None) -> None:  # noqa: ARG002
         """Clear the progress line.
