@@ -41,7 +41,9 @@ def sections(exports: Exports, name: str, *, reuse: bool) -> Discovery:
     Find a package's API reference sections, reusing cached sections when allowed
 
     Cached sections remain valid while the Great Docs version, the package's importable
-    name, the configuration file and the contents of the package's files are unchanged.
+    name, the configuration file and the package's files are unchanged. Files count by
+    their content and their paths within the package, so a moved or re-cloned project keeps
+    its cache.
     Discover and save sections when the cache is invalid or `reuse` is false. Treat a
     missing, unreadable or malformed cache as absent. If the package's files cannot be
     found or read, discover sections without saving them.
@@ -104,8 +106,8 @@ def _key(exports: Exports, name: str) -> str | None:
         return None
     parts = [__version__.encode(), name.encode(), config_text]
     try:
-        for file in files:
-            parts += [str(file).encode(), file.read_bytes()]
+        for relative, file in files:
+            parts += [relative.encode(), file.read_bytes()]
     except OSError:
         return None
     for part in parts:
@@ -115,7 +117,7 @@ def _key(exports: Exports, name: str) -> str | None:
     return digest.hexdigest()
 
 
-def _package_files(module: str, search_paths: list[str | Path]) -> list[Path] | None:
+def _package_files(module: str, search_paths: list[str | Path]) -> list[tuple[str, Path]] | None:
     """
     List the files of the top-level module resolved from the search paths
 
@@ -132,8 +134,9 @@ def _package_files(module: str, search_paths: list[str | Path]) -> list[Path] | 
     Returns
     -------
     :
-        The files in a stable order, or `None` when the module is not found or its files
-        cannot be listed.
+        Each file's POSIX path relative to the search directory it was found in, such as
+        `pkg/sub/mod.py`, and the file, in a stable order. `None` when the module is not
+        found or its files cannot be listed.
     """
     spec = PathFinder.find_spec(module, [str(path) for path in search_paths])
     if spec is None:
@@ -141,11 +144,14 @@ def _package_files(module: str, search_paths: list[str | Path]) -> list[Path] | 
     if spec.submodule_search_locations is None:
         if not spec.has_location or spec.origin is None:
             return None
-        return [Path(spec.origin)]
+        origin = Path(spec.origin)
+        return [(origin.name, origin)]
+    # A namespace package lists its portions in search order, which does not depend on
+    # where the project lives; sorting them by absolute path would.
     try:
         return [
-            file
-            for location in sorted(Path(entry) for entry in spec.submodule_search_locations)
+            (file.relative_to(location.parent).as_posix(), file)
+            for location in (Path(entry) for entry in spec.submodule_search_locations)
             for file in sorted(location.rglob("*"))
             if "__pycache__" not in file.relative_to(location).parts and file.is_file()
         ]
