@@ -38,6 +38,9 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Install d2 (for the diagram-rendering integration test)
+        env:
+          # The installer queries the GitHub API; unauthenticated calls hit the runner IP's rate limit
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           curl -fsSL https://d2lang.com/install.sh | sh -s -- --version v0.8.2
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
