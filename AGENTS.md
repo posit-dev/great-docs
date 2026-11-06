@@ -20,7 +20,8 @@ from the repository root using the Makefile.
 - `make type-check`: Run mypy across multiple Python versions.
 - `make type-check-strict`: Run strict pyright over the paths listed in `tool.pyright.include`.
 - `make quarto-project-diff`: Compare Quarto projects from `init`, `build`, `build --watch`
-  and `freeze` with those from `main` for 40 Gauntlet packages, with rendering stubbed.
+  and `freeze` with those from `main` across 40 cases drawn from 33 Gauntlet packages, with
+  rendering stubbed.
   See the docstring in `tests/quarto_project_diff/__init__.py` for requirements and options.
 
 Default to `make test` during iteration. Run `make test-synthetic` or `make test-integration`

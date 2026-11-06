@@ -5,13 +5,12 @@ Each side's recording directory contains `side.json` with environment facts,
 `builds/<case>.json` with one manifest per case, `logs/` with normalised command output for
 diagnosis, and `blobs/` with normalised file contents indexed by SHA-256 and shared by cases.
 
-A manifest records, for each command of the case: the exit status, every file the command
-added, changed or removed in the project, the step skeleton and `[!!]` warnings of its
-output, the census of exceptions that `great_docs` handled, and the calls that reached the
-stub `quarto`. A watch command also records whether its first build started the preview,
-whether a source edit reached the previewed project and whether its output holds a
-traceback. The manifest also names the case's variant, the order of its commands and whether
-it expects an API reference.
+For each command, a manifest records the exit status, files added, changed or removed in
+the project, the output's step skeleton and `[!!]` warnings, and calls to the stub `quarto`.
+For a watch command, it also records whether the first build started the preview, whether a
+source edit reached the previewed project and whether the output contains a traceback. The
+manifest also records the case's variant, command order and whether it expects an API
+reference.
 """
 
 from __future__ import annotations
@@ -44,22 +43,19 @@ from tests.quarto_project_diff.normalise import (
     log_skeleton,
     log_warnings,
     normalise_bytes,
-    normalise_message,
     normalise_text,
     path_rules,
 )
 from tests.quarto_project_diff.sides import (
-    CENSUS_VARIABLE,
     PREVIEW_DIRECTORY_VARIABLE,
     PREVIEW_HOLD_VARIABLE,
     QUARTO_LOG_VARIABLE,
     RENDER_PAGES_VARIABLE,
-    RequirementError,
     Side,
 )
 
 # Bumped whenever the manifest format changes; comparisons refuse mixed schemas.
-SCHEMA = 2
+SCHEMA = 3
 
 # Not build output: Python writes `__pycache__` when it imports the package, and Git rewrites
 # the stat data in `.git` of a copied repository.
@@ -225,50 +221,6 @@ def file_changes(
     return records
 
 
-def read_census(directory: Path, rules: Sequence[Rule]) -> tuple[list[dict[str, Any]], int]:
-    """
-    Merge the census files that a command's processes wrote
-
-    Entries are keyed by exception type, normalised message and raising function. Line
-    numbers and handlers are kept for the report only, so moving code does not by itself
-    create a new entry.
-
-    Parameters
-    ----------
-    directory :
-        Directory named by `GREAT_DOCS_QUARTO_PROJECT_DIFF_CENSUS` for the command.
-    rules :
-        Path rules for messages.
-
-    Returns
-    -------
-    :
-        The entries sorted by key, and the number of processes that reported.
-    """
-    merged: dict[tuple[str, str, str], dict[str, Any]] = {}
-    files = sorted(directory.glob("*.json")) if directory.is_dir() else []
-    for file in files:
-        payload = json.loads(file.read_text(encoding="utf-8"))
-        for kind, message, raised_in, raised_at, handler, handled_at, count in payload["records"]:
-            key = (kind, normalise_message(message, rules), raised_in)
-            entry = merged.setdefault(key, {"count": 0, "raised_at": set(), "handlers": set()})
-            entry["count"] += count
-            entry["raised_at"].add(raised_at)
-            entry["handlers"].add(f"{handler} ({handled_at})")
-    entries = [
-        {
-            "type": kind,
-            "message": message,
-            "raised_in": raised_in,
-            "count": entry["count"],
-            "raised_at": sorted(entry["raised_at"]),
-            "handlers": sorted(entry["handlers"]),
-        }
-        for (kind, message, raised_in), entry in sorted(merged.items())
-    ]
-    return entries, len(files)
-
-
 def package_paths(package: Path) -> list[str]:
     """
     List the `PYTHONPATH` entries that `test-packages/render_all.py` gives a package
@@ -334,20 +286,12 @@ def run_command(
     -------
     :
         The command's record and the package fingerprints after it.
-
-    Raises
-    ------
-    RequirementError
-        If the command finished but no process reported a census, which means the observer
-        did not load.
     """
     job_dir = package.parent
-    census_dir = job_dir / f"census-{name}"
     quarto_log = job_dir / f"quarto-{name}.log"
     env = {
         **job.environment,
-        "PYTHONPATH": os.pathsep.join([*package_paths(package), job.environment["PYTHONPATH"]]),
-        CENSUS_VARIABLE: str(census_dir),
+        "PYTHONPATH": os.pathsep.join(package_paths(package)),
         QUARTO_LOG_VARIABLE: str(quarto_log),
     }
     if job.case.render_pages:
@@ -389,11 +333,6 @@ def run_command(
     log.parent.mkdir(parents=True, exist_ok=True)
     _ = log.write_text(f"{stdout}\n--- stderr ---\n{stderr}", encoding="utf-8")
 
-    census, reporters = read_census(census_dir, rules)
-    if status != "timeout" and reporters == 0:
-        raise RequirementError(
-            f"{job.case.id} {name}: no census reported; the observer did not load"
-        )
     calls = quarto_log.read_text(encoding="utf-8").splitlines() if quarto_log.exists() else []
     record: dict[str, Any] = {
         "status": status,
@@ -401,8 +340,6 @@ def run_command(
         "files": files,
         "skeleton": log_skeleton(stdout, stderr),
         "warnings": log_warnings(stdout, stderr),
-        "census": census,
-        "python_processes": reporters,
         "quarto_calls": sorted(normalise_text(c, "", rules)[0] for c in calls),
     }
     if watch is not None:

@@ -5,9 +5,8 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import textwrap
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -21,12 +20,10 @@ from tests.quarto_project_diff.record import (
     SCHEMA,
     WATCH_MARKER,
     has_watch_marker,
-    read_census,
     served_directory,
     store_blob,
 )
 from tests.quarto_project_diff.sides import (
-    OBSERVER_SOURCE,
     PREVIEW_DIRECTORY_VARIABLE,
     RequirementError,
     run_checked,
@@ -104,79 +101,18 @@ def test_log_skeleton_keeps_steps_and_markers_without_timings():
     ]
 
 
-@pytest.mark.skipif(sys.version_info < (3, 12), reason="the observer needs sys.monitoring")
-def test_observer_counts_exceptions_that_great_docs_handles(tmp_path: Path):
-    # Only exceptions handled inside the package belong in the census. The caller
-    # handles a separate exception to check that the observer excludes it.
-    package = tmp_path / "src" / "great_docs"
-    package.mkdir(parents=True)
-    _ = (package / "__init__.py").write_text(
-        textwrap.dedent(
-            """\
-            def _parse(text):
-                return int(text)
-
-            def lenient(text):
-                try:
-                    return _parse(text)
-                except ValueError:
-                    return 0
-            """
-        ),
-        encoding="utf-8",
-    )
-    script = "import great_docs\ngreat_docs.lenient('x')\ntry:\n    {}['k']\nexcept KeyError:\n    pass\n"
-    census = tmp_path / "census"
-    env = {
-        **os.environ,
-        "PYTHONPATH": os.pathsep.join([str(tmp_path / "src"), str(OBSERVER_SOURCE.parent)]),
-        "GREAT_DOCS_QUARTO_PROJECT_DIFF_CENSUS": str(census),
-    }
-    _ = subprocess.run([sys.executable, "-c", script], env=env, cwd=tmp_path, check=True)
-
-    entries, processes = read_census(census, path_rules({"<SRC>": tmp_path / "src"}))
-
-    assert processes == 1
-    assert entries == [
-        {
-            "type": "ValueError",
-            "message": "invalid literal for int() with base 10: 'x'",
-            "raised_in": "_parse",
-            "count": 1,
-            "raised_at": ["__init__.py:2"],
-            "handlers": ["lenient (__init__.py:6)"],
-        }
-    ]
-
-
 def _recording(
     root: Path,
     commands: Mapping[str, Mapping[str, str | None]],
-    census: Sequence[Mapping[str, Any]] = (),
     extra: Mapping[str, Mapping[str, Any]] | None = None,
     **manifest: Any,
 ) -> Path:
     """
-    Write a one-case recording from the files each command wrote
+    Write a one-case recording in `root` and return its path
 
-    Parameters
-    ----------
-    root :
-        Recording directory to create.
-    commands :
-        For each command in order, the content of each file it wrote, or `None` for a file
-        it removed. A path that an earlier command wrote counts as changed.
-    census :
-        Handled-exception entries of every command.
-    extra :
-        Further record keys per command.
-    **manifest :
-        Further manifest keys, such as `expects_reference`.
-
-    Returns
-    -------
-    :
-        The recording directory.
+    Process `commands` in order, using each file's content or `None` for a removal.
+    A path written by an earlier command counts as changed. Add per-command record keys
+    from `extra` and manifest keys, such as `expects_reference`, from `manifest`.
     """
     records: dict[str, Any] = {}
     written: set[str] = set()
@@ -195,7 +131,6 @@ def _recording(
             "files": files,
             "skeleton": [],
             "warnings": [],
-            "census": list(census),
             **(extra or {}).get(name, {}),
         }
     content = {"case": "demo", "order": list(records), "commands": records, **manifest}
@@ -206,20 +141,10 @@ def _recording(
     return root
 
 
-def test_comparison_names_the_changed_file_and_the_new_handler(tmp_path: Path):
-    handled = {
-        "type": "KeyError",
-        "message": "'x'",
-        "raised_in": "GreatDocs._step",
-        "count": 1,
-        "raised_at": ["core.py:10"],
-        "handlers": ["GreatDocs._step (core.py:12)"],
-    }
+def test_comparison_names_the_changed_file(tmp_path: Path):
     base = _recording(tmp_path / "base", {"build": {"docs/index.qmd": "# Title\n"}})
     same = _recording(tmp_path / "same", {"build": {"docs/index.qmd": "# Title\n"}})
-    test = _recording(
-        tmp_path / "test", {"build": {"docs/index.qmd": "# Changed title\n"}}, [handled]
-    )
+    test = _recording(tmp_path / "test", {"build": {"docs/index.qmd": "# Changed title\n"}})
 
     assert compare(base, same).matches
     result = compare(base, test)
@@ -228,9 +153,7 @@ def test_comparison_names_the_changed_file_and_the_new_handler(tmp_path: Path):
     findings = "\n".join(result.cases[0].findings)
     assert "build: file changed: docs/index.qmd" in findings
     assert "+# Changed title" in findings
-    assert "NEW handled exception: KeyError" in findings
-    assert "handled in GreatDocs._step (core.py:12)" in findings
-    # Differences without a regression pass, unless the run fails on any difference
+    # File changes pass unless `--fail-on difference` is selected.
     assert not result.cases[0].regressed
     assert result.passes()
     assert not result.passes("difference")
@@ -259,33 +182,43 @@ def test_comparison_fails_when_the_test_side_lacks_an_expected_reference_index(t
 
 
 def test_comparison_refuses_a_recording_from_another_recording_schema(tmp_path: Path):
+    """Reject recordings made with an older manifest schema"""
     current = _recording(tmp_path / "current", {"build": {}})
     older = _recording(tmp_path / "older", {"build": {}})
     side = json.loads((older / "side.json").read_text(encoding="utf-8"))
-    _ = (older / "side.json").write_text(json.dumps({**side, "schema": 1}), encoding="utf-8")
+    _ = (older / "side.json").write_text(
+        json.dumps({**side, "schema": SCHEMA - 1}), encoding="utf-8"
+    )
 
-    with pytest.raises(RequirementError, match="schema 1"):
+    with pytest.raises(RequirementError, match=f"schema {SCHEMA - 1}"):
         _ = compare(older, current)
 
 
-def test_freeze_after_build_reports_what_it_prepares_differently_as_a_known_gap(tmp_path: Path):
+def test_freeze_after_build_fails_when_it_prepares_files_unlike_build(tmp_path: Path):
+    """Report changed and removed files after a build as a freeze regression"""
     project = "docs/_quarto/default"
     built = {f"{project}/_quarto.yml": "a", f"{project}/_inv/index.lua": "", f"{project}/x.qmd": ""}
     frozen = {f"{project}/_quarto.yml": "b", f"{project}/_inv/index.lua": None}
-    base = _recording(tmp_path / "base", {"build": built, "freeze": frozen})
-    same = _recording(tmp_path / "same", {"build": built, "freeze": frozen})
     fixed = _recording(tmp_path / "fixed", {"build": built, "freeze": {}})
+    broken = _recording(tmp_path / "broken", {"build": built, "freeze": frozen})
+    meta = json.loads((fixed / "side.json").read_text(encoding="utf-8"))
+    meta["facts"] |= {"checkout": "/x", "commit": "0" * 40}
 
-    result = compare(base, same)
+    assert compare(fixed, fixed).matches
+    result = compare(fixed, broken)
 
-    assert result.matches
-    assert result.cases[0].known_gaps == [
-        "freeze prepares 2 files unlike build [freeze-steps] (base: same)",
+    assert result.cases[0].checks == [
+        "freeze after build prepared 2 files unlike build (base: passes)",
         f"    changed {project}/_quarto.yml",
         f"    removed {project}/_inv/index.lua",
     ]
-    assert compare(base, fixed).cases[0].known_gaps == [
-        "closed: freeze prepares 2 files unlike build [freeze-steps]"
+    assert result.cases[0].regressed
+    report = render(result, meta, meta).splitlines()
+    start = report.index("demo: DIFFER (regression)") + 1
+    assert report[start : start + 3] == [
+        "  check failed: freeze after build prepared 2 files unlike build (base: passes)",
+        f"      changed {project}/_quarto.yml",
+        f"      removed {project}/_inv/index.lua",
     ]
 
 
@@ -325,20 +258,18 @@ def _watch_recording(root: Path, status: int | str, **facts: bool) -> Path:
     return _recording(root, {"watch": {}}, extra={"watch": watch})
 
 
-def test_watch_without_rebuild_is_a_known_gap_and_a_crash_fails(tmp_path: Path):
+def test_watch_fails_without_a_rebuild_or_a_clean_stop(tmp_path: Path):
+    """Treat missed rebuilds and unclean watch stops as failed checks"""
     stale = _watch_recording(tmp_path / "stale", 0, rebuilt=False)
     rebuilt = _watch_recording(tmp_path / "rebuilt", 0, rebuilt=True)
-    crashed = _watch_recording(tmp_path / "crashed", 1, rebuilt=False, traceback=True)
+    crashed = _watch_recording(tmp_path / "crashed", 1, rebuilt=True, traceback=True)
     stuck = _watch_recording(tmp_path / "stuck", "timeout", previewed=False, rebuilt=False)
 
-    result = compare(stale, stale)
+    assert compare(rebuilt, rebuilt).matches
+    result = compare(rebuilt, stale)
 
-    assert result.matches
-    assert result.cases[0].known_gaps == [
-        "watch mode does not rebuild after a source edit [watch-rebuild] (base: same)"
-    ]
-    assert compare(rebuilt, rebuilt).cases[0].known_gaps == []
-    assert compare(stale, rebuilt).cases[0].status == "differ"
+    assert result.cases[0].checks == ["watch did not rebuild after a source edit (base: passes)"]
+    assert result.cases[0].regressed
     assert compare(crashed, crashed).cases[0].checks == [
         "watch exited with status 1 after the interrupt (base: same)",
         "watch printed a traceback (base: same)",

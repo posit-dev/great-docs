@@ -30,7 +30,6 @@ from tests.quarto_project_diff.sides import (
     child_environment,
     describe,
     environment_differences,
-    install_observer,
     outside_git,
     own_checkout,
     python_version,
@@ -96,9 +95,9 @@ def choose_cases(
     return select(cases, only)
 
 
-def prepare_work(cache: Path) -> tuple[Path, Path, Path]:
+def prepare_work(cache: Path) -> tuple[Path, Path]:
     """
-    Create a fresh work directory with the stub `quarto` and the observer
+    Create a fresh work directory with the stub `quarto`
 
     Parameters
     ----------
@@ -108,14 +107,14 @@ def prepare_work(cache: Path) -> tuple[Path, Path, Path]:
     Returns
     -------
     :
-        The work directory, the stub's directory and the observer's directory.
+        The work directory and the stub's directory.
     """
     outside_git(cache)
     work = cache / "work" / f"{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}"
     work.mkdir(parents=True)
     stub_dir = work / "stub"
     _ = write_stub(stub_dir, real_quarto())
-    return work, stub_dir, install_observer(work / "observer")
+    return work, stub_dir
 
 
 def exit_status(comparison: Comparison, fail_on: FailOn) -> int:
@@ -160,7 +159,7 @@ def command_run(args: argparse.Namespace) -> int:
     """
     checkout = (args.checkout or own_checkout()).resolve()
     cache = cache_directory(args.cache_dir)
-    work, stub_dir, observer = prepare_work(cache)
+    work, stub_dir = prepare_work(cache)
     try:
         test = checkout_side(checkout)
         print(f"preparing base worktree for {args.base} in {cache / 'worktrees'}", flush=True)
@@ -173,8 +172,7 @@ def command_run(args: argparse.Namespace) -> int:
         out = (args.out or cache / "runs" / work.name).resolve()
         pristine = generate_all(cases, own_checkout() / "test-packages", work)
         sides = [
-            (side, out / side.label, child_environment(side, stub_dir, observer))
-            for side in (base, test)
+            (side, out / side.label, child_environment(side, stub_dir)) for side in (base, test)
         ]
         wall = record(sides, cases, pristine, work, args.workers, args.timeout, args.keep)
     finally:
@@ -201,13 +199,13 @@ def command_record(args: argparse.Namespace) -> int:
         The exit status, 0 once the recording is written.
     """
     cache = cache_directory(args.cache_dir)
-    work, stub_dir, observer = prepare_work(cache)
+    work, stub_dir = prepare_work(cache)
     out = args.out.resolve()
     try:
         side = describe(checkout_side(args.checkout), stub_dir)
         cases = choose_cases(args.catalogue, args.only, own_checkout(), side)
         pristine = generate_all(cases, own_checkout() / "test-packages", work)
-        environment = child_environment(side, stub_dir, observer)
+        environment = child_environment(side, stub_dir)
         sides = [(side, out, environment)]
         wall = record(sides, cases, pristine, work, args.workers, args.timeout, args.keep)
     finally:

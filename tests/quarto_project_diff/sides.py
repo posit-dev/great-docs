@@ -3,9 +3,8 @@ Checkouts and controlled build environments for the two sides of a comparison
 
 A side is a checkout with its own virtual environment. The base side is a detached worktree
 of the base commit, kept in the cache directory with a virtual environment synced from the
-test checkout's `uv.lock`. Each build command uses the same environment settings: a stub
-`quarto` first on `PATH`, the side's `bin` directory next, a failing HTTP proxy, a fixed hash
-seed and the census observer on `PYTHONPATH`.
+test checkout's `uv.lock`. Every build command runs with a stub `quarto` first on `PATH`,
+the side's `bin` directory next, a failing HTTP proxy and a fixed hash seed.
 """
 
 from __future__ import annotations
@@ -30,14 +29,11 @@ DEAD_PROXY = "http://127.0.0.1:9"
 # Variables passed through from this process's environment, besides `LC_*`.
 INHERITED_VARIABLES = ("HOME", "USER", "LOGNAME", "LANG", "TMPDIR", "TERM")
 
-# Read by the observer and by the stub `quarto`, which import nothing from this package.
-CENSUS_VARIABLE = "GREAT_DOCS_QUARTO_PROJECT_DIFF_CENSUS"
+# The stub `quarto` reads these variables without importing this package.
 QUARTO_LOG_VARIABLE = "GREAT_DOCS_QUARTO_PROJECT_DIFF_QUARTO_LOG"
 RENDER_PAGES_VARIABLE = "GREAT_DOCS_QUARTO_PROJECT_DIFF_RENDER_PAGES"
 PREVIEW_HOLD_VARIABLE = "GREAT_DOCS_QUARTO_PROJECT_DIFF_PREVIEW_HOLD"
 PREVIEW_DIRECTORY_VARIABLE = "GREAT_DOCS_QUARTO_PROJECT_DIFF_PREVIEW_DIRECTORY"
-
-OBSERVER_SOURCE = Path(__file__).resolve().parent / "observer" / "sitecustomize.py"
 
 _STUB_TEMPLATE = """\
 #!/bin/sh
@@ -289,27 +285,6 @@ def write_stub(directory: Path, real_quarto: str) -> Path:
     return stub
 
 
-def install_observer(directory: Path) -> Path:
-    """
-    Copy the census observer into a directory of its own for `PYTHONPATH`
-
-    The copy keeps every other module of this package off the build's import path.
-
-    Parameters
-    ----------
-    directory :
-        Destination directory.
-
-    Returns
-    -------
-    :
-        The directory.
-    """
-    directory.mkdir(parents=True, exist_ok=True)
-    _ = shutil.copyfile(OBSERVER_SOURCE, directory / "sitecustomize.py")
-    return directory
-
-
 def search_path(side: Side, stub_dir: Path) -> str:
     """
     Compose the `PATH` of a side's commands
@@ -329,7 +304,7 @@ def search_path(side: Side, stub_dir: Path) -> str:
     return os.pathsep.join([str(stub_dir), str(side.bin), os.environ.get("PATH", "")])
 
 
-def child_environment(side: Side, stub_dir: Path, observer_dir: Path) -> dict[str, str]:
+def child_environment(side: Side, stub_dir: Path) -> dict[str, str]:
     """
     Compose the environment shared by every command a side runs
 
@@ -342,19 +317,16 @@ def child_environment(side: Side, stub_dir: Path, observer_dir: Path) -> dict[st
         The side to build with.
     stub_dir :
         Directory of the stub `quarto`.
-    observer_dir :
-        Directory of the census observer, which goes last on `PYTHONPATH`.
 
     Returns
     -------
     :
-        The environment without the per-package `PYTHONPATH` entries and per-command
-        variables, which the recorder adds.
+        The shared environment. The recorder adds `PYTHONPATH` for each package and
+        variables for each command.
     """
     env = {k: v for k, v in os.environ.items() if k in INHERITED_VARIABLES or k.startswith("LC_")}
     env.update(
         PATH=search_path(side, stub_dir),
-        PYTHONPATH=str(observer_dir),
         PYTHONHASHSEED="0",
         PYTHONIOENCODING="utf-8",
         HTTPS_PROXY=DEAD_PROXY,
@@ -413,8 +385,7 @@ def describe(side: Side, stub_dir: Path) -> Side:
     Raises
     ------
     RequirementError
-        If `d2` or `ruff` is missing from the side's `PATH`, or the interpreter is older
-        than 3.12.
+        If `d2` or `ruff` is missing from the side's `PATH`.
     """
     path = search_path(side, stub_dir)
     versions: dict[str, str] = {}
@@ -429,8 +400,6 @@ def describe(side: Side, stub_dir: Path) -> Side:
     versions["git"] = run_checked(["git", "--version"], side.checkout)
     probe = json.loads(run_checked([str(side.bin / "python"), "-c", _DISTRIBUTIONS], side.checkout))
     python = str(probe["python"])
-    if tuple(int(p) for p in python.split(".")[:2]) < (3, 12):
-        raise RequirementError(f"The census needs Python 3.12 or later; {side.label} has {python}")
     distributions = {
         name: version for name, version in probe["distributions"].items() if name != "great-docs"
     }
