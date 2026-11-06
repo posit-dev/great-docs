@@ -658,6 +658,17 @@ def test_read_page_missing_file():
         assert result is None
 
 
+def test_read_page_with_empty_stem_after_prefix_has_no_title(tmp_path: Path):
+    """Verify that an ordering prefix alone produces an empty page title"""
+    page = tmp_path / "01-.qmd"
+    page.write_text("# Content\n", encoding="utf-8")
+
+    result = user_guide.read_page(page)
+
+    assert result is not None
+    assert result["title"] == ""
+
+
 def test_discover_auto():
     """Verify automatic discovery in `user_guide/`"""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -815,6 +826,41 @@ def test_discover_explicit_empty():
         result = user_guide._discover_explicit(ug, config, report=print)
 
         assert result is None
+
+
+def test_discover_explicit_skips_a_listed_page_that_cannot_be_read(tmp_path: Path):
+    """Verify that explicit discovery skips pages with invalid UTF-8"""
+    (tmp_path / "broken.qmd").write_bytes(b"\xff\xfe\x00")
+    (tmp_path / "ok.qmd").write_text("---\ntitle: Ok\n---\nA\n", encoding="utf-8")
+    config = [{"section": "S", "contents": ["broken.qmd", "ok.qmd"]}]
+
+    result = user_guide._discover_explicit(tmp_path, config, report=print)
+
+    assert result is not None
+    assert [page["title"] for page in result["files"]] == ["Ok"]
+
+
+def test_discover_auto_without_readable_pages_returns_none(tmp_path: Path):
+    """Verify that automatic discovery returns no guide when all pages are unreadable"""
+    config = write_config(tmp_path, "display_name: Demo\n")
+    guide_dir = tmp_path / "user_guide"
+    guide_dir.mkdir()
+    (guide_dir / "broken.qmd").write_bytes(b"\xff\xfe\x00")
+
+    assert user_guide.discover(config, Layout.make(tmp_path), report=print) is None
+
+
+def test_listed_page_without_a_file_name():
+    """Verify that an unsupported listed item has no file name or sidebar label"""
+    assert user_guide._listed_page(42) == ("", None)
+
+
+def test_published_path_outside_the_guide_keeps_only_its_file_name(tmp_path: Path):
+    """Verify that a page outside the guide directory publishes by its file name"""
+    guide = {"source_dir": tmp_path / "user_guide", "explicit": True}
+    page = {"path": tmp_path / "elsewhere" / "extra.qmd", "title": "Extra", "section": None}
+
+    assert user_guide.published(guide, page) == Path("extra.qmd")
 
 
 def test_discover_explicit_skips_duplicates():
@@ -1021,6 +1067,69 @@ def test_sidebar_explicit():
         section_items = [c for c in result["contents"] if isinstance(c, dict) and "section" in c]
 
         assert len(section_items) == 1
+
+
+def test_sidebar_explicit_skips_empty_sections_and_unnamed_items(tmp_path: Path):
+    """Verify that explicit sidebars skip unnamed or empty sections and unnamed items"""
+    (tmp_path / "install.qmd").write_text("---\ntitle: Install\n---\n", encoding="utf-8")
+    guide = {
+        "files": [],
+        "sections": {},
+        "has_index": False,
+        "explicit": True,
+        "source_dir": tmp_path,
+        "explicit_config": [
+            {"section": "", "contents": ["install.qmd"]},
+            {"section": "Empty", "contents": []},
+            {"section": "Setup", "contents": [42, {"text": "No target"}, "install.qmd"]},
+        ],
+    }
+
+    assert user_guide.sidebar(guide)["contents"] == [
+        {"section": "Setup", "contents": ["user-guide/install.qmd"]}
+    ]
+
+
+def test_sidebar_auto_links_an_untitled_page_by_its_href(tmp_path: Path):
+    """Verify that automatic sidebars link untitled pages without a label"""
+    (tmp_path / "01-.qmd").write_text("# Content\n", encoding="utf-8")
+    page = user_guide.read_page(tmp_path / "01-.qmd")
+    assert page is not None
+    guide = {
+        "files": [page],
+        "sections": {},
+        "has_index": False,
+        "explicit": False,
+        "source_dir": tmp_path,
+    }
+
+    assert user_guide.sidebar(guide)["contents"] == ["user-guide/.qmd"]
+
+
+def test_sidebar_auto_lists_the_root_index_before_subdirectories(tmp_path: Path):
+    """Verify that the root `index.qmd` precedes subdirectory sections in the sidebar"""
+    (tmp_path / "advanced").mkdir()
+    (tmp_path / "index.qmd").write_text("---\ntitle: Home\n---\n", encoding="utf-8")
+    (tmp_path / "advanced" / "tuning.qmd").write_text("---\ntitle: Tuning\n---\n", encoding="utf-8")
+    pages = [
+        user_guide.read_page(tmp_path / "advanced" / "tuning.qmd"),
+        user_guide.read_page(tmp_path / "index.qmd"),
+    ]
+    guide = {
+        "files": pages,
+        "sections": {},
+        "has_index": True,
+        "explicit": False,
+        "source_dir": tmp_path,
+    }
+
+    assert user_guide.sidebar(guide)["contents"] == [
+        {"text": "Home", "href": "user-guide/index.qmd"},
+        {
+            "section": "Advanced",
+            "contents": [{"text": "Tuning", "href": "user-guide/advanced/tuning.qmd"}],
+        },
+    ]
 
 
 def test_discover_basic_full_project():

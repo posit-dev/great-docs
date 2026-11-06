@@ -204,7 +204,7 @@ def discover(config: Config, layout: Layout, *, report: Callable[[str], None]) -
             sections.setdefault(page["section"], []).append(page)
 
     if not files:
-        return None  # pragma: no cover
+        return None
 
     return {
         "files": files,
@@ -262,7 +262,7 @@ def _discover_explicit(
 
             page = read_page(file_path)
             if page is None:
-                continue  # pragma: no cover
+                continue
 
             page["section"] = section_name
             if custom_text:
@@ -309,7 +309,7 @@ def _listed_page(item: object) -> tuple[str, str | None]:
     if isinstance(item, dict):
         entry = cast("dict[str, Any]", item)
         return cast("str", entry.get("href", "")), cast("str | None", entry.get("text"))
-    return "", None  # pragma: no cover
+    return "", None
 
 
 def read_page(path: Path) -> GuidePage | None:
@@ -360,7 +360,7 @@ def published(guide: UserGuide, page: GuidePage) -> Path:
     """
     try:
         rel_path = page["path"].relative_to(guide["source_dir"])
-    except ValueError:  # pragma: no cover
+    except ValueError:
         rel_path = Path(page["path"].name)
     return published_path(rel_path, strip_prefix=not guide.get("explicit", False))
 
@@ -483,13 +483,13 @@ def _explicit_contents(guide: UserGuide) -> list[Any]:
         section_name = cast("str", entry.get("section", ""))
         section_contents = cast("list[Any]", entry.get("contents", []))
         if not section_name or not section_contents:
-            continue  # pragma: no cover
+            continue
 
         items: list[Any] = []
         for item in section_contents:
             filename, custom_text = _listed_page(item)
             if not filename:
-                continue  # pragma: no cover
+                continue
             if not (source_dir / filename).exists():
                 continue
 
@@ -529,7 +529,7 @@ def _auto_contents(guide: UserGuide) -> list[Any]:
         href = f"{SIDEBAR_ID}/{published_path(rel_path, strip_prefix=True)}"
         if page.get("title"):
             return {"text": page["title"], "href": href}
-        return href  # pragma: no cover
+        return href
 
     contents: list[Any] = []
 
@@ -559,7 +559,7 @@ def _auto_contents(guide: UserGuide) -> list[Any]:
         return [link(page) for page in files]
 
     root_index = next((page for page in root_files if page["path"].name == "index.qmd"), None)
-    if root_index is not None:  # pragma: no cover
+    if root_index is not None:
         contents.append(link(root_index))
 
     # Files and directory sections sort together, so numeric prefixes set the order
