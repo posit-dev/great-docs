@@ -51,7 +51,7 @@ svg = [
     "cairosvg>=2.5.0",
 ]
 mcp = [
-    "mcp>=1.21.1",
+    "mcp>=2.0.0",
 ]
 marimo = [
     "marimo>=0.20.0",
