@@ -446,9 +446,45 @@ class _ToolCallContent(list[TextContent]):
     is_error: bool = False
 
 
+async def _missing_arguments(name: str, arguments: dict) -> list[str]:
+    """
+    List required argument names missing from a tool call
+
+    The server does not validate tool calls against their input schemas. Check for
+    missing arguments before dispatch so the client receives a failed tool result.
+
+    Parameters
+    ----------
+    name
+        The tool name.
+    arguments
+        The supplied argument names and values.
+
+    Returns
+    -------
+    :
+        Missing names in schema order, or an empty list for an unknown tool.
+    """
+    for tool in await list_tools():
+        if tool.name == name:
+            required: list[str] = tool.input_schema.get("required", [])
+            return [argument for argument in required if argument not in arguments]
+    return []
+
+
 @_handler("call_tool")
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     """Dispatch tool calls to their implementations."""
+    if missing := await _missing_arguments(name, arguments):
+        result = _ToolCallContent(
+            [
+                TextContent(
+                    type="text", text=f"Error: missing required argument: {', '.join(missing)}"
+                )
+            ]
+        )
+        result.is_error = True
+        return result
     try:
         if name == "gd_build":
             return await _handle_build(arguments)

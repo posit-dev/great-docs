@@ -287,6 +287,13 @@ class TestCallTool:
             with pytest.raises(ZeroDivisionError):
                 asyncio.run(call_tool("gd_scan", {}))
 
+    def test_missing_required_argument_returns_error_text(self):
+        with patch("great_docs.mcp._handle_add_page") as handler:
+            result = asyncio.run(call_tool("gd_add_page", {"section": "recipes"}))
+        handler.assert_not_called()
+        assert result.is_error is True
+        assert result[0].text == "Error: missing required argument: title"
+
     def test_successful_call_does_not_mark_is_error(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
