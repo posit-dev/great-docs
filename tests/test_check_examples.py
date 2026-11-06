@@ -1851,13 +1851,25 @@ class TestExtractDocstringExamples:
         assert "gd_hpmb_missing" in warnings[0]
         assert "ModuleNotFoundError" in warnings[0]
 
-    def test_unresolvable_object_warns_and_others_are_checked(self, tmp_path, monkeypatch):
+    @pytest.mark.parametrize(
+        ("name", "error"),
+        [
+            ("Gone.method", "AliasResolutionError"),
+            ("Gone", "AliasResolutionError"),
+            ("Loop", "CyclicAliasError"),
+        ],
+    )
+    def test_unresolvable_object_warns_and_others_are_checked(
+        self, name, error, tmp_path, monkeypatch
+    ):
         """Warn about unresolved imports and collect examples from other objects"""
         files = {
             "gd_hpmb_alias/__init__.py": """\
                 from .missing import Gone
+                from .cycle import Loop
                 from .real import Real
             """,
+            "gd_hpmb_alias/cycle.py": "from gd_hpmb_alias import Loop\n",
             "gd_hpmb_alias/real.py": '''\
                 class Real:
                     """
@@ -1869,14 +1881,14 @@ class TestExtractDocstringExamples:
                     """
             ''',
         }
-        contents = ["Gone.method", "Real"]
+        contents = [name, "Real"]
         warnings = []
         with self._write_project(tmp_path, monkeypatch, "gd-hpmb-alias", contents, files):
             result = extract_docstring_examples(tmp_path, warn=warnings.append)
         assert [page for page, _cells in result] == ["docstring:gd_hpmb_alias.Real"]
         assert len(warnings) == 1
-        assert "Gone.method" in warnings[0]
-        assert "AliasResolutionError" in warnings[0]
+        assert f"{name}'" in warnings[0]
+        assert error in warnings[0]
 
     def test_no_reference_enabled(self, tmp_path):
         (tmp_path / "great-docs.yml").write_text("display_name: Test\n")

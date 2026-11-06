@@ -236,16 +236,15 @@ def extract_docstring_examples(
         full_name = f"{package_name}.{obj_name}" if "." not in obj_name else obj_name
         try:
             member = _resolve_member(package, obj_name)
+            # Alias resolution can fail on docstring access as well as member lookup.
+            docstring = member.docstring if member is not None else None
         except (gf.AliasResolutionError, gf.CyclicAliasError) as e:
             warn(f"Skipped the examples of '{full_name}': {type(e).__name__}: {e}")
             continue
-        if member is None:
+        if docstring is None:
             continue
 
-        if not hasattr(member, "docstring") or member.docstring is None:
-            continue
-
-        parsed = member.docstring.parsed
+        parsed = docstring.parsed
         cells: list[Cell] = []
         cell_idx = 0
 
