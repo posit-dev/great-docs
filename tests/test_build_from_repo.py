@@ -164,6 +164,80 @@ def test_clone_without_branch():
 
 
 @pytest.fixture
+def pip_commands(monkeypatch, tmp_path):
+    """
+    Record the `pip install` commands `_install` runs, with each one succeeding
+
+    Returns the list of commands. Appending a requirement to its `fail_on` attribute makes the
+    install of that requirement fail.
+    """
+
+    class Commands(list[list[str]]):
+        fail_on: list[str]
+
+    commands = Commands()
+    failing: list[str] = []
+
+    def run(command, cwd=None):
+        commands.append(command)
+        failed = bool(failing) and failing[0] in command
+        return MagicMock(returncode=1 if failed else 0, stderr="no such version")
+
+    monkeypatch.setattr(from_repo.venv, "create", lambda *args, **kwargs: None)
+    monkeypatch.setattr(from_repo, "_run", run)
+    monkeypatch.setattr(from_repo, "install_extras", lambda project_dir: "")
+    commands.fail_on = failing
+    return commands
+
+
+def test_install_uses_the_running_release(tmp_path, monkeypatch, pip_commands):
+    """Install the version that is running from PyPI when it is not a source tree"""
+    monkeypatch.setattr(from_repo, "_source_tree", lambda: None)
+    monkeypatch.setattr(from_repo.metadata, "version", lambda name: "1.2.3")
+
+    from_repo._install(tmp_path / "repo", tmp_path / "venv", report=print)
+
+    assert pip_commands[0][1:] == ["install", "great-docs==1.2.3"]
+    assert len(pip_commands) == 2
+
+
+def test_install_uses_the_running_source_tree(tmp_path, monkeypatch, pip_commands):
+    """Install a development checkout from its source tree"""
+    monkeypatch.setattr(from_repo, "_source_tree", lambda: tmp_path / "src")
+
+    from_repo._install(tmp_path / "repo", tmp_path / "venv", report=print)
+
+    assert pip_commands[0][1:] == ["install", str(tmp_path / "src")]
+
+
+def test_install_failure_names_the_running_release(tmp_path, monkeypatch, pip_commands):
+    """Raise instead of installing another release when the running one is unavailable"""
+    monkeypatch.setattr(from_repo, "_source_tree", lambda: None)
+    monkeypatch.setattr(from_repo.metadata, "version", lambda name: "1.2.3")
+    pip_commands.fail_on.append("great-docs==1.2.3")
+
+    with pytest.raises(RuntimeError, match=r"great-docs==1\.2\.3"):
+        from_repo._install(tmp_path / "repo", tmp_path / "venv", report=print)
+
+    assert len(pip_commands) == 1
+
+
+def test_source_tree_found_for_a_development_checkout():
+    """Find the repository root when great-docs runs from this checkout"""
+    assert from_repo._source_tree() == Path(from_repo.__file__).resolve().parents[2]
+
+
+def test_source_tree_absent_for_another_project(tmp_path, monkeypatch):
+    """Ignore a `pyproject.toml` that names another project"""
+    root = tmp_path / "site-packages"
+    root.mkdir()
+    (root / "pyproject.toml").write_text('[project]\nname = "other"\n')
+    module = root / "great_docs" / "_build" / "from_repo.py"
+    monkeypatch.setattr(from_repo, "__file__", str(module))
+    assert from_repo._source_tree() is None
+
+
+@pytest.fixture
 def stub_remote_build(monkeypatch):
     """
     Replace the clone, installation and inner build with a site holding one page
