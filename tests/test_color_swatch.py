@@ -275,6 +275,13 @@ class TestHelperImports:
         colors = self.mod.parse_colors(body, "")
         assert [c["name"] for c in colors] == ["Kept"]
 
+    def test_parse_colors_unquoted_hex_names_the_entry(self):
+        """Identify the invalid colour when an unquoted hex value becomes null"""
+        # An unquoted `#ff0000` starts a YAML comment, leaving `hex` null.
+        body = "- name: Red\n  hex: #ff0000\n"
+        with pytest.raises(ValueError, match="Red"):
+            self.mod.parse_colors(body, "")
+
     def test_parse_yaml_non_list_body_returns_empty(self):
         """YAML that parses to a non-list (e.g. a mapping) returns []."""
         body = "key: value\nanother: 42\n"

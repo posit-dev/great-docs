@@ -382,6 +382,10 @@ def parse_colors(body: str, palette: str) -> list[dict[str, Any]]:
         for entry in parsed:
             if not isinstance(entry, dict) or "hex" not in entry or "name" not in entry:
                 continue
+            if not isinstance(entry["name"], str) or not isinstance(entry["hex"], str):
+                raise ValueError(
+                    f'name and hex must be text (quote a hex value: "#ff0000"): {entry!r}'
+                )
             colors.append(entry)
 
     return colors
