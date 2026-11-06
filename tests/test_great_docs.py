@@ -21822,6 +21822,34 @@ def test_build_reference_yaml_large_class_split():
         assert "      - Big.a" in result
 
 
+def test_build_reference_yaml_separates_class_like_sections_with_a_blank_line():
+    """Verify that a blank line separates class and protocol YAML sections"""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        categories = {
+            "classes": ["Alpha"],
+            "protocols": ["Proto"],
+            "class_methods": {},
+            "class_method_names": {},
+        }
+        result = reference_block.reference_yaml(docs._config, categories)
+        assert "      - Alpha\n\n  - title: Protocols" in result
+
+
+def test_build_reference_yaml_notes_method_count_of_small_class():
+    """Verify that small classes keep inline methods and a method count"""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        categories = {
+            "classes": ["Small"],
+            "class_methods": {"Small": 2},
+            "class_method_names": {"Small": ["a", "b"]},
+        }
+        result = reference_block.reference_yaml(docs._config, categories)
+        assert "      - Small  # 2 method(s)" in result
+        assert "members: false" not in result
+
+
 def test_build_reference_yaml_empty():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)

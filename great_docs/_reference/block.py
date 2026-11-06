@@ -46,8 +46,8 @@ def reference_yaml(config: Config, categories: Categories) -> str:
         items = categories.get(cat_key, [])
         if not items:
             continue
-        if has_prev_section:  # pragma: no cover
-            lines.append("")  # pragma: no cover
+        if has_prev_section:
+            lines.append("")
         lines.append(f"  - title: {title}")
         lines.append(f"    desc: {desc}")
         lines.append("    contents:")
@@ -57,10 +57,8 @@ def reference_yaml(config: Config, categories: Categories) -> str:
                 lines.append(f"      - name: {class_name}")
                 lines.append(f"        members: false  # {method_count} methods listed below")
                 large_classes.append(class_name)
-            elif method_count > 0:  # pragma: no cover
-                lines.append(
-                    f"      - {class_name}  # {method_count} method(s)"
-                )  # pragma: no cover
+            elif method_count > 0:
+                lines.append(f"      - {class_name}  # {method_count} method(s)")
             else:
                 lines.append(f"      - {class_name}")
         has_prev_section = True
