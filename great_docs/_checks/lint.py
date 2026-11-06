@@ -227,7 +227,7 @@ def run_lint(
         _check_directive_consistency(pkg, importable_name, exports, result)
 
     if "stale-versions" in checks:
-        _check_stale_versions(project_root, result, layout)
+        _check_stale_versions(config, project_root, result, layout)
 
     if "descriptions" in checks:
         _check_page_descriptions(config, layout, project_root, result)
@@ -834,29 +834,32 @@ _DEFAULT_CALLOUT_THRESHOLD = 4  # releases behind latest
 
 
 def _check_stale_versions(
-    project_root: Path, result: LintResult, layout: Layout | None = None
+    config: Config, project_root: Path, result: LintResult, layout: Layout | None = None
 ) -> None:
     """
-    Flag stale version-annotated content in .qmd files.
+    Flag stale version annotations in `.qmd` files
 
     Checks for:
       - `[version-badge new X]` where X is many releases behind latest
       - `::: {.version-note version="X"}` / `::: {.version-deprecated version="X"}`
         where X is very old
       - `upcoming: "X"` frontmatter where X is already released
+
+    Parameters
+    ----------
+    config
+        The project's configuration, whose `versions`, `new_is_old` and
+        `lint.stale_versions` settings drive the check. Without versions the
+        check reports nothing.
+    project_root
+        The project root containing the pages to scan.
+    result
+        The lint result to which findings are appended.
+    layout
+        The project layout used to exclude generated build copies.
     """
-    from yaml12 import read_yaml
-
     project_root = project_root.resolve()
-    # Load great-docs.yml for versions list and optional lint config
-    config_path = layout.config_path if layout is not None else project_root / "great-docs.yml"
-    if not config_path.exists():
-        return
-
-    try:
-        raw_config = read_yaml(config_path) or {}
-    except Exception:
-        return
+    raw_config = config.user_settings
 
     versions_raw = raw_config.get("versions", [])
     if not versions_raw:

@@ -79,7 +79,12 @@ def test_lint_includes_shared_sources(
         )
         expected.add("README.md")
     else:
-        _check_stale_versions(project_root, result, layout)
+        _check_stale_versions(
+            Config(layout.package_root, config_path=layout.config_path),
+            project_root,
+            result,
+            layout,
+        )
     assert {
         issue.symbol.split(":")[0] for issue in result.issues if issue.check == check
     } == expected
@@ -1630,7 +1635,7 @@ class TestCheckStaleVersions:
             },
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         stale = [i for i in result.issues if i.check == "stale-badge"]
         assert len(stale) == 1
         assert "0.3" in stale[0].message
@@ -1649,7 +1654,7 @@ class TestCheckStaleVersions:
             },
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         stale = [i for i in result.issues if i.check == "stale-badge"]
         assert len(stale) == 0
 
@@ -1669,7 +1674,7 @@ class TestCheckStaleVersions:
             },
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         stale = [i for i in result.issues if i.check == "stale-callout"]
         assert len(stale) == 1
         assert "0.2" in stale[0].message
@@ -1691,7 +1696,7 @@ class TestCheckStaleVersions:
             },
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         stale = [i for i in result.issues if i.check == "stale-callout"]
         assert len(stale) == 0
 
@@ -1706,7 +1711,7 @@ class TestCheckStaleVersions:
             },
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         stale = [i for i in result.issues if i.check == "stale-upcoming"]
         assert len(stale) == 1
         assert "0.5" in stale[0].message
@@ -1723,7 +1728,7 @@ class TestCheckStaleVersions:
             },
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         stale = [i for i in result.issues if i.check == "stale-upcoming"]
         assert len(stale) == 0
 
@@ -1743,7 +1748,7 @@ class TestCheckStaleVersions:
             },
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         stale = [i for i in result.issues if i.check == "stale-callout"]
         assert len(stale) == 1
         assert "version-deprecated" in stale[0].message
@@ -1768,7 +1773,7 @@ class TestCheckStaleVersions:
             '::: {.version-note version="0.1"}\nOld.\n:::\n'
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         assert len(result.issues) == 0
 
     def test_no_versions_config_skips(self, tmp_path):
@@ -1776,7 +1781,7 @@ class TestCheckStaleVersions:
 
         (tmp_path / "great-docs.yml").write_text("theme: default\n")
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         assert len(result.issues) == 0
 
     def test_skips_underscore_dirs(self, tmp_path):
@@ -1790,7 +1795,7 @@ class TestCheckStaleVersions:
             },
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         assert len(result.issues) == 0
 
     def test_skips_versioned_build_dirs(self, tmp_path):
@@ -1825,7 +1830,7 @@ class TestCheckStaleVersions:
             encoding="utf-8",
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         stale = [i for i in result.issues if i.check == "stale-badge"]
         assert len(stale) == 1
         assert "great-docs-examples" in stale[0].symbol
@@ -1842,7 +1847,7 @@ class TestCheckStaleVersions:
         )
 
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
 
         stale = [i for i in result.issues if i.check == "stale-badge"]
         assert len(stale) == 1
@@ -1861,7 +1866,7 @@ class TestCheckStaleVersions:
             },
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         stale = [i for i in result.issues if i.check == "stale-badge"]
         assert len(stale) == 1
         assert stale[0].symbol == "user_guide/page.qmd:7"
@@ -1872,7 +1877,16 @@ class TestCheckStaleVersions:
 
         (tmp_path / "great-docs.yml").write_text("versions: [\n  unclosed bracket")
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
+        assert result.issues == []
+
+    def test_configuration_that_is_not_a_mapping_skips(self, tmp_path):
+        """Report no stale versions when configuration is a YAML list"""
+        from great_docs._checks.lint import _check_stale_versions
+
+        (tmp_path / "great-docs.yml").write_text("- 0.2\n- 0.1\n")
+        result = LintResult()
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         assert result.issues == []
 
     def test_empty_versions_after_parse_skips(self, tmp_path):
@@ -1882,7 +1896,7 @@ class TestCheckStaleVersions:
         (tmp_path / "great-docs.yml").write_text("versions:\n  - tag: v0.1\n    label: '0.1'\n")
         result = LintResult()
         with patch("great_docs._versions.model.parse_versions_config", return_value=[]):
-            _check_stale_versions(tmp_path, result)
+            _check_stale_versions(Config(tmp_path), tmp_path, result)
         assert result.issues == []
 
     def test_no_latest_marked_falls_back_to_first_nonprerelease(self, tmp_path):
@@ -1901,7 +1915,7 @@ class TestCheckStaleVersions:
         with patch(
             "great_docs._versions.model.parse_versions_config", return_value=versions_no_latest
         ):
-            _check_stale_versions(tmp_path, result)
+            _check_stale_versions(Config(tmp_path), tmp_path, result)
         # Ran without error; latest_entry was set to 0.5 via fallback loop
 
     def test_only_prerelease_versions_skips(self, tmp_path):
@@ -1915,7 +1929,7 @@ class TestCheckStaleVersions:
             {"page.qmd": "---\ntitle: T\n---\n\nContent.\n"},
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         assert result.issues == []
 
     def test_version_field_added_to_released_set(self, tmp_path):
@@ -1937,7 +1951,7 @@ class TestCheckStaleVersions:
             {"page.qmd": '---\ntitle: T\nupcoming: "0.7.0"\n---\n\nContent.\n'},
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         stale = [i for i in result.issues if i.check == "stale-upcoming"]
         assert len(stale) == 1
         assert "0.7.0" in stale[0].message
@@ -1962,7 +1976,7 @@ class TestCheckStaleVersions:
 
         result = LintResult()
         with patch.object(Path, "read_text", _raise_for_qmd):
-            _check_stale_versions(tmp_path, result)
+            _check_stale_versions(Config(tmp_path), tmp_path, result)
         assert result.issues == []
 
     def test_badge_without_version_number_skipped(self, tmp_path):
@@ -1975,7 +1989,7 @@ class TestCheckStaleVersions:
             {"page.qmd": "---\ntitle: T\n---\n\n[version-badge new]\n"},
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         assert not any(i.check == "stale-badge" for i in result.issues)
 
     def test_expired_new_badge_advice(self, tmp_path):
@@ -1987,7 +2001,7 @@ class TestCheckStaleVersions:
         qmd = tmp_path / "page.qmd"
         qmd.write_text("---\ntitle: T\n---\n\n[version-badge new 0.1]\n")
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         stale = [i for i in result.issues if i.check == "stale-badge"]
         assert len(stale) == 1
         assert "consider removing" in stale[0].message
@@ -2002,7 +2016,7 @@ class TestCheckStaleVersions:
             {"page.qmd": "---\ntitle: T\n---\n\n[version-badge changed 0.1]\n"},
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         stale = [i for i in result.issues if i.check == "stale-badge"]
         assert len(stale) == 1
         assert "still displays in all versions" in stale[0].message
@@ -2017,7 +2031,7 @@ class TestCheckStaleVersions:
             {"page.qmd": "---\ntitle: T\n---\n\n::: {.version-note}\nSome note.\n:::\n"},
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         assert not any(i.check == "stale-callout" for i in result.issues)
 
     def test_deprecated_callout_without_version_attr_skipped(self, tmp_path):
@@ -2030,7 +2044,7 @@ class TestCheckStaleVersions:
             {"page.qmd": "---\ntitle: T\n---\n\n::: {.version-deprecated}\nUse new().\n:::\n"},
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         assert not any(i.check == "stale-callout" for i in result.issues)
 
     def test_fresh_deprecated_callout_not_flagged(self, tmp_path):
@@ -2051,7 +2065,7 @@ class TestCheckStaleVersions:
             },
         )
         result = LintResult()
-        _check_stale_versions(tmp_path, result)
+        _check_stale_versions(Config(tmp_path), tmp_path, result)
         assert not any(i.check == "stale-callout" for i in result.issues)
 
 
