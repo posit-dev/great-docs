@@ -5,6 +5,7 @@ Preview rebuilds after documentation source edits
 from __future__ import annotations
 
 import subprocess
+import sys
 import threading
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -94,6 +95,7 @@ def _watch(
     docs: GreatDocs,
     monkeypatch: pytest.MonkeyPatch,
     edits: Edits,
+    watched: list[Path] | None = None,
 ) -> list[list[str]]:
     """
     Build in watch mode and apply source edits while the preview runs
@@ -107,6 +109,8 @@ def _watch(
     edits
         A generator that edits the project's sources and yields each batch of changed paths,
         in place of watching the file system.
+    watched
+        A list that receives the directories the watch would observe.
 
     Returns
     -------
@@ -130,6 +134,8 @@ def _watch(
     monkeypatch.setattr(subprocess, "Popen", start)
 
     def changes(layout: Layout, package: Path | None, stop: threading.Event) -> Iterator[set[Path]]:
+        if watched is not None:
+            watched.extend(watch.watched_dirs(layout, package))
         return edits(layout)
 
     monkeypatch.setattr(watch, "source_changes", changes)
@@ -260,6 +266,45 @@ def test_watch_asks_for_a_restart_once_when_project_settings_change(
     _ = _watch(docs, monkeypatch, add_hook_then_edit)
 
     assert capsys.readouterr().out.count("rerun `great-docs build --watch`") == 1
+
+
+@pytest.fixture
+def package_project(tmp_path: Path) -> Iterator[GreatDocs]:
+    """
+    Create a project whose package sits beside `docs/` and is documented dynamically
+
+    Yields
+    ------
+    :
+        The project. Its package's modules leave `sys.modules` afterwards.
+    """
+    package = tmp_path / PACKAGE
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        '__all__ = ["greet"]\n\n\ndef greet() -> str:\n    """Say hello"""\n    return "hello"\n',
+        encoding="utf-8",
+    )
+    config = "dynamic: true\nchangelog:\n  enabled: false\nskill:\n  enabled: false\n"
+    yield _project(tmp_path, config)
+    for name in [name for name in sys.modules if name.split(".")[0] == PACKAGE]:
+        del sys.modules[name]
+
+
+def test_watch_rebuilds_the_reference_after_a_docstring_edit(
+    package_project: GreatDocs, monkeypatch: pytest.MonkeyPatch
+):
+    init = package_project.layout.package_root / PACKAGE / "__init__.py"
+    watched: list[Path] = []
+
+    def edit(layout: Layout) -> Iterator[set[Path]]:
+        source = init.read_text(encoding="utf-8")
+        init.write_text(source.replace("Say hello", MARKER), encoding="utf-8")
+        yield {init}
+
+    _ = _watch(package_project, monkeypatch, edit, watched)
+
+    assert watched == [package_project.layout.source_dir, init.parent]
+    assert "reference/greet.qmd" in _holding(package_project.layout.build_dir, MARKER)
 
 
 @pytest.mark.parametrize(

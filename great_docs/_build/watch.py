@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import importlib
 import shutil
 import subprocess
+import sys
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -27,6 +29,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "Staging",
+    "forget_package",
     "serve",
     "source_changes",
     "source_filter",
@@ -299,6 +302,25 @@ def _digests(project: Path) -> dict[str, bytes]:
         for path in project.rglob("*")
         if path.is_file()
     }
+
+
+def forget_package(name: str) -> None:
+    """
+    Clear cached modules so the next package import reloads them
+
+    Watch-mode rebuilds share a process, so dynamic introspection would otherwise
+    reuse imported modules. Remove the package and its submodules from `sys.modules`
+    while keeping modules from other packages loaded. Invalidate the import system's
+    directory caches so the next import can find newly added modules.
+
+    Parameters
+    ----------
+    name
+        The package's importable name, such as `yaml12` or `firebird.base`.
+    """
+    for module in [key for key in sys.modules if key == name or key.startswith(f"{name}.")]:
+        del sys.modules[module]
+    importlib.invalidate_caches()
 
 
 def stage(served: Layout) -> Staging:

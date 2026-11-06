@@ -85,9 +85,10 @@ great-docs build --watch
 ```
 
 Great Docs watches the directory containing `great-docs.yml`, including your pages, assets and
-the configuration itself. After each batch of edits, it prepares the project again and copies
-only changed files into the previewed project. Quarto re-renders the affected pages and refreshes
-the browser. Press Ctrl+C to stop.
+the configuration itself. It also watches your package's source, so a docstring edit or a new
+export updates the API reference. After each batch of edits, it prepares the project again and
+copies only changed files into the previewed project. Quarto re-renders the affected pages and
+refreshes the browser. Press Ctrl+C to stop.
 
 Edits to `great-docs.yml` apply without a restart. Changes to the generated `_quarto.yml`'s
 `project` settings, such as the output directory, may require Quarto to restart. Great Docs
