@@ -10,6 +10,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
+import griffe as gf
+
 from .._build.steps import USER_CODE_ERRORS
 from .._builtin.directives import DIRECTIVES
 from .._content import authored
@@ -272,28 +274,37 @@ def _check_config_keys(user_config: dict[str, Any], result: LintResult) -> None:
         )
 
 
-def _get_docstring(obj) -> str | None:
-    """Safely extract docstring text from a griffe object."""
+def _get_docstring(obj: gf.Object | gf.Alias) -> str | None:
+    """
+    Return an object's docstring text when available
+
+    Parameters
+    ----------
+    obj
+        The griffe object or alias to read.
+
+    Returns
+    -------
+    :
+        The docstring text, or `None` if it is absent or griffe cannot resolve
+        the alias.
+    """
     try:
-        if hasattr(obj, "docstring") and obj.docstring:
-            return obj.docstring.value
-    except Exception:
-        pass
-    return None
+        docstring = obj.docstring
+    except (gf.AliasResolutionError, gf.CyclicAliasError):
+        return None
+    return docstring.value if docstring else None
 
 
 def _iter_public_members(obj):
     """Yield (name, member) pairs for public members of a griffe object."""
-    try:
-        for name, member in obj.members.items():
-            if name.startswith("_") and not (name.startswith("__") and name.endswith("__")):
-                continue
-            # Skip __init__ and similar constructor dunders
-            if name in {"__init__", "__new__", "__init_subclass__"}:
-                continue
-            yield name, member
-    except Exception:
-        return
+    for name, member in obj.members.items():
+        if name.startswith("_") and not (name.startswith("__") and name.endswith("__")):
+            continue
+        # Skip __init__ and similar constructor dunders
+        if name in {"__init__", "__new__", "__init_subclass__"}:
+            continue
+        yield name, member
 
 
 def _check_missing_docstrings(
@@ -323,27 +334,22 @@ def _check_missing_docstrings(
             continue
 
         # For classes, check public methods too
-        try:
-            if obj.kind.value == "class":
-                for member_name, member in _iter_public_members(obj):
-                    try:
-                        if member.kind.value not in ("function", "method"):
-                            continue
-                    except Exception:
-                        continue
+        if obj.kind.value == "class":
+            for member_name, member in _iter_public_members(obj):
+                # An alias griffe cannot resolve has kind `alias`, so it is skipped.
+                if member.kind.value not in ("function", "method"):
+                    continue
 
-                    member_doc = _get_docstring(member)
-                    if not member_doc or not member_doc.strip():
-                        result.issues.append(
-                            LintIssue(
-                                check="missing-docstring",
-                                severity="warning",
-                                symbol=f"{name}.{member_name}",
-                                message=f"Public method '{name}.{member_name}' has no docstring.",
-                            )
+                member_doc = _get_docstring(member)
+                if not member_doc or not member_doc.strip():
+                    result.issues.append(
+                        LintIssue(
+                            check="missing-docstring",
+                            severity="warning",
+                            symbol=f"{name}.{member_name}",
+                            message=f"Public method '{name}.{member_name}' has no docstring.",
                         )
-        except Exception:
-            pass
+                    )
 
 
 def _check_cross_references(
@@ -461,16 +467,13 @@ def _check_cross_references(
         if docstring and f"{package_name}.{name}" in documented_paths:
             check(docstring, name)
 
-        try:
-            if obj.kind.value == "class":
-                for member_name, member in _iter_public_members(obj):
-                    if f"{package_name}.{name}.{member_name}" not in documented_paths:
-                        continue
-                    member_doc = _get_docstring(member)
-                    if member_doc:
-                        check(member_doc, f"{name}.{member_name}")
-        except Exception:
-            pass
+        if obj.kind.value == "class":
+            for member_name, member in _iter_public_members(obj):
+                if f"{package_name}.{name}.{member_name}" not in documented_paths:
+                    continue
+                member_doc = _get_docstring(member)
+                if member_doc:
+                    check(member_doc, f"{name}.{member_name}")
 
 
 _NOT_AUTHORED = {"node_modules"}
@@ -765,14 +768,11 @@ def _check_docstring_style(
             _check_one(name, docstring)
 
         # Check class method docstrings too
-        try:
-            if obj.kind.value == "class":
-                for member_name, member in _iter_public_members(obj):
-                    member_doc = _get_docstring(member)
-                    if member_doc:
-                        _check_one(f"{name}.{member_name}", member_doc)
-        except Exception:
-            pass
+        if obj.kind.value == "class":
+            for member_name, member in _iter_public_members(obj):
+                member_doc = _get_docstring(member)
+                if member_doc:
+                    _check_one(f"{name}.{member_name}", member_doc)
 
 
 # Pattern matching malformed directives (common mistakes)
@@ -817,14 +817,11 @@ def _check_directive_consistency(
             _check_one(name, docstring)
 
         # Check class method docstrings too
-        try:
-            if obj.kind.value == "class":
-                for member_name, member in _iter_public_members(obj):
-                    member_doc = _get_docstring(member)
-                    if member_doc:
-                        _check_one(f"{name}.{member_name}", member_doc)
-        except Exception:
-            pass
+        if obj.kind.value == "class":
+            for member_name, member in _iter_public_members(obj):
+                member_doc = _get_docstring(member)
+                if member_doc:
+                    _check_one(f"{name}.{member_name}", member_doc)
 
 
 # ---------------------------------------------------------------------------
