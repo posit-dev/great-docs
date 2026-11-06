@@ -224,7 +224,7 @@ def _dump(obj: BaseModel | dict[str, Any] | None) -> dict[str, Any]:
     -------
     :
         The dict unchanged, an empty dict for `None`, or model fields with
-        protocol names and unset fields omitted.
+        protocol names and `None` values omitted.
     """
     if obj is None:
         return {}
