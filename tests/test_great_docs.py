@@ -12639,7 +12639,7 @@ def test_cli_uninstall_error():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         with patch("great_docs.cli.GreatDocs") as MockGD:
-            MockGD.return_value.uninstall.side_effect = RuntimeError("uninstall failed")
+            MockGD.return_value.uninstall.side_effect = OSError("uninstall failed")
 
             result = runner.invoke(uninstall, ["--project-path", tmp_dir])
             assert result.exit_code == 1
@@ -12756,7 +12756,7 @@ def test_cli_config_error():
     runner = CliRunner()
 
     with patch("great_docs.config.create_default_config") as mock_create:
-        mock_create.side_effect = RuntimeError("config error")
+        mock_create.side_effect = OSError("config error")
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             result = runner.invoke(config, ["--project-path", tmp_dir, "--force"])
@@ -13228,12 +13228,12 @@ def test_cli_check_links_import_error():
 
 
 def test_cli_check_links_error():
-    """CLI check-links handles generic errors."""
+    """Report a `check-links` file access error and exit with status 1"""
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         with patch("great_docs.cli.GreatDocs") as MockGD:
-            MockGD.side_effect = RuntimeError("check failed")
+            MockGD.side_effect = OSError("check failed")
 
             result = runner.invoke(check_links, ["--project-path", tmp_dir])
             assert result.exit_code == 1
@@ -13381,15 +13381,15 @@ def test_cli_changelog_max_releases_without_pyproject(tmp_path: Path):
     assert page.count("{.changelog-version}") == 3
 
 
-def test_cli_changelog_error():
-    """CLI changelog handles errors."""
+def test_cli_changelog_unexpected_error_propagates():
+    """Propagate unexpected `changelog` errors without printing an error line"""
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         with patch("great_docs.cli.Config", side_effect=RuntimeError("changelog failed")):
             result = runner.invoke(changelog, ["--project-path", tmp_dir])
-            assert result.exit_code == 1
-            assert "Error: changelog failed" in result.output
+            assert isinstance(result.exception, RuntimeError)
+            assert "Error:" not in result.output
 
 
 def test_cli_main_entry_point():
