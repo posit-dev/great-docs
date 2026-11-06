@@ -110,6 +110,13 @@ def test_detect_logo_prefers_generic_name(tmp_path: Path):
     assert result["light"] == "assets/logo.svg"
 
 
+def test_detect_logo_ignores_docs_assets_under_the_source_directory(tmp_path: Path):
+    (tmp_path / "docs" / "assets").mkdir(parents=True)
+    (tmp_path / "docs" / "assets" / "logo.svg").write_text(_SVG)
+
+    assert branding.detect_logo(tmp_path, "pkg") is None
+
+
 def test_logo_candidates_without_package_name():
     candidates = branding.logo_candidates(None)
 

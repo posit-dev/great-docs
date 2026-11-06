@@ -71,8 +71,6 @@ def logo_candidates(package_name: str | None) -> list[str]:
         "logo.png",
         "assets/logo.svg",
         "assets/logo.png",
-        "docs/assets/logo.svg",
-        "docs/assets/logo.png",
     ]
     if package_name:
         for name in dict.fromkeys((package_name, package_name.replace("-", "_"))):
