@@ -132,6 +132,14 @@ FROZEN_DEFAULT_CONFIG: dict[str, Any] = {
         "extra_body": None,
         "skills": [],
     },
+    # Added after the snapshot: tools for in-browser AI agents.
+    "webmcp": {
+        "enabled": False,
+        "actions": True,
+        "js_api": True,
+        "exclude_tools": [],
+        "origin_trials": [],
+    },
     "social_cards": {"enabled": True, "image": None, "twitter_card": None, "twitter_site": None},
     "page_status": {
         "enabled": False,
