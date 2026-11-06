@@ -1428,7 +1428,7 @@ async def handle_completion(
                 exports = package_exports.names(importable_name)
                 filtered = [e for e in exports if value.lower() in e.lower()]
                 return Completion(values=filtered[:20], hasMore=len(filtered) > 20)
-            except Exception:
+            except _PROJECT_ERRORS:
                 return None
 
         if argument.name == "project_path":
@@ -1457,7 +1457,7 @@ async def handle_completion(
                 exports = package_exports.names(importable_name)
                 filtered = [e for e in exports if value.lower() in e.lower()]
                 return Completion(values=filtered[:20], hasMore=len(filtered) > 20)
-            except Exception:
+            except _PROJECT_ERRORS:
                 return None
 
         if "page" in str(ref.uri) and argument.name == "path":

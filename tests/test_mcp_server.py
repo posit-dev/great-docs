@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from mcp.types import CompletionArgument, PromptReference, ResourceTemplateReference
 from pydantic import AnyUrl
 
 import great_docs.mcp as mcp_module
@@ -1322,6 +1323,21 @@ class TestHandleCompletion:
             arg = CompletionArgument(name="symbol", value="x")
             result = asyncio.run(handle_completion(ref, arg))
         assert result is None
+
+    @pytest.mark.parametrize(
+        "ref",
+        [
+            PromptReference(type="ref/prompt", name="improve-docstrings"),
+            ResourceTemplateReference(type="ref/resource", uri="gd://reference/{symbol}"),
+        ],
+    )
+    def test_symbol_completion_unexpected_error_propagates(
+        self, ref: PromptReference | ResourceTemplateReference
+    ):
+        arg = CompletionArgument(name="symbol", value="x")
+        with patch("great_docs.mcp._get_exports", side_effect=ZeroDivisionError("bug")):
+            with pytest.raises(ZeroDivisionError):
+                asyncio.run(handle_completion(ref, arg))
 
 
 # ---------------------------------------------------------------------------
