@@ -35,7 +35,7 @@ from mcp.types import (
 )
 
 from ._build import outputs
-from ._build.steps import USER_CODE_ERRORS, BuildError
+from ._build.steps import PROJECT_ERRORS, USER_CODE_ERRORS, BuildError
 from ._content import user_guide
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, LayoutError
 from ._utils import is_in_great_docs_build_dir, recognised_build_dirs
@@ -61,11 +61,14 @@ _INSTRUCTIONS = (
     "tools and prompts to accomplish documentation tasks."
 )
 
-# Project failures produce failed tool results, resource error text or no completion
-# suggestions. These include invalid configuration or layout (`ValueError`), file
-# access errors, package import or loading errors, and build failures (`BuildError`
-# inherits from `RuntimeError`). Other exceptions propagate as protocol errors.
-_PROJECT_ERRORS: tuple[type[Exception], ...] = (*USER_CODE_ERRORS, ValueError)
+# The server reports these errors as failed tool results, resource error text or no
+# completion suggestions. `USER_CODE_ERRORS` covers package-loading failures and build
+# failures because `BuildError` inherits from `RuntimeError`.
+# The set also includes plain `ValueError`: builds and the lint stale-versions check raise it
+# for an invalid `versions` list. Builds also raise it for output Great Docs did not
+# generate or a directory claimed by both `sections` and either `user_guide` or
+# `custom_pages`. Other exceptions propagate as protocol errors.
+_REPORTED_ERRORS: tuple[type[Exception], ...] = (*PROJECT_ERRORS, *USER_CODE_ERRORS, ValueError)
 
 
 # ---------------------------------------------------------------------------
@@ -498,7 +501,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             result = _ToolCallContent([TextContent(type="text", text=f"Unknown tool: {name}")])
             result.is_error = True
             return result
-    except _PROJECT_ERRORS as e:
+    except _REPORTED_ERRORS as e:
         result = _ToolCallContent([TextContent(type="text", text=f"Error: {e}")])
         result.is_error = True
         return result
@@ -1317,7 +1320,7 @@ async def read_resource(uri: str) -> str:
                         lines.append(f"  - {item}")
                     lines.append("")
             return "\n".join(lines)
-        except _PROJECT_ERRORS as e:
+        except _REPORTED_ERRORS as e:
             return f"Error discovering API surface: {e}"
 
     elif uri_str == "gd://status":
@@ -1349,7 +1352,7 @@ async def read_resource(uri: str) -> str:
             doc = getattr(obj, "__doc__", None) or "No docstring available."
             kind = type(obj).__name__
             return f"# {importable_name}.{symbol}\nKind: {kind}\n\n{doc}"
-        except _PROJECT_ERRORS as e:
+        except _REPORTED_ERRORS as e:
             return f"Error reading reference for '{symbol}': {e}"
 
     elif uri_str.startswith("gd://page/"):
@@ -1479,7 +1482,7 @@ async def handle_completion(
                 exports = package_exports.names(importable_name)
                 filtered = [e for e in exports if value.lower() in e.lower()]
                 return Completion(values=filtered[:20], hasMore=len(filtered) > 20)
-            except _PROJECT_ERRORS:
+            except _REPORTED_ERRORS:
                 return None
 
         if argument.name == "project_path":
@@ -1508,7 +1511,7 @@ async def handle_completion(
                 exports = package_exports.names(importable_name)
                 filtered = [e for e in exports if value.lower() in e.lower()]
                 return Completion(values=filtered[:20], hasMore=len(filtered) > 20)
-            except _PROJECT_ERRORS:
+            except _REPORTED_ERRORS:
                 return None
 
         if "page" in str(ref.uri) and argument.name == "path":
