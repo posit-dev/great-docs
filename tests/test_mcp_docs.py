@@ -94,6 +94,13 @@ class TestLocateServer:
         mod = self._make_module(app=mock_server)
         assert locate_server(mod, None) is mock_server
 
+    def test_auto_detect_mcpserver_type(self):
+        mock_server = MagicMock()
+        type(mock_server).__name__ = "MCPServer"
+        type(mock_server).__module__ = "mcp.server.mcpserver.server"
+        mod = self._make_module(app=mock_server)
+        assert locate_server(mod, None) is mock_server
+
     def test_auto_detect_nothing_returns_none(self):
         mod = self._make_module(x=23, y="hello")
         assert locate_server(mod, None) is None
@@ -792,6 +799,30 @@ class TestDiscoverMcpServer:
         with patch("great_docs._mcpref.reference.importlib.import_module", return_value=mod):
             result = discover_mcp_server("fake")
         assert result is None
+
+    def test_lists_tools_of_an_mcpserver_over_the_protocol(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        (tmp_path / "probe_mcpserver.py").write_text(
+            "from mcp.server.mcpserver import MCPServer\n"
+            "\n"
+            'app = MCPServer("probe")\n'
+            "\n"
+            "\n"
+            "@app.tool()\n"
+            "def add(a: int, b: int) -> int:\n"
+            '    """Add numbers."""\n'
+            "    return a + b\n",
+            encoding="utf-8",
+        )
+        monkeypatch.syspath_prepend(str(tmp_path))
+        monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+
+        info = discover_mcp_server("probe_mcpserver")
+
+        assert info is not None
+        assert info["name"] == "probe"
+        assert [tool["name"] for tool in info["tools"]] == ["add"]
 
     def test_protocol_failure_falls_back_to_static_scan(self):
         import inspect

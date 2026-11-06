@@ -36,21 +36,21 @@ def discover_mcp_server(
     server_var: str | None = None,
 ) -> dict[str, Any] | None:
     """
-    Import an MCP server module and extract tool/resource/prompt metadata.
+    Discover an MCP server and read its tools, resources and prompts
 
     Parameters
     ----------
     module_path
         Importable module path (e.g., `"sweet.mcp"`).
     server_var
-        Name of the Server variable in the module. If `None`, auto-detects
-        the first `mcp.server.Server` instance.
+        Name of the server variable in the module. If `None`, detect the
+        first `Server`, `MCPServer` or `FastMCP` instance automatically.
 
     Returns
     -------
-    dict | None
-        Server metadata dict with keys: name, tools, resources, prompts.
-        Returns None if the module cannot be imported or no server found.
+    :
+        Server metadata with `name`, `tools`, `resources` and `prompts` keys,
+        or `None` if the module cannot be imported or no server is found.
     """
     try:
         module = importlib.import_module(module_path)
@@ -105,7 +105,7 @@ def locate_server(module: Any, server_var: str | None) -> Any:
         obj = getattr(module, attr_name)
         type_name = type(obj).__name__
         module_name = type(obj).__module__ or ""
-        if "mcp" in module_name and type_name in ("Server", "FastMCP"):
+        if "mcp" in module_name and type_name in ("Server", "MCPServer", "FastMCP"):
             return obj
     return None
 
