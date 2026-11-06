@@ -1386,107 +1386,97 @@ def test_config_parser_property():
 # --- Explicit Reference Config Tests ---
 
 
-def test_build_sections_from_reference_config():
-    """Test building sections from explicit reference config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
+def test_from_reference_config_keeps_string_contents():
+    """Keep plain string contents unchanged"""
 
-        # Test simple string contents
-        reference_config = [
-            {
-                "title": "Functions",
-                "desc": "Public functions",
-                "contents": ["func1", "func2"],
-            }
-        ]
+    # Test simple string contents
+    reference_config = [
+        {
+            "title": "Functions",
+            "desc": "Public functions",
+            "contents": ["func1", "func2"],
+        }
+    ]
 
-        sections = reference_sections.from_reference_config(reference_config)
+    sections = reference_sections.from_reference_config(reference_config)
 
-        assert sections is not None
-        assert len(sections) == 1
-        assert sections[0]["title"] == "Functions"
-        assert sections[0]["desc"] == "Public functions"
-        assert sections[0]["contents"] == ["func1", "func2"]
+    assert sections is not None
+    assert len(sections) == 1
+    assert sections[0]["title"] == "Functions"
+    assert sections[0]["desc"] == "Public functions"
+    assert sections[0]["contents"] == ["func1", "func2"]
 
 
-def test_build_sections_from_reference_config_with_members():
-    """Test building sections with members: false config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
+def test_from_reference_config_members_false_becomes_empty_list():
+    """Turn `members: false` into an empty members list"""
 
-        reference_config = [
-            {
-                "title": "Classes",
-                "desc": "Main classes",
-                "contents": [
-                    {"name": "MyClass", "members": False},
-                    "SimpleClass",
-                ],
-            }
-        ]
+    reference_config = [
+        {
+            "title": "Classes",
+            "desc": "Main classes",
+            "contents": [
+                {"name": "MyClass", "members": False},
+                "SimpleClass",
+            ],
+        }
+    ]
 
-        sections = reference_sections.from_reference_config(reference_config)
+    sections = reference_sections.from_reference_config(reference_config)
 
-        assert sections is not None
-        assert len(sections) == 1
-        assert {"name": "MyClass", "members": []} in sections[0]["contents"]
-        assert "SimpleClass" in sections[0]["contents"]
+    assert sections is not None
+    assert len(sections) == 1
+    assert {"name": "MyClass", "members": []} in sections[0]["contents"]
+    assert "SimpleClass" in sections[0]["contents"]
 
 
-def test_build_sections_from_reference_config_explicit_members_list():
-    """Test building sections with explicit members list passes through correctly."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
+def test_from_reference_config_explicit_members_list():
+    """Pass an explicit members list through"""
 
-        reference_config = [
-            {
-                "title": "Classes",
-                "desc": "Parent and child",
-                "contents": [
-                    {"name": "foo", "members": ["__init__", "a"]},
-                    {"name": "bar", "members": ["__init__", "a", "b"]},
-                ],
-            }
-        ]
+    reference_config = [
+        {
+            "title": "Classes",
+            "desc": "Parent and child",
+            "contents": [
+                {"name": "foo", "members": ["__init__", "a"]},
+                {"name": "bar", "members": ["__init__", "a", "b"]},
+            ],
+        }
+    ]
 
-        sections = reference_sections.from_reference_config(reference_config)
+    sections = reference_sections.from_reference_config(reference_config)
 
-        assert sections is not None
-        assert len(sections) == 1
-        contents = sections[0]["contents"]
-        assert {"name": "foo", "members": ["__init__", "a"]} in contents
-        assert {"name": "bar", "members": ["__init__", "a", "b"]} in contents
+    assert sections is not None
+    assert len(sections) == 1
+    contents = sections[0]["contents"]
+    assert {"name": "foo", "members": ["__init__", "a"]} in contents
+    assert {"name": "bar", "members": ["__init__", "a", "b"]} in contents
 
 
-def test_build_sections_from_reference_config_include_inherited():
-    """Test building sections with include_inherited option."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
+def test_from_reference_config_include_inherited():
+    """Keep the `include_inherited` option"""
 
-        reference_config = [
-            {
-                "title": "Classes",
-                "contents": [
-                    {"name": "bar", "include_inherited": True},
-                ],
-            }
-        ]
+    reference_config = [
+        {
+            "title": "Classes",
+            "contents": [
+                {"name": "bar", "include_inherited": True},
+            ],
+        }
+    ]
 
-        sections = reference_sections.from_reference_config(reference_config)
+    sections = reference_sections.from_reference_config(reference_config)
 
-        assert sections is not None
-        contents = sections[0]["contents"]
-        assert len(contents) == 1
-        assert contents[0] == {"name": "bar", "include_inherited": True}
+    assert sections is not None
+    contents = sections[0]["contents"]
+    assert len(contents) == 1
+    assert contents[0] == {"name": "bar", "include_inherited": True}
 
 
-def test_build_sections_from_reference_config_empty_and_none():
-    """Test that empty reference config returns None."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
+def test_from_reference_config_empty_and_none_return_none():
+    """Return `None` for an empty list or `None`"""
 
-        assert reference_sections.from_reference_config([]) is None
-        assert reference_sections.from_reference_config(None) is None
+    assert reference_sections.from_reference_config([]) is None
+    assert reference_sections.from_reference_config(None) is None
 
 
 def test_explicit_reference_config_applied_when_discovery_fails():
@@ -5594,80 +5584,74 @@ def test_homepage_hero_badge_from_config():
         assert "https://ci.svg" in result
 
 
-def test_build_sections_from_reference_config_basic_functions():
-    """_build_sections_from_reference_config creates sections from config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        reference_config = [
-            {"title": "Functions", "desc": "Utils", "contents": ["func_a", "func_b"]},
-            {"title": "Classes", "desc": "Types", "contents": ["MyClass"]},
-        ]
-        result = reference_sections.from_reference_config(reference_config)
+def test_from_reference_config_one_section_per_entry():
+    """Build one section per configuration entry"""
 
-        assert len(result) == 2
-        assert result[0]["title"] == "Functions"
-        assert result[0]["contents"] == ["func_a", "func_b"]
-        assert result[1]["title"] == "Classes"
+    reference_config = [
+        {"title": "Functions", "desc": "Utils", "contents": ["func_a", "func_b"]},
+        {"title": "Classes", "desc": "Types", "contents": ["MyClass"]},
+    ]
+    result = reference_sections.from_reference_config(reference_config)
 
-
-def test_build_sections_from_reference_config_dict_items_simple():
-    """_build_sections_from_reference_config handles dict items with members config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        reference_config = [
-            {
-                "title": "Classes",
-                "contents": [
-                    {"name": "BigClass", "members": False},
-                    {"name": "SmallClass"},
-                    "plain_func",
-                ],
-            }
-        ]
-        result = reference_sections.from_reference_config(reference_config)
-
-        assert len(result) == 1
-
-        contents = result[0]["contents"]
-
-        assert contents[0] == {"name": "BigClass", "members": []}
-        assert contents[1] == "SmallClass"
-        assert contents[2] == "plain_func"
+    assert len(result) == 2
+    assert result[0]["title"] == "Functions"
+    assert result[0]["contents"] == ["func_a", "func_b"]
+    assert result[1]["title"] == "Classes"
 
 
-def test_build_sections_from_reference_config_empty_v2():
-    """_build_sections_from_reference_config returns None for empty config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
+def test_from_reference_config_dict_items_members_false_and_default():
+    """Use an empty members list for `members: false` and the bare name when `members` is omitted"""
 
-        assert reference_sections.from_reference_config([]) is None
-        assert reference_sections.from_reference_config(None) is None
+    reference_config = [
+        {
+            "title": "Classes",
+            "contents": [
+                {"name": "BigClass", "members": False},
+                {"name": "SmallClass"},
+                "plain_func",
+            ],
+        }
+    ]
+    result = reference_sections.from_reference_config(reference_config)
+
+    assert len(result) == 1
+
+    contents = result[0]["contents"]
+
+    assert contents[0] == {"name": "BigClass", "members": []}
+    assert contents[1] == "SmallClass"
+    assert contents[2] == "plain_func"
 
 
-def test_build_sections_from_reference_config_skips_string_entry():
-    """_build_sections_from_reference_config skips non-dict items in config."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        reference_config = [
-            "not-a-dict",
-            {"title": "Valid", "contents": ["func_a"]},
-        ]
-        result = reference_sections.from_reference_config(reference_config)
+def test_from_reference_config_empty_list_and_none_return_none():
+    """Return `None` for an empty list or `None`"""
 
-        assert len(result) == 1
+    assert reference_sections.from_reference_config([]) is None
+    assert reference_sections.from_reference_config(None) is None
 
 
-def test_build_sections_from_reference_config_dict_no_name_returns_none():
-    """_build_sections_from_reference_config skips dict items without name."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        reference_config = [
-            {"title": "Test", "contents": [{"members": False}]},
-        ]
-        result = reference_sections.from_reference_config(reference_config)
+def test_from_reference_config_skips_string_entry():
+    """Skip string entries in place of sections"""
 
-        # Section has no valid contents, so it should be skipped
-        assert result is None
+    reference_config = [
+        "not-a-dict",
+        {"title": "Valid", "contents": ["func_a"]},
+    ]
+    result = reference_sections.from_reference_config(reference_config)
+
+    assert len(result) == 1
+
+
+def test_from_reference_config_nameless_dict_only_returns_none():
+    """Return `None` when the only content item is a dict without a `name`"""
+
+    reference_config = [
+        {"title": "Test", "contents": [{"members": False}]},
+    ]
+    result = reference_sections.from_reference_config(reference_config)
+
+    # Section has no valid contents, so it should be skipped
+    assert result is None
 
 
 def test_homepage_margin_with_funding():
@@ -8035,33 +8019,29 @@ def test_update_quarto_config_page_footer_author_homepage():
         assert "<a href=" in footer_text
 
 
-def test_build_sections_from_reference_config_skips_empty_sections():
-    """Test that sections with no contents are skipped."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
+def test_from_reference_config_skips_empty_sections():
+    """Skip sections with no contents"""
 
-        ref_config = [
-            {"title": "Empty", "contents": []},
-            {"title": "Valid", "contents": ["Foo"]},
-        ]
-        result = reference_sections.from_reference_config(ref_config)
-        assert result is not None
-        assert len(result) == 1
-        assert result[0]["title"] == "Valid"
+    ref_config = [
+        {"title": "Empty", "contents": []},
+        {"title": "Valid", "contents": ["Foo"]},
+    ]
+    result = reference_sections.from_reference_config(ref_config)
+    assert result is not None
+    assert len(result) == 1
+    assert result[0]["title"] == "Valid"
 
 
-def test_build_sections_from_reference_config_dict_no_name():
-    """Test that dict items without 'name' are skipped."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
+def test_from_reference_config_skips_nameless_dict_keeps_named():
+    """Skip content items without a `name` and keep the named item"""
 
-        ref_config = [
-            {"title": "Test", "contents": [{"members": True}, {"name": "Valid"}]},
-        ]
-        result = reference_sections.from_reference_config(ref_config)
-        assert result is not None
-        assert len(result[0]["contents"]) == 1
-        assert result[0]["contents"][0] == "Valid"
+    ref_config = [
+        {"title": "Test", "contents": [{"members": True}, {"name": "Valid"}]},
+    ]
+    result = reference_sections.from_reference_config(ref_config)
+    assert result is not None
+    assert len(result[0]["contents"]) == 1
+    assert result[0]["contents"][0] == "Valid"
 
 
 def test_categorise_references_all_found_no_error():
@@ -8644,67 +8624,63 @@ def test_prepare_build_directory_copies_assets():
         assert quarto_yml.exists()
 
 
-def test_build_sections_from_reference_config_dict_items():
-    """Test _build_sections_from_reference_config with dict items and members."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        ref_config = [
-            {
-                "title": "Classes",
-                "contents": [
-                    {"name": "MyClass", "members": False},
-                    {"name": "OtherClass"},
-                    "standalone_func",
-                ],
-            }
-        ]
-        result = reference_sections.from_reference_config(ref_config)
-        assert result is not None
-        assert len(result) == 1
-        contents = result[0]["contents"]
-        assert contents[0] == {"name": "MyClass", "members": []}
-        assert contents[1] == "OtherClass"
-        assert contents[2] == "standalone_func"
+def test_from_reference_config_dict_items_with_plain_names():
+    """Use an empty members list for `members: false` and keep plain names"""
+
+    ref_config = [
+        {
+            "title": "Classes",
+            "contents": [
+                {"name": "MyClass", "members": False},
+                {"name": "OtherClass"},
+                "standalone_func",
+            ],
+        }
+    ]
+    result = reference_sections.from_reference_config(ref_config)
+    assert result is not None
+    assert len(result) == 1
+    contents = result[0]["contents"]
+    assert contents[0] == {"name": "MyClass", "members": []}
+    assert contents[1] == "OtherClass"
+    assert contents[2] == "standalone_func"
 
 
-def test_build_sections_from_reference_config_skips_non_dict():
-    """Test _build_sections_from_reference_config skips non-dict section entries."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        ref_config = [
-            "not_a_dict",
-            {"title": "Valid", "contents": ["func"]},
-        ]
-        result = reference_sections.from_reference_config(ref_config)
-        assert result is not None
-        assert len(result) == 1
-        assert result[0]["title"] == "Valid"
+def test_from_reference_config_skips_non_dict_sections():
+    """Skip section entries that are not dicts"""
+
+    ref_config = [
+        "not_a_dict",
+        {"title": "Valid", "contents": ["func"]},
+    ]
+    result = reference_sections.from_reference_config(ref_config)
+    assert result is not None
+    assert len(result) == 1
+    assert result[0]["title"] == "Valid"
 
 
-def test_build_sections_from_reference_config_skips_empty_contents():
-    """Test _build_sections_from_reference_config skips sections with empty contents."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        ref_config = [
-            {"title": "Empty", "contents": []},
-            {"title": "Valid", "contents": ["func"]},
-        ]
-        result = reference_sections.from_reference_config(ref_config)
-        assert result is not None
-        assert len(result) == 1
-        assert result[0]["title"] == "Valid"
+def test_from_reference_config_skips_sections_with_empty_contents():
+    """Skip sections whose contents are empty"""
+
+    ref_config = [
+        {"title": "Empty", "contents": []},
+        {"title": "Valid", "contents": ["func"]},
+    ]
+    result = reference_sections.from_reference_config(ref_config)
+    assert result is not None
+    assert len(result) == 1
+    assert result[0]["title"] == "Valid"
 
 
-def test_build_sections_from_reference_config_skips_nameless_dict():
-    """Test _build_sections_from_reference_config skips dict items without name."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        ref_config = [
-            {"title": "Mixed", "contents": [{"members": True}, {"name": "good"}]},
-        ]
-        result = reference_sections.from_reference_config(ref_config)
-        assert result is not None
-        assert result[0]["contents"] == ["good"]
+def test_from_reference_config_nameless_dict_beside_named_dict():
+    """Skip the dict without a `name` and keep the named item"""
+
+    ref_config = [
+        {"title": "Mixed", "contents": [{"members": True}, {"name": "good"}]},
+    ]
+    result = reference_sections.from_reference_config(ref_config)
+    assert result is not None
+    assert result[0]["contents"] == ["good"]
 
 
 def test_get_cli_entry_point_gui_scripts():
@@ -9871,76 +9847,70 @@ def test_detect_dynamic_mode_no_exports():
             sys.path.remove(tmp_dir)
 
 
-def test_build_sections_from_reference_config_explicit_members():
-    """Test _build_sections_from_reference_config passes explicit members list."""
+def test_from_reference_config_explicit_members_with_include_inherited():
+    """Pass explicit members and `include_inherited` through"""
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = [
-            {
-                "title": "Classes",
-                "contents": [
-                    {"name": "Child", "members": ["own", "inherited"]},
-                    {"name": "Other", "members": ["x"], "include_inherited": True},
-                ],
-            },
-        ]
-        result = reference_sections.from_reference_config(config)
+    config = [
+        {
+            "title": "Classes",
+            "contents": [
+                {"name": "Child", "members": ["own", "inherited"]},
+                {"name": "Other", "members": ["x"], "include_inherited": True},
+            ],
+        },
+    ]
+    result = reference_sections.from_reference_config(config)
 
-        assert result is not None
-        contents = result[0]["contents"]
-        # Explicit members list passed through
-        assert contents[0] == {"name": "Child", "members": ["own", "inherited"]}
-        # include_inherited also attached
-        assert contents[1] == {
-            "name": "Other",
-            "members": ["x"],
-            "include_inherited": True,
-        }
+    assert result is not None
+    contents = result[0]["contents"]
+    # Explicit members list passed through
+    assert contents[0] == {"name": "Child", "members": ["own", "inherited"]}
+    # include_inherited also attached
+    assert contents[1] == {
+        "name": "Other",
+        "members": ["x"],
+        "include_inherited": True,
+    }
 
 
-def test_build_sections_from_reference_config_empty():
-    """Test _build_sections_from_reference_config returns None for empty config."""
+def test_from_reference_config_empty_config_returns_none():
+    """Return `None` for an empty list or `None`"""
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        assert reference_sections.from_reference_config([]) is None
-        assert reference_sections.from_reference_config(None) is None
+    assert reference_sections.from_reference_config([]) is None
+    assert reference_sections.from_reference_config(None) is None
 
 
-def test_build_sections_from_reference_config_basic():
-    """Test _build_sections_from_reference_config with simple config."""
+def test_from_reference_config_mixed_sections_with_members_false():
+    """Build several sections with a `members: false` item"""
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = [
-            {
-                "title": "Classes",
-                "desc": "All classes",
-                "contents": ["ClassA", "ClassB"],
-            },
-            {
-                "title": "Functions",
-                "contents": [
-                    "func_a",
-                    {"name": "ClassC", "members": False},
-                ],
-            },
-        ]
-        result = reference_sections.from_reference_config(config)
+    config = [
+        {
+            "title": "Classes",
+            "desc": "All classes",
+            "contents": ["ClassA", "ClassB"],
+        },
+        {
+            "title": "Functions",
+            "contents": [
+                "func_a",
+                {"name": "ClassC", "members": False},
+            ],
+        },
+    ]
+    result = reference_sections.from_reference_config(config)
 
-        assert result is not None
-        assert len(result) == 2
-        assert result[0]["title"] == "Classes"
-        assert "ClassA" in result[0]["contents"]
+    assert result is not None
+    assert len(result) == 2
+    assert result[0]["title"] == "Classes"
+    assert "ClassA" in result[0]["contents"]
 
-        # Dict item with members=False -> {"name": ..., "members": []}
-        found_dict = False
-        for item in result[1]["contents"]:
-            if isinstance(item, dict) and item.get("name") == "ClassC":
-                assert item["members"] == []
-                found_dict = True
-        assert found_dict
+    # Dict item with members=False -> {"name": ..., "members": []}
+    found_dict = False
+    for item in result[1]["contents"]:
+        if isinstance(item, dict) and item.get("name") == "ClassC":
+            assert item["members"] == []
+            found_dict = True
+    assert found_dict
 
 
 def test_preview_builds_if_no_site():
@@ -17758,86 +17728,79 @@ def test_type_information_write_extends_builder_items():
         assert mock_builder.items[0].name == "mypkg.types.T"
 
 
-class TestBuildSectionsFromReferenceConfig:
-    """Tests for _build_sections_from_reference_config."""
+class TestFromReferenceConfig:
+    """Tests for sections built from the reference configuration"""
 
     def test_basic_string_items(self):
-        """Builds sections from simple string references."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            config = [
-                {"title": "Classes", "desc": "Main classes", "contents": ["MyClass", "OtherClass"]},
-            ]
-            result = reference_sections.from_reference_config(config)
-            assert result is not None
-            assert len(result) == 1
-            assert result[0]["title"] == "Classes"
-            assert result[0]["contents"] == ["MyClass", "OtherClass"]
+        """Build a section with the configured title and string contents"""
+
+        config = [
+            {"title": "Classes", "desc": "Main classes", "contents": ["MyClass", "OtherClass"]},
+        ]
+        result = reference_sections.from_reference_config(config)
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["title"] == "Classes"
+        assert result[0]["contents"] == ["MyClass", "OtherClass"]
 
     def test_dict_items_with_members_false(self):
-        """Handles dict items with members: false."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            config = [
-                {"title": "Classes", "contents": [{"name": "MyClass", "members": False}]},
-            ]
-            result = reference_sections.from_reference_config(config)
-            assert result is not None
-            assert result[0]["contents"][0] == {"name": "MyClass", "members": []}
+        """Convert `members: false` to an empty members list"""
+
+        config = [
+            {"title": "Classes", "contents": [{"name": "MyClass", "members": False}]},
+        ]
+        result = reference_sections.from_reference_config(config)
+        assert result is not None
+        assert result[0]["contents"][0] == {"name": "MyClass", "members": []}
 
     def test_dict_items_with_members_true(self):
-        """Handles dict items with members: true (default inline)."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            config = [
-                {"title": "Classes", "contents": [{"name": "MyClass", "members": True}]},
-            ]
-            result = reference_sections.from_reference_config(config)
-            assert result is not None
-            assert result[0]["contents"][0] == "MyClass"
+        """Convert a content item with `members: true` to its name"""
+
+        config = [
+            {"title": "Classes", "contents": [{"name": "MyClass", "members": True}]},
+        ]
+        result = reference_sections.from_reference_config(config)
+        assert result is not None
+        assert result[0]["contents"][0] == "MyClass"
 
     def test_empty_config_returns_none(self):
-        """Returns None for empty config."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            assert reference_sections.from_reference_config([]) is None
-            assert reference_sections.from_reference_config(None) is None
+        """Return `None` for an empty list or `None`"""
+
+        assert reference_sections.from_reference_config([]) is None
+        assert reference_sections.from_reference_config(None) is None
 
     def test_skips_non_dict_entries(self):
-        """Skips entries that aren't dicts."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            config = [
-                "not a dict",
-                {"title": "Functions", "contents": ["func_a"]},
-            ]
-            result = reference_sections.from_reference_config(config)
-            assert result is not None
-            assert len(result) == 1
+        """Skip section entries that are not dicts"""
+
+        config = [
+            "not a dict",
+            {"title": "Functions", "contents": ["func_a"]},
+        ]
+        result = reference_sections.from_reference_config(config)
+        assert result is not None
+        assert len(result) == 1
 
     def test_skips_empty_contents(self):
-        """Skips sections with no contents."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            config = [
-                {"title": "Empty", "contents": []},
-                {"title": "Real", "contents": ["func_a"]},
-            ]
-            result = reference_sections.from_reference_config(config)
-            assert result is not None
-            assert len(result) == 1
-            assert result[0]["title"] == "Real"
+        """Skip sections with no contents"""
+
+        config = [
+            {"title": "Empty", "contents": []},
+            {"title": "Real", "contents": ["func_a"]},
+        ]
+        result = reference_sections.from_reference_config(config)
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["title"] == "Real"
 
     def test_dict_item_missing_name(self):
-        """Skips dict items without a name."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            config = [
-                {"title": "Classes", "contents": [{"members": False}]},
-            ]
-            result = reference_sections.from_reference_config(config)
-            # No valid contents, so the section is skipped
-            assert result is None
+        """Return `None` when the only content item has no `name`"""
+
+        config = [
+            {"title": "Classes", "contents": [{"members": False}]},
+        ]
+        result = reference_sections.from_reference_config(config)
+        # No valid contents, so the section is skipped
+        assert result is None
 
 
 class TestDetectDocstringStyleSphinx:
@@ -18182,68 +18145,63 @@ class TestHomepageHeroBatch9:
             assert "gd-only-dark" in hero_html
 
 
-class TestBuildSectionsFromReferenceConfigBatch9:
-    """Additional _build_sections_from_reference_config coverage."""
+class TestFromReferenceConfigMore:
+    """Tests for member settings and skipped reference configuration entries"""
 
     def test_dict_item_with_members_false(self):
-        """Dict item with members: false produces name-only entry."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            config = [
-                {
-                    "title": "Classes",
-                    "contents": [{"name": "MyClass", "members": False}],
-                },
-            ]
-            result = reference_sections.from_reference_config(config)
-            assert result is not None
-            classes_section = result[0]
-            assert classes_section["contents"][0] == {"name": "MyClass", "members": []}
+        """Convert `members: false` to a dict with the name and an empty members list"""
+
+        config = [
+            {
+                "title": "Classes",
+                "contents": [{"name": "MyClass", "members": False}],
+            },
+        ]
+        result = reference_sections.from_reference_config(config)
+        assert result is not None
+        classes_section = result[0]
+        assert classes_section["contents"][0] == {"name": "MyClass", "members": []}
 
     def test_dict_item_with_members_true(self):
-        """Dict item with members: true produces simple string entry."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            config = [
-                {
-                    "title": "Classes",
-                    "contents": [{"name": "MyClass", "members": True}],
-                },
-            ]
-            result = reference_sections.from_reference_config(config)
-            assert result is not None
-            assert result[0]["contents"][0] == "MyClass"
+        """Convert a content item with `members: true` to its name"""
+
+        config = [
+            {
+                "title": "Classes",
+                "contents": [{"name": "MyClass", "members": True}],
+            },
+        ]
+        result = reference_sections.from_reference_config(config)
+        assert result is not None
+        assert result[0]["contents"][0] == "MyClass"
 
     def test_skips_non_dict_sections(self):
-        """Skips non-dict entries in reference config."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            config = ["not_a_dict", {"title": "Funcs", "contents": ["func_a"]}]
-            result = reference_sections.from_reference_config(config)
-            assert result is not None
-            assert len(result) == 1
-            assert result[0]["title"] == "Funcs"
+        """Skip section entries that are not dicts"""
+
+        config = ["not_a_dict", {"title": "Funcs", "contents": ["func_a"]}]
+        result = reference_sections.from_reference_config(config)
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["title"] == "Funcs"
 
     def test_empty_config(self):
-        """Returns None for empty config."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = reference_sections.from_reference_config([])
-            assert result is None
+        """Return `None` for an empty configuration list"""
+
+        result = reference_sections.from_reference_config([])
+        assert result is None
 
     def test_dict_item_without_name(self):
-        """Skips dict items missing name key."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            config = [
-                {
-                    "title": "Things",
-                    "contents": [{"members": True}],
-                },
-            ]
-            result = reference_sections.from_reference_config(config)
-            # Section should be empty (no valid contents) so result is None
-            assert result is None
+        """Return `None` when the only content item has no `name`"""
+
+        config = [
+            {
+                "title": "Things",
+                "contents": [{"members": True}],
+            },
+        ]
+        result = reference_sections.from_reference_config(config)
+        # Section should be empty (no valid contents) so result is None
+        assert result is None
 
 
 class TestUpdateQuartoConfigStrNormalizationBatch10:
