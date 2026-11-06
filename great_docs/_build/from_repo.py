@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import venv
+from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -307,9 +308,9 @@ def _install(checkout: Path, environment: Path, *, report: Callable[[str], None]
     """
     Create a virtual environment with great-docs and the checkout's package
 
-    If installing great-docs from PyPI fails, the build installs it from the running source
-    tree, as during development. The checkout's package is installed in editable mode with
-    its documentation extras, or without them if installing with extras fails.
+    Install great-docs from the running source tree during development, or pin the PyPI
+    installation to the running version. Install the checkout's package in editable mode with
+    its documentation extras, retrying without extras if that installation fails.
 
     Parameters
     ----------
@@ -336,11 +337,13 @@ def _install(checkout: Path, environment: Path, *, report: Callable[[str], None]
     pip = str(scripts / _executable("pip"))
 
     report("📥 Installing great-docs into temporary environment...")
-    result = _run([pip, "install", "great-docs"])
+    source_tree = _source_tree()
+    requirement = (
+        str(source_tree) if source_tree else f"great-docs=={metadata.version('great-docs')}"
+    )
+    result = _run([pip, "install", requirement])
     if result.returncode != 0:
-        result = _run([pip, "install", str(Path(__file__).resolve().parents[2])])
-        if result.returncode != 0:
-            raise RuntimeError(f"Failed to install great-docs:\n{result.stderr.strip()}")
+        raise RuntimeError(f"Failed to install {requirement}:\n{result.stderr.strip()}")
 
     report("📥 Installing target package...")
     extras = install_extras(checkout)
@@ -350,6 +353,24 @@ def _install(checkout: Path, environment: Path, *, report: Callable[[str], None]
         if result.returncode != 0:
             raise RuntimeError(f"Failed to install target package:\n{result.stderr.strip()}")
     return scripts
+
+
+def _source_tree() -> Path | None:
+    """
+    Locate the source tree of the running great-docs installation
+
+    Returns
+    -------
+    :
+        The source root if its package metadata names the project `great-docs`, or
+        `None` if the name is missing or different, or the metadata cannot be read or parsed.
+    """
+    root = Path(__file__).resolve().parents[2]
+    try:
+        name = _manifest.read(root)["name"]
+    except ManifestError:
+        return None
+    return root if name == "great-docs" else None
 
 
 def _executable(name: str) -> str:

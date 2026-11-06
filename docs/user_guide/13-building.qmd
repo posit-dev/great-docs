@@ -155,7 +155,8 @@ these files, but they can be useful for debugging rendering issues.
 The `--from-repo` flag lets you build documentation for any Git-hosted package without cloning it
 yourself. Great Docs handles the entire workflow: cloning the repository, creating an isolated
 virtual environment, installing the package and its dependencies, running the full build pipeline,
-and copying the finished site to a local directory.
+and copying the finished site to a local directory. The temporary environment uses the same
+Great Docs version as the command that runs it.
 
 ```{.bash filename="Terminal"}
 great-docs build --from-repo https://github.com/owner/package.git
