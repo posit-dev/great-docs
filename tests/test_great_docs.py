@@ -9200,7 +9200,7 @@ def test_build_skill_md_error_handled(tmp_path, capsys):
 
 def test_build_log_numbers_every_step(tmp_path, capsys):
     """
-    Check that the log numbers all twenty steps in order and reports all twenty as run
+    Check that the log numbers all twenty-one steps in order and reports all of them as run
     """
     docs = _buildable_docs(tmp_path)
 
@@ -9209,7 +9209,7 @@ def test_build_log_numbers_every_step(tmp_path, capsys):
 
     out = capsys.readouterr().out
     headings = re.findall(r"Step\s+(\d+)/(\d+) \S (.+?) [━-]", out)
-    assert [(int(n), int(total)) for n, total, _ in headings] == [(n, 20) for n in range(1, 21)]
+    assert [(int(n), int(total)) for n, total, _ in headings] == [(n, 21) for n in range(1, 22)]
     assert [title for *_, title in headings] == [
         "Prepare build directory",
         "Configure API reference",
@@ -9225,6 +9225,7 @@ def test_build_log_numbers_every_step(tmp_path, capsys):
         "Process custom pages",
         "Process page tags",
         "Process page status badges",
+        "Prepare WebMCP pages",
         "Copy assets",
         "Generate API reference",
         "Build interlinks index",
@@ -9232,7 +9233,7 @@ def test_build_log_numbers_every_step(tmp_path, capsys):
         "Build site with Quarto",
         "Generate SEO files",
     ]
-    assert "Build complete — 20/20 steps" in out
+    assert "Build complete — 21/21 steps" in out
 
 
 def test_discover_with_explicit_cli_module(tmp_path):
