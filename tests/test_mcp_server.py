@@ -345,6 +345,12 @@ class TestServerRequests:
 
         return asyncio.run(run())
 
+    def test_initialisation_advertises_instructions(self):
+        async def instructions(client: Any) -> str | None:
+            return client.instructions
+
+        assert self._ask(instructions) == mcp_module._INSTRUCTIONS
+
     def test_lists_capabilities(self):
         async def names(client: Any) -> dict[str, list[str]]:
             return {

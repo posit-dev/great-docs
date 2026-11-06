@@ -1588,6 +1588,7 @@ async def _on_completion(ctx: Any, params: Any) -> Any:
 
 server = Server(
     name="great-docs",
+    instructions=_INSTRUCTIONS,
     on_list_tools=_on_list_tools,
     on_call_tool=_on_call_tool,
     on_list_prompts=_on_list_prompts,
@@ -1597,10 +1598,6 @@ server = Server(
     on_list_resource_templates=_on_list_resource_templates,
     on_completion=_on_completion,
 )
-try:
-    server.instructions = _INSTRUCTIONS
-except AttributeError:  # pragma: no cover
-    pass  # pragma: no cover
 
 
 # ---------------------------------------------------------------------------
