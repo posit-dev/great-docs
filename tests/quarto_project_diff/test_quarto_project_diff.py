@@ -62,6 +62,18 @@ def test_file_rules_remove_a_commit_folded_across_lines():
     assert counts == {"great-docs-commit": 1}
 
 
+def test_file_rules_mask_the_discovery_key_but_keep_the_sections():
+    cache = json.dumps({"key": "ab" * 32, "sections": [{"title": "Functions"}]}, indent=2)
+    path = ".great-docs-cache/api-discovery/sections.json"
+
+    text, counts = normalise_text(cache, path, FILE_RULES)
+    elsewhere, _ = normalise_text(cache, "data.json", FILE_RULES)
+
+    assert json.loads(text) == {"key": "<DIGEST>", "sections": [{"title": "Functions"}]}
+    assert counts == {"discovery-key": 1}
+    assert elsewhere == cache
+
+
 def test_path_rules_replace_the_innermost_directory_first(tmp_path: Path):
     package = tmp_path / "job" / "pkg"
     rules = path_rules({"<JOB>": tmp_path / "job", "<PKG>": package})
