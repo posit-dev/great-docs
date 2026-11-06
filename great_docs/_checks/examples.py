@@ -169,9 +169,7 @@ def extract_docstring_examples(
         return []
 
     if layout is not None:
-        config = Config(
-            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
-        )
+        config = layout.load_config()
     else:
         config = Config(project_root)
 

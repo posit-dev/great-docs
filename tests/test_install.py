@@ -333,7 +333,7 @@ def _write_initial_config(root: Path, *, force: bool = True) -> list[str]:
         The lines reported to the user.
     """
     layout = Layout.make(root)
-    config = Config(layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir)
+    config = layout.load_config()
     project = Project.make(config, layout)
     lines: list[str] = []
     write_initial_config(

@@ -23,7 +23,7 @@ from ._reference.exports import Exports
 from ._remote import HttpRemote
 from ._website import changelog as changelog_page
 from ._website import quarto_yml
-from .config import Config, ConfigError
+from .config import ConfigError
 from .core import GreatDocs
 
 if TYPE_CHECKING:
@@ -1244,10 +1244,8 @@ def _freeze_info(project_root: Path, persist_dir: Path, layout: Layout | None = 
     import re as _re
     from datetime import datetime
 
-    from great_docs.config import Config
-
     layout = layout or Layout.make(project_root)
-    cfg = Config(layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir)
+    cfg = layout.load_config()
     project_mode = cfg.freeze
 
     click.echo()
@@ -1450,7 +1448,7 @@ def freeze(
     from ._build import pipeline
     from ._build.log import BuildLog
 
-    config = Config(layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir)
+    config = layout.load_config()
     try:
         pipeline.prepare_for_freeze(
             config, layout, BuildLog(), remote=HttpRemote(report=print_warning)
@@ -2357,9 +2355,7 @@ def changelog(
             Path(project_path) if project_path else Path.cwd(),
             Path(config_path) if config_path else None,
         )
-        config = Config(
-            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
-        )
+        config = layout.load_config()
 
         repo = Project.make(config, layout).github
         if repo is None:
@@ -2557,9 +2553,7 @@ def proofread(
             Path(project_path) if project_path else Path.cwd(),
             Path(config_path) if config_path else None,
         )
-        config = Config(
-            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
-        )
+        config = layout.load_config()
 
         if files:
             files_to_check = [Path(f) for f in files]
@@ -2807,9 +2801,7 @@ def seo(
             Path(project_path) if project_path else Path.cwd(),
             Path(config_path) if config_path else None,
         )
-        config = Config(
-            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
-        )
+        config = layout.load_config()
         site_dir = layout.site_dir
 
         if not site_dir.exists():
@@ -3532,13 +3524,12 @@ def versions(project_path: str | None, check: bool, config_path: str | None = No
       great-docs versions --check      # Validate configuration
     """
     from great_docs._versions.model import get_latest_version, parse_versions_config
-    from great_docs.config import Config
 
     try:
         project_root = Path(project_path or ".").resolve()
         layout = Layout.make(project_root, Path(config_path) if config_path else None)
         project_root = layout.package_root
-        cfg = Config(project_root, config_path=layout.config_path, cache_dir=layout.cache_dir)
+        cfg = layout.load_config()
 
         if not cfg.has_versions:
             click.echo("No versions configured in great-docs.yml.")

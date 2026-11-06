@@ -638,9 +638,7 @@ def _watch(
     preview_env[shared_sidebar.PREVIEW_ENV] = "1"
 
     def rebuild(staging: watch.Staging) -> dict[str, Any]:
-        edited = Config(
-            config.project_root, config_path=config.config_path, cache_dir=config.cache_dir
-        )
+        edited = layout.load_config()
         current = Run.make(edited, staging, watch=True)
         rebuild_log = BuildLog()
         preparation = preparation_steps(

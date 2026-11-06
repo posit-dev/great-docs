@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from .config import Config
+
 _PROJECT_MANIFESTS = ("pyproject.toml", "setup.py", "go.mod", "Cargo.toml")
 CONVENTIONAL_DOC_DIRS = ("docs", "docs-website", "doc", "website")
 PACKAGE_DIRS = ("src", "python", "lib")
@@ -165,6 +167,22 @@ class Layout:
         if safe_tag in {"", ".", "..", "default"}:
             raise LayoutError(f"Historical version tag {tag!r} cannot use build name {safe_tag!r}")
         return self.build_dir.parent / safe_tag
+
+    def load_config(self) -> Config:
+        """
+        Load the selected configuration using this layout's cache directory
+
+        Returns
+        -------
+        :
+            The selected configuration merged with the defaults.
+
+        Raises
+        ------
+        ConfigError
+            If the configuration names an unsupported docstring parser.
+        """
+        return Config(self.package_root, config_path=self.config_path, cache_dir=self.cache_dir)
 
 
 def _find_package_root(project_path: Path) -> Path:

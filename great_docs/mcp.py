@@ -38,7 +38,6 @@ from ._build.steps import BuildError
 from ._content import user_guide
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, LayoutError
 from ._utils import is_in_great_docs_build_dir, recognised_build_dirs
-from .config import Config
 
 if TYPE_CHECKING:
     from ._reference.exports import Exports
@@ -482,11 +481,7 @@ async def _handle_build(arguments: dict) -> list[TextContent]:
         import shutil
 
         outputs.validate(
-            Config(
-                docs.layout.package_root,
-                config_path=docs.layout.config_path,
-                cache_dir=docs.layout.cache_dir,
-            ),
+            docs.layout.load_config(),
             docs.layout,
         )
         for ver_dir in _sibling_build_dirs(_get_project_root(project_path), _get_layout(arguments)):
@@ -757,9 +752,7 @@ async def _handle_add_page(arguments: dict) -> list[TextContent]:
 
     # Determine target directory
     if section == "user_guide":
-        config = Config(
-            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
-        )
+        config = layout.load_config()
         # A configured directory that does not exist yet receives the page
         target_dir = user_guide.find_dir(config, layout, report=lambda _: None) or root / (
             config.user_guide_dir or "user_guide"

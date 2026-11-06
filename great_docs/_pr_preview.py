@@ -26,7 +26,6 @@ from ._build import serve
 from ._github import GithubRepo, token_from_env
 from ._layout import Layout
 from ._project import Project
-from .config import Config
 
 GITHUB_API = "https://api.github.com"
 DEFAULT_WORKFLOW_NAME = "CI Docs"
@@ -92,9 +91,7 @@ def _config_repo(project_path: str | Path | None) -> tuple[str, str] | None:
     """
     try:
         layout = Layout.make(Path(project_path or os.getcwd()))
-        config = Config(
-            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
-        )
+        config = layout.load_config()
         github = Project.make(config, layout).github
     except (ValueError, OSError):
         # `LayoutError` and `ConfigError` are `ValueError`s.

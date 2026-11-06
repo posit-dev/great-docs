@@ -13,7 +13,6 @@ from ._layout import Layout
 from ._project import Project
 from ._reference.exports import Exports
 from ._remote import HttpRemote, Remote
-from .config import Config
 
 
 class GreatDocs:
@@ -103,11 +102,7 @@ class GreatDocs:
         self.assets_path = self.package_path / "assets"
 
         # Load configuration from great-docs.yml
-        self._config = Config(
-            self.layout.package_root,
-            config_path=self.layout.config_path,
-            cache_dir=self.layout.cache_dir,
-        )
+        self._config = self.layout.load_config()
 
         # GitHub and PyPI requests; release warnings print in the build log's format
         self._remote: Remote = HttpRemote(report=lambda message: print(f"   ⚠️  {message}"))
@@ -165,11 +160,7 @@ class GreatDocs:
         )
 
         # Reload configuration after generating it
-        self._config = Config(
-            self.layout.package_root,
-            config_path=self.layout.config_path,
-            cache_dir=self.layout.cache_dir,
-        )
+        self._config = self.layout.load_config()
 
         # Update project root .gitignore to exclude great-docs/
         update_gitignore(self.layout, report=print, ask=None if force else input)
