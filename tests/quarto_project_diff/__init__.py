@@ -5,10 +5,10 @@ A Quarto project is the directory holding `_quarto.yml` and its sources: the `.q
 scripts, stylesheets and data files that great-docs writes before Quarto renders anything.
 The tool runs `great-docs init`, `build`, `build --watch` and `freeze` on Gauntlet packages,
 once with a base commit and once with the checkout under test, and compares every file each
-command writes. It also compares exit statuses, build steps, logged warnings, handled
-exceptions, process counts and calls to `quarto`. A stub `quarto` skips rendering, so a build
-takes about a second. Each command runs in a separate process through the command-line
-interface; the tool never imports `great_docs`.
+command writes. It also compares exit statuses, build steps, logged warnings, watch outcomes
+and calls to `quarto`. A stub `quarto` skips rendering, so a build takes about a second. Each
+command runs in a separate process through the command-line interface; the tool never
+imports `great_docs`.
 
 Run it from the repository root of a checkout whose `.venv` was created with
 `env -u VIRTUAL_ENV uv sync --extra dev --frozen`:

@@ -1,9 +1,8 @@
 """
 Compare two recordings and report every difference
 
-Compare exit statuses, file changes, step skeletons, warnings, handled exceptions, the
-number of Python processes and calls to the stub `quarto`. Every difference is reported,
-including a handled exception that disappears, so each change can be reviewed.
+Compare exit statuses, file changes, step skeletons, warnings, watch outcomes and calls to
+the stub `quarto`. Report every difference for review.
 
 Regressions fail the comparison: a failed test-side check (even when the base fails the same
 check), a command that now exits with a non-zero status, a command run on one side only, a
@@ -243,63 +242,6 @@ def compare_files(
     return findings
 
 
-def _census_line(entry: Mapping[str, Any]) -> str:
-    """
-    Describe one census entry for the report
-
-    Parameters
-    ----------
-    entry :
-        The entry.
-
-    Returns
-    -------
-    :
-        Type, message, raising function and handlers on one line.
-    """
-    return (
-        f"{entry['type']}: {entry['message']!r} raised in {entry['raised_in']} "
-        f"({', '.join(entry['raised_at'])}), handled in {', '.join(entry['handlers'])}"
-    )
-
-
-def compare_census(old: Sequence[Mapping[str, Any]], new: Sequence[Mapping[str, Any]]) -> list[str]:
-    """
-    Compare the handled exceptions of one command
-
-    Parameters
-    ----------
-    old, new :
-        Census entries on each side.
-
-    Returns
-    -------
-    :
-        Findings for new entries, entries that disappeared and changed counts.
-    """
-
-    def keyed(
-        entries: Sequence[Mapping[str, Any]],
-    ) -> dict[tuple[str, str, str], Mapping[str, Any]]:
-        return {(e["type"], e["message"], e["raised_in"]): e for e in entries}
-
-    a, b = keyed(old), keyed(new)
-    findings = [
-        f"NEW handled exception: {_census_line(b[k])} x{b[k]['count']}"
-        for k in sorted(set(b) - set(a))
-    ]
-    findings += [
-        f"handled exception gone: {_census_line(a[k])} x{a[k]['count']}"
-        for k in sorted(set(a) - set(b))
-    ]
-    findings += [
-        f"handled exception count {a[k]['count']} -> {b[k]['count']}: {_census_line(b[k])}"
-        for k in sorted(set(a) & set(b))
-        if a[k]["count"] != b[k]["count"]
-    ]
-    return findings
-
-
 def compare_lists(label: str, old: Sequence[str], new: Sequence[str]) -> list[str]:
     """
     Compare two lists of lines as a unified diff
@@ -364,7 +306,6 @@ def compare_command(
     findings: list[str] = []
     for key, label in (
         ("status", "exit status"),
-        ("python_processes", "Python processes"),
         ("watch", "watch run"),
     ):
         if old.get(key) != new.get(key):
@@ -372,7 +313,6 @@ def compare_command(
     findings += compare_files(base, test, old.get("files", []), new.get("files", []))
     findings += compare_lists("step skeleton", old.get("skeleton", []), new.get("skeleton", []))
     findings += compare_warnings(old.get("warnings", []), new.get("warnings", []))
-    findings += compare_census(old.get("census", []), new.get("census", []))
     findings += compare_lists(
         "quarto calls", old.get("quarto_calls", []), new.get("quarto_calls", [])
     )

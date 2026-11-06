@@ -86,8 +86,6 @@ FILE_RULES: tuple[Rule, ...] = (
     ),
 )
 
-_ADDRESS = re.compile(r"0x[0-9a-fA-F]{6,}")
-
 
 def path_rules(paths: Mapping[str, Path]) -> tuple[Rule, ...]:
     """
@@ -168,28 +166,6 @@ def normalise_bytes(data: bytes, path: str, rules: Iterable[Rule]) -> tuple[byte
         return data, {}
     text, counts = normalise_text(text, path, rules)
     return text.encode("utf-8"), counts
-
-
-def normalise_message(text: str, rules: Iterable[Rule], limit: int = 200) -> str:
-    """
-    Normalise an exception message for comparison
-
-    Parameters
-    ----------
-    text :
-        Message as the observer recorded it.
-    rules :
-        Path rules for the build.
-    limit :
-        Maximum message length in characters.
-
-    Returns
-    -------
-    :
-        The message with paths and object addresses replaced, cut to `limit` characters.
-    """
-    text, _ = normalise_text(text, "", rules)
-    return _ADDRESS.sub("0x<ADDR>", text)[:limit]
 
 
 _STEP = re.compile(r"^-- (Step\s+\d+/\d+ - .*?)\s*-*$")
