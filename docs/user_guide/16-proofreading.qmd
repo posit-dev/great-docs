@@ -39,7 +39,19 @@ harper-cli --version
 
 ## What Gets Checked
 
-The proofreader scans all `.qmd` and `.md` files in your documentation site directory. It automatically skips:
+The proofreader reads the same `.qmd` and `.md` pages as the [link checker](link-checker.qmd#what-gets-checked):
+
+- The homepage source
+- The pages in the user guide directory
+- The pages in each section directory
+- The pages in each custom page directory
+- The `README.md` file at the package root
+
+Within page directories, paths with any part starting with `_` or `.` are skipped. Generated pages, such as the API reference, are not checked. A `recipes/` directory is read only when a section lists it.
+
+With `--include-docstrings`, the proofreader also checks docstrings in the documented package's Python files.
+
+Within `.qmd` pages, the proofreader skips:
 
 - **Fenced code blocks** - Content between ` ``` ` markers
 - **YAML frontmatter** - Content between `---` markers at the start of files
@@ -64,9 +76,11 @@ Check specific files or patterns:
 # Check one file
 great-docs proofread user-guide/getting-started.qmd
 
-# Check all files in a directory
-great-docs proofread recipes/
+# Check .qmd pages in a directory
+great-docs proofread recipes/*.qmd
 ```
+
+A directory argument is not expanded into files. Use a glob to pass its pages to the proofreader.
 
 ## Custom Dictionary
 
