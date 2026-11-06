@@ -18347,7 +18347,6 @@ def _skills_writer(docs: GreatDocs) -> SkillsWriter:
     return SkillsWriter(
         docs._config,
         docs.layout,
-        docs.build_dir,
         make_project(docs).name,
         make_project(docs).manifest,
     )
@@ -18357,7 +18356,6 @@ def _skills_page_writer(docs: GreatDocs) -> SkillsPageWriter:
     return SkillsPageWriter(
         docs._config,
         docs.layout,
-        docs.build_dir,
         make_project(docs).name,
         make_project(docs).manifest,
     )
@@ -21056,7 +21054,7 @@ def test_status_collection():
         ug.mkdir(parents=True)
         (ug / "feature.qmd").write_text("---\ntitle: Feature\nstatus: new\n---\nContent.")
 
-        status_map = page_status.collect(gd._config, gd.layout, gd.build_dir)
+        status_map = page_status.collect(gd._config, gd.layout)
         assert "user-guide/feature.qmd" in status_map
         assert status_map["user-guide/feature.qmd"] == "new"
 
@@ -21072,7 +21070,7 @@ def test_status_collection_ignores_invalid():
         ug.mkdir(parents=True)
         (ug / "bad.qmd").write_text("---\ntitle: Bad\nstatus: nonexistent_status\n---\nContent.")
 
-        status_map = page_status.collect(gd._config, gd.layout, gd.build_dir)
+        status_map = page_status.collect(gd._config, gd.layout)
         assert "user-guide/bad.qmd" not in status_map
 
 
@@ -22473,7 +22471,7 @@ def test_status_collection_from_user_guide(tmp_path):
     ug_dir.mkdir(parents=True, exist_ok=True)
     (ug_dir / "page.qmd").write_text("---\nstatus: new\n---\n")
 
-    result = page_status.collect(docs._config, docs.layout, docs.build_dir)
+    result = page_status.collect(docs._config, docs.layout)
 
     assert "user-guide/page.qmd" in result
     assert result["user-guide/page.qmd"] == "new"
@@ -22486,7 +22484,7 @@ def test_status_collection_unknown_status_warns(tmp_path, capsys):
     ug_dir.mkdir(parents=True, exist_ok=True)
     (ug_dir / "page.qmd").write_text("---\nstatus: completely-unknown-xyz\n---\n")
 
-    result = page_status.collect(docs._config, docs.layout, docs.build_dir)
+    result = page_status.collect(docs._config, docs.layout)
 
     assert "user-guide/page.qmd" not in result
 
@@ -22507,7 +22505,7 @@ def test_status_collection_custom_section(tmp_path):
     section_dir.mkdir(parents=True, exist_ok=True)
     (section_dir / "page.qmd").write_text("---\nstatus: beta\n---\n")
 
-    result = page_status.collect(docs._config, docs.layout, docs.build_dir)
+    result = page_status.collect(docs._config, docs.layout)
 
     assert any("tutorials/page.qmd" in k for k in result)
     assert "beta" in result.values()

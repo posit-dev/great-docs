@@ -385,7 +385,6 @@ def test_blended_homepage_keeps_front_matter_whose_title_contains_three_dashes(t
     index_qmd = page.write_blended(
         docs._config,
         docs.layout,
-        docs.build_dir,
         content,
         metadata={},
         package_name="pkg",

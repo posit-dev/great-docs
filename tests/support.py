@@ -899,7 +899,6 @@ def homepage_hero(docs: GreatDocs, readme: str | None = None) -> tuple[str, str 
         found,
         docs._config,
         docs.layout,
-        docs.build_dir,
         metadata=project.manifest,
         package_name=project.name,
         pages=content.page_map(docs._config, docs.layout, discover_user_guide(docs)),
@@ -924,16 +923,14 @@ def homepage_margin(docs: GreatDocs, *, api_block: dict[str, Any] | None = None)
     :
         The sidebar's Markdown.
     """
-    package_root = docs.layout.package_root
     project = make_project(docs)
     return margin.render(
         docs._config,
-        docs.build_dir,
-        package_root=package_root,
+        docs.layout,
         metadata=project.manifest,
         package_name=project.name,
         community_pages=community.write_pages(
-            docs._config, package_root, docs.build_dir, make_run(docs).page_authors
+            docs._config, docs.layout, make_run(docs).page_authors
         ),
         has_llms_txt=llms_txt.is_planned(api_block),
     )

@@ -28,7 +28,6 @@ def test_skill_md_comes_from_first_published_skill_when_first_entry_is_skipped(t
     SkillsWriter(
         docs._config,
         docs.layout,
-        docs.build_dir,
         make_project(docs).name,
         make_project(docs).manifest,
     ).write(None)

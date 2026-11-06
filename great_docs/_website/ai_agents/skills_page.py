@@ -34,11 +34,12 @@ class SkillMeta(TypedDict):
 class SkillsPageWriter:
     """
     Writer for the site page that displays and links to agent skills
+
+    `layout` supplies the build directory where `skills.qmd` is written.
     """
 
     config: Config
     layout: Layout
-    build_dir: Path
     distribution_name: str | None
     metadata: Manifest
 
@@ -50,7 +51,6 @@ class SkillsPageWriter:
         return cls(
             writer.config,
             writer.layout,
-            writer.build_dir,
             writer.distribution_name,
             writer.metadata,
         )
@@ -396,7 +396,7 @@ class SkillsPageWriter:
             lines.append("```")
             lines.append("")
 
-        skills_page = self.build_dir / "skills.qmd"
+        skills_page = self.layout.build_dir / "skills.qmd"
         with open(skills_page, "w", encoding="utf-8") as f:
             _ = f.write(noindex.add_to_page(self.config, "\n".join(lines)))
 

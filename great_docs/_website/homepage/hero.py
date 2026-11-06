@@ -117,7 +117,6 @@ def render(
     hero: Hero,
     config: Config,
     layout: Layout,
-    build_dir: Path,
     *,
     metadata: Manifest,
     package_name: str | None,
@@ -128,7 +127,7 @@ def render(
 
     The logo is the first available value from `hero.logo`, a hero logo file, `logo`, a navbar
     logo file and the README's logo. Its path is rewritten for the homepage, and a local file
-    is copied into the build directory.
+    is copied into the layout's build directory.
 
     Parameters
     ----------
@@ -137,9 +136,9 @@ def render(
     config
         The Great Docs configuration.
     layout
-        The project's directories.
-    build_dir
-        The Quarto project directory the homepage is written to.
+        The documentation source directory to search for logos, the configuration
+        path for resolving logo references and the build directory for local logo
+        copies and URLs relative to `index.qmd`.
     metadata
         The package metadata, whose description is the default tagline.
     package_name
@@ -180,7 +179,11 @@ def render(
         elif isinstance(logo, str):
             logo_html = f'<img src="{escape(logo)}" alt="Logo" class="gd-hero-logo" style="max-height:{height}" />'
         logo_html = publish.rebase_references(
-            logo_html, layout.config_path, build_dir / "index.qmd", layout=layout, pages=pages
+            logo_html,
+            layout.config_path,
+            layout.build_dir / "index.qmd",
+            layout=layout,
+            pages=pages,
         )
 
     name = config.hero_name

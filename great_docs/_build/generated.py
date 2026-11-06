@@ -102,9 +102,7 @@ def skills(run: Run, config: Config, layout: Layout) -> Outcome:
     """
     if not config.skill_enabled:
         return Skipped("disabled in config")
-    SkillsWriter(config, layout, layout.build_dir, run.project.name, run.project.manifest).write(
-        run.api_block
-    )
+    SkillsWriter(config, layout, run.project.name, run.project.manifest).write(run.api_block)
     return "Created skill.md"
 
 
@@ -218,7 +216,7 @@ def page_statuses(run: Run, config: Config, layout: Layout) -> Outcome:
     """
     if not config.page_status_enabled:
         return Skipped("page status not enabled")
-    contribution = page_status.process(config, layout, layout.build_dir)
+    contribution = page_status.process(config, layout)
     if contribution is None:
         return Skipped("no pages with status")
     run.contributions.append(contribution)

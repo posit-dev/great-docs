@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+    from ..._layout import Layout
     from ...config import Config
 
 __all__ = ["FILENAME", "write_page"]
@@ -23,8 +24,7 @@ FILENAME = "license.qmd"
 
 def write_page(
     config: Config,
-    package_root: Path,
-    build_dir: Path,
+    layout: Layout,
     licence_id: str,
     authors: list[dict[str, Any]],
     *,
@@ -40,10 +40,9 @@ def write_page(
     ----------
     config
         The Great Docs configuration.
-    package_root
-        The project directory holding `LICENSE`.
-    build_dir
-        The Quarto project directory to write the page into.
+    layout
+        The package root to read `LICENSE` from and the build directory to write
+        `license.qmd` into.
     licence_id
         The project's licence identifier, or `""` if it declares none.
     authors
@@ -56,7 +55,7 @@ def write_page(
     :
         The path of the written page, or `None` if the project has no `LICENSE` file.
     """
-    source = package_root / "LICENSE"
+    source = layout.package_root / "LICENSE"
     if not source.exists():
         return None
 
@@ -101,7 +100,7 @@ anchor-sections: false
 </pre>
 ```
 """
-    path = build_dir / FILENAME
+    path = layout.build_dir / FILENAME
     _ = path.write_text(page_dates.add_to_page(content, source, config, authors), encoding="utf-8")
     report(f"Created {path}")
     return path

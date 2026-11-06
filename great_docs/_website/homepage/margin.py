@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
+    from ..._layout import Layout
     from ...config import Config
     from ..project_pages.community import CommunityPage
 
@@ -54,9 +55,8 @@ _ROR_ICON = (
 
 def render(
     config: Config,
-    build_dir: Path,
+    layout: Layout,
     *,
-    package_root: Path,
     metadata: Manifest,
     package_name: str | None,
     community_pages: Sequence[CommunityPage],
@@ -72,10 +72,9 @@ def render(
     ----------
     config
         The Great Docs configuration.
-    build_dir
-        The Quarto project directory.
-    package_root
-        The project directory, which may contain a curated skill.
+    layout
+        The package root to search for a curated skill and the build directory to
+        check for pages the sidebar can link to.
     metadata
         The package metadata: URLs, authors, licence, Python requirement and extras.
     package_name
@@ -91,9 +90,10 @@ def render(
         The sidebar's Markdown, or `""` if no section has entries.
     """
     lang = config.lang
+    build_dir = layout.build_dir
     sections = [
         *_links(config, metadata, package_name, lang),
-        *_ai_agents(config, package_root, package_name, lang, has_llms_txt=has_llms_txt),
+        *_ai_agents(config, layout.package_root, package_name, lang, has_llms_txt=has_llms_txt),
         *_developers(config, metadata, lang),
         *_community(build_dir, metadata, package_name, community_pages, lang),
         *_meta(config, build_dir, metadata, lang),
