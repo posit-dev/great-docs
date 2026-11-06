@@ -17,6 +17,7 @@ from great_docs._contribution import Contribution, InlineData, NavbarLink
 from great_docs._layout import Layout
 from great_docs._utils import validate_build_dir
 from great_docs._website import inline_data, page_scan, quarto_yml, tags
+from great_docs._yaml import split_front_matter
 from great_docs.config import Config
 from great_docs.core import GreatDocs
 from tests.support import apply_contributions, make_run, write_config
@@ -380,6 +381,22 @@ class TestHierarchy:
 
 
 class TestRenderIndex:
+    def test_front_matter_quotes_a_translated_title(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Preserve quotes and colons in the translated tags title after a YAML round trip"""
+        config, _ = _project(tmp_path)
+        title = 'Tags: "all"'
+        monkeypatch.setattr(
+            tags, "get_translation", lambda key, lang: title if key == "site_tags" else key
+        )
+
+        text = tags.render_index({}, config)
+
+        front_matter, _ = split_front_matter(text)
+        assert front_matter.get("title") == title
+        assert front_matter.get("toc") is False
+
     def test_front_matter_and_page_links(self, tmp_path: Path):
         """Include front matter, page links, section badges and tooltips in the index"""
         config, _ = _project(tmp_path)
@@ -387,7 +404,7 @@ class TestRenderIndex:
 
         text = tags.render_index({"Python": [page]}, config)
 
-        assert text.startswith('---\ntitle: "Site Tags"\n')
+        assert text.startswith("---\ntitle: Site Tags\n")
         assert (
             '<div class="gd-tag-page-link">[Intro](../user-guide/intro.qmd)'
             ' <span class="gd-tag-section">User Guide</span></div>'

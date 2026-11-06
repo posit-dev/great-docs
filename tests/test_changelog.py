@@ -7,6 +7,7 @@ from great_docs._contribution import Contribution, NavbarLink
 from great_docs._github import GithubRepo
 from great_docs._layout import Layout
 from great_docs._website import changelog
+from great_docs._yaml import split_front_matter
 from tests.support import StubRemote, write_config
 
 REPO = GithubRepo("owner", "repo")
@@ -74,12 +75,12 @@ def test_write_page_lists_each_release(tmp_path: Path, layout: Layout):
     assert reported == [f"Created {layout.build_dir / 'changelog.qmd'}"]
     assert _page(layout) == (
         "---\n"
-        'title: "Changelog"\n'
+        "title: Changelog\n"
         "gd-auto-generated: true\n"
         "body-classes: gd-changelog-page\n"
         "toc: true\n"
         "toc-depth: 1\n"
-        'toc-title: "Releases"\n'
+        "toc-title: Releases\n"
         "shift-heading-level-by: -1\n"
         "---\n"
         "\n"
@@ -119,7 +120,22 @@ def test_write_page_translates_the_toc_title(
 
     _ = changelog.write_page(config, layout, REPO, remote, report=print)
 
-    assert f'toc-title: "{expected}"' in _page(layout)
+    assert f"toc-title: {expected}\n" in _page(layout)
+
+
+def test_write_page_quotes_a_translated_toc_title(
+    tmp_path: Path, layout: Layout, monkeypatch: pytest.MonkeyPatch
+):
+    """Preserve quotes and colons in the translated TOC title after a YAML round trip"""
+    title = 'Releases: "all"'
+    monkeypatch.setattr(changelog, "get_translation", lambda key, lang: title)
+    remote = StubRemote(releases=[_release("v1.0.0")])
+
+    _ = changelog.write_page(write_config(tmp_path), layout, REPO, remote, report=print)
+
+    front_matter, _ = split_front_matter(_page(layout))
+    assert front_matter.get("toc-title") == title
+    assert front_matter.get("gd-auto-generated") is True
 
 
 def test_write_page_labels_the_link_in_the_site_language(tmp_path: Path, layout: Layout):

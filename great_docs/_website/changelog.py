@@ -7,6 +7,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
+from yaml12 import format_yaml
+
 from .._contribution import Contribution, NavbarLink
 from .._translations import get_translation
 from . import page_dates
@@ -85,15 +87,20 @@ def write_page(
     # Pin the heading shift so release headings always render at level 1. This keeps the TOC
     # limited to release headings: without it, `toc-depth: 1` could include release-note
     # subsections or list nothing.
+    front_matter = format_yaml(
+        {
+            "title": "Changelog",
+            page_dates.AUTO_GENERATED: True,
+            "body-classes": "gd-changelog-page",
+            "toc": True,
+            "toc-depth": 1,
+            "toc-title": toc_title,
+            "shift-heading-level-by": -1,
+        }
+    )
     lines: list[str] = [
         "---",
-        'title: "Changelog"',
-        f"{page_dates.AUTO_GENERATED}: true",
-        "body-classes: gd-changelog-page",
-        "toc: true",
-        "toc-depth: 1",
-        f'toc-title: "{toc_title}"',
-        "shift-heading-level-by: -1",
+        front_matter.rstrip(),
         "---",
         "",
         "This changelog is generated automatically from ",
