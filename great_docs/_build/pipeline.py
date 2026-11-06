@@ -599,7 +599,9 @@ def _watch(
     """
     Prepare the Quarto project and preview it with rebuilds after source edits
 
-    Each rebuild reloads `great-docs.yml` and repeats preparation while the preview runs.
+    Edits to documentation sources and the documented package trigger rebuilds.
+    Each rebuild reloads `great-docs.yml`, imports the package again and prepares
+    the project while the preview keeps running.
 
     Parameters
     ----------
@@ -634,6 +636,8 @@ def _watch(
             config.project_root, config_path=config.config_path, cache_dir=config.cache_dir
         )
         current = Run.make(edited, staging, watch=True)
+        if current.project.importable_name:
+            watch.forget_package(current.project.importable_name)
         rebuild_log = BuildLog()
         preparation = preparation_steps(
             current, edited, staging, rebuild_log, remote=remote, refresh=refresh
@@ -642,7 +646,9 @@ def _watch(
         run_steps(preparation, rebuild_log, staging.build_dir)
         return current.quarto_config
 
-    watch.serve(layout, preview_env, rebuild, run.quarto_config)
+    package_init = run.project.package_init if config.is_python_project else None
+    package = package_init.parent if package_init is not None else None
+    watch.serve(layout, preview_env, rebuild, run.quarto_config, package)
 
 
 def _make_log(run: Run, config: Config, layout: Layout) -> BuildLog:
