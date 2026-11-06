@@ -20,14 +20,17 @@ make quarto-project-diff QUARTO_PROJECT_DIFF_ARGS="--base HEAD~1 --only gdtest_m
 make quarto-project-diff QUARTO_PROJECT_DIFF_ARGS="--fail-on difference"
 ```
 
-Every difference is reported. The exit status is 1 on a regression: a failed check, a command
-that now exits with a non-zero status, a command or case recorded on one side only, or
-environments that differ. Other differences, such as changed files or new warnings, leave the
-exit status at 0, since a change can alter output on purpose; `--fail-on difference` makes
-them fail too, for changes that should leave the output alone. Status 2 means the tool refused to run: a
-required tool (`d2`, `ruff`, `quarto`, `git` or `uv`) is missing, environments differ, or a
-recording uses another manifest schema. Known gaps appear in a separate report section without
-changing the exit status.
+Every difference is reported. Exit status 1 means the comparison found a regression: a
+failed check, a command that now exits with a non-zero status, a command or case recorded
+on one side only, or environments that differ. Checks fail for a missing API reference
+index; a watch run that does not preview, rebuild after a source edit or stop cleanly; or a
+freeze after a build that prepares different files.
+
+Other differences, such as changed files or new warnings, leave the exit status at 0:
+changes can alter output on purpose. Select `--fail-on difference` to make these
+differences fail too when output should stay the same. Status 2 means the tool refused to
+run: a required tool (`d2`, `ruff`, `quarto`, `git` or `uv`) is missing, environments differ,
+or a recording uses another manifest schema.
 
 The cache directory must be outside any Git repository. Choose it with `--cache-dir`;
 otherwise the tool uses `$GREAT_DOCS_QUARTO_PROJECT_DIFF_CACHE`, then

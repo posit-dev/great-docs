@@ -8,8 +8,7 @@ Regressions fail the comparison: a failed test-side check (even when the base fa
 check), a command that now exits with a non-zero status, a command run on one side only, a
 case recorded on one side only, and environments that differ. Other differences, such as
 changed files or new warnings, fail it only with `--fail-on difference`; a change that alters
-output on purpose reports them without failing. Known gaps appear in a separate report section and
-never fail the comparison.
+output on purpose reports them without failing.
 """
 
 from __future__ import annotations
@@ -50,42 +49,19 @@ class CaseResult:
     regressions :
         Findings that fail the comparison whatever it fails on.
     checks :
-        Failed test-side checks, each with the base side's result.
-    known_gaps :
-        Report lines for known gaps on either side, with indented details.
+        Failed test-side checks, each with the base side's result and any indented details.
     """
 
     case: str
     status: str
     findings: list[str] = field(default_factory=list[str])
     checks: list[str] = field(default_factory=list[str])
-    known_gaps: list[str] = field(default_factory=list[str])
     regressions: list[str] = field(default_factory=list[str])
 
     @property
     def regressed(self) -> bool:
         """Whether the case fails the comparison whatever it fails on"""
         return self.status == "missing" or bool(self.checks or self.regressions)
-
-
-@dataclass(frozen=True)
-class Gap:
-    """
-    A known defect observed in a case's output
-
-    Attributes
-    ----------
-    name :
-        Stable name used to match the gap across both sides.
-    summary :
-        One line stating what the output shows.
-    details :
-        Supporting evidence, such as affected file paths.
-    """
-
-    name: str
-    summary: str
-    details: tuple[str, ...] = ()
 
 
 @dataclass
@@ -356,9 +332,11 @@ def failed_checks(manifest: Mapping[str, Any]) -> list[str]:
     Returns
     -------
     :
-        One message per failed check, or an empty list when all checks pass.
+        One message per failed check, followed by any indented details. An empty list
+        means all checks passed.
     """
     failures: list[str] = []
+    commands: Mapping[str, Any] = manifest["commands"]
     present = present_files(manifest)
     if manifest.get("expects_reference"):
         # A Quarto project is a directory holding `_quarto.yml`; keep its trailing slash.
@@ -372,79 +350,30 @@ def failed_checks(manifest: Mapping[str, Any]) -> list[str]:
             for project in projects
             if f"{project}reference/index.qmd" not in present
         ]
-    watch = manifest["commands"].get("watch")
+    order: list[str] = manifest.get("order", list(commands))
+    if "freeze" in order and "build" in order[: order.index("freeze")]:
+        # Freeze recreates the build directory; its recorded changes show differences
+        # from the project given to Quarto. Freeze intentionally skips the changelog;
+        # this case has none, so that omission cannot trigger a failure.
+        files = commands["freeze"].get("files", [])
+        if files:
+            failures.append(
+                f"freeze after build prepared {len(files)} file{'' if len(files) == 1 else 's'} "
+                "unlike build"
+            )
+            failures += [f"    {r['change']} {r['path']}" for r in files]
+    watch = commands.get("watch")
     if watch is not None:
         facts: Mapping[str, bool] = watch.get("watch", {})
         if not facts.get("previewed"):
             failures.append("watch never reached the preview after its first build")
+        elif not facts.get("rebuilt"):
+            failures.append("watch did not rebuild after a source edit")
         if watch.get("status") != 0:
             failures.append(f"watch exited with status {watch.get('status')} after the interrupt")
         if facts.get("traceback"):
             failures.append("watch printed a traceback")
     return failures
-
-
-def known_gaps(manifest: Mapping[str, Any]) -> list[Gap]:
-    """
-    Identify known gaps in one side's recorded output
-
-    Parameters
-    ----------
-    manifest :
-        The case's manifest.
-
-    Returns
-    -------
-    :
-        Observed gaps, or an empty list when none are present.
-    """
-    gaps: list[Gap] = []
-    order: list[str] = manifest.get("order", list(manifest["commands"]))
-    if "freeze" in order and "build" in order[: order.index("freeze")]:
-        # Freeze rebuilds the build directory from scratch, so every file it writes or removes
-        # after a build differs from what the build gave Quarto. A changelog, which freeze is
-        # meant to skip, would appear here too; the freeze case has none.
-        files = manifest["commands"]["freeze"].get("files", [])
-        if files:
-            gaps.append(
-                Gap(
-                    "freeze-steps",
-                    f"freeze prepares {len(files)} file{'' if len(files) == 1 else 's'} "
-                    "unlike build",
-                    tuple(f"{r['change']} {r['path']}" for r in files),
-                )
-            )
-    watch: Mapping[str, bool] = manifest["commands"].get("watch", {}).get("watch", {})
-    if watch.get("previewed") and not watch.get("rebuilt"):
-        gaps.append(Gap("watch-rebuild", "watch mode does not rebuild after a source edit"))
-    return gaps
-
-
-def gap_lines(old: Sequence[Gap], new: Sequence[Gap]) -> list[str]:
-    """
-    Format known gaps with their base-side results and details
-
-    Parameters
-    ----------
-    old, new :
-        Gaps of the base and test sides.
-
-    Returns
-    -------
-    :
-        Test-side gaps with their base-side results and indented details, followed by
-        a closure message for each gap found only on the base side.
-    """
-    base = {gap.name: gap for gap in old}
-    lines: list[str] = []
-    for gap in new:
-        before = base.get(gap.name)
-        known = "none" if before is None else "same" if before == gap else before.summary
-        lines.append(f"{gap.summary} [{gap.name}] (base: {known})")
-        lines += [f"    {detail}" for detail in gap.details]
-    shown = {gap.name for gap in new}
-    lines += [f"closed: {gap.summary} [{gap.name}]" for gap in old if gap.name not in shown]
-    return lines
 
 
 def compare_case(base: Path, test: Path, case: str) -> CaseResult:
@@ -482,13 +411,15 @@ def compare_case(base: Path, test: Path, case: str) -> CaseResult:
         for finding in compare_command(base, test, old["commands"][name], new["commands"][name]):
             findings.append(finding if finding.startswith(" ") else f"{name}: {finding}")
     base_failures = failed_checks(old)
+    # Only check summaries get a base-side result; indented details belong to the summary.
     checks = [
-        f"{failure} (base: {'same' if failure in base_failures else 'passes'})"
+        failure
+        if failure.startswith(" ")
+        else f"{failure} (base: {'same' if failure in base_failures else 'passes'})"
         for failure in failed_checks(new)
     ]
     status = "differ" if findings else "fail" if checks else "match"
-    gaps = gap_lines(known_gaps(old), known_gaps(new))
-    return CaseResult(case, status, findings, checks, gaps, regressions)
+    return CaseResult(case, status, findings, checks, regressions)
 
 
 def compare(base: Path, test: Path) -> Comparison:
@@ -580,16 +511,9 @@ def render(
             continue
         regressed = " (regression)" if result.regressed else ""
         lines.append(f"{result.case}: {result.status.upper()}{regressed}")
-        lines += [f"  check failed: {c}" for c in result.checks]
+        lines += [f"  {c}" if c.startswith(" ") else f"  check failed: {c}" for c in result.checks]
         lines += [f"  regression: {r}" for r in result.regressions]
         lines += [f"  {f}" for f in result.findings]
-        lines.append("")
-    gapped = [c for c in comparison.cases if c.known_gaps]
-    if gapped:
-        lines.append("KNOWN GAPS (reported only; they never fail the run)")
-        for result in gapped:
-            lines.append(f"  {result.case}: {result.known_gaps[0]}")
-            lines += [f"  {line}" for line in result.known_gaps[1:]]
         lines.append("")
     differ = [c.case for c in comparison.cases if c.status != "match"]
     regressed = [c.case for c in comparison.cases if c.regressed]

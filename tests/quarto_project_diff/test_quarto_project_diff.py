@@ -194,24 +194,31 @@ def test_comparison_refuses_a_recording_from_another_recording_schema(tmp_path: 
         _ = compare(older, current)
 
 
-def test_freeze_after_build_reports_what_it_prepares_differently_as_a_known_gap(tmp_path: Path):
+def test_freeze_after_build_fails_when_it_prepares_files_unlike_build(tmp_path: Path):
+    """Report changed and removed files after a build as a freeze regression"""
     project = "docs/_quarto/default"
     built = {f"{project}/_quarto.yml": "a", f"{project}/_inv/index.lua": "", f"{project}/x.qmd": ""}
     frozen = {f"{project}/_quarto.yml": "b", f"{project}/_inv/index.lua": None}
-    base = _recording(tmp_path / "base", {"build": built, "freeze": frozen})
-    same = _recording(tmp_path / "same", {"build": built, "freeze": frozen})
     fixed = _recording(tmp_path / "fixed", {"build": built, "freeze": {}})
+    broken = _recording(tmp_path / "broken", {"build": built, "freeze": frozen})
+    meta = json.loads((fixed / "side.json").read_text(encoding="utf-8"))
+    meta["facts"] |= {"checkout": "/x", "commit": "0" * 40}
 
-    result = compare(base, same)
+    assert compare(fixed, fixed).matches
+    result = compare(fixed, broken)
 
-    assert result.matches
-    assert result.cases[0].known_gaps == [
-        "freeze prepares 2 files unlike build [freeze-steps] (base: same)",
+    assert result.cases[0].checks == [
+        "freeze after build prepared 2 files unlike build (base: passes)",
         f"    changed {project}/_quarto.yml",
         f"    removed {project}/_inv/index.lua",
     ]
-    assert compare(base, fixed).cases[0].known_gaps == [
-        "closed: freeze prepares 2 files unlike build [freeze-steps]"
+    assert result.cases[0].regressed
+    report = render(result, meta, meta).splitlines()
+    start = report.index("demo: DIFFER (regression)") + 1
+    assert report[start : start + 3] == [
+        "  check failed: freeze after build prepared 2 files unlike build (base: passes)",
+        f"      changed {project}/_quarto.yml",
+        f"      removed {project}/_inv/index.lua",
     ]
 
 
@@ -251,20 +258,18 @@ def _watch_recording(root: Path, status: int | str, **facts: bool) -> Path:
     return _recording(root, {"watch": {}}, extra={"watch": watch})
 
 
-def test_watch_without_rebuild_is_a_known_gap_and_a_crash_fails(tmp_path: Path):
+def test_watch_fails_without_a_rebuild_or_a_clean_stop(tmp_path: Path):
+    """Treat missed rebuilds and unclean watch stops as failed checks"""
     stale = _watch_recording(tmp_path / "stale", 0, rebuilt=False)
     rebuilt = _watch_recording(tmp_path / "rebuilt", 0, rebuilt=True)
-    crashed = _watch_recording(tmp_path / "crashed", 1, rebuilt=False, traceback=True)
+    crashed = _watch_recording(tmp_path / "crashed", 1, rebuilt=True, traceback=True)
     stuck = _watch_recording(tmp_path / "stuck", "timeout", previewed=False, rebuilt=False)
 
-    result = compare(stale, stale)
+    assert compare(rebuilt, rebuilt).matches
+    result = compare(rebuilt, stale)
 
-    assert result.matches
-    assert result.cases[0].known_gaps == [
-        "watch mode does not rebuild after a source edit [watch-rebuild] (base: same)"
-    ]
-    assert compare(rebuilt, rebuilt).cases[0].known_gaps == []
-    assert compare(stale, rebuilt).cases[0].status == "differ"
+    assert result.cases[0].checks == ["watch did not rebuild after a source edit (base: passes)"]
+    assert result.cases[0].regressed
     assert compare(crashed, crashed).cases[0].checks == [
         "watch exited with status 1 after the interrupt (base: same)",
         "watch printed a traceback (base: same)",
