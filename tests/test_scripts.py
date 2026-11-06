@@ -63,7 +63,6 @@ def test_include_libraries_loads_font_awesome_then_marimo_then_lightbox(tmp_path
     quarto_config: dict[str, Any] = {}
 
     scripts.include_libraries(config, quarto_config)
-    scripts.include_libraries(config, quarto_config)
 
     headers = _includes(quarto_config, "include-in-header")
     assert len(headers) == 10
@@ -84,11 +83,10 @@ def test_include_libraries_keeps_an_existing_font_awesome_link(tmp_path: Path):
     assert sum("font-awesome" in entry.lower() for entry in headers) == 1
 
 
-def test_include_loads_scripts_once_in_table_order(tmp_path: Path):
+def test_include_loads_scripts_in_table_order(tmp_path: Path):
     config = write_config(tmp_path)
     quarto_config: dict[str, Any] = {}
 
-    scripts.include(config, quarto_config, tmp_path, has_repository=True)
     scripts.include(config, quarto_config, tmp_path, has_repository=True)
 
     after_body = _includes(quarto_config, "include-after-body")
@@ -120,7 +118,6 @@ def test_include_puts_data_before_the_script_that_reads_it(tmp_path: Path):
     quarto_config: dict[str, Any] = {}
 
     scripts.include(config, quarto_config, tmp_path, has_repository=False)
-    scripts.include(config, quarto_config, tmp_path, has_repository=False)
 
     after_body = _includes(quarto_config, "include-after-body")
     data = _position(after_body, "sidebarFilterMinItems")
@@ -141,7 +138,6 @@ def test_include_embeds_the_status_script_staged_in_the_build_directory(
         (tmp_path / "page-status-badges.js").write_text("function renderPageBadge() {}\n")
     quarto_config: dict[str, Any] = {}
 
-    scripts.include(config, quarto_config, tmp_path, has_repository=False)
     scripts.include(config, quarto_config, tmp_path, has_repository=False)
 
     after_body = _includes(quarto_config, "include-after-body")

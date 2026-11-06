@@ -258,40 +258,6 @@ def add_include(
     items.insert(len(items) if position is None else position, entry)
 
 
-def set_include(
-    quarto_config: dict[str, Any], slot: Slot, entry: dict[str, str], *, marker: str
-) -> None:
-    """
-    Replace matching includes at the first match's position, or append if none match
-
-    Replace the first entry containing `marker` with `entry` and remove later matches.
-    Repeated calls preserve the entry's position.
-
-    Parameters
-    ----------
-    quarto_config
-        The configuration, changed in place.
-    slot
-        The key for `include-in-header` or `include-after-body`.
-    entry
-        The entry to set, such as `{"text": "<meta name=...>"}`.
-    marker
-        Text matched against each entry's string representation. Avoid quotes and line
-        breaks, which may be escaped.
-
-    Returns
-    -------
-    :
-    """
-    items = includes(quarto_config, slot)
-    position = find(items, marker)
-    if position is None:
-        items.append(entry)
-        return
-    items[position + 1 :] = [item for item in items[position + 1 :] if marker not in str(item)]
-    items[position] = entry
-
-
 def add_resources(quarto_config: dict[str, Any], names: Iterable[str]) -> None:
     """
     List files in `project.resources` for Quarto to copy into the site
@@ -365,8 +331,8 @@ def apply(quarto_config: dict[str, Any], contribution: Contribution, config: Con
     - Skip a `user_guide` link only if an item has the same `href`. Place it before
       Reference, or first if Reference is absent.
 
-    Repeated contributions add each link only once. Configurations without
-    `website.navbar.left` get no links.
+    Skip existing links so `great-docs changelog` can contribute to a built site that
+    already links its changelog. Add no links when `website.navbar.left` is absent.
 
     Append each sidebar to `website.sidebar` after removing every entry with the same
     `id`. Create the list if missing, and omit the `title` key for untitled sidebars.

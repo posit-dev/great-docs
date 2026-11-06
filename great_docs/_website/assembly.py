@@ -64,9 +64,8 @@ def assemble(
 
     Add pre-render scripts, theme, resources, page scripts, stylesheets, navigation,
     footer, canonical links and social cards. Apply the build steps' contributions
-    in order and preserve unrelated configuration. Repeated calls refresh these
-    settings without duplicating entries. Copy referenced files, including logos,
-    header includes, the metadata partial and the social card image, into the
+    in order and preserve unrelated configuration. Copy referenced files, including
+    logos, header includes, the metadata partial and the social card image, into the
     build directory.
 
     Parameters

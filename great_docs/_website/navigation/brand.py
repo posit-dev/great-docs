@@ -119,8 +119,7 @@ def register_release(quarto_config: dict[str, Any], config: Config, facts: Facts
     config
         Project configuration, for the language of the release date.
     facts
-        The repository's latest release. Without one, any badge or tooltip from an
-        earlier write is removed.
+        Repository facts containing the latest release, if available.
 
     Returns
     -------

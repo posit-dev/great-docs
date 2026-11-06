@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from ...config import Config
-    from ..quarto_yml import Slot
 
 __all__ = ["Section", "register"]
 
@@ -47,9 +46,8 @@ def register(
     If the first section is not the API reference, the navbar's Reference link opens that
     section's index page.
 
-    For sites with a switcher, the script is copied into the build directory, listed in
-    `project.resources` and loaded on every page. When the site has no CLI or MCP reference,
-    the script, resource listing and include entries added by an earlier call are removed.
+    Copy the switcher script into the build directory, list it in `project.resources`
+    and load it on every page.
 
     Parameters
     ----------
@@ -73,7 +71,6 @@ def register(
         section for section in _OTHER_SECTIONS if (build_dir / _INDEX_PAGES[section]).is_file()
     )
     if all(section == "api" for section in available):
-        _remove(quarto_config, build_dir)
         return
 
     sections = _order(available, config.ref_section_order)
@@ -90,14 +87,8 @@ def register(
         )
     }
     headers = quarto_yml.includes(quarto_config, "include-in-header")
-    position = quarto_yml.find(headers, _SECTIONS_ATTRIBUTE)
-    if position is not None:
-        headers[position] = attribute_script
-    else:
-        # Reference pages are written after the header. Inserting the sections script
-        # after the theme script preserves the load order across configuration writes.
-        theme = quarto_yml.find(headers, "theme-init.js")
-        headers.insert(len(headers) if theme is None else theme + 1, attribute_script)
+    theme = quarto_yml.find(headers, "theme-init.js")
+    headers.insert(len(headers) if theme is None else theme + 1, attribute_script)
 
     scripts.copy_asset(_SCRIPT, build_dir)
     quarto_yml.add_resources(quarto_config, [_SCRIPT])
@@ -153,33 +144,3 @@ def _point_reference_link(quarto_config: dict[str, Any], href: str) -> None:
             if nav_navbar.REFERENCE.owns(link.get("href")):
                 link["href"] = href
                 return
-
-
-def _remove(quarto_config: dict[str, Any], build_dir: Path) -> None:
-    """
-    Remove the switcher's script, resource listing and page includes
-
-    Parameters
-    ----------
-    quarto_config
-        Contents of `_quarto.yml`, updated in place.
-    build_dir
-        The Quarto project directory.
-
-    Returns
-    -------
-    :
-    """
-    (build_dir / _SCRIPT).unlink(missing_ok=True)
-    resources = quarto_config.get("project", {}).get("resources")
-    if isinstance(resources, list) and _SCRIPT in resources:
-        cast("list[Any]", resources).remove(_SCRIPT)
-    html = quarto_config.get("format", {}).get("html", {})
-    removals: dict[Slot, str] = {
-        "include-in-header": _SECTIONS_ATTRIBUTE,
-        "include-after-body": _SCRIPT,
-    }
-    for slot, marker in removals.items():
-        items = html.get(slot)
-        if isinstance(items, list):
-            html[slot] = [item for item in cast("list[Any]", items) if marker not in str(item)]

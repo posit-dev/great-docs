@@ -462,8 +462,7 @@ def include(
     """
     Load the site's own scripts and stylesheets in every page, in table order
 
-    Libraries and files loaded by another feature or an individual page are
-    excluded. Repeated calls do not duplicate entries.
+    Exclude libraries and files loaded by another feature or an individual page.
 
     Parameters
     ----------

@@ -78,23 +78,3 @@ def test_orders_sections_and_opens_the_first_from_the_navbar(tmp_path: Path):
 
     assert quarto_config["format"]["html"]["include-in-header"][1] == _sections_script("cli,api")
     assert quarto_config["website"]["navbar"]["left"][0]["href"] == "reference/cli/index.qmd"
-
-
-def test_replaces_the_sections_in_place(tmp_path: Path):
-    _write_index(tmp_path, "cli")
-    quarto_config = _register(_quarto_config(), tmp_path)
-
-    headers = _register(quarto_config, tmp_path, has_api_reference=False)["format"]["html"]
-
-    assert headers["include-in-header"] == [_THEME, _sections_script("cli"), _BADGE]
-
-
-def test_removes_the_switcher_when_only_the_api_reference_remains(tmp_path: Path):
-    _write_index(tmp_path, "mcp")
-    quarto_config = _register(_quarto_config(), tmp_path)
-    (tmp_path / "reference" / "mcp" / "index.qmd").unlink()
-
-    quarto_config = _register(quarto_config, tmp_path)
-
-    assert quarto_config == {**_quarto_config(), "project": {"resources": []}}
-    assert not (tmp_path / "reference-switcher.js").exists()

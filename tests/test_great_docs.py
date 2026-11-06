@@ -3898,33 +3898,6 @@ class TestPositBadgeInjection:
 
             assert not self._header_has_posit_badge(config)
 
-    def test_no_duplicate_badge(self):
-        """
-        Keep one Posit badge after repeated configuration
-        """
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-
-            (tmp / "pyproject.toml").write_text('[project]\nname = "test-pkg"\nversion = "0.1.0"\n')
-            (tmp / "great-docs.yml").write_text("display_name: Test\nfunding:\n  name: Posit\n")
-
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            write_initial_quarto_yml(docs.build_dir)
-            update_quarto_config(docs, make_run(docs))
-            update_quarto_config(docs, make_run(docs))  # second run
-
-            quarto_yml = docs.build_dir / "_quarto.yml"
-
-            with open(quarto_yml) as f:
-                config = read_yaml(f)
-
-            header = config.get("format", {}).get("html", {}).get("include-in-header", [])
-            badge_count = sum(1 for item in header if "supported-by-posit" in str(item))
-
-            assert badge_count == 1
-
 
 def test_build_cli_reference_uses_module_name(tmp_path):
     """Regression: build() discovers the Click CLI in the importable module,
@@ -19532,33 +19505,6 @@ def test_update_quarto_config_includes_copy_code_js_in_after_body():
         assert "copy-code.js" in after_body_str
 
 
-def test_update_quarto_config_copy_code_not_duplicated():
-    """
-    Keep one `copy-code.js` include after repeated configuration
-    """
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        update_quarto_config(docs, make_run(docs))
-        update_quarto_config(docs, make_run(docs))
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        after_body = result["format"]["html"]["include-after-body"]
-        copy_code_count = sum(
-            1
-            for item in after_body
-            if isinstance(item, dict) and "copy-code.js" in str(item.get("text", ""))
-        )
-
-        assert copy_code_count == 1
-
-        resource_count = result["project"]["resources"].count("copy-code.js")
-
-        assert resource_count == 1
-
-
 def test_update_quarto_config_includes_tooltips_js_in_resources():
     """
     Register `tooltips.js` as a Quarto resource
@@ -19590,32 +19536,6 @@ def test_update_quarto_config_includes_tooltips_js_in_after_body():
         after_body_str = str(after_body)
 
         assert "tooltips.js" in after_body_str
-
-
-def test_update_quarto_config_tooltips_not_duplicated():
-    """
-    Keep one `tooltips.js` include after repeated configuration
-    """
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        update_quarto_config(docs, make_run(docs))
-        update_quarto_config(docs, make_run(docs))
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        after_body = result["format"]["html"]["include-after-body"]
-        tooltips_count = sum(
-            1
-            for item in after_body
-            if isinstance(item, dict) and "tooltips.js" in str(item.get("text", ""))
-        )
-        assert tooltips_count == 1
-
-        resource_count = result["project"]["resources"].count("tooltips.js")
-
-        assert resource_count == 1
 
 
 def test_update_quarto_config_includes_responsive_tables_js_in_resources():
@@ -19651,32 +19571,6 @@ def test_update_quarto_config_includes_responsive_tables_js_in_after_body():
         assert "responsive-tables.js" in after_body_str
 
 
-def test_update_quarto_config_responsive_tables_not_duplicated():
-    """
-    Keep one `responsive-tables.js` include after repeated configuration
-    """
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        update_quarto_config(docs, make_run(docs))
-        update_quarto_config(docs, make_run(docs))
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        after_body = result["format"]["html"]["include-after-body"]
-        resp_tables_count = sum(
-            1
-            for item in after_body
-            if isinstance(item, dict) and "responsive-tables.js" in str(item.get("text", ""))
-        )
-        assert resp_tables_count == 1
-
-        resource_count = result["project"]["resources"].count("responsive-tables.js")
-
-        assert resource_count == 1
-
-
 def test_update_quarto_config_includes_video_embed_js_in_resources():
     """
     Register `video-embed.js` as a Quarto resource
@@ -19708,33 +19602,6 @@ def test_update_quarto_config_includes_video_embed_js_in_after_body():
         after_body_str = str(after_body)
 
         assert "video-embed.js" in after_body_str
-
-
-def test_update_quarto_config_video_embed_not_duplicated():
-    """
-    Keep one `video-embed.js` include after repeated configuration
-    """
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        update_quarto_config(docs, make_run(docs))
-        update_quarto_config(docs, make_run(docs))
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        after_body = result["format"]["html"]["include-after-body"]
-        video_count = sum(
-            1
-            for item in after_body
-            if isinstance(item, dict) and "video-embed.js" in str(item.get("text", ""))
-        )
-
-        assert video_count == 1
-
-        resource_count = result["project"]["resources"].count("video-embed.js")
-
-        assert resource_count == 1
 
 
 def test_update_quarto_config_video_embed_script_tag_format():
@@ -19935,28 +19802,6 @@ def test_update_quarto_config_includes_mermaid_renderer_js():
         after_body_str = str(after_body)
 
         assert "mermaid-renderer.js" in after_body_str
-
-
-def test_update_quarto_config_mermaid_renderer_not_duplicated():
-    """
-    Keep one `mermaid-renderer.js` include after repeated configuration
-    """
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs, quarto_yml = _make_uqc_docs(tmp_dir)
-        update_quarto_config(docs, make_run(docs))
-        update_quarto_config(docs, make_run(docs))
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        after_body = result["format"]["html"]["include-after-body"]
-        mermaid_count = sum(
-            1
-            for item in after_body
-            if isinstance(item, dict) and "mermaid-renderer.js" in str(item.get("text", ""))
-        )
-        assert mermaid_count == 1
 
 
 def test_config_seo_defaults():
@@ -20238,25 +20083,6 @@ def test_back_to_top_script_tag_content():
         assert back_to_top_entries[0] == {"text": '<script src="/back-to-top.js"></script>'}
 
 
-def test_back_to_top_not_duplicated():
-    """
-    Keep one `back-to-top.js` script tag after repeated configuration
-    """
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs, quarto_yml = _make_uqc_docs(tmp_dir)
-
-        update_quarto_config(docs, make_run(docs))
-        update_quarto_config(docs, make_run(docs))
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        after_body = result["format"]["html"]["include-after-body"]
-        back_to_top_count = sum(1 for item in after_body if "back-to-top.js" in str(item))
-        assert back_to_top_count == 1
-
-
 def test_back_to_top_with_string_include_after_body():
     """back-to-top works when include-after-body starts as a string."""
 
@@ -20368,7 +20194,6 @@ def test_wide_layout_meta_precedes_theme_init():
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
         update_quarto_config(docs, make_run(docs))
-        update_quarto_config(docs, make_run(docs))
 
         with open(quarto_yml) as f:
             result = read_yaml(f)
@@ -20379,25 +20204,6 @@ def test_wide_layout_meta_precedes_theme_init():
         assert meta_index < theme_index
         assert sum("gd-wide-layout" in h for h in header) == 1
         assert sum("wide-layout.js" in a for a in after_body) == 1
-
-
-def test_repeated_config_pass_keeps_wide_layout_in_place():
-    """
-    Check that a second configuration pass preserves the config and the `wide-layout.js` position
-    """
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs, quarto_yml = _make_uqc_docs(tmp_dir)
-
-        update_quarto_config(docs, make_run(docs))
-        first = read_yaml(quarto_yml)
-        update_quarto_config(docs, make_run(docs))
-        second = read_yaml(quarto_yml)
-
-        # Other scripts must follow the loader on the first pass to expose a move to the end
-        _, after_body = _wide_entries(first)
-        assert "wide-layout.js" not in after_body[-1]
-        assert second == first
 
 
 def test_theme_init_added_when_details_already_listed():
@@ -20663,7 +20469,7 @@ def test_color_swatch_script_tag_is_plain():
 
 def test_update_quarto_config_includes_are_plain_tags_once():
     """
-    Every site script and stylesheet is a plain tag, added once across re-runs
+    Include each site script and stylesheet once as a plain tag
 
     Quarto rewrites root-relative paths for each page, so no include needs to
     locate the site root at load time. Head scripts that should not block
@@ -20673,7 +20479,6 @@ def test_update_quarto_config_includes_are_plain_tags_once():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir, gd_yml_content="marimo:\n  enabled: true\n")
 
-        update_quarto_config(docs, make_run(docs))
         update_quarto_config(docs, make_run(docs))
 
         with open(quarto_yml) as f:
@@ -20725,26 +20530,6 @@ def test_update_quarto_config_includes_are_plain_tags_once():
             "video-embed.js",
         ):
             assert sum(f"/{name}" in str(item) for item in entries) == 1, name
-
-
-def test_on_this_page_not_duplicated():
-    """
-    Keep one `on-this-page.js` script tag after repeated configuration
-    """
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs, quarto_yml = _make_uqc_docs(tmp_dir)
-
-        update_quarto_config(docs, make_run(docs))
-        update_quarto_config(docs, make_run(docs))
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        after_body = result["format"]["html"]["include-after-body"]
-        otp_count = sum(1 for item in after_body if "on-this-page.js" in str(item))
-
-        assert otp_count == 1
 
 
 def test_on_this_page_js_copied_to_project():
@@ -20885,25 +20670,6 @@ def test_keyboard_nav_script_tag_content():
         kb_entries = [item for item in after_body if "keyboard-nav.js" in str(item)]
         assert len(kb_entries) == 1
         assert kb_entries[0] == {"text": '<script src="/keyboard-nav.js"></script>'}
-
-
-def test_keyboard_nav_not_duplicated():
-    """
-    Keep one `keyboard-nav.js` script tag after repeated configuration
-    """
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs, quarto_yml = _make_uqc_docs(tmp_dir)
-
-        update_quarto_config(docs, make_run(docs))
-        update_quarto_config(docs, make_run(docs))
-
-        with open(quarto_yml) as f:
-            result = read_yaml(f)
-
-        after_body = result["format"]["html"]["include-after-body"]
-        kb_count = sum(1 for item in after_body if "keyboard-nav.js" in str(item))
-        assert kb_count == 1
 
 
 def test_keyboard_nav_metadata_flag():

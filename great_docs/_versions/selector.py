@@ -23,11 +23,10 @@ _WARNING_BANNER = "gd-version-warning-banner"
 
 def register(quarto_config: dict[str, Any], config: Config) -> None:
     """
-    Add version metadata and the selector script to every page
+    Add the version map and selector script to every page
 
     The map lists the configured versions but contains no page paths. When
     the warning banner is disabled, a meta element tells the script to hide it.
-    Registration replaces matching meta elements and includes the script once.
     The script loads before `navbar-widgets.js` so that the selector exists
     when the navbar widgets are collected.
 
@@ -44,9 +43,9 @@ def register(quarto_config: dict[str, Any], config: Config) -> None:
     """
     versions = parse_versions_config(config.versions)
     version_map = build_version_map(versions, {version.tag: [] for version in versions})
-    _replace_meta(quarto_config, _VERSION_MAP, json.dumps(version_map, separators=(",", ":")))
+    _add_meta(quarto_config, _VERSION_MAP, json.dumps(version_map, separators=(",", ":")))
     if not config.version_warning_banner:
-        _replace_meta(quarto_config, _WARNING_BANNER, "false")
+        _add_meta(quarto_config, _WARNING_BANNER, "false")
 
     quarto_yml.add_include(
         quarto_config,
@@ -57,16 +56,16 @@ def register(quarto_config: dict[str, Any], config: Config) -> None:
     )
 
 
-def _replace_meta(quarto_config: dict[str, Any], name: str, content: str) -> None:
+def _add_meta(quarto_config: dict[str, Any], name: str, content: str) -> None:
     """
-    Replace header includes mentioning `name` with one meta element
+    Add a meta element to the header includes
 
     Parameters
     ----------
     quarto_config
         Contents of `_quarto.yml`, updated in place.
     name
-        The new element's `name` attribute.
+        The element's `name` attribute.
     content
         The unescaped value for the element's `content` attribute.
 
@@ -75,5 +74,4 @@ def _replace_meta(quarto_config: dict[str, Any], name: str, content: str) -> Non
     :
     """
     header = quarto_yml.includes(quarto_config, "include-in-header")
-    header[:] = [entry for entry in header if name not in str(entry)]
     header.append({"text": head.meta_element(name, content)})
