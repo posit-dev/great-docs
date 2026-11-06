@@ -4,10 +4,12 @@ import json
 import shutil
 import subprocess
 import tempfile
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from great_docs import _manifest
+from great_docs._build.steps import USER_CODE_ERRORS
 from great_docs._manifest import ManifestError
 from great_docs._subprocess import TEXT_MODE_KWARGS
 from great_docs._translations import get_translation
@@ -1761,6 +1763,11 @@ _EVOLUTION_TABLE_CSS = """\
 </style>"""
 
 
+# Release history can contain package or command-line loading failures, invalid TOML,
+# or Git and file errors. Report these failures in place of the evolution table.
+EVOLUTION_ERRORS: tuple[type[Exception], ...] = (*USER_CODE_ERRORS, tomllib.TOMLDecodeError)
+
+
 def render_evolution_table(
     project_path: str | Path,
     symbol: str,
@@ -2265,7 +2272,7 @@ def process_evolution_markers(
     package: str | None = None,
 ) -> str:
     """
-    Replace `<!-- %evolution ... -->` markers in text with rendered tables.
+    Replace `<!-- %evolution ... -->` markers in text with rendered tables
 
     This function scans *content* (typically a `.qmd` file body) for HTML comment markers of the
     form::
@@ -2303,10 +2310,11 @@ def process_evolution_markers(
 
     Returns
     -------
-    str
-        *content* with every `<!-- %evolution ... -->` marker replaced by the corresponding HTML
-        table. Markers that fail to render (e.g., missing `symbol`) are replaced with an HTML
-        comment explaining the error.
+    :
+        `content` with evolution markers replaced by HTML tables. A missing `symbol` produces
+        an HTML error comment. Handled package and command-line loading errors, invalid
+        `pyproject.toml` files, and Git or file errors also produce an error comment. Other
+        exception types propagate.
 
     Examples
     --------
@@ -2348,7 +2356,7 @@ def process_evolution_markers(
                 summary_text=attrs.get("summary"),
                 include_css=_bool("css"),
             )
-        except Exception as exc:
+        except EVOLUTION_ERRORS as exc:
             return f"<!-- %evolution error for {_escape_html(symbol)}: {_escape_html(str(exc))} -->"
 
     return _EVOLUTION_MARKER_RE.sub(_replace, content)
