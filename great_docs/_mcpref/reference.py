@@ -12,6 +12,7 @@ protocol returns is stable regardless of the installed library version.
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import inspect
 import os
@@ -129,13 +130,11 @@ def _introspect_via_protocol(
         return None
 
 
-async def _collect_over_protocol(  # pragma: no cover
+async def _collect_over_protocol(
     module_path: str,
     server_var: str | None,
 ) -> dict[str, Any] | None:
     """Connect to the server subprocess and collect all metadata as plain dicts."""
-    import asyncio
-
     from mcp import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
 
@@ -207,34 +206,26 @@ def _dump(obj: Any) -> dict[str, Any]:
     return {}
 
 
-async def _call_list(method: Any, cursor: str | None) -> dict[str, Any]:  # pragma: no cover
-    """Call an MCP client `list_*` method across `mcp` v1/v2 signatures.
-
-    `mcp` v1 paginates via a `cursor=` keyword; v2 wraps it in a
-    `params=PaginatedRequestParams(cursor=...)` object. Detect which shape the
-    installed client exposes, call accordingly, and return the result as a
-    wire-JSON dict.
+async def _call_list(method: Any, cursor: str | None) -> dict[str, Any]:
     """
-    import asyncio
-    import inspect
+    Fetch one page of MCP results
 
-    try:
-        param_names = set(inspect.signature(method).parameters)
-    except (TypeError, ValueError):
-        param_names = set()
+    Parameters
+    ----------
+    method
+        A bound `ClientSession.list_*` method.
+    cursor
+        The previous page's `nextCursor`, or `None` for the first page.
 
-    if cursor is None:
-        call = method()
-    elif "cursor" in param_names:
-        call = method(cursor=cursor)
-    elif "params" in param_names:
-        from mcp.types import PaginatedRequestParams
+    Returns
+    -------
+    :
+        The page as a dict with protocol field names.
+    """
+    from mcp.types import PaginatedRequestParams
 
-        call = method(params=PaginatedRequestParams(cursor=cursor))
-    else:
-        call = method()
-
-    return _dump(await asyncio.wait_for(call, _PROTOCOL_TIMEOUT))
+    params = None if cursor is None else PaginatedRequestParams(cursor=cursor)
+    return _dump(await asyncio.wait_for(method(params=params), _PROTOCOL_TIMEOUT))
 
 
 async def _list_tools(session: Any) -> list[dict[str, Any]]:  # pragma: no cover
@@ -342,8 +333,6 @@ async def _get_prompt_messages(  # pragma: no cover
     session: Any, name: str, required_names: list[str]
 ) -> list[dict[str, Any]]:
     """Call `prompts/get` for a prompt, tolerating required-argument servers."""
-    import asyncio
-
     # Try with no arguments first; if the server rejects that because arguments
     # are required, retry with placeholder values so we can still show a preview.
     attempts: list[dict[str, str]] = [{}]

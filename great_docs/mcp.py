@@ -44,29 +44,32 @@ if TYPE_CHECKING:
     from ._project import Project
     from ._reference.exports import Exports
 
-server = Server("great-docs")
-
 # ---------------------------------------------------------------------------
-# mcp v1/v2 compatibility
+# Handler registration
 # ---------------------------------------------------------------------------
 
-# mcp v2 removed the decorator API from Server; handlers are now passed as
-# constructor kwargs (on_list_tools=...) instead.
-_MCP_V1 = hasattr(server, "list_tools")
-_V2_HANDLERS: dict[str, Any] = {}
+# Request handlers are constructor arguments. Collect them until all
+# handler functions have been defined.
+_HANDLERS: dict[str, Any] = {}
 
 
 def _handler(name: str) -> Any:
-    """Return a decorator that registers a handler on the MCP server.
-
-    mcp v1 uses the decorator API; mcp v2 collects handlers for later
-    constructor-based registration at the bottom of this module.
     """
-    if _MCP_V1:  # pragma: no cover
-        return getattr(server, name)()  # pragma: no cover
+    Return a decorator that collects an MCP request handler
+
+    Parameters
+    ----------
+    name
+        The request name, such as `list_tools`.
+
+    Returns
+    -------
+    :
+        A decorator that records the function and returns it unchanged.
+    """
 
     def _collect(func: Any) -> Any:
-        _V2_HANDLERS[name] = func
+        _HANDLERS[name] = func
         return func
 
     return _collect
@@ -87,8 +90,6 @@ _INSTRUCTIONS = (
     "Start with `gd_status` to understand the current project state, then use "
     "tools and prompts to accomplish documentation tasks."
 )
-if _MCP_V1:  # pragma: no cover
-    server.instructions = _INSTRUCTIONS  # pragma: no cover
 
 
 # ---------------------------------------------------------------------------
@@ -416,7 +417,7 @@ async def list_tools() -> list[Tool]:
     ]
 
     for tool in tools:
-        schema = tool.inputSchema if _MCP_V1 else tool.input_schema
+        schema = tool.input_schema
         schema["properties"]["config_path"] = {
             "type": "string",
             "description": "Configuration file path. Relative paths use the server's current working directory.",
@@ -1470,94 +1471,96 @@ async def handle_completion(
 
 
 # ---------------------------------------------------------------------------
-# mcp v2: rebuild server with handlers as constructor kwargs
+# Server
 # ---------------------------------------------------------------------------
 
-# On mcp v2 the decorator API is gone; reconstruct the server now that all
-# handler functions have been collected in _V2_HANDLERS.
-if not _MCP_V1 and _V2_HANDLERS:
-    _raw = _V2_HANDLERS
+# The collected handlers return lists, strings and `Completion` values.
+# Wrap these values in the result models required by the protocol.
+from mcp.types import (
+    CallToolResult,
+    CompleteResult,
+    ListPromptsResult,
+    ListResourcesResult,
+    ListResourceTemplatesResult,
+    ListToolsResult,
+    ReadResourceResult,
+    TextResourceContents,
+)
+from mcp.types import (
+    Completion as _Completion,
+)
 
-    # mcp v2 handlers must return a typed result model (or dict), not the bare
-    # list/str/Completion the v1 decorator API accepted — the v1 decorators used
-    # to wrap those for us. Wrap each return value in the appropriate result
-    # type so the server speaks valid v2 protocol to real clients.
-    from mcp.types import (
-        CallToolResult,
-        CompleteResult,
-        ListPromptsResult,
-        ListResourcesResult,
-        ListResourceTemplatesResult,
-        ListToolsResult,
-        ReadResourceResult,
-        TextResourceContents,
+
+async def _on_list_tools(ctx: Any, params: Any = None) -> Any:  # pragma: no cover
+    return ListToolsResult(tools=await _HANDLERS["list_tools"]())  # pragma: no cover
+
+
+async def _on_call_tool(ctx: Any, params: Any) -> Any:  # pragma: no cover
+    content = await _HANDLERS["call_tool"](  # pragma: no cover
+        getattr(params, "name", ""),
+        getattr(params, "arguments", {}) or {},
     )
-    from mcp.types import (
-        Completion as _Completion,
+    return CallToolResult(  # pragma: no cover
+        content=list(content or []),
+        is_error=getattr(content, "is_error", False),
     )
 
-    async def _on_list_tools(ctx: Any, params: Any = None) -> Any:  # pragma: no cover
-        return ListToolsResult(tools=await _raw["list_tools"]())  # pragma: no cover
 
-    async def _on_call_tool(ctx: Any, params: Any) -> Any:  # pragma: no cover
-        content = await _raw["call_tool"](  # pragma: no cover
-            getattr(params, "name", ""),
-            getattr(params, "arguments", {}) or {},
-        )
-        return CallToolResult(  # pragma: no cover
-            content=list(content or []),
-            is_error=getattr(content, "is_error", False),
-        )
+async def _on_list_prompts(ctx: Any, params: Any = None) -> Any:  # pragma: no cover
+    return ListPromptsResult(prompts=await _HANDLERS["list_prompts"]())  # pragma: no cover
 
-    async def _on_list_prompts(ctx: Any, params: Any = None) -> Any:  # pragma: no cover
-        return ListPromptsResult(prompts=await _raw["list_prompts"]())  # pragma: no cover
 
-    async def _on_get_prompt(ctx: Any, params: Any) -> Any:  # pragma: no cover
-        # The v1 handler already returns a GetPromptResult (a valid v2 model).
-        return await _raw["get_prompt"](  # pragma: no cover
-            getattr(params, "name", ""),
-            getattr(params, "arguments", None),
-        )
-
-    async def _on_list_resources(ctx: Any, params: Any = None) -> Any:  # pragma: no cover
-        return ListResourcesResult(resources=await _raw["list_resources"]())  # pragma: no cover
-
-    async def _on_read_resource(ctx: Any, params: Any) -> Any:  # pragma: no cover
-        uri = getattr(params, "uri", "")  # pragma: no cover
-        text = await _raw["read_resource"](uri)
-        return ReadResourceResult(
-            contents=[TextResourceContents(uri=uri, text=text or "")]
-        )  # pragma: no cover
-
-    async def _on_list_resource_templates(ctx: Any, params: Any = None) -> Any:  # pragma: no cover
-        return ListResourceTemplatesResult(  # pragma: no cover
-            resourceTemplates=await _raw["list_resource_templates"]()
-        )
-
-    async def _on_completion(ctx: Any, params: Any) -> Any:  # pragma: no cover
-        completion = await _raw["completion"](  # pragma: no cover
-            getattr(params, "ref", None),
-            getattr(params, "argument", None),
-        )
-        if completion is None:  # pragma: no cover
-            completion = _Completion(values=[])  # pragma: no cover
-        return CompleteResult(completion=completion)  # pragma: no cover
-
-    server = Server(
-        name="great-docs",
-        on_list_tools=_on_list_tools,
-        on_call_tool=_on_call_tool,
-        on_list_prompts=_on_list_prompts,
-        on_get_prompt=_on_get_prompt,
-        on_list_resources=_on_list_resources,
-        on_read_resource=_on_read_resource,
-        on_list_resource_templates=_on_list_resource_templates,
-        on_completion=_on_completion,
+async def _on_get_prompt(ctx: Any, params: Any) -> Any:  # pragma: no cover
+    # The handler already returns a `GetPromptResult`.
+    return await _HANDLERS["get_prompt"](  # pragma: no cover
+        getattr(params, "name", ""),
+        getattr(params, "arguments", None),
     )
-    try:
-        server.instructions = _INSTRUCTIONS
-    except AttributeError:  # pragma: no cover
-        pass  # pragma: no cover
+
+
+async def _on_list_resources(ctx: Any, params: Any = None) -> Any:  # pragma: no cover
+    return ListResourcesResult(resources=await _HANDLERS["list_resources"]())  # pragma: no cover
+
+
+async def _on_read_resource(ctx: Any, params: Any) -> Any:  # pragma: no cover
+    uri = getattr(params, "uri", "")  # pragma: no cover
+    text = await _HANDLERS["read_resource"](uri)
+    return ReadResourceResult(
+        contents=[TextResourceContents(uri=uri, text=text or "")]
+    )  # pragma: no cover
+
+
+async def _on_list_resource_templates(ctx: Any, params: Any = None) -> Any:  # pragma: no cover
+    return ListResourceTemplatesResult(  # pragma: no cover
+        resourceTemplates=await _HANDLERS["list_resource_templates"]()
+    )
+
+
+async def _on_completion(ctx: Any, params: Any) -> Any:  # pragma: no cover
+    completion = await _HANDLERS["completion"](  # pragma: no cover
+        getattr(params, "ref", None),
+        getattr(params, "argument", None),
+    )
+    if completion is None:  # pragma: no cover
+        completion = _Completion(values=[])  # pragma: no cover
+    return CompleteResult(completion=completion)  # pragma: no cover
+
+
+server = Server(
+    name="great-docs",
+    on_list_tools=_on_list_tools,
+    on_call_tool=_on_call_tool,
+    on_list_prompts=_on_list_prompts,
+    on_get_prompt=_on_get_prompt,
+    on_list_resources=_on_list_resources,
+    on_read_resource=_on_read_resource,
+    on_list_resource_templates=_on_list_resource_templates,
+    on_completion=_on_completion,
+)
+try:
+    server.instructions = _INSTRUCTIONS
+except AttributeError:  # pragma: no cover
+    pass  # pragma: no cover
 
 
 # ---------------------------------------------------------------------------

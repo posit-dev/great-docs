@@ -281,9 +281,6 @@ class TestCallTool:
         assert getattr(result, "is_error", False) is False
 
 
-@pytest.mark.skipif(
-    mcp_module._MCP_V1, reason="_on_call_tool only exists on the mcp v2 handler path"
-)
 class TestOnCallToolIsError:
     """CallToolResult.is_error must reflect a failed dispatch (issue: it never did)."""
 

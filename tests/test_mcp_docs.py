@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import importlib
 import types
 from pathlib import Path
@@ -924,13 +925,83 @@ class TestMcpRunnerRun:
 
         mock_server.run_stdio_async.assert_called_once()
 
+    def test_runs_low_level_server_with_initialization_options(self):
+        from great_docs._mcpref.runner import _run
+
+        server = MagicMock(spec=["run", "create_initialization_options"])
+        server.run = AsyncMock()
+        mod = types.ModuleType("fake")
+        mod.server = server
+
+        @contextlib.asynccontextmanager
+        async def fake_stdio_server():
+            yield "read", "write"
+
+        # The second patch replaces the import function that `patch` uses to
+        # resolve targets. Apply the stdio patch first.
+        with (
+            patch("mcp.server.stdio.stdio_server", fake_stdio_server),
+            patch("great_docs._mcpref.runner.importlib.import_module", return_value=mod),
+        ):
+            asyncio.run(_run("fake.module", "server"))
+
+        server.run.assert_awaited_once_with(
+            "read", "write", server.create_initialization_options.return_value
+        )
+
 
 # ---------------------------------------------------------------------------
-# _introspect_via_protocol exception path
+# _introspect_via_protocol
 # ---------------------------------------------------------------------------
+
+_LOW_LEVEL_SERVER = """
+from mcp import types
+from mcp.server import Server
+
+
+async def list_tools(ctx, params=None):
+    tool = types.Tool(name="add", description="Add numbers.", input_schema={"type": "object"})
+    return types.ListToolsResult(tools=[tool])
+
+
+async def list_prompts(ctx, params=None):
+    argument = types.PromptArgument(name="topic", required=True)
+    prompt = types.Prompt(name="explain", description="Explain.", arguments=[argument])
+    return types.ListPromptsResult(prompts=[prompt])
+
+
+async def get_prompt(ctx, params):
+    topic = (params.arguments or {})["topic"]
+    content = types.TextContent(type="text", text=f"Explain {topic}")
+    return types.GetPromptResult(messages=[types.PromptMessage(role="user", content=content)])
+
+
+server = Server(
+    "probe", on_list_tools=list_tools, on_list_prompts=list_prompts, on_get_prompt=get_prompt
+)
+"""
 
 
 class TestIntrospectViaProtocol:
+    def test_reads_a_low_level_server_over_the_protocol(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        from great_docs._mcpref.reference import _introspect_via_protocol
+
+        (tmp_path / "probe_server.py").write_text(_LOW_LEVEL_SERVER, encoding="utf-8")
+        monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+
+        info = _introspect_via_protocol("probe_server", "server")
+
+        # The server exposes no resources. Its required prompt argument makes
+        # the preview use a placeholder value.
+        assert info is not None
+        assert info["name"] == "probe"
+        assert [tool["name"] for tool in info["tools"]] == ["add"]
+        assert info["resources"] == []
+        assert info["resource_templates"] == []
+        assert info["prompts"][0]["messages"] == [{"role": "user", "text": "Explain <topic>"}]
+
     def test_returns_none_when_collect_raises(self):
         from great_docs._mcpref.reference import _introspect_via_protocol
 
@@ -941,6 +1012,30 @@ class TestIntrospectViaProtocol:
             result = _introspect_via_protocol("fake.module", None)
 
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Protocol listing helpers
+# ---------------------------------------------------------------------------
+
+
+class TestListHelpers:
+    def test_list_tools_follows_the_next_cursor(self):
+        from great_docs._mcpref.reference import _list_tools
+
+        session = MagicMock()
+        session.list_tools = AsyncMock(
+            side_effect=[
+                {"tools": [{"name": "first"}], "nextCursor": "page-2"},
+                {"tools": [{"name": "second"}]},
+            ]
+        )
+
+        tools = asyncio.run(_list_tools(session))
+
+        assert [tool["name"] for tool in tools] == ["first", "second"]
+        assert session.list_tools.await_args_list[0].kwargs == {"params": None}
+        assert session.list_tools.await_args_list[1].kwargs["params"].cursor == "page-2"
 
 
 # ---------------------------------------------------------------------------
