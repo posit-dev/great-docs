@@ -306,7 +306,7 @@ def build(
 
     Use '--project-path' to point to a project in a different directory.
     Use '--watch' to serve the site with 'quarto preview' and rebuild after
-    changes to the documentation sources or 'great-docs.yml'.
+    changes to the documentation sources, 'great-docs.yml' or the package.
 
     Use '--no-refresh' to skip API discovery for faster rebuilds when your
     package's public API hasn't changed.

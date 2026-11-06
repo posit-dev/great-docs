@@ -19,6 +19,7 @@ from great_docs._layout import Layout
 
 CONFIG = "reference: false\nchangelog:\n  enabled: false\nskill:\n  enabled: false\n"
 MARKER = "A line added while watching."
+PACKAGE = "watch_demo"
 
 Edits = Callable[[Layout], Iterator[set[Path]]]
 
@@ -62,7 +63,7 @@ class _Preview:
         self._stopped.set()
 
 
-def _project(root: Path) -> GreatDocs:
+def _project(root: Path, config: str = CONFIG) -> GreatDocs:
     """
     Create a project with a home page and two user guide pages
 
@@ -70,6 +71,8 @@ def _project(root: Path) -> GreatDocs:
     ----------
     root
         The project directory.
+    config
+        The contents of `great-docs.yml`.
 
     Returns
     -------
@@ -80,14 +83,18 @@ def _project(root: Path) -> GreatDocs:
     docs = root / "docs"
     guide = docs / "user_guide"
     guide.mkdir(parents=True)
-    (docs / "great-docs.yml").write_text(CONFIG, encoding="utf-8")
+    (docs / "great-docs.yml").write_text(config, encoding="utf-8")
     (docs / "index.qmd").write_text("# Watch demo\n", encoding="utf-8")
     (guide / "01-intro.qmd").write_text("---\ntitle: Intro\n---\n\nFirst.\n", encoding="utf-8")
     (guide / "02-usage.qmd").write_text("---\ntitle: Usage\n---\n\nSecond.\n", encoding="utf-8")
     return GreatDocs(str(root))
 
 
-def _watch(docs: GreatDocs, monkeypatch: pytest.MonkeyPatch, edits: Edits) -> list[list[str]]:
+def _watch(
+    docs: GreatDocs,
+    monkeypatch: pytest.MonkeyPatch,
+    edits: Edits,
+) -> list[list[str]]:
     """
     Build in watch mode and apply source edits while the preview runs
 
@@ -122,7 +129,7 @@ def _watch(docs: GreatDocs, monkeypatch: pytest.MonkeyPatch, edits: Edits) -> li
     monkeypatch.setattr("great_docs._build.quarto.ensure_installed", lambda: None)
     monkeypatch.setattr(subprocess, "Popen", start)
 
-    def changes(layout: Layout, stop: threading.Event) -> Iterator[set[Path]]:
+    def changes(layout: Layout, package: Path | None, stop: threading.Event) -> Iterator[set[Path]]:
         return edits(layout)
 
     monkeypatch.setattr(watch, "source_changes", changes)
@@ -256,6 +263,48 @@ def test_watch_asks_for_a_restart_once_when_project_settings_change(
 
 
 @pytest.mark.parametrize(
+    ("directory", "package", "expected"),
+    [
+        ("docs", "pkg", ["docs", "pkg"]),
+        ("docs", "src/pkg", ["docs", "src/pkg"]),
+        (".", "pkg", ["."]),
+        ("pkg/docs", "pkg", ["pkg"]),
+        ("docs", None, ["docs"]),
+    ],
+)
+def test_watched_dirs_cover_each_directory_once(
+    tmp_path: Path, directory: str, package: str | None, expected: list[str]
+):
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "watch-demo"\n', encoding="utf-8")
+    source = tmp_path / directory
+    source.mkdir(parents=True, exist_ok=True)
+    (source / "great-docs.yml").write_text(CONFIG, encoding="utf-8")
+    layout = Layout.make(tmp_path, source / "great-docs.yml")
+
+    watched = watch.watched_dirs(layout, None if package is None else tmp_path.resolve() / package)
+
+    assert watched == [tmp_path.resolve() / path for path in expected]
+
+
+@pytest.mark.parametrize(
+    ("path", "accepted"),
+    [
+        ("watch_demo/__init__.py", True),
+        ("watch_demo/core/api.py", True),
+        ("watch_demo/__pycache__/__init__.cpython-313.pyc", False),
+        ("watch_demo/.mypy_cache/core.json", False),
+        ("watch_demo/.notes.py", False),
+    ],
+)
+def test_source_filter_accepts_package_sources(tmp_path: Path, path: str, accepted: bool):
+    docs = _project(tmp_path)
+
+    accept = watch.source_filter(docs.layout, tmp_path.resolve() / PACKAGE)
+
+    assert accept(watchfiles.Change.modified, str(tmp_path.resolve() / path)) is accepted
+
+
+@pytest.mark.parametrize(
     ("path", "accepted"),
     [
         ("docs/user_guide/01-intro.qmd", True),
@@ -272,7 +321,7 @@ def test_watch_asks_for_a_restart_once_when_project_settings_change(
 def test_source_filter_skips_generated_and_hidden_files(tmp_path: Path, path: str, accepted: bool):
     docs = _project(tmp_path)
 
-    accept = watch.source_filter(docs.layout)
+    accept = watch.source_filter(docs.layout, None)
 
     assert accept(watchfiles.Change.modified, str(tmp_path.resolve() / path)) is accepted
 

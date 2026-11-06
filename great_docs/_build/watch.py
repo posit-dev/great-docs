@@ -1,9 +1,10 @@
 """
-Live preview with rebuilds after documentation source edits
+Live preview with rebuilds after documentation and package source edits
 
-`quarto preview` serves the build directory while source changes, including edits to
-`great-docs.yml`, trigger preparation in a staging directory. Only changed files are copied
-into the previewed project, so Quarto re-renders the affected pages.
+Edits to documentation sources, `great-docs.yml` or the documented package trigger
+preparation in a staging directory while `quarto preview` serves the build directory.
+Only changed files are copied into the previewed project, so Quarto re-renders the affected
+pages.
 """
 
 from __future__ import annotations
@@ -24,7 +25,15 @@ from .steps import BuildError
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
-__all__ = ["Staging", "serve", "source_changes", "source_filter", "stage", "sync"]
+__all__ = [
+    "Staging",
+    "serve",
+    "source_changes",
+    "source_filter",
+    "stage",
+    "sync",
+    "watched_dirs",
+]
 
 # Seconds allowed for `quarto preview` to exit before it is killed
 _STOP_SECONDS = 5
@@ -79,6 +88,7 @@ def serve(
     env: Mapping[str, str],
     rebuild: Callable[[Staging], Mapping[str, Any]],
     quarto_config: Mapping[str, Any],
+    package: Path | None,
 ) -> None:
     """
     Preview a prepared project and rebuild it after source edits
@@ -101,6 +111,9 @@ def serve(
         step, or `ValueError` for invalid configuration or output directories.
     quarto_config
         The initial prepared project's Quarto configuration.
+    package
+        The documented package's source directory, or `None` when no package was
+        located. Edits to this directory also trigger rebuilds.
 
     Raises
     ------
@@ -118,7 +131,7 @@ def serve(
 
     threading.Thread(target=wait_for_preview, daemon=True).start()
     try:
-        for paths in source_changes(layout, stopped):
+        for paths in source_changes(layout, package, stopped):
             print(f"\n🔄 Rebuilding after changes to {_describe(paths, layout)}")
             try:
                 rebuilt = rebuild(staging)
@@ -140,15 +153,20 @@ def serve(
         shutil.rmtree(staging.build_dir, ignore_errors=True)
 
 
-def source_changes(layout: Layout, stop: threading.Event) -> Iterator[set[Path]]:
+def source_changes(
+    layout: Layout, package: Path | None, stop: threading.Event
+) -> Iterator[set[Path]]:
     """
-    Wait for edits to the documentation sources and yield them in batches
+    Wait for documentation and package edits and yield changed paths in batches
 
     Parameters
     ----------
     layout
         The project's directories. Edits anywhere in the source directory count, except in
         hidden directories and directories that hold generated output.
+    package
+        The documented package's source directory, watched with the same exclusions as
+        the documentation sources, or `None` when no package was located.
     stop
         An event that ends the watch when set.
 
@@ -162,32 +180,67 @@ def source_changes(layout: Layout, stop: threading.Event) -> Iterator[set[Path]]
     KeyboardInterrupt
         If the user stops watching with Ctrl+C.
     """
-    accept = source_filter(layout)
-    for changes in watchfiles.watch(layout.source_dir, watch_filter=accept, stop_event=stop):
+    accept = source_filter(layout, package)
+    directories = watched_dirs(layout, package)
+    for changes in watchfiles.watch(*directories, watch_filter=accept, stop_event=stop):
         yield {Path(path) for _, path in changes}
 
 
-def source_filter(layout: Layout) -> Callable[[watchfiles.Change, str], bool]:
+def watched_dirs(layout: Layout, package: Path | None) -> list[Path]:
     """
-    Create a filter for documentation source changes
+    List watch directories without nested or duplicate entries
 
     Parameters
     ----------
     layout
         The project's directories.
+    package
+        The documented package's source directory, or `None` when no package was
+        located.
+
+    Returns
+    -------
+    :
+        The documentation source directory and, if available, the package directory.
+        If one contains the other, only the containing directory is returned.
+    """
+    if package is None or package.is_relative_to(layout.source_dir):
+        return [layout.source_dir]
+    if layout.source_dir.is_relative_to(package):
+        return [package]
+    return [layout.source_dir, package]
+
+
+def source_filter(layout: Layout, package: Path | None) -> Callable[[watchfiles.Change, str], bool]:
+    """
+    Create a filter for changes to the documentation sources and the package
+
+    Parameters
+    ----------
+    layout
+        The project's directories.
+    package
+        The documented package's source directory, or `None` when no package was
+        located.
 
     Returns
     -------
     :
         A filter that accepts a change and its path, excluding editor and Python
-        byproducts, hidden files and directories, and generated output.
+        byproducts, hidden files and directories, and generated output. Hidden path
+        components are checked below the documentation source directory, or below the
+        package directory for paths outside the documentation source directory.
     """
     default = watchfiles.DefaultFilter(ignore_paths=layout.generated_dirs())
 
     def accept(change: watchfiles.Change, path: str) -> bool:
         if not default(change, path):
             return False
-        relative = Path(path).relative_to(layout.source_dir)
+        file = Path(path)
+        root = layout.source_dir
+        if package is not None and not file.is_relative_to(root):
+            root = package
+        relative = file.relative_to(root)
         return not any(part.startswith(".") for part in relative.parts)
 
     return accept
