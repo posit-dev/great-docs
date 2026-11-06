@@ -466,18 +466,7 @@ def _annotation_str(annotation) -> str | None:
     if annotation is None:
         return None
     # griffe annotations can be Name, Expression, or str
-    try:
-        return str(annotation)
-    except Exception:
-        return None
-
-
-def _parameter_kind_str(param) -> str:
-    """Get a string for the parameter kind."""
-    try:
-        return param.kind.name
-    except Exception:
-        return "POSITIONAL_OR_KEYWORD"
+    return str(annotation)
 
 
 # ---------------------------------------------------------------------------
@@ -488,44 +477,29 @@ def _parameter_kind_str(param) -> str:
 def _extract_parameters(obj) -> list[ParameterInfo]:
     """Extract parameter info from a griffe callable."""
     params: list[ParameterInfo] = []
-    try:
-        for param in obj.parameters:
-            # Skip 'self' and 'cls'
-            if param.name in ("self", "cls"):
-                continue
-            params.append(
-                ParameterInfo(
-                    name=param.name,
-                    annotation=_annotation_str(param.annotation),
-                    default=str(param.default) if param.default is not None else None,
-                    kind=_parameter_kind_str(param),
-                )
+    for param in obj.parameters:
+        # Skip 'self' and 'cls'
+        if param.name in ("self", "cls"):
+            continue
+        params.append(
+            ParameterInfo(
+                name=param.name,
+                annotation=_annotation_str(param.annotation),
+                default=str(param.default) if param.default is not None else None,
+                kind=param.kind.name,
             )
-    except Exception:
-        pass
+        )
     return params
 
 
 def _extract_bases(obj) -> list[str]:
     """Extract base class names from a griffe class."""
-    bases: list[str] = []
-    try:
-        for base in obj.bases:
-            bases.append(str(base))
-    except Exception:
-        pass
-    return bases
+    return [str(base) for base in obj.bases]
 
 
 def _extract_decorators(obj) -> list[str]:
-    """Extract decorator names from a griffe object."""
-    decorators: list[str] = []
-    try:
-        for dec in obj.decorators:
-            decorators.append(str(dec.value))
-    except Exception:
-        pass
-    return decorators
+    """Extract decorator expressions from a griffe function or class"""
+    return [str(dec.value) for dec in obj.decorators]
 
 
 def _symbol_info_for_dotted(pkg, dotted: str) -> SymbolInfo | None:
@@ -568,7 +542,7 @@ def _symbol_info_for_dotted(pkg, dotted: str) -> SymbolInfo | None:
         kind=kind,
         parameters=_extract_parameters(obj) if kind in ("function", "class") else [],
         bases=_extract_bases(obj) if kind == "class" else [],
-        decorators=_extract_decorators(obj),
+        decorators=_extract_decorators(obj) if kind in ("function", "class") else [],
         is_async=getattr(obj, "is_async", False),
         return_annotation=_annotation_str(
             getattr(obj, "annotation", None) or getattr(obj, "returns", None)
@@ -629,12 +603,10 @@ def snapshot_from_griffe(
     if hasattr(pkg, "exports") and pkg.exports is not None:
         exports = list(pkg.exports)
     elif "__all__" in pkg.members:
-        try:
-            all_obj = pkg.members["__all__"]
-            if hasattr(all_obj, "value"):
-                exports = list(all_obj.value)
-        except Exception:
-            pass
+        all_obj = pkg.members["__all__"]
+        # An `__all__` imported from a missing or cyclic import has kind `alias` and no value
+        if all_obj.kind.value != "alias" and all_obj.value is not None:
+            exports = list(all_obj.value)
 
     if not exports:
         # Fallback: public members (no leading underscore)
@@ -649,25 +621,24 @@ def snapshot_from_griffe(
         if name not in pkg.members:
             continue
 
-        try:
-            obj = pkg.members[name]
-            kind = obj.kind.value  # "class", "function", "module", "attribute"
-
-            info = SymbolInfo(
-                name=name,
-                kind=kind,
-                parameters=_extract_parameters(obj) if kind in ("function", "class") else [],
-                bases=_extract_bases(obj) if kind == "class" else [],
-                decorators=_extract_decorators(obj),
-                is_async=getattr(obj, "is_async", False),
-                return_annotation=_annotation_str(
-                    getattr(obj, "annotation", None) or getattr(obj, "returns", None)
-                ),
-            )
-            symbols[name] = info
-        except Exception:
-            # Skip symbols that fail to introspect (cyclic alias, etc.)
+        obj = pkg.members[name]
+        kind = obj.kind.value  # "class", "function", "module", "attribute"
+        if kind == "alias":
+            # griffe reports this kind for an export whose target is missing or cyclic. Reading
+            # its parameters, decorators or annotation would raise, so it has no API to record
             continue
+
+        symbols[name] = SymbolInfo(
+            name=name,
+            kind=kind,
+            parameters=_extract_parameters(obj) if kind in ("function", "class") else [],
+            bases=_extract_bases(obj) if kind == "class" else [],
+            decorators=_extract_decorators(obj) if kind in ("function", "class") else [],
+            is_async=getattr(obj, "is_async", False),
+            return_annotation=_annotation_str(
+                getattr(obj, "annotation", None) or getattr(obj, "returns", None)
+            ),
+        )
 
     return ApiSnapshot(version=version, package_name=normalized, symbols=symbols)
 
