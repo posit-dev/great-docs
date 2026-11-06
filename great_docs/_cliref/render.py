@@ -313,8 +313,6 @@ def index_page(config: Config, cli: CliCommand, entry_safe: str) -> str:
             # The group's own overview page, then each subcommand.
             emit_entry(group, f"{gsafe}.qmd")
             for sub in group.get("commands", []):
-                if sub.get("hidden"):  # pragma: no cover
-                    continue  # pragma: no cover
                 ssafe = sub["name"].replace("-", "_")
                 emit_entry(sub, f"{gsafe}/{ssafe}.qmd")
 
