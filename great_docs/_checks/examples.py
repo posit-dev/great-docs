@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from .. import _manifest
 from .._build import quarto
+from .._build.steps import USER_CODE_ERRORS
 from .._content.walk import find_files
 
 if TYPE_CHECKING:
@@ -79,6 +80,7 @@ class CheckResult:
     cells_passed: int = 0
     cells_failed: int = 0
     pages: list[PageResult] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -159,7 +161,28 @@ def extract_cells(text: str) -> list[Cell]:
 def extract_docstring_examples(
     project_root: Path,
     layout: Layout | None = None,
+    *,
+    warn: Callable[[str], None] = lambda _message: None,
 ) -> list[tuple[str, list[Cell]]]:
+    """
+    Collect docstring examples for objects listed in the API reference
+
+    Parameters
+    ----------
+    project_root
+        Directory containing the project's packaging files.
+    layout
+        Project layout used to locate the configuration and package.
+    warn
+        Callback for package-loading and object-resolution warnings. A package
+        failure returns no examples; an object failure skips that object.
+
+    Returns
+    -------
+    :
+        Pairs of `docstring:<object>` page labels and example cells, one pair per
+        object with examples.
+    """
     try:
         from great_docs.config import Config
     except ImportError:
@@ -194,19 +217,29 @@ def extract_docstring_examples(
     except ImportError:
         return []
 
-    loader = make_loader("numpy")
     object_names = _collect_object_names(reference_sections)
+    if not object_names:
+        return []
+
+    try:
+        package = make_loader("numpy").load(package_name)
+    except (*USER_CODE_ERRORS, UnicodeDecodeError) as e:
+        warn(
+            f"Could not load package '{package_name}', so its docstring examples were not "
+            f"checked: {type(e).__name__}: {e}"
+        )
+        return []
 
     results: list[tuple[str, list[Cell]]] = []
 
     for obj_name in object_names:
         full_name = f"{package_name}.{obj_name}" if "." not in obj_name else obj_name
         try:
-            obj = loader.load(package_name)
-            member = _resolve_member(obj, obj_name)
-            if member is None:
-                continue
-        except Exception:
+            member = _resolve_member(package, obj_name)
+        except (gf.AliasResolutionError, gf.CyclicAliasError) as e:
+            warn(f"Skipped the examples of '{full_name}': {type(e).__name__}: {e}")
+            continue
+        if member is None:
             continue
 
         if not hasattr(member, "docstring") or member.docstring is None:
@@ -644,6 +677,8 @@ def check_examples(
     if err:
         return CheckResult(pages=[PageResult(path="(setup)", status="error", message=err)])
 
+    warnings: list[str] = []
+
     # Collect pages to check
     # (label, cells, is_docstring, absolute .qmd path or None for docstrings)
     page_cells: list[tuple[str, list[Cell], bool, Path | None]] = []
@@ -660,12 +695,14 @@ def check_examples(
                 page_cells.append((rel, cells, False, qmd_path))
 
     if not no_docstrings and not paths:
-        docstring_pages = extract_docstring_examples(project_root, layout=layout)
+        docstring_pages = extract_docstring_examples(
+            project_root, layout=layout, warn=warnings.append
+        )
         for page_path, cells in docstring_pages:
             page_cells.append((page_path, cells, True, None))
 
     if not page_cells:
-        return CheckResult()
+        return CheckResult(warnings=warnings)
 
     # Build per-section totals for progress tracking (preserve insertion order)
     section_totals: dict[str, int] = {}
@@ -690,7 +727,7 @@ def check_examples(
     max_workers = max(jobs, 1) if use_parallel else 1
 
     # Execute
-    result = CheckResult()
+    result = CheckResult(warnings=warnings)
 
     if max_workers > 1:
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
@@ -813,6 +850,9 @@ def format_console(result: CheckResult, verbose: bool = False) -> str:
                         lines.append(f"      {tb_line}")
                 lines.append("")
 
+    for warning in result.warnings:
+        lines.append(f"  ⚠ {warning}")
+
     lines.append("")
     lines.append(
         f"Results: {result.pages_passed} passed, {result.pages_failed} failed "
@@ -833,6 +873,7 @@ def format_json(result: CheckResult) -> str:
             "cells_failed": result.cells_failed,
         },
         "pages": [asdict(p) for p in result.pages],
+        "warnings": result.warnings,
     }
     return json.dumps(data, indent=2)
 
