@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>WebMCP probe, iframes</title>
+  </head>
+  <body>
+    <h1>WebMCP probe, iframes</h1>
+    <!-- run.mjs fills in the cross-origin URL through the query string. -->
+    <iframe id="same" src="page2.html"></iframe>
+    <iframe id="cross"></iframe>
+    <script>
+      window.__frames = [];
+      window.addEventListener("message", function (event) {
+        if (event.data && event.data.probe) window.__frames.push({ from: event.origin, report: event.data.probe });
+      });
+      document.getElementById("cross").src = new URLSearchParams(location.search).get("cross") || "about:blank";
+    </script>
+  </body>
+</html>
