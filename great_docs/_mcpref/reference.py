@@ -114,23 +114,48 @@ def _introspect_via_protocol(
     module_path: str,
     server_var: str | None,
 ) -> dict[str, Any] | None:
-    """Launch the server and read its capabilities over the MCP protocol.
+    """
+    Launch the server and read its capabilities over the MCP protocol
 
-    Runs the target server in a subprocess via `great_docs._mcpref.runner` and
-    speaks the MCP protocol to it with a standard client session. Returns the
-    server metadata dict, or `None` if the client could not connect or the
-    `mcp` client APIs are unavailable.
+    Run the server in a subprocess and query it with a standard MCP client.
+    Report a missing `mcp` package, start-up or connection failures, timeouts
+    and protocol errors, then return `None`. Propagate all other errors,
+    including those grouped with expected failures.
+
+    Parameters
+    ----------
+    module_path
+        Importable path of the module that defines the server.
+    server_var
+        Name of the server variable in the module, or `None` to detect it.
+
+    Returns
+    -------
+    :
+        The server metadata, or `None` after a reported failure.
     """
     try:
-        import asyncio
-    except Exception:  # pragma: no cover
-        return None  # pragma: no cover
+        from mcp.shared.exceptions import MCPError
+    except ImportError as error:
+        print(f"Could not introspect MCP server over protocol: {error}")
+        return None
 
+    expected = (OSError, TimeoutError, MCPError)
+    failure: BaseException
     try:
         return asyncio.run(_collect_over_protocol(module_path, server_var))
-    except Exception as e:
-        print(f"Could not introspect MCP server over protocol: {e}")
-        return None
+    except expected as error:
+        failure = error
+    except ExceptionGroup as group:
+        # AnyIO may nest failures in exception groups. Fall back only when
+        # every contained error is expected.
+        if group.split(expected)[1] is not None:
+            raise
+        failure = group
+    while isinstance(failure, BaseExceptionGroup):
+        failure = failure.exceptions[0]
+    print(f"Could not introspect MCP server over protocol: {failure}")
+    return None
 
 
 async def _collect_over_protocol(

@@ -11,6 +11,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from mcp.shared.exceptions import MCPError
 
 from great_docs._mcpref.reference import (
     _dump,
@@ -990,16 +991,58 @@ class TestIntrospectViaProtocol:
         assert info["resource_templates"] == []
         assert info["prompts"][0]["messages"] == [{"role": "user", "text": "Explain <topic>"}]
 
-    def test_returns_none_when_collect_raises(self):
+    @pytest.mark.parametrize(
+        "error",
+        [
+            # Nested groups reproduce how AnyIO reports a server connection failure.
+            ExceptionGroup(
+                "outer", [ExceptionGroup("inner", [MCPError(-32000, "Connection closed")])]
+            ),
+            TimeoutError("no answer"),
+            OSError("cannot start"),
+        ],
+        ids=["protocol-error-in-task-groups", "timeout", "os-error"],
+    )
+    def test_expected_failure_falls_back(
+        self, error: Exception, capsys: pytest.CaptureFixture[str]
+    ):
         from great_docs._mcpref.reference import _introspect_via_protocol
 
-        async def _bad_coro(*args, **kwargs):
-            raise RuntimeError("connection refused")
+        async def failing(*args: Any) -> None:
+            raise error
 
-        with patch("great_docs._mcpref.reference._collect_over_protocol", _bad_coro):
+        with patch("great_docs._mcpref.reference._collect_over_protocol", failing):
             result = _introspect_via_protocol("fake.module", None)
 
         assert result is None
+        message = "Connection closed" if isinstance(error, ExceptionGroup) else str(error)
+        assert (
+            f"Could not introspect MCP server over protocol: {message}" in capsys.readouterr().out
+        )
+
+    def test_missing_mcp_falls_back(self):
+        from great_docs._mcpref.reference import _introspect_via_protocol
+
+        with patch.dict("sys.modules", {"mcp.shared.exceptions": None}):
+            assert _introspect_via_protocol("fake.module", None) is None
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            RuntimeError("bug"),
+            ExceptionGroup("outer", [MCPError(-32000, "Connection closed"), RuntimeError("bug")]),
+        ],
+        ids=["bare", "beside-a-protocol-error"],
+    )
+    def test_unexpected_error_propagates(self, error: Exception):
+        from great_docs._mcpref.reference import _introspect_via_protocol
+
+        async def failing(*args: Any) -> None:
+            raise error
+
+        with patch("great_docs._mcpref.reference._collect_over_protocol", failing):
+            with pytest.raises(type(error)):
+                _introspect_via_protocol("fake.module", None)
 
 
 # ---------------------------------------------------------------------------
