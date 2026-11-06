@@ -343,12 +343,16 @@ class TestPreprocessVersion:
         ]
 
     def test_skips_underscore_prefixed_files(self, tmp_path: Path):
+        # Version scoping would delete these files; skipping internal paths must
+        # preserve their contents and exclude them from the page list.
+        other_version = '---\ntitle: Internal\nversions: ["0.1"]\n---\n\nHi'
         source = tmp_path / "source"
         _make_source_tree(
             source,
             {
                 "index.qmd": "---\ntitle: Home\n---\n\nHi",
-                "_quarto.yml": "project:\n  type: website\n",
+                "_partial.qmd": other_version,
+                "_internal/notes.md": other_version,
             },
         )
 
@@ -358,8 +362,9 @@ class TestPreprocessVersion:
             source, dest, versions[0], versions, layout=Layout.make(tmp_path), quarto_config={}
         )
 
-        # _quarto.yml should NOT be in pages (it starts with _)
-        assert all(not p.startswith("_") for p in pages)
+        assert pages == ["index.html"]
+        assert (dest / "_partial.qmd").read_text() == other_version
+        assert (dest / "_internal" / "notes.md").read_text() == other_version
 
     def test_snapshot_strategy_a(self, tmp_path: Path):
         source = tmp_path / "source"
@@ -551,6 +556,21 @@ class TestPreprocessVersion:
 
         assert (source / "index.qmd").is_file()
         assert "index.html" in pages
+
+    def test_existing_destination_is_replaced(self, tmp_path: Path):
+        source = tmp_path / "source"
+        _make_source_tree(source, {"index.qmd": "---\ntitle: Home\n---\n\nHome\n"})
+        dest = tmp_path / "build"
+        _make_source_tree(dest, {"stale.qmd": "---\ntitle: Stale\n---\n\nOld\n"})
+        versions = self._setup_versions()
+
+        pages = preprocess_version(
+            source, dest, versions[1], versions, layout=Layout.make(tmp_path), quarto_config={}
+        )
+
+        assert pages == ["index.html"]
+        assert not (dest / "stale.qmd").exists()
+        assert (dest / "index.qmd").is_file()
 
 
 # ---------------------------------------------------------------------------
@@ -2671,6 +2691,25 @@ class TestRebuildApiFromSnapshotEdge:
         assert (ref_dir / "kept.qmd").exists()
         assert not (ref_dir / "removed.qmd").exists()
         assert (ref_dir / "index.qmd").exists()
+
+    def test_prune_keeps_subdirectories_and_other_files(self, tmp_path: Path):
+        snap_path = tmp_path / "snap.json"
+        ApiSnapshot(
+            version="0.2",
+            package_name="pkg",
+            symbols={"kept": SymbolInfo(name="kept", kind="function")},
+        ).save(snap_path)
+        ref_dir = tmp_path / "build" / "reference"
+        (ref_dir / "cli").mkdir(parents=True)
+        (ref_dir / "cli" / "index.qmd").write_text("---\ntitle: CLI\n---\n")
+        (ref_dir / "objects.json").write_text("{}")
+
+        _rebuild_api_from_snapshot(
+            tmp_path / "build", snap_path, _make_entry("0.2"), quarto_config={}
+        )
+
+        assert (ref_dir / "cli" / "index.qmd").exists()
+        assert (ref_dir / "objects.json").exists()
 
     def test_shallow_snapshot_keeps_method_pages(self, tmp_path: Path):
         # Regression guard for #190: when the documented set can't be resolved,
