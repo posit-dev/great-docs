@@ -478,6 +478,239 @@ def test_publish_gives_a_sidebar_to_pages_in_one_subdirectory(tmp_path: Path):
     assert "gd-section-no-sidebar" not in first
 
 
+def test_card_index_groups_pages_the_way_the_sidebar_does():
+    pages: list[sections.Page] = [
+        {"filename": "01-foundations/b.qmd", "title": "B", "description": "", "image": "b.png"},
+        {"filename": "overview.qmd", "title": "Overview", "description": "First", "image": ""},
+        {"filename": "01-foundations/a.qmd", "title": "A", "description": "Plain"},
+        {"filename": "start.qmd", "title": "Start", "description": "", "image": "start.png"},
+        {"filename": "01-foundations/deep/nested.qmd", "title": "Nested", "description": ""},
+        {"filename": "02-panel/c.qmd", "title": "C", "description": "", "image": "c.png"},
+        {"filename": "index.qmd", "title": "Index", "description": ""},
+    ]
+    titles = {"foundations": "Foundations", "panel": "Panel Time"}
+
+    content = sections.card_index("Examples", pages, dir_titles=titles)
+    sidebar = sections.sidebar("Examples", "examples", pages, has_index=True, dir_titles=titles)
+
+    assert sidebar is not None
+    assert [item["section"] for item in sidebar["contents"] if "section" in item] == [
+        "Foundations",
+        "Panel Time",
+    ]
+    assert 'href="index.qmd"' not in content
+    assert "## Deep" not in content
+    assert "<hr>" not in content
+    assert "section-cards-list" not in content
+    assert (
+        content.index("overview.qmd") < content.index("start.qmd") < content.index("## Foundations")
+    )
+    foundations = content.split("## Foundations", 1)[1].split("## Panel Time", 1)[0]
+    assert foundations.index("01-foundations/b.qmd") < foundations.index("01-foundations/a.qmd")
+    assert foundations.index("01-foundations/a.qmd") < foundations.index(
+        "01-foundations/deep/nested.qmd"
+    )
+    assert foundations.index("01-foundations/deep/nested.qmd") < foundations.index("</a></div>")
+    assert "start.qmd" not in foundations
+    assert content.index("## Panel Time") < content.index("02-panel/c.qmd")
+    leading = content.split("## Foundations", 1)[0]
+    assert "<img" not in leading.split("overview.qmd", 1)[0]
+    assert 'src="start.png"' in leading
+
+
+def test_card_index_follows_sidebar_groups_and_leaves_the_rest_untitled():
+    pages = [
+        _page("intro.qmd", "Introduction"),
+        _page("extra.qmd", "Extra"),
+        _page("advanced.qmd", "Advanced"),
+        _page("nested/page.qmd", "Nested"),
+    ]
+    sidebar_groups = [
+        {"section": "Getting Started", "contents": ["intro.qmd", "missing.qmd"]},
+        {"section": "Deep Dive", "contents": ["advanced.qmd"]},
+        {"section": "Empty", "contents": ["missing.qmd"]},
+    ]
+
+    content = sections.card_index("Recipes", pages, sidebar_groups=sidebar_groups)
+    sidebar = sections.sidebar(
+        "Recipes", "recipes", pages, has_index=False, sidebar_groups=sidebar_groups
+    )
+
+    assert sidebar is not None
+    assert [item["section"] for item in sidebar["contents"] if "section" in item] == [
+        "Getting Started",
+        "Deep Dive",
+    ]
+    assert "## Getting Started\n" in content
+    assert "## Deep Dive\n" in content
+    assert "## Empty" not in content
+    assert (
+        content.index("intro.qmd") < content.index("## Deep Dive") < content.index("advanced.qmd")
+    )
+    deep = content.split("## Deep Dive", 1)[1]
+    assert deep.index("</a></div>") < deep.index("extra.qmd") < deep.index("nested/page.qmd")
+
+
+def test_card_index_can_keep_the_flat_layout_when_the_sidebar_has_groups():
+    pages: list[sections.Page] = [
+        {"filename": "foundations/plain.qmd", "title": "Plain", "description": "", "image": ""},
+        {
+            "filename": "foundations/featured.qmd",
+            "title": "Featured",
+            "description": "",
+            "image": "a.png",
+        },
+    ]
+
+    content = sections.card_index("Examples", pages, index_groups=False)
+
+    assert "\n## " not in content
+    assert content.index("featured.qmd") < content.index("<hr>") < content.index("plain.qmd")
+    assert "section-cards-list" in content
+
+
+def test_grouped_index_uses_the_column_count_for_every_group():
+    pages: list[sections.Page] = [
+        {"filename": "foundations/plain.qmd", "title": "Plain", "description": "No image"},
+        {
+            "filename": "panel/featured.qmd",
+            "title": "Featured",
+            "description": "",
+            "image": "a.png",
+        },
+    ]
+
+    content = sections.card_index("Examples", pages, columns=1)
+
+    assert content.count("section-cards-1col") == 2
+    assert "section-cards-2col" not in content
+    assert "section-cards-list" not in content
+    assert "<hr>" not in content
+
+
+def test_grouped_index_keeps_each_card_grid_in_one_html_block():
+    pages: list[sections.Page] = [
+        {"filename": "foundations/a.qmd", "title": "A", "description": "Desc", "image": "a.png"},
+        {"filename": "foundations/b.qmd", "title": "B", "description": ""},
+    ]
+
+    content = sections.card_index("Examples", pages)
+
+    assert "## Foundations\n\n<div" in content
+    grid = content.split('<div class="section-cards', 1)[1].split("</a></div>", 1)[0]
+    assert "\n\n" not in grid
+
+
+def test_grouped_index_escapes_a_heading_that_would_break_the_page():
+    pages: list[sections.Page] = [
+        {
+            "filename": "odd/a.qmd",
+            "title": 'Say "hi" <tag>',
+            "description": "A & B",
+            "image": 'a"b.png',
+        }
+    ]
+
+    content = sections.card_index("Cards", pages, dir_titles={"odd": "A < B & C\n## injected"})
+    closed = sections.card_index(
+        "Cards",
+        [{"filename": "odd/a.qmd", "title": "A", "description": ""}],
+        dir_titles={"odd": "Results #"},
+    )
+
+    assert "## A &lt; B &amp; C \\#\\# injected\n" in content
+    assert "\n## injected" not in content
+    assert 'href="odd/a.qmd"' in content
+    assert '>Say "hi" &lt;tag&gt;</div>' in content
+    assert 'src="a&quot;b.png"' in content
+    assert "## Results \\#\n" in closed
+
+
+def test_card_index_keeps_subdirectory_groups_in_source_order():
+    pages = [_page("10-later/z.qmd", "Later"), _page("2-earlier/y.qmd", "Earlier")]
+
+    content = sections.card_index("Examples", pages)
+    sidebar = sections.sidebar("Examples", "examples", pages, has_index=False)
+
+    assert sidebar is not None
+    assert [item["section"] for item in sidebar["contents"]] == ["Later", "Earlier"]
+    assert content.index("## Later") < content.index("10-later/z.qmd") < content.index("## Earlier")
+
+
+def test_read_stores_index_groups(tmp_path: Path):
+    source = tmp_path / "examples"
+    source.mkdir()
+    (source / "page.qmd").write_text("# Page\n")
+    disabled = write_config(
+        tmp_path,
+        {"sections": [{"title": "Examples", "dir": "examples", "index_groups": False}]},
+    )
+
+    [section] = sections.read(disabled, Layout.make(tmp_path), report=print)
+
+    assert section.index_groups is False
+    omitted = write_config(tmp_path, {"sections": [{"title": "Examples", "dir": "examples"}]})
+    [section] = sections.read(omitted, Layout.make(tmp_path), report=print)
+    assert section.index_groups is True
+
+
+def test_publish_writes_an_index_grouped_like_the_sidebar(tmp_path: Path):
+    project = tmp_path.resolve()
+    source = project / "examples"
+    (source / "01-foundations").mkdir(parents=True)
+    (source / "02-panel").mkdir()
+    (source / "overview.qmd").write_text(
+        "---\ntitle: Overview\nimage: thumbnails/overview.png\n---\n"
+    )
+    (source / "01-foundations" / "predictors.qmd").write_text(
+        "---\ntitle: Predictors\nimage: thumbnails/predictors.png\n---\n"
+    )
+    (source / "01-foundations" / "plain.qmd").write_text("---\ntitle: Plain\n---\n")
+    (source / "02-panel" / "history.qmd").write_text(
+        "---\ntitle: History\nimage: thumbnails/history.png\n---\n"
+    )
+    config = write_config(
+        project,
+        {
+            "sections": [
+                {
+                    "title": "Examples",
+                    "dir": "examples",
+                    "index": True,
+                    "dir_titles": {"foundations": "Foundations", "panel": "Panel Time"},
+                }
+            ]
+        },
+    )
+    layout = Layout.make(project)
+    [section] = sections.read(config, layout, report=print)
+
+    published = sections.publish(
+        section,
+        config=config,
+        layout=layout,
+        pages=PageMap.make(config, layout, None, []),
+        add_dates=_without_dates,
+    )
+    index = (section.destination / "index.qmd").read_text(encoding="utf-8")
+
+    assert published.sidebar is not None
+    assert [item["section"] for item in published.sidebar["contents"] if "section" in item] == [
+        "Foundations",
+        "Panel Time",
+    ]
+    assert "## Foundations\n" in index
+    assert "## Panel Time\n" in index
+    assert index.index("overview.qmd") < index.index("## Foundations")
+    foundations = index.split("## Foundations", 1)[1].split("## Panel Time", 1)[0]
+    assert foundations.index("foundations/plain.qmd") < foundations.index(
+        "foundations/predictors.qmd"
+    )
+    assert foundations.index("foundations/predictors.qmd") < foundations.index("</a></div>")
+    assert "overview.qmd" not in foundations
+    assert "<hr>" not in index
+
+
 def _no_sidebar(dest_dir: Path, content: str) -> str:
     (dest_dir / "page.qmd").write_text(content)
     sections.add_no_sidebar_class([_page("page.qmd", "Page")], dest_dir)

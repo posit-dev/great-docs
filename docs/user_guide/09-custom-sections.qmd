@@ -71,6 +71,7 @@ sections:
 
 ::: {.version-only versions="dev"}
 | `dir_titles`     | `{}`               | Mapping of subdirectory names to custom sidebar section titles (see [Subdirectories](#subdirectories)) [version-badge new dev] |
+| `index_groups`   | `true`             | When `true`, a generated index uses the same groups, titles, and order as the sidebar. Set `false` for one flat card grid (see [Grouped Index](#grouped-index)) [version-badge new dev] |
 :::
 
 ## Multiple Sections
@@ -216,6 +217,24 @@ The generated index page shows:
 - A horizontal rule
 - Two plain link entries (Tips and FAQ) in a single-column list below
 
+::: {.version-only versions="dev"}
+
+### Grouped Index {#grouped-index}
+
+The two-zone layout above is what you get when the sidebar has no groups, or when `index_groups` is false. When pages live in subdirectories, or `sidebar_groups` is set, the generated index uses those same groups, titles, and order. Each group is a Markdown heading followed by one card grid. A page without an `image` stays in its group; it is not moved below a horizontal rule. Top-level pages, which the sidebar lists before the groups, appear in one grid before the first heading. Pages that `sidebar_groups` does not name appear after the groups, with no heading.
+
+```{.yaml filename="docs/great-docs.yml"}
+sections:
+  - title: Examples
+    dir: examples
+    index: true
+    index_groups: true   # the default
+```
+
+Set `index_groups: false` to keep the image-card and plain-link layout even when the sidebar has groups. `index_columns` applies to every group grid. The headings are Markdown headings, so the page table of contents lists them when the site shows one. An `index.qmd` you write yourself is still used as-is.
+
+:::
+
 ### Custom Index
 
 If you provide your own `index.qmd` in the directory, Great Docs uses it as-is (regardless of the `index` setting). This gives you full control over the landing page layout as you can write custom HTML, use Quarto grid layouts, or embed interactive content.
@@ -260,6 +279,10 @@ examples/
 ```
 
 The sidebar displays these as **"Getting Started"**, **"Results And Reporting"**, and **"Advanced Topics"** (not "01 Getting Started", etc.).
+
+::: {.version-only versions="dev"}
+A generated index follows these sidebar sections: one heading and one card grid per section, in the same order. See [Grouped Index](#grouped-index).
+:::
 
 ::: {.version-only versions="dev"}
 
