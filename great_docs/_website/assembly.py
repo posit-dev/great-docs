@@ -31,8 +31,6 @@ from .navigation import label as nav_label
 from .navigation import navbar as nav_navbar
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from .._build.facts import Facts
     from .._contribution import Contribution
     from .._github import GithubRepo
@@ -47,7 +45,6 @@ def assemble(
     quarto_config: dict[str, Any],
     config: Config,
     layout: Layout,
-    build_dir: Path,
     *,
     repo: GithubRepo | None,
     facts: Facts,
@@ -76,9 +73,7 @@ def assemble(
     config
         Project configuration.
     layout
-        Project directories.
-    build_dir
-        The Quarto project directory.
+        Project directories for locating source files and writing build resources.
     repo
         The project's GitHub repository, if it has one.
     facts
@@ -112,10 +107,11 @@ def assemble(
         If a header include file does not exist.
     """
     has_repository = repo is not None
+    build_dir = layout.build_dir
 
     quarto_defaults.register(quarto_config, config, layout)
     scripts.add_resources(config, quarto_config, has_repository=has_repository)
-    project_resources.register(quarto_config, config, layout, build_dir)
+    project_resources.register(quarto_config, config, layout)
     quarto_defaults.register_site(quarto_config, config, layout, report=report)
     scripts.include_libraries(config, quarto_config)
 
@@ -124,7 +120,6 @@ def assemble(
         quarto_config,
         config,
         layout,
-        build_dir,
         identity=identity,
         package_name=package_name,
         repo=repo,
@@ -158,7 +153,7 @@ def assemble(
     quarto_defaults.register_extensions(quarto_config)
 
     # Quarto renders page titles and translation metadata from this partial.
-    metadata_partial.write(quarto_config, config, build_dir, report=report)
+    metadata_partial.write(quarto_config, config, layout, report=report)
     nav_label.register(quarto_config, config)
     i18n.register(quarto_config, config)
 
@@ -171,9 +166,7 @@ def assemble(
         build_dir,
         og_url=social_cards.applies(quarto_config, config, build_dir),
     )
-    card_image_url = social_cards.publish_image(
-        config, layout, build_dir, identity.base_url, report=warn
-    )
+    card_image_url = social_cards.publish_image(config, layout, identity.base_url, report=warn)
     social_cards.register(quarto_config, config, card_image_url, build_dir)
     markdown_pages.register(quarto_config, config)
 

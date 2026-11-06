@@ -27,9 +27,7 @@ _MCP_MANIFEST = ".well-known/mcp.json"
 """The MCP discovery manifest, relative to the Quarto project directory"""
 
 
-def register(
-    quarto_config: dict[str, Any], config: Config, layout: Layout, build_dir: Path
-) -> None:
+def register(quarto_config: dict[str, Any], config: Config, layout: Layout) -> None:
     """
     List the site's fixed resources in `project.resources`
 
@@ -52,20 +50,19 @@ def register(
     config
         Project configuration.
     layout
-        Project directories used to locate published sections.
-    build_dir
-        The Quarto project directory.
+        Project directories for finding build resources and published sections.
 
     Returns
     -------
     :
     """
+    build_dir = layout.build_dir
     resources = [
         *_marimo(config, build_dir),
         *_asset_dirs(build_dir / "user-guide", build_dir),
         *(["assets/**"] if (build_dir / "assets").is_dir() else []),
         "_shared/**",
-        *_section_asset_dirs(config, layout, build_dir),
+        *_section_asset_dirs(config, layout),
     ]
     render_excludes: list[str] = []
     if config.skill_enabled:
@@ -131,7 +128,7 @@ def _asset_dirs(directory: Path, build_dir: Path) -> Iterator[str]:
             yield f"{prefix}/{item.name}/**"
 
 
-def _section_asset_dirs(config: Config, layout: Layout, build_dir: Path) -> Iterator[str]:
+def _section_asset_dirs(config: Config, layout: Layout) -> Iterator[str]:
     """
     Yield a glob for each asset directory of each configured section
 
@@ -140,14 +137,13 @@ def _section_asset_dirs(config: Config, layout: Layout, build_dir: Path) -> Iter
     config
         Project configuration.
     layout
-        The project's directories.
-    build_dir
-        The Quarto project directory.
+        Project directories for locating published sections and expressing their
+        asset paths relative to the build directory.
 
     Returns
     -------
     :
-        The resource globs, in section order.
+        The resource globs relative to the build directory, in section order.
     """
     sections = cast("object", config.sections)
     if not isinstance(sections, list):
@@ -157,4 +153,4 @@ def _section_asset_dirs(config: Config, layout: Layout, build_dir: Path) -> Iter
             continue
         destination = section_destination(layout, cast("Mapping[str, object]", entry))
         if destination is not None:
-            yield from _asset_dirs(destination, build_dir)
+            yield from _asset_dirs(destination, layout.build_dir)

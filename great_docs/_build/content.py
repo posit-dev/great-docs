@@ -491,11 +491,10 @@ def custom_pages(
     if not sources:
         return Skipped("no custom pages")
 
-    build_dir = layout.build_dir
     head = authored_pages.RawPageHead(
         base_url=identity.base_url,
         card_image_url=(
-            social_cards.publish_image(config, layout, build_dir, identity.base_url, report=report)
+            social_cards.publish_image(config, layout, identity.base_url, report=report)
             if config.social_cards_enabled
             else None
         ),

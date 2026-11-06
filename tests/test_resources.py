@@ -13,7 +13,7 @@ def _register(root: Path, settings: dict[str, object]) -> dict[str, Any]:
     config = write_config(root, settings)
     layout = Layout.make(root)
     quarto_config: dict[str, Any] = {"project": {"resources": ["logo.png"]}}
-    resources.register(quarto_config, config, layout, layout.build_dir)
+    resources.register(quarto_config, config, layout)
     return quarto_config["project"]
 
 

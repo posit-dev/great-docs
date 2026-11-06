@@ -19,6 +19,7 @@ from .seo import title as seo_title
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from .._layout import Layout
     from ..config import Config
 
 __all__ = ["FILENAME", "title_element", "write"]
@@ -61,7 +62,7 @@ def title_element(template: object) -> str | None:
 def write(
     quarto_config: dict[str, Any],
     config: Config,
-    build_dir: Path,
+    layout: Layout,
     *,
     report: Callable[[str], None],
 ) -> None:
@@ -80,8 +81,8 @@ def write(
         `format.html.template-partials`.
     config
         Project configuration.
-    build_dir
-        The Quarto project directory.
+    layout
+        Project directories, including the build directory for the metadata partial.
     report
         A callback that receives a warning when SEO is enabled and the title template is
         invalid.
@@ -114,14 +115,14 @@ def write(
         # Pandoc templates require `$$` to render a literal `$`.
         partial = partial.rstrip("\n") + "\n" + meta_tag.replace("$", "$$") + "\n"
 
-    if social_cards.applies(quarto_config, config, build_dir):
+    if social_cards.applies(quarto_config, config, layout.build_dir):
         partial = partial.rstrip("\n") + "\n" + social_cards.OG_TYPE_PARTIAL + "\n"
 
     if config.show_dates:
         date_lines = page_dates.partial_lines(datetime.now().isoformat())
         partial = partial.rstrip("\n") + "\n" + date_lines + "\n"
 
-    _ = (build_dir / FILENAME).write_text(partial, encoding="utf-8")
+    _ = (layout.build_dir / FILENAME).write_text(partial, encoding="utf-8")
 
     partials = cast("str | list[str]", html_config.get("template-partials", []))
     if isinstance(partials, str):

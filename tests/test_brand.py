@@ -67,7 +67,6 @@ def _register(
         quarto_config,
         config,
         layout,
-        layout.build_dir,
         identity=identity,
         package_name="pkg",
         repo=repo,

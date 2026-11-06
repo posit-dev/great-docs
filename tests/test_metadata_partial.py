@@ -184,7 +184,7 @@ def _write_partial(tmp_path: Path, yaml: str) -> tuple[GreatDocs, dict]:
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir(parents=True, exist_ok=True)
     config: dict = {"format": {"html": {}}}
-    metadata_partial.write(config, docs._config, docs.build_dir, report=print)
+    metadata_partial.write(config, docs._config, docs.layout, report=print)
     return docs, config
 
 

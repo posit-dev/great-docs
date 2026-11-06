@@ -31,7 +31,6 @@ def register(
     quarto_config: dict[str, Any],
     config: Config,
     layout: Layout,
-    build_dir: Path,
     *,
     identity: Identity,
     package_name: str | None,
@@ -64,9 +63,8 @@ def register(
     config
         Project configuration.
     layout
-        The project's directories, for finding the logo and favicon sources.
-    build_dir
-        The Quarto project directory that receives logo and favicon files.
+        Project directories for locating logo and favicon sources and writing
+        their published files to the build directory.
     identity
         The site's name and address.
     package_name
@@ -88,7 +86,7 @@ def register(
     Raises
     ------
     ValueError
-        If a logo would overwrite a different file in `build_dir`.
+        If a logo would overwrite a different file in the build directory.
     """
     website = cast("dict[str, Any]", quarto_config.setdefault("website", {}))
     if identity.url:
@@ -104,8 +102,12 @@ def register(
         logo = branding.detect_logo(layout.source_dir, package_name)
     logo_file = None
     if logo is not None:
-        logo_file = _add_logo(quarto_config, config, layout, build_dir, logo, package_name, report)
-    _add_favicons(quarto_config, config, layout, build_dir, logo_file, documentation_url, report)
+        logo_file = _add_logo(
+            quarto_config, config, layout, layout.build_dir, logo, package_name, report
+        )
+    _add_favicons(
+        quarto_config, config, layout, layout.build_dir, logo_file, documentation_url, report
+    )
 
 
 def register_release(quarto_config: dict[str, Any], config: Config, facts: Facts) -> None:

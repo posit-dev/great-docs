@@ -48,7 +48,6 @@ def _assemble(root: Path, settings: str) -> dict[str, Any]:
         quarto_config,
         config,
         layout,
-        layout.build_dir,
         repo=None,
         facts=Facts(),
         identity=Identity(name="Pkg", url=BASE_URL, base_url=BASE_URL),
