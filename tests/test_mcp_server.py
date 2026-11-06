@@ -1094,7 +1094,7 @@ class TestListResourceTemplates:
 
     def test_returns_reference_and_page_templates(self):
         templates = asyncio.run(list_resource_templates())
-        uri_templates = [t.uri_template for t in templates]
+        uri_templates = [str(t.model_dump(by_alias=True)["uriTemplate"]) for t in templates]
         assert any("reference" in u for u in uri_templates)
         assert any("page" in u for u in uri_templates)
 

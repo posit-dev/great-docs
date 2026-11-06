@@ -37,11 +37,11 @@ dependencies = [
     "nbclient>=0.10",
     "py-yaml12>=0.2.0",
     "PyYAML>=6.0",
-    "click>=8.0.0",
+    "click>=8.2.0",
     "griffe~=2.1.0",
-    "requests>=2.25.0",
+    "requests>=2.27.0",
     "python-dotenv>=1.0.0",
-    "Pillow>=9.0.0",
+    "Pillow>=9.2.0",
     "ruff>=0.9.9",
     "watchfiles>=1.0.0",
 ]
@@ -51,7 +51,7 @@ svg = [
     "cairosvg>=2.5.0",
 ]
 mcp = [
-    "mcp>=1.0.0",
+    "mcp>=1.21.1",
 ]
 marimo = [
     "marimo>=0.20.0",
@@ -60,7 +60,7 @@ marimo = [
     "uv>=0.5.0",
 ]
 dev = [
-    "pytest>=6.0",
+    "pytest>=7.3",
     "pytest-cov>=3.0",
     "pytest-xdist>=3.5",
     # Validates termshow files against their published JSON Schemas
@@ -73,15 +73,15 @@ dev = [
     "pyright>=1.1.414",
     "build>=0.7",
     "twine>=3.4",
-    "typer>=0.12.0",
+    "typer>=0.16.0",
     "great-docs[docs]",
 ]
 docs = [
     "plotnine>=0.13.0",
     "jupyter>=1.0.0",
     "polars>=0.20",
-    "pandas>=2.0",
-    "pyarrow>=12.0",
+    "pandas>=2.2.2",
+    "pyarrow>=16.0",
     "great_tables>=1.1.0",
     "great-docs[mcp,marimo]",
 ]
