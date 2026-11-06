@@ -2367,40 +2367,6 @@ def test_navbar_no_home_new_build():
         # does not add it.
 
 
-def test_navbar_home_removed_from_existing():
-    """Test that existing navbars with Home get it removed."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        (project_path / "great-docs.yml").write_text("")
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-        quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "project:\n  type: website\n"
-            "website:\n"
-            "  title: TestPkg\n"
-            "  navbar:\n"
-            "    left:\n"
-            "      - text: Home\n"
-            "        href: index.qmd\n"
-            "      - text: Reference\n"
-            "        href: reference/index.qmd\n"
-            "format:\n  html:\n    theme: flatly\n"
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        update_quarto_config(docs, make_run(docs))
-
-        with open(quarto_yml) as f:
-            config = read_yaml(f)
-
-        navbar_items = config["website"]["navbar"]["left"]
-        texts = [item.get("text") for item in navbar_items if isinstance(item, dict)]
-
-        assert "Home" not in texts
-        assert "Reference" in texts
-
-
 def test_navbar_release_from_github_release():
     """The navbar title shows the latest GitHub release"""
 

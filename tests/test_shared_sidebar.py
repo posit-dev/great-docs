@@ -249,16 +249,6 @@ def test_prepare_extends_existing_post_render(tmp_path: Path):
     ]
 
 
-def test_prepare_twice_changes_nothing(tmp_path: Path):
-    root = _write_project(tmp_path / "proj")
-    config = _config(root)
-    shared_sidebar.prepare(root, config)
-    before = copy.deepcopy(config)
-
-    assert shared_sidebar.prepare(root, config) == []
-    assert config == before
-
-
 @pytest.mark.parametrize(
     ("page", "front_matter"),
     [

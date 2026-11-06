@@ -109,8 +109,7 @@ def prepare(build_dir: Path, quarto_config: dict[str, Any]) -> list[str]:
         project_config["post-render"] = entry
     else:
         scripts: list[YamlValue] = post_render if isinstance(post_render, list) else [post_render]
-        if entry not in scripts:
-            project_config["post-render"] = [*scripts, entry]
+        project_config["post-render"] = [*scripts, entry]
 
     (build_dir / "scripts").mkdir(exist_ok=True)
     _ = shutil.copy2(Path(__file__).parents[2] / "assets" / SCRIPT, build_dir / "scripts" / SCRIPT)
@@ -265,8 +264,6 @@ class _Project:
         if sidebar_id not in SIDEBAR_IDS or not _shareable(sidebar.get("contents")):
             return None
         if len(_hrefs(sidebar["contents"])) <= len(self.navbar_items(sidebar)):
-            return None
-        if any(str(s.get("id", "")).startswith(FULL_PREFIX) for s in self.sidebars):
             return None
 
         pages: list[str] = []

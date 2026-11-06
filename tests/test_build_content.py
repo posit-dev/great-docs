@@ -2116,7 +2116,7 @@ def test_the_assets_step_adds_the_recorded_contributions_before_ordering_the_nav
     tmp_path: Path,
 ):
     """
-    Add an earlier step's navbar link before applying `navbar_order`
+    Add contributed navbar links before applying `navbar_order`
     """
     docs = _project(
         tmp_path,
@@ -2125,11 +2125,13 @@ def test_the_assets_step_adds_the_recorded_contributions_before_ordering_the_nav
             "great-docs.yml": "navbar_order: [Changelog]\n",
         },
     )
-    write_initial_quarto_yml(docs.build_dir)
-    run = make_run(docs)
-    update_quarto_config(docs, run)
-    run.quarto_config["website"]["navbar"]["left"] = [{"text": "Examples", "href": "ex.qmd"}]
-    run.contributions.append(Contribution(navbar=(NavbarLink("Changelog", "changelog.qmd"),)))
+    run = make_run(docs, quarto_config=write_initial_quarto_yml(docs.build_dir))
+    run.contributions.extend(
+        [
+            Contribution(navbar=(NavbarLink("Examples", "ex.qmd"),)),
+            Contribution(navbar=(NavbarLink("Changelog", "changelog.qmd"),)),
+        ]
+    )
 
     _ = content.assets(run, docs._config, docs.layout, remote=docs._remote)
 

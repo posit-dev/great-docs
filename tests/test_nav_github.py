@@ -66,30 +66,3 @@ def test_icon_item_for_icon_style_or_missing_repo():
     assert github.navbar_item(REPO_URL, "owner", "repo", "icon", None) == icon
     assert github.navbar_item(REPO_URL, None, "repo", "widget", None) == icon
     assert github.navbar_item(REPO_URL, "owner", None, "widget", None) == icon
-
-
-def test_set_navbar_item_replaces_icon_and_legacy_widget_entries():
-    item = {"icon": "github", "href": REPO_URL}
-    navbar = {
-        "right": [
-            {"icon": "github", "href": "old"},
-            {"text": "Other"},
-            {"text": '<div id="github-widget" data-owner="o" data-repo="r"></div>'},
-        ]
-    }
-
-    github.set_navbar_item(navbar, item)
-
-    assert navbar["right"] == [item, {"text": "Other"}, item]
-
-
-def test_set_navbar_item_appends_after_other_items():
-    item = {"icon": "github", "href": REPO_URL}
-    navbar = {"right": ["text-only", {"text": "Other"}]}
-    empty: dict = {}
-
-    github.set_navbar_item(navbar, item)
-    github.set_navbar_item(empty, item)
-
-    assert navbar["right"] == ["text-only", {"text": "Other"}, item]
-    assert empty["right"] == [item]

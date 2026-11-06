@@ -20,7 +20,6 @@ from . import quarto_yml
 if TYPE_CHECKING:
     from ..config import Config
 
-_ATTRIBUTION_MARKER = "Great&nbsp;Docs"
 _POSIT_BADGE = (
     '<script src="https://cdn.jsdelivr.net/gh/posit-dev/'
     'supported-by-posit/js/badge.min.js"></script>'
@@ -35,10 +34,10 @@ def register(quarto_config: dict[str, Any], config: Config, metadata: Manifest) 
     """
     Add the page footer and the Posit badge
 
-    If `website.page-footer` is absent, add a centred footer that credits the
-    developers and the funder. If `attribution` is enabled, append a Great Docs
-    credit unless one is already present. Add the badge script to the HTML
-    header when the funder's name contains the word "Posit".
+    Centre the developer and funder credits in the footer. Include a Great Docs
+    credit when `attribution` is enabled, even without other credits. Omit the
+    footer when there are no credits. Add the badge script to the HTML header
+    when the funder's name contains the word "Posit".
 
     Parameters
     ----------
@@ -58,23 +57,17 @@ def register(quarto_config: dict[str, Any], config: Config, metadata: Manifest) 
     funding = config.funding
     funder = _funder(funding)
 
-    if "page-footer" not in website:
-        credits = _credits(config, metadata, funder)
-        if credits:
-            website["page-footer"] = {"center": credits}
-
+    lines: list[str] = []
+    credits = _credits(config, metadata, funder)
+    if credits:
+        lines.append(credits)
     if config.attribution:
-        attribution = (
+        lines.append(
             f"{get_translation('site_created_with', config.lang)} "
-            f"<strong>{_ATTRIBUTION_MARKER}</strong>{_commit_label()}."
+            f"<strong>Great&nbsp;Docs</strong>{_commit_label()}."
         )
-        if "page-footer" in website:
-            footer = cast("dict[str, Any]", website["page-footer"])
-            existing = footer.get("center", "")
-            if _ATTRIBUTION_MARKER not in existing:
-                footer["center"] = f"{existing}<br>{attribution}" if existing else attribution
-        else:
-            website["page-footer"] = {"center": attribution}
+    if lines:
+        website["page-footer"] = {"center": "<br>".join(lines)}
 
     if funder and funding and re.search(r"\bPosit\b", funding["name"], re.IGNORECASE):
         quarto_yml.add_include(

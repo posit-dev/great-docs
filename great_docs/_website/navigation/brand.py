@@ -44,15 +44,13 @@ def register(
 
     Set `website.site-url` to the site address when available. Enable page
     navigation unless the Quarto configuration already sets it. Set a missing
-    site title to the site's name when the name is non-empty. Create a missing
-    navbar, or remove the legacy `Home` link from the left side of an existing
-    navbar. Add the GitHub entry on the right when the project has a GitHub
-    repository.
+    site title to the site's name when the name is non-empty. Create the navbar.
+    Include a GitHub entry on the right when the project has a GitHub repository.
 
     Show a configured logo, or one found at a conventional path, in place of
     the navbar title unless `logo.show_title` is set. Copy local logo images into
-    `build_dir`. Generate favicons from the configured `favicon`, even without
-    a logo, or use a local logo image when no favicon is configured. Link the
+    the build directory. Generate favicons from the configured `favicon`, even
+    without a logo, or use a local logo image when no favicon is configured. Link the
     favicons from every page.
 
     Parameters
@@ -134,7 +132,7 @@ def _add_navbar(
     website: dict[str, Any], config: Config, repo: GithubRepo | None, facts: Facts
 ) -> None:
     """
-    Create the navbar or update an existing one, with the GitHub entry on the right
+    Create the navbar with the GitHub entry on the right
 
     Parameters
     ----------
@@ -151,28 +149,14 @@ def _add_navbar(
     -------
     :
     """
-    item = (
-        github.navbar_item(repo.url, repo.owner, repo.name, config.github_style, facts.github_stats)
-        if repo is not None
-        else None
-    )
-    if "navbar" not in website:
-        navbar: dict[str, Any] = {"left": []}
-        if item:
-            navbar["right"] = [item]
-        website["navbar"] = navbar
-        return
-
-    navbar = cast("dict[str, Any]", website["navbar"])
-    if item:
-        github.set_navbar_item(navbar, item)
-    # The site title in the navbar already links to the home page.
-    if "left" in navbar:
-        navbar["left"] = [
-            entry
-            for entry in cast("list[Any]", navbar["left"])
-            if not (isinstance(entry, dict) and cast("dict[str, Any]", entry).get("text") == "Home")
+    navbar: dict[str, Any] = {"left": []}
+    if repo is not None:
+        navbar["right"] = [
+            github.navbar_item(
+                repo.url, repo.owner, repo.name, config.github_style, facts.github_stats
+            )
         ]
+    website["navbar"] = navbar
 
 
 def _add_logo(
