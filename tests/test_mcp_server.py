@@ -401,6 +401,21 @@ class TestServerRequests:
         result = self._ask(lambda client: client.complete(ref, {"name": "audience", "value": "b"}))
         assert result.completion.values == ["beginner"]
 
+    def test_completion_uses_context_arguments(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        project = tmp_path / "project"
+        (project / "user_guide").mkdir(parents=True)
+        (project / "user_guide/intro.qmd").write_text("Intro\n")
+        monkeypatch.chdir(tmp_path)
+        ref = ResourceTemplateReference(type="ref/resource", uri="gd://page/{path}")
+        result = self._ask(
+            lambda client: client.complete(
+                ref, {"name": "path", "value": ""}, context_arguments={"project_path": str(project)}
+            )
+        )
+        assert result.completion.values == ["user_guide/intro.qmd"]
+
     def test_completion_without_suggestions_is_empty(self):
         ref = PromptReference(type="ref/prompt", name="no-such-prompt")
         result = self._ask(lambda client: client.complete(ref, {"name": "topic", "value": ""}))

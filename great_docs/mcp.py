@@ -1580,6 +1580,7 @@ async def _on_completion(ctx: Any, params: Any) -> Any:
     completion = await _HANDLERS["completion"](
         getattr(params, "ref", None),
         getattr(params, "argument", None),
+        getattr(params, "context", None),
     )
     if completion is None:
         completion = _Completion(values=[])
