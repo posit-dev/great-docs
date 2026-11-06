@@ -5,11 +5,11 @@ Specification: https://pandoc.org/lua-filters.html#element-components-1
 
 from __future__ import annotations
 
-import typing
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-if typing.TYPE_CHECKING:
-    from typing import Sequence  # pragma: no cover
+if TYPE_CHECKING:
+    from typing import Sequence
 
 __all__ = ("Attr",)
 

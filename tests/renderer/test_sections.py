@@ -129,6 +129,23 @@ def test_parameters_section_on_a_class_still_renders():
     assert "How big." in qmd
 
 
+def test_definition_section_without_items_renders_nothing():
+    """
+    Verify that empty `Parameters` and `Returns` sections produce no output
+
+    griffe drops empty sections during parsing. Hooks and renderer subclasses
+    can still supply them directly to the renderer.
+    """
+    import griffe as gf
+
+    from great_docs._apiref._render.doc import __RenderDoc as RenderDocImpl  # noqa: N813
+
+    render = object.__new__(RenderDocImpl)
+
+    assert render.render_definition_items(gf.DocstringSectionParameters([])) is None
+    assert render.render_definition_items(gf.DocstringSectionReturns([])) is None
+
+
 def test_methods_section_is_dropped_silently(caplog):
     """Deliberate suppression must not warn — `Methods` is valid numpydoc"""
     source = '''

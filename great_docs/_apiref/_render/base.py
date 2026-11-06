@@ -114,12 +114,12 @@ class __RenderBase(Block):
         Render the header of a docstring, including any anchors
         """
 
-    def render_description(self) -> BlockContent:  # pragma: no cover
+    def render_description(self) -> BlockContent:
         """
         Render the description of the object
         """
 
-    def render_body(self) -> BlockContent:  # pragma: no cover
+    def render_body(self) -> BlockContent:
         """
         Render the body of the object being documented
         """
@@ -166,4 +166,4 @@ class RenderBase(__RenderBase):
         # The "filling in" should only happen when extending the Render*
         # classes outside the package.
         if not cls.__module__.startswith("great_docs."):
-            extend_base_class(cls)  # pragma: no cover
+            extend_base_class(cls)

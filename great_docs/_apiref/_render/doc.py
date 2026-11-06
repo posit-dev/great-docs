@@ -714,7 +714,7 @@ class __RenderDoc(RenderBase):
 
         items = [render_section_item(item) for item in items_to_render]
         if not items:
-            return None  # pragma: no cover
+            return None
         return Div(DefinitionList(items), Attr(classes=["doc-definition-items"]))
 
     @property
