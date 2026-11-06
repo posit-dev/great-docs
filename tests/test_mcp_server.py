@@ -1402,6 +1402,11 @@ class TestReadResourceApiSurface:
 
         assert "Error discovering API surface" in result
 
+    def test_api_surface_unexpected_error_propagates(self):
+        with patch("great_docs.mcp._get_exports", side_effect=ZeroDivisionError("bug")):
+            with pytest.raises(ZeroDivisionError):
+                asyncio.run(read_resource(self._uri("gd://api-surface")))
+
 
 # ---------------------------------------------------------------------------
 # read_resource — gd://reference/{symbol} paths
@@ -1471,6 +1476,20 @@ class TestReadResourceReference:
             result = asyncio.run(read_resource(self._uri("gd://reference/any_sym")))
 
         assert "Error reading reference" in result
+
+    def test_reference_invalid_configuration_returns_error_message(self, tmp_path: Path):
+        write_pyproject(tmp_path, "mypkg")
+        (tmp_path / "great-docs.yml").write_text("parser: nope\n", encoding="utf-8")
+        uri = self._uri(f"gd://reference/any_sym?project_path={tmp_path}")
+        result = asyncio.run(read_resource(uri))
+
+        assert result.startswith("Error reading reference for 'any_sym':")
+        assert "parser: 'nope'" in result
+
+    def test_reference_unexpected_error_propagates(self):
+        with patch("great_docs.mcp._get_exports", side_effect=ZeroDivisionError("bug")):
+            with pytest.raises(ZeroDivisionError):
+                asyncio.run(read_resource(self._uri("gd://reference/any_sym")))
 
 
 # ---------------------------------------------------------------------------

@@ -1282,7 +1282,7 @@ async def read_resource(uri: AnyUrl) -> str:
                         lines.append(f"  - {item}")
                     lines.append("")
             return "\n".join(lines)
-        except Exception as e:
+        except _PROJECT_ERRORS as e:
             return f"Error discovering API surface: {e}"
 
     elif uri_str == "gd://status":
@@ -1314,7 +1314,7 @@ async def read_resource(uri: AnyUrl) -> str:
             doc = getattr(obj, "__doc__", None) or "No docstring available."
             kind = type(obj).__name__
             return f"# {importable_name}.{symbol}\nKind: {kind}\n\n{doc}"
-        except Exception as e:
+        except _PROJECT_ERRORS as e:
             return f"Error reading reference for '{symbol}': {e}"
 
     elif uri_str.startswith("gd://page/"):
