@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import io
 import json
+import shutil
 import sys
 from contextlib import AbstractContextManager
 from pathlib import Path
@@ -202,6 +203,38 @@ def test_no_refresh_discovers_when_a_package_file_changes(tmp_path: Path):
     assert run.api_block is not None
     assert "part" in str(run.api_block["sections"])
     assert reference.api_config(run) == "API reference discovered"
+
+
+def test_no_refresh_reuses_the_discovery_of_a_moved_project(tmp_path: Path):
+    """
+    Reuse the discovery saved before the project moved to another directory
+    """
+    (tmp_path / "before").mkdir()
+    docs = _discoverable_project(tmp_path / "before", "cache_move")
+    discovered = _configure(docs, refresh=True)
+    moved = shutil.copytree(tmp_path / "before", tmp_path / "after")
+
+    with _spy_on_discovery() as sections:
+        reused = _configure(GreatDocs(project_path=str(moved)), refresh=False)
+
+    sections.assert_not_called()
+    assert reused.api_block == discovered.api_block
+
+
+def test_no_refresh_discovers_when_a_package_file_is_renamed(tmp_path: Path):
+    """
+    Rediscover the exports after a package file is renamed with its content unchanged
+    """
+    docs = _discoverable_project(tmp_path, "cache_rename")
+    package = tmp_path / "cache_rename"
+    _ = (package / "helpers.py").write_text("VALUE = 1\n", encoding="utf-8")
+    _ = _configure(docs, refresh=True)
+    _ = (package / "helpers.py").rename(package / "utilities.py")
+
+    with _spy_on_discovery() as sections:
+        _ = _configure(docs, refresh=False)
+
+    sections.assert_called_once()
 
 
 def test_no_refresh_discovers_when_the_configuration_changes(tmp_path: Path):

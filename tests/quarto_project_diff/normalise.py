@@ -84,6 +84,14 @@ FILE_RULES: tuple[Rule, ...] = (
         "<UUID>",
         scope=("_marimo_islands/", "__marimo__/session/"),
     ),
+    # The API discovery cache's key is a digest that includes the great-docs version, so
+    # it differs between commits that discover the same sections.
+    Rule(
+        "discovery-key",
+        re.compile(r'("key": ")[0-9a-f]{64}"'),
+        r'\g<1><DIGEST>"',
+        scope=("api-discovery/sections.json",),
+    ),
 )
 
 
