@@ -125,6 +125,21 @@ class TestIconBridgeScript:
         )
         assert result.returncode != 0
 
+    def test_finds_icons_source_when_great_docs_is_not_installed(self, monkeypatch):
+        """Load icon code from the source tree when the package import fails"""
+        import importlib.util
+
+        monkeypatch.setitem(sys.modules, "great_docs._icons", None)
+        spec = importlib.util.spec_from_file_location(
+            "_icon_shortcode", _ext_dir() / "_icon_shortcode.py"
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        get_icon_svg = mod._load_icons_module()
+
+        assert get_icon_svg("heart").startswith("<svg")
+
     def test_no_trailing_newline(self):
         """Output should not have trailing newline (inline SVG)."""
         bridge = _ext_dir() / "_icon_shortcode.py"

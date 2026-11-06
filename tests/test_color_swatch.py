@@ -282,6 +282,39 @@ class TestHelperImports:
         with pytest.raises(ValueError, match="Red"):
             self.mod.parse_colors(body, "")
 
+    # Quarto may use an interpreter without Great Docs or `yaml12` installed.
+
+    def _load_with_blocked(self, monkeypatch, blocked: str, script: Path):
+        """Load the shortcode script with the specified import disabled"""
+        import importlib.util
+
+        monkeypatch.setitem(sys.modules, blocked, None)
+        spec = importlib.util.spec_from_file_location("_color_swatch_shortcode", script)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_finds_contrast_source_when_great_docs_is_not_installed(self, monkeypatch):
+        """Load contrast code from the source tree when the package import fails"""
+        mod = self._load_with_blocked(monkeypatch, "great_docs.contrast", _helper())
+        assert mod.hex_to_rgb("#ff0000") == (255, 0, 0)
+
+    def test_fails_when_contrast_source_cannot_be_found(self, monkeypatch, tmp_path):
+        """Raise an import error when neither installed nor source contrast code is available"""
+        script = tmp_path / "_color_swatch_shortcode.py"
+        script.write_text(_helper().read_text())
+        with pytest.raises(ImportError, match="Cannot locate"):
+            self._load_with_blocked(monkeypatch, "great_docs.contrast", script)
+
+    def test_parses_simple_yaml_when_yaml12_is_not_installed(self, monkeypatch):
+        """Parse a flat list of colour mappings without `yaml12`"""
+        mod = self._load_with_blocked(monkeypatch, "yaml12", _helper())
+        body = "# palette\n- name: Red\n  hex: '#ff0000'\n- hex: \"#00ff00\"\n  name: Green\n"
+        assert mod.parse_colors(body, "") == [
+            {"name": "Red", "hex": "#ff0000"},
+            {"name": "Green", "hex": "#00ff00"},
+        ]
+
     def test_parse_yaml_non_list_body_returns_empty(self):
         """YAML that parses to a non-list (e.g. a mapping) returns []."""
         body = "key: value\nanother: 42\n"

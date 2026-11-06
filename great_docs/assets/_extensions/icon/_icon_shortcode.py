@@ -20,7 +20,7 @@ def _load_icons_module():
         from great_docs._icons import get_icon_svg
 
         return get_icon_svg
-    except Exception:
+    except ImportError:
         pass
 
     # Walk ancestors to find the _icons.py source file
@@ -90,35 +90,34 @@ def main() -> None:
 
     try:
         get_icon_svg = _load_icons_module()
-
-        # get_icon_svg needs a pixel size; default to 16 (will be replaced by em)
-        px_size = args.size if args.size is not None else 16
-        svg = get_icon_svg(args.name, size=px_size, css_class=args.css_class)
-
-        if not svg:
-            print(
-                f"<!-- icon shortcode error: unknown icon '{args.name}' -->",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
-        # Replace pixel sizing with em-based inline styles
-        svg = _apply_inline_text_style(svg, args.size)
-
-        # If a label is provided, make the icon accessible
-        if args.label:
-            svg = svg.replace(
-                'aria-hidden="true"',
-                f'aria-label="{args.label}" role="img"',
-            )
-
-        print(svg, end="")
-    except Exception as exc:
+    except ImportError as exc:
         print(
             f"<!-- icon shortcode error for '{args.name}': {exc} -->",
             file=sys.stderr,
         )
         sys.exit(1)
+
+    # The SVG loader requires pixels before inline styles convert the size to `em`.
+    px_size = args.size if args.size is not None else 16
+    svg = get_icon_svg(args.name, size=px_size, css_class=args.css_class)
+
+    if not svg:
+        print(
+            f"<!-- icon shortcode error: unknown icon '{args.name}' -->",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    svg = _apply_inline_text_style(svg, args.size)
+
+    # A labelled icon must be exposed to assistive technology.
+    if args.label:
+        svg = svg.replace(
+            'aria-hidden="true"',
+            f'aria-label="{args.label}" role="img"',
+        )
+
+    print(svg, end="")
 
 
 if __name__ == "__main__":
