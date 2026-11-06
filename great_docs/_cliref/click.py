@@ -18,7 +18,7 @@ import re
 import subprocess
 import sys
 import tomllib
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -67,8 +67,14 @@ def to_click_command(obj: Any) -> Any | None:
     Returns
     -------
     :
-        The Click command, or `None` when the object is neither a Click command nor a Typer app,
-        or Typer is not installed.
+        The Click command, or `None` if the object is unsupported, Typer is unavailable,
+        or the Typer app has no registered commands, groups or callback.
+
+    Raises
+    ------
+    RuntimeError
+        When Typer cannot convert the app, for example when a parameter's type is unsupported.
+        The message includes Typer's error, which is retained as the exception's cause.
     """
     import click
 
@@ -78,33 +84,104 @@ def to_click_command(obj: Any) -> Any | None:
     try:
         import typer
         from typer.main import get_command
+        from typer.utils import (
+            AnnotatedParamWithDefaultValueError,
+            DefaultFactoryAndDefaultValueError,
+            MixedAnnotatedAndDefaultStyleError,
+            MultipleTyperAnnotationsError,
+        )
     except ImportError:
         return None
 
-    if isinstance(obj, typer.Typer):
-        try:
-            return get_command(obj)
-        except Exception:  # pragma: no cover - defensive (malformed Typer app)
-            return None
+    if not isinstance(obj, typer.Typer):
+        return None
 
-    return None
+    # Typer rejects apps without registered commands, groups or a callback.
+    if not (
+        obj.registered_commands
+        or obj.registered_groups
+        or obj.registered_callback
+        or obj.info.callback
+    ):
+        return None
+
+    try:
+        return get_command(obj)
+    except (
+        RuntimeError,
+        AssertionError,
+        AttributeError,
+        NameError,
+        TypeError,
+        ValueError,
+        AnnotatedParamWithDefaultValueError,
+        DefaultFactoryAndDefaultValueError,
+        MixedAnnotatedAndDefaultStyleError,
+        MultipleTyperAnnotationsError,
+    ) as error:
+        # Typer can reject command signatures defined by the project. Wrap these errors
+        # in `RuntimeError` so callers can report them as project code failures.
+        raise RuntimeError(
+            f"Typer cannot convert the app to a Click command: {type(error).__name__}: {error}"
+        ) from error
 
 
-def is_cli_command(obj: Any) -> bool:
+def _first_command(
+    module: ModuleType,
+    module_path: str,
+    names: Iterable[str],
+    unconvertible: dict[str, RuntimeError],
+) -> tuple[str, Any] | None:
     """
-    Check whether an object is a documentable CLI
+    Find the first of a module's attributes that converts to a Click command
 
     Parameters
     ----------
-    obj
-        The candidate object.
+    module
+        The module to scan.
+    module_path
+        The module's dotted path, used in the `module:attribute` references.
+    names
+        The attribute names to try, in order. Missing attributes are skipped.
+    unconvertible
+        Receives the `module:attribute` reference and error of each Typer app that Typer cannot
+        convert. The scan skips such an app and continues.
 
     Returns
     -------
     :
-        `True` for a Click command or a Typer app.
+        The attribute's name and its Click command, or `None` when no attribute is a command.
     """
-    return to_click_command(obj) is not None
+    for name in names:
+        try:
+            command = to_click_command(getattr(module, name, None))
+        except RuntimeError as error:
+            unconvertible[f"{module_path}:{name}"] = error
+            continue
+        if command is not None:
+            return name, command
+    return None
+
+
+def _unconvertible_error(unconvertible: dict[str, RuntimeError]) -> RuntimeError:
+    """
+    Describe a failed search in which Typer could not convert one or more apps
+
+    Parameters
+    ----------
+    unconvertible
+        Each unconvertible Typer app's `module:attribute` reference and conversion error.
+
+    Returns
+    -------
+    :
+        An error that names every app with Typer's reason for rejecting it.
+    """
+    apps = "; ".join(
+        f"{target} ({type(error.__cause__).__name__}: {error.__cause__})"
+        for target, error in unconvertible.items()
+    )
+    return RuntimeError(f"No Click command found, and Typer cannot convert {apps}")
 
 
 def is_cli_group(cmd: Any) -> bool:
@@ -176,7 +253,8 @@ def discover(
     module_name
         The package's importable name.
     package_root
-        The directory holding `pyproject.toml`, which supplies the command's script name.
+        The directory holding `pyproject.toml`. Its scripts supply the command's display
+        name and additional modules to search.
     cli_module
         The `cli.module` setting: the module that defines the command line.
     cli_name
@@ -193,7 +271,9 @@ def discover(
         The command tree of the command `find_command` finds, with `entry_point_name` set on the
         root, or `None` when the package has no command line.
     """
-    found = find_command(module_name, cli_module=cli_module, cli_name=cli_name, report=report)
+    found = find_command(
+        module_name, package_root, cli_module=cli_module, cli_name=cli_name, report=report
+    )
     if found is None:
         return None
 
@@ -210,6 +290,7 @@ def discover(
 
 def find_command(
     module_name: str,
+    package_root: Path,
     *,
     cli_module: str | None,
     cli_name: str | None,
@@ -218,16 +299,23 @@ def find_command(
     """
     Find a package's command line as a Click command
 
-    Import `cli_module`, or else the first of the package's `cli`, `__main__`, `main`, `console`
-    and `commands` modules that holds a command. In that module, take the attribute `cli_name`
-    names, or else the first command among `cli`, `main`, `app`, `command` and the module's own
-    name, or else the first public command. When `cli_name` names an attribute that is not a
-    command, the package has no command line.
+    Use `cli_module` when configured. Otherwise, search the package's `cli`, `__main__`,
+    `main`, `console` and `commands` modules in that order, followed by the modules named
+    by scripts in `pyproject.toml`. Search console scripts before GUI scripts, preserving
+    declaration order within each group. Use the first module that contains a command.
+
+    In the selected module, try the attribute named by `cli_name` first. For a module added
+    by a script, next try the script's attribute if it is a command. Then try commands named
+    `cli`, `main`, `app`, `command` and `module_name`, in order, before searching the remaining
+    public attributes. If `cli_name` selects a non-command object, return no command. A Typer
+    app that Typer cannot convert is skipped, so a later command is still found.
 
     Parameters
     ----------
     module_name
         The package's importable name.
+    package_root
+        The directory holding `pyproject.toml`, which declares the scripts to search.
     cli_module
         The `cli.module` setting: the module that defines the command line.
     cli_name
@@ -246,19 +334,34 @@ def find_command(
     ImportError
         When a candidate module exists but fails to import, for example because a dependency
         is missing. The message names the module.
+    RuntimeError
+        When no command is found and Typer cannot convert one or more of the Typer apps
+        scanned. The message names each app and gives Typer's error.
     """
+    unconvertible: dict[str, RuntimeError] = {}
     cli_module_path = cli_module
+    script_attr: str | None = None
     if not cli_module_path:
-        for candidate in ("cli", "__main__", "main", "console", "commands"):
-            module_path = f"{module_name}.{candidate}"
+        # Keep conventional modules first, with their usual attribute order. For other
+        # modules, prefer the attribute named by the first script that references them.
+        candidates: dict[str, str | None] = {
+            f"{module_name}.{name}": None
+            for name in ("cli", "__main__", "main", "console", "commands")
+        }
+        for module_path, attr_name in _script_targets(package_root):
+            _ = candidates.setdefault(module_path, attr_name)
+        for module_path, attr_name in candidates.items():
             module = _import_candidate(module_path)
-            if module is not None and any(
-                is_cli_command(getattr(module, attr_name)) for attr_name in dir(module)
+            if module is not None and _first_command(
+                module, module_path, dir(module), unconvertible
             ):
                 cli_module_path = module_path
+                script_attr = attr_name
                 break
 
     if not cli_module_path:
+        if unconvertible:
+            raise _unconvertible_error(unconvertible)
         report(f"No Click CLI found in {module_name}")
         return None
 
@@ -268,35 +371,71 @@ def find_command(
         report(f"Could not import CLI module {cli_module_path}: {e}")
         return None
 
-    cli_obj = None
-    if cli_name:
-        cli_obj = getattr(module, cli_name, None)
+    if cli_name and getattr(module, cli_name, None):
+        found = _first_command(module, cli_module_path, [cli_name], unconvertible)
+    else:
+        script = [script_attr] if script_attr else []
+        public = [name for name in dir(module) if not name.startswith("_")]
+        names = [*script, "cli", "main", "app", "command", module_name, *public]
+        found = _first_command(module, cli_module_path, names, unconvertible)
 
-    if not cli_obj:
-        for attr_name in ["cli", "main", "app", "command", module_name]:
-            attr = getattr(module, attr_name, None)
-            if is_cli_command(attr):
-                cli_obj = attr
-                cli_name = attr_name
-                break
-
-    if not cli_obj:
-        for attr_name in dir(module):
-            if attr_name.startswith("_"):
-                continue
-            attr = getattr(module, attr_name)
-            if is_cli_command(attr):
-                cli_obj = attr
-                cli_name = attr_name
-                break
-
-    cli_obj = to_click_command(cli_obj)
-    if not cli_obj:
+    if found is None:
+        if unconvertible:
+            raise _unconvertible_error(unconvertible)
         report(f"No Click command/group found in {cli_module_path}")
         return None
 
+    cli_name, command = found
     report(f"Found Click CLI: {cli_name} in {cli_module_path}")
-    return FoundCommand(cli_obj, f"{cli_module_path}:{cli_name}")
+    return FoundCommand(command, f"{cli_module_path}:{cli_name}")
+
+
+def _script_targets(package_root: Path) -> list[tuple[str, str | None]]:
+    """
+    Read the module and attribute named by each project script
+
+    Parameters
+    ----------
+    package_root
+        The directory holding `pyproject.toml`.
+
+    Returns
+    -------
+    :
+        The `(module, attribute)` pairs in declaration order, console scripts before GUI
+        scripts. The attribute is `None` for an entry point that names only a module.
+        The list is empty when no scripts are declared or a packaging file cannot be read
+        or parsed.
+    """
+    try:
+        scripts = _manifest.read(package_root)["scripts"]
+    except ManifestError:
+        return []
+
+    targets: list[tuple[str, str | None]] = []
+    for reference in scripts.values():
+        module, _, attr = _entry_point_target(reference).partition(":")
+        if module:
+            targets.append((module, attr or None))
+    return targets
+
+
+def _entry_point_target(reference: str) -> str:
+    """
+    Remove extras and whitespace from a script's entry point
+
+    Parameters
+    ----------
+    reference
+        The entry point declared in `pyproject.toml`, such as `pkg.cli:main [extra]`.
+
+    Returns
+    -------
+    :
+        The module reference, optionally followed by `:attribute`. Extras and whitespace
+        do not affect which object the entry point names.
+    """
+    return re.sub(r"\s", "", reference.split("[", 1)[0])
 
 
 def _import_candidate(module_path: str) -> ModuleType | None:
@@ -388,8 +527,7 @@ def entry_point_name(package_root: Path, target: str) -> str | None:
         return None
 
     for name, reference in scripts.items():
-        # Whitespace and optional extras do not change the command an entry point names.
-        if re.sub(r"\s", "", reference.split("[", 1)[0]) == target:
+        if _entry_point_target(reference) == target:
             return name
 
     return next(iter(scripts), None)
@@ -733,7 +871,7 @@ def snapshot_from_source(source_dir: Path, cli_module: str) -> CliCommandInfo | 
     Import a command line from an extracted source tree and record its snapshot
 
     `sys.path` and `sys.modules` are restored afterwards, so the installed package stays the one
-    later imports find.
+    later imports find. A Typer app that Typer cannot convert is skipped, as in `find_command`.
 
     Parameters
     ----------
@@ -758,26 +896,13 @@ def snapshot_from_source(source_dir: Path, cli_module: str) -> CliCommandInfo | 
 
         module = _import_cli_module(cli_module)
 
-        cli_obj = None
-        for attr_name in ["cli", "main", "app", "command"]:
-            obj = to_click_command(getattr(module, attr_name, None))
-            if obj is not None:
-                cli_obj = obj
-                break
-
-        if cli_obj is None:
-            for attr_name in dir(module):
-                if attr_name.startswith("_"):
-                    continue
-                obj = to_click_command(getattr(module, attr_name))
-                if obj is not None:
-                    cli_obj = obj
-                    break
-
-        if cli_obj is None:
+        public = [name for name in dir(module) if not name.startswith("_")]
+        names = ["cli", "main", "app", "command", *public]
+        found = _first_command(module, cli_module, names, unconvertible={})
+        if found is None:
             return None
 
-        return extract_snapshot(cli_obj)
+        return extract_snapshot(found[1])
     except USER_CODE_ERRORS:
         return None
     finally:

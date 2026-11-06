@@ -373,6 +373,16 @@ def test_prepare_reads_options_from_directory_metadata(tmp_path: Path):
     }
 
 
+@pytest.mark.parametrize("content", [b"page-navigation: [\n", b"title: \xff\xfe\n"])
+def test_unreadable_directory_metadata_reads_as_empty(tmp_path: Path, content: bytes):
+    root = _write_project(tmp_path / "proj")
+    (root / "reference" / "_metadata.yml").write_bytes(content)
+
+    project = shared_sidebar._Project(root, _config(root))
+
+    assert project.dir_meta("reference") == {}
+
+
 def test_prepare_leaves_out_crumbs_it_cant_work_out(tmp_path: Path):
     quarto_yml = _QUARTO_YML.replace(
         "  navbar:\n    left:\n",

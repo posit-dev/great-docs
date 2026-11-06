@@ -68,10 +68,9 @@ def islands_runtime_version() -> str:
     """
     try:
         import marimo
-
-        return str(marimo.__version__)
-    except Exception:
+    except ImportError:
         return _FALLBACK_VERSION
+    return str(marimo.__version__)
 
 
 def get_islands_head_html(version: str | None = None) -> str:

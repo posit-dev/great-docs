@@ -72,8 +72,9 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
                 display_name=package_name,
                 report=print,
             )
-        except ImportError:
-            # The CLI reference step reports the import failure. Continue without CLI help.
+        except (ImportError, RuntimeError):
+            # The CLI reference step reports import and Typer conversion failures.
+            # Omit CLI help here so `llms-full.txt` is still written.
             pass
     _ = llms_files.write_full(
         build_dir, api_block, cli=cli, user_guide=run.user_guide, report=print
