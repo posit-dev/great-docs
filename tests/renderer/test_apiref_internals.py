@@ -198,6 +198,35 @@ def test_render_type_object_with_type_input():
 
 
 # ---------------------------------------------------------------------------
+# Renderer overrides propagate through a shared extension point
+# ---------------------------------------------------------------------------
+
+
+def test_render_subclass_outside_the_package_fills_in_its_extension_point():
+    """
+    Verify that a user's override reaches package renderers sharing its extension point
+    """
+    from great_docs._apiref._render.base import RenderBase
+
+    # An isolated extension point prevents the override from affecting
+    # package renderer classes shared by other tests.
+    class ExtensionPoint(RenderBase):
+        __module__ = "great_docs._apiref._render.probe"
+
+    class PackageRenderer(ExtensionPoint):
+        __module__ = "great_docs._apiref._render.probe"
+
+    class UserRenderer(ExtensionPoint):
+        def render_summary(self):
+            return [("user", "summary")]
+
+    renderer = object.__new__(PackageRenderer)
+
+    assert renderer.render_summary() == [("user", "summary")]
+    assert "render_summary" not in vars(RenderBase)
+
+
+# ---------------------------------------------------------------------------
 # _docstring_sections — duplicate registration raises KeyError
 # ---------------------------------------------------------------------------
 

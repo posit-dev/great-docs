@@ -49,7 +49,7 @@ class DCDocstringSection:
     A docstring section specific to dataclasses
     """
 
-    kind: DCDocstringSectionKind  # pragma: no cover
+    kind: DCDocstringSectionKind
     """The section kind."""
 
     def __init__(self, value: list[gf.DocstringParameter], title: str):

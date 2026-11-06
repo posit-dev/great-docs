@@ -183,12 +183,11 @@ def _simple_table_to_markdown(table_lines: list[str]) -> str | None:
     if len(separators) < 2:
         return None
 
+    # The separator pattern requires at least two `=` runs, each defining a column.
     spans = [
         (match.start(), match.end())
         for match in _RST_SIMPLE_TABLE_COLUMN_RE.finditer(separators[0][1])
     ]
-    if not spans:  # pragma: no cover
-        return None
 
     def cells(line: str) -> list[str]:
         values: list[str] = []
@@ -264,9 +263,8 @@ def _convert_rst_grid_tables(text: str) -> str:
 
 def _grid_table_to_markdown(table_lines: list[str]) -> str | None:
     """Convert one complete RST grid table to Markdown"""
+    # The border pattern requires at least two cells, giving at least three `+` boundaries.
     positions = [match.start() for match in _RST_GRID_TABLE_COLUMN_RE.finditer(table_lines[0])]
-    if len(positions) < 2:  # pragma: no cover
-        return None
     spans = list(zip(positions[:-1], positions[1:]))
 
     def cells(line: str) -> list[str]:
