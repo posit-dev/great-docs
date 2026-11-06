@@ -86,7 +86,7 @@ def _find_package_skills(package: str) -> list[Path]:
         return []
 
     if not hasattr(mod, "__file__") or mod.__file__ is None:
-        return []  # pragma: no cover
+        return []
 
     pkg_dir = Path(mod.__file__).parent
 

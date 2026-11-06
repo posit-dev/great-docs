@@ -601,6 +601,14 @@ class TestSerializeHighlight:
 # ---------------------------------------------------------------------------
 
 
+class TestInitialKeyframe:
+    def test_added_when_the_recording_starts_before_zero(self):
+        events = [Event(time=-1.0, code="o", data="a"), Event(time=-0.5, code="o", data="b")]
+        rec = Recording(events=events, term=TermInfo(cols=20, rows=4))
+        manifest = generate_manifest(rec)
+        assert [kf.time for kf in manifest.keyframes] == [-1.0, -0.5, 0.0]
+
+
 class TestGenerateManifestBranches:
     def test_script_theme_applied(self, tmp_path: Path):
         """script.theme being a Theme object overrides the default theme."""

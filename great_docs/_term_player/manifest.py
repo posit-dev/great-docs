@@ -328,7 +328,7 @@ def generate_manifest(
     event_idx = 0
 
     # Always capture initial state (time 0)
-    if 0.0 not in keyframe_times:  # pragma: no cover
+    if 0.0 not in keyframe_times:
         keyframe_times = [0.0] + keyframe_times
 
     for target_time in sorted(keyframe_times):

@@ -127,6 +127,30 @@ class TestRecordSession:
         o_events = [e for e in events if e[1] == "o"]
         assert len(o_events) >= 1
 
+    def test_child_process_execs_the_shell_at_the_requested_size(self, tmp_path: Path):
+        """Check that the child sets its terminal size and starts the requested shell"""
+        import struct
+        import termios
+
+        mock_stdout = MagicMock()
+        mock_stdout.fileno.return_value = _STDOUT_FD
+
+        with (
+            patch("pty.fork", return_value=(0, _MASTER_FD)),
+            patch("fcntl.ioctl") as ioctl,
+            patch("os.execvp") as execvp,
+            patch("sys.stdout", mock_stdout),
+            pytest.raises(SystemExit) as exit_info,
+        ):
+            record_session(tmp_path / "child.termshow", shell="/bin/fakesh", cols=30, rows=10)
+
+        execvp.assert_called_once_with("/bin/fakesh", ["/bin/fakesh"])
+        ioctl.assert_called_once_with(
+            _STDOUT_FD, termios.TIOCSWINSZ, struct.pack("HHHH", 10, 30, 0, 0)
+        )
+        # The exec stub returns; the child must exit before the parent's recording loop.
+        assert exit_info.value.code == 1
+
     def test_select_oserror_exits_loop(self, tmp_path: Path):
         """OSError from select breaks the loop; file is still written."""
         output_path = tmp_path / "session.termshow"
