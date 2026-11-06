@@ -13,6 +13,7 @@ from great_docs import _manifest
 from great_docs._content.naming import section_slug
 from great_docs._layout import CONVENTIONAL_DOC_DIRS, Layout
 from great_docs._manifest import ManifestError
+from great_docs._project import package_name
 from great_docs._utils import is_great_docs_build_dir, recognised_build_dirs
 from great_docs._website import branding
 from great_docs._website.homepage import source as homepage_source
@@ -315,7 +316,7 @@ def _package_metadata(root: Path) -> tuple[str, list[Path]]:
         The root cannot be listed.
     """
     manifest = _manifest.read(root)
-    name = manifest["name"] or ""
+    name = package_name(root, manifest) or ""
     sources: list[Path] = [root / "src"]
     sources.extend(
         absolute_path(root / directory)
@@ -329,8 +330,6 @@ def _package_metadata(root: Path) -> tuple[str, list[Path]]:
         if not child.name.startswith(".") and (child / "__init__.py").is_file()
     ]
     sources.extend(packages)
-    if not name and len(packages) == 1:
-        name = packages[0].name
     if name:
         sources.append(root / name.replace("-", "_"))
     return name, sources

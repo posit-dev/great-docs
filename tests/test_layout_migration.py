@@ -12,8 +12,11 @@ from yaml12 import read_yaml
 from great_docs._layout import CONVENTIONAL_DOC_DIRS, Layout
 from great_docs._layout_migration import analyse
 from great_docs._layout_migration.model import MigrationError, Move, Note, fingerprint
+from great_docs._project import Project
 from great_docs._utils import QUARTO_YML_HEADER
+from great_docs._website import branding
 from great_docs.cli import _print_notes, cli
+from great_docs.config import Config
 from tests.support import discover_user_guide, make_run, prepare_build_directory, user_guide_step
 
 
@@ -1649,6 +1652,23 @@ def test_implicit_logos_become_explicit_without_losing_settings(project: Path) -
     assert config["hero"]["logo"] == {"light": "../logo-hero.png", "dark": "../logo-hero.png"}
     assert config["hero"]["tagline"] == "Simple"
     assert "# Keep" in edit.after.decode()
+
+
+def test_name_specific_logo_matches_the_build(project: Path):
+    # With no declared name, migration and build must use the sole package directory's
+    # name to find the logo.
+    put(project, "pyproject.toml", "[build-system]\nrequires = []\n")
+    put(project, "sample_logo.svg", "<svg/>")
+    layout = Layout.make(project)
+    detected = branding.detect_logo(layout.source_dir, Project.make(Config(project), layout).name)
+
+    result = analyse(layout, Path("docs"))
+
+    assert not result.blockers
+    edit = next(edit for edit in result.edits if edit.path == project / "great-docs.yml")
+    config = read_yaml(io.StringIO(edit.after.decode()))
+    assert detected == {"light": "sample_logo.svg", "dark": "sample_logo.svg"}
+    assert config["logo"] == {"light": "../sample_logo.svg", "dark": "../sample_logo.svg"}
 
 
 def test_automation_follow_up_names_file_and_new_site(project: Path) -> None:

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from ._layout import Layout
     from .config import Config
 
-__all__ = ["Project", "locate_package_init", "read_manifest"]
+__all__ = ["Project", "locate_package_init", "package_name", "read_manifest"]
 
 # Recognised repository URL labels, casefolded without separators, in preference order.
 _REPOSITORY_URL_LABELS = ("repository", "source", "sourcecode", "github", "homepage")
@@ -145,7 +145,7 @@ class Project:
         """
         root = layout.package_root
         manifest = read_manifest(root)
-        name = manifest["name"] or _sole_package(root)
+        name = package_name(root, manifest)
         module = _detect_module(config, root, manifest, name)
         importable_name = _importable_name(module, name)
         return cls(
@@ -186,21 +186,26 @@ def read_manifest(root: Path) -> Manifest:
         return _manifest.empty()
 
 
-def _sole_package(root: Path) -> str | None:
+def package_name(root: Path, manifest: Manifest) -> str | None:
     """
-    Find the sole non-hidden package directory at a project's root
+    Find the package name from declared metadata or the sole package directory
 
     Parameters
     ----------
     root
         The project's root directory.
+    manifest
+        The metadata the project's packaging files declare.
 
     Returns
     -------
     :
-        The directory's name, or `None` unless exactly one non-hidden directory contains
-        `__init__.py`.
+        The declared distribution name, falling back to the name of the sole non-hidden
+        directory at `root` containing `__init__.py`. Return `None` if neither identifies
+        a name.
     """
+    if manifest["name"]:
+        return manifest["name"]
     packages = [
         path.name
         for path in root.iterdir()
