@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import textwrap
+from concurrent.futures import Future
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -1091,6 +1093,12 @@ class TestFormatConsole:
         assert "✓ page.qmd (2 cells)" in output
         assert "1 passed, 0 failed" in output
 
+    def test_warnings(self):
+        """Display collection warnings in the console output"""
+        result = CheckResult(warnings=["Skipped the examples of pkg.Foo"])
+        output = format_console(result)
+        assert "⚠ Skipped the examples of pkg.Foo" in output
+
     def test_failing_page(self):
         result = CheckResult(
             pages_checked=1,
@@ -1185,6 +1193,12 @@ class TestFormatJson:
         assert "summary" in data
         assert "pages" in data
         assert data["summary"]["pages_passed"] == 1
+
+    def test_warnings(self):
+        """Include collection warnings in the JSON output"""
+        result = CheckResult(warnings=["Skipped the examples of pkg.Foo"])
+        data = json.loads(format_json(result))
+        assert data["warnings"] == ["Skipped the examples of pkg.Foo"]
 
     def test_with_errors(self):
         result = CheckResult(
@@ -1626,12 +1640,76 @@ class TestCheckExamplesOrchestrator:
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
         with patch(
             "great_docs._checks.examples._render_page_with_quarto",
-            side_effect=Exception("render crashed"),
+            side_effect=OSError("render crashed"),
         ):
             result = check_examples(tmp_path, no_docstrings=True)
         assert result.pages_failed == 1
         assert result.pages[0].status == "error"
         assert "render crashed" in result.pages[0].message
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            FileNotFoundError(2, "No such file or directory", "quarto"),
+            UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte"),
+        ],
+    )
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    def test_quarto_run_failure_reported_as_error(self, mock_quarto, error, tmp_path):
+        """Report Quarto startup and output-decoding failures as page errors"""
+        self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
+        with patch("great_docs._checks.examples.subprocess.run", side_effect=error):
+            result = check_examples(tmp_path, no_docstrings=True)
+        assert result.pages[0].status == "error"
+        assert result.pages[0].message.startswith(type(error).__name__)
+
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    def test_render_bug_propagates(self, mock_quarto, tmp_path):
+        """Propagate unexpected rendering errors"""
+        self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
+        with patch(
+            "great_docs._checks.examples._render_page_with_quarto",
+            side_effect=TypeError("bug"),
+        ):
+            with pytest.raises(TypeError, match="bug"):
+                check_examples(tmp_path, no_docstrings=True)
+
+    def test_worker_reports_render_os_error(self, tmp_path):
+        """Report file-access failures from rendering in a worker"""
+        cells_json = json.dumps([asdict(Cell(0, "x = 1"))])
+        with patch(
+            "great_docs._checks.examples._render_page_with_quarto",
+            side_effect=PermissionError("denied"),
+        ):
+            result = json.loads(_run_page("page.qmd", cells_json, 30, str(tmp_path)))
+        assert result["status"] == "error"
+        assert result["message"] == "PermissionError: denied"
+
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    def test_broken_process_pool_reported_as_error(self, mock_quarto, tmp_path):
+        """Report a page error for each task whose worker pool has failed"""
+
+        class BrokenPool:
+            def __init__(self, max_workers: int) -> None:
+                pass
+
+            def __enter__(self) -> BrokenPool:
+                return self
+
+            def __exit__(self, *exc_info: object) -> None:
+                pass
+
+            def submit(self, fn: object, *args: object) -> Future[str]:
+                future: Future[str] = Future()
+                future.set_exception(BrokenProcessPool("a worker died"))
+                return future
+
+        self._write_qmd(tmp_path / "a.qmd", "```{python}\nx = 1\n```\n")
+        self._write_qmd(tmp_path / "b.qmd", "```{python}\ny = 2\n```\n")
+        with patch("great_docs._checks.examples.ProcessPoolExecutor", BrokenPool):
+            result = check_examples(tmp_path, jobs=2, no_docstrings=True)
+        assert [p.status for p in result.pages] == ["error", "error"]
+        assert all("a worker died" in p.message for p in result.pages)
 
     @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
     @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
@@ -1649,6 +1727,19 @@ class TestCheckExamplesOrchestrator:
         with patch("great_docs._checks.examples.extract_docstring_examples") as mock_ds:
             result = check_examples(tmp_path, no_docstrings=True)
         mock_ds.assert_not_called()
+
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    def test_docstring_warnings_reach_the_result(self, mock_quarto, tmp_path):
+        """Preserve collection warnings when no examples can be checked"""
+
+        def extract(project_root, layout=None, *, warn):
+            warn("Could not load package pkg")
+            return []
+
+        with patch("great_docs._checks.examples.extract_docstring_examples", side_effect=extract):
+            result = check_examples(tmp_path)
+        assert result.pages == []
+        assert result.warnings == ["Could not load package pkg"]
 
     @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
     @patch("great_docs._checks.examples._render_page_with_quarto")
@@ -1740,6 +1831,66 @@ class TestExtractDocstringExamples:
     def test_no_config_file(self, tmp_path):
         result = extract_docstring_examples(tmp_path)
         assert result == []
+
+    def _write_project(self, tmp_path, monkeypatch, name, contents, files=None):
+        (tmp_path / "great-docs.yml").write_text("display_name: Test\n")
+        (tmp_path / "pyproject.toml").write_text(f'[project]\nname = "{name}"\n')
+        for rel, text in (files or {}).items():
+            path = tmp_path / "src" / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(textwrap.dedent(text))
+        monkeypatch.syspath_prepend(tmp_path / "src")
+        config = mock_config(reference_enabled=True, reference=[{"contents": contents}])
+        return patch("great_docs.config.Config", return_value=config)
+
+    def test_package_that_cannot_load_warns(self, tmp_path, monkeypatch):
+        """Warn when the documented package cannot be loaded"""
+        warnings = []
+        with self._write_project(tmp_path, monkeypatch, "gd-hpmb-missing", ["Foo"]):
+            result = extract_docstring_examples(tmp_path, warn=warnings.append)
+        assert result == []
+        assert len(warnings) == 1
+        assert "gd_hpmb_missing" in warnings[0]
+        assert "ModuleNotFoundError" in warnings[0]
+
+    @pytest.mark.parametrize(
+        ("name", "error"),
+        [
+            ("Gone.method", "AliasResolutionError"),
+            ("Gone", "AliasResolutionError"),
+            ("Loop", "CyclicAliasError"),
+        ],
+    )
+    def test_unresolvable_object_warns_and_others_are_checked(
+        self, name, error, tmp_path, monkeypatch
+    ):
+        """Warn about unresolved imports and collect examples from other objects"""
+        files = {
+            "gd_hpmb_alias/__init__.py": """\
+                from .missing import Gone
+                from .cycle import Loop
+                from .real import Real
+            """,
+            "gd_hpmb_alias/cycle.py": "from gd_hpmb_alias import Loop\n",
+            "gd_hpmb_alias/real.py": '''\
+                class Real:
+                    """
+                    A class
+
+                    Examples
+                    --------
+                    >>> Real()
+                    """
+            ''',
+        }
+        contents = [name, "Real"]
+        warnings = []
+        with self._write_project(tmp_path, monkeypatch, "gd-hpmb-alias", contents, files):
+            result = extract_docstring_examples(tmp_path, warn=warnings.append)
+        assert [page for page, _cells in result] == ["docstring:gd_hpmb_alias.Real"]
+        assert len(warnings) == 1
+        assert f"{name}'" in warnings[0]
+        assert error in warnings[0]
 
     def test_no_reference_enabled(self, tmp_path):
         (tmp_path / "great-docs.yml").write_text("display_name: Test\n")
@@ -2773,7 +2924,7 @@ class TestOrchestratorEdgeCases:
                     errors=[CellError(0, "bad", "NameError", "bad", "tb")],
                 )
             else:
-                raise RuntimeError("render crashed")
+                raise OSError("render crashed")
 
         mock_render.side_effect = render_side_effect
         result = check_examples(tmp_path, no_docstrings=True)
