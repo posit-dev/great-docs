@@ -1568,10 +1568,7 @@ if not _MCP_V1 and _V2_HANDLERS:
 async def run_mcp_server():  # pragma: no cover
     """Run the Great Docs MCP server over stdio."""
     async with stdio_server() as (read_stream, write_stream):
-        if _MCP_V1:
-            await server.run(read_stream, write_stream, server.create_initialization_options())
-        else:
-            await server.run(read_stream, write_stream)
+        await server.run(read_stream, write_stream, server.create_initialization_options())
 
 
 if __name__ == "__main__":  # pragma: no cover

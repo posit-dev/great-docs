@@ -312,6 +312,28 @@ class TestOnCallToolIsError:
 
 
 # ---------------------------------------------------------------------------
+# Server entry point
+# ---------------------------------------------------------------------------
+
+
+def test_server_answers_a_client_over_stdio():
+    import sys
+
+    from mcp import ClientSession
+    from mcp.client.stdio import StdioServerParameters, stdio_client
+
+    async def list_tool_names() -> list[str]:
+        params = StdioServerParameters(command=sys.executable, args=["-m", "great_docs.mcp"])
+        async with stdio_client(params) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await asyncio.wait_for(session.initialize(), 30)
+                result = await asyncio.wait_for(session.list_tools(), 30)
+        return [tool.name for tool in result.tools]
+
+    assert "gd_build" in asyncio.run(list_tool_names())
+
+
+# ---------------------------------------------------------------------------
 # _handle_preview
 # ---------------------------------------------------------------------------
 
