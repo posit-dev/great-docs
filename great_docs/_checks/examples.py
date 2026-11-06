@@ -5,6 +5,7 @@ import re
 import subprocess
 import tempfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import asdict, dataclass, field
 from fnmatch import fnmatch
 from html import unescape
@@ -464,7 +465,7 @@ def _render_page_with_quarto(
                 cells_checked=len(cells),
                 message=f"Quarto render timed out after {timeout * len(cells) + 60}s",
             )
-        except Exception as e:
+        except (OSError, UnicodeDecodeError) as e:
             return PageResult(
                 path=page_label,
                 status="error",
@@ -532,7 +533,7 @@ def _run_page(
         else:
             qmd_path = Path(qmd_path_str) if qmd_path_str else project_root / page_path
             result = _render_page_with_quarto(qmd_path, page_path, cells, timeout, project_root)
-    except Exception as e:
+    except OSError as e:
         result = PageResult(
             path=page_path,
             status="error",
@@ -713,7 +714,9 @@ def check_examples(
                     page_result_json = future.result()
                     page_result_dict = json.loads(page_result_json)
                     page_result = _dict_to_page_result(page_result_dict)
-                except Exception as e:
+                # A dead worker cannot return a page result. Let other exceptions propagate
+                # so checker bugs remain visible.
+                except BrokenProcessPool as e:
                     page_result = PageResult(
                         path=f_page_path,
                         status="error",
@@ -737,7 +740,7 @@ def check_examples(
                     page_result = _render_page_with_quarto(
                         qmd_path, page_path, cells, timeout, project_root
                     )
-            except Exception as e:
+            except OSError as e:
                 page_result = PageResult(
                     path=page_path,
                     status="error",

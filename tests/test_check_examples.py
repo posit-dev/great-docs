@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import textwrap
+from concurrent.futures import Future
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -1624,12 +1626,76 @@ class TestCheckExamplesOrchestrator:
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
         with patch(
             "great_docs._checks.examples._render_page_with_quarto",
-            side_effect=Exception("render crashed"),
+            side_effect=OSError("render crashed"),
         ):
             result = check_examples(tmp_path, no_docstrings=True)
         assert result.pages_failed == 1
         assert result.pages[0].status == "error"
         assert "render crashed" in result.pages[0].message
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            FileNotFoundError(2, "No such file or directory", "quarto"),
+            UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte"),
+        ],
+    )
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    def test_quarto_run_failure_reported_as_error(self, mock_quarto, error, tmp_path):
+        """Report Quarto startup and output-decoding failures as page errors"""
+        self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
+        with patch("great_docs._checks.examples.subprocess.run", side_effect=error):
+            result = check_examples(tmp_path, no_docstrings=True)
+        assert result.pages[0].status == "error"
+        assert result.pages[0].message.startswith(type(error).__name__)
+
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    def test_render_bug_propagates(self, mock_quarto, tmp_path):
+        """Propagate unexpected rendering errors"""
+        self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
+        with patch(
+            "great_docs._checks.examples._render_page_with_quarto",
+            side_effect=TypeError("bug"),
+        ):
+            with pytest.raises(TypeError, match="bug"):
+                check_examples(tmp_path, no_docstrings=True)
+
+    def test_worker_reports_render_os_error(self, tmp_path):
+        """Report file-access failures from rendering in a worker"""
+        cells_json = json.dumps([asdict(Cell(0, "x = 1"))])
+        with patch(
+            "great_docs._checks.examples._render_page_with_quarto",
+            side_effect=PermissionError("denied"),
+        ):
+            result = json.loads(_run_page("page.qmd", cells_json, 30, str(tmp_path)))
+        assert result["status"] == "error"
+        assert result["message"] == "PermissionError: denied"
+
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    def test_broken_process_pool_reported_as_error(self, mock_quarto, tmp_path):
+        """Report a page error for each task whose worker pool has failed"""
+
+        class BrokenPool:
+            def __init__(self, max_workers: int) -> None:
+                pass
+
+            def __enter__(self) -> BrokenPool:
+                return self
+
+            def __exit__(self, *exc_info: object) -> None:
+                pass
+
+            def submit(self, fn: object, *args: object) -> Future[str]:
+                future: Future[str] = Future()
+                future.set_exception(BrokenProcessPool("a worker died"))
+                return future
+
+        self._write_qmd(tmp_path / "a.qmd", "```{python}\nx = 1\n```\n")
+        self._write_qmd(tmp_path / "b.qmd", "```{python}\ny = 2\n```\n")
+        with patch("great_docs._checks.examples.ProcessPoolExecutor", BrokenPool):
+            result = check_examples(tmp_path, jobs=2, no_docstrings=True)
+        assert [p.status for p in result.pages] == ["error", "error"]
+        assert all("a worker died" in p.message for p in result.pages)
 
     @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
     @patch("great_docs._checks.examples._render_page_with_quarto", side_effect=_mock_render_pass)
@@ -2771,7 +2837,7 @@ class TestOrchestratorEdgeCases:
                     errors=[CellError(0, "bad", "NameError", "bad", "tb")],
                 )
             else:
-                raise RuntimeError("render crashed")
+                raise OSError("render crashed")
 
         mock_render.side_effect = render_side_effect
         result = check_examples(tmp_path, no_docstrings=True)
