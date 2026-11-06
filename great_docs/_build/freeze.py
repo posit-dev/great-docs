@@ -3,7 +3,8 @@ Page freezing and freeze cache persistence
 
 Quarto reuses a page's cached results only while its source is unchanged. Pages are frozen
 from the same sources a build renders. Each build stores its cache in its Quarto project.
-The persisted cache beside the configuration preserves those results for the next build.
+The persisted cache beside the configuration preserves results for later builds. It stores
+the latest version's results at its root and historical results in a subdirectory per version.
 """
 
 from __future__ import annotations
@@ -28,6 +29,9 @@ if TYPE_CHECKING:
     from .steps import Step
 
 __all__ = ["find_page", "merge", "prepare", "render_page", "save"]
+
+# Keep this directory name in sync with the restore script copied into Quarto projects.
+_VERSIONS_DIR = "_versions"
 
 
 def prepare(steps: Iterable[Step], log: BuildLog, build_dir: Path) -> None:
@@ -154,11 +158,12 @@ def merge(source: Path, destination: Path) -> int:
 
 def save(layout: Layout) -> int | None:
     """
-    Replace the persisted freeze cache with merged caches from all builds
+    Replace the persisted freeze cache with separate caches for each build
 
-    The latest version and non-versioned builds store their cache in the default build
-    directory. Historical versions use recognised build directories beside it. Merge
-    historical caches first so the latest version wins when versions cache the same file.
+    Store the latest version's cache, or a non-versioned build's cache, at the root of
+    the persisted cache. Store each historical version's cache under
+    `_versions/<build directory name>/` so versions can cache different results for the
+    same page.
 
     Parameters
     ----------
@@ -175,17 +180,23 @@ def save(layout: Layout) -> int | None:
     ValueError
         If a cache contains a symlink.
     """
-    builds = (*recognised_build_dirs(layout), layout.build_dir)
-    sources = [build / "_freeze" for build in builds if (build / "_freeze").is_dir()]
-    if not sources:
+    persisted = layout.freeze_dir
+    destinations = {layout.build_dir: persisted} | {
+        build: persisted / _VERSIONS_DIR / build.name for build in recognised_build_dirs(layout)
+    }
+    caches = {
+        build / "_freeze": destination
+        for build, destination in destinations.items()
+        if (build / "_freeze").is_dir()
+    }
+    if not caches:
         return None
 
-    destination = layout.freeze_dir
-    for cache in (destination, *sources):
+    for cache in (persisted, *caches):
         validate_tree_symlinks(cache)
-    if destination.exists():
-        shutil.rmtree(destination)
-    destination.mkdir(parents=True)
-    for source in sources:
+    if persisted.exists():
+        shutil.rmtree(persisted)
+    persisted.mkdir(parents=True)
+    for source, destination in caches.items():
         _ = merge(source, destination)
-    return sum(1 for path in destination.rglob("*") if path.is_file())
+    return sum(1 for path in persisted.rglob("*") if path.is_file())

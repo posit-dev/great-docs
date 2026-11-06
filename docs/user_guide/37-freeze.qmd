@@ -95,8 +95,10 @@ the freeze cache survive? Great Docs handles this transparently with a two-step 
 1. Restore `docs/_freeze/` into each generated Quarto project's `_freeze/` before rendering
 2. Persist updated results from those project caches back to `docs/_freeze/` after rendering
 
-You don't need to create or manage any scripts; it's all handled internally. This also works with
-versioned builds, where each version's freeze cache is collected and merged beside the configuration.
+Great Docs manages these scripts for you. In versioned builds, it stores the latest version's
+results at the root of `docs/_freeze/`. It stores each older version's results in a separate
+subdirectory under `docs/_freeze/_versions/`. Versions can cache different results for the same
+page without overwriting each other's results.
 
 ## The `great-docs freeze` Command
 
@@ -354,10 +356,11 @@ docs/_freeze/
 │   └── benchmarks/
 │       └── execute-results/
 │           └── html.json     # Cached cell outputs + content hash
-└── recipes/
-    └── mcmc-demo/
-        └── execute-results/
-            └── html.json
+├── recipes/
+│   └── mcmc-demo/
+│       └── execute-results/
+│           └── html.json
+└── _versions/                # Older versions' results, one directory per version
 ```
 
 Each `html.json` contains the rendered cell outputs and a hash of the source file. This hash is

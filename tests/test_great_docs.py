@@ -21724,16 +21724,15 @@ class TestSaveFreezeCacheVersioned:
 
         assert count == 2
         assert (tmp_path / "_freeze" / "latest.json").is_file()
-        assert (tmp_path / "_freeze" / "old.json").is_file()
-        assert not (tmp_path / "_freeze" / "stray.json").exists()
+        assert (tmp_path / "_freeze" / "_versions" / "great-docs-0.2" / "old.json").is_file()
+        assert not list(tmp_path.joinpath("_freeze").rglob("stray.json"))
 
-    def test_merge_keeps_pages_scoped_out_of_a_historical_version(self, tmp_path: Path):
+    def test_versions_caching_the_same_page_keep_their_own_results(self, tmp_path: Path):
         """
-        Preserve latest pages that a historical version excludes
+        Preserve each version's results when versions cache the same page
 
-        Quarto groups page caches below shared section directories. Replacing
-        a whole section with a historical cache would discard pages that the
-        historical version excluded.
+        Store different results for the shared page and retain pages that only the
+        latest version caches.
         """
         from great_docs._utils import QUARTO_YML_HEADER
 
@@ -21761,11 +21760,11 @@ class TestSaveFreezeCacheVersioned:
                 tmp_path / "_freeze" / "user-guide" / page / "execute-results" / "html.json"
             ).is_file()
 
-        # The latest cache is merged last and must win same-path collisions.
-        merged_a = (
-            tmp_path / "_freeze" / "user-guide" / "a" / "execute-results" / "html.json"
-        ).read_text(encoding="utf-8")
-        assert merged_a == '{"page": "a"}'
+        page_a = Path("user-guide/a/execute-results/html.json")
+        persisted = tmp_path / "_freeze"
+        assert (persisted / page_a).read_text(encoding="utf-8") == '{"page": "a"}'
+        old_a = persisted / "_versions" / "great-docs-0.14.0" / page_a
+        assert old_a.read_text(encoding="utf-8") == '{"page": "a-old"}'
 
 
 # ---------------------------------------------------------------------------
