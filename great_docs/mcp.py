@@ -34,7 +34,7 @@ from mcp.types import (
 from pydantic import AnyUrl
 
 from ._build import outputs
-from ._build.steps import BuildError
+from ._build.steps import USER_CODE_ERRORS, BuildError
 from ._content import user_guide
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, LayoutError
 from ._utils import is_in_great_docs_build_dir, recognised_build_dirs
@@ -90,6 +90,12 @@ _INSTRUCTIONS = (
     "Start with `gd_status` to understand the current project state, then use "
     "tools and prompts to accomplish documentation tasks."
 )
+
+# Project failures produce failed tool results, resource error text or no completion
+# suggestions. These include invalid configuration or layout (`ValueError`), file
+# access errors, package import or loading errors, and build failures (`BuildError`
+# inherits from `RuntimeError`). Other exceptions propagate as protocol errors.
+_PROJECT_ERRORS: tuple[type[Exception], ...] = (*USER_CODE_ERRORS, ValueError)
 
 
 # ---------------------------------------------------------------------------
@@ -464,7 +470,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             result = _ToolCallContent([TextContent(type="text", text=f"Unknown tool: {name}")])
             result.is_error = True
             return result
-    except Exception as e:
+    except _PROJECT_ERRORS as e:
         result = _ToolCallContent([TextContent(type="text", text=f"Error: {e}")])
         result.is_error = True
         return result

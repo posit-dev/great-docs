@@ -15,6 +15,7 @@ import great_docs.mcp as mcp_module
 from great_docs._layout import Layout
 from great_docs._project import Project
 from great_docs._utils import QUARTO_YML_HEADER
+from great_docs.config import ConfigError
 from great_docs.mcp import (
     _build_output_dirs,
     _get_project_root,
@@ -272,6 +273,18 @@ class TestCallTool:
         with patch("great_docs.mcp._handle_build", side_effect=RuntimeError("boom")):
             result = asyncio.run(call_tool("gd_build", {}))
         assert result.is_error is True
+
+    def test_configuration_error_returns_error_text(self):
+        error = ConfigError("great-docs.yml: parser: 'nope' is not one of numpy, google, sphinx.")
+        with patch("great_docs.mcp._handle_scan", side_effect=error):
+            result = asyncio.run(call_tool("gd_scan", {}))
+        assert result.is_error is True
+        assert result[0].text == f"Error: {error}"
+
+    def test_unexpected_error_in_handler_propagates(self):
+        with patch("great_docs.mcp._handle_scan", side_effect=ZeroDivisionError("bug")):
+            with pytest.raises(ZeroDivisionError):
+                asyncio.run(call_tool("gd_scan", {}))
 
     def test_successful_call_does_not_mark_is_error(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
