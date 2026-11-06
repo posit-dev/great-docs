@@ -1,3 +1,5 @@
+import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -155,8 +157,9 @@ def test_include_embeds_the_status_script_staged_in_the_build_directory(
         ({}, False),
         ({"sidebar_filter": {"enabled": False}, "dark_mode_toggle": False}, True),
         ({"github_style": "icon", "marimo": {"enabled": True}, "cli": {"enabled": True}}, True),
+        ({"webmcp": True}, True),
     ],
-    ids=["defaults", "no-repository", "opt-outs", "icon-marimo-cli"],
+    ids=["defaults", "no-repository", "opt-outs", "icon-marimo-cli", "webmcp"],
 )
 def test_a_file_is_copied_and_listed_exactly_when_it_is_used(
     tmp_path: Path, settings: dict[str, Any], has_repository: bool
@@ -183,3 +186,82 @@ def test_a_file_is_copied_and_listed_exactly_when_it_is_used(
         assert (script.name in listed) == used, script.name
         if script.slot is not None:
             assert (script.name in included) == used, script.name
+
+
+def _webmcp_headers(tmp_path: Path, settings: dict[str, Any]) -> list[str]:
+    config = write_config(tmp_path, settings)
+    quarto_config: dict[str, Any] = {}
+    scripts.include(config, quarto_config, tmp_path, has_repository=False)
+    return [entry["text"] for entry in quarto_config["format"]["html"]["include-in-header"]]
+
+
+def _webmcp_settings(headers: list[str]) -> dict[str, Any]:
+    entry = headers[_position(headers, "gd-webmcp-settings")]
+    match = re.search(r'id="gd-webmcp-settings">(.*)</script>', entry)
+    assert match is not None
+    return json.loads(match.group(1))
+
+
+def test_webmcp_is_off_by_default(tmp_path: Path):
+    headers = _webmcp_headers(tmp_path, {})
+
+    assert not any("webmcp" in entry for entry in headers)
+
+
+def test_webmcp_loads_deferred_in_the_header_after_its_settings(tmp_path: Path):
+    headers = _webmcp_headers(tmp_path, {"webmcp": True})
+
+    script = _position(headers, "webmcp.js")
+    assert 'defer src="/webmcp.js"' in headers[script]
+    assert _position(headers, "gd-webmcp-settings") == script - 1
+    assert sum("webmcp.js" in entry for entry in headers) == 1
+
+
+def test_webmcp_settings_carry_the_configuration(tmp_path: Path):
+    from great_docs import __version__
+
+    headers = _webmcp_headers(
+        tmp_path,
+        {
+            "webmcp": {
+                "enabled": True,
+                "actions": False,
+                "js_api": False,
+                "exclude_tools": ["get_page"],
+            },
+            "markdown_pages": False,
+        },
+    )
+
+    assert _webmcp_settings(headers) == {
+        "schema": 1,
+        "generator": f"great-docs {__version__}",
+        "markdown_pages": False,
+        "actions": False,
+        "js_api": False,
+        "exclude": ["get_page"],
+    }
+
+
+def test_webmcp_settings_cannot_close_their_script_element(tmp_path: Path):
+    headers = _webmcp_headers(
+        tmp_path, {"webmcp": {"enabled": True, "exclude_tools": ["</script><b>"]}}
+    )
+
+    entry = headers[_position(headers, "gd-webmcp-settings")]
+    assert entry.count("</script>") == 1
+    assert _webmcp_settings(headers)["exclude"] == ["</script><b>"]
+
+
+def test_webmcp_origin_trial_tags_appear_only_with_tokens(tmp_path: Path):
+    without = _webmcp_headers(tmp_path, {"webmcp": True})
+    with_tokens = _webmcp_headers(
+        tmp_path, {"webmcp": {"enabled": True, "origin_trials": ["TOKEN-A", ' "B&C" ']}}
+    )
+
+    assert not any("origin-trial" in entry for entry in without)
+    entry = with_tokens[_position(with_tokens, "gd-webmcp-settings")]
+    assert entry.splitlines()[:2] == [
+        '<meta http-equiv="origin-trial" content="TOKEN-A">',
+        '<meta http-equiv="origin-trial" content="&quot;B&amp;C&quot;">',
+    ]

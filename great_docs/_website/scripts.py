@@ -13,6 +13,8 @@ root.
 
 from __future__ import annotations
 
+import html
+import json
 import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -277,6 +279,41 @@ def _dark_mode_disabled(config: Config) -> str | None:
     return '<meta name="gd-dark-mode" content="disabled">'
 
 
+def _webmcp_head(config: Config) -> str:
+    """
+    Build the header tags that configure `webmcp.js`
+
+    Parameters
+    ----------
+    config
+        The Great Docs configuration.
+
+    Returns
+    -------
+    :
+        An origin-trial `<meta>` tag for each configured token, then the runtime's settings
+        as a JSON `<script>` element.
+    """
+    from .. import __version__
+
+    settings = {
+        "schema": 1,
+        "generator": f"great-docs {__version__}",
+        "markdown_pages": config.markdown_pages,
+        "actions": config.webmcp_actions,
+        "js_api": config.webmcp_js_api,
+        "exclude": config.webmcp_exclude_tools,
+    }
+    # "</" inside a <script> element would end it early.
+    text = json.dumps(settings, separators=(",", ":")).replace("</", r"<\/")
+    tags = [
+        f'<meta http-equiv="origin-trial" content="{html.escape(token)}">'
+        for token in config.webmcp_origin_trials
+    ]
+    tags.append(f'<script type="application/json" id="gd-webmcp-settings">{text}</script>')
+    return "\n".join(tags)
+
+
 _HEADER: Slot = "include-in-header"
 _AFTER_BODY: Slot = "include-after-body"
 _LIGHTBOX = "_extensions/gd-lightbox"
@@ -298,6 +335,7 @@ SCRIPTS: tuple[Script, ...] = (
     Script("gd-lightbox-annotate.css", _HEADER, library=True, directory=_LIGHTBOX),
     Script("gd-lightbox-annotate.js", _HEADER, defer=True, library=True, directory=_LIGHTBOX),
     Script("theme-init.js", _HEADER, data=_dark_mode_disabled),
+    Script("webmcp.js", _HEADER, lambda c: c.webmcp_enabled, defer=True, data=_webmcp_head),
     Script("announcement-banner.js", gate=lambda c: c.announcement is not None),
     Script(
         "github-widget.js",
