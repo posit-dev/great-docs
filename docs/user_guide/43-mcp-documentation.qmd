@@ -37,8 +37,8 @@ mcp:
   enabled: false
 ```
 
-If your module is importable and contains a valid `mcp.server.Server` instance, you're all set.
-Great Docs handles discovery, introspection, page generation, and sidebar integration from there.
+The module must be importable and contain an MCP server instance. Great Docs then discovers the
+server, reads its capabilities, generates pages and adds them to the sidebar.
 
 ## How It Works
 
@@ -47,9 +47,11 @@ gives you confidence that the output matches your code. When MCP documentation i
 Docs runs the following steps during `great-docs build`:
 
 1. **Imports your module**: loads the module at the path you specified (or auto-detected)
-2. **Finds the Server instance**: auto-detects the first `mcp.server.Server` object in the module
-3. **Extracts capabilities**: introspects registered tools, resources, resource templates, and
-   prompts by calling the server's internal handlers
+2. **Finds the server instance**: auto-detects the first `Server`, `MCPServer` or `FastMCP`
+   instance in the module
+3. **Extracts capabilities**: runs the server in a subprocess over standard input and output
+   (stdio) and queries its tools, resources, resource templates and prompts over the MCP
+   protocol. If protocol introspection fails, Great Docs scans the module source for tools instead
 4. **Generates structured pages**: creates `.qmd` files in `reference/mcp/` with parameter tables,
    type annotations, and descriptions
 5. **Builds an index page**: creates an overview with capability tiles and categorized tool listings
@@ -146,17 +148,17 @@ mcp:
 
 ### `module` (optional)
 
-The dotted import path to the Python module containing your `mcp.server.Server` instance. If
-omitted, Great Docs tries `<package>.mcp`, `<package>.mcp_server` and `<package>.server` in order,
+The dotted import path of the module containing your MCP server. If omitted, Great Docs tries
+`<package>.mcp`, `<package>.mcp_server` and `<package>.server` in order,
 where `<package>` is the top-level `module` setting or, without one, the package Great Docs detects
 in your project. Trying a candidate imports your package. When Great Docs finds no package, it
 looks for no server, so set `mcp.module` to document one.
 
 ### `server_var` (optional)
 
-The variable name of the `Server` instance in your module. If omitted, Great Docs auto-detects the
-first `mcp.server.Server` object it finds. Only needed if your module defines multiple server
-instances.
+The name of the variable holding your server instance. If omitted, Great Docs automatically detects
+the first `Server`, `MCPServer` or `FastMCP` instance in the module. Set `server_var` to select a
+server when your module defines multiple instances.
 
 ### `name` (optional)
 
