@@ -19,9 +19,12 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .._translations import get_translation
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
 
 # How long (seconds) to wait for the server subprocess to answer each request
 # before giving up on protocol introspection.
@@ -180,30 +183,29 @@ async def _collect_over_protocol(
             }
 
 
-def _dump(obj: Any) -> dict[str, Any]:
-    """Serialize an MCP result/model to its wire-JSON dict (camelCase keys).
+def _dump(obj: BaseModel | dict[str, Any] | None) -> dict[str, Any]:
+    """
+    Convert an MCP result to a dict with protocol field names
 
-    `mcp` v1 and v2 disagree on Python attribute names (v2 switched result
-    models to snake_case), but `model_dump(by_alias=True)` emits the stable
-    camelCase field names defined by the MCP protocol in *both* versions. Read
-    from that dict rather than touching attributes so discovery is not coupled to
-    a particular library version.
+    Use protocol field names such as `inputSchema` and `nextCursor`.
+    These names remain stable when `mcp` changes its Python attributes.
+
+    Parameters
+    ----------
+    obj
+        An MCP result model, a dict in protocol form, or `None`.
+
+    Returns
+    -------
+    :
+        The dict unchanged, an empty dict for `None`, or model fields with
+        protocol names and unset fields omitted.
     """
     if obj is None:
         return {}
     if isinstance(obj, dict):
         return obj
-    if hasattr(obj, "model_dump"):
-        try:
-            return obj.model_dump(by_alias=True, exclude_none=True)
-        except Exception:
-            pass
-    if hasattr(obj, "dict"):
-        try:
-            return obj.dict(by_alias=True)
-        except Exception:
-            pass
-    return {}
+    return obj.model_dump(by_alias=True, exclude_none=True)
 
 
 async def _call_list(method: Any, cursor: str | None) -> dict[str, Any]:

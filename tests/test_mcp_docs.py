@@ -50,24 +50,12 @@ class TestDump:
         assert _dump(obj) == {"serverInfo": {"name": "my-server"}}
         obj.model_dump.assert_called_once_with(by_alias=True, exclude_none=True)
 
-    def test_falls_back_to_dict_when_model_dump_raises(self):
+    def test_serialisation_failure_propagates(self):
         obj = MagicMock(spec=["model_dump", "dict"])
-        obj.model_dump.side_effect = RuntimeError("fail")
+        obj.model_dump.side_effect = ValueError("cannot serialise")
         obj.dict.return_value = {"key": "val"}
-        assert _dump(obj) == {"key": "val"}
-
-    def test_returns_empty_when_no_serializer(self):
-        class Plain:
-            pass
-
-        assert _dump(Plain()) == {}
-
-    def test_returns_empty_when_dict_also_raises(self):
-        """When both model_dump and dict raise, returns {} (lines 203-204)."""
-        obj = MagicMock(spec=["model_dump", "dict"])
-        obj.model_dump.side_effect = RuntimeError("v2 fail")
-        obj.dict.side_effect = TypeError("v1 fail")
-        assert _dump(obj) == {}
+        with pytest.raises(ValueError, match="cannot serialise"):
+            _dump(obj)
 
 
 # ---------------------------------------------------------------------------
