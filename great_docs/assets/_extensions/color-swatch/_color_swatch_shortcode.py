@@ -380,7 +380,7 @@ def parse_colors(body: str, palette: str) -> list[dict[str, Any]]:
     if body.strip():
         parsed = _parse_yaml(body)
         for entry in parsed:
-            if "hex" not in entry or "name" not in entry:
+            if not isinstance(entry, dict) or "hex" not in entry or "name" not in entry:
                 continue
             colors.append(entry)
 

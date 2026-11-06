@@ -269,6 +269,12 @@ class TestHelperImports:
         colors = self.mod.parse_colors(body, "")
         assert colors == []
 
+    def test_parse_colors_skips_items_that_are_not_mappings(self):
+        """Keep valid colours when YAML also contains numeric or empty items"""
+        body = '- 42\n-\n- name: Kept\n  hex: "#ff0000"\n'
+        colors = self.mod.parse_colors(body, "")
+        assert [c["name"] for c in colors] == ["Kept"]
+
     def test_parse_yaml_non_list_body_returns_empty(self):
         """YAML that parses to a non-list (e.g. a mapping) returns []."""
         body = "key: value\nanother: 42\n"
