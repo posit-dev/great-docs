@@ -87,10 +87,8 @@ def write_pages(
         config, build_dir, cli, cli_ref_dir, "reference/cli", generated_paths
     )
 
-    if config.cli_sections:  # pragma: no cover
-        subcommand_items = order_sidebar_items(  # pragma: no cover
-            subcommand_items, config.cli_sections
-        )
+    if config.cli_sections:
+        subcommand_items = order_sidebar_items(subcommand_items, config.cli_sections)
     generated_files.extend(subcommand_items)
 
     if generated_paths:
@@ -295,8 +293,8 @@ def index_page(config: Config, cli: CliCommand, entry_safe: str) -> str:
             emit_section(section.get("title", ""), section.get("desc"))
             for cmd_name in section.get("contents", []):
                 cmd = by_name.get(cmd_name)
-                if not cmd:  # pragma: no cover
-                    continue  # pragma: no cover
+                if not cmd:
+                    continue
                 emit_entry(cmd, f"{cmd_name.replace('-', '_')}.qmd")
     else:
         leaf = [c for c in top_commands if not c.get("is_group")]
@@ -313,8 +311,6 @@ def index_page(config: Config, cli: CliCommand, entry_safe: str) -> str:
             # The group's own overview page, then each subcommand.
             emit_entry(group, f"{gsafe}.qmd")
             for sub in group.get("commands", []):
-                if sub.get("hidden"):  # pragma: no cover
-                    continue  # pragma: no cover
                 ssafe = sub["name"].replace("-", "_")
                 emit_entry(sub, f"{gsafe}/{ssafe}.qmd")
 
@@ -428,12 +424,12 @@ def command_page(config: Config, cmd: CliCommand, is_main: bool = False) -> str:
                 ):
                     for bline in para_lines:
                         stripped = bline.strip()
-                        if not stripped:  # pragma: no cover
-                            continue  # pragma: no cover
-                        if stripped.startswith("•"):  # pragma: no cover
-                            stripped = stripped[1:].strip()  # pragma: no cover
-                        elif stripped.startswith(("- ", "* ")):  # pragma: no cover
-                            stripped = stripped[2:].strip()  # pragma: no cover
+                        if not stripped:
+                            continue
+                        if stripped.startswith("•"):
+                            stripped = stripped[1:].strip()
+                        elif stripped.startswith(("- ", "* ")):
+                            stripped = stripped[2:].strip()
                         if stripped:
                             stripped = backtick_prose(stripped, option_names)
                             lines.append(f"- {stripped}")

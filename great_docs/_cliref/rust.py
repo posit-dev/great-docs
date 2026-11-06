@@ -374,11 +374,6 @@ def _short_help(description: str, limit: int = 150) -> str:
     if len(first_sentence) <= limit:
         return first_sentence
 
-    if (
-        len(description) <= limit
-    ):  # pragma: no cover — first_sentence ≤ desc, so first_sentence>limit implies desc>limit
-        return description
-
     truncated = description[:limit].rsplit(" ", 1)[0].rstrip()
     return f"{truncated}..."
 

@@ -1454,6 +1454,42 @@ class TestCommandPage:
         front_matter = page.split("---\n")[1]
         assert yaml.safe_load(front_matter)["title"] == 'The "gd" tool'
 
+    def test_sections_order_the_sidebar_entries(self, tmp_path):
+        cli_info = self._make_cli_info(
+            commands=[
+                self._make_cli_info(name=n, full_path=f"mycli {n}")
+                for n in ("build", "deploy", "init")
+            ]
+        )
+        config = mock_config(
+            lang="en", cli_sections=[{"title": "Main", "contents": ["init", "build", "deploy"]}]
+        )
+        items = cli_render.write_pages(config, tmp_path, cli_info, report=lambda _: None)
+        assert items[2:] == [f"reference/cli/{n}.qmd" for n in ("init", "build", "deploy")]
+
+    def test_index_skips_section_commands_that_are_missing_or_hidden(self):
+        cli_info = self._make_cli_info(
+            commands=[
+                self._make_cli_info(name="build"),
+                self._make_cli_info(name="secret", hidden=True),
+            ]
+        )
+        config = mock_config(
+            lang="en", cli_sections=[{"title": "Main", "contents": ["build", "secret", "gone"]}]
+        )
+        page = cli_render.index_page(config, cli_info, "mycli")
+        assert "(build.qmd)" in page
+        assert "secret" not in page
+        assert "gone" not in page
+
+    def test_bullet_markers_are_stripped_into_list_items(self):
+        description = "Summary.\n\nSteps:\n• first\n- second\n* third\n  \nplain"
+        page = cli_render.command_page(
+            mock_config(lang="en"), self._make_cli_info(description=description), is_main=True
+        )
+        assert "- first\n- second\n- third\n- plain\n" in page
+        assert "• first" not in page
+
     def test_pages_written_as_utf8_whatever_the_locale(self, tmp_path, monkeypatch):
         # Stand in for a locale whose code page lacks `•`, such as cp1252 on Windows.
         monkeypatch.setattr(io, "text_encoding", lambda encoding, stacklevel=2: encoding or "ascii")
