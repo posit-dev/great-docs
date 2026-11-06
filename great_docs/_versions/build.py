@@ -1658,18 +1658,9 @@ def expand_version_badges(
         if is_upcoming:
             css_class = "gd-badge gd-badge-upcoming"
             label = f"Upcoming in {version}"
-        elif badge_type == "new":
-            css_class = "gd-badge gd-badge-new"
-            label = f"New in {version}"
-        elif badge_type == "changed":
-            css_class = "gd-badge gd-badge-changed"
-            label = f"Changed in {version}"
-        elif badge_type == "deprecated":
-            css_class = "gd-badge gd-badge-deprecated"
-            label = f"Deprecated in {version}"
-        else:  # pragma: no cover
-            css_class = f"gd-badge gd-badge-{badge_type}"  # pragma: no cover
-            label = f"{badge_type} in {version}"  # pragma: no cover
+        else:
+            css_class = f"gd-badge gd-badge-{badge_type}"
+            label = f"{badge_type.capitalize()} in {version}"
 
         return f'<span class="{css_class}">{label}</span>'
 
