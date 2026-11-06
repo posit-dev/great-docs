@@ -61,6 +61,13 @@ class TestParseColor:
         with pytest.raises(ValueError):
             parse_color("")
 
+    @pytest.mark.parametrize("color", ["#12345", "#1234567"])
+    def test_hex_of_unsupported_length_raises(self, color):
+        # The pattern accepts three to eight hex digits; only lengths 3, 4, 6 and 8
+        # have supported channel layouts.
+        with pytest.raises(ValueError, match="Unrecognized color"):
+            parse_color(color)
+
 
 class TestAPCALuminance:
     """Tests for APCA relative luminance calculation."""

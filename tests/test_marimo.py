@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,8 @@ from great_docs._marimo import (
     _FALLBACK_VERSION,
     _ISLANDS_CDN,
     _tag_setup_islands,
+    generate_islands_for_build,
+    generate_islands_html,
     get_islands_head_html,
     islands_runtime_version,
     notebook_source,
@@ -203,6 +206,120 @@ class TestNotebookSource:
         nb = tmp_path / "demo.py"
         nb.write_text("import marimo\n", encoding="utf-8")
         assert notebook_source(nb) == "import marimo\n"
+
+
+# ---------------------------------------------------------------------------
+# generate_islands_html / generate_islands_for_build
+# ---------------------------------------------------------------------------
+
+_ISLANDS = (
+    '<marimo-island data-app-id="main" data-reactive="true">'
+    "<marimo-cell-output><span></span></marimo-cell-output></marimo-island>"
+    '<marimo-island data-app-id="main" data-reactive="true">'
+    "<marimo-cell-output><span>out</span></marimo-cell-output></marimo-island>"
+)
+
+
+class _FakeIslandGenerator:
+    """A marimo island generator stand-in that avoids kernel subprocesses"""
+
+    from_file_calls: list[tuple[str, bool]] = []
+    build_error: Exception | None = None
+
+    def __init__(self) -> None:
+        self.render_calls: list[tuple[bool, str]] = []
+
+    @classmethod
+    def from_file(cls, path: str, *, display_code: bool) -> _FakeIslandGenerator:
+        cls.from_file_calls.append((path, display_code))
+        return cls()
+
+    async def build(self) -> None:
+        if self.build_error is not None:
+            raise self.build_error
+
+    def render_body(self, *, include_init_island: bool, max_width: str) -> str:
+        self.render_calls.append((include_init_island, max_width))
+        return _ISLANDS
+
+
+@pytest.fixture
+def fake_marimo(monkeypatch: pytest.MonkeyPatch) -> type[_FakeIslandGenerator]:
+    class Generator(_FakeIslandGenerator):
+        from_file_calls: list[tuple[str, bool]] = []
+        build_error: Exception | None = None
+
+    module = types.ModuleType("marimo")
+    module.MarimoIslandGenerator = Generator  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "marimo", module)
+    return Generator
+
+
+class TestGenerateIslandsHtml:
+    def test_tags_setup_cells_and_names_the_app_after_the_notebook(
+        self, fake_marimo: type[_FakeIslandGenerator], tmp_path: Path
+    ):
+        html = generate_islands_html(tmp_path / "demo.py")
+
+        assert fake_marimo.from_file_calls == [(str(tmp_path / "demo.py"), True)]
+        assert html.count('data-gd-setup="true"') == 1
+        assert html.count('data-app-id="demo"') == 2
+        assert html.count('data-reactive="true"') == 2
+
+    def test_without_code_or_reactivity_leaves_cells_untagged_and_static(
+        self, fake_marimo: type[_FakeIslandGenerator], tmp_path: Path
+    ):
+        html = generate_islands_html(
+            tmp_path / "demo.py", display_code=False, reactive=False, app_id="custom"
+        )
+
+        assert fake_marimo.from_file_calls == [(str(tmp_path / "demo.py"), False)]
+        assert "data-gd-setup" not in html
+        assert html.count('data-app-id="custom"') == 2
+        assert 'data-reactive="true"' not in html
+        assert html.count('data-reactive="false"') == 2
+
+    def test_keeps_the_main_app_id(self, fake_marimo: type[_FakeIslandGenerator], tmp_path: Path):
+        html = generate_islands_html(tmp_path / "demo.py", app_id="main")
+
+        assert html.count('data-app-id="main"') == 2
+
+    def test_restores_streams_when_a_cell_run_fails(
+        self, fake_marimo: type[_FakeIslandGenerator], tmp_path: Path
+    ):
+        fake_marimo.build_error = RuntimeError("kernel died")
+        stdout, stderr = sys.stdout, sys.stderr
+
+        with pytest.raises(RuntimeError, match="kernel died"):
+            generate_islands_html(tmp_path / "demo.py")
+
+        assert sys.stdout is stdout
+        assert sys.stderr is stderr
+
+
+class TestGenerateIslandsForBuild:
+    def test_writes_the_islands_creating_missing_directories(
+        self, fake_marimo: type[_FakeIslandGenerator], tmp_path: Path
+    ):
+        output = tmp_path / "build" / "_marimo_islands" / "demo.html"
+
+        generate_islands_for_build(tmp_path / "demo.py", output, app_id="custom")
+
+        html = output.read_text(encoding="utf-8")
+        assert html.count('data-app-id="custom"') == 2
+        assert html.count('data-gd-setup="true"') == 1
+
+    def test_passes_display_code_and_reactive_through(
+        self, fake_marimo: type[_FakeIslandGenerator], tmp_path: Path
+    ):
+        output = tmp_path / "demo-nocode.html"
+
+        generate_islands_for_build(tmp_path / "demo.py", output, display_code=False, reactive=False)
+
+        html = output.read_text(encoding="utf-8")
+        assert fake_marimo.from_file_calls == [(str(tmp_path / "demo.py"), False)]
+        assert 'data-reactive="false"' in html
+        assert "data-gd-setup" not in html
 
 
 # ---------------------------------------------------------------------------
