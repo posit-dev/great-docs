@@ -189,6 +189,32 @@ def checkout_side(checkout: Path) -> Side:
     return Side("test", checkout, venv)
 
 
+def branch_point(checkout: Path) -> str:
+    """
+    Find the commit where the checkout's `HEAD` branched from `main`
+
+    Comparing with this commit rather than with `main`'s tip keeps commits that landed on
+    `main` after the branch point out of the report.
+
+    Parameters
+    ----------
+    checkout :
+        The checkout under test.
+
+    Returns
+    -------
+    :
+        The merge base of `main` and `HEAD`, which is `main`'s tip when `HEAD` is up to date
+        with it.
+
+    Raises
+    ------
+    RequirementError
+        If `main` is unknown or shares no history with `HEAD`.
+    """
+    return run_checked(["git", "merge-base", "main", "HEAD"], checkout)
+
+
 def base_side(checkout: Path, ref: str, cache: Path, python_version: str) -> Side:
     """
     Prepare a clean worktree of a base commit with its own virtual environment

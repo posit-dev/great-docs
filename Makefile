@@ -28,11 +28,11 @@ test-integration: ## Run integration tests with external packages
 	@$(PYTHON) -m pytest tests/test_integration.py -n auto
 
 .PHONY: quarto-project-diff
-quarto-project-diff: ## Compare the Quarto projects that init, build, watch and freeze write with those of main, for 40 cases
+quarto-project-diff: ## Compare the Quarto projects that init, build, watch and freeze write with those of the commit where HEAD branched from main, for 40 cases
 	@$(PYTHON) -m tests.quarto_project_diff run $(QUARTO_PROJECT_DIFF_ARGS)
 
 .PHONY: quarto-project-diff-full
-quarto-project-diff-full: ## Compare the Quarto projects that init, build, watch and freeze write with those of main, for every supported Gauntlet package and variant
+quarto-project-diff-full: ## Compare the Quarto projects that init, build, watch and freeze write with those of the commit where HEAD branched from main, for every supported Gauntlet package and variant
 	@$(PYTHON) -m tests.quarto_project_diff run --catalogue full $(QUARTO_PROJECT_DIFF_ARGS)
 
 .PHONY: test-all

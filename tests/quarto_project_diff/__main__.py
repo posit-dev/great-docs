@@ -26,6 +26,7 @@ from tests.quarto_project_diff.sides import (
     RequirementError,
     Side,
     base_side,
+    branch_point,
     checkout_side,
     child_environment,
     describe,
@@ -162,8 +163,9 @@ def command_run(args: argparse.Namespace) -> int:
     work, stub_dir = prepare_work(cache)
     try:
         test = checkout_side(checkout)
-        print(f"preparing base worktree for {args.base} in {cache / 'worktrees'}", flush=True)
-        base = base_side(checkout, args.base, cache, python_version(test))
+        ref = args.base or branch_point(checkout)
+        print(f"preparing base worktree for {ref} in {cache / 'worktrees'}", flush=True)
+        base = base_side(checkout, ref, cache, python_version(test))
         base, test = describe(base, stub_dir), describe(test, stub_dir)
         drift = environment_differences(base.facts, test.facts)
         if drift:
@@ -255,7 +257,9 @@ def parser() -> argparse.ArgumentParser:
         _ = sub.add_argument("--keep", action="store_true", help="keep job directories")
 
     run = commands.add_parser("run", help="record a base commit and this checkout, then compare")
-    _ = run.add_argument("--base", default="main", help="base revision (default: main)")
+    _ = run.add_argument(
+        "--base", default=None, help="base revision (default: where HEAD branched from main)"
+    )
     _ = run.add_argument("--checkout", type=Path, default=None, help="checkout under test")
     _ = run.add_argument("--out", type=Path, default=None, help="directory for recordings")
     _ = run.add_argument(
