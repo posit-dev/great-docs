@@ -180,7 +180,8 @@ class Layout:
         Raises
         ------
         ConfigError
-            If the configuration names an unsupported docstring parser.
+            If the configuration names an unsupported docstring parser or has malformed
+            `webmcp` lists.
         """
         return Config(self.package_root, config_path=self.config_path, cache_dir=self.cache_dir)
 

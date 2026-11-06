@@ -152,6 +152,7 @@ class Config:
 
         config = self._normalize_shorthands(config)
         config["parser"] = self._validate_parser(config["parser"], self.config_path)
+        config["webmcp"] = self._validate_webmcp(config["webmcp"], self.config_path)
         return config
 
     @staticmethod
@@ -182,6 +183,67 @@ class Config:
                 f"{config_path}: parser: {value!r} is not one of {', '.join(_PARSERS)}."
             )
         return cast("str", value)
+
+    @staticmethod
+    def _validate_webmcp(value: object, config_path: Path) -> ConfigDict:
+        """
+        Check the `webmcp` lists, and warn about tool names it doesn't know
+
+        An empty list key (`exclude_tools:` with nothing under it) reads as an empty list.
+        An unknown name in `exclude_tools` is only a warning, so a tool renamed in a later
+        release doesn't break the build.
+
+        Parameters
+        ----------
+        value
+            The merged `webmcp` value, after shorthand expansion.
+        config_path
+            The configuration file, named in the errors.
+
+        Returns
+        -------
+        dict
+            The `webmcp` mapping, with empty list keys read as empty lists.
+
+        Raises
+        ------
+        ConfigError
+            If `webmcp` is not a mapping, `exclude_tools` is not a list of strings, or
+            `origin_trials` is not a list of non-empty strings.
+        """
+        from ._website.ai_agents.webmcp_tools import TOOL_NAMES
+
+        if not isinstance(value, dict):
+            raise ConfigError(f"{config_path}: webmcp: {value!r} must be a mapping, true or false.")
+        webmcp = cast("ConfigDict", value)
+        for key in ("exclude_tools", "origin_trials"):
+            if webmcp[key] is None:
+                webmcp[key] = []
+
+        exclude = webmcp["exclude_tools"]
+        if not isinstance(exclude, list) or not all(
+            isinstance(name, str) for name in cast("list[object]", exclude)
+        ):
+            raise ConfigError(
+                f"{config_path}: webmcp.exclude_tools: {exclude!r} must be a list of tool "
+                "names, such as [set_theme]."
+            )
+        unknown = [name for name in cast("list[str]", exclude) if name not in TOOL_NAMES]
+        if unknown:
+            print(
+                f"Warning: webmcp.exclude_tools names unknown tools: {', '.join(unknown)}. "
+                f"Known tools: {', '.join(sorted(TOOL_NAMES))}."
+            )
+
+        tokens = webmcp["origin_trials"]
+        if not isinstance(tokens, list) or not all(
+            isinstance(token, str) and token.strip() for token in cast("list[object]", tokens)
+        ):
+            raise ConfigError(
+                f"{config_path}: webmcp.origin_trials: {tokens!r} must be a list of "
+                "origin-trial tokens (non-empty strings)."
+            )
+        return webmcp
 
     @staticmethod
     def _normalize_legacy_keys(user_config: ConfigDict) -> ConfigDict:
@@ -227,6 +289,7 @@ class Config:
         "mcp",
         "marimo",
         "wide_layout",
+        "webmcp",
     )
 
     def _normalize_shorthands(self, config: ConfigDict) -> ConfigDict:
@@ -857,6 +920,31 @@ class Config:
     def markdown_pages_widget(self) -> bool:
         """Whether the copy-page widget is shown (requires markdown_pages)"""
         return bool(self["markdown_pages.widget"]) and self.markdown_pages
+
+    @property
+    def webmcp_enabled(self) -> bool:
+        """Whether pages register tools for in-browser AI agents (WebMCP)"""
+        return bool(self["webmcp.enabled"])
+
+    @property
+    def webmcp_actions(self) -> bool:
+        """Whether the WebMCP action tools are registered (requires webmcp)"""
+        return bool(self["webmcp.actions"]) and self.webmcp_enabled
+
+    @property
+    def webmcp_js_api(self) -> bool:
+        """Whether `window.greatDocs.tools` is exposed in every browser (requires webmcp)"""
+        return bool(self["webmcp.js_api"]) and self.webmcp_enabled
+
+    @property
+    def webmcp_exclude_tools(self) -> list[str]:
+        """Names of the WebMCP tools to leave out"""
+        return self["webmcp.exclude_tools"]
+
+    @property
+    def webmcp_origin_trials(self) -> list[str]:
+        """WebMCP origin-trial tokens, each stripped of surrounding whitespace"""
+        return [token.strip() for token in self["webmcp.origin_trials"]]
 
     @property
     def parser(self) -> str:

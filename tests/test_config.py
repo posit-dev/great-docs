@@ -472,6 +472,82 @@ class TestMarkdownPagesCanonical:
         assert cfg.markdown_pages_widget is False
 
 
+class TestWebMCP:
+    def test_default_off(self, tmp_project: Path):
+        cfg = Config(tmp_project)
+        assert cfg.webmcp_enabled is False
+        assert cfg.webmcp_actions is False
+        assert cfg.webmcp_js_api is False
+        assert cfg.webmcp_exclude_tools == []
+        assert cfg.webmcp_origin_trials == []
+
+    def test_true_enables_with_defaults(self, tmp_path: Path):
+        cfg = write_config(tmp_path, "webmcp: true\n")
+        assert cfg["webmcp"] == {**DEFAULT_CONFIG["webmcp"], "enabled": True}
+        assert cfg.webmcp_enabled is True
+        assert cfg.webmcp_actions is True
+        assert cfg.webmcp_js_api is True
+
+    def test_false(self, tmp_path: Path):
+        cfg = write_config(tmp_path, "webmcp: false\n")
+        assert cfg.webmcp_enabled is False
+        assert cfg["webmcp.actions"] is True  # sub-defaults survive
+
+    def test_null_keeps_defaults(self, tmp_path: Path):
+        cfg = write_config(tmp_path, "webmcp:\n")
+        assert cfg["webmcp"] == DEFAULT_CONFIG["webmcp"]
+
+    def test_partial_map(self, tmp_path: Path):
+        cfg = write_config(tmp_path, "webmcp:\n  enabled: true\n  actions: false\n")
+        assert cfg.webmcp_enabled is True
+        assert cfg.webmcp_actions is False
+        assert cfg.webmcp_js_api is True
+
+    def test_settings_need_enabled(self, tmp_path: Path):
+        cfg = write_config(tmp_path, "webmcp:\n  actions: true\n  js_api: true\n")
+        assert cfg.webmcp_actions is False
+        assert cfg.webmcp_js_api is False
+
+    def test_exclude_known_tools(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+        cfg = write_config(tmp_path, "webmcp:\n  exclude_tools: [set_theme, list_api]\n")
+        assert cfg.webmcp_exclude_tools == ["set_theme", "list_api"]
+        assert "Warning" not in capsys.readouterr().out
+
+    def test_exclude_unknown_tool_warns(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+        cfg = write_config(tmp_path, "webmcp:\n  exclude_tools: [set_theme, get_pages]\n")
+        assert cfg.webmcp_exclude_tools == ["set_theme", "get_pages"]
+        out = capsys.readouterr().out
+        assert "webmcp.exclude_tools names unknown tools: get_pages." in out
+        assert "Known tools:" in out
+        assert "get_page," in out
+
+    def test_empty_lists_read_as_empty(self, tmp_path: Path):
+        cfg = write_config(tmp_path, "webmcp:\n  exclude_tools:\n  origin_trials:\n")
+        assert cfg.webmcp_exclude_tools == []
+        assert cfg.webmcp_origin_trials == []
+
+    def test_exclude_tools_string_is_rejected(self, tmp_path: Path):
+        with pytest.raises(ConfigError, match="webmcp.exclude_tools: 'set_theme' must be a list"):
+            write_config(tmp_path, "webmcp:\n  exclude_tools: set_theme\n")
+
+    def test_exclude_tools_non_string_entry_is_rejected(self, tmp_path: Path):
+        with pytest.raises(ConfigError, match="webmcp.exclude_tools"):
+            write_config(tmp_path, "webmcp:\n  exclude_tools: [set_theme, 3]\n")
+
+    def test_origin_trials_are_stripped(self, tmp_path: Path):
+        cfg = write_config(tmp_path, "webmcp:\n  origin_trials: ['  AbC123  ', XyZ]\n")
+        assert cfg.webmcp_origin_trials == ["AbC123", "XyZ"]
+
+    @pytest.mark.parametrize("tokens", ["['']", "['   ']", "[1]", "token"])
+    def test_bad_origin_trials_are_rejected(self, tmp_path: Path, tokens: str):
+        with pytest.raises(ConfigError, match="webmcp.origin_trials.*non-empty strings"):
+            write_config(tmp_path, f"webmcp:\n  origin_trials: {tokens}\n")
+
+    def test_non_mapping_is_rejected(self, tmp_path: Path):
+        with pytest.raises(ConfigError, match="webmcp: 'yes please' must be a mapping"):
+            write_config(tmp_path, "webmcp: yes please\n")
+
+
 class TestLogo:
     def test_default_none(self, tmp_project: Path):
         cfg = Config(tmp_project)
