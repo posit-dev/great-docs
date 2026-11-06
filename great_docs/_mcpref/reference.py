@@ -12,15 +12,19 @@ protocol returns is stable regardless of the installed library version.
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import inspect
 import os
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .._translations import get_translation
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
 
 # How long (seconds) to wait for the server subprocess to answer each request
 # before giving up on protocol introspection.
@@ -110,32 +114,55 @@ def _introspect_via_protocol(
     module_path: str,
     server_var: str | None,
 ) -> dict[str, Any] | None:
-    """Launch the server and read its capabilities over the MCP protocol.
+    """
+    Launch the server and read its capabilities over the MCP protocol
 
-    Runs the target server in a subprocess via `great_docs._mcpref.runner` and
-    speaks the MCP protocol to it with a standard client session. Returns the
-    server metadata dict, or `None` if the client could not connect or the
-    `mcp` client APIs are unavailable.
+    Run the server in a subprocess and query it with a standard MCP client.
+    Report a missing `mcp` package, start-up or connection failures, timeouts
+    and protocol errors, then return `None`. Propagate all other errors,
+    including those grouped with expected failures.
+
+    Parameters
+    ----------
+    module_path
+        Importable path of the module that defines the server.
+    server_var
+        Name of the server variable in the module, or `None` to detect it.
+
+    Returns
+    -------
+    :
+        The server metadata, or `None` after a reported failure.
     """
     try:
-        import asyncio
-    except Exception:  # pragma: no cover
-        return None  # pragma: no cover
-
-    try:
-        return asyncio.run(_collect_over_protocol(module_path, server_var))
-    except Exception as e:
-        print(f"Could not introspect MCP server over protocol: {e}")
+        from mcp.shared.exceptions import MCPError
+    except ImportError as error:
+        print(f"Could not introspect MCP server over protocol: {error}")
         return None
 
+    expected = (OSError, TimeoutError, MCPError)
+    failure: BaseException
+    try:
+        return asyncio.run(_collect_over_protocol(module_path, server_var))
+    except expected as error:
+        failure = error
+    except ExceptionGroup as group:
+        # AnyIO may nest failures in exception groups. Fall back only when
+        # every contained error is expected.
+        if group.split(expected)[1] is not None:
+            raise
+        failure = group
+    while isinstance(failure, BaseExceptionGroup):
+        failure = failure.exceptions[0]
+    print(f"Could not introspect MCP server over protocol: {failure}")
+    return None
 
-async def _collect_over_protocol(  # pragma: no cover
+
+async def _collect_over_protocol(
     module_path: str,
     server_var: str | None,
 ) -> dict[str, Any] | None:
     """Connect to the server subprocess and collect all metadata as plain dicts."""
-    import asyncio
-
     from mcp import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
 
@@ -181,63 +208,54 @@ async def _collect_over_protocol(  # pragma: no cover
             }
 
 
-def _dump(obj: Any) -> dict[str, Any]:
-    """Serialize an MCP result/model to its wire-JSON dict (camelCase keys).
+def _dump(obj: BaseModel | dict[str, Any] | None) -> dict[str, Any]:
+    """
+    Convert an MCP result to a dict with protocol field names
 
-    `mcp` v1 and v2 disagree on Python attribute names (v2 switched result
-    models to snake_case), but `model_dump(by_alias=True)` emits the stable
-    camelCase field names defined by the MCP protocol in *both* versions. Read
-    from that dict rather than touching attributes so discovery is not coupled to
-    a particular library version.
+    Use protocol field names such as `inputSchema` and `nextCursor`.
+    These names remain stable when `mcp` changes its Python attributes.
+
+    Parameters
+    ----------
+    obj
+        An MCP result model, a dict in protocol form, or `None`.
+
+    Returns
+    -------
+    :
+        The dict unchanged, an empty dict for `None`, or model fields with
+        protocol names and `None` values omitted.
     """
     if obj is None:
         return {}
     if isinstance(obj, dict):
         return obj
-    if hasattr(obj, "model_dump"):
-        try:
-            return obj.model_dump(by_alias=True, exclude_none=True)
-        except Exception:
-            pass
-    if hasattr(obj, "dict"):
-        try:
-            return obj.dict(by_alias=True)
-        except Exception:
-            pass
-    return {}
+    return obj.model_dump(by_alias=True, exclude_none=True)
 
 
-async def _call_list(method: Any, cursor: str | None) -> dict[str, Any]:  # pragma: no cover
-    """Call an MCP client `list_*` method across `mcp` v1/v2 signatures.
-
-    `mcp` v1 paginates via a `cursor=` keyword; v2 wraps it in a
-    `params=PaginatedRequestParams(cursor=...)` object. Detect which shape the
-    installed client exposes, call accordingly, and return the result as a
-    wire-JSON dict.
+async def _call_list(method: Any, cursor: str | None) -> dict[str, Any]:
     """
-    import asyncio
-    import inspect
+    Fetch one page of MCP results
 
-    try:
-        param_names = set(inspect.signature(method).parameters)
-    except (TypeError, ValueError):
-        param_names = set()
+    Parameters
+    ----------
+    method
+        A bound `ClientSession.list_*` method.
+    cursor
+        The previous page's `nextCursor`, or `None` for the first page.
 
-    if cursor is None:
-        call = method()
-    elif "cursor" in param_names:
-        call = method(cursor=cursor)
-    elif "params" in param_names:
-        from mcp.types import PaginatedRequestParams
+    Returns
+    -------
+    :
+        The page as a dict with protocol field names.
+    """
+    from mcp.types import PaginatedRequestParams
 
-        call = method(params=PaginatedRequestParams(cursor=cursor))
-    else:
-        call = method()
-
-    return _dump(await asyncio.wait_for(call, _PROTOCOL_TIMEOUT))
+    params = None if cursor is None else PaginatedRequestParams(cursor=cursor)
+    return _dump(await asyncio.wait_for(method(params=params), _PROTOCOL_TIMEOUT))
 
 
-async def _list_tools(session: Any) -> list[dict[str, Any]]:  # pragma: no cover
+async def _list_tools(session: Any) -> list[dict[str, Any]]:
     """Fetch all tools, following pagination cursors."""
     tools: list[dict[str, Any]] = []
     cursor: str | None = None
@@ -257,14 +275,16 @@ async def _list_tools(session: Any) -> list[dict[str, Any]]:  # pragma: no cover
     return tools
 
 
-async def _list_resources(session: Any) -> list[dict[str, Any]]:  # pragma: no cover
+async def _list_resources(session: Any) -> list[dict[str, Any]]:
     """Fetch all resources, following pagination cursors."""
+    from mcp.shared.exceptions import MCPError
+
     resources: list[dict[str, Any]] = []
     cursor: str | None = None
     while True:
         try:
             result = await _call_list(session.list_resources, cursor)
-        except Exception:
+        except (MCPError, TimeoutError):
             break
         for r in result.get("resources", []) or []:
             resources.append(
@@ -281,12 +301,14 @@ async def _list_resources(session: Any) -> list[dict[str, Any]]:  # pragma: no c
     return resources
 
 
-async def _list_resource_templates(session: Any) -> list[dict[str, Any]]:  # pragma: no cover
+async def _list_resource_templates(session: Any) -> list[dict[str, Any]]:
     """Fetch all resource templates."""
+    from mcp.shared.exceptions import MCPError
+
     templates: list[dict[str, Any]] = []
     try:
         result = await _call_list(session.list_resource_templates, None)
-    except Exception:
+    except (MCPError, TimeoutError):
         return templates
     for t in result.get("resourceTemplates", []) or []:
         templates.append(
@@ -300,12 +322,14 @@ async def _list_resource_templates(session: Any) -> list[dict[str, Any]]:  # pra
     return templates
 
 
-async def _list_prompts(session: Any) -> list[dict[str, Any]]:  # pragma: no cover
+async def _list_prompts(session: Any) -> list[dict[str, Any]]:
     """Fetch all prompts along with their expanded message content."""
+    from mcp.shared.exceptions import MCPError
+
     prompts: list[dict[str, Any]] = []
     try:
         result = await _call_list(session.list_prompts, None)
-    except Exception:
+    except (MCPError, TimeoutError):
         return prompts
 
     for p in result.get("prompts", []) or []:
@@ -338,11 +362,12 @@ async def _list_prompts(session: Any) -> list[dict[str, Any]]:  # pragma: no cov
     return prompts
 
 
-async def _get_prompt_messages(  # pragma: no cover
+async def _get_prompt_messages(
     session: Any, name: str, required_names: list[str]
 ) -> list[dict[str, Any]]:
     """Call `prompts/get` for a prompt, tolerating required-argument servers."""
-    import asyncio
+    from mcp.shared.exceptions import MCPError
+    from mcp.types import InputRequiredResult
 
     # Try with no arguments first; if the server rejects that because arguments
     # are required, retry with placeholder values so we can still show a preview.
@@ -352,10 +377,15 @@ async def _get_prompt_messages(  # pragma: no cover
 
     for args in attempts:
         try:
-            result = await asyncio.wait_for(session.get_prompt(name, args), _PROTOCOL_TIMEOUT)
-            return _dump(result).get("messages", []) or []
-        except Exception:
+            result = await asyncio.wait_for(
+                session.get_prompt(name, args, allow_input_required=True), _PROTOCOL_TIMEOUT
+            )
+        except (MCPError, TimeoutError):
             continue
+        if isinstance(result, InputRequiredResult):
+            # A build cannot provide interactive input. Omit the preview.
+            return []
+        return _dump(result).get("messages", []) or []
     return []
 
 

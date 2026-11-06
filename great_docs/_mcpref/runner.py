@@ -1,11 +1,9 @@
-"""Run an arbitrary MCP server module over stdio.
+"""
+Run an MCP server module over stdio for protocol introspection
 
-This is a tiny, version-agnostic launcher used by `great_docs._mcpref.reference`
-to introspect an MCP server *through the wire protocol* rather than by reaching
-into the `mcp` library's internal handler registries (which change between
-major releases). The launcher imports the target module, locates its server
-instance, and runs it over stdio using whichever `run` shape the installed
-`mcp` version exposes.
+Import the target module, locate its server instance and run it over stdio.
+Protocol introspection avoids reliance on the `mcp` library's internal
+handler registries, which change between major releases.
 
 Usage:
 
@@ -27,34 +25,15 @@ async def _run(module_path: str, server_var: str | None) -> None:
     if server is None:
         raise SystemExit(f"No MCP server instance found in {module_path}")
 
-    # FastMCP knows how to run itself over stdio.
+    # MCPServer (FastMCP before mcp 2.0) provides its own stdio runner.
     if hasattr(server, "run_stdio_async"):
         await server.run_stdio_async()
         return
 
-    # FastMCP exposes the underlying low-level server as `_mcp_server`.
-    low = getattr(server, "_mcp_server", server)  # pragma: no cover
+    from mcp.server.stdio import stdio_server
 
-    from mcp.server.stdio import stdio_server  # pragma: no cover
-
-    async with stdio_server() as (read_stream, write_stream):  # pragma: no cover
-        # mcp v1 requires initialization options; v2's `run` takes only the
-        # streams. Try the v1 shape first and fall back on signature mismatch.
-        init_options = None
-        if hasattr(low, "create_initialization_options"):
-            try:
-                init_options = low.create_initialization_options()
-            except Exception:
-                init_options = None
-
-        if init_options is not None:
-            try:
-                await low.run(read_stream, write_stream, init_options)
-                return
-            except TypeError:
-                pass
-
-        await low.run(read_stream, write_stream)
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(read_stream, write_stream, server.create_initialization_options())
 
 
 if __name__ == "__main__":

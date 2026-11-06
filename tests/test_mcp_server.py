@@ -6,15 +6,18 @@ import asyncio
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from mcp.types import CompletionArgument, PromptReference, ResourceTemplateReference
 from pydantic import AnyUrl
 
 import great_docs.mcp as mcp_module
 from great_docs._layout import Layout
 from great_docs._project import Project
 from great_docs._utils import QUARTO_YML_HEADER
+from great_docs.config import ConfigError
 from great_docs.mcp import (
     _build_output_dirs,
     _get_project_root,
@@ -273,6 +276,25 @@ class TestCallTool:
             result = asyncio.run(call_tool("gd_build", {}))
         assert result.is_error is True
 
+    def test_configuration_error_returns_error_text(self):
+        error = ConfigError("great-docs.yml: parser: 'nope' is not one of numpy, google, sphinx.")
+        with patch("great_docs.mcp._handle_scan", side_effect=error):
+            result = asyncio.run(call_tool("gd_scan", {}))
+        assert result.is_error is True
+        assert result[0].text == f"Error: {error}"
+
+    def test_unexpected_error_in_handler_propagates(self):
+        with patch("great_docs.mcp._handle_scan", side_effect=ZeroDivisionError("bug")):
+            with pytest.raises(ZeroDivisionError):
+                asyncio.run(call_tool("gd_scan", {}))
+
+    def test_missing_required_argument_returns_error_text(self):
+        with patch("great_docs.mcp._handle_add_page") as handler:
+            result = asyncio.run(call_tool("gd_add_page", {"section": "recipes"}))
+        handler.assert_not_called()
+        assert result.is_error is True
+        assert result[0].text == "Error: missing required argument: title"
+
     def test_successful_call_does_not_mark_is_error(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
@@ -281,9 +303,6 @@ class TestCallTool:
         assert getattr(result, "is_error", False) is False
 
 
-@pytest.mark.skipif(
-    mcp_module._MCP_V1, reason="_on_call_tool only exists on the mcp v2 handler path"
-)
 class TestOnCallToolIsError:
     """CallToolResult.is_error must reflect a failed dispatch (issue: it never did)."""
 
@@ -309,6 +328,149 @@ class TestOnCallToolIsError:
         monkeypatch.chdir(tmp_path)
         result = asyncio.run(mcp_module._on_call_tool(None, self._params("gd_status", {})))
         assert result.is_error is False
+
+
+class TestServerRequests:
+    """MCP request handling through an in-process client"""
+
+    def _ask(self, request: Callable[[Any], Any]) -> Any:
+        """Send a client request and return the protocol result"""
+        from mcp.client import Client
+
+        async def run() -> Any:
+            # Legacy mode exercises the initialisation handshake and JSON-RPC
+            # messages used over stdio.
+            async with Client(mcp_module.server, mode="legacy") as client:
+                return await request(client)
+
+        return asyncio.run(run())
+
+    def test_initialisation_advertises_instructions(self):
+        async def instructions(client: Any) -> str | None:
+            return client.instructions
+
+        assert self._ask(instructions) == mcp_module._INSTRUCTIONS
+
+    def test_lists_capabilities(self):
+        async def names(client: Any) -> dict[str, list[str]]:
+            return {
+                "tools": [tool.name for tool in (await client.list_tools()).tools],
+                "prompts": [prompt.name for prompt in (await client.list_prompts()).prompts],
+                "resources": [
+                    str(resource.uri) for resource in (await client.list_resources()).resources
+                ],
+                "templates": [
+                    template.uri_template
+                    for template in (await client.list_resource_templates()).resource_templates
+                ],
+            }
+
+        result = self._ask(names)
+        assert result["tools"] == [tool.name for tool in asyncio.run(list_tools())]
+        assert result["prompts"] == [prompt.name for prompt in asyncio.run(list_prompts())]
+        assert result["resources"] == [str(r.uri) for r in asyncio.run(list_resources())]
+        assert result["templates"] == [
+            template.uri_template for template in asyncio.run(list_resource_templates())
+        ]
+
+    def test_call_tool_reports_whether_the_call_failed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        unknown = self._ask(lambda client: client.call_tool("bogus_tool_name", {}))
+        status = self._ask(lambda client: client.call_tool("gd_status", {}))
+        assert unknown.is_error is True
+        assert unknown.content[0].text == "Unknown tool: bogus_tool_name"
+        assert status.is_error is False
+        assert status.content[0].text.startswith(f"Project: {tmp_path.name}")
+
+    def test_get_prompt_returns_the_prompt(self):
+        result = self._ask(
+            lambda client: client.get_prompt("write-user-guide", {"topic": "Installation"})
+        )
+        assert "Installation" in result.messages[0].content.text
+
+    def test_read_resource_returns_text(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.chdir(tmp_path)
+        result = self._ask(lambda client: client.read_resource("gd://config"))
+        expected = asyncio.run(read_resource(AnyUrl("gd://config")))
+        assert [(str(c.uri), c.text) for c in result.contents] == [("gd://config", expected)]
+
+    def test_completion_returns_suggestions(self):
+        ref = PromptReference(type="ref/prompt", name="write-user-guide")
+        result = self._ask(lambda client: client.complete(ref, {"name": "audience", "value": "b"}))
+        assert result.completion.values == ["beginner"]
+
+    def test_completion_uses_context_arguments(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        project = tmp_path / "project"
+        (project / "user_guide").mkdir(parents=True)
+        (project / "user_guide/intro.qmd").write_text("Intro\n")
+        monkeypatch.chdir(tmp_path)
+        ref = ResourceTemplateReference(type="ref/resource", uri="gd://page/{path}")
+        result = self._ask(
+            lambda client: client.complete(
+                ref, {"name": "path", "value": ""}, context_arguments={"project_path": str(project)}
+            )
+        )
+        assert result.completion.values == ["user_guide/intro.qmd"]
+
+    def test_completion_without_suggestions_is_empty(self):
+        ref = PromptReference(type="ref/prompt", name="no-such-prompt")
+        result = self._ask(lambda client: client.complete(ref, {"name": "topic", "value": ""}))
+        assert result.completion.values == []
+
+
+# ---------------------------------------------------------------------------
+# Server entry point
+# ---------------------------------------------------------------------------
+
+
+def test_server_answers_a_client_over_stdio():
+    import sys
+
+    from mcp import ClientSession
+    from mcp.client.stdio import StdioServerParameters, stdio_client
+
+    async def list_tool_names() -> list[str]:
+        params = StdioServerParameters(command=sys.executable, args=["-m", "great_docs.mcp"])
+        async with stdio_client(params) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await asyncio.wait_for(session.initialize(), 30)
+                result = await asyncio.wait_for(session.list_tools(), 30)
+        return [tool.name for tool in result.tools]
+
+    assert "gd_build" in asyncio.run(list_tool_names())
+
+
+def test_run_mcp_server_serves_stdio_until_input_ends(monkeypatch: pytest.MonkeyPatch):
+    from contextlib import asynccontextmanager
+
+    import anyio
+    from mcp import ClientSession
+    from mcp.shared.memory import create_client_server_memory_streams
+
+    async def list_tool_names() -> list[str]:
+        async with create_client_server_memory_streams() as (client_streams, server_streams):
+
+            @asynccontextmanager
+            async def memory_stdio():
+                yield server_streams
+
+            monkeypatch.setattr(mcp_module, "stdio_server", memory_stdio)
+            with anyio.fail_after(30):
+                async with anyio.create_task_group() as task_group:
+                    task_group.start_soon(mcp_module.run_mcp_server)
+                    async with ClientSession(*client_streams) as session:
+                        await session.initialize()
+                        result = await session.list_tools()
+                    # The server returns on end-of-input; close the client's output
+                    # to let it finish.
+                    await client_streams[1].aclose()
+        return [tool.name for tool in result.tools]
+
+    assert "gd_build" in asyncio.run(list_tool_names())
 
 
 # ---------------------------------------------------------------------------
@@ -1291,6 +1453,21 @@ class TestHandleCompletion:
             result = asyncio.run(handle_completion(ref, arg))
         assert result is None
 
+    @pytest.mark.parametrize(
+        "ref",
+        [
+            PromptReference(type="ref/prompt", name="improve-docstrings"),
+            ResourceTemplateReference(type="ref/resource", uri="gd://reference/{symbol}"),
+        ],
+    )
+    def test_symbol_completion_unexpected_error_propagates(
+        self, ref: PromptReference | ResourceTemplateReference
+    ):
+        arg = CompletionArgument(name="symbol", value="x")
+        with patch("great_docs.mcp._get_exports", side_effect=ZeroDivisionError("bug")):
+            with pytest.raises(ZeroDivisionError):
+                asyncio.run(handle_completion(ref, arg))
+
 
 # ---------------------------------------------------------------------------
 # _get_great_docs direct call
@@ -1370,6 +1547,11 @@ class TestReadResourceApiSurface:
 
         assert "Error discovering API surface" in result
 
+    def test_api_surface_unexpected_error_propagates(self):
+        with patch("great_docs.mcp._get_exports", side_effect=ZeroDivisionError("bug")):
+            with pytest.raises(ZeroDivisionError):
+                asyncio.run(read_resource(self._uri("gd://api-surface")))
+
 
 # ---------------------------------------------------------------------------
 # read_resource — gd://reference/{symbol} paths
@@ -1439,6 +1621,20 @@ class TestReadResourceReference:
             result = asyncio.run(read_resource(self._uri("gd://reference/any_sym")))
 
         assert "Error reading reference" in result
+
+    def test_reference_invalid_configuration_returns_error_message(self, tmp_path: Path):
+        write_pyproject(tmp_path, "mypkg")
+        (tmp_path / "great-docs.yml").write_text("parser: nope\n", encoding="utf-8")
+        uri = self._uri(f"gd://reference/any_sym?project_path={tmp_path}")
+        result = asyncio.run(read_resource(uri))
+
+        assert result.startswith("Error reading reference for 'any_sym':")
+        assert "parser: 'nope'" in result
+
+    def test_reference_unexpected_error_propagates(self):
+        with patch("great_docs.mcp._get_exports", side_effect=ZeroDivisionError("bug")):
+            with pytest.raises(ZeroDivisionError):
+                asyncio.run(read_resource(self._uri("gd://reference/any_sym")))
 
 
 # ---------------------------------------------------------------------------
