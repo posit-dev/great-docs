@@ -1469,7 +1469,8 @@ def freeze(
         if target is None:
             click.echo(f"  ✗ {page} — not found in build directory", err=True)
             click.echo(
-                "    Hint: Run 'great-docs build' first to set up the build directory.",
+                "    Hint: The site does not publish this page. Freeze renders only pages of the\n"
+                "    user guide, the configured sections and the custom pages.",
                 err=True,
             )
             failed.append(page)
