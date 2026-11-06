@@ -631,11 +631,17 @@ great-docs build
 
 This automatically re-discovers exports and updates the configuration.
 
-For faster builds when only documentation content changed (not API):
+For faster rebuilds, reuse cached API discovery when its inputs are unchanged:
 
 ```{.bash filename="Terminal"}
 great-docs build --no-refresh
 ```
+
+Each build saves its API reference sections in the cache directory. This is `.great-docs-cache/`
+beside `great-docs.yml` at the project root, or `.cache/` beside `great-docs.yml` in a docs
+directory. With `--no-refresh`, the build reuses cached sections while the package's files,
+`great-docs.yml` and the Great Docs version are unchanged. Otherwise, it discovers the API again.
+Running `great-docs build` without `--no-refresh` always rediscovers the API.
 
 Either way, the rendered output reflects the current state of your package. You never need to
 manually edit generated reference pages.

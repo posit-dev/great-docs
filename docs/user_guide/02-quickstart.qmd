@@ -221,7 +221,7 @@ you genuinely want to reset.
 ### Build Options
 
 ```{.bash filename="Terminal"}
-# Skip API re-discovery for faster rebuilds
+# Reuse cached API discovery when the package and configuration are unchanged
 great-docs build --no-refresh
 
 # Watch for file changes and rebuild automatically
