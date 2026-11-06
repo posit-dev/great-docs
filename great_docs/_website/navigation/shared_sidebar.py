@@ -199,7 +199,7 @@ class _Project:
                 if path.is_file():
                     try:
                         meta = parse_yaml(path.read_text(encoding="utf-8"))
-                    except Exception:
+                    except (OSError, ValueError):
                         meta = None
                     break
             self._dir_meta[directory] = meta if isinstance(meta, dict) else {}

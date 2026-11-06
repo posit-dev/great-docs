@@ -210,6 +210,15 @@ class TestShouldUseColor:
                 os.environ.pop("TERM", None)
                 assert _should_use_color() is False
 
+    def test_closed_stdout(self):
+        stream = io.StringIO()
+        stream.close()
+        with patch("sys.stdout", stream):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("NO_COLOR", None)
+                os.environ.pop("TERM", None)
+                assert _should_use_color() is False
+
 
 # =========================================================================
 # format_elapsed

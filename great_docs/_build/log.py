@@ -121,7 +121,8 @@ def _should_use_color() -> bool:
         return False
     try:
         return sys.stdout.isatty()
-    except Exception:
+    except (ValueError, AttributeError):
+        # A closed stream raises `ValueError`; absent standard output raises `AttributeError`.
         return False
 
 
