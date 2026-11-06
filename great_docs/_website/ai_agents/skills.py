@@ -22,11 +22,14 @@ from .well_known import publish
 class SkillsWriter:
     """
     Publisher for skill files, their discovery index and the site skills page
+
+    `layout` supplies the source directory for configured skill files, the package
+    root for curated skills and the build directory for published skills, discovery
+    files and `skills.qmd`.
     """
 
     config: Config
     layout: Layout
-    build_dir: Path
     distribution_name: str | None
     metadata: Manifest
 
@@ -51,6 +54,7 @@ class SkillsWriter:
             return
 
         package_root = self.layout.package_root
+        build_dir = self.layout.build_dir
 
         if self.config.skill_skills:
             self._write_multi(package_root)
@@ -59,11 +63,11 @@ class SkillsWriter:
         if self.config.skill_file:
             src = self.layout.source_dir / self.config.skill_file
             if src.exists():
-                dest = self.build_dir / "skill.md"
+                dest = build_dir / "skill.md"
                 _ = shutil.copy2(src, dest)
                 print(f"Copied user SKILL.md from {src}")
                 own_dir = self._own_directory(src)
-                publish(self.build_dir, [(dest, own_dir)], enabled=self.config.skill_well_known)
+                publish(build_dir, [(dest, own_dir)], enabled=self.config.skill_well_known)
                 SkillsPageWriter.make(self).write(
                     dest, skill_dir=src.parent, companions=own_dir is not None
                 )
@@ -80,11 +84,11 @@ class SkillsWriter:
                 continue
             skills_path = package_root / "skills" / candidate_name / "SKILL.md"
             if skills_path.exists():
-                dest = self.build_dir / "skill.md"
+                dest = build_dir / "skill.md"
                 _ = shutil.copy2(skills_path, dest)
                 print(f"Using curated skill from {skills_path}")
                 own_dir = self._own_directory(skills_path)
-                publish(self.build_dir, [(dest, own_dir)], enabled=self.config.skill_well_known)
+                publish(build_dir, [(dest, own_dir)], enabled=self.config.skill_well_known)
                 SkillsPageWriter.make(self).write(
                     dest, skill_dir=skills_path.parent, companions=own_dir is not None
                 )
@@ -94,12 +98,12 @@ class SkillsWriter:
             self.config, self.layout, self.distribution_name, self.metadata, api_block
         )
 
-        skill_path = self.build_dir / "skill.md"
+        skill_path = build_dir / "skill.md"
         _ = skill_path.write_text(skill_content, encoding="utf-8")
 
         print(f"Created {skill_path}")
 
-        publish(self.build_dir, [(skill_path, None)], enabled=self.config.skill_well_known)
+        publish(build_dir, [(skill_path, None)], enabled=self.config.skill_well_known)
 
         SkillsPageWriter.make(self).write(skill_path)
 
@@ -116,6 +120,7 @@ class SkillsWriter:
         if not skill_entries:
             return
 
+        build_dir = self.layout.build_dir
         placed_skills: list[tuple["Path", "Path | None"]] = []
 
         for i, entry in enumerate(skill_entries):
@@ -131,7 +136,7 @@ class SkillsWriter:
                 continue
 
             if not placed_skills:
-                dest = self.build_dir / "skill.md"
+                dest = build_dir / "skill.md"
                 _ = shutil.copy2(src, dest)
                 print(f"Copied primary skill '{name}' from {src}")
                 placed_skills.append((dest, self._own_directory(src)))
@@ -141,7 +146,7 @@ class SkillsWriter:
         if not placed_skills:
             return
 
-        publish(self.build_dir, placed_skills, enabled=self.config.skill_well_known)
+        publish(build_dir, placed_skills, enabled=self.config.skill_well_known)
 
         primary_path, primary_dir = placed_skills[0]
         extra = placed_skills[1:] if len(placed_skills) > 1 else None

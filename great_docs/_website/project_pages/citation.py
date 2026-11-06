@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
+    from ..._layout import Layout
     from ...config import Config
 
 __all__ = ["FILENAME", "write_page"]
@@ -24,8 +25,8 @@ FILENAME = "citation.qmd"
 
 def write_page(
     config: Config,
-    package_root: Path,
-    build_dir: Path,
+    layout: Layout,
+    package_name: str | None,
     authors: list[dict[str, Any]],
     *,
     report: Callable[[str], None],
@@ -42,10 +43,12 @@ def write_page(
     config
         The Great Docs configuration. An author's role comes from the configured author with
         the same name, or is `"Author"` if there is none or it has no role.
-    package_root
-        The project directory holding `CITATION.cff`.
-    build_dir
-        The Quarto project directory to write the page into.
+    layout
+        The package root to read `CITATION.cff` from and the build directory to write
+        `citation.qmd` into.
+    package_name
+        The distribution name used in the introduction. If `None` or empty, the
+        introduction uses "this package".
     authors
         The configured authors, with local portrait paths replaced by site URLs.
     report
@@ -56,7 +59,7 @@ def write_page(
     :
         The path of the written page, or `None` if the project has no `CITATION.cff` file.
     """
-    source = package_root / "CITATION.cff"
+    source = layout.package_root / "CITATION.cff"
     if not source.exists():
         return None
 
@@ -64,8 +67,8 @@ def write_page(
         citation = cast("dict[str, Any]", read_yaml(f))
     cff_authors: list[dict[str, Any]] = citation.get("authors") or []
 
-    intro_paragraph = """
-To cite this package in publications, please use the following citation.
+    intro_paragraph = f"""
+To cite {package_name or "this package"} in publications, please use the following citation.
 """
 
     configured_authors: list[dict[str, Any]] = config.authors or []
@@ -101,7 +104,7 @@ title: "Authors and Citation"
 
 {citation_section}
 """
-    path = build_dir / FILENAME
+    path = layout.build_dir / FILENAME
     _ = path.write_text(page_dates.add_to_page(content, source, config, authors), encoding="utf-8")
     report(f"Created {path}")
     return path

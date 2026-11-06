@@ -5,7 +5,6 @@ Collect authored page statuses and prepare badge data for embedding
 from __future__ import annotations
 
 import json
-from dataclasses import replace
 from typing import TYPE_CHECKING, Any, cast
 
 from .._contribution import Contribution, InlineData
@@ -25,18 +24,30 @@ __all__ = ["add_upcoming", "collect", "process", "write"]
 _BUILTIN_STATUSES = {"new", "updated", "beta", "deprecated", "experimental", "upcoming"}
 
 
-def collect(config: Config, layout: Layout, build_dir: Path) -> dict[str, str]:
+def collect(config: Config, layout: Layout) -> dict[str, str]:
     """
     Map published authored pages to their declared status
 
     Scan user-guide, recipe and custom section pages, excluding index pages.
     Unknown statuses produce a warning and are omitted.
+
+    Parameters
+    ----------
+    config
+        The Great Docs configuration, including custom sections and known statuses.
+    layout
+        The build directory to scan for authored pages and use as the base for
+        page paths in the result.
+
+    Returns
+    -------
+    :
+        A map from build-relative page paths to known status names.
     """
     statuses: dict[str, str] = {}
     valid = config.page_status_definitions
-    scan_layout = replace(layout, build_dir=build_dir)
-    dirs = page_scan.content_dirs(config, scan_layout, reference=False)
-    for item in page_scan.scan(dirs, build_dir, skip_index=True):
+    dirs = page_scan.content_dirs(config, layout, reference=False)
+    for item in page_scan.scan(dirs, layout.build_dir, skip_index=True):
         status = item.page.front_matter.string("status")
         if not status:
             continue
@@ -93,7 +104,7 @@ def write(config: Config, build_dir: Path, statuses: Mapping[str, str]) -> dict[
     return data
 
 
-def process(config: Config, layout: Layout, build_dir: Path) -> Contribution | None:
+def process(config: Config, layout: Layout) -> Contribution | None:
     """
     Write badge data when authored pages declare a status
 
@@ -102,10 +113,8 @@ def process(config: Config, layout: Layout, build_dir: Path) -> Contribution | N
     config
         The Great Docs configuration.
     layout
-        The project's directories.
-    build_dir
-        The Quarto project directory whose pages are scanned and which receives
-        `_page_status.json`.
+        The build directory to scan for authored page statuses and to write
+        `_page_status.json` into.
 
     Returns
     -------
@@ -113,10 +122,10 @@ def process(config: Config, layout: Layout, build_dir: Path) -> Contribution | N
         The badge data to embed before `page-status-badges.js`, or `None` when no
         page declares a known status.
     """
-    statuses = collect(config, layout, build_dir)
+    statuses = collect(config, layout)
     if not statuses:
         return None
-    data = write(config, build_dir, statuses)
+    data = write(config, layout.build_dir, statuses)
     return Contribution(
         inline_data=(InlineData("__GD_STATUS_DATA__", data, before="page-status-badges.js"),)
     )

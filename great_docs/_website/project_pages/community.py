@@ -10,8 +10,7 @@ from typing import TYPE_CHECKING, Any
 from .. import page_dates
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
+    from ..._layout import Layout
     from ...config import Config
 
 __all__ = ["PAGES", "SECURITY", "CommunityPage", "write_pages"]
@@ -74,7 +73,7 @@ PAGES = (
 
 
 def write_pages(
-    config: Config, package_root: Path, build_dir: Path, authors: list[dict[str, Any]]
+    config: Config, layout: Layout, authors: list[dict[str, Any]]
 ) -> list[CommunityPage]:
     """
     Write community pages from the project's Markdown files
@@ -86,10 +85,9 @@ def write_pages(
     ----------
     config
         The Great Docs configuration.
-    package_root
-        The project directory holding the source files.
-    build_dir
-        The Quarto project directory to write the pages into.
+    layout
+        The package root holding the source Markdown files and the build directory
+        to write the community pages into.
     authors
         The configured authors, with local portrait paths replaced by site URLs.
 
@@ -98,6 +96,7 @@ def write_pages(
     :
         The pages written, in the order of `PAGES`.
     """
+    package_root = layout.package_root
     written: list[CommunityPage] = []
     for page in PAGES:
         if page is SECURITY and not config.show_security:
@@ -119,7 +118,7 @@ title: "{page.title}"
 
 {text}
 """
-        _ = (build_dir / page.filename).write_text(
+        _ = (layout.build_dir / page.filename).write_text(
             page_dates.add_to_page(content, source, config, authors), encoding="utf-8"
         )
         written.append(page)

@@ -120,7 +120,6 @@ def write(
 def write_readme(
     config: Config,
     layout: Layout,
-    build_dir: Path,
     *,
     metadata: Manifest,
     package_name: str | None,
@@ -144,9 +143,9 @@ def write_readme(
     config
         The Great Docs configuration.
     layout
-        The project's directories.
-    build_dir
-        The Quarto project directory to write the homepage and community pages into.
+        The source directory and package root to search for homepage content, and
+        the build directory to write the homepage, community pages and local logo
+        copies into.
     metadata
         The package metadata.
     package_name
@@ -171,7 +170,7 @@ def write_readme(
     :
         The path to the written `index.qmd`.
     """
-    index_qmd = build_dir / "index.qmd"
+    index_qmd = layout.build_dir / "index.qmd"
     sources = source.find(layout)
     if len(sources) > 1:
         others = ", ".join(path.name for path in sources[1:])
@@ -207,7 +206,6 @@ def write_readme(
     hero_html, without_badges = _hero(
         config,
         layout,
-        build_dir,
         body,
         metadata=metadata,
         package_name=package_name,
@@ -238,7 +236,6 @@ def write_readme(
     sidebar = _sidebar(
         config,
         layout,
-        build_dir,
         metadata=metadata,
         package_name=package_name,
         page_authors=page_authors,
@@ -263,7 +260,7 @@ def write_readme(
         f"body-classes: {json.dumps(' '.join(classes))}\n---\n"
     )
     index_qmd = write(
-        build_dir,
+        layout.build_dir,
         front_matter=front_matter,
         hero=hero_html,
         body=body,
@@ -277,7 +274,6 @@ def write_readme(
 def write_blended(
     config: Config,
     layout: Layout,
-    build_dir: Path,
     content: str,
     *,
     metadata: Manifest,
@@ -297,9 +293,9 @@ def write_blended(
     config
         The Great Docs configuration.
     layout
-        The project's directories.
-    build_dir
-        The Quarto project directory to write the homepage and community pages into.
+        The source directory for logos, the package root for community pages and
+        curated skills, and the build directory to write the homepage, community
+        pages and local logo copies into.
     content
         The user guide page as copied into the build directory.
     metadata
@@ -324,7 +320,6 @@ def write_blended(
     sidebar = _sidebar(
         config,
         layout,
-        build_dir,
         metadata=metadata,
         package_name=package_name,
         page_authors=page_authors,
@@ -333,7 +328,6 @@ def write_blended(
     hero_html, _ = _hero(
         config,
         layout,
-        build_dir,
         None,
         metadata=metadata,
         package_name=package_name,
@@ -355,7 +349,7 @@ def write_blended(
     body = re.sub(r"^#\s+[^\n]*\n?", "", body, count=1, flags=re.MULTILINE)
 
     return write(
-        build_dir,
+        layout.build_dir,
         front_matter=front_matter,
         hero=hero_html,
         body=body,
@@ -367,7 +361,6 @@ def write_blended(
 def _hero(
     config: Config,
     layout: Layout,
-    build_dir: Path,
     readme_text: str | None,
     *,
     metadata: Manifest,
@@ -382,9 +375,9 @@ def _hero(
     config
         The Great Docs configuration.
     layout
-        The project's directories.
-    build_dir
-        The Quarto project directory, which receives a copy of a local logo.
+        The source directory to search for logos, the configuration path for resolving
+        logo references and the build directory for local logo copies and URLs
+        relative to `index.qmd`.
     readme_text
         The homepage Markdown, or `None` for a page that is not a README.
     metadata
@@ -407,7 +400,6 @@ def _hero(
         found,
         config,
         layout,
-        build_dir,
         metadata=metadata,
         package_name=package_name,
         pages=pages,
@@ -418,7 +410,6 @@ def _hero(
 def _sidebar(
     config: Config,
     layout: Layout,
-    build_dir: Path,
     *,
     metadata: Manifest,
     package_name: str | None,
@@ -433,9 +424,8 @@ def _sidebar(
     config
         The Great Docs configuration.
     layout
-        The project's directories.
-    build_dir
-        The Quarto project directory to write the community pages into.
+        The package root to read community pages and discover curated skills, and
+        the build directory to write community pages and check for linked pages.
     metadata
         The package metadata.
     package_name
@@ -450,13 +440,11 @@ def _sidebar(
     :
         The sidebar's Markdown, or `""` when it has no sections.
     """
-    package_root = layout.package_root
     return margin.render(
         config,
-        build_dir,
-        package_root=package_root,
+        layout,
         metadata=metadata,
         package_name=package_name,
-        community_pages=community.write_pages(config, package_root, build_dir, page_authors),
+        community_pages=community.write_pages(config, layout, page_authors),
         has_llms_txt=has_llms_txt,
     )

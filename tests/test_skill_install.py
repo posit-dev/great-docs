@@ -498,7 +498,6 @@ class TestMultiSkillWellKnown:
             SkillsWriter(
                 docs._config,
                 docs.layout,
-                docs.build_dir,
                 make_project(docs).name,
                 make_project(docs).manifest,
             ).write(None)

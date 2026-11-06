@@ -103,15 +103,11 @@ def homepage(
     -------
     :
     """
-    package_root = layout.package_root
-    build_dir = layout.build_dir
     metadata = run.project.manifest
 
-    _ = licence.write_page(
-        config, package_root, build_dir, metadata["license"], page_authors, report=print
-    )
-    _ = citation.write_page(config, package_root, build_dir, page_authors, report=print)
-    _ = package_info.write_page(config, build_dir, metadata, remote, report=print)
+    _ = licence.write_page(config, layout, metadata["license"], page_authors, report=print)
+    _ = citation.write_page(config, layout, run.project.name, page_authors, report=print)
+    _ = package_info.write_page(config, layout.build_dir, metadata, remote, report=print)
 
     if config.homepage == "user_guide" and not fallback:
         return
@@ -120,7 +116,6 @@ def homepage(
     _ = homepage_page.write_readme(
         config,
         layout,
-        build_dir,
         metadata=metadata,
         package_name=run.project.name,
         pages=page_map(config, layout, guide),
@@ -314,7 +309,6 @@ def _promote_first_page(
     _ = homepage_page.write_blended(
         config,
         layout,
-        layout.build_dir,
         first_ug_path.read_text(encoding="utf-8"),
         metadata=project.manifest,
         package_name=project.name,
