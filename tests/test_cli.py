@@ -2650,6 +2650,30 @@ class TestFreezeInfo:
 
         assert "could not be parsed" in out
 
+    @pytest.mark.parametrize(
+        "content",
+        [b'{"result": "\xff"}', b"[1, 2]", b'{"result": null}', b'{"result": {"markdown": 3}}'],
+        ids=["not-utf-8", "not-a-mapping", "no-result", "markdown-not-text"],
+    )
+    def test_unusable_cache_is_listed_and_later_pages_follow(self, tmp_path, capsys, content):
+        (tmp_path / "great-docs.yml").write_text("")
+        persist_dir = tmp_path / "_freeze"
+        broken = persist_dir / "a" / "execute-results"
+        broken.mkdir(parents=True)
+        (broken / "html.json").write_bytes(content)
+        valid = persist_dir / "b" / "execute-results"
+        valid.mkdir(parents=True)
+        (valid / "html.json").write_text(
+            json.dumps({"result": {"markdown": "Executed at: 2024-01-15 10:30:00"}})
+        )
+
+        _freeze_info(tmp_path, persist_dir)
+        out = capsys.readouterr().out
+
+        assert "?  a" in out
+        assert "could not be parsed" in out
+        assert "✓  b" in out
+
     def test_per_page_overrides_qmd(self, tmp_path, capsys):
         # Create a .qmd file in user_guide/ with freeze: true in frontmatter
         user_guide = tmp_path / "user_guide"
@@ -3185,19 +3209,18 @@ class TestSetupGithubPagesMissedBranches:
             )
         # Either succeeds or fails, but the ImportError path was exercised
 
-    def test_exception_in_setup(self, tmp_path, monkeypatch):
-        """An exception inside setup_github_pages exits 1 with error message."""
+    def test_unreadable_template_reports_error(self, tmp_path, monkeypatch):
+        """Report an unreadable workflow template and exit with status 1"""
         monkeypatch.chdir(tmp_path)
         self._make_pyproject(tmp_path)
         runner = CliRunner()
-        # Raise inside the try block by making template loading fail
-        with patch("importlib.resources.files", side_effect=RuntimeError("boom")):
+        with patch("importlib.resources.files", side_effect=OSError("boom")):
             result = runner.invoke(
                 cli,
                 ["setup-github-pages", "--project-path", str(tmp_path)],
             )
         assert result.exit_code == 1
-        assert "Error" in result.output
+        assert "Error: boom" in result.output
 
 
 class TestCheckLinksAutodiscover:
@@ -3389,25 +3412,25 @@ class TestSeoMissedBranches:
         result = runner.invoke(cli, ["seo", "--project-path", str(tmp_path)])
         assert result.exit_code in (0, 1)
 
-    def test_seo_exception_path(self, tmp_path, monkeypatch):
-        """An unhandled exception in seo exits 1 with error message."""
+    def test_seo_unexpected_error_propagates(self, tmp_path, monkeypatch):
+        """Propagate unexpected `seo` errors without printing an error line"""
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
         runner = CliRunner()
         with patch("great_docs._layout.Layout.load_config", side_effect=RuntimeError("boom")):
             result = runner.invoke(cli, ["seo", "--project-path", str(tmp_path)])
-        assert result.exit_code == 1
-        assert "Error: boom" in result.output
+        assert isinstance(result.exception, RuntimeError)
+        assert "Error:" not in result.output
 
-    def test_seo_json_exception_path(self, tmp_path, monkeypatch):
-        """An exception with --json outputs JSON error object."""
+    def test_seo_json_unexpected_error_prints_no_json(self, tmp_path, monkeypatch):
+        """Propagate unexpected `seo --json` errors without printing a JSON error object"""
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
         runner = CliRunner()
         with patch("great_docs._layout.Layout.load_config", side_effect=RuntimeError("boom")):
             result = runner.invoke(cli, ["seo", "--json", "--project-path", str(tmp_path)])
-        assert result.exit_code == 1
-        assert "error" in result.output
+        assert isinstance(result.exception, RuntimeError)
+        assert '"status"' not in result.output
 
 
 class TestLintInfoOutput:
@@ -3518,15 +3541,16 @@ class TestApiDiffMissedBranches:
 
 
 class TestVersionsExceptionPath:
-    def test_exception_exits_one(self, tmp_path, monkeypatch):
-        """An exception in versions exits 1 with error message."""
+    def test_unexpected_error_propagates(self, tmp_path, monkeypatch):
+        """Propagate unexpected `versions` errors with exit status 1"""
         monkeypatch.chdir(tmp_path)
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
         runner = CliRunner()
         with patch("great_docs._layout.Layout.load_config", side_effect=RuntimeError("boom")):
             result = runner.invoke(cli, ["versions", "--project-path", str(tmp_path)])
         assert result.exit_code == 1
-        assert "Error" in result.output
+        assert isinstance(result.exception, RuntimeError)
+        assert "Error:" not in result.output
 
 
 class TestApiSnapshotMissedBranches:
@@ -4332,23 +4356,6 @@ class TestProofreadExceptionHandlers:
                 ["proofread", "README.md", "--project-path", str(tmp_path)],
             )
         assert result.exit_code == 2
-
-    def test_generic_exception(self, tmp_path, monkeypatch):
-        """Generic Exception exits with code 1."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
-        (tmp_path / "README.md").write_text("# Test")
-
-        runner = CliRunner()
-        with patch(
-            "great_docs._checks.harper.check_harper_available",
-            side_effect=RuntimeError("unexpected"),
-        ):
-            result = runner.invoke(
-                cli,
-                ["proofread", "README.md", "--project-path", str(tmp_path)],
-            )
-        assert result.exit_code == 1
 
 
 class TestSeoSitemapParseError:

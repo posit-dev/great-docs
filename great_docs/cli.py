@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import zipfile
 from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
@@ -13,10 +14,10 @@ from . import __version__, _manifest
 from ._build import freeze as freeze_cache
 from ._build import from_repo as repository
 from ._build import quarto, serve, site
-from ._build.steps import BuildError, print_warning
+from ._build.steps import USER_CODE_ERRORS, BuildError, print_warning
 from ._content import user_guide
 from ._install import update_gitignore
-from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
+from ._layout import CONVENTIONAL_DOC_DIRS, Layout, LayoutError, _find_package_root
 from ._manifest import ManifestError
 from ._project import Project
 from ._reference.exports import Exports
@@ -28,6 +29,18 @@ from .core import GreatDocs
 
 if TYPE_CHECKING:
     from ._layout_migration import Migration, Move, Note
+
+# A command reports these errors as `Error: <message>` and exits with status 1. Great Docs
+# raises them for a problem in the project or its environment: an invalid configuration or
+# layout, a file it cannot read or write, a missing tool, or a file that is not UTF-8. A
+# command that loads the project's package also reports `USER_CODE_ERRORS`. Any other error
+# is a bug in Great Docs and shows its traceback; Python then exits with status 1 as well.
+COMMAND_ERRORS: tuple[type[Exception], ...] = (
+    ConfigError,
+    LayoutError,
+    OSError,
+    UnicodeDecodeError,
+)
 
 
 def _config_option(function: Callable[..., Any]) -> Callable[..., Any]:
@@ -208,7 +221,7 @@ def init(project_path: str | None, force: bool, config_path: str | None = None) 
     try:
         docs = GreatDocs(project_path=project_path, config_path=config_path, create=True)
         docs.install(force=force)
-    except Exception as e:
+    except (*COMMAND_ERRORS, *USER_CODE_ERRORS, EOFError) as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
@@ -399,7 +412,7 @@ def build(
     except serve.ServeError as e:
         click.echo(f"❌ {e}")
         sys.exit(1)
-    except Exception as e:
+    except (*COMMAND_ERRORS, *USER_CODE_ERRORS, ValueError) as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
@@ -430,7 +443,7 @@ def uninstall(project_path: str | None, config_path: str | None = None) -> None:
     try:
         docs = GreatDocs(project_path=project_path, config_path=config_path)
         docs.uninstall()
-    except Exception as e:
+    except (*COMMAND_ERRORS, ValueError) as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
@@ -607,7 +620,7 @@ def preview(
     except BuildError:
         # Exit without repeating the build's failure report
         sys.exit(1)
-    except Exception as e:
+    except (*COMMAND_ERRORS, *USER_CODE_ERRORS, ValueError, zipfile.BadZipFile) as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
@@ -661,7 +674,7 @@ def config(project_path: str | None, force: bool, config_path: str | None = None
         click.echo("\nEdit this file to customize your documentation settings.")
         click.echo("See https://posit-dev.github.io/great-docs/user-guide/configuration.html")
 
-    except Exception as e:
+    except COMMAND_ERRORS as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
@@ -1230,7 +1243,7 @@ def scan(
             click.echo("           members: false     # Don't document methods")
             click.echo("         - SimpleClass        # Methods inline")
 
-    except Exception as e:
+    except (*COMMAND_ERRORS, *USER_CODE_ERRORS) as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
@@ -1324,7 +1337,9 @@ def _freeze_info(project_root: Path, persist_dir: Path, layout: Layout | None = 
                 timestamp = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
             click.echo(f"  ✓  {page_stem}")
             click.echo(f"       frozen at {timestamp}")
-        except Exception:
+        # An unreadable, undecodable or invalid cache file raises `OSError` or `ValueError`;
+        # JSON without a `result` mapping holding `markdown` text raises the other two
+        except (OSError, ValueError, AttributeError, TypeError):
             click.echo(f"  ?  {page_stem}")
             click.echo("       cache file exists but could not be parsed")
 
@@ -1933,7 +1948,7 @@ def setup_github_pages(
         click.echo("   • Automatically deploy to GitHub Pages on main branch")
         click.echo("   • Comment on pull requests with a 'great-docs preview' command")
 
-    except Exception as e:
+    except COMMAND_ERRORS as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
@@ -2112,7 +2127,7 @@ def check_links(
         click.echo(f"Error: {e}", err=True)
         click.echo("\nInstall the requests package with: pip install requests", err=True)
         sys.exit(1)
-    except Exception as e:
+    except COMMAND_ERRORS as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
@@ -2385,7 +2400,7 @@ def changelog(
                     quarto_yml.apply(quarto_config, contribution, config)
             click.echo(f"✅ Changelog generated: {layout.build_dir / changelog_page.FILENAME}")
 
-    except Exception as e:
+    except (*COMMAND_ERRORS, ValueError) as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
@@ -2741,7 +2756,7 @@ def proofread(
     except HarperError as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(2)
-    except Exception as e:
+    except COMMAND_ERRORS as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
@@ -2988,7 +3003,7 @@ def seo(
             else:
                 click.echo("✅ All SEO checks passed!")
 
-    except Exception as e:
+    except (*COMMAND_ERRORS, ValueError) as e:
         if json_output:
             click.echo(json.dumps({"status": "error", "error": str(e)}))
         else:
@@ -3164,7 +3179,7 @@ def lint(
         if result.errors:
             sys.exit(1)
 
-    except Exception as e:
+    except (*COMMAND_ERRORS, *USER_CODE_ERRORS) as e:
         if json_output:
             click.echo(json.dumps({"status": "error", "error": str(e)}))
         else:
@@ -3491,7 +3506,7 @@ def api_diff_cmd(
 
         click.echo()
 
-    except Exception as e:
+    except (*COMMAND_ERRORS, *USER_CODE_ERRORS) as e:
         if json_output:
             click.echo(json.dumps({"status": "error", "error": str(e)}))
         else:
@@ -3577,7 +3592,7 @@ def versions(project_path: str | None, check: bool, config_path: str | None = No
 
         click.echo()
 
-    except Exception as e:
+    except COMMAND_ERRORS as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
@@ -3727,7 +3742,7 @@ def api_snapshot_cmd(
             click.echo(f"  ✓  {tag}: {snap.symbol_count} symbols → {out_path}")
             saved += 1
 
-        except Exception as e:
+        except USER_CODE_ERRORS as e:
             click.echo(f"  ✗  {tag}: {e}", err=True)
             failed += 1
 
