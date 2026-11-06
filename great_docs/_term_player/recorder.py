@@ -79,13 +79,12 @@ def record_session(
     # Fork PTY
     pid, master_fd = pty.fork()
 
-    if pid == 0:  # pragma: no cover — child process exec path
-        # Child process: exec shell
-        # Set terminal size
+    if pid == 0:
+        # The shell must inherit the requested terminal size.
         winsize = struct.pack("HHHH", rows, cols, 0, 0)
         fcntl.ioctl(sys.stdout.fileno(), termios.TIOCSWINSZ, winsize)
         os.execvp(shell, [shell])
-        # Should not reach here
+        # Keep the child out of the parent's recording loop if exec returns.
         sys.exit(1)
 
     # Parent process: capture output

@@ -422,6 +422,25 @@ def test_cli_import():
     assert callable(main)
 
 
+def test_version_falls_back_when_the_package_is_not_installed(monkeypatch):
+    """Check that missing package metadata yields version `0.0.0`"""
+    import importlib.metadata
+
+    import great_docs
+
+    def missing(name: str) -> str:
+        raise importlib.metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(importlib.metadata, "version", missing)
+    try:
+        importlib.reload(great_docs)
+        assert great_docs.__version__ == "0.0.0"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(great_docs)
+    assert great_docs.__version__ == importlib.metadata.version("great-docs")
+
+
 def test_config_exclude_in_parse():
     """Test that great-docs.yml exclude filters items from __all__."""
 

@@ -331,6 +331,69 @@ class TestRecordSteps:
         assert recording.term.type == "xterm-256color"
         assert recording.title == "size"
 
+    @posix_only
+    def test_child_process_execs_the_shell_in_the_settings(self, tmp_path: Path):
+        """Check that the child applies the shell settings before starting it"""
+        import struct
+        import termios
+        from unittest.mock import patch
+
+        from great_docs._term_player.steps import _Session
+
+        class ChildExit(Exception):
+            pass
+
+        def leave(status: int) -> None:
+            raise ChildExit(status)
+
+        settings = _fast(cwd=tmp_path, env={"GREETING": "hi"}, shell="sh -l", cols=30, rows=10)
+        with (
+            patch("pty.fork", return_value=(0, 7)),
+            patch("fcntl.ioctl") as ioctl,
+            patch("os.chdir") as chdir,
+            patch("os.execvpe") as execvpe,
+            patch("os._exit", side_effect=leave),
+            pytest.raises(ChildExit) as exit_info,
+        ):
+            _Session(settings).start()
+
+        ioctl.assert_called_once_with(1, termios.TIOCSWINSZ, struct.pack("HHHH", 10, 30, 0, 0))
+        chdir.assert_called_once_with(tmp_path)
+        (file, argv, env), _ = execvpe.call_args
+        assert (file, argv) == ("sh", ["sh", "-l"])
+        assert env == shell_env(settings) | {"SHELL": shutil.which("sh")}
+        assert env["GREETING"] == "hi"
+        # The exec stub returns, so the child must still exit before the parent's code.
+        assert exit_info.value.args == (127,)
+
+    @posix_only
+    def test_child_process_reports_a_shell_that_cannot_start(self):
+        """Check that a failed shell start reports its cause and exits with status 127"""
+        import errno
+        from unittest.mock import patch
+
+        from great_docs._term_player.steps import _Session
+
+        class ChildExit(Exception):
+            pass
+
+        def leave(status: int) -> None:
+            raise ChildExit(status)
+
+        failure = FileNotFoundError(errno.ENOENT, "No such file or directory")
+        with (
+            patch("pty.fork", return_value=(0, 7)),
+            patch("fcntl.ioctl"),
+            patch("os.execvpe", side_effect=failure),
+            patch("os.write") as write,
+            patch("os._exit", side_effect=leave),
+            pytest.raises(ChildExit) as exit_info,
+        ):
+            _Session(_fast(shell="no-such-shell")).start()
+
+        write.assert_called_once_with(1, b"no-such-shell: No such file or directory\r\n")
+        assert exit_info.value.args == (127,)
+
     def test_env_and_cwd(self, tmp_path: Path):
         settings = _fast(cwd=tmp_path, env={"GREETING": "hi there"})
         recording = record_steps(settings, [Step("run", "echo $GREETING"), Step("run", "pwd")])

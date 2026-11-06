@@ -407,6 +407,19 @@ class TestFindPackageSkills:
                 assert len(results) == 1
                 assert results[0].name == "SKILL.md"
 
+    def test_namespace_package_has_no_skills(self, tmp_path: Path, monkeypatch):
+        # A namespace package has `__file__ = None`, so skill discovery skips it.
+        import sys
+
+        skill = tmp_path / "ns_pkg" / "skills" / "ns-pkg"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("# Skill")
+        monkeypatch.syspath_prepend(str(tmp_path))
+        try:
+            assert _find_package_skills("ns-pkg") == []
+        finally:
+            sys.modules.pop("ns_pkg", None)
+
     def test_package_without_skills_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             pkg_dir = Path(tmp) / "bare_pkg"

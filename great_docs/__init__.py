@@ -1,11 +1,8 @@
-try:
-    from importlib.metadata import PackageNotFoundError, version
-except ImportError:  # pragma: no cover
-    from importlib_metadata import PackageNotFoundError, version  # type: ignore[import-not-found]
+from importlib.metadata import PackageNotFoundError, version
 
-try:  # pragma: no cover
+try:
     __version__ = version("great-docs")
-except PackageNotFoundError:  # pragma: no cover
+except PackageNotFoundError:
     __version__ = "0.0.0"
 
 from . import _builtin  # noqa: F401  — registers great-docs' built-in event handlers

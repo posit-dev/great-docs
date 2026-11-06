@@ -504,6 +504,18 @@ class TestProgressBar:
         # bucket 10: 100*100//100=100 -> 100//10=10 (emitted at i=100)
         assert len(lines) == 11
 
+    @pytest.mark.parametrize("is_tty", [True, False])
+    def test_update_survives_a_closed_pipe(self, is_tty: bool):
+        class ClosedPipe(io.StringIO):
+            def write(self, text: str) -> int:
+                raise BrokenPipeError
+
+        bar = ProgressBar(
+            "Test", 100, is_tty=is_tty, colors=Colors(force_color=False), stream=ClosedPipe()
+        )
+        bar.update(50)
+        assert bar._current == 50
+
     def test_update_ci_no_repeat_buckets(self):
         stream = io.StringIO()
         bar = ProgressBar(
