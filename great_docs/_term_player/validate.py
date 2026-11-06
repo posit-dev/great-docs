@@ -927,10 +927,7 @@ def _script_from(data: dict[str, Any]) -> Script | None:
     for section in _SECTIONS:
         if section in data:
             plain[section] = [entry[1] for entry in data[section] or [] if entry is not None]
-    try:
-        return _parse_script_data(plain)
-    except (ValueError, TypeError):  # pragma: no cover - already reported
-        return None
+    return _parse_script_data(plain)
 
 
 def _overlapping(windows: list[tuple[int, dict, float, float]]):
