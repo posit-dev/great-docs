@@ -178,7 +178,7 @@ def navbar_link(
         if isinstance(text, str) and text:
             return NavbarLink(text=text, href=href), after if isinstance(after, str) else None
 
-    return None  # pragma: no cover
+    return None
 
 
 def publish(
@@ -253,11 +253,11 @@ def publish(
             page_title = front_matter.string("title") or title_from_name(src_path.stem)
 
             if page_layout not in _LAYOUTS:
-                report(  # pragma: no cover
+                report(
                     f"Unsupported custom page layout '{page_layout}' in {output_path}; "
                     "defaulting to passthrough"
                 )
-                page_layout = "passthrough"  # pragma: no cover
+                page_layout = "passthrough"
 
             if page_layout == "raw":
                 _ = dest_path.write_text(
