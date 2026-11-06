@@ -20,6 +20,7 @@ from mcp.server.stdio import stdio_server
 from mcp.types import (
     Completion,
     CompletionArgument,
+    CompletionContext,
     GetPromptResult,
     Prompt,
     PromptArgument,
@@ -31,7 +32,6 @@ from mcp.types import (
     TextContent,
     Tool,
 )
-from pydantic import AnyUrl
 
 from ._build import outputs
 from ._build.steps import USER_CODE_ERRORS, BuildError
@@ -43,37 +43,6 @@ if TYPE_CHECKING:
     from ._api_diff import ApiSnapshot
     from ._project import Project
     from ._reference.exports import Exports
-
-# ---------------------------------------------------------------------------
-# Handler registration
-# ---------------------------------------------------------------------------
-
-# Request handlers are constructor arguments. Collect them until all
-# handler functions have been defined.
-_HANDLERS: dict[str, Any] = {}
-
-
-def _handler(name: str) -> Any:
-    """
-    Return a decorator that collects an MCP request handler
-
-    Parameters
-    ----------
-    name
-        The request name, such as `list_tools`.
-
-    Returns
-    -------
-    :
-        A decorator that records the function and returns it unchanged.
-    """
-
-    def _collect(func: Any) -> Any:
-        _HANDLERS[name] = func
-        return func
-
-    return _collect
-
 
 # Server-level instructions — displayed to the AI at connection time
 _INSTRUCTIONS = (
@@ -211,7 +180,6 @@ def _get_layout(arguments: dict, *, create: bool = False) -> Layout:
 # ---------------------------------------------------------------------------
 
 
-@_handler("list_tools")
 async def list_tools() -> list[Tool]:
     """List all available Great Docs tools."""
     tools = [
@@ -446,7 +414,7 @@ class _ToolCallContent(list[TextContent]):
     is_error: bool = False
 
 
-async def _missing_arguments(name: str, arguments: dict) -> list[str]:
+async def _missing_arguments(name: str, arguments: dict[str, Any]) -> list[str]:
     """
     List required argument names missing from a tool call
 
@@ -472,9 +440,23 @@ async def _missing_arguments(name: str, arguments: dict) -> list[str]:
     return []
 
 
-@_handler("call_tool")
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-    """Dispatch tool calls to their implementations."""
+async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+    """
+    Run a tool and return its text output
+
+    Parameters
+    ----------
+    name
+        The tool name.
+    arguments
+        The supplied argument names and values.
+
+    Returns
+    -------
+    :
+        The tool output. Unknown tools, missing required arguments and handled
+        project errors return error text with `is_error=True`.
+    """
     if missing := await _missing_arguments(name, arguments):
         result = _ToolCallContent(
             [
@@ -940,7 +922,6 @@ async def _handle_api_diff(arguments: dict) -> list[TextContent]:
 # ---------------------------------------------------------------------------
 
 
-@_handler("list_prompts")
 async def list_prompts() -> list[Prompt]:
     """List pre-built prompt templates for documentation workflows."""
     return [
@@ -1032,7 +1013,6 @@ async def list_prompts() -> list[Prompt]:
     ]
 
 
-@_handler("get_prompt")
 async def get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptResult:
     """Return the expanded prompt messages for a given prompt template."""
     args = arguments or {}
@@ -1181,7 +1161,6 @@ async def get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptRe
 # ---------------------------------------------------------------------------
 
 
-@_handler("list_resources")
 async def list_resources() -> list[Resource]:
     """List available documentation resources."""
     resources = []
@@ -1256,15 +1235,25 @@ async def list_resources() -> list[Resource]:
     return resources
 
 
-@_handler("read_resource")
-async def read_resource(uri: AnyUrl) -> str:
+async def read_resource(uri: str) -> str:
     """
-    Read a resource with optional project and configuration selection
+    Read a documentation resource from a `gd://` URI
 
-    The `project_path` and `config_path` query parameters follow tool argument
-    semantics. Bare URIs use automatic project configuration discovery.
+    The `project_path` and `config_path` query parameters select the project and
+    configuration as they do for tool calls. Without these parameters, use
+    automatic project configuration discovery.
+
+    Parameters
+    ----------
+    uri
+        The resource URI, including any project and configuration query parameters.
+
+    Returns
+    -------
+    :
+        The resource content or a message describing an unavailable resource.
     """
-    parts = urlsplit(str(uri))
+    parts = urlsplit(uri)
     uri_str = parts._replace(query="").geturl()
     query = parse_qs(parts.query)
     arguments = {name: query[name][0] for name in ("project_path", "config_path") if name in query}
@@ -1370,7 +1359,6 @@ async def read_resource(uri: AnyUrl) -> str:
 # ---------------------------------------------------------------------------
 
 
-@_handler("list_resource_templates")
 async def list_resource_templates() -> list[ResourceTemplate]:
     """List dynamic resource templates."""
     return [
@@ -1414,15 +1402,32 @@ async def list_resource_templates() -> list[ResourceTemplate]:
 # ---------------------------------------------------------------------------
 
 
-@_handler("completion")
 async def handle_completion(
     ref: PromptReference | ResourceTemplateReference,
     argument: CompletionArgument,
-    context: object | None = None,
+    context: CompletionContext | None = None,
 ) -> Completion | None:
-    """Provide auto-completions for prompt arguments and resource template URIs."""
+    """
+    Suggest values for prompt and resource template arguments
+
+    Parameters
+    ----------
+    ref
+        The prompt or resource template to complete.
+    argument
+        The argument name and partial value to complete.
+    context
+        Previously supplied arguments, including any project and configuration
+        selection. Omit to use the default project configuration discovery.
+
+    Returns
+    -------
+    :
+        Matching suggestions, or `None` for an unsupported completion or a
+        handled project error.
+    """
     value = argument.value or ""
-    arguments = getattr(context, "arguments", None) or {}
+    arguments = (context.arguments if context else None) or {}
 
     # Prompt argument completions
     if isinstance(ref, PromptReference):
@@ -1516,74 +1521,77 @@ async def handle_completion(
 # Server
 # ---------------------------------------------------------------------------
 
-# The collected handlers return lists, strings and `Completion` values.
-# Wrap these values in the result models required by the protocol.
+# MCP validates request parameters before these adapters run. The adapters wrap
+# handler output in protocol result models and preserve tool failure status.
+from mcp.server.context import ServerRequestContext
 from mcp.types import (
+    CallToolRequestParams,
     CallToolResult,
+    CompleteRequestParams,
     CompleteResult,
+    GetPromptRequestParams,
     ListPromptsResult,
     ListResourcesResult,
     ListResourceTemplatesResult,
     ListToolsResult,
+    PaginatedRequestParams,
+    ReadResourceRequestParams,
     ReadResourceResult,
     TextResourceContents,
 )
-from mcp.types import (
-    Completion as _Completion,
-)
 
 
-async def _on_list_tools(ctx: Any, params: Any = None) -> Any:
-    return ListToolsResult(tools=await _HANDLERS["list_tools"]())
+async def _on_list_tools(
+    ctx: ServerRequestContext, params: PaginatedRequestParams | None
+) -> ListToolsResult:
+    return ListToolsResult(tools=await list_tools())
 
 
-async def _on_call_tool(ctx: Any, params: Any) -> Any:
-    content = await _HANDLERS["call_tool"](
-        getattr(params, "name", ""),
-        getattr(params, "arguments", {}) or {},
-    )
+async def _on_call_tool(ctx: ServerRequestContext, params: CallToolRequestParams) -> CallToolResult:
+    content = await call_tool(params.name, params.arguments or {})
     return CallToolResult(
-        content=list(content or []),
-        is_error=getattr(content, "is_error", False),
+        content=list(content),
+        is_error=isinstance(content, _ToolCallContent) and content.is_error,
     )
 
 
-async def _on_list_prompts(ctx: Any, params: Any = None) -> Any:
-    return ListPromptsResult(prompts=await _HANDLERS["list_prompts"]())
+async def _on_list_prompts(
+    ctx: ServerRequestContext, params: PaginatedRequestParams | None
+) -> ListPromptsResult:
+    return ListPromptsResult(prompts=await list_prompts())
 
 
-async def _on_get_prompt(ctx: Any, params: Any) -> Any:
-    # The handler already returns a `GetPromptResult`.
-    return await _HANDLERS["get_prompt"](
-        getattr(params, "name", ""),
-        getattr(params, "arguments", None),
-    )
+async def _on_get_prompt(
+    ctx: ServerRequestContext, params: GetPromptRequestParams
+) -> GetPromptResult:
+    return await get_prompt(params.name, params.arguments)
 
 
-async def _on_list_resources(ctx: Any, params: Any = None) -> Any:
-    return ListResourcesResult(resources=await _HANDLERS["list_resources"]())
+async def _on_list_resources(
+    ctx: ServerRequestContext, params: PaginatedRequestParams | None
+) -> ListResourcesResult:
+    return ListResourcesResult(resources=await list_resources())
 
 
-async def _on_read_resource(ctx: Any, params: Any) -> Any:
-    uri = getattr(params, "uri", "")
-    text = await _HANDLERS["read_resource"](uri)
-    return ReadResourceResult(contents=[TextResourceContents(uri=uri, text=text or "")])
+async def _on_read_resource(
+    ctx: ServerRequestContext, params: ReadResourceRequestParams
+) -> ReadResourceResult:
+    text = await read_resource(params.uri)
+    return ReadResourceResult(contents=[TextResourceContents(uri=params.uri, text=text)])
 
 
-async def _on_list_resource_templates(ctx: Any, params: Any = None) -> Any:
-    return ListResourceTemplatesResult(
-        resourceTemplates=await _HANDLERS["list_resource_templates"]()
-    )
+async def _on_list_resource_templates(
+    ctx: ServerRequestContext, params: PaginatedRequestParams | None
+) -> ListResourceTemplatesResult:
+    return ListResourceTemplatesResult(resource_templates=await list_resource_templates())
 
 
-async def _on_completion(ctx: Any, params: Any) -> Any:
-    completion = await _HANDLERS["completion"](
-        getattr(params, "ref", None),
-        getattr(params, "argument", None),
-        getattr(params, "context", None),
-    )
+async def _on_completion(
+    ctx: ServerRequestContext, params: CompleteRequestParams
+) -> CompleteResult:
+    completion = await handle_completion(params.ref, params.argument, params.context)
     if completion is None:
-        completion = _Completion(values=[])
+        completion = Completion(values=[])
     return CompleteResult(completion=completion)
 
 

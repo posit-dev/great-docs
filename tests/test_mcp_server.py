@@ -10,8 +10,13 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from mcp.types import CompletionArgument, PromptReference, ResourceTemplateReference
-from pydantic import AnyUrl
+from mcp.types import (
+    CallToolRequestParams,
+    CompletionArgument,
+    CompletionContext,
+    PromptReference,
+    ResourceTemplateReference,
+)
 
 import great_docs.mcp as mcp_module
 from great_docs._layout import Layout
@@ -124,17 +129,15 @@ def test_preview_command_quotes_paths(tmp_path: Path) -> None:
 def test_page_completion_uses_selected_context(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from types import SimpleNamespace
-
-    from mcp.types import CompletionArgument, ResourceTemplateReference
-
     (tmp_path / "website").mkdir()
     config = tmp_path / "website/settings.yml"
     config.write_text("{}\n")
     (tmp_path / "website/guide.qmd").write_text("Guide\n")
     (tmp_path / "unrelated.qmd").write_text("Unrelated\n")
     monkeypatch.chdir(tmp_path)
-    context = SimpleNamespace(arguments={"project_path": str(tmp_path), "config_path": str(config)})
+    context = CompletionContext(
+        arguments={"project_path": str(tmp_path), "config_path": str(config)}
+    )
     result = asyncio.run(
         handle_completion(
             ResourceTemplateReference(type="ref/resource", uri="gd://page/{path}"),
@@ -306,11 +309,8 @@ class TestCallTool:
 class TestOnCallToolIsError:
     """CallToolResult.is_error must reflect a failed dispatch (issue: it never did)."""
 
-    def _params(self, name: str, arguments: dict):
-        params = MagicMock()
-        params.name = name
-        params.arguments = arguments
-        return params
+    def _params(self, name: str, arguments: dict[str, Any]) -> CallToolRequestParams:
+        return CallToolRequestParams(name=name, arguments=arguments)
 
     def test_unknown_tool_sets_is_error(self):
         result = asyncio.run(mcp_module._on_call_tool(None, self._params("bogus_tool_name", {})))
@@ -393,7 +393,7 @@ class TestServerRequests:
     def test_read_resource_returns_text(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         result = self._ask(lambda client: client.read_resource("gd://config"))
-        expected = asyncio.run(read_resource(AnyUrl("gd://config")))
+        expected = asyncio.run(read_resource("gd://config"))
         assert [(str(c.uri), c.text) for c in result.contents] == [("gd://config", expected)]
 
     def test_completion_returns_suggestions(self):
@@ -1140,70 +1140,67 @@ class TestReadResource:
             (tmp_path / "great-docs.yml").write_text("module: wrong_module\n")
         monkeypatch.chdir(tmp_path)
         query = urlencode({"config_path": selection})
-        result = asyncio.run(read_resource(AnyUrl(f"gd://{resource}?{query}")))
+        result = asyncio.run(read_resource(f"gd://{resource}?{query}"))
         assert expected in result
         if resource == "status":
             assert selection in result
 
-    def _uri(self, s: str) -> AnyUrl:
-        return AnyUrl(s)
-
     def test_config_when_file_exists(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         (tmp_path / "great-docs.yml").write_text("project:\n  name: test\n")
         monkeypatch.chdir(tmp_path)
-        result = asyncio.run(read_resource(self._uri("gd://config")))
+        result = asyncio.run(read_resource("gd://config"))
         assert "project:" in result
 
     def test_config_when_file_missing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
-        result = asyncio.run(read_resource(self._uri("gd://config")))
+        result = asyncio.run(read_resource("gd://config"))
         assert "No great-docs.yml" in result
 
     def test_build_log_with_build_dirs(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         (tmp_path / "great-docs").mkdir()
         monkeypatch.chdir(tmp_path)
-        result = asyncio.run(read_resource(self._uri("gd://build-log")))
+        result = asyncio.run(read_resource("gd://build-log"))
         assert "great-docs" in result
 
     def test_build_log_without_build_dirs(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
-        result = asyncio.run(read_resource(self._uri("gd://build-log")))
+        result = asyncio.run(read_resource("gd://build-log"))
         assert "No build output" in result
 
     def test_status_resource_delegates_to_handle_status(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
         monkeypatch.chdir(tmp_path)
-        result = asyncio.run(read_resource(self._uri("gd://status")))
-        assert result  # returns non-empty status text
+        result = asyncio.run(read_resource("gd://status"))
+        assert result
 
     def test_pyproject_when_file_exists(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         (tmp_path / "pyproject.toml").write_text("[project]\nname = 'mypkg'\n")
         monkeypatch.chdir(tmp_path)
-        result = asyncio.run(read_resource(self._uri("gd://pyproject")))
+        result = asyncio.run(read_resource("gd://pyproject"))
         assert "mypkg" in result
 
     def test_pyproject_when_file_missing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
-        result = asyncio.run(read_resource(self._uri("gd://pyproject")))
+        result = asyncio.run(read_resource("gd://pyproject"))
         assert "No pyproject.toml" in result
 
     def test_page_resource_returns_content(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         (tmp_path / "my-page.qmd").write_text("---\ntitle: Hello\n---\n")
         monkeypatch.chdir(tmp_path)
-        result = asyncio.run(read_resource(self._uri("gd://page/my-page.qmd")))
+        result = asyncio.run(read_resource("gd://page/my-page.qmd"))
         assert "Hello" in result
 
     def test_page_resource_missing_returns_not_found(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
         monkeypatch.chdir(tmp_path)
-        result = asyncio.run(read_resource(self._uri("gd://page/missing.qmd")))
+        result = asyncio.run(read_resource("gd://page/missing.qmd"))
         assert "not found" in result.lower()
 
     def test_unknown_uri_returns_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
-        result = asyncio.run(read_resource(self._uri("gd://unknown-thing")))
+        result = asyncio.run(read_resource("gd://unknown-thing"))
         assert "Unknown resource" in result
 
     def test_api_surface_no_package(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -1213,7 +1210,7 @@ class TestReadResource:
         with patch(
             "great_docs.mcp._get_exports", side_effect=_reading_project(mock_exports, tmp_path)
         ):
-            result = asyncio.run(read_resource(self._uri("gd://api-surface")))
+            result = asyncio.run(read_resource("gd://api-surface"))
         assert "Could not detect" in result
 
     def test_api_surface_with_exports(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -1226,7 +1223,7 @@ class TestReadResource:
         with patch(
             "great_docs.mcp._get_exports", side_effect=_reading_project(mock_exports, tmp_path)
         ):
-            result = asyncio.run(read_resource(self._uri("gd://api-surface")))
+            result = asyncio.run(read_resource("gd://api-surface"))
         assert "do_thing" in result
 
 
@@ -1518,9 +1515,6 @@ class TestHandleScanRefConfigDictItem:
 
 
 class TestReadResourceApiSurface:
-    def _uri(self, s: str) -> AnyUrl:
-        return AnyUrl(s)
-
     def test_api_surface_no_exports_returns_message(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
@@ -1533,24 +1527,24 @@ class TestReadResourceApiSurface:
         with patch(
             "great_docs.mcp._get_exports", side_effect=_reading_project(mock_exports, tmp_path)
         ):
-            result = asyncio.run(read_resource(self._uri("gd://api-surface")))
+            result = asyncio.run(read_resource("gd://api-surface"))
 
         assert "No exports discovered" in result
 
     def test_api_surface_exception_returns_error_message(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
-        """Verify that the API surface resource reports project read errors"""
+        """Check that API discovery failures return an error message"""
         monkeypatch.chdir(tmp_path)
         with patch("great_docs.mcp._get_exports", side_effect=RuntimeError("pkg not found")):
-            result = asyncio.run(read_resource(self._uri("gd://api-surface")))
+            result = asyncio.run(read_resource("gd://api-surface"))
 
         assert "Error discovering API surface" in result
 
     def test_api_surface_unexpected_error_propagates(self):
         with patch("great_docs.mcp._get_exports", side_effect=ZeroDivisionError("bug")):
             with pytest.raises(ZeroDivisionError):
-                asyncio.run(read_resource(self._uri("gd://api-surface")))
+                asyncio.run(read_resource("gd://api-surface"))
 
 
 # ---------------------------------------------------------------------------
@@ -1559,24 +1553,19 @@ class TestReadResourceApiSurface:
 
 
 class TestReadResourceReference:
-    def _uri(self, s: str) -> AnyUrl:
-        return AnyUrl(s)
-
     def test_reference_symbol_found_returns_docstring(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
-        """gd://reference/symbol returns kind and docstring when symbol is found."""
+        """Check that a resolved reference includes the symbol's kind and docstring"""
         monkeypatch.chdir(tmp_path)
         mock_exports = MagicMock()
         write_pyproject(tmp_path, "mypkg")
         mock_exports.config = mock_config()
 
-        # Build a module-like object that has `my_func` as an attribute
         mock_func = MagicMock()
         mock_func.__doc__ = "Does a thing."
         mock_mod = MagicMock()
 
-        # getattr(mock_mod, "my_func", None) returns mock_func via spec trick
         mock_mod.configure_mock(**{"my_func": mock_func})
 
         with (
@@ -1586,20 +1575,21 @@ class TestReadResourceReference:
             ),
             patch("importlib.import_module", return_value=mock_mod),
         ):
-            result = asyncio.run(read_resource(self._uri("gd://reference/my_func")))
+            result = asyncio.run(read_resource("gd://reference/my_func"))
 
         assert "mypkg" in result or "my_func" in result or "Does a thing" in result
 
     def test_reference_symbol_not_found_returns_message(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
-        """gd://reference/symbol returns 'not found' message when getattr returns None."""
+        """Check that a missing reference returns a message saying it was not found"""
         monkeypatch.chdir(tmp_path)
         mock_exports = MagicMock()
         write_pyproject(tmp_path, "mypkg")
         mock_exports.config = mock_config()
 
-        mock_mod = MagicMock(spec=[])  # no attributes -> getattr returns None
+        # An empty spec makes the requested symbol unavailable.
+        mock_mod = MagicMock(spec=[])
 
         with (
             patch(
@@ -1608,24 +1598,24 @@ class TestReadResourceReference:
             ),
             patch("importlib.import_module", return_value=mock_mod),
         ):
-            result = asyncio.run(read_resource(self._uri("gd://reference/missing_sym")))
+            result = asyncio.run(read_resource("gd://reference/missing_sym"))
 
         assert "not found" in result.lower()
 
     def test_reference_exception_returns_error_message(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
-        """gd://reference/symbol returns error string on exception."""
+        """Check that a reference lookup failure returns an error message"""
         monkeypatch.chdir(tmp_path)
         with patch("great_docs.mcp._get_exports", side_effect=RuntimeError("import fail")):
-            result = asyncio.run(read_resource(self._uri("gd://reference/any_sym")))
+            result = asyncio.run(read_resource("gd://reference/any_sym"))
 
         assert "Error reading reference" in result
 
     def test_reference_invalid_configuration_returns_error_message(self, tmp_path: Path):
         write_pyproject(tmp_path, "mypkg")
         (tmp_path / "great-docs.yml").write_text("parser: nope\n", encoding="utf-8")
-        uri = self._uri(f"gd://reference/any_sym?project_path={tmp_path}")
+        uri = f"gd://reference/any_sym?project_path={tmp_path}"
         result = asyncio.run(read_resource(uri))
 
         assert result.startswith("Error reading reference for 'any_sym':")
@@ -1634,7 +1624,7 @@ class TestReadResourceReference:
     def test_reference_unexpected_error_propagates(self):
         with patch("great_docs.mcp._get_exports", side_effect=ZeroDivisionError("bug")):
             with pytest.raises(ZeroDivisionError):
-                asyncio.run(read_resource(self._uri("gd://reference/any_sym")))
+                asyncio.run(read_resource("gd://reference/any_sym"))
 
 
 # ---------------------------------------------------------------------------
@@ -1670,7 +1660,7 @@ def undetectable_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Pat
 
 
 def test_reference_resource_without_a_package_reports_it(undetectable_project: Path):
-    result = asyncio.run(read_resource(AnyUrl("gd://reference/Foo")))
+    result = asyncio.run(read_resource("gd://reference/Foo"))
     assert result == "Error: Could not detect package name."
 
 
@@ -1721,7 +1711,7 @@ def test_scan_tool_runs_with_a_bare_name_author(bare_name_author: Path):
 
 
 def test_api_surface_resource_runs_with_a_bare_name_author(bare_name_author: Path):
-    result = asyncio.run(read_resource(AnyUrl("gd://api-surface")))
+    result = asyncio.run(read_resource("gd://api-surface"))
     assert "Package: json" in result
 
 
@@ -1745,5 +1735,5 @@ def test_status_tool_runs_with_a_bare_name_author(bare_name_author: Path):
 
 
 def test_reference_resource_runs_with_a_bare_name_author(bare_name_author: Path):
-    result = asyncio.run(read_resource(AnyUrl("gd://reference/dumps")))
+    result = asyncio.run(read_resource("gd://reference/dumps"))
     assert result.startswith("# json.dumps")
