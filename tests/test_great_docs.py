@@ -10268,8 +10268,7 @@ def test_homepage_hero_with_logo_dict():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir = Path(tmp_dir) / "great-docs"
-        docs.build_dir.mkdir()
+        docs.layout.build_dir.mkdir()
 
         docs._config = mock_config(
             hero_explicitly_disabled=False,
@@ -21052,10 +21051,9 @@ def test_status_collection():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("page_status: true\n")
         gd = GreatDocs(project_path=tmp)
-        gd.build_dir = project
 
-        ug = project / "user-guide"
-        ug.mkdir()
+        ug = gd.layout.build_dir / "user-guide"
+        ug.mkdir(parents=True)
         (ug / "feature.qmd").write_text("---\ntitle: Feature\nstatus: new\n---\nContent.")
 
         status_map = page_status.collect(gd._config, gd.layout, gd.build_dir)
@@ -21069,10 +21067,9 @@ def test_status_collection_ignores_invalid():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("page_status: true\n")
         gd = GreatDocs(project_path=tmp)
-        gd.build_dir = project
 
-        ug = project / "user-guide"
-        ug.mkdir()
+        ug = gd.layout.build_dir / "user-guide"
+        ug.mkdir(parents=True)
         (ug / "bad.qmd").write_text("---\ntitle: Bad\nstatus: nonexistent_status\n---\nContent.")
 
         status_map = page_status.collect(gd._config, gd.layout, gd.build_dir)
@@ -21089,7 +21086,7 @@ def test_homepage_margin_roadmap():
         (project / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
         gd = GreatDocs(project_path=tmp)
-        gd.build_dir = project
+        gd.layout.build_dir.mkdir()
 
         # Create ROADMAP.md
         (project / "ROADMAP.md").write_text("# Roadmap\n\nUpcoming features.")
@@ -21105,7 +21102,7 @@ def test_homepage_margin_meta_tags():
         (project / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
         (project / "great-docs.yml").write_text("display_name: MyPkg\ntags: true\n")
         gd = GreatDocs(project_path=tmp)
-        gd.build_dir = project
+        gd.layout.build_dir.mkdir()
 
         result = homepage_margin(gd)
         assert "tags" in result.lower()
@@ -21123,7 +21120,7 @@ def test_homepage_margin_requires_python():
         )
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
         gd = GreatDocs(project_path=tmp)
-        gd.build_dir = project
+        gd.layout.build_dir.mkdir()
 
         result = homepage_margin(gd)
         assert "3.9" in result
@@ -21139,7 +21136,7 @@ def test_homepage_margin_extras():
         )
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
         gd = GreatDocs(project_path=tmp)
-        gd.build_dir = project
+        gd.layout.build_dir.mkdir()
 
         result = homepage_margin(gd)
         assert "dev" in result
@@ -21157,7 +21154,7 @@ def test_write_skills_page_with_companions():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
         gd = GreatDocs(project_path=tmp)
-        gd.build_dir = project
+        gd.layout.build_dir.mkdir()
 
         # Create skill dir with SKILL.md and companion files
         skill_dir = project / "skill-test"
@@ -21175,7 +21172,7 @@ def test_write_skills_page_with_companions():
 
         _skills_page_writer(gd).write(skill_md, skill_dir=skill_dir)
 
-        skills_page = project / "skills.qmd"
+        skills_page = gd.layout.build_dir / "skills.qmd"
         assert skills_page.exists()
         content = skills_page.read_text()
         assert "gd-skills-tree" in content
@@ -21192,7 +21189,7 @@ def test_write_skills_page_multi_skill_switcher():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
         gd = GreatDocs(project_path=tmp)
-        gd.build_dir = project
+        gd.layout.build_dir.mkdir()
 
         # Create primary skill
         skill_dir_a = project / "skill-a"
@@ -21221,7 +21218,7 @@ def test_write_skills_page_multi_skill_switcher():
             extra_skills=[(skill_md_b, skill_dir_b)],
         )
 
-        skills_page = project / "skills.qmd"
+        skills_page = gd.layout.build_dir / "skills.qmd"
         assert skills_page.exists()
         content = skills_page.read_text()
 
@@ -21263,7 +21260,7 @@ def test_write_skills_page_multi_skill_install_section():
         # `pyproject.toml` names the package
         (project / "pyproject.toml").write_text('[project]\nname = "test-pkg"\n')
         gd = GreatDocs(project_path=tmp)
-        gd.build_dir = project
+        gd.layout.build_dir.mkdir()
 
         skill_dir_a = project / "skill-a"
         skill_dir_a.mkdir()
@@ -21281,7 +21278,7 @@ def test_write_skills_page_multi_skill_install_section():
             extra_skills=[(skill_md_b, skill_dir_b)],
         )
 
-        content = (project / "skills.qmd").read_text()
+        content = (gd.layout.build_dir / "skills.qmd").read_text()
 
         # npx line uses "install all with"
         assert "install all with" in content
@@ -21311,7 +21308,7 @@ def test_write_skills_page_multi_skill_no_cli_without_package_name():
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
         # Without `pyproject.toml` or a package directory, no name is detected
         gd = GreatDocs(project_path=tmp)
-        gd.build_dir = project
+        gd.layout.build_dir.mkdir()
 
         skill_dir_a = project / "skill-a"
         skill_dir_a.mkdir()
@@ -21329,7 +21326,7 @@ def test_write_skills_page_multi_skill_no_cli_without_package_name():
             extra_skills=[(skill_md_b, skill_dir_b)],
         )
 
-        content = (project / "skills.qmd").read_text()
+        content = (gd.layout.build_dir / "skills.qmd").read_text()
 
         # CLI install line should NOT appear
         assert "great-docs skill install" not in content
@@ -21347,7 +21344,7 @@ def test_write_skills_page_single_skill_install_section():
             "display_name: MyPkg\nsite_url: https://example.com/docs/\n"
         )
         gd = GreatDocs(project_path=tmp)
-        gd.build_dir = project
+        gd.layout.build_dir.mkdir()
 
         skill_dir = project / "skill-solo"
         skill_dir.mkdir()
@@ -21356,7 +21353,7 @@ def test_write_skills_page_single_skill_install_section():
 
         _skills_page_writer(gd).write(skill_md, skill_dir=skill_dir)
 
-        content = (project / "skills.qmd").read_text()
+        content = (gd.layout.build_dir / "skills.qmd").read_text()
 
         # Singular install label
         assert "Install this skill" in content
@@ -21385,7 +21382,7 @@ def test_write_skills_page_single_skill_no_switcher():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
         gd = GreatDocs(project_path=tmp)
-        gd.build_dir = project
+        gd.layout.build_dir.mkdir()
 
         skill_dir = project / "skill-solo"
         skill_dir.mkdir()
@@ -21394,7 +21391,7 @@ def test_write_skills_page_single_skill_no_switcher():
 
         _skills_page_writer(gd).write(skill_md, skill_dir=skill_dir)
 
-        content = (project / "skills.qmd").read_text()
+        content = (gd.layout.build_dir / "skills.qmd").read_text()
 
         # No switcher bar or panels
         assert "gd-skill-switcher" not in content
@@ -21418,7 +21415,7 @@ def test_skills_page_intro_is_a_whole_translated_paragraph(tmp_path: Path, lang:
     """
     (tmp_path / "great-docs.yml").write_text(f"site:\n  lang: {lang}\n")
     gd = GreatDocs(project_path=str(tmp_path))
-    gd.build_dir = tmp_path
+    gd.layout.build_dir.mkdir()
     skill_dir = tmp_path / "solo"
     skill_dir.mkdir()
     skill_md = skill_dir / "SKILL.md"
@@ -21434,7 +21431,7 @@ def test_skills_page_intro_is_a_whole_translated_paragraph(tmp_path: Path, lang:
     intros: dict[str, str] = {}
     for variant, kwargs in variants.items():
         _skills_page_writer(gd).write(skill_md, **kwargs)
-        body = (tmp_path / "skills.qmd").read_text().split("---\n", 2)[2]
+        body = (gd.layout.build_dir / "skills.qmd").read_text().split("---\n", 2)[2]
         intros[variant] = body.strip().split("\n", 1)[0]
 
     for intro in intros.values():
