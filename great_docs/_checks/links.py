@@ -10,7 +10,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 import requests
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-__all__ = ["check"]
+__all__ = ["BrokenLink", "LinkReport", "Redirect", "check"]
 
 _URL = re.compile(r'https?://[^\s<>"\')\]}`\\]+', re.IGNORECASE)
 
@@ -29,6 +29,60 @@ _NO_LINK = re.compile(r'`?(https?://[^\s<>"\')\]}`\\{]+)`?\{\.gd-no-link\}', re.
 _HEADERS = {"User-Agent": "great-docs-link-checker/1.0"}
 
 _WORKERS = 16
+
+
+class Redirect(TypedDict):
+    """A URL with a 3xx response and the files containing it"""
+
+    url: str
+    """The URL found in the scanned files"""
+
+    status: int | None
+    """The HTTP status code of the 3xx response"""
+
+    location: str | None
+    """The redirect target, or `"Unknown"` if the response has no `Location` header"""
+
+    files: list[str]
+    """Paths of files containing the URL, relative to the project root and in scan order"""
+
+
+class BrokenLink(TypedDict):
+    """A URL with a status outside 2xx and 3xx or a failed request"""
+
+    url: str
+    """The URL found in the scanned files"""
+
+    status: int | None
+    """The HTTP status code, or `None` if the request failed"""
+
+    error: str | None
+    """The HTTP status or request failure that made the link broken"""
+
+    files: list[str]
+    """Paths of files containing the URL, relative to the project root and in scan order"""
+
+
+class LinkReport(TypedDict):
+    """The unique URLs found in scanned files and their check results"""
+
+    total: int
+    """The number of unique URLs found, including skipped URLs"""
+
+    ok: list[str]
+    """URLs with a 2xx response, in discovery order"""
+
+    redirects: list[Redirect]
+    """Results for URLs with a 3xx response, in discovery order"""
+
+    broken: list[BrokenLink]
+    """Results for URLs with a status outside 2xx and 3xx or a failed request, in discovery order"""
+
+    skipped: list[str]
+    """URLs excluded from requests by an ignore pattern, in discovery order"""
+
+    by_file: dict[str, list[str]]
+    """URLs found in each file, keyed by file path relative to the project root"""
 
 
 @dataclass(frozen=True)
@@ -58,7 +112,7 @@ def check(
     timeout: float,
     ignore_patterns: Sequence[str],
     report: Callable[[str], None],
-) -> dict[str, Any]:
+) -> LinkReport:
     """
     Check the URLs found in files
 
@@ -89,11 +143,10 @@ def check(
     Returns
     -------
     :
-        A dictionary with the unique URL count in `total`, URL lists in `ok` and
-        `skipped`, and each file's URLs in `by_file`. Entries in `redirects` contain `url`,
-        `status`, `files` and `location`; entries in `broken` contain `url`, `status`,
-        `files` and `error`. URL lists preserve discovery order, and `files` lists
-        preserve scan order.
+        A report of every unique URL found, including skipped URLs, and the check
+        results. URL lists preserve discovery order. Each redirect and broken-link
+        entry includes `files`: paths of files containing the URL, relative to the
+        project root and in scan order.
     """
     ignore = [_compile_ignore(pattern) for pattern in ignore_patterns]
     url_to_files: dict[str, list[str]] = {}
@@ -112,8 +165,8 @@ def check(
                 url_to_files.setdefault(url, []).append(rel_path)
 
     ok: list[str] = []
-    redirects: list[dict[str, Any]] = []
-    broken: list[dict[str, Any]] = []
+    redirects: list[Redirect] = []
+    broken: list[BrokenLink] = []
     skipped: list[str] = []
 
     report(f"\n🔍 Found {len(url_to_files)} unique URLs to check\n")

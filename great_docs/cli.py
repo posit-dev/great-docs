@@ -2536,6 +2536,7 @@ def proofread(
     import json as json_module
     from collections import defaultdict
 
+    from ._checks import inputs
     from ._checks import proofread as proofreading
     from ._checks.harper import HarperError, HarperNotFoundError, check_harper_available
 
@@ -2570,15 +2571,15 @@ def proofread(
                 if readme.exists():
                     files_to_check.append(readme)
             else:
-                files_to_check = proofreading.find_pages(
+                files_to_check = inputs.find_pages(
                     config,
                     layout,
                     report=lambda message: click.echo(f"⚠️  {message}", err=True),
                 )
             if include_docstrings:
                 project = Project.make(config, layout)
-                if project.name and project.importable_name:
-                    files_to_check += proofreading.find_modules(layout, project.importable_name)
+                if project.importable_name:
+                    files_to_check += inputs.find_modules(layout, project.importable_name)
 
         if not files_to_check:
             click.echo("No documentation files found to check.", err=True)

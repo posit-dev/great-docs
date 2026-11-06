@@ -6,7 +6,8 @@ from ._build import finish, outputs, pipeline, serve
 from ._build.quarto import QuartoNotFoundError as QuartoNotFoundError
 from ._build.quarto import QuartoVersionError as QuartoVersionError
 from ._build.steps import print_warning
-from ._checks import links, proofread
+from ._checks import inputs, links, proofread
+from ._checks.links import LinkReport
 from ._checks.proofread import CheckedFile
 from ._install import update_gitignore, write_initial_config
 from ._layout import Layout
@@ -74,7 +75,7 @@ class GreatDocs:
 
     def __init__(
         self,
-        project_path: str | None = None,
+        project_path: str | os.PathLike[str] | None = None,
         *,
         config_path: str | None = None,
         create: bool = False,
@@ -363,7 +364,7 @@ class GreatDocs:
         timeout: float = 10.0,
         ignore_patterns: list[str] | None = None,
         verbose: bool = False,
-    ) -> dict:
+    ) -> LinkReport:
         """
         Check source code and documentation for broken links
 
@@ -412,10 +413,12 @@ class GreatDocs:
         :
             A dictionary containing:
 
-            - `total`: total number of unique links checked
+            - `total`: number of unique links found, including skipped ones
             - `ok`: list of links that returned 2xx status
-            - `redirects`: list of dicts with `url`, `status`, `location` for 3xx responses
-            - `broken`: list of dicts with `url`, `status`, `error` for 4xx/5xx or errors
+            - `redirects`: list of dicts with `url`, `status`, `location` and `files` for 3xx
+              responses
+            - `broken`: list of dicts with `url`, `status`, `error` and `files` for 4xx/5xx or
+              errors
             - `skipped`: list of URLs that were skipped (matched ignore patterns)
             - `by_file`: dict mapping file paths to lists of links found in each file
 
@@ -447,10 +450,10 @@ class GreatDocs:
         files: list[Path] = []
         if include_source:
             project = Project.make(self._config, self.layout)
-            if project.name and project.importable_name:
-                files += proofread.find_modules(self.layout, project.importable_name)
+            if project.importable_name:
+                files += inputs.find_modules(self.layout, project.importable_name)
         if include_docs:
-            files += proofread.find_pages(self._config, self.layout, report=print_warning)
+            files += inputs.find_pages(self._config, self.layout, report=print_warning)
 
         return links.check(
             files,
@@ -556,11 +559,11 @@ class GreatDocs:
 
         files: list[Path] = []
         if include_docs:
-            files = proofread.find_pages(self._config, self.layout, report=print_warning)
+            files = inputs.find_pages(self._config, self.layout, report=print_warning)
         if include_docstrings:
             project = Project.make(self._config, self.layout)
-            if project.name and project.importable_name:
-                files += proofread.find_modules(self.layout, project.importable_name)
+            if project.importable_name:
+                files += inputs.find_modules(self.layout, project.importable_name)
 
         options = proofread.Options(
             dialect=dialect,

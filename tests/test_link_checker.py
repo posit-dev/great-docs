@@ -1591,3 +1591,16 @@ def test_check_links_without_a_guide_skips_the_build_directory(tmp_path: Path):
     )
 
     assert list(results["by_file"]) == ["README.md", "tutorials/first.md"]
+
+
+def test_check_links_reads_the_configured_module_of_a_project_without_a_name(tmp_path: Path):
+    (tmp_path / "great-docs.yml").write_text("module: beta\n")
+    for package in ("alpha", "beta"):
+        (tmp_path / package).mkdir()
+        (tmp_path / package / "__init__.py").write_text(f'URL = "https://{package}.test"\n')
+
+    results = GreatDocs(project_path=tmp_path).check_links(
+        include_docs=False, ignore_patterns=["."]
+    )
+
+    assert results["by_file"] == {"beta/__init__.py": ["https://beta.test"]}

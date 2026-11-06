@@ -191,10 +191,10 @@ The `check_links()` method returns a dictionary with:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `total` | `int` | Total unique URLs found |
+| `total` | `int` | Total unique URLs found, including skipped ones |
 | `ok` | `list[str]` | URLs returning 2xx status |
-| `redirects` | `list[dict]` | URLs returning 3xx status (with `url`, `status`, `location`) |
-| `broken` | `list[dict]` | URLs returning 4xx/5xx or errors (with `url`, `status`, `error`) |
+| `redirects` | `list[dict]` | URLs returning 3xx status (with `url`, `status`, `location`, `files`) |
+| `broken` | `list[dict]` | URLs returning 4xx/5xx or errors (with `url`, `status`, `error`, `files`) |
 | `skipped` | `list[str]` | URLs matching ignore patterns |
 | `by_file` | `dict[str, list[str]]` | Mapping of file paths to URLs found in each |
 
