@@ -936,6 +936,31 @@ class TestFileExtensionMap:
         assert _FILE_EXT_MAP[".arrow"] == "arrow"
         assert _FILE_EXT_MAP[".ipc"] == "arrow"
 
+    @pytest.mark.parametrize(
+        "name, reader",
+        [
+            ("t.csv", "_from_csv"),
+            ("t.unknown", "_from_csv"),
+            ("t.tab", "_from_tsv"),
+            ("t.ndjson", "_from_jsonl"),
+            ("t.pq", "_from_parquet"),
+        ],
+    )
+    def test_dispatches_to_reader_for_extension(self, name, reader):
+        from great_docs._tables import preview
+
+        with patch.object(preview, reader, return_value="read") as read:
+            assert preview._from_file(f"/data/{name}") == "read"
+        read.assert_called_once_with(Path("/data") / name)
+
+    @pytest.mark.parametrize("ext, fmt", [(".feather", "feather"), (".ipc", "arrow")])
+    def test_dispatches_feather_and_arrow_with_format(self, ext, fmt):
+        from great_docs._tables import preview
+
+        with patch.object(preview, "_from_feather", return_value="read") as read:
+            assert preview._from_file(f"/data/t{ext}") == "read"
+        read.assert_called_once_with(Path("/data") / f"t{ext}", fmt)
+
     def test_badge_styles_for_all_types(self):
         from great_docs._tables.preview import _TABLE_TYPE_STYLES
 

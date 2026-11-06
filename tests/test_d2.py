@@ -411,6 +411,17 @@ def test_process_directory_renders():
     assert modified == ["a.qmd"]
 
 
+def test_process_directory_reports_nested_pages_relative_to_directory(tmp_path):
+    (tmp_path / "guide").mkdir()
+    (tmp_path / "guide" / "c.qmd").write_text("```{d2}\na -> b\n```", encoding="utf-8")
+    with (
+        patch("great_docs._website.d2.d2_available", return_value=True),
+        patch("great_docs._website.d2.render_d2_svg", side_effect=_render_side_effect),
+    ):
+        modified = process_directory(tmp_path)
+    assert modified == [str(Path("guide") / "c.qmd")]
+
+
 # --------------------------------------------------------------------------- #
 # Integration: exercise the real `d2` binary (skipped when it is not installed).
 # Guards against d2 CLI/API drift that the mocked tests above cannot catch.

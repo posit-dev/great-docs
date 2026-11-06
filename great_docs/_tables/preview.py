@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html as _html_mod
+import math
 import secrets
 from pathlib import Path
 from typing import Any
@@ -249,9 +250,8 @@ def _from_file(
         return _from_jsonl(p)
     if fmt == "parquet":
         return _from_parquet(p)
-    if fmt in ("feather", "arrow"):
-        return _from_feather(p, fmt)
-    return _from_csv(p)  # pragma: no cover
+    # Only `feather` and `arrow` remain after the other mapped formats are handled.
+    return _from_feather(p, fmt)
 
 
 def _from_csv(
@@ -440,8 +440,6 @@ def _infer_dtype(values: list) -> str:
         return "i64"
     if types <= {int, float}:
         return "f64"
-    if types == {float}:  # pragma: no cover
-        return "f64"  # pragma: no cover
     if types == {bool}:
         return "bool"
     return "str"
@@ -522,14 +520,7 @@ _MISSING_REPRS = {"None", "nan", "NaN", "NA", "NaT", "<NA>", ""}
 def _is_missing(value: Any) -> bool:
     if value is None:
         return True
-    try:
-        import math
-
-        if isinstance(value, float) and math.isnan(value):
-            return True
-    except (TypeError, ValueError):  # pragma: no cover
-        pass  # pragma: no cover
-    return False
+    return isinstance(value, float) and math.isnan(value)
 
 
 # ---------------------------------------------------------------------------

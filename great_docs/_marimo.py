@@ -95,7 +95,7 @@ def get_islands_head_html(version: str | None = None) -> str:
     )
 
 
-def generate_islands_html(  # pragma: no cover
+def generate_islands_html(
     notebook_path: Path,
     *,
     display_code: bool = True,
@@ -220,7 +220,7 @@ def _tag_setup_islands(body_html: str) -> str:
     return "".join(out)
 
 
-def generate_islands_for_build(  # pragma: no cover
+def generate_islands_for_build(
     notebook_path: Path,
     output_path: Path,
     *,
@@ -401,15 +401,8 @@ def parse_marimo_source(source: str) -> list[dict[str, str]]:
         name = match.group(1)
         body = match.group(2)
 
-        lines = body.split("\n")
-        dedented: list[str] = []
-        for line in lines:
-            if line.startswith("    "):
-                dedented.append(line[4:])
-            elif line.strip() == "":
-                dedented.append("")
-            else:  # pragma: no cover
-                dedented.append(line)
+        # The cell pattern captures only empty lines or lines starting with four spaces.
+        dedented = [line[4:] for line in body.split("\n")]
 
         while dedented and dedented[-1].strip() == "":
             _ = dedented.pop()
