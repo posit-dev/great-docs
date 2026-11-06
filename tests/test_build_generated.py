@@ -116,6 +116,22 @@ def test_llms_full_is_written_without_cli_when_the_cli_module_fails_to_import(im
     assert "## CLI" not in (docs.build_dir / "llms-full.txt").read_text(encoding="utf-8")
 
 
+def test_llms_full_is_written_without_cli_when_typer_cannot_convert_the_app(importable: Path):
+    """
+    Write `llms-full.txt` without CLI help when Typer rejects the app
+    """
+    _ = pytest.importorskip("typer")
+    docs = _cli_project(
+        importable,
+        "import typer\n\napp = typer.Typer()\n\n\n@app.command()\ndef load(options: dict):\n"
+        '    """Load."""\n',
+    )
+
+    generated.llms_txt(make_run(docs, api_block=LLMS_API_BLOCK), docs._config, docs.layout)
+
+    assert "## CLI" not in (docs.build_dir / "llms-full.txt").read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize(
     ("settings", "warned"),
     [

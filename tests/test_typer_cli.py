@@ -12,6 +12,7 @@ from __future__ import annotations
 import importlib
 import sys
 import types
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import patch
 
@@ -110,12 +111,22 @@ class TestTyperHelpers:
         # Typer import before returning None.
         assert to_click_command(object()) is None
 
-    def test_is_cli_command(self):
-        from great_docs._cliref.click import is_cli_command
+    def test_to_click_command_returns_none_for_empty_typer_app(self):
+        from great_docs._cliref.click import to_click_command
 
-        assert is_cli_command(_sample_app()) is True
-        assert is_cli_command(click.Command("x")) is True
-        assert is_cli_command(42) is False
+        assert to_click_command(typer.Typer()) is None
+
+    def test_to_click_command_raises_for_typer_app_it_cannot_convert(self):
+        from great_docs._cliref.click import to_click_command
+
+        app = typer.Typer()
+
+        @app.command()
+        def load(options: dict):
+            """Typer has no option type for a dictionary."""
+
+        with pytest.raises(RuntimeError, match="Typer cannot convert"):
+            _ = to_click_command(app)
 
     def test_is_cli_group_leaf_vs_group(self):
         from great_docs._cliref.click import is_cli_group, to_click_command
@@ -222,6 +233,89 @@ class TestTyperDiscovery:
 
         assert db["is_group"] is True
         assert [c["name"] for c in db["commands"]] == ["migrate"]
+
+
+# Typer has no parameter type for a dictionary, so it cannot convert this app.
+_UNCONVERTIBLE_APP = """
+import typer
+
+app = typer.Typer()
+
+
+@app.command()
+def load(options: dict):
+    \"\"\"Load.\"\"\"
+"""
+
+
+@pytest.fixture
+def cli_package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
+    """
+    Make the package `typerskip` importable from the test's directory and forget it afterwards
+
+    Parameters
+    ----------
+    tmp_path
+        The test's directory.
+    monkeypatch
+        Restores `sys.path` after the test.
+
+    Yields
+    ------
+    :
+        The package's directory, holding an empty `__init__.py`.
+    """
+    package = tmp_path / "typerskip"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    yield package
+    for name in [name for name in sys.modules if name.partition(".")[0] == "typerskip"]:
+        del sys.modules[name]
+
+
+class TestUnconvertibleTyperApp:
+    def test_discovery_skips_the_app_and_documents_a_later_command(self, cli_package: Path):
+        """
+        Document the Click command that follows a Typer app Typer cannot convert
+        """
+        click_command = '\n\nimport click\n\n\n@click.command()\ndef serve():\n    """Serve."""\n'
+        (cli_package / "cli.py").write_text(_UNCONVERTIBLE_APP + click_command, encoding="utf-8")
+        lines: list[str] = []
+
+        info = cli_click.discover(
+            "typerskip", cli_package, cli_module=None, cli_name=None, report=lines.append
+        )
+
+        assert info is not None
+        assert info["help"] == "Serve."
+        assert lines == ["Found Click CLI: serve in typerskip.cli"]
+
+    def test_discovery_without_another_command_names_the_app(self, cli_package: Path):
+        """
+        Raise an error naming the app, which the CLI reference step reports as a warning
+        """
+        (cli_package / "cli.py").write_text(_UNCONVERTIBLE_APP, encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match=r"Typer cannot convert typerskip\.cli:app \("):
+            _ = cli_click.discover(
+                "typerskip", cli_package, cli_module=None, cli_name=None, report=print
+            )
+
+    def test_snapshot_skips_the_app_and_records_a_later_command(self, tmp_path: Path):
+        """
+        Record the Click command that follows a Typer app Typer cannot convert
+        """
+        package = tmp_path / "typersnap"
+        package.mkdir()
+        (package / "__init__.py").write_text("", encoding="utf-8")
+        click_command = '\n\nimport click\n\n\n@click.command()\ndef serve():\n    """Serve."""\n'
+        (package / "cli.py").write_text(_UNCONVERTIBLE_APP + click_command, encoding="utf-8")
+
+        snap = cli_click.snapshot_from_source(tmp_path, "typersnap.cli")
+
+        assert snap is not None
+        assert snap.name == "serve"
 
 
 # ---------------------------------------------------------------------------
