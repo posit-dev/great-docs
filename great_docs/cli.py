@@ -2385,7 +2385,7 @@ def changelog(
 
         contribution = changelog_page.write_page(
             config,
-            layout.build_dir,
+            layout,
             repo,
             HttpRemote(report=lambda message: print(f"   ⚠️  {message}")),
             max_releases=max_releases,

@@ -224,7 +224,7 @@ class TestGenerateStatusJson:
             "page_status:\n  enabled: true\n  statuses:\n    new:\n"
             "      label: Fresh\n      description: Newly published\n      icon: no-such-icon\n",
         )
-        page_status.write(gd._config, gd.build_dir, {})
+        page_status.write(gd._config, gd.layout, {})
 
         definition = json.loads((gd.build_dir / "_page_status.json").read_text())["definitions"][
             "new"
@@ -238,7 +238,7 @@ class TestGenerateStatusJson:
         gd = _bootstrap_project(tmp_path)
         status_map = {"user-guide/intro.qmd": "new"}
 
-        page_status.write(gd._config, gd.build_dir, status_map)
+        page_status.write(gd._config, gd.layout, status_map)
 
         json_path = gd.build_dir / "_page_status.json"
         assert json_path.exists()
@@ -253,7 +253,7 @@ class TestGenerateStatusJson:
         gd = _bootstrap_project(tmp_path)
         status_map = {"user-guide/intro.qmd": "new"}
 
-        page_status.write(gd._config, gd.build_dir, status_map)
+        page_status.write(gd._config, gd.layout, status_map)
 
         json_path = gd.build_dir / "_page_status.json"
         data = json.loads(json_path.read_text(encoding="utf-8"))

@@ -4575,8 +4575,8 @@ def test_write_pages_empty():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert cli_render.write_pages(docs._config, docs.build_dir, {}, report=print) == []
-        assert cli_render.write_pages(docs._config, docs.build_dir, None, report=print) == []
+        assert cli_render.write_pages(docs._config, docs.layout, {}, report=print) == []
+        assert cli_render.write_pages(docs._config, docs.layout, None, report=print) == []
 
 
 def test_write_pages_basic():
@@ -4600,7 +4600,7 @@ def test_write_pages_basic():
                 },
             ],
         }
-        result = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
+        result = cli_render.write_pages(docs._config, docs.layout, cli_info, report=print)
 
         # The index is now a labeled listing entry (not the root command page).
         assert {"text": "CLI Index", "href": "reference/cli/index.qmd"} in result
@@ -4648,7 +4648,7 @@ def test_write_pages_sections_omit_unlisted():
                 },
             ],
         }
-        result = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
+        result = cli_render.write_pages(docs._config, docs.layout, cli_info, report=print)
         cli_dir = docs.build_dir / "reference" / "cli"
 
         assert "reference/cli/build.qmd" in result
@@ -9067,7 +9067,7 @@ def test_build_with_cli_documentation(tmp_path):
         docs.build(watch=False, refresh=False)
 
     discover.assert_called_once()
-    write_pages.assert_called_once_with(docs._config, docs.build_dir, cli_info, report=print)
+    write_pages.assert_called_once_with(docs._config, docs.layout, cli_info, report=print)
     sidebars = read_quarto_yml(docs.build_dir)["website"]["sidebar"]
     assert [s["contents"] for s in sidebars if s["id"] == "cli-reference"] == [cli_files]
 
@@ -22301,7 +22301,7 @@ def test_status_json_writing_writes_json(tmp_path):
     docs.build_dir.mkdir(parents=True, exist_ok=True)
 
     status_map = {"user-guide/intro.qmd": "new", "user-guide/old.qmd": "deprecated"}
-    page_status.write(docs._config, docs.build_dir, status_map)
+    page_status.write(docs._config, docs.layout, status_map)
 
     status_file = docs.build_dir / "_page_status.json"
 
@@ -22321,7 +22321,7 @@ def test_status_json_writing_builtin_statuses_have_labels(tmp_path):
     docs = GreatDocs(project_path=str(tmp_path))
     docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-    page_status.write(docs._config, docs.build_dir, {})
+    page_status.write(docs._config, docs.layout, {})
     data = json.loads((docs.build_dir / "_page_status.json").read_text())
 
     for key in ("new", "updated", "beta", "deprecated", "experimental", "upcoming"):

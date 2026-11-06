@@ -107,7 +107,7 @@ def homepage(
 
     _ = licence.write_page(config, layout, metadata["license"], page_authors, report=print)
     _ = citation.write_page(config, layout, run.project.name, page_authors, report=print)
-    _ = package_info.write_page(config, layout.build_dir, metadata, remote, report=print)
+    _ = package_info.write_page(config, layout, metadata, remote, report=print)
 
     if config.homepage == "user_guide" and not fallback:
         return

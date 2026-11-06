@@ -6,13 +6,15 @@ from __future__ import annotations
 
 import importlib
 from collections.abc import Sequence
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .._contribution import Contribution, Sidebar, SidebarItem
 from .._translations import get_translation
 from ..config import Config
 from . import reference
+
+if TYPE_CHECKING:
+    from .._layout import Layout
 
 
 def discover_server(config: Config, package: str | None) -> dict[str, Any] | None:
@@ -56,7 +58,7 @@ def discover_server(config: Config, package: str | None) -> dict[str, Any] | Non
 def build_mcp_reference(
     config: Config,
     server_info: dict[str, Any],
-    build_dir: Path,
+    layout: Layout,
     package_name: str | None,
     repo_url: str | None,
 ) -> list[SidebarItem]:
@@ -69,8 +71,9 @@ def build_mcp_reference(
         The documentation configuration.
     server_info
         Metadata returned by MCP server discovery.
-    build_dir
-        The Quarto project directory.
+    layout
+        Project directories, including the build directory for the MCP reference
+        pages and discovery manifest.
     package_name
         The installable package name, when known.
     repo_url
@@ -83,7 +86,7 @@ def build_mcp_reference(
     """
     files = reference.generate_mcp_reference_pages(
         server_info=server_info,
-        output_dir=build_dir / "reference" / "mcp",
+        output_dir=layout.build_dir / "reference" / "mcp",
         categories=config.mcp_categories or None,
         display_name=config.mcp_name,
         language=config.lang,
@@ -91,7 +94,7 @@ def build_mcp_reference(
     if files:
         _ = reference.generate_mcp_manifest(
             server_info=server_info,
-            output_dir=build_dir,
+            output_dir=layout.build_dir,
             package_name=package_name,
             repo_url=repo_url,
             site_url=config.site_url,

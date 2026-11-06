@@ -69,7 +69,7 @@ section.level2:first-of-type > h2:first-child,
 
 
 def write(
-    build_dir: Path,
+    layout: Layout,
     *,
     front_matter: str,
     hero: str,
@@ -82,8 +82,8 @@ def write(
 
     Parameters
     ----------
-    build_dir
-        The Quarto project directory to write `index.qmd` into.
+    layout
+        Project directories, including the build directory for `index.qmd`.
     front_matter
         The page's front matter with its `---` fences, or `""` for none.
     hero
@@ -112,7 +112,7 @@ def write(
         if sidebar:
             content += f"\n\n::: {{.gd-meta-sidebar .gd-homepage-sidebar}}\n{sidebar}\n:::\n"
 
-    index_qmd = build_dir / "index.qmd"
+    index_qmd = layout.build_dir / "index.qmd"
     _ = index_qmd.write_text(content, encoding="utf-8")
     return index_qmd
 
@@ -260,7 +260,7 @@ def write_readme(
         f"body-classes: {json.dumps(' '.join(classes))}\n---\n"
     )
     index_qmd = write(
-        layout.build_dir,
+        layout,
         front_matter=front_matter,
         hero=hero_html,
         body=body,
@@ -349,7 +349,7 @@ def write_blended(
     body = re.sub(r"^#\s+[^\n]*\n?", "", body, count=1, flags=re.MULTILINE)
 
     return write(
-        layout.build_dir,
+        layout,
         front_matter=front_matter,
         hero=hero_html,
         body=body,

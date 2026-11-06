@@ -20,13 +20,14 @@ from .._website.navigation import navbar
 from .model import CliArgument, CliCommand, CliOption
 
 if TYPE_CHECKING:
+    from .._layout import Layout
     from ..config import Config
 
 INDEX_PAGE = "reference/cli/index.qmd"
 
 
 def write_pages(
-    config: Config, build_dir: Path, cli: CliCommand, *, report: Callable[[str], None]
+    config: Config, layout: Layout, cli: CliCommand, *, report: Callable[[str], None]
 ) -> list[SidebarItem]:
     """
     Write the reference pages for a command line
@@ -35,8 +36,8 @@ def write_pages(
     ----------
     config
         The site configuration, for `cli.sections`, `cli.title`, `cli.desc` and `lang`.
-    build_dir
-        The build directory.
+    layout
+        Project directories, including the build directory for the CLI reference pages.
     cli
         The root command.
     report
@@ -59,6 +60,7 @@ def write_pages(
         cli = cli.copy()
         cli["commands"] = [c for c in cli.get("commands", []) if c["name"] in listed]
 
+    build_dir = layout.build_dir
     cli_ref_dir = build_dir / "reference" / "cli"
     cli_ref_dir.mkdir(parents=True, exist_ok=True)
 

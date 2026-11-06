@@ -14,9 +14,9 @@ from .navigation import navbar
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
-    from pathlib import Path
 
     from .._github import GithubRepo
+    from .._layout import Layout
     from .._remote import Remote
     from ..config import Config
 
@@ -37,7 +37,7 @@ _CODE = re.compile(
 
 def write_page(
     config: Config,
-    build_dir: Path,
+    layout: Layout,
     repo: GithubRepo,
     remote: Remote,
     *,
@@ -56,8 +56,8 @@ def write_page(
     ----------
     config
         The Great Docs configuration.
-    build_dir
-        The Quarto project directory to write the page into.
+    layout
+        Project directories, including the build directory for `changelog.qmd`.
     repo
         The repository whose releases the page lists.
     remote
@@ -103,7 +103,7 @@ def write_page(
     for release in releases:
         lines.extend(_release_lines(release, repo))
 
-    page = build_dir / FILENAME
+    page = layout.build_dir / FILENAME
     _ = page.write_text("\n".join(lines), encoding="utf-8")
     report(f"Created {page}")
     return Contribution(navbar=(NavbarLink(text=navbar.CHANGELOG.label(config), href=FILENAME),))

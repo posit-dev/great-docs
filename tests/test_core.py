@@ -484,7 +484,7 @@ class TestBuildMcpReference:
         server = {"name": "test", "tools": []}
 
         files = mcp_build.build_mcp_reference(
-            gd._config, server, gd.build_dir, "mypkg", "https://github.com/owner/repo"
+            gd._config, server, gd.layout, "mypkg", "https://github.com/owner/repo"
         )
 
         assert files == ["reference/mcp/tool.qmd"]
@@ -1464,7 +1464,8 @@ class TestCommandPage:
         config = mock_config(
             lang="en", cli_sections=[{"title": "Main", "contents": ["init", "build", "deploy"]}]
         )
-        items = cli_render.write_pages(config, tmp_path, cli_info, report=lambda _: None)
+        layout = _make_gd(tmp_path).layout
+        items = cli_render.write_pages(config, layout, cli_info, report=lambda _: None)
         assert items[2:] == [f"reference/cli/{n}.qmd" for n in ("init", "build", "deploy")]
 
     def test_index_skips_section_commands_that_are_missing_or_hidden(self):
@@ -1497,8 +1498,9 @@ class TestCommandPage:
             name="sub", full_path="mycli sub", short_help="Run • fast.", description="Run • fast."
         )
         cli_info = self._make_cli_info(description="Root • tool.", commands=[sub])
-        cli_render.write_pages(mock_config(lang="en"), tmp_path, cli_info, report=lambda _: None)
-        cli_dir = tmp_path / "reference" / "cli"
+        layout = _make_gd(tmp_path).layout
+        cli_render.write_pages(mock_config(lang="en"), layout, cli_info, report=lambda _: None)
+        cli_dir = layout.build_dir / "reference" / "cli"
         assert "Run • fast." in (cli_dir / "index.qmd").read_text(encoding="utf-8")
         assert "Root • tool." in (cli_dir / "mycli.qmd").read_text(encoding="utf-8")
         assert "Run • fast." in (cli_dir / "sub.qmd").read_text(encoding="utf-8")

@@ -163,7 +163,7 @@ def changelog(run: Run, config: Config, layout: Layout, *, remote: Remote) -> Ou
     repo = run.project.github
     if repo is None:
         return Skipped("no GitHub repo info")
-    contribution = changelog_page.write_page(config, layout.build_dir, repo, remote, report=print)
+    contribution = changelog_page.write_page(config, layout, repo, remote, report=print)
     if contribution is None:
         return "No releases found; skipped"
     run.contributions.append(contribution)

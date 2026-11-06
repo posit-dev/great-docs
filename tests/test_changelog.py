@@ -5,10 +5,20 @@ import pytest
 
 from great_docs._contribution import Contribution, NavbarLink
 from great_docs._github import GithubRepo
+from great_docs._layout import Layout
 from great_docs._website import changelog
 from tests.support import StubRemote, write_config
 
 REPO = GithubRepo("owner", "repo")
+
+
+@pytest.fixture
+def layout(tmp_path: Path) -> Layout:
+    """Create a project layout with an existing build directory"""
+    (tmp_path / "great-docs.yml").write_text("", encoding="utf-8")
+    layout = Layout.make(tmp_path)
+    layout.build_dir.mkdir(parents=True)
+    return layout
 
 
 def _release(
@@ -43,24 +53,12 @@ def _release(
     }
 
 
-def _page(build_dir: Path) -> str:
-    """
-    Read the changelog page
-
-    Parameters
-    ----------
-    build_dir
-        The directory the page was written into.
-
-    Returns
-    -------
-    :
-        The page's text.
-    """
-    return (build_dir / "changelog.qmd").read_text(encoding="utf-8")
+def _page(layout: Layout) -> str:
+    """Read the changelog page from the layout's build directory"""
+    return (layout.build_dir / "changelog.qmd").read_text(encoding="utf-8")
 
 
-def test_write_page_lists_each_release(tmp_path: Path):
+def test_write_page_lists_each_release(tmp_path: Path, layout: Layout):
     config = write_config(tmp_path)
     remote = StubRemote(
         releases=[
@@ -70,11 +68,11 @@ def test_write_page_lists_each_release(tmp_path: Path):
     )
     reported: list[str] = []
 
-    contribution = changelog.write_page(config, tmp_path, REPO, remote, report=reported.append)
+    contribution = changelog.write_page(config, layout, REPO, remote, report=reported.append)
 
     assert contribution == Contribution(navbar=(NavbarLink("Changelog", "changelog.qmd"),))
-    assert reported == [f"Created {tmp_path / 'changelog.qmd'}"]
-    assert _page(tmp_path) == (
+    assert reported == [f"Created {layout.build_dir / 'changelog.qmd'}"]
+    assert _page(layout) == (
         "---\n"
         'title: "Changelog"\n'
         "gd-auto-generated: true\n"
@@ -101,59 +99,59 @@ def test_write_page_lists_each_release(tmp_path: Path):
     )
 
 
-def test_write_page_without_releases_writes_nothing(tmp_path: Path):
+def test_write_page_without_releases_writes_nothing(tmp_path: Path, layout: Layout):
     config = write_config(tmp_path)
     reported: list[str] = []
 
-    contribution = changelog.write_page(
-        config, tmp_path, REPO, StubRemote(), report=reported.append
-    )
+    contribution = changelog.write_page(config, layout, REPO, StubRemote(), report=reported.append)
 
     assert contribution is None
     assert reported == []
-    assert not (tmp_path / "changelog.qmd").exists()
+    assert not (layout.build_dir / "changelog.qmd").exists()
 
 
 @pytest.mark.parametrize(("lang", "expected"), [("fr", "Versions"), ("ja", "リリース")])
-def test_write_page_translates_the_toc_title(tmp_path: Path, lang: str, expected: str):
+def test_write_page_translates_the_toc_title(
+    tmp_path: Path, layout: Layout, lang: str, expected: str
+):
     config = write_config(tmp_path, {"site": {"lang": lang}})
     remote = StubRemote(releases=[_release("v1.0.0")])
 
-    _ = changelog.write_page(config, tmp_path, REPO, remote, report=print)
+    _ = changelog.write_page(config, layout, REPO, remote, report=print)
 
-    assert f'toc-title: "{expected}"' in _page(tmp_path)
+    assert f'toc-title: "{expected}"' in _page(layout)
 
 
-def test_write_page_labels_the_link_in_the_site_language(tmp_path: Path):
+def test_write_page_labels_the_link_in_the_site_language(tmp_path: Path, layout: Layout):
     config = write_config(tmp_path, {"site": {"lang": "fr"}})
     remote = StubRemote(releases=[_release("v1.0.0")])
 
-    contribution = changelog.write_page(config, tmp_path, REPO, remote, report=print)
+    contribution = changelog.write_page(config, layout, REPO, remote, report=print)
 
     link = NavbarLink("Journal des modifications", "changelog.qmd")
     assert contribution == Contribution(navbar=(link,))
 
 
 @pytest.mark.parametrize(("max_releases", "expected"), [(None, 2), (1, 1)])
-def test_write_page_limits_the_releases(tmp_path: Path, max_releases: int | None, expected: int):
+def test_write_page_limits_the_releases(
+    tmp_path: Path, layout: Layout, max_releases: int | None, expected: int
+):
     config = write_config(tmp_path, {"changelog": {"max_releases": 2}})
     remote = StubRemote(releases=[_release(f"v1.{i}") for i in range(3)])
 
-    _ = changelog.write_page(
-        config, tmp_path, REPO, remote, max_releases=max_releases, report=print
-    )
+    _ = changelog.write_page(config, layout, REPO, remote, max_releases=max_releases, report=print)
 
-    assert _page(tmp_path).count("{.changelog-version}") == expected
+    assert _page(layout).count("{.changelog-version}") == expected
 
 
-def test_write_page_nests_note_headings_under_the_release(tmp_path: Path):
+def test_write_page_nests_note_headings_under_the_release(tmp_path: Path, layout: Layout):
     config = write_config(tmp_path)
     body = "# Title\n\n## Features\n\n### Detail"
     remote = StubRemote(releases=[_release("v1.0.0", body)])
 
-    _ = changelog.write_page(config, tmp_path, REPO, remote, report=print)
+    _ = changelog.write_page(config, layout, REPO, remote, report=print)
 
-    assert "# Title\n\n### Features\n\n#### Detail\n" in _page(tmp_path)
+    assert "# Title\n\n### Features\n\n#### Detail\n" in _page(layout)
 
 
 @pytest.mark.parametrize(

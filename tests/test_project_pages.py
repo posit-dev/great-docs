@@ -3,9 +3,19 @@ from typing import Any
 
 import pytest
 
+from great_docs._layout import Layout
 from great_docs._website.project_pages import package_info
 from great_docs._yaml import split_front_matter
 from tests.support import StubRemote, mock_config
+
+
+@pytest.fixture
+def layout(tmp_path: Path) -> Layout:
+    """Create a project layout with an existing build directory"""
+    (tmp_path / "great-docs.yml").write_text("", encoding="utf-8")
+    layout = Layout.make(tmp_path)
+    layout.build_dir.mkdir(parents=True)
+    return layout
 
 
 def _dep(name: str, specifier: str = "", marker: str = "") -> dict[str, Any]:
@@ -85,7 +95,7 @@ def _config(**values: object) -> Any:
     return mock_config(**(settings | values))
 
 
-def test_package_info_lists_runtime_dependencies(tmp_path: Path):
+def test_package_info_lists_runtime_dependencies(layout: Layout):
     """Check runtime dependency details, PyPI links, release dates and summary counts"""
     metadata = _metadata(
         [_dep("numpy", ">=1.24"), _dep("pandas", ">=2.0,<3.0")], requires_python=">=3.11"
@@ -93,11 +103,11 @@ def test_package_info_lists_runtime_dependencies(tmp_path: Path):
     remote = StubRemote(release_dates={"numpy": "2026-05-01", "pandas": "2026-06-15"})
     reported: list[str] = []
 
-    path = package_info.write_page(_config(), tmp_path, metadata, remote, report=reported.append)
+    path = package_info.write_page(_config(), layout, metadata, remote, report=reported.append)
 
-    assert path == tmp_path / "package-info.qmd"
+    assert path == layout.build_dir / "package-info.qmd"
     assert reported == [f"Created {path}"]
-    content = (tmp_path / "package-info.qmd").read_text(encoding="utf-8")
+    content = (layout.build_dir / "package-info.qmd").read_text(encoding="utf-8")
     assert split_front_matter(content)[0].string("title") == "Package Info"
     assert "## Runtime Dependencies" in content
     assert 'class="gd-no-link">numpy</code>' in content
@@ -113,14 +123,14 @@ def test_package_info_lists_runtime_dependencies(tmp_path: Path):
     assert "- **Total unique dependencies:** 2" in content
 
 
-def test_package_info_lists_optional_groups(tmp_path: Path):
+def test_package_info_lists_optional_groups(layout: Layout):
     """Check optional groups, empty-group messages and unique dependency counts"""
     metadata = _metadata(
         [_dep("click", ">=8.0")],
         {"dev": [_dep("pytest", ">=7.0"), _dep("click")], "empty": []},
     )
 
-    path = package_info.write_page(_config(), tmp_path, metadata, StubRemote(), report=print)
+    path = package_info.write_page(_config(), layout, metadata, StubRemote(), report=print)
 
     assert path is not None
     content = path.read_text(encoding="utf-8")
@@ -131,14 +141,14 @@ def test_package_info_lists_optional_groups(tmp_path: Path):
     assert "- **Total unique dependencies:** 2" in content
 
 
-def test_package_info_shows_markers_only_in_tables_that_have_them(tmp_path: Path):
+def test_package_info_shows_markers_only_in_tables_that_have_them(layout: Layout):
     """Check that each table includes a marker column only when its dependencies need one"""
     metadata = _metadata(
         [_dep("numpy")],
         {"dev": [_dep("typing-extensions", ">=4.0", "python_version<'3.12'")]},
     )
 
-    path = package_info.write_page(_config(), tmp_path, metadata, StubRemote(), report=print)
+    path = package_info.write_page(_config(), layout, metadata, StubRemote(), report=print)
 
     assert path is not None
     content = path.read_text(encoding="utf-8")
@@ -148,17 +158,17 @@ def test_package_info_shows_markers_only_in_tables_that_have_them(tmp_path: Path
     assert "<code>python_version&lt;&#x27;3.12&#x27;</code>" in optional
 
 
-def test_package_info_shows_a_dash_for_unknown_dates(tmp_path: Path):
+def test_package_info_shows_a_dash_for_unknown_dates(layout: Layout):
     """Check that an unknown PyPI release date appears as a dash"""
     metadata = _metadata([_dep("numpy", ">=1.24")])
 
-    path = package_info.write_page(_config(), tmp_path, metadata, StubRemote(), report=print)
+    path = package_info.write_page(_config(), layout, metadata, StubRemote(), report=print)
 
     assert path is not None
     assert "<td>—</td>" in path.read_text(encoding="utf-8")
 
 
-def test_package_info_without_release_dates_skips_pypi(tmp_path: Path):
+def test_package_info_without_release_dates_skips_pypi(layout: Layout):
     """Check that disabling release dates omits PyPI requests and the date column"""
     metadata = _metadata(
         [_dep("numpy", ">=1.24")],
@@ -167,7 +177,7 @@ def test_package_info_without_release_dates_skips_pypi(tmp_path: Path):
     remote = StubRemote(release_dates={"numpy": "2026-05-01"})
 
     path = package_info.write_page(
-        _config(package_info_page_release_dates=False), tmp_path, metadata, remote, report=print
+        _config(package_info_page_release_dates=False), layout, metadata, remote, report=print
     )
 
     assert path is not None
@@ -183,7 +193,7 @@ def test_package_info_without_release_dates_skips_pypi(tmp_path: Path):
     assert "Environment Marker" in optional
 
 
-def test_package_info_is_skipped_when_disabled_or_empty(tmp_path: Path):
+def test_package_info_is_skipped_when_disabled_or_empty(layout: Layout):
     """Check that disabled, non-Python and empty pages leave no file or remote calls"""
     remote = StubRemote()
     metadata = _metadata([_dep("numpy")])
@@ -193,15 +203,13 @@ def test_package_info_is_skipped_when_disabled_or_empty(tmp_path: Path):
         (_config(is_python_project=False), metadata),
         (_config(), _metadata()),
     ]:
-        assert (
-            package_info.write_page(config, tmp_path, page_metadata, remote, report=print) is None
-        )
+        assert package_info.write_page(config, layout, page_metadata, remote, report=print) is None
 
-    assert not (tmp_path / "package-info.qmd").exists()
+    assert not (layout.build_dir / "package-info.qmd").exists()
     assert remote.calls == []
 
 
-def test_package_info_title_survives_yaml_syntax(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_package_info_title_survives_yaml_syntax(layout: Layout, monkeypatch: pytest.MonkeyPatch):
     """Check that YAML front matter preserves quotes and a colon in a translated title"""
     title = 'Package "Info": details'
     translate = package_info.get_translation
@@ -212,7 +220,7 @@ def test_package_info_title_survives_yaml_syntax(tmp_path: Path, monkeypatch: py
     )
 
     path = package_info.write_page(
-        _config(), tmp_path, _metadata([_dep("numpy")]), StubRemote(), report=print
+        _config(), layout, _metadata([_dep("numpy")]), StubRemote(), report=print
     )
 
     assert path is not None

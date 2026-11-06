@@ -358,7 +358,7 @@ def _write_cli_pages(
     :
         The step's result line.
     """
-    cli_files = cli_render.write_pages(config, layout.build_dir, cli_info, report=print)
+    cli_files = cli_render.write_pages(config, layout, cli_info, report=print)
     if not cli_files:
         return f"No {kind} pages generated"
     run.contributions.append(cli_render.contribution(config, cli_files))
@@ -394,10 +394,7 @@ def mcp(run: Run, config: Config, layout: Layout) -> Outcome:
     if not mcp_info:
         return Skipped("no MCP server found")
     repo_url = run.project.github.url if run.project.github else None
-    build_dir = layout.build_dir
-    mcp_files = mcp_build.build_mcp_reference(
-        config, mcp_info, build_dir, run.project.name, repo_url
-    )
+    mcp_files = mcp_build.build_mcp_reference(config, mcp_info, layout, run.project.name, repo_url)
     if not mcp_files:
         return "No MCP pages generated"
     run.contributions.append(mcp_build.contribution(config, mcp_files))
