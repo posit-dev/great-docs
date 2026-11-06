@@ -96,6 +96,19 @@ class TestRegisterSite:
             quarto_defaults.register_site(quarto_config, config, layout, report=print)
             assert quarto_config["format"]["html"]["theme"] == expected
 
+    def test_light_and_dark_themes_each_get_great_docs_theme(self, tmp_path: Path):
+        config = write_config(
+            tmp_path, "site:\n  theme:\n    light: [flatly, light.scss]\n    dark: darkly\n"
+        )
+        layout = Layout.make(tmp_path)
+        quarto_config = _initial()
+        for _ in range(2):
+            quarto_defaults.register_site(quarto_config, config, layout, report=print)
+            assert quarto_config["format"]["html"]["theme"] == {
+                "light": ["flatly", "great-docs.scss", "light.scss"],
+                "dark": ["darkly", "great-docs.scss"],
+            }
+
     def test_site_table_widths_win(self, tmp_path: Path):
         quarto_config, _ = _register_site(tmp_path, "site:\n  tbl-colwidths: auto\n")
         assert quarto_config["format"]["html"]["tbl-colwidths"] == "auto"

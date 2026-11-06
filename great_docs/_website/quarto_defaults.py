@@ -93,7 +93,8 @@ def register_site(
 
     The Great Docs theme is inserted before the first user stylesheet, or
     after all built-in themes if there are no stylesheets. An existing Great
-    Docs theme entry keeps its position.
+    Docs theme entry keeps its position. For a mapping with `light` and `dark`
+    entries, these placement rules apply to each mode.
 
     Parameters
     ----------
@@ -155,14 +156,12 @@ def register_site(
     # Dark mode puts diagrams on a light background, so one theme serves both.
     html["mermaid"] = {"theme": "default"}
 
-    # Later Quarto theme entries take precedence. User styles override Great
-    # Docs, which overrides preceding built-in themes.
-    theme = cast("str | list[Any]", html["theme"])
-    if "great-docs.scss" not in theme:
-        themes = [theme] if isinstance(theme, str) else list(theme)
-        files = (i for i, entry in enumerate(themes) if _is_style_file(entry))
-        themes.insert(next(files, len(themes)), "great-docs.scss")
-        html["theme"] = themes
+    # The `light` and `dark` keys select modes; their values name the themes.
+    theme = cast("str | list[Any] | dict[str, Any]", html["theme"])
+    if isinstance(theme, dict):
+        html["theme"] = {mode: _with_great_docs_theme(entry) for mode, entry in theme.items()}
+    else:
+        html["theme"] = _with_great_docs_theme(theme)
 
     grammars = cast("str | list[Any]", html.get("syntax-definitions") or [])
     if isinstance(grammars, str):
@@ -260,6 +259,33 @@ def _site_includes(config: Config) -> dict[str, list[Any]]:
         if value is not None:
             includes[key] = list(cast("list[Any]", value)) if isinstance(value, list) else [value]
     return includes
+
+
+def _with_great_docs_theme(theme: str | list[Any]) -> str | list[Any]:
+    """
+    Add Great Docs' theme without moving an existing entry
+
+    Later Quarto theme entries take precedence. User styles override Great Docs,
+    which overrides preceding built-in themes.
+
+    Parameters
+    ----------
+    theme
+        A theme name or list shared by both modes, or used by one mode.
+
+    Returns
+    -------
+    :
+        `theme` unchanged if it contains `great-docs.scss`. Otherwise, a new list
+        with `great-docs.scss` inserted before the first user stylesheet, or at
+        the end if there are no user stylesheets.
+    """
+    themes = [theme] if isinstance(theme, str) else list(theme)
+    if "great-docs.scss" in themes:
+        return theme
+    files = (i for i, entry in enumerate(themes) if _is_style_file(entry))
+    themes.insert(next(files, len(themes)), "great-docs.scss")
+    return themes
 
 
 def _is_style_file(theme: object) -> bool:
