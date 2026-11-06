@@ -247,25 +247,17 @@ def run(
         render_step = Step("Build site with Quarto", render_versions, user_code=True, quiet=False)
     else:
         render_step = Step("Build site with Quarto", render_site, quiet=False)
-    finishing = _finishing_steps(current, config, layout, log, render_timings)
-
-    # Watch mode skips the finishing steps, but the header still counts them.
-    log.total_steps = count_listed([*preparation, render_step, *finishing])
+    # Watch mode uses a live preview, so the steps after a full render do not apply.
+    finishing = [] if watch else _finishing_steps(current, config, layout, log, render_timings)
+    steps = [*preparation, render_step, *finishing]
+    log.total_steps = count_listed(steps)
     log.header()
 
     if watch:
-        _watch(
-            current,
-            config,
-            layout,
-            log,
-            [*preparation, render_step],
-            remote=remote,
-            refresh=refresh,
-        )
+        _watch(current, config, layout, log, steps, remote=remote, refresh=refresh)
         return
 
-    run_steps([*preparation, render_step, *finishing], log, layout.build_dir)
+    run_steps(steps, log, layout.build_dir)
     site_path = layout.site_dir / "index.html"
     log.footer(site_path=str(site_path if site_path.exists() else layout.site_dir))
     finish.print_layout_notice(layout)
