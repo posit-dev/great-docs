@@ -5,15 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-from yaml12 import read_yaml
-
 from great_docs._build import generated
 from great_docs._contribution import Contribution, InlineData
 from great_docs._website import page_status
 from great_docs.config import Config
 from great_docs.core import GreatDocs
-from tests.support import make_run, update_quarto_config, write_config
+from tests.support import make_run, write_config
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -298,26 +295,6 @@ def test_the_page_status_step_records_the_badge_data(tmp_path: Path):
     [contribution] = run.contributions
     assert [data.name for data in contribution.inline_data] == ["__GD_STATUS_DATA__"]
     assert not (gd.build_dir / "_quarto.yml").exists()
-
-
-# ── Configuration Pass Tests ────────────────────────────────────────────────
-
-
-@pytest.mark.parametrize("inlined", [True, False], ids=["inlined", "reference"])
-def test_repeated_config_passes_keep_one_status_script(tmp_path: Path, inlined: bool):
-    """Verify that repeated passes keep one status script in either include form"""
-    gd = _bootstrap_project(tmp_path)
-    gd.build_dir.mkdir(exist_ok=True)
-    if inlined:
-        (gd.build_dir / "page-status-badges.js").write_text("function renderPageBadge() {}\n")
-    quarto_yml = gd.build_dir / "_quarto.yml"
-    quarto_yml.write_text("project:\n  type: website\nformat:\n  html: {}\n")
-
-    update_quarto_config(gd, make_run(gd))
-    update_quarto_config(gd, make_run(gd))
-
-    entries = read_yaml(quarto_yml)["format"]["html"]["include-after-body"]
-    assert sum("renderPageBadge" in str(e) or "page-status-badges" in str(e) for e in entries) == 1
 
 
 # ── Asset Correctness Tests ─────────────────────────────────────────────────

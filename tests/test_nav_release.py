@@ -8,7 +8,6 @@ a header meta tag.
 
 from __future__ import annotations
 
-import copy
 import html
 import re
 from typing import Any
@@ -113,28 +112,13 @@ def test_logo_with_title_gets_the_badge():
     assert _tooltips(config) == []
 
 
-def test_no_release_removes_an_earlier_badge():
-    config = _quarto_config(logo="logo.svg", title=False)
-    add_to_navbar(config, RELEASE, "en")
-    text_config = _quarto_config()
-    add_to_navbar(text_config, RELEASE, "en")
-
-    add_to_navbar(config, None, "en")
-    add_to_navbar(text_config, None, "en")
-
-    assert _tooltips(config) == []
-    assert "title" not in text_config["website"]["navbar"]
-
-
-def test_repeated_calls_give_the_same_config():
+def test_no_release_leaves_the_config_unchanged():
     for navbar in ({}, {"logo": "logo.svg", "title": False}):
         config = _quarto_config(**navbar)
-        add_to_navbar(config, RELEASE, "en")
-        once = copy.deepcopy(config)
 
-        add_to_navbar(config, RELEASE, "en")
+        add_to_navbar(config, None, "en")
 
-        assert config == once
+        assert config == _quarto_config(**navbar)
 
 
 def test_release_line_follows_the_site_language():

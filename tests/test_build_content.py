@@ -950,24 +950,6 @@ def test_user_guide_navbar_link_targets_an_explicit_guide_first_page(tmp_path: P
     assert left[0] == {"text": "User Guide", "href": "user-guide/01-intro.qmd"}
 
 
-def test_user_guide_navbar_link_is_added_once_in_a_translated_site(tmp_path: Path):
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-    (tmp_path / "user_guide").mkdir()
-    (tmp_path / "user_guide" / "intro.qmd").write_text("---\ntitle: Intro\n---\n")
-    write_config(tmp_path, "site:\n  lang: de\n")
-    docs = GreatDocs(project_path=str(tmp_path))
-    docs.build_dir.mkdir(parents=True)
-    write_quarto_yml(docs.build_dir, {"website": {"navbar": {"left": []}}})
-    guide = discover_user_guide(docs)
-    assert guide is not None
-
-    _add_navigation(docs, guide)
-    _add_navigation(docs, guide)
-
-    left = read_quarto_yml(docs.build_dir)["website"]["navbar"]["left"]
-    assert [item["href"] for item in left] == ["user-guide/intro.qmd"]
-
-
 # ---------------------------------------------------------------------------
 # Sections step
 # ---------------------------------------------------------------------------

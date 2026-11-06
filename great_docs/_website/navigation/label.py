@@ -17,9 +17,6 @@ if TYPE_CHECKING:
     from ...config import Config
 
 
-_PREFIX_PROPERTY = "--gd-nav-prefix-api:"
-
-
 def _css_string(text: str) -> str:
     """
     Escape and quote text for use in CSS and an HTML style element
@@ -43,12 +40,10 @@ def _css_string(text: str) -> str:
 
 def register(quarto_config: dict[str, Any], config: Config) -> None:
     """
-    Add translated navigation prefixes to the HTML header
+    Add translated navigation prefixes in a header style block
 
     Set `--gd-nav-prefix-api`, `--gd-nav-prefix-cli` and `--gd-nav-prefix-mcp`
     on `:root`. Leave the configuration unchanged if it has no HTML mapping.
-    Replace the style from an earlier call so repeated calls keep one style
-    with prefixes in the current language.
 
     Parameters
     ----------
@@ -69,10 +64,7 @@ def register(quarto_config: dict[str, Any], config: Config) -> None:
         f"--gd-nav-prefix-{kind}:{_css_string(text)};" for kind, text in prefixes.items()
     )
 
-    headers = [
-        header
-        for header in YamlMapping(html_config).entries("include-in-header")
-        if _PREFIX_PROPERTY not in str(header)
+    html_config["include-in-header"] = [
+        *YamlMapping(html_config).entries("include-in-header"),
+        {"text": f"<style>:root{{{declarations}}}</style>"},
     ]
-    headers.append({"text": f"<style>:root{{{declarations}}}</style>"})
-    html_config["include-in-header"] = headers

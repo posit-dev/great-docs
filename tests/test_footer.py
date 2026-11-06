@@ -78,12 +78,11 @@ class TestCredits:
 
 
 class TestAttribution:
-    def test_appends_the_credit_once(self):
+    def test_appends_the_credit_to_the_developers(self):
         quarto_config: dict[str, Any] = {"website": {}}
         config = mock_config(lang="en", attribution=True)
 
-        with _git(_done("", returncode=1), _done("", returncode=1)):
-            footer.register(quarto_config, config, {"authors": ["Ann"]})
+        with _git(_done("", returncode=1)):
             footer.register(quarto_config, config, {"authors": ["Ann"]})
 
         assert quarto_config["website"]["page-footer"]["center"] == (
@@ -120,11 +119,10 @@ class TestAttribution:
 
 
 class TestPositBadge:
-    def test_adds_the_badge_once_for_posit(self):
+    def test_adds_the_badge_for_posit(self):
         quarto_config: dict[str, Any] = {"website": {}}
         config = mock_config(lang="en", funding={"name": "Posit Software, PBC"})
 
-        footer.register(quarto_config, config, {})
         footer.register(quarto_config, config, {})
 
         headers = quarto_config["format"]["html"]["include-in-header"]

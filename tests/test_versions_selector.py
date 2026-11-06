@@ -82,14 +82,6 @@ class TestRegister:
         assert [v["tag"] for v in version_map["versions"]] == ["0.2", "0.1"]
         assert version_map["pages"] == {}
 
-    def test_version_map_replaces_previous_one(self, tmp_path: Path):
-        quarto_config = {
-            "format": {"html": {"include-in-header": '<meta name="gd-version-map" content="{}">'}}
-        }
-        html_config = _register(quarto_config, write_config(tmp_path, VERSIONS))
-        version_map = _version_map(html_config["include-in-header"])
-        assert [v["tag"] for v in version_map["versions"]] == ["0.2", "0.1"]
-
     def test_banner_meta_only_when_banner_disabled(self, tmp_path: Path):
         enabled = _register({"format": {"html": {}}}, write_config(tmp_path, VERSIONS))
         assert not _texts(enabled["include-in-header"], "gd-version-warning-banner")
@@ -120,13 +112,3 @@ class TestRegister:
             "body.html",
             {"text": '<script src="/version-selector.js"></script>'},
         ]
-
-    def test_repeated_registration_adds_each_entry_once(self, tmp_path: Path):
-        config = write_config(tmp_path, VERSIONS + "version_selector:\n  warning_banner: false\n")
-        quarto_config: dict[str, Any] = {"format": {"html": {}}}
-        selector.register(quarto_config, config)
-        html_config = _register(quarto_config, config)
-        header = html_config["include-in-header"]
-        assert len(_texts(header, "gd-version-map")) == 1
-        assert len(_texts(header, "gd-version-warning-banner")) == 1
-        assert len(_texts(html_config["include-after-body"], "version-selector")) == 1

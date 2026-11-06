@@ -173,13 +173,12 @@ def _icon_data(quarto_config: dict[str, Any]) -> list[dict[str, dict[str, str]]]
     return [json.loads(m) for e in after_body for m in re.findall(pattern, e["text"])]
 
 
-def test_register_embeds_icons_and_script_once(tmp_path: Path):
+def test_register_embeds_icons_and_script(tmp_path: Path):
     config = write_config(
         tmp_path, "nav_icons:\n  navbar:\n    Reference: book\n  sidebar:\n    Intro: rocket\n"
     )
     quarto_config: dict[str, Any] = {"format": {"html": {}}}
 
-    icons.register(quarto_config, config, report=print)
     icons.register(quarto_config, config, report=print)
 
     assert _icon_data(quarto_config) == [

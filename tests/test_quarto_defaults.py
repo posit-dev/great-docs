@@ -2,16 +2,14 @@
 Quarto project defaults, site settings and extension filters
 """
 
-import copy
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from great_docs import GreatDocs
 from great_docs._layout import Layout
-from great_docs._website import inline_data, quarto_defaults, quarto_yml
-from tests.support import make_run, update_quarto_config, write_config
+from great_docs._website import quarto_defaults
+from tests.support import write_config
 
 
 def _initial() -> dict[str, Any]:
@@ -92,9 +90,8 @@ class TestRegisterSite:
         config = write_config(tmp_path, f"site:\n  theme: {themes}\n")
         layout = Layout.make(tmp_path)
         quarto_config = _initial()
-        for _ in range(2):
-            quarto_defaults.register_site(quarto_config, config, layout, report=print)
-            assert quarto_config["format"]["html"]["theme"] == expected
+        quarto_defaults.register_site(quarto_config, config, layout, report=print)
+        assert quarto_config["format"]["html"]["theme"] == expected
 
     def test_light_and_dark_themes_each_get_great_docs_theme(self, tmp_path: Path):
         config = write_config(
@@ -112,14 +109,6 @@ class TestRegisterSite:
     def test_site_table_widths_win(self, tmp_path: Path):
         quarto_config, _ = _register_site(tmp_path, "site:\n  tbl-colwidths: auto\n")
         assert quarto_config["format"]["html"]["tbl-colwidths"] == "auto"
-
-    def test_second_update_changes_nothing(self, tmp_path: Path):
-        settings = "site:\n  syntax-definitions: mine.xml\ninclude_in_header: '<meta x>'\n"
-        once, _ = _register_site(tmp_path, settings)
-        twice, _ = _register_site(tmp_path, settings, copy.deepcopy(once))
-        assert twice == once
-        assert once["format"]["html"]["syntax-definitions"] == ["mine.xml", "pythonsignature.xml"]
-        assert once["format"]["html"]["include-in-header"] == [{"text": "<meta x>"}]
 
     def test_bibliography_and_style_by_basename(self, tmp_path: Path):
         quarto_config, reports = _register_site(
@@ -150,7 +139,6 @@ class TestRegisterExtensions:
             "filters": ["mine", "details"],
         }
         quarto_defaults.register_extensions(quarto_config)
-        quarto_defaults.register_extensions(quarto_config)
         assert quarto_config["filters"] == [
             "mine",
             "details",
@@ -178,13 +166,11 @@ class TestSiteIncludes:
         config = write_config(tmp_path, self.SETTINGS)
         layout = Layout.make(tmp_path)
 
-        # The build's second update must preserve entries added during the first.
-        for _ in range(2):
-            quarto_defaults.register_site(quarto_config, config, layout, report=print)
-            headers = quarto_config["format"]["html"]["include-in-header"]
-            if {"text": "<style>great-docs</style>"} not in headers:
-                headers.append({"text": "<style>great-docs</style>"})
-            quarto_defaults.register_site_includes(quarto_config, config)
+        quarto_defaults.register_site(quarto_config, config, layout, report=print)
+        quarto_config["format"]["html"]["include-in-header"].append(
+            {"text": "<style>great-docs</style>"}
+        )
+        quarto_defaults.register_site_includes(quarto_config, config)
 
         html = quarto_config["format"]["html"]
         assert html["include-after-body"] == [data, reader, "<script>mine()</script>"]
@@ -192,23 +178,3 @@ class TestSiteIncludes:
             {"text": "<style>great-docs</style>"},
             {"text": "<style>mine</style>"},
         ]
-
-    def test_data_added_between_updates_survives(self, tmp_path: Path):
-        (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n', encoding="utf-8")
-        write_config(tmp_path, "tags:\n  enabled: true\n" + self.SETTINGS)
-        docs = GreatDocs(project_path=str(tmp_path))
-        docs.build_dir.mkdir(parents=True)
-        quarto_yml.write_initial(docs.build_dir)
-
-        # The build adds tag data between updates, before the script that reads it.
-        update_quarto_config(docs, make_run(docs))
-        with quarto_yml.edit(docs.build_dir) as quarto_config:
-            inline_data.add(quarto_config, "__GD_TAGS_DATA__", {}, before="page-tags.js")
-        update_quarto_config(docs, make_run(docs))
-
-        html = quarto_yml.read(docs.build_dir)["format"]["html"]
-        after_body = [str(entry) for entry in html["include-after-body"]]
-        data = next(i for i, entry in enumerate(after_body) if "__GD_TAGS_DATA__" in entry)
-        assert "page-tags.js" in after_body[data + 1]
-        assert after_body[-1] == "<script>mine()</script>"
-        assert html["include-in-header"][-1] == {"text": "<style>mine</style>"}

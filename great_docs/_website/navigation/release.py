@@ -11,17 +11,14 @@ onto the link.
 from __future__ import annotations
 
 import html
-import re
 from dataclasses import dataclass
 from typing import Any, cast
 
 from ..._translations import get_translation
+from .. import quarto_yml
 from ..head import raw_inline
 
 _LOGO_TOOLTIP = "gd-logo-tooltip"
-
-# A badge from an earlier call, matched so that a repeated call replaces it
-_BADGE_SUFFIX = re.compile(r' (`+)<span class="version-badge".*?\1\{=html\}$')
 
 
 @dataclass(frozen=True)
@@ -59,45 +56,26 @@ class Release:
 
 def add_to_navbar(quarto_config: dict[str, Any], release: Release | None, language: str) -> None:
     """
-    Add the latest release beside the navbar title, or on a logo-only brand
+    Show the release in a navbar badge or a logo tooltip
 
-    Replace any badge or tooltip from an earlier call. Repeated calls with
-    the same release leave the configuration unchanged. With no release,
-    remove both.
+    Append the version badge to a text title. For a logo without a title, add
+    header metadata for the release tooltip.
 
     Parameters
     ----------
     quarto_config
         Contents of `_quarto.yml`, updated in place.
     release
-        The release to show, or `None` to remove the badge and tooltip.
+        The release to show, or `None` to leave the configuration unchanged.
     language
         Language code for the "Released {date}" hover text.
     """
-    website = cast("dict[str, Any]", quarto_config.setdefault("website", {}))
-    navbar = cast("dict[str, Any]", website.setdefault("navbar", {}))
-    html_config = cast(
-        "dict[str, Any]", quarto_config.setdefault("format", {}).setdefault("html", {})
-    )
-    header = html_config.get("include-in-header", [])
-    if isinstance(header, str):
-        header = [header]
-    header = [entry for entry in header if _LOGO_TOOLTIP not in str(entry)]
-    if "include-in-header" in html_config:
-        html_config["include-in-header"] = header
-
-    site_title = website.get("title")
-    title = navbar.get("title")
-    if isinstance(title, str):
-        title = _BADGE_SUFFIX.sub("", title)
-        if title == site_title:
-            del navbar["title"]
-        else:
-            navbar["title"] = title
-
     if release is None:
         return
 
+    website = cast("dict[str, Any]", quarto_config.setdefault("website", {}))
+    navbar = cast("dict[str, Any]", website.setdefault("navbar", {}))
+    site_title = website.get("title")
     version = html.escape(release.version)
     released = (
         get_translation("logo_tooltip_released", language).replace("{date}", release.date)
@@ -115,4 +93,4 @@ def add_to_navbar(quarto_config: dict[str, Any], release: Release | None, langua
         if released:
             tooltip += f"<br>{html.escape(released)}"
         meta = f'<meta name="{_LOGO_TOOLTIP}" content="{html.escape(tooltip)}">'
-        html_config["include-in-header"] = [*header, {"text": meta}]
+        quarto_yml.includes(quarto_config, "include-in-header").append({"text": meta})

@@ -158,24 +158,6 @@ def test_add_include_inserts_before_its_anchor_or_appends(before: str | None, ex
     assert [entry["text"] for entry in entries] == expected
 
 
-def test_set_include_replaces_the_first_marked_entry_and_drops_the_rest():
-    texts = ["a", "old gd-x 1", "b", "old gd-x 2"]
-    quarto_config = {"format": {"html": {"include-in-header": [{"text": t} for t in texts]}}}
-
-    quarto_yml.set_include(quarto_config, "include-in-header", {"text": "new gd-x"}, marker="gd-x")
-
-    entries = quarto_yml.includes(quarto_config, "include-in-header")
-    assert [entry["text"] for entry in entries] == ["a", "new gd-x", "b"]
-
-
-def test_set_include_appends_an_entry_whose_marker_is_absent():
-    quarto_config = {"format": {"html": {"include-after-body": "a.html"}}}
-
-    quarto_yml.set_include(quarto_config, "include-after-body", {"text": "gd-x"}, marker="gd-x")
-
-    assert quarto_yml.includes(quarto_config, "include-after-body") == ["a.html", {"text": "gd-x"}]
-
-
 def test_add_resources_appends_each_missing_name_once():
     quarto_config = {"project": {"resources": "objects.inv"}}
 
@@ -297,12 +279,11 @@ def test_apply_appends_a_link_whose_anchor_is_missing():
     assert left == [guide, {"text": "Tags", "href": "tags/index.qmd"}]
 
 
-def test_apply_inserts_an_anchored_link_once():
-    """Insert a positioned link only once across repeated contributions"""
+def test_apply_skips_a_link_the_navbar_already_has():
+    """Preserve a built site's navbar when it already links the contributed page"""
     reference = {"text": "Reference", "href": "reference/index.qmd"}
-    left = [reference]
+    left = [{"text": "Tags", "href": "tags/index.qmd"}, reference]
 
-    quarto_yml.apply({"website": {"navbar": {"left": left}}}, TAGS, CONFIG)
     quarto_yml.apply({"website": {"navbar": {"left": left}}}, TAGS, CONFIG)
 
     assert left == [{"text": "Tags", "href": "tags/index.qmd"}, reference]
@@ -348,15 +329,16 @@ def test_apply_without_sidebars_leaves_the_sidebar_key_absent():
     assert "sidebar" not in quarto_config["website"]
 
 
-def test_apply_adds_resources_and_render_excludes_once():
+def test_apply_adds_only_the_missing_resources_and_render_excludes():
     contribution = Contribution(resources=("raw.html", "logo.png"), render_excludes=("raw.html",))
-    quarto_config: dict[str, Any] = {"project": {"resources": ["logo.png"]}}
+    quarto_config: dict[str, Any] = {
+        "project": {"resources": ["logo.png"], "render": ["*.qmd", "!raw.html"]}
+    }
 
-    quarto_yml.apply(quarto_config, contribution, CONFIG)
     quarto_yml.apply(quarto_config, contribution, CONFIG)
 
     assert quarto_config["project"]["resources"] == ["logo.png", "raw.html"]
-    assert quarto_config["project"]["render"] == [*quarto_yml.RENDER_GLOBS, "!raw.html"]
+    assert quarto_config["project"]["render"] == ["*.qmd", "!raw.html"]
 
 
 def test_apply_without_project_files_leaves_the_project_absent():

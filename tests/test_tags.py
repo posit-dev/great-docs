@@ -868,13 +868,13 @@ class TestTagsStep:
         validate_build_dir(docs.build_dir)
 
     def test_links_the_index_page_before_reference(self, tmp_path: Path):
-        """Insert one translated Tags link before Reference across repeated builds"""
+        """Insert a translated Tags link before Reference"""
         docs = _docs(tmp_path, "tags: true\nsite:\n  lang: fr\n")
         _make_qmd(docs.build_dir / "user-guide" / "page.qmd", "Page", tags=["Python"])
 
-        for run in (make_run(docs), make_run(docs)):
-            _ = generated.tags(run, docs._config, docs.layout)
-            apply_contributions(docs, run)
+        run = make_run(docs)
+        _ = generated.tags(run, docs._config, docs.layout)
+        apply_contributions(docs, run)
 
         left = quarto_yml.read(docs.build_dir)["website"]["navbar"]["left"]
         assert left == [{"text": "Étiquettes", "href": "tags/index.qmd"}, REFERENCE]
