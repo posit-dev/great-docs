@@ -1138,6 +1138,25 @@ class TestListHelpers:
         assert asyncio.run(_get_prompt_messages(session, "explain", ["topic"])) == []
         assert session.get_prompt.await_count == 2
 
+    def test_prompt_that_asks_for_input_has_no_preview(self):
+        from mcp.types import InputRequiredResult
+
+        from great_docs._mcpref.reference import _get_prompt_messages
+
+        # The client requires callers to opt in to responses that request
+        # user input. Match that requirement in the fake.
+        async def get_prompt(
+            name: str, arguments: dict[str, str], *, allow_input_required: bool = False
+        ) -> InputRequiredResult:
+            if not allow_input_required:
+                raise RuntimeError("Server returned InputRequiredResult")
+            return InputRequiredResult(request_state="awaiting-topic")
+
+        session = MagicMock()
+        session.get_prompt = get_prompt
+
+        assert asyncio.run(_get_prompt_messages(session, "explain", ["topic"])) == []
+
     def test_unexpected_error_from_a_prompt_preview_propagates(self):
         from great_docs._mcpref.reference import _get_prompt_messages
 

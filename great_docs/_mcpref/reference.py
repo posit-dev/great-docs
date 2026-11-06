@@ -367,6 +367,7 @@ async def _get_prompt_messages(
 ) -> list[dict[str, Any]]:
     """Call `prompts/get` for a prompt, tolerating required-argument servers."""
     from mcp.shared.exceptions import MCPError
+    from mcp.types import InputRequiredResult
 
     # Try with no arguments first; if the server rejects that because arguments
     # are required, retry with placeholder values so we can still show a preview.
@@ -376,9 +377,14 @@ async def _get_prompt_messages(
 
     for args in attempts:
         try:
-            result = await asyncio.wait_for(session.get_prompt(name, args), _PROTOCOL_TIMEOUT)
+            result = await asyncio.wait_for(
+                session.get_prompt(name, args, allow_input_required=True), _PROTOCOL_TIMEOUT
+            )
         except (MCPError, TimeoutError):
             continue
+        if isinstance(result, InputRequiredResult):
+            # A build cannot provide interactive input. Omit the preview.
+            return []
         return _dump(result).get("messages", []) or []
     return []
 
