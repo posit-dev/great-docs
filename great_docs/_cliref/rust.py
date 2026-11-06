@@ -14,6 +14,8 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .model import CliArgument, CliCommand, CliOption
+
 
 @dataclass
 class RustCliProject:
@@ -21,7 +23,7 @@ class RustCliProject:
 
     project_root: Path
     package_name: str  # from [package].name in Cargo.toml
-    binary_names: list[str] = field(default_factory=list)  # [[bin]] names, or inferred
+    binary_names: list[str] = field(default_factory=list[str])  # [[bin]] names, or inferred
     uses_clap: bool = False  # True when clap appears in [dependencies]
 
 
@@ -227,7 +229,7 @@ def build_rust_binary(
     return binary_path
 
 
-def introspect_rust_cli(rust_project: RustCliProject) -> dict | None:
+def introspect_rust_cli(rust_project: RustCliProject) -> CliCommand | None:
     """
     Build and run a Rust CLI to extract its command structure
 
@@ -297,18 +299,19 @@ _CLAP_DEFAULT_RE = re.compile(r"\[default:\s*([^\]]+)\]\s*$")
 _CLAP_POSSIBLE_VALUES_RE = re.compile(r"\[possible values:\s*([^\]]+)\]")
 
 
-def _parse_clap_flag(raw: str) -> dict | None:
-    """Parse a single clap flag line into a dict compatible with Click's option format.
+def _parse_clap_flag(raw: str) -> CliOption | None:
+    """
+    Parse a clap flag line into an option in the shared CLI model
 
     Parameters
     ----------
     raw
-        A single flag line from ``--help`` output.
+        A single flag line from `--help` output.
 
     Returns
     -------
-    dict | None
-        Option dict, or ``None`` if the line could not be parsed.
+    :
+        The parsed option, or `None` if the line does not match a flag definition.
     """
     m = _CLAP_FLAG_RE.match(raw)
     if not m:
@@ -385,10 +388,9 @@ def _extract_clap_commands(
     name: str,
     parent_args: list[str] | None = None,
     display_path: str | None = None,
-) -> dict | None:
-    """Recursively extract the command tree from a clap-based CLI binary.
-
-    Calls ``binary [subcommand...] --help`` and parses the output.
+) -> CliCommand | None:
+    """
+    Extract a clap command tree by running `--help` for each command
 
     Parameters
     ----------
@@ -399,12 +401,12 @@ def _extract_clap_commands(
     parent_args
         Invocation tokens appended after the binary name to reach this subcommand.
     display_path
-        Full display path for this node, e.g. ``"yamark git-filter"``.
+        Full command path, such as `"yamark git-filter"`. Use `name` when this is `None`.
 
     Returns
     -------
-    dict | None
-        Parsed command structure, or ``None`` on timeout/error.
+    :
+        The command tree, or `None` if the help command times out or cannot run.
     """
     args_list = parent_args or []
     node_display = display_path or name
@@ -431,10 +433,11 @@ def _parse_clap_help(
     binary_path: Path,
     parent_args: list[str],
     display_path: str | None = None,
-) -> dict:
-    """Parse the output of ``<binary> [subcommand...] --help``.
+) -> CliCommand:
+    """
+    Parse clap help output into a command tree
 
-    clap's help format is::
+    clap's help format is:
 
         Description text
 
@@ -468,8 +471,8 @@ def _parse_clap_help(
     _NON_COMMAND_SECTIONS = frozenset({"Usage", "Examples", "Aliases"})
 
     subcommand_names: list[tuple[str, str]] = []
-    options: list[dict] = []
-    arguments: list[dict] = []
+    options: list[CliOption] = []
+    arguments: list[CliArgument] = []
     current_section = ""
 
     for line in lines:
@@ -533,7 +536,7 @@ def _parse_clap_help(
     node_full_path = display_path or name
 
     # Recursively introspect subcommands
-    commands: list[dict] = []
+    commands: list[CliCommand] = []
     for cmd_name, cmd_short in subcommand_names:
         sub_args = parent_args + [cmd_name]
         sub_display = f"{node_full_path} {cmd_name}"
@@ -548,7 +551,7 @@ def _parse_clap_help(
                 "short_help": cmd_short,
                 "help_text": "",
                 "description": cmd_short,
-                "examples": "",
+                "examples": [],
                 "commands": [],
                 "options": [],
                 "arguments": [],
@@ -565,7 +568,7 @@ def _parse_clap_help(
         "short_help": _short_help(description),
         "help_text": help_text,
         "description": description,
-        "examples": "",
+        "examples": [],
         "commands": commands,
         "options": options,
         "arguments": arguments,

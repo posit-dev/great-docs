@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from .._cliref import click as cli_click
 from .._cliref import render as cli_render
@@ -290,16 +290,12 @@ def go_cli(run: Run, config: Config, layout: Layout) -> Outcome:
     """
     if not config.go_cli_enabled:
         return Skipped("Go CLI not enabled")
-    from .._cliref.go import (
-        detect_go_cli_project,
-        introspect_cobra_cli,  # pyright: ignore[reportUnknownVariableType]
-    )
+    from .._cliref.go import detect_go_cli_project, introspect_cobra_cli
 
     project = detect_go_cli_project(layout.package_root)
     if not project:
         return Skipped("no Go CLI project detected")
-    # The introspection module types the command tree as a plain `dict`.
-    cli_info = cast("CliCommand | None", introspect_cobra_cli(project))
+    cli_info = introspect_cobra_cli(project)
     if not cli_info:
         return Skipped("Go CLI introspection failed (is 'go' on PATH?)")
     return _write_cli_pages(run, config, layout, cli_info, "Go CLI", f" ({project.binary_name})")
@@ -325,16 +321,12 @@ def rust_cli(run: Run, config: Config, layout: Layout) -> Outcome:
     """
     if not config.rust_cli_enabled:
         return Skipped("Rust CLI not enabled")
-    from .._cliref.rust import (
-        detect_rust_cli_project,
-        introspect_rust_cli,  # pyright: ignore[reportUnknownVariableType]
-    )
+    from .._cliref.rust import detect_rust_cli_project, introspect_rust_cli
 
     project = detect_rust_cli_project(layout.package_root)
     if not project:
         return Skipped("no Rust CLI project detected")
-    # The introspection module types the command tree as a plain `dict`.
-    cli_info = cast("CliCommand | None", introspect_rust_cli(project))
+    cli_info = introspect_rust_cli(project)
     if not cli_info:
         return Skipped("Rust CLI introspection failed (is 'cargo' on PATH?)")
     return _write_cli_pages(

@@ -12,6 +12,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from .model import CliCommand, CliOption
+
 
 @dataclass
 class GoCliProject:
@@ -183,7 +185,7 @@ def build_go_binary(
     return binary_path
 
 
-def introspect_cobra_cli(go_project: GoCliProject) -> dict | None:
+def introspect_cobra_cli(go_project: GoCliProject) -> CliCommand | None:
     """
     Build and run a Cobra CLI to extract its command structure
 
@@ -263,20 +265,20 @@ _FLAG_RE = re.compile(
 _DEFAULT_PARENS_RE = re.compile(r"\(default[:\s]+[\"']?([^\"')]+)[\"']?\)\s*$")
 
 
-def _parse_cobra_flag(raw: str) -> dict | None:
-    """Parse a single cobra flag line into a dict compatible with Click's option format.
+def _parse_cobra_flag(raw: str) -> CliOption | None:
+    """
+    Parse a Cobra flag line into an option in the shared CLI model
 
     Parameters
     ----------
     raw
-        A single flag line from `--help` output, e.g.
-        "`-n, --name string   name to greet (default \"World\")`"
+        A single flag line from `--help` output, such as
+        `-n, --name string   name to greet (default "World")`.
 
     Returns
     -------
-    dict | None
-        Option dict with keys `names`, `name_display`, `type`, `help`, `default`, `is_flag`,
-        `required`, `hidden`; or `None` if the line could not be parsed.
+    :
+        The parsed option, or `None` if the line does not match a flag definition.
     """
     m = _FLAG_RE.match(raw)
     if not m:
@@ -364,10 +366,9 @@ def _extract_cobra_commands(
     name: str,
     parent_args: list[str] | None = None,
     display_path: str | None = None,
-) -> dict | None:
-    """Recursively extract the command tree from a Cobra CLI binary.
-
-    Calls `binary [subcommand...] --help` and parses the output.
+) -> CliCommand | None:
+    """
+    Extract a Cobra command tree by running `--help` for each command
 
     Parameters
     ----------
@@ -376,16 +377,15 @@ def _extract_cobra_commands(
     name
         Display name for this command node.
     parent_args
-        Invocation tokens appended after the binary name to reach this subcommand (e.g.
-        `["greet"]` -> `binary greet --help`).
+        Invocation tokens after the binary name, such as `["greet"]` for
+        `binary greet --help`.
     display_path
-        Full display path for this node, e.g. `"hello greet"`. When `None` the node is the root
-        command and `name` is used.
+        Full command path, such as `"hello greet"`. Use `name` when this is `None`.
 
     Returns
     -------
-    dict | None
-        Parsed command structure, or ``None`` on timeout/error.
+    :
+        The command tree, or `None` if the help command times out or cannot run.
     """
     args_list = parent_args or []
     node_display = display_path or name
@@ -412,8 +412,9 @@ def _parse_cobra_help(
     binary_path: Path,
     parent_args: list[str],
     display_path: str | None = None,
-) -> dict:
-    """Parse the output of `<binary> [subcommand...] --help`.
+) -> CliCommand:
+    """
+    Parse Cobra help output into a command tree
 
     Cobra's help format is:
 
@@ -431,8 +432,7 @@ def _parse_cobra_help(
 
         Use "<binary> [command] --help" for more information.
 
-    When command groups are defined the section shows group labels before the commands indented by
-    an extra two spaces.
+    Command groups add labels before their commands and indent the commands by two extra spaces.
     """
     lines = help_text.splitlines()
 
@@ -453,7 +453,7 @@ def _parse_cobra_help(
 
     # Parse sections
     subcommand_names: list[tuple[str, str]] = []
-    flags: list[dict] = []
+    flags: list[CliOption] = []
     current_section = ""
 
     for line in lines:
@@ -493,7 +493,7 @@ def _parse_cobra_help(
     node_full_path = display_path or name
 
     # Recursively introspect subcommands
-    commands: list[dict] = []
+    commands: list[CliCommand] = []
     for cmd_name, cmd_short in subcommand_names:
         sub_args = parent_args + [cmd_name]
         sub_display = f"{node_full_path} {cmd_name}"
@@ -508,7 +508,7 @@ def _parse_cobra_help(
                 "short_help": cmd_short,
                 "help_text": "",
                 "description": cmd_short,
-                "examples": "",
+                "examples": [],
                 "commands": [],
                 "options": [],
                 "arguments": [],
@@ -525,7 +525,7 @@ def _parse_cobra_help(
         "short_help": _short_help(description),
         "help_text": help_text,
         "description": description,
-        "examples": "",
+        "examples": [],
         "commands": commands,
         "options": flags,
         "arguments": [],
