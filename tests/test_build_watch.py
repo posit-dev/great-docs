@@ -4,6 +4,7 @@ Preview rebuilds after documentation source edits
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import threading
@@ -385,3 +386,26 @@ def test_staging_skips_the_previewed_project(tmp_path: Path, directory: str):
     top = layout.source_dir / layout.build_dir.relative_to(layout.source_dir).parts[0]
     assert staging.is_reserved_directory(top)
     assert layout.build_dir in staging.generated_dirs()
+
+
+def test_forget_package_ignores_stale_bytecode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Reimports read an edit that keeps the source size and modification time"""
+    monkeypatch.setattr(sys, "dont_write_bytecode", False)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "stale_bytecode_pkg", raising=False)
+    source = tmp_path / "stale_bytecode_pkg.py"
+    source.write_text("VALUE = 'old'\n")
+
+    import stale_bytecode_pkg  # type: ignore[import-not-found]
+
+    assert stale_bytecode_pkg.VALUE == "old"
+
+    mtime_ns = source.stat().st_mtime_ns
+    source.write_text("VALUE = 'new'\n")
+    os.utime(source, ns=(mtime_ns, mtime_ns))
+    watch.forget_package("stale_bytecode_pkg")
+
+    import stale_bytecode_pkg  # type: ignore[import-not-found]  # noqa: F811
+
+    assert stale_bytecode_pkg.VALUE == "new"
+    sys.modules.pop("stale_bytecode_pkg", None)

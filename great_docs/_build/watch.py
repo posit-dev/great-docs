@@ -9,6 +9,7 @@ pages.
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import hashlib
 import importlib
@@ -313,13 +314,20 @@ def forget_package(name: str) -> None:
     while keeping modules from other packages loaded. Invalidate the import system's
     directory caches so the next import can find newly added modules.
 
+    Python can reuse stale bytecode when an edit preserves the source file's size
+    and whole-second modification time. Delete each module's cached bytecode where
+    possible so the next import reads the edited source.
+
     Parameters
     ----------
     name
         The package's importable name, such as `yaml12` or `firebird.base`.
     """
     for module in [key for key in sys.modules if key == name or key.startswith(f"{name}.")]:
-        del sys.modules[module]
+        spec = getattr(sys.modules.pop(module), "__spec__", None)
+        if spec is not None and spec.has_location and spec.cached:
+            with contextlib.suppress(OSError):
+                Path(spec.cached).unlink()
     importlib.invalidate_caches()
 
 
