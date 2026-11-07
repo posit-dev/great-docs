@@ -252,7 +252,7 @@ def webmcp_pages(config: Config, layout: Layout) -> Outcome:
     if not config.webmcp_enabled:
         return Skipped("WebMCP not enabled")
     facts = webmcp_page_data.prepare(config, layout)
-    opted_out = sum(not page.webmcp for page in facts)
+    opted_out = sum(not page.webmcp for page in facts.pages)
     if opted_out:
         return f"WebMCP pages prepared ({opted_out} opted out)"
     return "WebMCP pages prepared"

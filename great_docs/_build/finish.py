@@ -1,7 +1,7 @@
 """
 The build steps that run after the site is rendered
 
-These steps write SEO files and build timings, save the freeze cache, save an API snapshot
+These steps write the WebMCP manifest, SEO files and build timings, save the freeze cache, save an API snapshot
 for versioned sites and record ownership of files in a separate site directory.
 
 `print_layout_notice` shows migration guidance for documentation at the project root after
@@ -11,14 +11,17 @@ a build and before a preview.
 from __future__ import annotations
 
 import subprocess
+from importlib import metadata
 from typing import TYPE_CHECKING
 
 from .._cliref import click as cli_click
 from .._utils import record_site_ownership as record_ownership
+from .._website.ai_agents import webmcp_manifest as manifest_file
 from .._website.seo import site_files
 from . import freeze, timings
 from .facts import exact_tag
-from .steps import USER_CODE_ERRORS, Outcome
+from .site import default_description
+from .steps import USER_CODE_ERRORS, Outcome, Skipped
 
 if TYPE_CHECKING:
     from .._layout import Layout
@@ -33,8 +36,55 @@ __all__ = [
     "save_api_snapshot",
     "save_freeze_cache",
     "seo_files",
+    "webmcp_manifest",
     "write_timings",
 ]
+
+
+def webmcp_manifest(run: Run, config: Config, layout: Layout, log: BuildLog) -> Outcome:
+    """
+    Write `gd-webmcp.json` to the root of each rendered version
+
+    Parameters
+    ----------
+    run
+        The current build, which supplies the package's names, metadata and site address.
+    config
+        The project's configuration.
+    layout
+        The project's directories.
+    log
+        The build log, which shows missing or unreadable inputs as warnings.
+
+    Returns
+    -------
+    :
+        The result line or skip reason.
+    """
+    if not config.webmcp_enabled:
+        return Skipped("WebMCP not enabled")
+    project = run.project
+    name = project.name
+    version: str | None = None
+    if name:
+        try:
+            version = metadata.version(name)
+        except metadata.PackageNotFoundError:
+            pass
+    site = manifest_file.SiteInfo(
+        name=name,
+        title=run.identity.name or name or "",
+        description=default_description(config, project),
+        version=version,
+        repo=project.github.url if project.github else None,
+        license=project.manifest["license"] or None,
+        install=(f"pip install {name}", f"uv add {name}") if name and project.module else (),
+    )
+    roots = manifest_file.roots(config, layout, run.identity.base_url)
+    written = manifest_file.write(roots, site, warn=log.warn)
+    if len(written) > 1:
+        return f"{manifest_file.MANIFEST_FILE} written for {len(written)} versions"
+    return f"{manifest_file.MANIFEST_FILE} written"
 
 
 def seo_files(config: Config, layout: Layout, base_url: str | None) -> Outcome:
