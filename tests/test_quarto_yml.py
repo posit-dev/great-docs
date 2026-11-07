@@ -458,8 +458,8 @@ def test_apply_places_the_user_guide_as_the_user_guide_step_does(
     quarto_config: dict[str, Any] = {
         "website": {"navbar": {"left": copy.deepcopy(left)}, "sidebar": []}
     }
-    docs.build_dir.mkdir(parents=True)
-    quarto_yml.write(docs.build_dir, copy.deepcopy(quarto_config))
+    docs.layout.build_dir.mkdir(parents=True)
+    quarto_yml.write(docs.layout.build_dir, copy.deepcopy(quarto_config))
     user_guide_step(docs, guide)
     sidebar = user_guide.sidebar(guide)
     link = NavbarLink(navbar.USER_GUIDE.label(config), user_guide.entry(guide), kind="user_guide")
@@ -470,7 +470,7 @@ def test_apply_places_the_user_guide_as_the_user_guide_step_does(
 
     quarto_yml.apply(quarto_config, contribution, config)
 
-    assert quarto_config == quarto_yml.read(docs.build_dir)
+    assert quarto_config == quarto_yml.read(docs.layout.build_dir)
 
 
 @pytest.mark.parametrize(

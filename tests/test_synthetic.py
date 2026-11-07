@@ -783,7 +783,7 @@ def test_L3_cli_sidebar_no_wrong_level_paths(pkg_name: str, tmp_path: Path):
 
     # Every path must point to an actual file on disk.
     # Sidebar paths are relative to the build directory, where the pages are written.
-    docs_dir = docs.build_dir
+    docs_dir = docs.layout.build_dir
     for path in all_paths:
         full = docs_dir / path
         assert full.exists(), f"Sidebar path {path!r} does not exist on disk at {full}"
@@ -842,7 +842,7 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
     run.contributions.append(cli_render.contribution(docs._config, cli_files))
     update_quarto_config(docs, run)
 
-    quarto_yml = docs.build_dir / "_quarto.yml"
+    quarto_yml = docs.layout.build_dir / "_quarto.yml"
     assert quarto_yml.exists(), "_quarto.yml was not created"
 
     with open(quarto_yml, encoding="utf-8") as f:
@@ -897,7 +897,7 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     user_guide_step(docs, run.user_guide)
     update_quarto_config(docs, run)
 
-    quarto_yml = docs.build_dir / "_quarto.yml"
+    quarto_yml = docs.layout.build_dir / "_quarto.yml"
     with open(quarto_yml, encoding="utf-8") as f:
         config = read_yaml(f)
 
@@ -1052,12 +1052,12 @@ def test_L3_bibliography_wired_into_quarto_config(pkg_name: str, tmp_path: Path)
     bib_file = expected["bibliography_file"]
 
     # The .bib file is copied into the build directory by basename.
-    assert (docs.build_dir / bib_file).exists(), (
-        f"{bib_file!r} should be copied into the build dir {docs.build_dir}"
+    assert (docs.layout.build_dir / bib_file).exists(), (
+        f"{bib_file!r} should be copied into the build dir {docs.layout.build_dir}"
     )
 
     # _quarto.yml references the bibliography by basename.
-    quarto_yml = docs.build_dir / "_quarto.yml"
+    quarto_yml = docs.layout.build_dir / "_quarto.yml"
 
     assert quarto_yml.exists(), "_quarto.yml was not created"
 
@@ -1090,12 +1090,12 @@ def test_L3_custom_css_wired_into_quarto_config(pkg_name: str, tmp_path: Path):
     css_file = expected["custom_css_file"]
 
     # The .css file is copied into the build directory by basename.
-    assert (docs.build_dir / css_file).exists(), (
-        f"{css_file!r} should be copied into the build dir {docs.build_dir}"
+    assert (docs.layout.build_dir / css_file).exists(), (
+        f"{css_file!r} should be copied into the build dir {docs.layout.build_dir}"
     )
 
     # _quarto.yml references the CSS by basename.
-    quarto_yml = docs.build_dir / "_quarto.yml"
+    quarto_yml = docs.layout.build_dir / "_quarto.yml"
 
     assert quarto_yml.exists(), "_quarto.yml was not created"
 
@@ -1118,7 +1118,7 @@ def test_L3_blended_homepage_index_content(pkg_name: str, tmp_path: Path):
 
     docs = _setup_blended_homepage(pkg_dir, spec)
 
-    index_qmd = docs.build_dir / "index.qmd"
+    index_qmd = docs.layout.build_dir / "index.qmd"
     assert index_qmd.exists(), "index.qmd was not created in blended mode"
 
     content = index_qmd.read_text(encoding="utf-8")
@@ -1141,7 +1141,7 @@ def test_L3_blended_homepage_no_duplicate(pkg_name: str, tmp_path: Path):
     docs = _setup_blended_homepage(pkg_dir, spec)
 
     for rel_path in expected.get("index_not_exists", []):
-        full_path = docs.build_dir / rel_path
+        full_path = docs.layout.build_dir / rel_path
         assert not full_path.exists(), f"Duplicate UG page should be removed: {rel_path}"
 
 
@@ -1156,7 +1156,7 @@ def test_L3_blended_homepage_remaining_pages(pkg_name: str, tmp_path: Path):
     docs = _setup_blended_homepage(pkg_dir, spec)
 
     for rel_path in expected.get("ug_pages_exist", []):
-        full_path = docs.build_dir / rel_path
+        full_path = docs.layout.build_dir / rel_path
         assert full_path.exists(), f"Remaining UG page should exist: {rel_path}"
 
 
@@ -1172,7 +1172,7 @@ def test_L3_blended_homepage_no_navbar_user_guide(pkg_name: str, tmp_path: Path)
 
     docs = _setup_blended_homepage(pkg_dir, spec)
 
-    quarto_yml = docs.build_dir / "_quarto.yml"
+    quarto_yml = docs.layout.build_dir / "_quarto.yml"
     assert quarto_yml.exists(), "_quarto.yml was not created"
 
     with open(quarto_yml, encoding="utf-8") as f:
@@ -1199,7 +1199,7 @@ def test_L3_blended_homepage_sidebar_first_entry(pkg_name: str, tmp_path: Path):
 
     docs = _setup_blended_homepage(pkg_dir, spec)
 
-    quarto_yml = docs.build_dir / "_quarto.yml"
+    quarto_yml = docs.layout.build_dir / "_quarto.yml"
     with open(quarto_yml, encoding="utf-8") as f:
         config = read_yaml(f)
 
@@ -1244,7 +1244,7 @@ def test_L3_code_include_expansion(tmp_path: Path):
 
     user_guide_step(docs, ug_info)
 
-    built = docs.build_dir / "user-guide" / "includes.qmd"
+    built = docs.layout.build_dir / "user-guide" / "includes.qmd"
     assert built.exists(), "includes.qmd not found in build dir"
 
     content = built.read_text(encoding="utf-8")

@@ -129,15 +129,15 @@ class TestPageStatusConfig:
 class TestCollectPageStatuses:
     def test_skips_reference_and_index_pages(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        _make_qmd(gd.build_dir / "reference" / "item.qmd", "Item", status="new")
-        _make_qmd(gd.build_dir / "user-guide" / "index.qmd", "Guide", status="new")
-        _make_qmd(gd.build_dir / "user-guide" / "topic.qmd", "Topic", status="new")
+        _make_qmd(gd.layout.build_dir / "reference" / "item.qmd", "Item", status="new")
+        _make_qmd(gd.layout.build_dir / "user-guide" / "index.qmd", "Guide", status="new")
+        _make_qmd(gd.layout.build_dir / "user-guide" / "topic.qmd", "Topic", status="new")
 
         assert page_status.collect(gd._config, gd.layout) == {"user-guide/topic.qmd": "new"}
 
     def test_collect_from_user_guide(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.build_dir / "user-guide"
+        ug_dir = gd.layout.build_dir / "user-guide"
         _make_qmd(ug_dir / "intro.qmd", "Introduction", status="new")
         _make_qmd(ug_dir / "advanced.qmd", "Advanced Usage", status="deprecated")
 
@@ -148,7 +148,7 @@ class TestCollectPageStatuses:
 
     def test_collect_from_recipes(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        recipes_dir = gd.build_dir / "recipes"
+        recipes_dir = gd.layout.build_dir / "recipes"
         _make_qmd(recipes_dir / "recipe1.qmd", "Easy Recipe", status="beta")
 
         result = page_status.collect(gd._config, gd.layout)
@@ -157,7 +157,7 @@ class TestCollectPageStatuses:
 
     def test_unknown_status_warns(self, tmp_path: Path, capsys):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.build_dir / "user-guide"
+        ug_dir = gd.layout.build_dir / "user-guide"
         _make_qmd(ug_dir / "page.qmd", "A Page", status="nonexistent")
 
         result = page_status.collect(gd._config, gd.layout)
@@ -168,7 +168,7 @@ class TestCollectPageStatuses:
 
     def test_no_status_pages(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.build_dir / "user-guide"
+        ug_dir = gd.layout.build_dir / "user-guide"
         _make_qmd(ug_dir / "page.qmd", "No Status")
 
         result = page_status.collect(gd._config, gd.layout)
@@ -181,7 +181,7 @@ class TestCollectPageStatuses:
 
     def test_case_insensitive_status(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.build_dir / "user-guide"
+        ug_dir = gd.layout.build_dir / "user-guide"
         _make_qmd(ug_dir / "page.qmd", "A Page", status="New")
 
         result = page_status.collect(gd._config, gd.layout)
@@ -193,7 +193,7 @@ class TestCollectPageStatuses:
             tmp_path,
             "page_status:\n  enabled: true\nsections:\n  - title: Tutorials\n    dir: tutorials\n",
         )
-        tut_dir = gd.build_dir / "tutorials"
+        tut_dir = gd.layout.build_dir / "tutorials"
         _make_qmd(tut_dir / "first.qmd", "First Tutorial", status="new")
 
         result = page_status.collect(gd._config, gd.layout)
@@ -206,7 +206,7 @@ class TestCollectPageStatuses:
             tmp_path,
             "page_status:\n  enabled: true\nsections:\n  - title: Examples\n    dir: docs/examples\n",
         )
-        section_dir = gd.build_dir / "docs" / "examples"
+        section_dir = gd.layout.build_dir / "docs" / "examples"
         _make_qmd(section_dir / "ex.qmd", "Example", status="new")
 
         result = page_status.collect(gd._config, gd.layout)
@@ -226,9 +226,9 @@ class TestGenerateStatusJson:
         )
         page_status.write(gd._config, gd.layout, {})
 
-        definition = json.loads((gd.build_dir / "_page_status.json").read_text())["definitions"][
-            "new"
-        ]
+        definition = json.loads((gd.layout.build_dir / "_page_status.json").read_text())[
+            "definitions"
+        ]["new"]
         assert definition["label"] == "Fresh"
         assert definition["description"] == "Newly published"
         assert definition["icon"] == ""
@@ -240,7 +240,7 @@ class TestGenerateStatusJson:
 
         page_status.write(gd._config, gd.layout, status_map)
 
-        json_path = gd.build_dir / "_page_status.json"
+        json_path = gd.layout.build_dir / "_page_status.json"
         assert json_path.exists()
         data = json.loads(json_path.read_text(encoding="utf-8"))
         assert data["page_statuses"] == {"user-guide/intro.qmd": "new"}
@@ -255,7 +255,7 @@ class TestGenerateStatusJson:
 
         page_status.write(gd._config, gd.layout, status_map)
 
-        json_path = gd.build_dir / "_page_status.json"
+        json_path = gd.layout.build_dir / "_page_status.json"
         data = json.loads(json_path.read_text(encoding="utf-8"))
         # All built-in statuses should be in definitions
         for key in ("new", "updated", "beta", "deprecated", "experimental"):
@@ -273,12 +273,14 @@ class TestProcessPageStatuses:
 
     def test_with_pages_returns_the_written_data(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.build_dir / "user-guide"
+        ug_dir = gd.layout.build_dir / "user-guide"
         _make_qmd(ug_dir / "intro.qmd", "Intro", status="new")
 
         result = page_status.process(gd._config, gd.layout)
 
-        written = json.loads((gd.build_dir / "_page_status.json").read_text(encoding="utf-8"))
+        written = json.loads(
+            (gd.layout.build_dir / "_page_status.json").read_text(encoding="utf-8")
+        )
         assert written["page_statuses"] == {"user-guide/intro.qmd": "new"}
         assert result == Contribution(
             inline_data=(InlineData("__GD_STATUS_DATA__", written, before="page-status-badges.js"),)
@@ -287,14 +289,14 @@ class TestProcessPageStatuses:
 
 def test_the_page_status_step_records_the_badge_data(tmp_path: Path):
     gd = _bootstrap_project(tmp_path)
-    _make_qmd(gd.build_dir / "user-guide" / "intro.qmd", "Intro", status="new")
+    _make_qmd(gd.layout.build_dir / "user-guide" / "intro.qmd", "Intro", status="new")
     run = make_run(gd)
 
     assert generated.page_statuses(run, gd._config, gd.layout) == "Status badges processed"
 
     [contribution] = run.contributions
     assert [data.name for data in contribution.inline_data] == ["__GD_STATUS_DATA__"]
-    assert not (gd.build_dir / "_quarto.yml").exists()
+    assert not (gd.layout.build_dir / "_quarto.yml").exists()
 
 
 # ── Asset Correctness Tests ─────────────────────────────────────────────────

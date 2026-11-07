@@ -235,7 +235,7 @@ def prepare_build_directory(docs: GreatDocs, run: Run) -> Outcome:
         page_authors=run.page_authors,
         refresh=True,
     )
-    quarto_yml.write(docs.build_dir, run.quarto_config)
+    quarto_yml.write(docs.layout.build_dir, run.quarto_config)
     return outcome
 
 
@@ -254,7 +254,7 @@ def update_quarto_config(docs: GreatDocs, run: Run) -> None:
     -------
     :
     """
-    with _quarto_config_in(docs.build_dir, run):
+    with _quarto_config_in(docs.layout.build_dir, run):
         site.update_quarto_config(run, docs._config, docs.layout, remote=docs._remote)
 
 
@@ -279,10 +279,10 @@ def apply_contributions(docs: GreatDocs, run: Run) -> None:
     """
     if not run.contributions:
         return
-    quarto_config = _seeded_quarto_config(docs.build_dir)
+    quarto_config = _seeded_quarto_config(docs.layout.build_dir)
     for contribution in run.contributions:
         quarto_yml.apply(quarto_config, contribution, docs._config)
-    quarto_yml.write(docs.build_dir, quarto_config)
+    quarto_yml.write(docs.layout.build_dir, quarto_config)
 
 
 def _seeded_quarto_config(build_dir: Path) -> dict[str, Any]:
@@ -327,7 +327,7 @@ def add_api_block(docs: GreatDocs, run: Run) -> None:
     -------
     :
     """
-    with _quarto_config_in(docs.build_dir, run):
+    with _quarto_config_in(docs.layout.build_dir, run):
         reference.add_api_block(run, docs._config, refresh=True)
 
 
@@ -475,7 +475,7 @@ def _preparation_step(docs: GreatDocs, title: str, run: Run) -> Outcome:
     :
         The step's outcome.
     """
-    run.quarto_config = _seeded_quarto_config(docs.build_dir)
+    run.quarto_config = _seeded_quarto_config(docs.layout.build_dir)
     steps = pipeline.preparation_steps(
         run, docs._config, docs.layout, BuildLog(stream=io.StringIO()), remote=docs._remote
     )

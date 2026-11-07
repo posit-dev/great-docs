@@ -105,7 +105,7 @@ def test_python_initialisation_defaults_to_docs(tmp_path: Path) -> None:
     assert not (tmp_path / "docs").exists()
     docs.install(force=True)
     assert (tmp_path / "docs/great-docs.yml").is_file()
-    assert docs.build_dir == tmp_path / "docs/_quarto/default"
+    assert docs.layout.build_dir == tmp_path / "docs/_quarto/default"
 
 
 def test_creation_constructor_does_not_create_directories(tmp_path: Path) -> None:

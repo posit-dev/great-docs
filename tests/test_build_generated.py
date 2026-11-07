@@ -46,7 +46,7 @@ def _cli_project(root: Path, cli_source: str | None = None) -> GreatDocs:
         (package / "__init__.py").write_text('"""actual_module."""\n', encoding="utf-8")
         (package / "cli.py").write_text(cli_source, encoding="utf-8")
     docs = GreatDocs(project_path=str(root))
-    docs.build_dir.mkdir()
+    docs.layout.build_dir.mkdir()
     return docs
 
 
@@ -102,7 +102,9 @@ def test_llms_cli_heading_uses_the_distribution_name(importable: Path):
 
     generated.llms_txt(make_run(docs, api_block=LLMS_API_BLOCK), docs._config, docs.layout)
 
-    assert "## CLI: my-dist" in (docs.build_dir / "llms-full.txt").read_text(encoding="utf-8")
+    assert "## CLI: my-dist" in (docs.layout.build_dir / "llms-full.txt").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_llms_full_is_written_without_cli_when_the_cli_module_fails_to_import(importable: Path):
@@ -113,7 +115,7 @@ def test_llms_full_is_written_without_cli_when_the_cli_module_fails_to_import(im
 
     generated.llms_txt(make_run(docs, api_block=LLMS_API_BLOCK), docs._config, docs.layout)
 
-    assert "## CLI" not in (docs.build_dir / "llms-full.txt").read_text(encoding="utf-8")
+    assert "## CLI" not in (docs.layout.build_dir / "llms-full.txt").read_text(encoding="utf-8")
 
 
 def test_llms_full_is_written_without_cli_when_typer_cannot_convert_the_app(importable: Path):
@@ -129,7 +131,7 @@ def test_llms_full_is_written_without_cli_when_typer_cannot_convert_the_app(impo
 
     generated.llms_txt(make_run(docs, api_block=LLMS_API_BLOCK), docs._config, docs.layout)
 
-    assert "## CLI" not in (docs.build_dir / "llms-full.txt").read_text(encoding="utf-8")
+    assert "## CLI" not in (docs.layout.build_dir / "llms-full.txt").read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(

@@ -861,9 +861,9 @@ def _docs(tmp_path: Path, yaml_text: str = "tags: true\n") -> GreatDocs:
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "test-pkg"\n', encoding="utf-8")
     (tmp_path / "great-docs.yml").write_text(yaml_text, encoding="utf-8")
     docs = GreatDocs(project_path=str(tmp_path))
-    docs.build_dir.mkdir()
-    quarto_yml.write_initial(docs.build_dir)
-    with quarto_yml.edit(docs.build_dir) as quarto_config:
+    docs.layout.build_dir.mkdir()
+    quarto_yml.write_initial(docs.layout.build_dir)
+    with quarto_yml.edit(docs.layout.build_dir) as quarto_config:
         quarto_config["format"]["html"]["include-after-body"] = ["page-tags.js"]
         quarto_config["website"] = {"navbar": {"left": [REFERENCE]}}
     return docs
@@ -873,27 +873,27 @@ class TestTagsStep:
     def test_embeds_the_page_data(self, tmp_path: Path):
         """Embed tag data before its script and preserve the generated configuration header"""
         docs = _docs(tmp_path)
-        _make_qmd(docs.build_dir / "user-guide" / "page.qmd", "Page", tags=["Python"])
+        _make_qmd(docs.layout.build_dir / "user-guide" / "page.qmd", "Page", tags=["Python"])
 
         run = make_run(docs)
         assert generated.tags(run, docs._config, docs.layout) == "Tags processed"
         apply_contributions(docs, run)
 
-        entries = quarto_yml.read(docs.build_dir)["format"]["html"]["include-after-body"]
+        entries = quarto_yml.read(docs.layout.build_dir)["format"]["html"]["include-after-body"]
         assert entries[0]["text"].startswith("<script>window.__GD_TAGS_DATA__=")
         assert entries[1] == "page-tags.js"
-        validate_build_dir(docs.build_dir)
+        validate_build_dir(docs.layout.build_dir)
 
     def test_links_the_index_page_before_reference(self, tmp_path: Path):
         """Insert a translated Tags link before Reference"""
         docs = _docs(tmp_path, "tags: true\nsite:\n  lang: fr\n")
-        _make_qmd(docs.build_dir / "user-guide" / "page.qmd", "Page", tags=["Python"])
+        _make_qmd(docs.layout.build_dir / "user-guide" / "page.qmd", "Page", tags=["Python"])
 
         run = make_run(docs)
         _ = generated.tags(run, docs._config, docs.layout)
         apply_contributions(docs, run)
 
-        left = quarto_yml.read(docs.build_dir)["website"]["navbar"]["left"]
+        left = quarto_yml.read(docs.layout.build_dir)["website"]["navbar"]["left"]
         assert left == [{"text": "Étiquettes", "href": "tags/index.qmd"}, REFERENCE]
 
     def test_skips_without_tagged_pages(self, tmp_path: Path):

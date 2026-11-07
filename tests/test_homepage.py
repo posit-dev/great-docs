@@ -379,7 +379,7 @@ def test_blended_homepage_keeps_front_matter_whose_title_contains_three_dashes(t
     """Preserve the front matter and body when a title contains `---`"""
     _ = (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n', encoding="utf-8")
     docs = GreatDocs(project_path=tmp_path)
-    docs.build_dir.mkdir()
+    docs.layout.build_dir.mkdir()
     content = "---\ntitle: A---B\ndescription: Guide\n---\n\n# A---B\n\nWelcome.\n"
 
     index_qmd = page.write_blended(

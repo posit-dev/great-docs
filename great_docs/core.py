@@ -32,12 +32,8 @@ class GreatDocs:
 
     Attributes
     ----------
-    project_root
-        Absolute path to the project root directory.
     layout
         Resolved package, documentation, build, and deployment paths.
-    build_dir
-        Absolute path to the selected Quarto project directory.
 
     Examples
     --------
@@ -97,8 +93,6 @@ class GreatDocs:
             create=create,
         )
         self._selected_config_path = Path(config_path).resolve() if config_path else None
-        self.project_root = self.layout.package_root
-        self.build_dir = self.layout.build_dir
         self.package_path = Path(resources.files("great_docs"))
         self.assets_path = self.package_path / "assets"
 
@@ -147,8 +141,7 @@ class GreatDocs:
         """
         print("Initializing great-docs...")
 
-        self.layout = Layout.make(self.project_root, self._selected_config_path, create=True)
-        self.build_dir = self.layout.build_dir
+        self.layout = Layout.make(self.layout.package_root, self._selected_config_path, create=True)
 
         project = Project.make(self._config, self.layout)
         write_initial_config(
@@ -448,7 +441,7 @@ class GreatDocs:
 
         return links.check(
             files,
-            self.project_root,
+            self.layout.package_root,
             timeout=timeout,
             ignore_patterns=ignore_patterns or (),
             report=print if verbose else lambda _line: None,
@@ -567,7 +560,7 @@ class GreatDocs:
         try:
             return proofread.check(
                 files,
-                self.project_root,
+                self.layout.package_root,
                 options,
                 report=print if verbose else lambda _line: None,
             )
