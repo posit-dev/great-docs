@@ -1797,9 +1797,9 @@ def test_migrated_shared_asset_is_staged_under_the_build(project: Path) -> None:
     gd = GreatDocs(str(project))
     prepare_build_directory(gd, make_run(gd))
     user_guide_step(gd, discover_user_guide(gd))
-    page = gd.build_dir / "user-guide/start.qmd"
+    page = gd.layout.build_dir / "user-guide/start.qmd"
     assert "![Chart](../_shared/assets/chart.png)" in page.read_text()
-    assert (gd.build_dir / "_shared/assets/chart.png").read_bytes() == b"chart"
+    assert (gd.layout.build_dir / "_shared/assets/chart.png").read_bytes() == b"chart"
 
 
 def test_retained_narrative_links_follow_moved_guides(project: Path) -> None:

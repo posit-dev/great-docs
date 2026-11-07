@@ -221,14 +221,16 @@ def _french_site(tmp_path: Path, settings: str, *left: dict[str, str]) -> GreatD
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
     write_config(tmp_path, f"site:\n  lang: fr\n{settings}")
     docs = GreatDocs(project_path=str(tmp_path))
-    docs.build_dir.mkdir(parents=True)
+    docs.layout.build_dir.mkdir(parents=True)
     website: dict[str, Any] = {"navbar": {"left": [dict(item) for item in left]}, "sidebar": []}
-    quarto_yml.write(docs.build_dir, {"website": website})
+    quarto_yml.write(docs.layout.build_dir, {"website": website})
     return docs
 
 
 def _built_labels(docs: GreatDocs) -> list[str]:
-    return [item["text"] for item in quarto_yml.read(docs.build_dir)["website"]["navbar"]["left"]]
+    return [
+        item["text"] for item in quarto_yml.read(docs.layout.build_dir)["website"]["navbar"]["left"]
+    ]
 
 
 def test_user_guide_link_precedes_the_translated_reference(tmp_path: Path):
@@ -247,7 +249,7 @@ def test_cli_reference_link_is_labelled_in_the_site_language(tmp_path: Path):
     docs = _french_site(tmp_path, "", BLOG)
 
     contribution = cli_render.contribution(docs._config, ["reference/cli/index.qmd"])
-    with quarto_yml.edit(docs.build_dir) as quarto_config:
+    with quarto_yml.edit(docs.layout.build_dir) as quarto_config:
         quarto_yml.apply(quarto_config, contribution, docs._config)
 
     assert _built_labels(docs) == ["Blog", "Référence"]

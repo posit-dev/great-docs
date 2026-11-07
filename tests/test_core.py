@@ -398,7 +398,7 @@ class TestDiscoverMcpServer:
         candidates = _build_mcp_candidates(gd, monkeypatch)
 
         assert candidates == ["mypkgxyz.mcp", "mypkgxyz.mcp_server", "mypkgxyz.server"]
-        assert not (gd.build_dir / "reference" / "mcp").exists()
+        assert not (gd.layout.build_dir / "reference" / "mcp").exists()
 
     def test_build_tries_configured_module_without_package_name(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1558,8 +1558,8 @@ class TestCountPages:
 class TestRobotsWrite:
     def _setup_gd(self, tmp_path, monkeypatch, **config_overrides):
         gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        site_dir = gd.build_dir / "_site"
+        gd.layout.build_dir.mkdir(parents=True, exist_ok=True)
+        site_dir = gd.layout.build_dir / "_site"
         site_dir.mkdir()
         _patch_cfg(monkeypatch, gd, "robots_enabled", True)
         _patch_cfg(monkeypatch, gd, "robots_allow_all", True)
@@ -1580,7 +1580,7 @@ class TestRobotsWrite:
     def test_no_site_dir_skips(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
         _patch_cfg(monkeypatch, gd, "robots_enabled", True)
-        site_dir = gd.build_dir / "_site"
+        site_dir = gd.layout.build_dir / "_site"
         robots.write(site_dir, gd._config, None, report=print)
         assert not (site_dir / "robots.txt").exists()
 
@@ -1640,8 +1640,8 @@ class TestCanonicalIntegration:
 
     def test_raw_custom_page_gets_a_canonical_link(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        (gd.build_dir / "_quarto.yml").write_text(
+        gd.layout.build_dir.mkdir(parents=True, exist_ok=True)
+        (gd.layout.build_dir / "_quarto.yml").write_text(
             "website:\n  sidebar: []\n  navbar:\n    left: []\n", encoding="utf-8"
         )
         _put_on_github(tmp_path)
@@ -1653,7 +1653,7 @@ class TestCanonicalIntegration:
 
         custom_pages_step(gd, discover_user_guide(gd))
 
-        page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
+        page = (gd.layout.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert (
             '<link rel="canonical" href="https://acme.github.io/mypkg/custom/widget.html">' in page
         )
@@ -1664,8 +1664,8 @@ class TestCanonicalIntegration:
             encoding="utf-8",
         )
         gd = GreatDocs(project_path=str(tmp_path))
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        (gd.build_dir / "_quarto.yml").write_text(
+        gd.layout.build_dir.mkdir(parents=True, exist_ok=True)
+        (gd.layout.build_dir / "_quarto.yml").write_text(
             "website:\n  sidebar: []\n  navbar:\n    left: []\n", encoding="utf-8"
         )
         custom = tmp_path / "custom"
@@ -1676,7 +1676,7 @@ class TestCanonicalIntegration:
 
         custom_pages_step(gd, discover_user_guide(gd))
 
-        page = (gd.build_dir / "reference" / "demo.html").read_text(encoding="utf-8")
+        page = (gd.layout.build_dir / "reference" / "demo.html").read_text(encoding="utf-8")
         assert page.count('<script type="application/ld+json">') == 1
         assert '"name": "demo - Pkg"' in page
 
@@ -1686,8 +1686,8 @@ class TestCanonicalIntegration:
             f"module: mypkg\ndisplay_name: Pkg\nseo:\n  enabled: {seo}\n", encoding="utf-8"
         )
         gd = GreatDocs(project_path=str(tmp_path))
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        (gd.build_dir / "_quarto.yml").write_text(
+        gd.layout.build_dir.mkdir(parents=True, exist_ok=True)
+        (gd.layout.build_dir / "_quarto.yml").write_text(
             "website:\n  sidebar: []\n  navbar:\n    left: []\n", encoding="utf-8"
         )
         _put_on_github(tmp_path)
@@ -1700,7 +1700,7 @@ class TestCanonicalIntegration:
 
         custom_pages_step(gd, discover_user_guide(gd))
 
-        page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
+        page = (gd.layout.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert page.count('<meta property="og:title" content="Widget Lab">') == 1
         assert '<meta property="og:site_name" content="Pkg">' in page
         assert (
@@ -1714,8 +1714,8 @@ class TestCanonicalIntegration:
             "module: mypkg\nsite:\n  lang: fr\n", encoding="utf-8"
         )
         gd = GreatDocs(project_path=str(tmp_path))
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        (gd.build_dir / "_quarto.yml").write_text(
+        gd.layout.build_dir.mkdir(parents=True, exist_ok=True)
+        (gd.layout.build_dir / "_quarto.yml").write_text(
             "website:\n  sidebar: []\n  navbar:\n    left: []\n", encoding="utf-8"
         )
         custom = tmp_path / "custom"
@@ -1726,7 +1726,7 @@ class TestCanonicalIntegration:
 
         custom_pages_step(gd, discover_user_guide(gd))
 
-        page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
+        page = (gd.layout.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert page.count('<meta name="gd-i18n"') == 1
 
 
@@ -1737,8 +1737,8 @@ class TestPageDescriptions:
 
     def _gd(self, tmp_path: Path, monkeypatch, *, default: str | None = "Site default"):
         gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        (gd.build_dir / "_quarto.yml").write_text(
+        gd.layout.build_dir.mkdir(parents=True, exist_ok=True)
+        (gd.layout.build_dir / "_quarto.yml").write_text(
             "website:\n  sidebar: []\n  navbar:\n    left: []\n", encoding="utf-8"
         )
         _patch_cfg(monkeypatch, gd, "seo_default_description", default)
@@ -1746,9 +1746,9 @@ class TestPageDescriptions:
 
     def test_pages_get_their_opening_paragraph_or_the_default(self, tmp_path, monkeypatch):
         gd = self._gd(tmp_path, monkeypatch)
-        prose = gd.build_dir / "guide.qmd"
+        prose = gd.layout.build_dir / "guide.qmd"
         prose.write_text(f"---\ntitle: Guide\n---\n\n{self.LONG}\n", encoding="utf-8")
-        code = gd.build_dir / "code.qmd"
+        code = gd.layout.build_dir / "code.qmd"
         code.write_text("```python\nx = 1\n```\n", encoding="utf-8")
 
         freeze_cache_step(gd)
@@ -1760,7 +1760,7 @@ class TestPageDescriptions:
         gd = self._gd(tmp_path, monkeypatch)
         _patch_cfg(monkeypatch, gd, "seo_enabled", False)
         _patch_cfg(monkeypatch, gd, "social_cards_enabled", False)
-        page = gd.build_dir / "guide.qmd"
+        page = gd.layout.build_dir / "guide.qmd"
         page.write_text(f"{self.LONG}\n", encoding="utf-8")
 
         freeze_cache_step(gd)
@@ -1770,7 +1770,7 @@ class TestPageDescriptions:
     def test_versioned_sites_are_described_per_version(self, tmp_path, monkeypatch):
         gd = self._gd(tmp_path, monkeypatch)
         _patch_cfg(monkeypatch, gd, "has_versions", True)
-        page = gd.build_dir / "guide.qmd"
+        page = gd.layout.build_dir / "guide.qmd"
         page.write_text(f"{self.LONG}\n", encoding="utf-8")
 
         freeze_cache_step(gd)
@@ -1780,7 +1780,7 @@ class TestPageDescriptions:
     def test_versioned_sites_are_described_when_watching(self, tmp_path, monkeypatch):
         gd = self._gd(tmp_path, monkeypatch)
         _patch_cfg(monkeypatch, gd, "has_versions", True)
-        page = gd.build_dir / "guide.qmd"
+        page = gd.layout.build_dir / "guide.qmd"
         page.write_text(f"---\nscale-to-fit: [.wide]\n---\n\n{self.LONG}\n", encoding="utf-8")
 
         freeze_cache_step(gd, watch=True)
@@ -1807,7 +1807,7 @@ class TestPageDescriptions:
 
         custom_pages_step(gd, discover_user_guide(gd))
 
-        page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
+        page = (gd.layout.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
         assert page.count('<meta name="description" content="Tom &amp; Jerry">') == 1
 
 
@@ -1847,7 +1847,7 @@ class TestSaveFreezeCache:
 
     def test_keeps_each_historical_cache_apart(self, tmp_path):
         gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        gd.layout.build_dir.mkdir(parents=True, exist_ok=True)
         (_historical_cache(tmp_path, "great-docs-v1") / "page1.json").write_text('{"v": 1}')
         (_historical_cache(tmp_path, "great-docs-v2") / "page1.json").write_text('{"v": 2}')
         removed = tmp_path / "_freeze" / "_versions" / "great-docs-v0"
@@ -1871,7 +1871,7 @@ class TestSaveFreezeCache:
 
     def test_js_newline_appended(self, tmp_path):
         gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        gd.layout.build_dir.mkdir(parents=True, exist_ok=True)
         (_historical_cache(tmp_path, "great-docs-v1") / "chunk.js").write_bytes(b"var x = 1;")
 
         freeze.save(gd.layout)

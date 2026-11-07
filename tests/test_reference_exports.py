@@ -744,7 +744,7 @@ def test_sections_basic():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        docs.layout.build_dir.mkdir(parents=True, exist_ok=True)
 
         categories = empty_categories()
         categories["classes"] = ["Widget"]
@@ -769,7 +769,7 @@ def test_sections_large_class():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        docs.layout.build_dir.mkdir(parents=True, exist_ok=True)
 
         categories = empty_categories()
         categories["classes"] = ["BigClass"]
@@ -806,7 +806,7 @@ def test_sections_all_types():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        docs.layout.build_dir.mkdir(parents=True, exist_ok=True)
 
         categories = empty_categories()
         categories["classes"] = ["MyClass"]

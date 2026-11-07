@@ -78,7 +78,7 @@ def test_build_step_registers_the_output_as_a_resource(tmp_path: Path):
     run = make_run(docs)
     stream = io.StringIO()
     passes.terminal_recordings(run, docs._config, docs.layout, BuildLog(stream=stream))
-    assert (docs.build_dir / "termshow" / "demos" / "demo" / "manifest.json").exists()
+    assert (docs.layout.build_dir / "termshow" / "demos" / "demo" / "manifest.json").exists()
     assert run.quarto_config["project"]["resources"] == ["termshow/**"]
     assert "Pre-rendered 1 terminal recording(s)" in stream.getvalue()
 
@@ -98,7 +98,7 @@ def test_build_step_leaves_out_recordings_that_are_not_documentation(tmp_path):
     passes.terminal_recordings(
         make_run(docs), docs._config, docs.layout, BuildLog(stream=io.StringIO())
     )
-    rendered = docs.build_dir / "termshow"
+    rendered = docs.layout.build_dir / "termshow"
     found = sorted(
         p.parent.relative_to(rendered).as_posix() for p in rendered.rglob("manifest.json")
     )
