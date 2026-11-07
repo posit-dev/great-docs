@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 import tempfile
 import tomllib
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from typing import TYPE_CHECKING
 
 from great_docs import _manifest
 from great_docs._build.steps import USER_CODE_ERRORS
+from great_docs._layout import PACKAGE_DIRS
 from great_docs._manifest import ManifestError
 from great_docs._subprocess import TEXT_MODE_KWARGS
 from great_docs._translations import get_translation
+
+if TYPE_CHECKING:
+    from griffe import Alias, Object
 
 # ---------------------------------------------------------------------------
 # Data models
@@ -505,10 +509,21 @@ def _extract_decorators(obj) -> list[str]:
 
 
 def _symbol_info_for_dotted(pkg, dotted: str) -> SymbolInfo | None:
-    """SymbolInfo for the symbol named `dotted` in `pkg`, or None if absent
+    """
+    Look up API information for a documented symbol
 
-    None means the symbol does not exist in this source — a name component is
-    missing, or an alias cannot be resolved to a real object.
+    Parameters
+    ----------
+    pkg
+        The loaded package.
+    dotted
+        The symbol's dotted name relative to the package.
+
+    Returns
+    -------
+    :
+        The symbol's API information, or `None` if a name component is missing
+        or an alias target is missing or cyclic.
     """
     from griffe import AliasResolutionError, CyclicAliasError
 
@@ -522,9 +537,9 @@ def _symbol_info_for_dotted(pkg, dotted: str) -> SymbolInfo | None:
             return None
         obj = members[part]
 
-    try:
-        kind = obj.kind.value
-    except (AliasResolutionError, CyclicAliasError):
+    # An unresolved alias still reports kind `alias`; accessing its API details would raise.
+    kind = obj.kind.value
+    if kind == "alias":
         return None
 
     return SymbolInfo(
@@ -540,6 +555,40 @@ def _symbol_info_for_dotted(pkg, dotted: str) -> SymbolInfo | None:
     )
 
 
+def _exported_names(pkg: Object | Alias) -> list[str]:
+    """
+    List the names a package exports at its top level
+
+    Use the package's `__all__` as expanded by griffe. If the package imports
+    `__all__`, use the defining module's exports. Fall back to members without
+    a leading underscore when no export names can be read.
+
+    Parameters
+    ----------
+    pkg
+        The loaded package.
+
+    Returns
+    -------
+    :
+        The export names, or public member names when no exports can be read.
+    """
+    from griffe import AliasResolutionError, CyclicAliasError
+
+    exports = pkg.exports
+    all_member = pkg.members.get("__all__")
+    if exports is None and all_member is not None and all_member.is_alias:
+        # An imported `__all__` leaves package exports unset; use its defining module.
+        try:
+            exports = all_member.final_target.module.exports
+        except (AliasResolutionError, CyclicAliasError):
+            exports = None
+
+    # Unexpanded exports remain expressions; only strings can identify snapshot symbols.
+    names = [name for name in exports or [] if isinstance(name, str)]
+    return names or [name for name in pkg.members if not name.startswith("_")]
+
+
 def snapshot_from_griffe(
     package_name: str,
     version: str,
@@ -547,7 +596,9 @@ def snapshot_from_griffe(
     search_paths: list[str] | None = None,
 ) -> ApiSnapshot:
     """
-    Build an API snapshot of a package's public API.
+    Build an API snapshot from documented names or top-level exports
+
+    Skip names that are missing or whose aliases cannot be resolved.
 
     Parameters
     ----------
@@ -556,17 +607,16 @@ def snapshot_from_griffe(
     version
         Version label for this snapshot.
     documented_names
-        Dotted names to capture, including submodule-qualified and method symbols. When `None`,
-        the snapshot holds only the package's top-level public exports.
+        Package-relative dotted names to capture, including submodule and method names.
+        When `None` or empty, capture the package's top-level public exports.
     search_paths
-        Additional paths to search for the package source. When loading a historical version
-        extracted to a temp directory, pass its path here.
+        Additional paths to search for the package source. For a historical version
+        extracted to a temporary directory, include that directory here.
 
     Returns
     -------
-    ApiSnapshot
-        Snapshot keyed by symbol name — dotted names when `documented_names` is given,
-        bare top-level names otherwise.
+    :
+        The snapshot, keyed by the requested dotted names or by top-level export names.
     """
     import griffe
 
@@ -580,55 +630,13 @@ def snapshot_from_griffe(
 
     pkg = griffe.load(normalized, **loader_kwargs)
 
-    if documented_names:
-        symbols: dict[str, SymbolInfo] = {}
-        for dotted in documented_names:
-            info = _symbol_info_for_dotted(pkg, dotted)
-            if info is not None:
-                symbols[dotted] = info
-        return ApiSnapshot(version=version, package_name=normalized, symbols=symbols)
-
-    # Determine public exports
-    exports: list[str] = []
-    if hasattr(pkg, "exports") and pkg.exports is not None:
-        exports = list(pkg.exports)
-    elif "__all__" in pkg.members:
-        all_obj = pkg.members["__all__"]
-        # An `__all__` imported from a missing or cyclic import has kind `alias` and no value
-        if all_obj.kind.value != "alias" and all_obj.value is not None:
-            exports = list(all_obj.value)
-
-    if not exports:
-        # Fallback: public members (no leading underscore)
-        exports = [name for name in pkg.members if not name.startswith("_")]
-
     skip = {"__version__", "__author__", "__email__", "__all__"}
+    names = documented_names or [name for name in _exported_names(pkg) if name not in skip]
     symbols: dict[str, SymbolInfo] = {}
-
-    for name in exports:
-        if name in skip:
-            continue
-        if name not in pkg.members:
-            continue
-
-        obj = pkg.members[name]
-        kind = obj.kind.value  # "class", "function", "module", "attribute"
-        if kind == "alias":
-            # griffe reports this kind for an export whose target is missing or cyclic. Reading
-            # its parameters, decorators or annotation would raise, so it has no API to record
-            continue
-
-        symbols[name] = SymbolInfo(
-            name=name,
-            kind=kind,
-            parameters=_extract_parameters(obj) if kind in ("function", "class") else [],
-            bases=_extract_bases(obj) if kind == "class" else [],
-            decorators=_extract_decorators(obj) if kind in ("function", "class") else [],
-            is_async=getattr(obj, "is_async", False),
-            return_annotation=_annotation_str(
-                getattr(obj, "annotation", None) or getattr(obj, "returns", None)
-            ),
-        )
+    for name in names:
+        info = _symbol_info_for_dotted(pkg, name)
+        if info is not None:
+            symbols[name] = info
 
     return ApiSnapshot(version=version, package_name=normalized, symbols=symbols)
 
@@ -692,66 +700,75 @@ def _extract_package_at_tag(
     project_root: Path,
     tag: str,
     package_name: str,
+    destination: Path,
 ) -> Path | None:
     """
-    Extract the package source at a given git tag into a temp directory.
+    Extract tagged source for a Python package
 
-    Uses `git archive` to avoid modifying the working tree. Returns the temp directory path (caller
-    is responsible for cleanup), or `None` on failure.
+    Search the project root, then its `src`, `python` and `lib` directories as they were at
+    the tag. Use the first directory containing `package_name` and extract only the
+    top-level package that contains it.
+
+    Parameters
+    ----------
+    project_root
+        The project's root directory. Git paths are relative to this directory, which may
+        be a subdirectory of the repository.
+    tag
+        The git tag, branch or commit.
+    package_name
+        The importable module name, which may be dotted, such as `firebird.base`.
+    destination
+        The directory in which to extract the package.
+
+    Returns
+    -------
+    :
+        The directory within `destination` to use as a search path for `package_name`, or
+        `None` if the module is absent at the tag or extraction fails.
     """
-    normalized = package_name.replace("-", "_")
+    parts = package_name.replace("-", "_").split(".")
+    source_dirs = [PurePosixPath(directory) for directory in ("", *PACKAGE_DIRS)]
+    candidates = {source_dir.joinpath(*parts).as_posix(): source_dir for source_dir in source_dirs}
 
-    # Determine the package directory path within the repo
-    # Try common layouts: src/<pkg>, <pkg>/
-    candidates = [normalized, f"src/{normalized}"]
+    try:
+        # git reads these paths relative to its working directory, the project root
+        listing = subprocess.run(
+            ["git", "ls-tree", "--name-only", tag, "--", *candidates],
+            cwd=project_root,
+            capture_output=True,
+            **TEXT_MODE_KWARGS,
+            timeout=10,
+        )
+        if listing.returncode != 0:
+            return None
+        present = set(listing.stdout.splitlines())
+        source_dir = next((candidates[path] for path in candidates if path in present), None)
+        if source_dir is None:
+            return None
 
-    for candidate in candidates:
-        try:
-            # Check if this path exists at that tag
-            check = subprocess.run(
-                ["git", "ls-tree", "--name-only", tag, candidate + "/"],
-                cwd=project_root,
-                capture_output=True,
-                **TEXT_MODE_KWARGS,
-                timeout=10,
-            )
-            if check.returncode != 0 or not check.stdout.strip():
-                continue
+        # Loading a dotted module requires its containing top-level package.
+        archive = subprocess.run(
+            ["git", "archive", tag, (source_dir / parts[0]).as_posix()],
+            cwd=project_root,
+            capture_output=True,
+            timeout=30,
+        )
+        if archive.returncode != 0:
+            return None
+        untar = subprocess.run(
+            ["tar", "xf", "-"],
+            cwd=destination,
+            input=archive.stdout,
+            capture_output=True,
+            timeout=30,
+        )
+        if untar.returncode != 0:
+            return None
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return None
 
-            # Extract the package source via git archive
-            tmp_dir = tempfile.mkdtemp(prefix="gd_api_diff_")
-            result = subprocess.run(
-                ["git", "archive", tag, candidate],
-                cwd=project_root,
-                capture_output=True,
-                timeout=30,
-            )
-            if result.returncode != 0:
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-                continue
-
-            # Untar the archive into the temp directory
-            subprocess.run(
-                ["tar", "xf", "-"],
-                cwd=tmp_dir,
-                input=result.stdout,
-                capture_output=True,
-                timeout=30,
-            )
-
-            # For src-layout, move the package up one level so griffe can find it
-            if candidate.startswith("src/"):
-                src_pkg = Path(tmp_dir) / "src" / normalized
-                dest_pkg = Path(tmp_dir) / normalized
-                if src_pkg.exists():
-                    shutil.move(str(src_pkg), str(dest_pkg))
-
-            return Path(tmp_dir)
-
-        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-            continue
-
-    return None
+    return destination / source_dir
 
 
 def snapshot_at_tag(
@@ -761,35 +778,41 @@ def snapshot_at_tag(
     documented_names: list[str] | None = None,
 ) -> ApiSnapshot | None:
     """
-    Build an API snapshot of a package at a specific git tag.
+    Build an API snapshot from a package's tagged source
+
+    Search the project root, then its `src`, `python` and `lib` directories at the tag.
+    Extract only the top-level package containing `package_name` from the first matching
+    source directory.
 
     Parameters
     ----------
     project_root
-        Root of the git repository.
+        The project's root directory. Git paths are relative to this directory, which may
+        be a subdirectory of the repository.
     tag
-        Git tag name (e.g., `"v1.0.0"`).
+        The git tag name, such as `"v1.0.0"`.
     package_name
-        Python package name.
+        The importable module name, which may be dotted, such as `firebird.base`.
     documented_names
         Dotted names to capture, including submodule-qualified and method symbols. When `None`,
         the snapshot holds only the package's top-level public exports.
 
     Returns
     -------
-    ApiSnapshot | None
-        The snapshot, or None if the tag's source could not be extracted.
+    :
+        The snapshot, or `None` if the package's source is absent at the tag or extraction
+        fails.
     """
-    tmp_dir = _extract_package_at_tag(project_root, tag, package_name)
-    if tmp_dir is None:
-        return None
+    with tempfile.TemporaryDirectory(prefix="gd_api_diff_", ignore_cleanup_errors=True) as tmp:
+        source_dir = _extract_package_at_tag(project_root, tag, package_name, Path(tmp))
+        if source_dir is None:
+            return None
 
-    try:
         snap = snapshot_from_griffe(
             package_name,
             version=tag,
             documented_names=documented_names,
-            search_paths=[str(tmp_dir)],
+            search_paths=[str(source_dir)],
         )
 
         # Attempt CLI introspection from the version-specific source
@@ -797,11 +820,9 @@ def snapshot_at_tag(
 
         cli_module = cli_click.read_module_at_tag(project_root, tag, package_name)
         if cli_module:
-            snap.cli_commands = cli_click.snapshot_from_source(tmp_dir, cli_module)
+            snap.cli_commands = cli_click.snapshot_from_source(source_dir, cli_module)
 
         return snap
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
