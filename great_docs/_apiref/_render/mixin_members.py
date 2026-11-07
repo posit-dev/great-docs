@@ -146,14 +146,7 @@ class __RenderDocMembersMixin(RenderDoc):
         For a module, this will be the objects at the top level that
         are not classes or functions.
         """
-        from .._globals import EXCLUSIONS
-
-        exclude = EXCLUSIONS.attributes.get(self.obj.path, ())
-        if isinstance(exclude, str):
-            exclude = (exclude,)
-        exclude = set(exclude)
-
-        return [x for x in self.doc.members if is_doc_attribute(x) and x.name not in exclude]
+        return [x for x in self.doc.members if is_doc_attribute(x)]
 
     @cached_property
     def classes(self) -> list[DocClass]:
@@ -174,14 +167,7 @@ class __RenderDocMembersMixin(RenderDoc):
                 pass
         ```
         """
-        from .._globals import EXCLUSIONS
-
-        exclude = EXCLUSIONS.classes.get(self.obj.path, ())
-        if isinstance(exclude, str):
-            exclude = (exclude,)
-        exclude = set(exclude)
-
-        return [x for x in self.doc.members if is_doc_class(x) and x.name not in exclude]
+        return [x for x in self.doc.members if is_doc_class(x)]
 
     @cached_property
     def functions(self) -> list[DocFunction]:
@@ -192,28 +178,14 @@ class __RenderDocMembersMixin(RenderDoc):
         For a class, this will be the instance methods, static methods
         and class methods.
         """
-        from .._globals import EXCLUSIONS
-
-        exclude = EXCLUSIONS.functions.get(self.obj.path, ())
-        if isinstance(exclude, str):
-            exclude = (exclude,)
-        exclude = set(exclude)
-
-        return [x for x in self.doc.members if is_doc_function(x) and x.name not in exclude]
+        return [x for x in self.doc.members if is_doc_function(x)]
 
     @cached_property
     def type_aliases(self) -> list[DocTypeAlias]:
         """
         Members that are PEP 695 type aliases
         """
-        from .._globals import EXCLUSIONS
-
-        exclude = EXCLUSIONS.type_aliases.get(self.obj.path, ())
-        if isinstance(exclude, str):
-            exclude = (exclude,)
-        exclude = set(exclude)
-
-        return [x for x in self.doc.members if is_doc_type_alias(x) and x.name not in exclude]
+        return [x for x in self.doc.members if is_doc_type_alias(x)]
 
     @cached_property
     def attribute_member_pages(self) -> list[MemberPage]:
@@ -223,76 +195,32 @@ class __RenderDocMembersMixin(RenderDoc):
         For a module, this will be the objects at the top level that
         are not classes or functions.
         """
-        from .._globals import EXCLUSIONS
-
-        exclude = EXCLUSIONS.attributes.get(self.obj.path, ())
-        if isinstance(exclude, str):
-            exclude = (exclude,)
-        exclude = set(exclude)
-
-        def has_attribute(p: MemberPage) -> bool:
-            obj = p.obj
-            return cast("gf.Object", obj).is_attribute
-
         pages = cast("list[MemberPage]", self.doc.members)
-        return [p for p in pages if has_attribute(p) and p.obj.name not in exclude]
+        return [p for p in pages if p.obj.is_attribute]
 
     @cached_property
     def class_member_pages(self) -> list[MemberPage]:
         """
-        Member pages of classes are classes
+        Member pages of classes
         """
-        from .._globals import EXCLUSIONS
-
-        exclude = EXCLUSIONS.classes.get(self.obj.path, ())
-        if isinstance(exclude, str):
-            exclude = (exclude,)
-        exclude = set(exclude)
-
-        def has_class(p: MemberPage) -> bool:
-            obj = p.obj
-            return cast("gf.Object", obj).is_class
-
         pages = cast("list[MemberPage]", self.doc.members)
-        return [p for p in pages if has_class(p) and p.obj.name not in exclude]
+        return [p for p in pages if p.obj.is_class]
 
     @cached_property
     def function_member_pages(self) -> list[MemberPage]:
         """
         Member pages of functions
         """
-        from .._globals import EXCLUSIONS
-
-        exclude = EXCLUSIONS.functions.get(self.obj.path, ())
-        if isinstance(exclude, str):
-            exclude = (exclude,)
-        exclude = set(exclude)
-
-        def has_function(p: MemberPage) -> bool:
-            obj = p.obj
-            return cast("gf.Object", obj).is_function
-
         pages = cast("list[MemberPage]", self.doc.members)
-        return [p for p in pages if has_function(p) and p.obj.name not in exclude]
+        return [p for p in pages if p.obj.is_function]
 
     @cached_property
     def type_alias_member_pages(self) -> list[MemberPage]:
         """
         Member pages of type aliases
         """
-        from .._globals import EXCLUSIONS
-
-        exclude = EXCLUSIONS.type_aliases.get(self.obj.path, ())
-        if isinstance(exclude, str):
-            exclude = (exclude,)
-        exclude = set(exclude)
-
-        def has_type_alias(p: MemberPage) -> bool:
-            obj = p.obj
-            return cast("gf.Object", obj).is_type_alias
-
         pages = cast("list[MemberPage]", self.doc.members)
-        return [p for p in pages if has_type_alias(p) and p.obj.name not in exclude]
+        return [p for p in pages if p.obj.is_type_alias]
 
     def render_classes(self) -> RenderedMembersGroup | None:
         """

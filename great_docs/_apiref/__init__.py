@@ -5,13 +5,6 @@ from ._render.docclass import RenderDocClass
 from ._render.docfunction import RenderDocFunction
 from ._render.docmodule import RenderDocModule
 from ._render.doctypealias import RenderDocTypeAlias
-from ._render.extending import (
-    exclude_attributes,
-    exclude_classes,
-    exclude_functions,
-    exclude_parameters,
-    exclude_type_aliases,
-)
 from ._render.mixin_call import RenderDocCallMixin
 from ._render.mixin_members import RenderDocMembersMixin
 from ._render.reference_page import RenderReferencePage
@@ -36,11 +29,6 @@ __all__ = (
     "RenderReferencePage",
     "RenderAPIPage",
     "RenderReferenceSection",
-    "exclude_attributes",
-    "exclude_classes",
-    "exclude_functions",
-    "exclude_parameters",
-    "exclude_type_aliases",
     "get_object",
     "APIReference",
     "remove_package_prefix",
