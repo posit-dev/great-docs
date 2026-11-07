@@ -16,6 +16,7 @@ from .. import _manifest
 from .._build import quarto
 from .._build.steps import USER_CODE_ERRORS
 from .._content.walk import find_files
+from .._subprocess import TEXT_MODE_KWARGS
 
 if TYPE_CHECKING:
     from .._layout import Layout
@@ -357,6 +358,8 @@ def _prepare_qmd_for_check(text: str, timeout: int = 30) -> str:
 
     text = "\n".join(result_lines)
 
+    # Quarto's Jupyter engine uses `execute.timeout` to limit how long an idle
+    # kernel daemon stays alive; it does not limit cell execution
     execute_block = f"execute:\n  error: true\n  echo: true\n  timeout: {timeout}"
 
     fm = _FRONTMATTER_RE.match(text)
@@ -463,6 +466,8 @@ def _render_page_with_quarto(
 ) -> PageResult:
     text = qmd_path.read_text(encoding="utf-8")
     prepared = _prepare_qmd_for_check(text, timeout)
+    # Quarto's Jupyter engine has no per-cell time limit. Bound the page's render.
+    render_limit = timeout * len(cells) + 60
 
     # Render in an isolated temp directory so Quarto doesn't detect the real
     # project's _quarto.yml (which would create _freeze/, .gitignore, etc.).
@@ -484,8 +489,8 @@ def _render_page_with_quarto(
                     str(qmd_path.parent),
                 ],
                 capture_output=True,
-                text=True,
-                timeout=timeout * len(cells) + 60,
+                timeout=render_limit,
+                **TEXT_MODE_KWARGS,
                 cwd=tmpdir,
             )
         except subprocess.TimeoutExpired:
@@ -493,9 +498,9 @@ def _render_page_with_quarto(
                 path=page_label,
                 status="error",
                 cells_checked=len(cells),
-                message=f"Quarto render timed out after {timeout * len(cells) + 60}s",
+                message=f"Quarto render timed out after {render_limit}s",
             )
-        except (OSError, UnicodeDecodeError) as e:
+        except OSError as e:
             return PageResult(
                 path=page_label,
                 status="error",
