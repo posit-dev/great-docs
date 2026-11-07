@@ -436,7 +436,7 @@ A generated page contains these sections in order:
 5. **Extended description**: remaining paragraphs, formatted as prose
 6. **Collapsible `--help` output**: the full raw `--help` text, tucked inside a disclosure widget
 7. **Arguments**: if the command takes positional arguments, a definition list with name, type,
-and help text
+and help text. Plain text arguments omit the type label.
 8. **Options**: a definition list with name, type, default, and help text
 9. **Subcommands**: for groups, each subcommand links to its own page
 10. **Examples**: if the help text includes an `Examples:` section

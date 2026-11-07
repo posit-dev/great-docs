@@ -1281,6 +1281,32 @@ class TestExtractArgument:
         assert result["type"] is None
         assert result["required"] is True
 
+    @pytest.mark.parametrize("framework", ["click", "typer"])
+    def test_text_argument_has_no_type(self, framework):
+        if framework == "click":
+            click = pytest.importorskip("click")
+            param = click.Argument(["name"], type=click.STRING)
+        else:
+            pytest.importorskip("typer")
+            import typer
+            from typer.main import get_command
+
+            app = typer.Typer()
+
+            @app.command()
+            def run(name: str): ...
+
+            @app.command()
+            def other(): ...
+
+            param = get_command(app).commands["run"].params[0]
+        assert cli_click.extract_argument(param)["type"] is None
+
+    def test_path_argument_keeps_type(self):
+        click = pytest.importorskip("click")
+        param = click.Argument(["src"], type=click.Path())
+        assert cli_click.extract_argument(param)["type"] == "PATH"
+
     def test_non_text_type_uppercased(self):
         param = MagicMock()
         param.name = "count"
