@@ -143,7 +143,7 @@ Click-based CLIs get rich, sectioned reference pages with usage signatures, type
 
 ### MCP Server Reference
 
-If your package ships an [MCP](https://modelcontextprotocol.io/) server, Great Docs generates structured reference pages for every tool, resource, and prompt it exposes. Parameters, types, required/optional markers, and descriptions are extracted automatically from your server definitions. Both standard MCP and [FastMCP](https://gofastmcp.com/) servers are detected automatically.
+If your package ships an [MCP](https://modelcontextprotocol.io/) server, Great Docs generates structured reference pages for every tool, resource, and prompt it exposes. Parameters, types, required/optional markers, and descriptions are extracted automatically from your server definitions. Great Docs automatically detects `Server` and `MCPServer` instances from the `mcp` package and [FastMCP](https://gofastmcp.com/) servers.
 
 ### Terminal Recordings
 
