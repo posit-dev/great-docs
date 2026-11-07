@@ -6,11 +6,16 @@ import gzip
 import json
 import shutil
 import subprocess
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from great_docs._interlinks.sphinx_inventory import Inventory, InventoryEntry, encode
+from great_docs._website.ai_agents import webmcp_manifest, webmcp_pages
+from great_docs._website.ai_agents.webmcp_manifest import Root, SiteInfo
+from great_docs._website.ai_agents.webmcp_pages import PageFacts, SectionFacts
 from great_docs._website.ai_agents.webmcp_tools import TOOLS
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +26,144 @@ SITE = ROOT / "tests" / "fixtures" / "webmcp_site"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
 
 SETTLE = "await settle();"
+BASE = "https://docs.example.org/"
+SITE_TOOLS = ["get_site_overview", "get_current_page", "list_pages", "get_page", "search_docs"]
+
+_QUARTO_YML = """\
+project:
+  type: website
+website:
+  sidebar:
+    - id: user-guide
+      contents:
+        - user-guide/intro.qmd
+        - user-guide/setup.qmd
+        - section: Publishing
+          contents:
+            - user-guide/02-deploy.qmd
+    - id: reference
+      contents:
+        - reference/index.qmd
+        - section: Classes
+          contents:
+            - reference/Widget.qmd
+            - reference/Widget.spin.qmd
+        - section: CLI
+          contents:
+            - reference/cli/index.qmd
+"""
+
+_PAGES = [
+    ("index.html", {"title": "Example"}),
+    ("notes.html", {"title": "Notes"}),
+    (
+        "user-guide/intro.html",
+        {"title": "Introduction", "description": "What Example does.", "tags": ("basics",)},
+    ),
+    ("user-guide/setup.html", {"title": "Setup"}),
+    (
+        "user-guide/02-deploy.html",
+        {"description": "Publish the docs to GitHub Pages or Netlify.", "status": "new"},
+    ),
+    ("user-guide/internal.html", {"listed": False}),
+    ("blog/index.html", {}),
+    ("blog/launch.html", {"date": "2026-01-02", "tags": ("news",)}),
+    ("blog/setup.html", {"date": "2026-03-01"}),
+]
+
+_HTML_CLASSES = {
+    "reference/index.html": "doc-reference",
+    "reference/Widget.html": "doc-api-page doc-py-api-page",
+    "reference/Widget.spin.html": "doc-api-page doc-py-api-page",
+    "reference/cli/index.html": "doc-cli-api-page",
+}
+
+_API = [
+    ("example.Widget", "class", "reference/Widget.html#example.Widget"),
+    ("example.Widget.spin", "method", "reference/Widget.spin.html#example.Widget.spin"),
+]
+
+
+def _page_facts(path: str, fields: dict[str, Any]) -> PageFacts:
+    values: dict[str, Any] = {
+        "source": path.replace(".html", ".qmd"),
+        "title": None,
+        "description": None,
+        "section": path.split("/")[0] if "/" in path else "",
+        "tags": (),
+        "status": None,
+        "date": None,
+        "draft": False,
+        "webmcp": True,
+        "listed": True,
+    }
+    return PageFacts(path=path, **{**values, **fields})
+
+
+def _build_site(directory: Path) -> Path:
+    """
+    Copy the fixture site and write what a build adds to it, including `gd-webmcp.json`
+
+    Parameters
+    ----------
+    directory
+        An empty directory to build in.
+
+    Returns
+    -------
+    :
+        The site directory.
+    """
+    site_dir = directory / "_site"
+    _ = shutil.copytree(SITE, site_dir)
+    project_dir = directory
+    _ = (project_dir / "_quarto.yml").write_text(_QUARTO_YML, encoding="utf-8")
+    facts = {
+        "schema": 1,
+        "sections": [
+            asdict(SectionFacts("user-guide", "User Guide", "guide")),
+            asdict(SectionFacts("blog", "Blog", "blog")),
+        ],
+        "pages": [asdict(_page_facts(path, fields)) for path, fields in _PAGES],
+    }
+    _ = (project_dir / webmcp_pages.FACTS_FILE).write_text(json.dumps(facts), encoding="utf-8")
+    search = json.loads((site_dir / "search.json").read_text(encoding="utf-8"))
+    for path in {entry["href"].split("#")[0] for entry in search}:
+        html = site_dir / path
+        html.parent.mkdir(parents=True, exist_ok=True)
+        _ = html.write_text(
+            f'<html><body class="{_HTML_CLASSES.get(path, "")}"><main></main></body></html>',
+            encoding="utf-8",
+        )
+    inventory = Inventory(
+        "example",
+        "1.2.0",
+        tuple(InventoryEntry(name, "py", role, 1, uri, name) for name, role, uri in _API),
+    )
+    _ = (site_dir / "objects.inv").write_bytes(encode(inventory))
+    info = SiteInfo(
+        name="example",
+        title="Example",
+        description="A package for examples.",
+        version="1.2.0",
+        repo="https://github.com/acme/example",
+        license="MIT",
+        install=("pip install example",),
+    )
+    warnings: list[str] = []
+    _ = webmcp_manifest.write([Root(site_dir, project_dir, None, BASE)], info, warn=warnings.append)
+    assert warnings == []
+    return site_dir
+
+
+_built: list[Path] = []
+
+
+@pytest.fixture(scope="module", autouse=True)
+def built_site(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    site_dir = _build_site(tmp_path_factory.mktemp("webmcp"))
+    _built[:] = [site_dir]
+    return site_dir
 
 
 def _run(scenario: str = "", **options: Any) -> dict[str, Any]:
@@ -32,14 +175,15 @@ def _run(scenario: str = "", **options: Any) -> dict[str, Any]:
     scenario
         The body of an async function; see `tests/js/webmcp_harness.js`.
     **options
-        The harness options. `siteDir` defaults to the fixture site.
+        The harness options. `siteDir` defaults to the built fixture site.
 
     Returns
     -------
     :
         What the harness observed, with the scenario's return value as `result`.
     """
-    options.setdefault("siteDir", str(SITE))
+    if "siteDir" not in options:
+        options["siteDir"] = str(_built[0])
     completed = subprocess.run(
         ["node", str(HARNESS), str(RUNTIME), json.dumps(options), scenario],
         capture_output=True,
@@ -68,14 +212,14 @@ class TestRegistration:
         observed = _run(SETTLE)
 
         assert observed["status"] == "registered"
-        assert observed["registered"] == ["get_current_page"]
+        assert observed["registered"] == SITE_TOOLS
         assert observed["warnings"] == []
 
     def test_navigator_model_context_is_a_fallback(self):
         observed = _run(SETTLE, modelContext="navigator")
 
         assert observed["status"] == "registered"
-        assert observed["registered"] == ["get_current_page"]
+        assert observed["registered"] == SITE_TOOLS
 
     def test_without_webmcp_the_js_api_still_works(self):
         observed = _run(
@@ -85,7 +229,7 @@ class TestRegistration:
         )
 
         assert observed["status"] == "unavailable"
-        assert observed["result"] == ["unavailable", ["get_current_page"], "markdown"]
+        assert observed["result"] == ["unavailable", SITE_TOOLS, "markdown"]
 
     def test_platform_objects_keep_their_properties(self):
         observed = _run(
@@ -94,15 +238,22 @@ class TestRegistration:
             modelContext="both",
         )
 
-        assert observed["registered"] == ["get_current_page", "site_tool"]
+        assert observed["registered"] == [*SITE_TOOLS, "site_tool"]
         assert observed["platformUnchanged"] is True
 
-    def test_a_refused_tool_leaves_the_status_failed_and_warns_once(self):
-        observed = _run(SETTLE, refuse=["get_current_page"])
+    def test_refused_tools_leave_the_status_failed_and_warn_once_each(self):
+        observed = _run(SETTLE, refuse=SITE_TOOLS)
 
         assert observed["status"] == "failed"
+        assert len(observed["warnings"]) == len(SITE_TOOLS)
+        assert "get_current_page" in observed["warnings"][1]
+
+    def test_a_refused_tool_leaves_the_status_partial(self):
+        observed = _run(SETTLE, refuse=["get_page"])
+
+        assert observed["status"] == "partial"
         assert len(observed["warnings"]) == 1
-        assert "get_current_page" in observed["warnings"][0]
+        assert "get_page" in observed["warnings"][0]
 
     def test_the_status_is_pending_until_registration_settles(self):
         observed = _run("return document.documentElement.getAttribute('data-gd-webmcp');")
@@ -126,7 +277,7 @@ class TestRegistration:
         assert observed["fetched"] == []
 
     def test_excluded_tools_are_not_registered(self):
-        observed = _run(SETTLE, settings={"exclude": ["get_current_page"]})
+        observed = _run(SETTLE, settings={"exclude": SITE_TOOLS})
 
         assert observed["status"] == "off"
         assert observed["registered"] == []
@@ -152,11 +303,13 @@ class TestRegistration:
     def test_registered_tools_carry_title_and_annotations(self):
         observed = _run(f"{SETTLE} return browser.tools.map((t) => [t.title, t.annotations]);")
 
-        assert observed["result"] == [["Get the current page", {"readOnlyHint": True}]]
+        assert observed["result"] == [
+            [tool.title, {"readOnlyHint": True}] for tool in TOOLS if tool.name in SITE_TOOLS
+        ]
 
     def test_the_browser_receives_plain_results(self):
         observed = _run(
-            f"{SETTLE} const tool = browser.tools[0];"
+            f"{SETTLE} const tool = browser.tools.find((t) => t.name === 'get_current_page');"
             " return await tool.execute({format: 'outline'}, {});"
         )
 
@@ -176,15 +329,15 @@ class TestJsApi:
     def test_list_describes_each_tool(self):
         listed = _run("return tools.list();")["result"]
 
-        assert [tool["name"] for tool in listed] == ["get_current_page"]
-        assert set(listed[0]) == {"name", "title", "description", "inputSchema", "annotations"}
-        assert listed[0]["inputSchema"]["properties"]["format"]["enum"] == ["markdown", "outline"]
+        assert [tool["name"] for tool in listed] == SITE_TOOLS
+        assert set(listed[1]) == {"name", "title", "description", "inputSchema", "annotations"}
+        assert listed[1]["inputSchema"]["properties"]["format"]["enum"] == ["markdown", "outline"]
 
     def test_call_reports_an_unknown_tool(self):
         result = _call("get_nothing", {})
 
         assert result["error"]["code"] == "not_found"
-        assert result["error"]["candidates"] == ["get_current_page"]
+        assert result["error"]["candidates"] == SITE_TOOLS
 
     def test_add_registers_a_working_tool(self):
         observed = _run(
@@ -200,7 +353,7 @@ class TestJsApi:
         assert outcome == {"added": ["site.echo"], "rejected": []}
         assert echoed == {"echo": "hi"}
         assert missing["error"]["code"] == "invalid_input"
-        assert names == ["get_current_page", "site.echo"]
+        assert names == [*SITE_TOOLS, "site.echo"]
         assert "site.echo" in observed["registered"]
 
     @pytest.mark.parametrize(
@@ -512,15 +665,443 @@ class TestGetCurrentPage:
     def test_a_cancelled_call_returns_an_error(self):
         observed = _run(
             f"{SETTLE} const controller = new AbortController();"
-            " const pending = browser.tools[0].execute({}, {signal: controller.signal});"
+            " const tool = browser.tools.find((t) => t.name === 'get_current_page');"
+            " const pending = tool.execute({}, {signal: controller.signal});"
             " controller.abort(); return await pending;"
         )
 
         assert observed["result"]["error"]["code"] == "unavailable"
 
 
+def _variant(tmp_path: Path, search: list[dict[str, str]] | None = None) -> Path:
+    """Build the fixture site in `tmp_path`, then replace its search index with `search`"""
+    site_dir = _build_site(tmp_path)
+    if search is not None:
+        _ = (site_dir / "search.json").write_text(json.dumps(search), encoding="utf-8")
+    return site_dir
+
+
+class TestToolDescriptions:
+    @pytest.mark.parametrize("name", SITE_TOOLS)
+    def test_descriptions_say_when_to_use_the_tool(self, name: str):
+        [tool] = [tool for tool in _run("return tools.list();")["result"] if tool["name"] == name]
+
+        description = tool["description"]
+        assert description.startswith("Use this")
+        assert len(description) <= 450
+        assert 'Example: "' in description
+
+    def test_titles_match_the_tool_list(self):
+        listed = _run("return tools.list();")["result"]
+
+        titles = {tool.name: tool.title for tool in TOOLS}
+        assert [tool["title"] for tool in listed] == [titles[tool["name"]] for tool in listed]
+
+
+class TestGetSiteOverview:
+    def test_the_overview_describes_the_package_and_its_sections(self):
+        result = _call("get_site_overview")
+
+        assert {key: result[key] for key in ("name", "version", "install", "license")} == {
+            "name": "example",
+            "version": "1.2.0",
+            "install": ["pip install example"],
+            "license": "MIT",
+        }
+        assert result["url"] == BASE
+        assert result["repo"] == "https://github.com/acme/example"
+        assert result["sections"] == [
+            {"id": "user-guide", "title": "User Guide", "kind": "guide", "pages": 3},
+            {"id": "blog", "title": "Blog", "kind": "blog", "pages": 3},
+            {"id": "reference", "title": "Reference", "kind": "reference", "pages": 4},
+        ]
+        assert result["pages"] == 12
+        assert result["resources"] == {
+            "llms_txt": f"{BASE}llms.txt",
+            "search": f"{BASE}search.json",
+        }
+        assert result["current_page"]["path"] == "user-guide/intro.html"
+
+    def test_the_tools_are_those_registered_with_their_purposes(self):
+        observed = _run(
+            "tools.add({name: 'site.echo', title: 'Echo', description: 'Echo.',"
+            " execute: () => 1});"
+            " return await tools.call('get_site_overview');",
+            settings={"exclude": ["search_docs"]},
+        )
+
+        expected = [
+            {"name": tool.name, "title": tool.title, "purpose": tool.purpose}
+            for tool in TOOLS
+            if tool.name in SITE_TOOLS and tool.name != "search_docs"
+        ]
+        expected.append({"name": "site.echo", "title": "Echo", "purpose": "Echo"})
+        assert observed["result"]["tools"] == expected
+
+    def test_without_the_manifest_the_overview_still_lists_the_tools(self):
+        result = _call("get_site_overview", fetchFails=True)
+
+        assert "could not be loaded" in result["note"]
+        assert [tool["name"] for tool in result["tools"]] == SITE_TOOLS
+        assert "sections" not in result
+
+    def test_the_manifest_is_fetched_once_and_the_search_index_not_at_all(self):
+        observed = _run(
+            "await tools.call('get_site_overview'); await tools.call('list_pages');"
+            " await tools.call('get_page', {page: 'deploy'});"
+        )
+
+        assert observed["fetched"] == [f"{BASE}gd-webmcp.json", f"{BASE}user-guide/02-deploy.md"]
+
+
+class TestListPages:
+    def test_pages_are_grouped_by_section_in_order(self):
+        result = _call("list_pages")
+
+        sections = result["sections"]
+        assert [section["id"] for section in sections] == ["", "user-guide", "blog", "reference"]
+        assert [page["url"] for page in sections[1]["pages"]] == [
+            f"{BASE}user-guide/intro.html",
+            f"{BASE}user-guide/setup.html",
+            f"{BASE}user-guide/02-deploy.html",
+        ]
+
+    def test_entries_carry_their_details(self):
+        result = _call("list_pages", {"section": "user-guide"})
+
+        assert result["sections"][0]["pages"][2] == {
+            "title": "Deploying the site",
+            "url": f"{BASE}user-guide/02-deploy.html",
+            "description": "Publish the docs to GitHub Pages or Netlify.",
+            "kind": "guide",
+            "group": "Publishing",
+            "status": "new",
+        }
+
+    def test_blog_posts_come_newest_first(self):
+        result = _call("list_pages", {"section": "blog"})
+
+        pages = result["sections"][0]["pages"]
+        assert [(page["title"], page.get("date")) for page in pages] == [
+            ("Blog", None),
+            ("Setup", "2026-03-01"),
+            ("Launch day", "2026-01-02"),
+        ]
+
+    @pytest.mark.parametrize("section", ["reference", "REFERENCE", "Reference"])
+    def test_a_section_is_named_by_id_or_title(self, section: str):
+        result = _call("list_pages", {"section": section})
+
+        assert [section["id"] for section in result["sections"]] == ["reference"]
+
+    def test_an_unknown_section_lists_the_sections(self):
+        result = _call("list_pages", {"section": "recipes"})
+
+        assert result["error"]["code"] == "not_found"
+        assert [item["id"] for item in result["error"]["candidates"]] == [
+            "user-guide",
+            "blog",
+            "reference",
+        ]
+
+    def test_a_failed_fetch_points_to_other_files(self):
+        result = _call("list_pages", fetchFails=True)
+
+        assert result["error"]["code"] == "fetch_failed"
+        assert result["error"]["fallback"] == [
+            f"{BASE}llms.txt",
+            f"{BASE}llms-full.txt",
+            f"{BASE}search.json",
+        ]
+
+
+class TestGetPage:
+    @pytest.mark.parametrize(
+        ("page", "path", "match"),
+        [
+            ("user-guide/02-deploy.html", "user-guide/02-deploy.html", "path"),
+            ("/user-guide/02-deploy", "user-guide/02-deploy.html", "path"),
+            ("user-guide/02-deploy.md", "user-guide/02-deploy.html", "path"),
+            (f"{BASE}user-guide/02-deploy.html", "user-guide/02-deploy.html", "path"),
+            ("reference/cli/", "reference/cli/index.html", "path"),
+            ("reference/cli", "reference/cli/index.html", "path"),
+            ("example.Widget.spin", "reference/Widget.spin.html", "api"),
+            ("Widget", "reference/Widget.html", "api"),
+            ("deploying the SITE", "user-guide/02-deploy.html", "title"),
+            ("02-deploy", "user-guide/02-deploy.html", "name"),
+            ("deploy", "user-guide/02-deploy.html", "name"),
+            ("netlify publishing", "user-guide/02-deploy.html", "words"),
+            ("deployment", "user-guide/02-deploy.html", "words"),
+        ],
+    )
+    def test_a_page_is_found_by_path_api_name_title_file_name_or_words(
+        self, page: str, path: str, match: str
+    ):
+        result = _call("get_page", {"page": page})
+
+        assert (result["path"], result["match"]) == (path, match)
+        assert result["url"] == BASE + path
+        assert result["markdown"] == (SITE / path.replace(".html", ".md")).read_text(
+            encoding="utf-8"
+        )
+        assert result["truncated"] is False
+
+    def test_a_shared_title_is_ambiguous(self):
+        result = _call("get_page", {"page": "Setup"})
+
+        assert result["error"]["code"] == "ambiguous"
+        assert [item["url"] for item in result["error"]["candidates"]] == [
+            f"{BASE}user-guide/setup.html",
+            f"{BASE}blog/setup.html",
+        ]
+
+    def test_close_word_matches_are_ambiguous(self):
+        result = _call("get_page", {"page": "widget class"})
+
+        assert result["error"]["code"] == "ambiguous"
+        assert [item["title"] for item in result["error"]["candidates"]] == [
+            "Widget",
+            "Widget.spin",
+        ]
+
+    @pytest.mark.parametrize("page", ["nothing like it", "https://elsewhere.org/intro.html"])
+    def test_an_unknown_page_is_not_found(self, page: str):
+        result = _call("get_page", {"page": page})
+
+        assert result["error"]["code"] == "not_found"
+        assert result["error"]["hint"]
+
+    @pytest.mark.parametrize(
+        "section", ["github-pages", "#github-pages", "GitHub Pages", "github pages"]
+    )
+    def test_a_section_is_named_by_anchor_or_heading(self, section: str):
+        result = _call("get_page", {"page": "deploy", "section": section})
+
+        assert result["url"] == f"{BASE}user-guide/02-deploy.html#github-pages"
+        assert result["section"] == {"level": 2, "text": "GitHub Pages", "anchor": "github-pages"}
+        # The section runs to the next heading of its level, past a `#` line in a code block.
+        assert result["markdown"] == (
+            "## GitHub Pages {#github-pages}\n\n"
+            "Push to the `gh-pages` branch, or let the workflow deploy it:\n\n"
+            "```yaml\n# deploy on every push\non: push\n```\n\n"
+            "### Custom domains\n\nAdd a `CNAME` file.\n"
+        )
+
+    def test_an_anchor_of_the_rendered_page_names_its_section(self):
+        result = _call("get_page", {"page": "Widget", "section": "#widget-params"})
+
+        assert result["url"] == f"{BASE}reference/Widget.html#widget-params"
+        assert result["markdown"] == "## Parameters\n\nspeed\n: How fast the widget spins.\n"
+
+    def test_the_anchor_of_a_page_url_names_the_section(self):
+        result = _call("get_page", {"page": f"{BASE}user-guide/02-deploy.html#netlify"})
+
+        assert result["section"]["text"] == "Netlify"
+
+    def test_a_page_url_anchor_that_names_no_section_is_ignored(self):
+        result = _call("get_page", {"page": "user-guide/02-deploy.html#gone"})
+
+        assert "section" not in result
+        assert result["markdown"].startswith("# Deploying the site")
+
+    def test_a_repeated_heading_is_ambiguous(self):
+        result = _call("get_page", {"page": "intro", "section": "Getting started"})
+
+        assert result["error"]["code"] == "ambiguous"
+        assert [item["anchor"] for item in result["error"]["candidates"]] == [
+            "getting-started",
+            "getting-started-1",
+        ]
+
+    def test_an_unknown_section_lists_the_outline(self):
+        result = _call("get_page", {"page": "intro", "section": "Nowhere"})
+
+        assert result["error"]["code"] == "not_found"
+        assert [item["text"] for item in result["error"]["candidates"]] == [
+            "Introduction",
+            "Getting started",
+            "Options",
+            "The level option",
+            "Getting started",
+        ]
+
+    def test_a_long_page_is_truncated_with_its_outline(self):
+        result = _call("get_page", {"page": "intro", "max_chars": 500})
+
+        assert result["truncated"] is True
+        assert len(result["markdown"]) <= 500
+        assert result["total_chars"] > 500
+        assert [item["anchor"] for item in result["outline"]][-1] == "getting-started-1"
+
+    def test_a_page_without_a_markdown_copy_is_unavailable(self):
+        result = _call("get_page", {"page": "notes"})
+
+        assert result["error"] == {
+            "code": "unavailable",
+            "message": "notes.html has no Markdown copy.",
+            "url": f"{BASE}notes.html",
+        }
+
+    def test_a_missing_markdown_copy_points_to_other_files(self, tmp_path: Path):
+        site_dir = _variant(tmp_path)
+        (site_dir / "user-guide" / "setup.md").unlink()
+
+        result = _call("get_page", {"page": "user-guide/setup.html"}, siteDir=str(site_dir))
+
+        assert result["error"]["code"] == "fetch_failed"
+        assert "user-guide/setup.md" in result["error"]["message"]
+        assert len(result["error"]["fallback"]) == 3
+
+    def test_a_missing_manifest_points_to_other_files(self):
+        result = _call("get_page", {"page": "intro"}, fetchFails=True)
+
+        assert result["error"]["code"] == "fetch_failed"
+        assert f"{BASE}llms.txt" in result["error"]["fallback"]
+
+
+def _entry(href: str, title: str, section: str = "", text: str = "") -> dict[str, str]:
+    return {"href": href, "title": title, "section": section, "text": text}
+
+
+class TestSearchDocs:
+    def test_a_question_finds_the_section_that_answers_it(self):
+        result = _call("search_docs", {"query": "How do I deploy to GitHub Pages?"})
+
+        first = result["results"][0]
+        assert first == {
+            "title": "Deploying the site",
+            "section": "GitHub Pages",
+            "url": f"{BASE}user-guide/02-deploy.html#github-pages",
+            "kind": "guide",
+            "score": first["score"],
+            "excerpt": "Push to the gh-pages branch, or let the workflow deploy it to GitHub Pages.",
+        }
+        assert isinstance(first["score"], (int, float))
+
+    def test_pages_left_out_of_the_manifest_are_not_searched(self):
+        result = _call("search_docs", {"query": "secrets"})
+
+        assert result["results"] == []
+        assert result["hint"]
+
+    def test_title_beats_heading_beats_text(self, tmp_path: Path):
+        site_dir = _variant(
+            tmp_path,
+            [
+                _entry("blog/launch.html", "Launch day", text="A gizmo appears."),
+                _entry("user-guide/setup.html#gizmos", "Setup", "Gizmo", "Text."),
+                _entry("notes.html", "Gizmo", text="Notes."),
+            ],
+        )
+
+        result = _call("search_docs", {"query": "gizmo"}, siteDir=str(site_dir))
+
+        assert [hit["url"] for hit in result["results"]] == [
+            f"{BASE}notes.html",
+            f"{BASE}user-guide/setup.html#gizmos",
+            f"{BASE}blog/launch.html",
+        ]
+        assert [hit["score"] for hit in result["results"]] == [13, 8, 4]
+
+    def test_a_page_gives_at_most_two_matches(self, tmp_path: Path):
+        site_dir = _variant(
+            tmp_path,
+            [_entry(f"user-guide/setup.html#s{n}", "Setup", "Gizmo") for n in range(4)]
+            + [_entry("notes.html", "Notes", text="gizmo")],
+        )
+
+        result = _call("search_docs", {"query": "gizmo"}, siteDir=str(site_dir))
+
+        assert [hit["url"] for hit in result["results"]] == [
+            f"{BASE}user-guide/setup.html#s0",
+            f"{BASE}user-guide/setup.html#s1",
+            f"{BASE}notes.html",
+        ]
+
+    def test_an_api_name_finds_its_page_first(self):
+        result = _call("search_docs", {"query": "Widget.spin"})
+
+        assert result["results"][0]["url"] == f"{BASE}reference/Widget.spin.html"
+        assert result["results"][0]["kind"] == "api"
+
+    @pytest.mark.parametrize(
+        ("scope", "urls"),
+        [
+            ("blog", [f"{BASE}blog/launch.html"]),
+            ("post", [f"{BASE}blog/launch.html"]),
+            ("user-guide", [f"{BASE}user-guide/02-deploy.html#github-pages"]),
+            ("User Guide", [f"{BASE}user-guide/02-deploy.html#github-pages"]),
+        ],
+    )
+    def test_a_scope_keeps_a_kind_of_page_or_a_section(self, scope: str, urls: list[str]):
+        result = _call("search_docs", {"query": "deploy", "scope": scope, "limit": 1})
+
+        assert [hit["url"] for hit in result["results"]] == urls
+
+    def test_an_unknown_scope_lists_the_scopes(self):
+        result = _call("search_docs", {"query": "deploy", "scope": "recipes"})
+
+        assert result["error"]["code"] == "not_found"
+        assert result["error"]["candidates"][0] == "all"
+        assert {"guide", "api", "cli", "blog", "user-guide"} <= set(result["error"]["candidates"])
+
+    @pytest.mark.parametrize("limit", [0, 26])
+    def test_the_limit_is_bounded(self, limit: int):
+        result = _call("search_docs", {"query": "deploy", "limit": limit})
+
+        assert result["error"]["code"] == "invalid_input"
+
+    def test_a_query_without_words_is_invalid(self):
+        result = _call("search_docs", {"query": "?!"})
+
+        assert result["error"]["code"] == "invalid_input"
+
+    def test_html_entities_in_the_index_are_decoded(self):
+        result = _call("search_docs", {"query": "launched", "limit": 1})
+
+        assert result["results"][0]["excerpt"] == (
+            "We launched Example. Deploy it today & tell a friend."
+        )
+
+    def test_a_missing_index_points_to_other_files(self, tmp_path: Path):
+        site_dir = _variant(tmp_path)
+        (site_dir / "search.json").unlink()
+
+        result = _call("search_docs", {"query": "deploy"}, siteDir=str(site_dir))
+
+        assert result["error"]["code"] == "fetch_failed"
+        assert result["error"]["fallback"] == [f"{BASE}llms.txt", f"{BASE}llms-full.txt"]
+
+
+class TestWords:
+    def test_identifiers_are_kept_whole_and_split(self):
+        assert _internal("internals.tokenize('Use GT.fmt_number() here')") == [
+            "use",
+            "gt.fmt_number",
+            "gt",
+            "fmt_number",
+            "fmt",
+            "number",
+            "here",
+        ]
+
+    def test_queries_drop_common_words_unless_they_have_only_those(self):
+        assert _internal("internals.queryWords('How do I install it?')") == ["install"]
+        assert _internal("internals.queryWords('how to')") == ["how", "to"]
+
+    def test_excerpts_are_cut_between_words(self):
+        text = " ".join(f"word{n}" for n in range(200))
+
+        excerpt = _internal(f"internals.excerpt({json.dumps(text)}, {text.index('word100')})")
+
+        assert excerpt.startswith("…word") and excerpt.endswith("…")
+        assert "word100" in excerpt
+        assert len(excerpt) <= 242
+        assert excerpt[1:-1] in text
+
+
 def test_the_runtime_stays_small():
     raw = RUNTIME.read_bytes()
 
-    assert len(raw) <= 40 * 1024
-    assert len(gzip.compress(raw)) <= 12 * 1024
+    assert len(raw) <= 80 * 1024
+    assert len(gzip.compress(raw)) <= 20 * 1024

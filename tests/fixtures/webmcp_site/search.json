@@ -1,0 +1,162 @@
+[
+ {
+  "objectID": "index.html",
+  "href": "index.html",
+  "title": "Example",
+  "section": "",
+  "text": "A package for examples.",
+  "crumbs": []
+ },
+ {
+  "objectID": "index.html#install",
+  "href": "index.html#install",
+  "title": "Example",
+  "section": "Install",
+  "text": "Install\npip install example",
+  "crumbs": []
+ },
+ {
+  "objectID": "user-guide/intro.html",
+  "href": "user-guide/intro.html",
+  "title": "Introduction",
+  "section": "",
+  "text": "Example turns data into examples.",
+  "crumbs": []
+ },
+ {
+  "objectID": "user-guide/intro.html#getting-started",
+  "href": "user-guide/intro.html#getting-started",
+  "title": "Introduction",
+  "section": "Getting started",
+  "text": "Getting started\nInstall the package, then import it: import example",
+  "crumbs": []
+ },
+ {
+  "objectID": "user-guide/intro.html#sec-options",
+  "href": "user-guide/intro.html#sec-options",
+  "title": "Introduction",
+  "section": "Options",
+  "text": "Options\nOptions are set with example.configure(). Each option has a default, so a call names only the options it changes.",
+  "crumbs": []
+ },
+ {
+  "objectID": "user-guide/02-deploy.html",
+  "href": "user-guide/02-deploy.html",
+  "title": "Deploying the site",
+  "section": "",
+  "text": "Build the site, then publish the _site directory.",
+  "crumbs": []
+ },
+ {
+  "objectID": "user-guide/02-deploy.html#github-pages",
+  "href": "user-guide/02-deploy.html#github-pages",
+  "title": "Deploying the site",
+  "section": "GitHub Pages",
+  "text": "GitHub Pages\nPush to the gh-pages branch, or let the workflow deploy it to GitHub Pages.",
+  "crumbs": []
+ },
+ {
+  "objectID": "user-guide/02-deploy.html#custom-domains",
+  "href": "user-guide/02-deploy.html#custom-domains",
+  "title": "Deploying the site",
+  "section": "Custom domains",
+  "text": "Custom domains\nAdd a CNAME file.",
+  "crumbs": []
+ },
+ {
+  "objectID": "user-guide/02-deploy.html#netlify",
+  "href": "user-guide/02-deploy.html#netlify",
+  "title": "Deploying the site",
+  "section": "Netlify",
+  "text": "Netlify\nDrag the _site folder onto Netlify to deploy.",
+  "crumbs": []
+ },
+ {
+  "objectID": "user-guide/setup.html",
+  "href": "user-guide/setup.html",
+  "title": "Setup",
+  "section": "",
+  "text": "Configure the package before first use.",
+  "crumbs": []
+ },
+ {
+  "objectID": "user-guide/internal.html",
+  "href": "user-guide/internal.html",
+  "title": "Internal notes",
+  "section": "",
+  "text": "Deploy secrets to GitHub Pages live here.",
+  "crumbs": []
+ },
+ {
+  "objectID": "blog/index.html",
+  "href": "blog/index.html",
+  "title": "Blog",
+  "section": "",
+  "text": "",
+  "crumbs": []
+ },
+ {
+  "objectID": "blog/launch.html",
+  "href": "blog/launch.html",
+  "title": "Launch day",
+  "section": "",
+  "text": "We launched Example. Deploy it today &amp; tell a friend.",
+  "crumbs": []
+ },
+ {
+  "objectID": "blog/setup.html",
+  "href": "blog/setup.html",
+  "title": "Setup",
+  "section": "",
+  "text": "How we set up our own docs.",
+  "crumbs": []
+ },
+ {
+  "objectID": "notes.html",
+  "href": "notes.html",
+  "title": "Notes",
+  "section": "",
+  "text": "Notes about examples.",
+  "crumbs": []
+ },
+ {
+  "objectID": "reference/index.html",
+  "href": "reference/index.html",
+  "title": "Reference",
+  "section": "",
+  "text": "Widget Widget.spin",
+  "crumbs": []
+ },
+ {
+  "objectID": "reference/Widget.html",
+  "href": "reference/Widget.html",
+  "title": "Widget",
+  "section": "",
+  "text": "A widget that spins. Widget(speed=1)",
+  "crumbs": []
+ },
+ {
+  "objectID": "reference/Widget.html#widget-params",
+  "href": "reference/Widget.html#widget-params",
+  "title": "Widget",
+  "section": "Parameters",
+  "text": "Parameters\nspeed: how fast the widget spins.",
+  "crumbs": []
+ },
+ {
+  "objectID": "reference/Widget.spin.html",
+  "href": "reference/Widget.spin.html",
+  "title": "Widget.spin",
+  "section": "",
+  "text": "Spin the widget. Widget.spin(times=1)",
+  "crumbs": []
+ },
+ {
+  "objectID": "reference/cli/index.html",
+  "href": "reference/cli/index.html",
+  "title": "example",
+  "section": "",
+  "text": "Usage: example [OPTIONS] COMMAND",
+  "crumbs": []
+ }
+]
