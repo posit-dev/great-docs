@@ -2125,7 +2125,7 @@ def test_the_assets_step_adds_the_recorded_contributions_before_ordering_the_nav
             "great-docs.yml": "navbar_order: [Changelog]\n",
         },
     )
-    run = make_run(docs, quarto_config=write_initial_quarto_yml(docs.build_dir))
+    run = make_run(docs, quarto_config=write_initial_quarto_yml(docs.layout.build_dir))
     run.contributions.extend(
         [
             Contribution(navbar=(NavbarLink("Examples", "ex.qmd"),)),
