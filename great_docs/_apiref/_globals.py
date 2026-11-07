@@ -1,36 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass, field
-
 from great_docs._translations import get_translation
 
 from ._settings import Settings
-
-# Parent object's path (as shown on the API page) -> the member, or members,
-# of that object to leave out of the generated documentation.
-ExclusionMap = dict[str, str | Sequence[str]]
-
-
-@dataclass
-class Exclusions:
-    """Members left out of the generated documentation
-
-    Each mapping is keyed by a parent object's path (as shown on the API
-    page); the value names the member — or members — of that object to
-    leave out: parameters of a callable, or attributes, functions, classes,
-    and type aliases of a class or module.
-    """
-
-    parameters: ExclusionMap = field(default_factory=ExclusionMap)
-    attributes: ExclusionMap = field(default_factory=ExclusionMap)
-    functions: ExclusionMap = field(default_factory=ExclusionMap)
-    classes: ExclusionMap = field(default_factory=ExclusionMap)
-    type_aliases: ExclusionMap = field(default_factory=ExclusionMap)
-
-
-EXCLUSIONS = Exclusions()
-
 
 SETTINGS = Settings()
 """The settings of the build in progress, for the render classes to read"""

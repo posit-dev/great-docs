@@ -95,15 +95,8 @@ class __RenderDocCallMixin(RenderDoc):
         """
         The parameters of the callable
         """
-        from .._globals import EXCLUSIONS
-
         obj = self.obj
         parameters = obj.parameters
-
-        exclude = EXCLUSIONS.parameters.get(self.obj.path, ())
-        if isinstance(exclude, str):
-            exclude = (exclude,)
-        exclude = set(exclude)
 
         if not len(parameters) > 0 or not obj.parent:
             return parameters
@@ -115,9 +108,6 @@ class __RenderDocCallMixin(RenderDoc):
 
         if omit_first_parameter:
             parameters = gf.Parameters(*list(parameters)[1:])
-
-        if exclude:
-            parameters = gf.Parameters(*[p for p in parameters if p.name not in exclude])
 
         return parameters
 
