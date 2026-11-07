@@ -11,7 +11,7 @@ import html
 from typing import TYPE_CHECKING, Any, cast
 
 from ..._manifest import Manifest
-from ..._translations import get_translation
+from ..._translations import translate
 from ..spdx import get_license_info
 
 if TYPE_CHECKING:
@@ -129,13 +129,13 @@ def _links(config: Config, metadata: Manifest, package_name: str | None, lang: s
         else:
             pypi_url = f"https://pypi.org/project/{package_name}/" if package_name else None
         if pypi_url:
-            label = get_translation("view_on_pypi", lang)
+            label = translate("view_on_pypi", lang)
             items.append(f'<a href="{html.escape(pypi_url)}">{label}{_EXTERNAL_ARROW}</a><br>')
 
     labels = {
         "homepage": None,
-        "repository": get_translation("browse_source_code", lang),
-        "bug_tracker": get_translation("report_a_bug", lang),
+        "repository": translate("browse_source_code", lang),
+        "bug_tracker": translate("report_a_bug", lang),
         "documentation": None,
     }
     urls: Mapping[str, str] = metadata.get("urls") or {}
@@ -149,7 +149,7 @@ def _links(config: Config, metadata: Manifest, package_name: str | None, lang: s
 
     if not items:
         return []
-    return [f"#### {get_translation('links', lang)}\n", *items]
+    return [f"#### {translate('links', lang)}\n", *items]
 
 
 def _ai_agents(
@@ -208,7 +208,7 @@ def _ai_agents(
 
     if not items:
         return []
-    return [f"\n#### {get_translation('ai_agents', lang)}\n", *items]
+    return [f"\n#### {translate('ai_agents', lang)}\n", *items]
 
 
 def _developers(config: Config, metadata: Manifest, lang: str) -> list[str]:
@@ -255,7 +255,7 @@ def _developers(config: Config, metadata: Manifest, lang: str) -> list[str]:
         cards.append(_funder_card(funding))
 
     return [
-        f"\n#### {get_translation('developers', lang)}\n",
+        f"\n#### {translate('developers', lang)}\n",
         *(
             f"<div>{card}</div>" if index == 0 else f'<div style="padding-top: 10px;">{card}</div>'
             for index, card in enumerate(cards)
@@ -430,12 +430,11 @@ def _community(
         The heading and one line per link, or no lines if there are no links.
     """
     items = [
-        f"[{get_translation(page.label_key, lang)}]({page.filename})<br>"
-        for page in community_pages
+        f"[{translate(page.label_key, lang)}]({page.filename})<br>" for page in community_pages
     ]
 
     if (build_dir / "license.qmd").exists():
-        full_licence = get_translation("full_license", lang)
+        full_licence = translate("full_license", lang)
         licence_id: str = metadata.get("license", "")
         info = get_license_info(licence_id) if licence_id else None
         if info is not None:
@@ -448,12 +447,12 @@ def _community(
             items.append(f"[{full_licence}](license.qmd)<br>")
 
     if (build_dir / "citation.qmd").exists():
-        citing = get_translation("citing", lang)
+        citing = translate("citing", lang)
         items.append(f"[{citing} {package_name or 'this package'}](citation.qmd)<br>")
 
     if not items:
         return []
-    return [f"\n#### {get_translation('community', lang)}\n", *items]
+    return [f"\n#### {translate('community', lang)}\n", *items]
 
 
 def _meta(config: Config, build_dir: Path, metadata: Manifest, lang: str) -> list[str]:
@@ -478,19 +477,19 @@ def _meta(config: Config, build_dir: Path, metadata: Manifest, lang: str) -> lis
     """
     items: list[str] = []
     if config.is_python_project and metadata.get("requires_python"):
-        requires = get_translation("requires_python", lang)
+        requires = translate("requires_python", lang)
         items.append(f"**{requires}:** Python `{metadata['requires_python']}`")
 
     if config.is_python_project and (extras := list(metadata.get("optional_dependencies") or {})):
-        provides = get_translation("provides_extra", lang)
+        provides = translate("provides_extra", lang)
         items.append(f"**{provides}:** " + ", ".join(f"`{extra}`" for extra in extras))
 
     if config.tags_enabled and config.tags_index_page:
-        items.append(f"[{get_translation('site_tags', lang)}](tags/index.html)")
+        items.append(f"[{translate('site_tags', lang)}](tags/index.html)")
 
     if (build_dir / "package-info.qmd").exists():
-        items.append(f"[{get_translation('package_info', lang)}](package-info.html)")
+        items.append(f"[{translate('package_info', lang)}](package-info.html)")
 
     if not items:
         return []
-    return [f"\n#### {get_translation('meta', lang)}\n", "<br>\n".join(items)]
+    return [f"\n#### {translate('meta', lang)}\n", "<br>\n".join(items)]

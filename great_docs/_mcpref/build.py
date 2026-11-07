@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from .._contribution import Contribution, Sidebar, SidebarItem
-from .._translations import get_translation
+from .._translations import translate
 from ..config import Config
 from . import reference
 
@@ -120,7 +120,7 @@ def contribution(config: Config, items: Sequence[SidebarItem]) -> Contribution:
         Its first entry links to the index page. The link is labelled "MCP Index" on
         an English site and uses the sidebar's title otherwise.
     """
-    title = get_translation("mcp_reference", config.lang)
+    title = translate("mcp_reference", config.lang)
     index_label = "MCP Index" if config.lang == "en" else title
     index: SidebarItem = {"text": index_label, "href": "reference/mcp/index.qmd"}
     return Contribution(

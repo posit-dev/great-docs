@@ -1,6 +1,5 @@
 import pytest
 
-from great_docs._apiref._globals import SETTINGS
 from great_docs._apiref._render._tables import pipe_table, summary_table
 
 
@@ -30,7 +29,7 @@ def test_pipe_table_escapes_pipes_outside_code_spans():
 def test_summary_table_keeps_markdown_links_and_its_class():
     """Leave name links as Markdown and mark the table for the summary styles"""
     link = "[get()](reference/Config.qmd#get){.doc-function .doc-label .doc-label-method}"
-    table = summary_table([(link, "Get a value."), ("[x](#x)", None)])
+    table = summary_table([(link, "Get a value."), ("[x](#x)", None)], "en")
     lines = table.splitlines()
     assert lines[2] == f"| {link} | Get a value. |"
     assert lines[3] == "| [x](#x) |  |"
@@ -41,9 +40,6 @@ def test_summary_table_keeps_markdown_links_and_its_class():
 @pytest.mark.parametrize(
     ("lang", "header"), [("en", "| Name | Description |"), ("fr", "| Nom | Description |")]
 )
-def test_summary_table_headers_follow_the_site_language(
-    monkeypatch: pytest.MonkeyPatch, lang: str, header: str
-):
+def test_summary_table_headers_follow_the_site_language(lang: str, header: str):
     """Translate the column headers, which the Markdown companion shows"""
-    monkeypatch.setattr(SETTINGS, "lang", lang)
-    assert summary_table([("[x](#x)", "y")]).splitlines()[0] == header
+    assert summary_table([("[x](#x)", "y")], lang).splitlines()[0] == header

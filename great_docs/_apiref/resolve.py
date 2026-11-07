@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import contextmanager
+from contextvars import ContextVar
 from enum import Enum
 from functools import partial
 from textwrap import indent
@@ -10,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Callable, cast
 import griffe as gf
 from yaml12 import format_yaml
 
+from great_docs._translations import DEFAULT_LANGUAGE
 from great_docs.hooks._docstring_parsed import emit_docstring_parsed
 from great_docs.hooks._object_resolved import emit_object_resolved
 
@@ -54,6 +56,12 @@ if TYPE_CHECKING:
     from .spec import SpecEntry
 
 _log = logging.getLogger(__name__)
+
+# The language of the API reference whose objects are being resolved. An
+# `object_resolved` handler receives only the object, yet the version callouts
+# translate their titles while it runs; this variable is the one way the
+# language reaches them.
+resolution_lang: ContextVar[str] = ContextVar("resolution_lang", default=DEFAULT_LANGUAGE)
 
 # Type alias for the griffe object loader callable used throughout this module.
 _GetObject = Callable[..., gf.Object | gf.Alias]

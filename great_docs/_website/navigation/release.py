@@ -14,7 +14,7 @@ import html
 from dataclasses import dataclass
 from typing import Any, cast
 
-from ..._translations import get_translation
+from ..._translations import translate
 from .. import quarto_yml
 from ..head import raw_inline
 
@@ -78,7 +78,7 @@ def add_to_navbar(quarto_config: dict[str, Any], release: Release | None, langua
     site_title = website.get("title")
     version = html.escape(release.version)
     released = (
-        get_translation("logo_tooltip_released", language).replace("{date}", release.date)
+        translate("logo_tooltip_released", language).replace("{date}", release.date)
         if release.date
         else None
     )

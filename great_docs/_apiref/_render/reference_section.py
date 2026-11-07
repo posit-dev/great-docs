@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
+from great_docs._translations import translate
 from great_docs.pandoc.blocks import (
     BlockContent,
     DefinitionList,
@@ -11,7 +12,6 @@ from great_docs.pandoc.blocks import (
 )
 from great_docs.pandoc.components import Attr
 
-from .._globals import translate
 from ._tables import summary_table
 from .base import RenderBase
 
@@ -63,7 +63,11 @@ class __RenderReferenceSection(RenderBase):
         else:
             return None
         key = _GROUP_TITLE_KEYS.get(title)
-        return Header(level, translate(key) if key else title, Attr(classes=["doc-group"]))
+        return Header(
+            level,
+            translate(key, self.settings.lang) if key else title,
+            Attr(classes=["doc-group"]),
+        )
 
     def render_description(self) -> BlockContent:
         """
@@ -115,9 +119,15 @@ class __RenderReferenceSection(RenderBase):
 
         from . import get_render_type
 
-        render_objs: list[RenderObjType] = [get_render_type(c)(c) for c in self.section.contents]
+        render_objs: list[RenderObjType] = [
+            get_render_type(c)(c, settings=self.settings) for c in self.section.contents
+        ]
         rows = [row for r in render_objs for row in r.render_summary()]
-        items = DefinitionList(rows) if self.display_format == "list" else summary_table(rows)
+        items = (
+            DefinitionList(rows)
+            if self.display_format == "list"
+            else summary_table(rows, self.settings.lang)
+        )
         return items
 
 

@@ -212,10 +212,10 @@ def test_package_info_is_skipped_when_disabled_or_empty(layout: Layout):
 def test_package_info_title_survives_yaml_syntax(layout: Layout, monkeypatch: pytest.MonkeyPatch):
     """Check that YAML front matter preserves quotes and a colon in a translated title"""
     title = 'Package "Info": details'
-    translate = package_info.get_translation
+    translate = package_info.translate
     monkeypatch.setattr(
         package_info,
-        "get_translation",
+        "translate",
         lambda key, lang: title if key == "package_info" else translate(key, lang),
     )
 

@@ -1,8 +1,11 @@
+from contextvars import copy_context
+
 import griffe as gf
 import pytest
 
 from great_docs._apiref import RenderDocFunction, content
-from great_docs._apiref._settings import Settings, active_settings
+from great_docs._apiref._settings import Settings
+from great_docs._apiref.resolve import resolution_lang
 from great_docs._builtin.directives import _callouts
 from great_docs._builtin.directives._callouts import add_callouts, convert_directives
 from great_docs._builtin.directives._rst_directives import convert_rst_directives
@@ -57,6 +60,13 @@ def test_version_directive_without_version_uses_generic_title():
     )
 
 
+def _convert_resolving(text: str, lang: str) -> str:
+    """Convert directives in the reference's resolution language"""
+    context = copy_context()
+    context.run(resolution_lang.set, lang)
+    return context.run(convert_directives, text)
+
+
 @pytest.mark.parametrize(
     ("name", "lang", "title"),
     [
@@ -70,15 +80,13 @@ def test_version_directive_without_version_uses_generic_title():
     ],
 )
 def test_version_titles_use_the_site_language(name: str, lang: str, title: str):
-    with active_settings(Settings(lang=lang)):
-        result = convert_directives(f"%{name} 2.0 Description.")
+    result = _convert_resolving(f"%{name} 2.0 Description.", lang)
 
     assert f'title="{title}"' in result
 
 
 def test_version_title_without_version_drops_the_placeholder():
-    with active_settings(Settings(lang="ja")):
-        result = convert_directives("%versionadded")
+    result = _convert_resolving("%versionadded", "ja")
 
     assert 'title="バージョン で追加"' in result
 
@@ -224,7 +232,9 @@ def test_first_line_callout_is_rendered_in_the_docstring_body():
     )
     add_callouts(function)
 
-    renderer = RenderDocFunction(content.Doc.from_griffe(function.name, function))
+    renderer = RenderDocFunction(
+        content.Doc.from_griffe(function.name, function), settings=Settings()
+    )
 
     assert renderer.docstring_subject is None
     assert "::: {.callout-warning}\nBe careful.\n:::" in str(renderer.render_body())
@@ -238,7 +248,9 @@ def test_normal_first_line_remains_the_docstring_subject():
         parser="numpy",
     )
 
-    renderer = RenderDocFunction(content.Doc.from_griffe(function.name, function))
+    renderer = RenderDocFunction(
+        content.Doc.from_griffe(function.name, function), settings=Settings()
+    )
 
     assert renderer.docstring_subject == "Process the input."
     body = str(renderer.render_body())

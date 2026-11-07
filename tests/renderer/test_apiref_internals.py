@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from great_docs._apiref._settings import Settings
 import dataclasses
 import sys
 import textwrap
@@ -264,7 +265,7 @@ def test_render_value_non_expr_uses_format_value():
     mock_obj.type_parameters = []
 
     doc = DocTypeAlias(name="X", obj=mock_obj)  # type: ignore[arg-type]
-    renderer = RenderDocTypeAlias(doc)
+    renderer = RenderDocTypeAlias(doc, settings=Settings())
 
     with patch(
         "great_docs._apiref._render.doctypealias.format_value", return_value="int | str"
@@ -320,7 +321,7 @@ def test_render_value_long_expr_with_ruff():
     mock_obj.type_parameters = []
 
     doc = DocTypeAlias(name="Y", obj=mock_obj)  # type: ignore[arg-type]
-    renderer = RenderDocTypeAlias(doc)
+    renderer = RenderDocTypeAlias(doc, settings=Settings())
 
     with (
         patch.object(dta, "HAS_RUFF", True),

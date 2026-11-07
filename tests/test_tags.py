@@ -388,7 +388,7 @@ class TestRenderIndex:
         config, _ = _project(tmp_path)
         title = 'Tags: "all"'
         monkeypatch.setattr(
-            tags, "get_translation", lambda key, lang: title if key == "site_tags" else key
+            tags, "translate", lambda key, lang: title if key == "site_tags" else key
         )
 
         text = tags.render_index({}, config)

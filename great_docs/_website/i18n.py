@@ -16,9 +16,9 @@ from typing import TYPE_CHECKING, Any, cast
 from .._translations import (
     QUARTO_LANGUAGE_KEYS,
     QUARTO_UNTRANSLATED_LANGUAGES,
-    get_translation,
     get_translations_bundle,
     is_rtl,
+    translate,
 )
 from . import head
 
@@ -70,7 +70,7 @@ def register_toc_title(quarto_config: dict[str, Any], config: Config) -> None:
     """
     if "toc-title" not in config.site_quarto:
         html_config = cast("dict[str, Any]", quarto_config["format"]["html"])
-        html_config["toc-title"] = get_translation("on_this_page", config.lang)
+        html_config["toc-title"] = translate("on_this_page", config.lang)
 
 
 def register_quarto_strings(quarto_config: dict[str, Any], config: Config) -> None:
@@ -101,7 +101,7 @@ def register_quarto_strings(quarto_config: dict[str, Any], config: Config) -> No
     if isinstance(language, dict):
         strings = cast("dict[str, Any]", language).setdefault(lang, {})
         for quarto_key, key in QUARTO_LANGUAGE_KEYS.items():
-            strings.setdefault(quarto_key, get_translation(key, lang))
+            strings.setdefault(quarto_key, translate(key, lang))
 
 
 def meta_tag(config: Config) -> str | None:

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from .._contribution import Contribution, InlineData
 from .._icons import get_icon_svg
-from .._translations import get_translation
+from .._translations import translate
 from . import page_scan
 
 if TYPE_CHECKING:
@@ -94,9 +94,9 @@ def write(config: Config, layout: Layout, statuses: Mapping[str, str]) -> dict[s
         description = definition.get("description", "")
         if key in _BUILTIN_STATUSES:
             if "label" not in override:
-                label = get_translation(f"status_label_{key}", config.lang)
+                label = translate(f"status_label_{key}", config.lang)
             if "description" not in override:
-                description = get_translation(f"status_desc_{key}", config.lang)
+                description = translate(f"status_desc_{key}", config.lang)
         definitions[key] = {
             "label": label,
             "icon": icon,

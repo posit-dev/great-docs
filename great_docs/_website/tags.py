@@ -19,7 +19,7 @@ from yaml12 import format_yaml
 from .._content.naming import title_from_name
 from .._contribution import Contribution, InlineData, NavbarLink
 from .._icons import get_icon_svg
-from .._translations import get_translation
+from .._translations import translate
 from . import page_scan
 from .navigation import navbar
 
@@ -223,7 +223,7 @@ def render_index(groups: Mapping[str, Sequence[TaggedPage]], config: Config) -> 
     lang = config.lang
     front_matter = format_yaml(
         {
-            "title": get_translation("site_tags", lang),
+            "title": translate("site_tags", lang),
             "bread-crumbs": False,
             "toc": False,
             "body-classes": "gd-tags-index",
@@ -234,7 +234,7 @@ def render_index(groups: Mapping[str, Sequence[TaggedPage]], config: Config) -> 
         front_matter.rstrip(),
         "---",
         "",
-        get_translation("tags_intro", lang),
+        translate("tags_intro", lang),
         "",
     ]
     ids = _heading_ids(groups, config)
@@ -297,10 +297,10 @@ def page_data(
 
     lang = config.lang
     tooltip_templates = {
-        "one": get_translation("tags_page_count_one", lang),
-        "other": get_translation("tags_page_count_other", lang),
-        "one_no_section": get_translation("tags_page_count_one_no_section", lang),
-        "other_no_section": get_translation("tags_page_count_other_no_section", lang),
+        "one": translate("tags_page_count_one", lang),
+        "other": translate("tags_page_count_other", lang),
+        "one_no_section": translate("tags_page_count_one_no_section", lang),
+        "other_no_section": translate("tags_page_count_other_no_section", lang),
     }
 
     icons: dict[str, str] = {}
@@ -556,10 +556,10 @@ def _tooltip(pages: Sequence[TaggedPage], lang: str) -> str:
     sections = sorted({page.section for page in pages if page.section})
     if sections:
         key = "tags_page_count_one" if count == 1 else "tags_page_count_other"
-        template = get_translation(key, lang)
+        template = translate(key, lang)
         return template.replace("{count}", str(count)).replace("{sections}", ", ".join(sections))
     key = "tags_page_count_one_no_section" if count == 1 else "tags_page_count_other_no_section"
-    return get_translation(key, lang).replace("{count}", str(count))
+    return translate(key, lang).replace("{count}", str(count))
 
 
 def _heading_pill(

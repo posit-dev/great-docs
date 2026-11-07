@@ -11,10 +11,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from .._interlinks.sphinx_inventory import INVENTORY_FILENAME
-from ._settings import Settings, SourceLinks, active_settings
+from ._settings import Settings, SourceLinks
 from .content import Doc, Link, Page
 from .inventory import create_inventory, write_inventory
-from .resolve import Resolver
+from .resolve import Resolver, resolution_lang
 from .spec import SpecOptions, SpecSection
 from .write import (
     write_index,
@@ -172,11 +172,12 @@ class APIReference:
     @cached_property
     def resolved(self) -> list[Section]:
         """The resolved section tree, computed once per instance"""
-        # Object hooks need the reference settings even when resolution runs
-        # before the build, such as when listing documented objects.
-        with active_settings(self.settings):
+        token = resolution_lang.set(self.settings.lang)
+        try:
             secs = self.sections or self._resolver.autogenerate_sections(self.package)
             return self._resolver.resolve_sections(secs)
+        finally:
+            resolution_lang.reset(token)
 
     @cached_property
     def documented_symbols(self) -> list[str]:
@@ -216,22 +217,6 @@ class APIReference:
     def build(self) -> None:
         """Write reference pages, index, inventory, and (optionally) sidebar to disk"""
         s = self.settings
-        with active_settings(s):
-            self._build(s)
-
-    def _build(self, s: Settings) -> None:
-        """
-        Write the reference, with the signature settings already published
-
-        Parameters
-        ----------
-        s
-            The settings of this API reference.
-
-        Returns
-        -------
-        :
-        """
         if s.source_dir:
             sys.path.append(str(Path(s.source_dir).absolute()))
 
@@ -247,14 +232,7 @@ class APIReference:
         )
 
         _log.info("Writing docs pages")
-        write_pages(
-            pages,
-            dir=s.dir,
-            out_page_suffix=s.out_page_suffix,
-            rewrite_all_pages=s.rewrite_all_pages,
-            header_level=s.header_level,
-            site_toc_depth=self.site_toc_depth,
-        )
+        write_pages(pages, s, site_toc_depth=self.site_toc_depth)
         write_typing_information(s.typing_module_paths, self)
 
         _log.info("Creating inventory file")

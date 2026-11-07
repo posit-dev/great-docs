@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from yaml12 import format_yaml
 
 from .._contribution import Contribution, NavbarLink
-from .._translations import get_translation
+from .._translations import translate
 from . import page_dates
 from .navigation import navbar
 
@@ -82,7 +82,7 @@ def write_page(
     if not releases:
         return None
 
-    toc_title = get_translation("releases", config.lang)
+    toc_title = translate("releases", config.lang)
 
     # Pin the heading shift so release headings always render at level 1. This keeps the TOC
     # limited to release headings: without it, `toc-depth: 1` could include release-note

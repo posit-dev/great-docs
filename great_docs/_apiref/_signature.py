@@ -52,7 +52,7 @@ def escape_signature_markup(s: str) -> str:
     return SIGNATURE_SMART_RE.sub(r"\\\g<0>", escaped)
 
 
-def make_call_signature_text(name: str, params: list[str]) -> str:
+def make_call_signature_text(name: str, params: list[str], wrap: str) -> str:
     """
     Build the text of a callable's signature
 
@@ -63,16 +63,17 @@ def make_call_signature_text(name: str, params: list[str]) -> str:
     params
         Parameters of the callable, each already rendered as a string,
         e.g. `a`, `*args`, `*`, `/`, `b=2`, `c=3`, `**kwargs`.
+    wrap
+        Signature wrapping mode: `width` wraps signatures that exceed the
+        line limit; `per_parameter` puts each parameter on its own line
+        when there are at least two parameters.
 
     Returns
     -------
-    The signature, broken across lines according to the wrap style.
+    :
+        The signature, broken across lines according to `wrap`.
     """
-    # Read through the module: `active_settings` rebinds `SETTINGS` for the
-    # duration of a build, so a name bound once would hold the old object.
-    from . import _globals
-
-    if _globals.SETTINGS.callable_signatures.wrap == "width":
+    if wrap == "width":
         return _wrap_to_width(name, params)
     return _wrap_per_parameter(name, params)
 
@@ -246,7 +247,9 @@ def _mark_signature_text(text: str, params: list[str]) -> str:
     return f"{marked_name}{bracket}{_splice_marked_parameters(rest, params)}"
 
 
-def render_signature_block(lines: list[tuple[str, list[str]]], attr: Attr) -> BlockContent:
+def render_signature_block(
+    lines: list[tuple[str, list[str]]], attr: Attr, style: str
+) -> BlockContent:
     """
     Build the block that carries a callable's signature
 
@@ -257,17 +260,16 @@ def render_signature_block(lines: list[tuple[str, list[str]]], attr: Attr) -> Bl
         was built from.
     attr
         The attributes of the enclosing div.
+    style
+        Signature format: `plain` for inline markup or `highlighted` for a
+        highlighted code block.
 
     Returns
     -------
-    The signature, as a code block or as inline markup, according to
-    `callable_signatures.style`.
+    :
+        The signature as a code block or inline markup, according to `style`.
     """
-    # Read through the module: `active_settings` rebinds `SETTINGS` for the
-    # duration of a build, so a name bound once would hold the old object.
-    from . import _globals
-
-    if _globals.SETTINGS.callable_signatures.style == "plain":
+    if style == "plain":
         marked = "\n".join(_mark_signature_text(text, params) for text, params in lines)
         # Not `pretty_code`: each default was already highlighted in isolation
         # by `_mark_parameter`, and `highlight_repr_value`'s string pattern is

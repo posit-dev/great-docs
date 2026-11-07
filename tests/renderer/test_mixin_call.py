@@ -4,6 +4,7 @@ RST directive handling, overload signatures, parameter exclusion, and **kwargs r
 
 from __future__ import annotations
 
+from great_docs._apiref._settings import Settings
 import griffe as gf
 import pytest
 
@@ -569,7 +570,7 @@ def test_annotation_in_signature():
         obj = m["func"]
 
     doc = content.Doc.from_griffe(obj.name, obj)
-    rd = RenderDocFunction(doc, show_signature_annotation=True)
+    rd = RenderDocFunction(doc, show_signature_annotation=True, settings=Settings())
     qmd = str(rd)
 
     # Annotations should appear in the signature with ': type' format

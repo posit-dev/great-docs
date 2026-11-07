@@ -124,7 +124,8 @@ class __RenderDocCallMixin(RenderDoc):
         """
         name = self.signature_name if self.show_signature_name else ""
         attr = Attr(classes=["doc-signature", f"doc-{self.kind_slug}"])
-        return render_signature_block(self._signature_lines(name), attr)
+        style = self.settings.callable_signatures.style
+        return render_signature_block(self._signature_lines(name), attr, style)
 
     def _signature_lines(self, name: str) -> list[tuple[str, list[str]]]:
         """
@@ -157,7 +158,8 @@ class __RenderDocCallMixin(RenderDoc):
             return [(name, [])]
 
         params = self.render_signature_parameters()
-        return [(make_call_signature_text(name, params), params)]
+        wrap = self.settings.callable_signatures.wrap
+        return [(make_call_signature_text(name, params, wrap), params)]
 
     def _overloads(self) -> list[gf.Function]:
         """
@@ -218,7 +220,7 @@ class __RenderDocCallMixin(RenderDoc):
                 else:
                     params.append(p.name)
             ret = repr_obj(ov.returns) if ov.returns else ""
-            text = make_call_signature_text(name, params)
+            text = make_call_signature_text(name, params, self.settings.callable_signatures.wrap)
             if ret:
                 text += f" -> {ret}"
             lines.append((text, params))
