@@ -1245,7 +1245,9 @@ cli.add_command(scan)
 
 
 def _freeze_info(project_root: Path, persist_dir: Path, layout: Layout | None = None) -> None:
-    """Display freeze status: project-level setting and all cached pages."""
+    """
+    Display freeze settings and cached pages for the current version
+    """
     import json
     import re as _re
     from datetime import datetime
@@ -1299,14 +1301,17 @@ def _freeze_info(project_root: Path, persist_dir: Path, layout: Layout | None = 
             click.echo(f"    {source}  (freeze: {mode})")
         click.echo()
 
-    # Report all cached entries from _freeze/
     if not persist_dir.is_dir():
         click.echo("  No freeze cache found yet (run a build to populate it).")
         return
 
-    cache_entries = sorted(persist_dir.rglob("execute-results/html.json"))
+    cache_entries = sorted(
+        cache_json
+        for cache_json in persist_dir.rglob("execute-results/html.json")
+        if not cache_json.is_relative_to(persist_dir / "_versions")
+    )
     if not cache_entries:
-        click.echo("  Freeze cache directory exists but contains no entries.")
+        click.echo("  Freeze cache directory exists but contains no current page entries.")
         return
 
     click.echo(f"  {len(cache_entries)} cached page(s):")
@@ -1365,7 +1370,7 @@ def _freeze_info(project_root: Path, persist_dir: Path, layout: Layout | None = 
     "--info",
     is_flag=True,
     default=False,
-    help="Show freeze status for all pages (which are frozen, cached, stale).",
+    help="Show freeze settings and cached pages for the current version.",
 )
 @_config_option
 def freeze(
@@ -1391,7 +1396,8 @@ def freeze(
     Use '--clean' to wipe the entire '_freeze/' cache before re-executing.
     This forces a full refresh of all specified pages from scratch.
 
-    Use '--info' to see the freeze status of all pages without rendering.
+    Use `--info` to see freeze settings and cached pages for the current
+    version without rendering.
 
     After running, the updated '_freeze/' entries are ready to commit to
     version control.
