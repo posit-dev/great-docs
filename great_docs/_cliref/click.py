@@ -870,8 +870,9 @@ def snapshot_from_source(source_dir: Path, cli_module: str) -> CliCommandInfo | 
     """
     Import a command line from an extracted source tree and record its snapshot
 
-    `sys.path` and `sys.modules` are restored afterwards, so the installed package stays the one
-    later imports find. A Typer app that Typer cannot convert is skipped, as in `find_command`.
+    Temporarily add `source_dir` to `sys.path`. Afterwards, remove that entry and the CLI
+    module and its submodules from `sys.modules`. Parent packages imported along the way
+    remain cached. Skip Typer apps that Typer cannot convert.
 
     Parameters
     ----------
@@ -883,7 +884,8 @@ def snapshot_from_source(source_dir: Path, cli_module: str) -> CliCommandInfo | 
     Returns
     -------
     :
-        The snapshot, or `None` when the module cannot be imported or holds no command.
+        The snapshot, or `None` if the module cannot be imported, raises `ValueError` or
+        `TypeError` while loading, or contains no supported command.
     """
     str_dir = str(source_dir)
     sys.path.insert(0, str_dir)
@@ -903,7 +905,8 @@ def snapshot_from_source(source_dir: Path, cli_module: str) -> CliCommandInfo | 
             return None
 
         return extract_snapshot(found[1])
-    except USER_CODE_ERRORS:
+    except (*USER_CODE_ERRORS, ValueError, TypeError):
+        # Older releases may raise `ValueError` or `TypeError` with newer dependencies.
         return None
     finally:
         if str_dir in sys.path:
