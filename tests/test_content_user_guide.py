@@ -855,12 +855,27 @@ def test_listed_page_without_a_file_name():
     assert user_guide._listed_page(42) == ("", None)
 
 
-def test_published_path_outside_the_guide_keeps_only_its_file_name(tmp_path: Path):
-    """Verify that a page outside the guide directory publishes by its file name"""
-    guide = {"source_dir": tmp_path / "user_guide", "explicit": True}
-    page = {"path": tmp_path / "elsewhere" / "extra.qmd", "title": "Extra", "section": None}
+@pytest.mark.parametrize("outside", ["absolute", "parent"])
+def test_explicit_guide_rejects_pages_outside_the_guide_directory(tmp_path: Path, outside: str):
+    """Verify that explicit guides warn about and omit absolute and `..` page paths"""
+    guide_dir = tmp_path / "user_guide"
+    guide_dir.mkdir()
+    (guide_dir / "ok.qmd").write_text("# Ok\n")
+    (tmp_path / "outside.qmd").write_text("# Outside\n")
+    name = str(tmp_path / "outside.qmd") if outside == "absolute" else "../outside.qmd"
+    config = [{"section": "S", "contents": [name, "ok.qmd"]}]
+    warnings: list[str] = []
 
-    assert user_guide.published(guide, page) == Path("extra.qmd")
+    guide = user_guide._discover_explicit(guide_dir, config, report=warnings.append)
+
+    assert guide is not None
+    assert [page["path"].name for page in guide["files"]] == ["ok.qmd"]
+    assert warnings == [
+        f"User guide file '{name}' referenced in config must be a path inside the user guide directory"
+    ]
+    assert user_guide.sidebar(guide)["contents"] == [
+        {"section": "S", "contents": [{"text": "Ok", "href": "user-guide/ok.qmd"}]}
+    ]
 
 
 def test_discover_explicit_skips_duplicates():
