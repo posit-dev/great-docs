@@ -323,40 +323,34 @@ def _parse_cobra_flag(raw: str) -> CliOption | None:
 
 
 def _short_help(description: str, limit: int = 150) -> str:
-    """Condense a full command description into a one-line summary.
+    """
+    Summarise a command description for the CLI reference index
 
-    Cobra's root/group `--help` prints the command's full (Long) description, which can span
-    several sentences. The CLI reference *index* page shows only a one-line summary per command, so
-    this trims the description to the first sentence when that is short enough, otherwise truncates
-    on a word boundary and appends an ellipsis. Mirrors the Click path's
-    ``get_short_help_str(limit=...)`` behaviour so both ecosystems read consistently.
+    Use the first sentence without trailing full stops when it fits within `limit`.
+    Otherwise, truncate at a word boundary where possible and append `...`.
 
     Parameters
     ----------
     description
-        The full (already whitespace-collapsed) command description.
+        The full command description with whitespace already collapsed.
     limit
         Maximum length of the returned summary, excluding the ellipsis.
 
     Returns
     -------
-    str
-        A one-line summary, never cut mid-word.
+    :
+        The command summary, or an empty string for a blank description.
     """
     description = description.strip()
     if not description:
         return ""
 
-    # Prefer the first sentence when it comfortably fits.
     first_sentence = description.split(". ", 1)[0].rstrip(".")
     if len(first_sentence) <= limit:
         return first_sentence
 
-    if len(description) <= limit:
-        return description
-
-    # Truncate on a word boundary and mark the elision. Uses "..." (three dots)
-    # to match Click's get_short_help_str placeholder for consistency.
+    # The first sentence exceeds the limit, so the full description does too.
+    # Match Click's summary placeholder with three dots.
     truncated = description[:limit].rsplit(" ", 1)[0].rstrip()
     return f"{truncated}..."
 
