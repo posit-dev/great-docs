@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import sys
 import textwrap
 from concurrent.futures import Future
 from concurrent.futures.process import BrokenProcessPool
@@ -1648,21 +1650,35 @@ class TestCheckExamplesOrchestrator:
         assert result.pages[0].status == "error"
         assert "render crashed" in result.pages[0].message
 
-    @pytest.mark.parametrize(
-        "error",
-        [
-            FileNotFoundError(2, "No such file or directory", "quarto"),
-            UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte"),
-        ],
-    )
     @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
-    def test_quarto_run_failure_reported_as_error(self, mock_quarto, error, tmp_path):
-        """Report Quarto startup and output-decoding failures as page errors"""
+    def test_quarto_start_failure_reported_as_error(self, mock_quarto, tmp_path):
+        """A Quarto startup failure is reported as a page error"""
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
+        error = FileNotFoundError(2, "No such file or directory", "quarto")
         with patch("great_docs._checks.examples.subprocess.run", side_effect=error):
             result = check_examples(tmp_path, no_docstrings=True)
         assert result.pages[0].status == "error"
-        assert result.pages[0].message.startswith(type(error).__name__)
+        assert result.pages[0].message.startswith("FileNotFoundError")
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="stub Quarto is a shell script")
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    def test_undecodable_quarto_output_still_checked(self, mock_quarto, tmp_path, monkeypatch):
+        """Pages are still checked when Quarto output contains invalid UTF-8"""
+        self._write_qmd(tmp_path / "docs" / "page.qmd", "```{python}\nx = 1\n```\n")
+        # Stands in for `quarto render PAGE.qmd ...`: emits an undecodable byte on both
+        # streams and writes the HTML page the checker parses
+        stub = tmp_path / "bin" / "quarto"
+        stub.parent.mkdir()
+        stub.write_text(
+            "#!/bin/sh\n"
+            "printf 'out \\377\\n'\n"
+            "printf 'err \\377\\n' >&2\n"
+            "printf '<html></html>' > \"${2%.qmd}.html\"\n"
+        )
+        stub.chmod(0o755)
+        monkeypatch.setenv("PATH", f"{stub.parent}{os.pathsep}{os.environ['PATH']}")
+        result = check_examples(tmp_path / "docs", no_docstrings=True)
+        assert result.pages[0].status == "pass", result.pages[0]
 
     @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
     def test_render_time_limit_scales_with_cell_count(self, mock_quarto, tmp_path):

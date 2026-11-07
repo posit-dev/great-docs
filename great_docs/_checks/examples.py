@@ -16,6 +16,7 @@ from .. import _manifest
 from .._build import quarto
 from .._build.steps import USER_CODE_ERRORS
 from .._content.walk import find_files
+from .._subprocess import TEXT_MODE_KWARGS
 
 if TYPE_CHECKING:
     from .._layout import Layout
@@ -488,8 +489,8 @@ def _render_page_with_quarto(
                     str(qmd_path.parent),
                 ],
                 capture_output=True,
-                text=True,
                 timeout=render_limit,
+                **TEXT_MODE_KWARGS,
                 cwd=tmpdir,
             )
         except subprocess.TimeoutExpired:
@@ -499,7 +500,7 @@ def _render_page_with_quarto(
                 cells_checked=len(cells),
                 message=f"Quarto render timed out after {render_limit}s",
             )
-        except (OSError, UnicodeDecodeError) as e:
+        except OSError as e:
             return PageResult(
                 path=page_label,
                 status="error",
