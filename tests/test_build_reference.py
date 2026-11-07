@@ -58,14 +58,14 @@ def _source_linked_project(root: Path, name: str, branch: str) -> GreatDocs:
         'def greet():\n    """Say hello."""\n    return "hi"\n', encoding="utf-8"
     )
     docs = GreatDocs(project_path=str(root))
-    docs.build_dir.mkdir(parents=True)
+    docs.layout.build_dir.mkdir(parents=True)
     block = {
         "package": name,
         "dynamic": False,
         "dir": "reference",
         "sections": [{"title": "Functions", "contents": [{"name": "greet"}]}],
     }
-    (docs.build_dir / "_quarto.yml").write_text(
+    (docs.layout.build_dir / "_quarto.yml").write_text(
         yaml.safe_dump({"api-reference": block}), encoding="utf-8"
     )
     return docs
@@ -85,7 +85,7 @@ def _write_api_reference(docs: GreatDocs) -> Outcome:
     :
         The step's outcome.
     """
-    quarto_config = quarto_yml.read(docs.build_dir)
+    quarto_config = quarto_yml.read(docs.layout.build_dir)
     run = make_run(docs, quarto_config=quarto_config, api_block=quarto_config["api-reference"])
     outcome, _ = reference.api(run, docs._config, docs.layout, BuildLog(stream=io.StringIO()))
     return outcome
@@ -313,9 +313,11 @@ def test_api_links_each_project_in_a_process_to_its_own_source(
     for name, branch in [("srclinks_a", "branch-a"), ("srclinks_b", "branch-b")]:
         docs = _source_linked_project(tmp_path / name, name, branch)
         monkeypatch.syspath_prepend(str(docs.layout.package_root))
-        monkeypatch.chdir(docs.build_dir)
+        monkeypatch.chdir(docs.layout.build_dir)
         _ = _write_api_reference(docs)
-        pages.append((docs.build_dir / "reference" / "greet.qmd").read_text(encoding="utf-8"))
+        pages.append(
+            (docs.layout.build_dir / "reference" / "greet.qmd").read_text(encoding="utf-8")
+        )
 
     assert "github.com/owner/srclinks_a/blob/branch-a/srclinks_a/__init__.py" in pages[0]
     assert "github.com/owner/srclinks_b/blob/branch-b/srclinks_b/__init__.py" in pages[1]
@@ -330,7 +332,7 @@ def test_api_imports_the_package_from_the_project_root(
     docs = _source_linked_project(tmp_path / "srclinks_path", "srclinks_path", "main")
     root = str(docs.layout.package_root)
     monkeypatch.setattr(sys, "path", list(sys.path))
-    monkeypatch.chdir(docs.build_dir)
+    monkeypatch.chdir(docs.layout.build_dir)
 
     assert _write_api_reference(docs) == "API reference generated"
 
@@ -344,8 +346,8 @@ def test_api_retry_with_static_analysis_disables_dynamic_introspection_in_the_co
     Disable dynamic introspection in memory before retrying with static analysis
     """
     docs = _source_linked_project(tmp_path / "static_retry", "static_retry", "main")
-    monkeypatch.chdir(docs.build_dir)
-    quarto_config = quarto_yml.read(docs.build_dir)
+    monkeypatch.chdir(docs.layout.build_dir)
+    quarto_config = quarto_yml.read(docs.layout.build_dir)
     block = quarto_config["api-reference"]
     block["dynamic"] = True
     run = make_run(docs, quarto_config=quarto_config, api_block=block)
@@ -371,8 +373,8 @@ def test_cli_reports_a_command_tree_without_pages(tmp_path: Path):
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
     write_config(tmp_path, "cli:\n  enabled: true\n")
     docs = GreatDocs(project_path=str(tmp_path))
-    docs.build_dir.mkdir()
-    (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER, encoding="utf-8")
+    docs.layout.build_dir.mkdir()
+    (docs.layout.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER, encoding="utf-8")
 
     with (
         patch("great_docs._cliref.click.discover", return_value={"name": "mycli"}),
@@ -381,4 +383,4 @@ def test_cli_reports_a_command_tree_without_pages(tmp_path: Path):
         outcome = reference.cli(make_run(docs), docs._config, docs.layout)
 
     assert outcome == "No CLI pages generated"
-    assert (docs.build_dir / "_quarto.yml").read_text(encoding="utf-8") == QUARTO_YML_HEADER
+    assert (docs.layout.build_dir / "_quarto.yml").read_text(encoding="utf-8") == QUARTO_YML_HEADER

@@ -182,7 +182,7 @@ def _write_partial(tmp_path: Path, yaml: str) -> tuple[GreatDocs, dict]:
     """
     (tmp_path / "great-docs.yml").write_text(yaml, encoding="utf-8")
     docs = GreatDocs(project_path=str(tmp_path))
-    docs.build_dir.mkdir(parents=True, exist_ok=True)
+    docs.layout.build_dir.mkdir(parents=True, exist_ok=True)
     config: dict = {"format": {"html": {}}}
     metadata_partial.write(config, docs._config, docs.layout, report=print)
     return docs, config
@@ -194,7 +194,7 @@ def test_partial_carries_translations_without_seo(tmp_path: Path):
         tmp_path, "site:\n  lang: fr\nseo:\n  enabled: false\nsocial_cards: false\n"
     )
 
-    partial = (docs.build_dir / "metadata.html").read_text(encoding="utf-8")
+    partial = (docs.layout.build_dir / "metadata.html").read_text(encoding="utf-8")
     assert config["format"]["html"]["template-partials"] == ["metadata.html"]
     assert '<meta name="gd-i18n" content="' in partial
     assert _without_title(partial)[:-1] == _without_title(VENDORED.read_text(encoding="utf-8"))
@@ -210,7 +210,7 @@ def test_bundled_partial_registered_without_options(tmp_path: Path) -> None:
     """
     docs, config = _write_partial(tmp_path, "seo:\n  enabled: false\nsocial_cards: false\n")
 
-    partial = (docs.build_dir / "metadata.html").read_text(encoding="utf-8")
+    partial = (docs.layout.build_dir / "metadata.html").read_text(encoding="utf-8")
     assert partial == VENDORED.read_text(encoding="utf-8")
     assert config["format"]["html"]["template-partials"] == ["metadata.html"]
 
@@ -221,7 +221,7 @@ def test_partial_carries_title_and_translations(tmp_path: Path):
         tmp_path, "site:\n  lang: fr\nseo:\n  title_template: '{site_name} - {page_title}'\n"
     )
 
-    partial = (docs.build_dir / "metadata.html").read_text(encoding="utf-8")
+    partial = (docs.layout.build_dir / "metadata.html").read_text(encoding="utf-8")
     assert "$title-prefix$ - $pagetitle$" in partial
     assert '<meta name="gd-i18n" content="' in partial
 
@@ -232,7 +232,7 @@ def test_partial_carries_og_type_without_seo(tmp_path: Path):
     """
     docs, config = _write_partial(tmp_path, "seo:\n  enabled: false\n")
 
-    partial = (docs.build_dir / "metadata.html").read_text(encoding="utf-8")
+    partial = (docs.layout.build_dir / "metadata.html").read_text(encoding="utf-8")
     assert config["format"]["html"]["template-partials"] == ["metadata.html"]
     assert partial.count('<meta property="og:type" content="website">') == 1
 
@@ -243,7 +243,7 @@ def test_partial_omits_og_type_without_social_cards(tmp_path: Path):
     """
     docs, _ = _write_partial(tmp_path, "social_cards: false\n")
 
-    partial = (docs.build_dir / "metadata.html").read_text(encoding="utf-8")
+    partial = (docs.layout.build_dir / "metadata.html").read_text(encoding="utf-8")
     assert "og:type" not in partial
 
 
@@ -258,7 +258,7 @@ def test_show_dates_registers_partial(tmp_path: Path) -> None:
         tmp_path, "show_dates: true\nseo:\n  enabled: false\nsocial_cards: false\n"
     )
 
-    partial = (docs.build_dir / "metadata.html").read_text(encoding="utf-8")
+    partial = (docs.layout.build_dir / "metadata.html").read_text(encoding="utf-8")
     assert config["format"]["html"]["template-partials"] == ["metadata.html"]
     assert partial.count("$for(gd-head-tags)$") == 1
     assert partial.count('<meta name="gd-build-time" content="') == 1

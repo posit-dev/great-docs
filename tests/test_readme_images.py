@@ -15,24 +15,24 @@ def docs(tmp_path: Path, request: pytest.FixtureRequest) -> GreatDocs:
     (source / "great-docs.yml").write_text("display_name: Sample\n")
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "sample"\nversion = "1"\n')
     result = GreatDocs(str(tmp_path))
-    result.build_dir.mkdir(parents=True)
+    result.layout.build_dir.mkdir(parents=True)
     return result
 
 
 def stage(docs: GreatDocs, content: str | None) -> str:
     if content is not None:
-        (docs.project_root / "README.md").write_text(content)
+        (docs.layout.package_root / "README.md").write_text(content)
     write_homepage(docs)
-    return (docs.build_dir / "index.qmd").read_text()
+    return (docs.layout.build_dir / "index.qmd").read_text()
 
 
 def destination(docs: GreatDocs, relative: str) -> Path:
-    prefix = "_shared" if docs.layout.source_dir != docs.project_root else "."
-    return docs.build_dir / prefix / relative
+    prefix = "_shared" if docs.layout.source_dir != docs.layout.package_root else "."
+    return docs.layout.build_dir / prefix / relative
 
 
 def test_copy_readme_images_basic(docs: GreatDocs) -> None:
-    source = docs.project_root / "images/screenshot.png"
+    source = docs.layout.package_root / "images/screenshot.png"
     source.parent.mkdir()
     source.write_bytes(b"fake png data")
 
@@ -40,11 +40,11 @@ def test_copy_readme_images_basic(docs: GreatDocs) -> None:
 
     copied = destination(docs, "images/screenshot.png")
     assert copied.read_bytes() == source.read_bytes()
-    assert copied.relative_to(docs.build_dir).as_posix() in page
+    assert copied.relative_to(docs.layout.build_dir).as_posix() in page
 
 
 def test_copy_readme_images_html_tags(docs: GreatDocs) -> None:
-    source = docs.project_root / "diagrams/architecture.svg"
+    source = docs.layout.package_root / "diagrams/architecture.svg"
     source.parent.mkdir()
     source.write_bytes(b"<svg></svg>")
 
@@ -52,7 +52,7 @@ def test_copy_readme_images_html_tags(docs: GreatDocs) -> None:
 
     copied = destination(docs, "diagrams/architecture.svg")
     assert copied.read_bytes() == source.read_bytes()
-    assert f'src="{copied.relative_to(docs.build_dir).as_posix()}"' in page
+    assert f'src="{copied.relative_to(docs.layout.build_dir).as_posix()}"' in page
 
 
 def test_copy_readme_images_skips_urls(docs: GreatDocs) -> None:
@@ -66,12 +66,12 @@ def test_copy_readme_images_skips_urls(docs: GreatDocs) -> None:
     page = stage(docs, "\n".join(f"![External]({url})" for url in urls))
 
     assert all(url in page for url in urls)
-    assert not list(docs.build_dir.rglob("*.png"))
-    assert not (docs.build_dir / "_shared").exists()
+    assert not list(docs.layout.build_dir.rglob("*.png"))
+    assert not (docs.layout.build_dir / "_shared").exists()
 
 
 def test_copy_readme_images_reuses_assets(docs: GreatDocs) -> None:
-    source = docs.project_root / "assets/logo.svg"
+    source = docs.layout.package_root / "assets/logo.svg"
     source.parent.mkdir()
     source.write_bytes(b"<svg></svg>")
     with patch("great_docs._build.site.update_quarto_config"):
@@ -81,16 +81,16 @@ def test_copy_readme_images_reuses_assets(docs: GreatDocs) -> None:
 
     copied = destination(docs, "assets/logo.svg")
     assert copied.read_bytes() == source.read_bytes()
-    assert copied.relative_to(docs.build_dir).as_posix() in page
-    assert list(docs.build_dir.rglob("logo.svg")) == [copied]
+    assert copied.relative_to(docs.layout.build_dir).as_posix() in page
+    assert list(docs.layout.build_dir.rglob("logo.svg")) == [copied]
 
 
 def test_copy_readme_images_none_source(docs: GreatDocs) -> None:
     page = stage(docs, None)
 
     assert "sample" in page
-    assert not list(docs.build_dir.rglob("*.png"))
-    assert not (docs.build_dir / "_shared").exists()
+    assert not list(docs.layout.build_dir.rglob("*.png"))
+    assert not (docs.layout.build_dir / "_shared").exists()
 
 
 def test_copy_readme_images_missing_file(docs: GreatDocs) -> None:

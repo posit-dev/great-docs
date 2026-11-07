@@ -74,8 +74,8 @@ def _versioned_docs(root: Path) -> GreatDocs:
     """
     write_config(root, {"versions": ["0.2", "0.1"]})
     docs = GreatDocs(str(root))
-    docs.build_dir.mkdir(parents=True)
-    quarto_yml.write_initial(docs.build_dir)
+    docs.layout.build_dir.mkdir(parents=True)
+    quarto_yml.write_initial(docs.layout.build_dir)
     return docs
 
 
@@ -103,11 +103,11 @@ def _set_title(run: Run, *args: object, **kwargs: object) -> object:
 
 def test_versioned_build_renders_each_version_from_the_configuration_in_memory(tmp_path: Path):
     docs = _versioned_docs(tmp_path)
-    initial = quarto_yml.read(docs.build_dir)
+    initial = quarto_yml.read(docs.layout.build_dir)
     seen: dict[str, Any] = {}
 
     def versioned_build(*args: object, **kwargs: Any) -> dict[str, Any]:
-        seen["written"] = quarto_yml.read(docs.build_dir)
+        seen["written"] = quarto_yml.read(docs.layout.build_dir)
         seen["passed"] = kwargs["quarto_config"]
         return {"success": False, "errors": [], "versions_built": []}
 
@@ -132,4 +132,4 @@ def test_freeze_preparation_of_a_versioned_project_writes_the_configuration(tmp_
         stubs.steps["content.assets"].side_effect = _set_title
         pipeline.prepare_for_freeze(docs._config, docs.layout, log, remote=docs._remote)
 
-    assert quarto_yml.read(docs.build_dir)["website"] == {"title": "Prepared"}
+    assert quarto_yml.read(docs.layout.build_dir)["website"] == {"title": "Prepared"}

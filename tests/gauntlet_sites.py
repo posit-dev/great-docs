@@ -370,7 +370,7 @@ def build_site(rendered_dir: Path, name: str) -> Path:
 
         result = subprocess.run(
             ["quarto", "render"],
-            cwd=docs.build_dir,
+            cwd=docs.layout.build_dir,
             env=quarto.environment(docs._config),
             capture_output=True,
             text=True,
@@ -387,10 +387,10 @@ def build_site(rendered_dir: Path, name: str) -> Path:
         # The docs layout renders Quarto's default `_site` inside the build
         # directory, separate from the public site. Mirror `GreatDocs.build()`
         # because this builder runs the render stages directly.
-        if docs.layout.site_dir != docs.build_dir / "_site":
+        if docs.layout.site_dir != docs.layout.build_dir / "_site":
             from great_docs._versions.build import assemble_site
 
-            assemble_site(docs.build_dir, [], "", docs.layout.site_dir, layout=docs.layout)
+            assemble_site(docs.layout.build_dir, [], "", docs.layout.site_dir, layout=docs.layout)
 
         published = rendered_dir / name
         _clear_package_dir(rendered_dir, name)

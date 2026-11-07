@@ -611,8 +611,8 @@ def test_build_command_uses_selected_config(
     config.write_text("name: selected\n")
 
     def build_selected(docs: GreatDocs, **kwargs: object) -> None:
-        docs.build_dir.mkdir(parents=True)
-        (docs.build_dir / "selection.txt").write_text(docs._config["name"])
+        docs.layout.build_dir.mkdir(parents=True)
+        (docs.layout.build_dir / "selection.txt").write_text(docs._config["name"])
 
     monkeypatch.setattr(GreatDocs, "build", build_selected)
     result = CliRunner().invoke(
@@ -760,8 +760,8 @@ def test_uninstall_removes_only_selected_project(tmp_path: Path) -> None:
     config = tmp_path / "website/settings.yml"
     config.write_text("{}\n")
     docs = GreatDocs(str(tmp_path), config_path=str(config))
-    docs.build_dir.mkdir(parents=True)
-    (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
+    docs.layout.build_dir.mkdir(parents=True)
+    (docs.layout.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
     result = CliRunner().invoke(
         cli, ["uninstall", "--project-path", str(tmp_path), "--config", str(config)]
     )
@@ -3296,7 +3296,6 @@ class TestCheckLinksAutodiscover:
         (recipes / "recipe.qmd").write_text("# Recipe")
 
         mock_docs = MagicMock()
-        mock_docs.project_root = tmp_path
         mock_docs.check_links.return_value = {
             "total": 0,
             "ok": [],
