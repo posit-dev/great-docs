@@ -52,6 +52,7 @@ svg = [
 ]
 mcp = [
     "mcp>=2.0.0",
+    "jsonschema>=4.20.0",
 ]
 marimo = [
     "marimo>=0.20.0",

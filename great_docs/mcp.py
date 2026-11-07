@@ -15,11 +15,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlsplit
 
+from jsonschema import Draft202012Validator
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
     Completion,
     CompletionArgument,
+    CompletionContext,
     GetPromptResult,
     Prompt,
     PromptArgument,
@@ -31,10 +33,9 @@ from mcp.types import (
     TextContent,
     Tool,
 )
-from pydantic import AnyUrl
 
 from ._build import outputs
-from ._build.steps import USER_CODE_ERRORS, BuildError
+from ._build.steps import PROJECT_ERRORS, USER_CODE_ERRORS, BuildError
 from ._content import user_guide
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, LayoutError
 from ._utils import is_in_great_docs_build_dir, recognised_build_dirs
@@ -43,37 +44,6 @@ if TYPE_CHECKING:
     from ._api_diff import ApiSnapshot
     from ._project import Project
     from ._reference.exports import Exports
-
-# ---------------------------------------------------------------------------
-# Handler registration
-# ---------------------------------------------------------------------------
-
-# Request handlers are constructor arguments. Collect them until all
-# handler functions have been defined.
-_HANDLERS: dict[str, Any] = {}
-
-
-def _handler(name: str) -> Any:
-    """
-    Return a decorator that collects an MCP request handler
-
-    Parameters
-    ----------
-    name
-        The request name, such as `list_tools`.
-
-    Returns
-    -------
-    :
-        A decorator that records the function and returns it unchanged.
-    """
-
-    def _collect(func: Any) -> Any:
-        _HANDLERS[name] = func
-        return func
-
-    return _collect
-
 
 # Server-level instructions — displayed to the AI at connection time
 _INSTRUCTIONS = (
@@ -91,11 +61,14 @@ _INSTRUCTIONS = (
     "tools and prompts to accomplish documentation tasks."
 )
 
-# Project failures produce failed tool results, resource error text or no completion
-# suggestions. These include invalid configuration or layout (`ValueError`), file
-# access errors, package import or loading errors, and build failures (`BuildError`
-# inherits from `RuntimeError`). Other exceptions propagate as protocol errors.
-_PROJECT_ERRORS: tuple[type[Exception], ...] = (*USER_CODE_ERRORS, ValueError)
+# The server reports these errors as failed tool results, resource error text or no
+# completion suggestions. `USER_CODE_ERRORS` covers package-loading failures and build
+# failures because `BuildError` inherits from `RuntimeError`.
+# The set also includes plain `ValueError`: builds and the lint stale-versions check raise it
+# for an invalid `versions` list. Builds also raise it for output Great Docs did not
+# generate or a directory claimed by both `sections` and either `user_guide` or
+# `custom_pages`. Other exceptions propagate as protocol errors.
+_REPORTED_ERRORS: tuple[type[Exception], ...] = (*PROJECT_ERRORS, *USER_CODE_ERRORS, ValueError)
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +184,6 @@ def _get_layout(arguments: dict, *, create: bool = False) -> Layout:
 # ---------------------------------------------------------------------------
 
 
-@_handler("list_tools")
 async def list_tools() -> list[Tool]:
     """List all available Great Docs tools."""
     tools = [
@@ -446,12 +418,14 @@ class _ToolCallContent(list[TextContent]):
     is_error: bool = False
 
 
-async def _missing_arguments(name: str, arguments: dict) -> list[str]:
+async def _argument_errors(name: str, arguments: dict[str, Any]) -> list[str]:
     """
-    List required argument names missing from a tool call
+    List violations of a tool's input schema
 
-    The server does not validate tool calls against their input schemas. Check for
-    missing arguments before dispatch so the client receives a failed tool result.
+    MCP validates request parameters but does not check tool arguments against
+    the tool's schema. Report argument errors before dispatch so clients receive
+    a failed tool result they can correct. Allow arguments the schema does not
+    declare.
 
     Parameters
     ----------
@@ -463,26 +437,47 @@ async def _missing_arguments(name: str, arguments: dict) -> list[str]:
     Returns
     -------
     :
-        Missing names in schema order, or an empty list for an unknown tool.
+        One message listing any missing required arguments in schema order,
+        followed by one message per other schema violation. Each later message
+        names the argument or list item, such as `checks` or `checks[1]`.
+        The list is empty for valid arguments or an unknown tool.
     """
-    for tool in await list_tools():
-        if tool.name == name:
-            required: list[str] = tool.input_schema.get("required", [])
-            return [argument for argument in required if argument not in arguments]
-    return []
-
-
-@_handler("call_tool")
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-    """Dispatch tool calls to their implementations."""
-    if missing := await _missing_arguments(name, arguments):
-        result = _ToolCallContent(
-            [
-                TextContent(
-                    type="text", text=f"Error: missing required argument: {', '.join(missing)}"
-                )
-            ]
+    schema = next((tool.input_schema for tool in await list_tools() if tool.name == name), None)
+    if schema is None:
+        return []
+    errors: list[str] = []
+    required: list[str] = schema.get("required", [])
+    if missing := [argument for argument in required if argument not in arguments]:
+        errors.append(f"Error: missing required argument: {', '.join(missing)}")
+    for error in Draft202012Validator(schema).iter_errors(arguments):
+        if error.validator == "required" and not error.absolute_path:
+            continue
+        path = "".join(
+            f"[{part}]" if isinstance(part, int) else f".{part}" for part in error.absolute_path
         )
+        errors.append(f"Error: invalid argument {path.removeprefix('.')}: {error.message}")
+    return errors
+
+
+async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+    """
+    Run a tool and return its text output
+
+    Parameters
+    ----------
+    name
+        The tool name.
+    arguments
+        The supplied argument names and values.
+
+    Returns
+    -------
+    :
+        The tool output. Unknown tools, invalid arguments and handled
+        project errors return error text with `is_error=True`.
+    """
+    if errors := await _argument_errors(name, arguments):
+        result = _ToolCallContent([TextContent(type="text", text="\n".join(errors))])
         result.is_error = True
         return result
     try:
@@ -506,7 +501,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             result = _ToolCallContent([TextContent(type="text", text=f"Unknown tool: {name}")])
             result.is_error = True
             return result
-    except _PROJECT_ERRORS as e:
+    except _REPORTED_ERRORS as e:
         result = _ToolCallContent([TextContent(type="text", text=f"Error: {e}")])
         result.is_error = True
         return result
@@ -942,7 +937,6 @@ async def _handle_api_diff(arguments: dict) -> list[TextContent]:
 # ---------------------------------------------------------------------------
 
 
-@_handler("list_prompts")
 async def list_prompts() -> list[Prompt]:
     """List pre-built prompt templates for documentation workflows."""
     return [
@@ -1034,7 +1028,6 @@ async def list_prompts() -> list[Prompt]:
     ]
 
 
-@_handler("get_prompt")
 async def get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptResult:
     """Return the expanded prompt messages for a given prompt template."""
     args = arguments or {}
@@ -1183,7 +1176,6 @@ async def get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptRe
 # ---------------------------------------------------------------------------
 
 
-@_handler("list_resources")
 async def list_resources() -> list[Resource]:
     """List available documentation resources."""
     resources = []
@@ -1258,15 +1250,25 @@ async def list_resources() -> list[Resource]:
     return resources
 
 
-@_handler("read_resource")
-async def read_resource(uri: AnyUrl) -> str:
+async def read_resource(uri: str) -> str:
     """
-    Read a resource with optional project and configuration selection
+    Read a documentation resource from a `gd://` URI
 
-    The `project_path` and `config_path` query parameters follow tool argument
-    semantics. Bare URIs use automatic project configuration discovery.
+    The `project_path` and `config_path` query parameters select the project and
+    configuration as they do for tool calls. Without these parameters, use
+    automatic project configuration discovery.
+
+    Parameters
+    ----------
+    uri
+        The resource URI, including any project and configuration query parameters.
+
+    Returns
+    -------
+    :
+        The resource content or a message describing an unavailable resource.
     """
-    parts = urlsplit(str(uri))
+    parts = urlsplit(uri)
     uri_str = parts._replace(query="").geturl()
     query = parse_qs(parts.query)
     arguments = {name: query[name][0] for name in ("project_path", "config_path") if name in query}
@@ -1320,7 +1322,7 @@ async def read_resource(uri: AnyUrl) -> str:
                         lines.append(f"  - {item}")
                     lines.append("")
             return "\n".join(lines)
-        except _PROJECT_ERRORS as e:
+        except _REPORTED_ERRORS as e:
             return f"Error discovering API surface: {e}"
 
     elif uri_str == "gd://status":
@@ -1352,7 +1354,7 @@ async def read_resource(uri: AnyUrl) -> str:
             doc = getattr(obj, "__doc__", None) or "No docstring available."
             kind = type(obj).__name__
             return f"# {importable_name}.{symbol}\nKind: {kind}\n\n{doc}"
-        except _PROJECT_ERRORS as e:
+        except _REPORTED_ERRORS as e:
             return f"Error reading reference for '{symbol}': {e}"
 
     elif uri_str.startswith("gd://page/"):
@@ -1372,7 +1374,6 @@ async def read_resource(uri: AnyUrl) -> str:
 # ---------------------------------------------------------------------------
 
 
-@_handler("list_resource_templates")
 async def list_resource_templates() -> list[ResourceTemplate]:
     """List dynamic resource templates."""
     return [
@@ -1416,15 +1417,32 @@ async def list_resource_templates() -> list[ResourceTemplate]:
 # ---------------------------------------------------------------------------
 
 
-@_handler("completion")
 async def handle_completion(
     ref: PromptReference | ResourceTemplateReference,
     argument: CompletionArgument,
-    context: object | None = None,
+    context: CompletionContext | None = None,
 ) -> Completion | None:
-    """Provide auto-completions for prompt arguments and resource template URIs."""
+    """
+    Suggest values for prompt and resource template arguments
+
+    Parameters
+    ----------
+    ref
+        The prompt or resource template to complete.
+    argument
+        The argument name and partial value to complete.
+    context
+        Previously supplied arguments, including any project and configuration
+        selection. Omit to use the default project configuration discovery.
+
+    Returns
+    -------
+    :
+        Matching suggestions, or `None` for an unsupported completion or a
+        handled project error.
+    """
     value = argument.value or ""
-    arguments = getattr(context, "arguments", None) or {}
+    arguments = (context.arguments if context else None) or {}
 
     # Prompt argument completions
     if isinstance(ref, PromptReference):
@@ -1466,7 +1484,7 @@ async def handle_completion(
                 exports = package_exports.names(importable_name)
                 filtered = [e for e in exports if value.lower() in e.lower()]
                 return Completion(values=filtered[:20], hasMore=len(filtered) > 20)
-            except _PROJECT_ERRORS:
+            except _REPORTED_ERRORS:
                 return None
 
         if argument.name == "project_path":
@@ -1495,7 +1513,7 @@ async def handle_completion(
                 exports = package_exports.names(importable_name)
                 filtered = [e for e in exports if value.lower() in e.lower()]
                 return Completion(values=filtered[:20], hasMore=len(filtered) > 20)
-            except _PROJECT_ERRORS:
+            except _REPORTED_ERRORS:
                 return None
 
         if "page" in str(ref.uri) and argument.name == "path":
@@ -1518,74 +1536,77 @@ async def handle_completion(
 # Server
 # ---------------------------------------------------------------------------
 
-# The collected handlers return lists, strings and `Completion` values.
-# Wrap these values in the result models required by the protocol.
+# MCP validates request parameters before these adapters run. The adapters wrap
+# handler output in protocol result models and preserve tool failure status.
+from mcp.server.context import ServerRequestContext
 from mcp.types import (
+    CallToolRequestParams,
     CallToolResult,
+    CompleteRequestParams,
     CompleteResult,
+    GetPromptRequestParams,
     ListPromptsResult,
     ListResourcesResult,
     ListResourceTemplatesResult,
     ListToolsResult,
+    PaginatedRequestParams,
+    ReadResourceRequestParams,
     ReadResourceResult,
     TextResourceContents,
 )
-from mcp.types import (
-    Completion as _Completion,
-)
 
 
-async def _on_list_tools(ctx: Any, params: Any = None) -> Any:
-    return ListToolsResult(tools=await _HANDLERS["list_tools"]())
+async def _on_list_tools(
+    ctx: ServerRequestContext, params: PaginatedRequestParams | None
+) -> ListToolsResult:
+    return ListToolsResult(tools=await list_tools())
 
 
-async def _on_call_tool(ctx: Any, params: Any) -> Any:
-    content = await _HANDLERS["call_tool"](
-        getattr(params, "name", ""),
-        getattr(params, "arguments", {}) or {},
-    )
+async def _on_call_tool(ctx: ServerRequestContext, params: CallToolRequestParams) -> CallToolResult:
+    content = await call_tool(params.name, params.arguments or {})
     return CallToolResult(
-        content=list(content or []),
-        is_error=getattr(content, "is_error", False),
+        content=list(content),
+        is_error=isinstance(content, _ToolCallContent) and content.is_error,
     )
 
 
-async def _on_list_prompts(ctx: Any, params: Any = None) -> Any:
-    return ListPromptsResult(prompts=await _HANDLERS["list_prompts"]())
+async def _on_list_prompts(
+    ctx: ServerRequestContext, params: PaginatedRequestParams | None
+) -> ListPromptsResult:
+    return ListPromptsResult(prompts=await list_prompts())
 
 
-async def _on_get_prompt(ctx: Any, params: Any) -> Any:
-    # The handler already returns a `GetPromptResult`.
-    return await _HANDLERS["get_prompt"](
-        getattr(params, "name", ""),
-        getattr(params, "arguments", None),
-    )
+async def _on_get_prompt(
+    ctx: ServerRequestContext, params: GetPromptRequestParams
+) -> GetPromptResult:
+    return await get_prompt(params.name, params.arguments)
 
 
-async def _on_list_resources(ctx: Any, params: Any = None) -> Any:
-    return ListResourcesResult(resources=await _HANDLERS["list_resources"]())
+async def _on_list_resources(
+    ctx: ServerRequestContext, params: PaginatedRequestParams | None
+) -> ListResourcesResult:
+    return ListResourcesResult(resources=await list_resources())
 
 
-async def _on_read_resource(ctx: Any, params: Any) -> Any:
-    uri = getattr(params, "uri", "")
-    text = await _HANDLERS["read_resource"](uri)
-    return ReadResourceResult(contents=[TextResourceContents(uri=uri, text=text or "")])
+async def _on_read_resource(
+    ctx: ServerRequestContext, params: ReadResourceRequestParams
+) -> ReadResourceResult:
+    text = await read_resource(params.uri)
+    return ReadResourceResult(contents=[TextResourceContents(uri=params.uri, text=text)])
 
 
-async def _on_list_resource_templates(ctx: Any, params: Any = None) -> Any:
-    return ListResourceTemplatesResult(
-        resourceTemplates=await _HANDLERS["list_resource_templates"]()
-    )
+async def _on_list_resource_templates(
+    ctx: ServerRequestContext, params: PaginatedRequestParams | None
+) -> ListResourceTemplatesResult:
+    return ListResourceTemplatesResult(resource_templates=await list_resource_templates())
 
 
-async def _on_completion(ctx: Any, params: Any) -> Any:
-    completion = await _HANDLERS["completion"](
-        getattr(params, "ref", None),
-        getattr(params, "argument", None),
-        getattr(params, "context", None),
-    )
+async def _on_completion(
+    ctx: ServerRequestContext, params: CompleteRequestParams
+) -> CompleteResult:
+    completion = await handle_completion(params.ref, params.argument, params.context)
     if completion is None:
-        completion = _Completion(values=[])
+        completion = Completion(values=[])
     return CompleteResult(completion=completion)
 
 

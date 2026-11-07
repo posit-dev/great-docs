@@ -11,12 +11,16 @@ from typing import TYPE_CHECKING, TextIO, cast
 
 import griffe
 
+from great_docs._layout import LayoutError
+from great_docs.config import ConfigError
+
 if TYPE_CHECKING:
     from pathlib import Path
 
     from great_docs._build.log import BuildLog
 
 __all__ = [
+    "PROJECT_ERRORS",
     "USER_CODE_ERRORS",
     "BuildError",
     "Skipped",
@@ -38,6 +42,16 @@ USER_CODE_ERRORS: tuple[type[Exception], ...] = (
     RuntimeError,
     OSError,
     griffe.GriffeError,
+)
+
+# The CLI and MCP server report these project and environment failures: invalid
+# configuration or layout, file access failures, missing tools and non-UTF-8 files.
+# Each front end also handles errors specific to its operations.
+PROJECT_ERRORS: tuple[type[Exception], ...] = (
+    ConfigError,
+    LayoutError,
+    OSError,
+    UnicodeDecodeError,
 )
 
 
