@@ -1835,8 +1835,8 @@ class TestSaveFreezeCache:
 
     def test_non_versioned_build_persists_at_top_level(self, tmp_path):
         gd = _make_gd(tmp_path)
-        (gd.build_dir / "_freeze").mkdir(parents=True)
-        (gd.build_dir / "_freeze" / "page1.json").write_text('{"v": 1}')
+        (gd.layout.build_dir / "_freeze").mkdir(parents=True)
+        (gd.layout.build_dir / "_freeze" / "page1.json").write_text('{"v": 1}')
 
         assert freeze.save(gd.layout) == 1
         assert [path.name for path in (tmp_path / "_freeze").iterdir()] == ["page1.json"]
