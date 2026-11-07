@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from .._layout import Layout
     from ..config import Config
 
-__all__ = ["find_pages"]
+__all__ = ["find_pages", "find_pages_in"]
 
 _PAGE_SUFFIXES = (".md", ".qmd")
 
@@ -58,9 +58,32 @@ def find_pages(config: Config, layout: Layout, *, report: Callable[[str], None])
 
     pages = [path for path in homepage_source.find(layout)[:1] if path.suffix in _PAGE_SUFFIXES]
     for directory in directories:
-        if not directory.is_dir():
-            continue
-        for path in sorted([*directory.rglob("*.qmd"), *directory.rglob("*.md")]):
-            if not any(part.startswith(("_", ".")) for part in path.relative_to(directory).parts):
-                pages.append(path)
+        pages.extend(find_pages_in(directory))
     return pages
+
+
+def find_pages_in(directory: Path) -> list[Path]:
+    """
+    Find documentation pages recursively in a directory
+
+    Quarto does not render paths with a component starting with `_` or `.` below the
+    directory. Exclude those paths from the results.
+
+    Parameters
+    ----------
+    directory
+        The directory to search recursively.
+
+    Returns
+    -------
+    :
+        The `.qmd` and `.md` pages sorted by path, or an empty list if `directory` is not
+        a directory.
+    """
+    if not directory.is_dir():
+        return []
+    return [
+        path
+        for path in sorted([*directory.rglob("*.qmd"), *directory.rglob("*.md")])
+        if not any(part.startswith(("_", ".")) for part in path.relative_to(directory).parts)
+    ]

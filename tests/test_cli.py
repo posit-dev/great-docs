@@ -2180,6 +2180,63 @@ def test_proofread_only_and_ignore_rules(mock_check, mock_run, tmp_path, monkeyp
     assert result.exit_code == 0
 
 
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+def test_proofread_expands_a_directory_argument(mock_check, mock_run, tmp_path, monkeypatch):
+    """Expand a directory into its sorted pages, skipping `_` directories and other files"""
+    monkeypatch.chdir(tmp_path)
+    Path("pyproject.toml").write_text('[project]\nname = "pkg"\n')
+    for name in ("recipes/b.md", "recipes/a/c.md", "recipes/_drafts/d.md", "recipes/notes.txt"):
+        Path(name).parent.mkdir(parents=True, exist_ok=True)
+        Path(name).write_text("text")
+
+    result = CliRunner().invoke(cli, ["proofread", "recipes", "--project-path", "."])
+
+    assert result.exit_code == 0, result.output
+    assert mock_run.call_args.args[0] == [Path("recipes/a/c.md"), Path("recipes/b.md")]
+
+
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+def test_proofread_resolves_docs_dir_against_the_project(
+    mock_check, mock_run, tmp_path, monkeypatch
+):
+    """Resolve `--docs-dir` from the project root and exclude generated pages"""
+    project = tmp_path / "project"
+    (project / "guide" / "_site").mkdir(parents=True)
+    (project / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+    (project / "guide" / "page.md").write_text("text")
+    (project / "guide" / "_site" / "copy.md").write_text("text")
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "guide").mkdir(parents=True)
+    (elsewhere / "guide" / "other.md").write_text("text")
+    monkeypatch.chdir(elsewhere)
+
+    result = CliRunner().invoke(
+        cli, ["proofread", "--docs-dir", "guide", "--project-path", str(project)]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert mock_run.call_args.args[0] == [project.resolve() / "guide" / "page.md"]
+
+
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+def test_proofread_json_counts_only_checked_files(mock_check, mock_run, tmp_path, monkeypatch):
+    """Count only supported files in JSON output, excluding Python files by default"""
+    monkeypatch.chdir(tmp_path)
+    Path("pyproject.toml").write_text('[project]\nname = "pkg"\n')
+    for name in ("page.md", "notes.txt", "module.py"):
+        Path(name).write_text("text")
+
+    result = CliRunner().invoke(
+        cli,
+        ["proofread", "page.md", "notes.txt", "module.py", "--json-output", "--project-path", "."],
+    )
+
+    assert json.loads(result.output)["files_checked"] == 1
+
+
 # =========================================================================
 # `great-docs versions` command
 # =========================================================================

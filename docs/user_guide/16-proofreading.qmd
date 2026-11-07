@@ -76,11 +76,14 @@ Check specific files or patterns:
 # Check one file
 great-docs proofread user-guide/getting-started.qmd
 
-# Check .qmd pages in a directory
+# Check pages recursively in a directory
+great-docs proofread recipes/
+
+# Check .qmd pages directly in a directory
 great-docs proofread recipes/*.qmd
 ```
 
-A directory argument is not expanded into files. Use a glob to pass its pages to the proofreader.
+A directory argument expands into its `.qmd` and `.md` pages, including pages in subdirectories. As with the default page search, paths with a component starting with `_` or `.` below the specified directory are skipped.
 
 ## Custom Dictionary
 

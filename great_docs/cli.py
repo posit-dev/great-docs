@@ -2535,6 +2535,7 @@ def proofread(
       great-docs proofread --json-output           # JSON output for CI
       great-docs proofread --ignore=SpellCheck     # Skip specific rules
       great-docs proofread README.md user_guide/*.qmd  # Specific files
+      great-docs proofread recipes/                # Pages in a directory
 
     \b
     Requires harper-cli to be installed:
@@ -2569,13 +2570,10 @@ def proofread(
         config = layout.load_config()
 
         if files:
-            files_to_check = [Path(f) for f in files]
+            files_to_check = inputs.expand_directories(Path(f) for f in files)
         else:
             if docs_dir:
-                files_to_check = [*Path(docs_dir).rglob("*.qmd"), *Path(docs_dir).rglob("*.md")]
-                readme = layout.package_root / "README.md"
-                if readme.exists():
-                    files_to_check.append(readme)
+                files_to_check = inputs.find_pages_in(Path(docs_dir), layout)
             else:
                 files_to_check = inputs.find_pages(
                     config,
@@ -2617,9 +2615,11 @@ def proofread(
             builtin_dictionary=not strict and not no_builtin_dictionary,
             default_ignores=not strict,
         )
-        # Exclude Python files unless docstring checking is requested.
+        # Harper checks Python files only when docstring checking is requested.
+        checked_suffixes = {".md", ".qmd", ".py"} if include_docstrings else {".md", ".qmd"}
+        checked_files = [f for f in files_to_check if f.suffix in checked_suffixes]
         all_results = proofreading.check(
-            [f for f in files_to_check if include_docstrings or f.suffix != ".py"],
+            checked_files,
             layout.package_root,
             options,
             report=click.echo if show_progress else lambda _line: None,
@@ -2645,7 +2645,7 @@ def proofread(
                 "version": "1.0.0",
                 "harper_version": harper_info.split()[-1] if harper_info else "unknown",
                 "dialect": dialect,
-                "files_checked": len(files_to_check),
+                "files_checked": len(checked_files),
                 "total_issues": total_issues,
                 "summary": {
                     "by_kind": dict(by_kind),
