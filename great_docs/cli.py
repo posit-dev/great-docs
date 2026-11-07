@@ -2539,6 +2539,7 @@ def proofread(
       great-docs proofread --json-output           # JSON output for CI
       great-docs proofread --ignore=SpellCheck     # Skip specific rules
       great-docs proofread README.md user_guide/*.qmd  # Specific files
+      great-docs proofread recipes/                # Pages in a directory
 
     \b
     Requires harper-cli to be installed:
@@ -2573,13 +2574,10 @@ def proofread(
         config = layout.load_config()
 
         if files:
-            files_to_check = [Path(f) for f in files]
+            files_to_check = inputs.expand_directories(Path(f) for f in files)
         else:
             if docs_dir:
-                files_to_check = [*Path(docs_dir).rglob("*.qmd"), *Path(docs_dir).rglob("*.md")]
-                readme = layout.package_root / "README.md"
-                if readme.exists():
-                    files_to_check.append(readme)
+                files_to_check = inputs.find_pages_in(Path(docs_dir), layout)
             else:
                 files_to_check = inputs.find_pages(
                     config,

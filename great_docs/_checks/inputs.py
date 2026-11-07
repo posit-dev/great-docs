@@ -12,13 +12,13 @@ from .._content import authored
 from .._layout import PACKAGE_DIRS
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
     from pathlib import Path
 
     from .._layout import Layout
     from ..config import Config
 
-__all__ = ["find_modules", "find_pages"]
+__all__ = ["expand_directories", "find_modules", "find_pages", "find_pages_in"]
 
 
 def find_pages(config: Config, layout: Layout, *, report: Callable[[str], None]) -> list[Path]:
@@ -41,11 +41,51 @@ def find_pages(config: Config, layout: Layout, *, report: Callable[[str], None])
         source, then pages in the user guide, sections and custom page directories.
         An existing `README.md` at the package root is appended unless already included.
     """
-    pages = authored.find_pages(config, layout, report=report)
-    readme = layout.package_root / "README.md"
-    if readme.exists() and readme not in pages:
-        pages.append(readme)
-    return pages
+    return _with_readme(authored.find_pages(config, layout, report=report), layout)
+
+
+def find_pages_in(directory: Path, layout: Layout) -> list[Path]:
+    """
+    Find documentation pages recursively and include the package README
+
+    Parameters
+    ----------
+    directory
+        The documentation directory, absolute or relative to the package root.
+    layout
+        The project's paths.
+
+    Returns
+    -------
+    :
+        The `.qmd` and `.md` pages under `directory`, sorted by path. Paths with a
+        component starting with `_` or `.` below `directory` are excluded. An existing
+        `README.md` at the package root is appended unless already included.
+    """
+    return _with_readme(authored.find_pages_in(layout.package_root / directory), layout)
+
+
+def expand_directories(paths: Iterable[Path]) -> list[Path]:
+    """
+    Expand directory paths into documentation pages
+
+    Parameters
+    ----------
+    paths
+        Files and directories named on the command line.
+
+    Returns
+    -------
+    :
+        The paths in their original order, with each directory replaced by its `.qmd`
+        and `.md` pages, sorted by path. Paths with a component starting with `_` or
+        `.` below each directory are excluded. File paths are unchanged.
+    """
+    return [
+        file
+        for path in paths
+        for file in (authored.find_pages_in(path) if path.is_dir() else [path])
+    ]
 
 
 def find_modules(layout: Layout, module: str) -> list[Path]:
@@ -72,3 +112,26 @@ def find_modules(layout: Layout, module: str) -> list[Path]:
         if module_dir.is_dir():
             return list(module_dir.rglob("*.py"))
     return []
+
+
+def _with_readme(pages: list[Path], layout: Layout) -> list[Path]:
+    """
+    Append the package README if it exists and is not already included
+
+    Parameters
+    ----------
+    pages
+        The pages to extend in place.
+    layout
+        The project's paths.
+
+    Returns
+    -------
+    :
+        The same list, extended in place with `README.md` from the package root if the
+        file exists and is not already included.
+    """
+    readme = layout.package_root / "README.md"
+    if readme.exists() and readme not in pages:
+        pages.append(readme)
+    return pages
