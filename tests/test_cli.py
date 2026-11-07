@@ -2220,6 +2220,23 @@ def test_proofread_resolves_docs_dir_against_the_project(
     assert mock_run.call_args.args[0] == [project.resolve() / "guide" / "page.md"]
 
 
+@patch("great_docs._checks.harper.run_harper", return_value=[])
+@patch("great_docs._checks.harper.check_harper_available", return_value=(True, "harper 1.12.0"))
+def test_proofread_json_counts_only_checked_files(mock_check, mock_run, tmp_path, monkeypatch):
+    """Count only supported files in JSON output, excluding Python files by default"""
+    monkeypatch.chdir(tmp_path)
+    Path("pyproject.toml").write_text('[project]\nname = "pkg"\n')
+    for name in ("page.md", "notes.txt", "module.py"):
+        Path(name).write_text("text")
+
+    result = CliRunner().invoke(
+        cli,
+        ["proofread", "page.md", "notes.txt", "module.py", "--json-output", "--project-path", "."],
+    )
+
+    assert json.loads(result.output)["files_checked"] == 1
+
+
 # =========================================================================
 # `great-docs versions` command
 # =========================================================================
