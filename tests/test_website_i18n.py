@@ -9,8 +9,8 @@ from typing import Any
 
 from great_docs._translations import (
     QUARTO_LANGUAGE_KEYS,
-    get_translation,
     get_translations_bundle,
+    translate,
 )
 from great_docs._website import i18n
 from great_docs.config import Config
@@ -88,7 +88,7 @@ class TestRegisterTocTitle:
     def test_title_follows_the_language(self, tmp_path: Path):
         quarto_config = {"format": {"html": {"toc-title": "On this page"}}}
         i18n.register_toc_title(quarto_config, write_config(tmp_path, "site:\n  lang: fr\n"))
-        assert quarto_config["format"]["html"]["toc-title"] == get_translation("on_this_page", "fr")
+        assert quarto_config["format"]["html"]["toc-title"] == translate("on_this_page", "fr")
 
     def test_site_title_wins(self, tmp_path: Path):
         quarto_config = {"format": {"html": {"toc-title": "Contents"}}}

@@ -130,9 +130,9 @@ def configure(
     ref_desc = site_config.reference_desc
 
     if not site_config.reference_title and site_config.lang != "en":
-        from .._translations import get_translation
+        from .._translations import translate
 
-        ref_title = get_translation("api_reference", site_config.lang)
+        ref_title = translate("api_reference", site_config.lang)
 
     api_ref_config: dict[str, Any] = {
         "package": importable_name,

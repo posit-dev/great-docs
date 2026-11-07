@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from ..._translations import get_translation
+from ..._translations import translate
 
 if TYPE_CHECKING:
     from ..._contribution import NavbarLink
@@ -60,7 +60,7 @@ class OwnItem:
         :
             The label the site shows.
         """
-        return get_translation(self.key, config.lang)
+        return translate(self.key, config.lang)
 
     def owns(self, href: object) -> bool:
         """

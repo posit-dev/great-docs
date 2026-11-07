@@ -99,12 +99,12 @@ def from_categories(config: Config, categories: Categories) -> list[dict[str, An
     """
     sections: list[dict[str, Any]] = []
 
-    from .._translations import get_translation
+    from .._translations import translate
 
     lang = config.lang
 
     def _t(key: str, fallback: str) -> str:
-        return get_translation(key, lang) if lang != "en" else fallback
+        return translate(key, lang) if lang != "en" else fallback
 
     def _make_class_section(title: str, desc: str, class_names: list[str]) -> list[dict[str, Any]]:
         """
@@ -392,10 +392,10 @@ def sidebar(site_config: Config, api_block: dict[str, Any]) -> Sidebar:
         The sidebar, with `reference` as its `id`.
     """
     from .._apiref import APIReference, SpecObject
-    from .._translations import get_translation
+    from .._translations import translate
 
     contents: list[dict[str, Any]] = [
-        {"text": get_translation("api_index", site_config.lang), "href": "reference/index.qmd"}
+        {"text": translate("api_index", site_config.lang), "href": "reference/index.qmd"}
     ]
     for section in APIReference({"api-reference": api_block}).sections:
         heading = section.title or section.subtitle or ""
@@ -427,9 +427,9 @@ def contribution(site_config: Config, api_block: dict[str, Any]) -> Contribution
         The `reference` sidebar and a navbar link to `reference/index.qmd`. The navbar
         label is `reference.title` when set, otherwise "Reference" in the site's language.
     """
-    from .._translations import get_translation
+    from .._translations import translate
 
-    label = site_config.reference_title or get_translation("reference", site_config.lang)
+    label = site_config.reference_title or translate("reference", site_config.lang)
     return Contribution(
         navbar=(NavbarLink(text=label, href="reference/index.qmd"),),
         sidebars=(sidebar(site_config, api_block),),

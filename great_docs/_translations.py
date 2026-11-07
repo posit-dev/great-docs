@@ -7785,7 +7785,7 @@ UI_TRANSLATIONS: dict[str, dict[str, str]] = {
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-def get_translation(key: str, language: str = DEFAULT_LANGUAGE) -> str:
+def translate(key: str, language: str = DEFAULT_LANGUAGE) -> str:
     """
     Look up a single translation string.
 
@@ -7806,6 +7806,35 @@ def get_translation(key: str, language: str = DEFAULT_LANGUAGE) -> str:
     if entry is None:
         return key
     return entry.get(language, entry.get(DEFAULT_LANGUAGE, key))
+
+
+def translate_versioned(key: str, language: str, version: str) -> str:
+    """
+    Translate a version label and insert the version
+
+    Replace `{v}` when the translated label contains a placeholder; otherwise,
+    append the version. Remove the placeholder when the version is empty.
+
+    Parameters
+    ----------
+    key
+        The translation key, such as `added_in_version`.
+    language
+        The BCP 47 language code, with English as the fallback.
+    version
+        The version, or an empty string for a label without one.
+
+    Returns
+    -------
+    :
+        The translated label, including the version when supplied.
+    """
+    label = translate(key, language)
+    if not version:
+        return label.replace(" {v}", "").replace("{v}", "")
+    if "{v}" in label:
+        return label.replace("{v}", version)
+    return f"{label} {version}"
 
 
 def get_translations_bundle(language: str = DEFAULT_LANGUAGE) -> dict[str, str]:

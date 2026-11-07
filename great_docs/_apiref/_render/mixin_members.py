@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
+from great_docs._translations import translate
 from great_docs.pandoc.blocks import (
     Block,
     BlockContent,
@@ -12,7 +13,6 @@ from great_docs.pandoc.blocks import (
 )
 from great_docs.pandoc.components import Attr
 
-from .._globals import translate
 from .._type_checks import (
     griffe_to_doc,
     is_doc_attribute,
@@ -313,15 +313,17 @@ class __RenderDocMembersMixin(RenderDoc):
 
         title = Header(
             self.level + 1,
-            translate(slug.replace("-", "_")),
+            translate(slug.replace("-", "_"), self.settings.lang),
             Attr(classes=[f"doc-{slug}"]),
         )
 
-        render_objs = [Render(obj, self.level + 2, contained=True) for obj in docables]
+        render_objs = [
+            Render(obj, self.level + 2, contained=True, settings=self.settings) for obj in docables
+        ]
 
         if self.show_members_summary and show_summary:
             rows = [row for r in render_objs for row in r.render_summary()]
-            summary = summary_table(rows)
+            summary = summary_table(rows, self.settings.lang)
         else:
             summary = None
 
@@ -367,7 +369,7 @@ class __RenderDocMembersMixin(RenderDoc):
 
         title = Header(
             self.level + 1,
-            translate(slug.replace("-", "_")),
+            translate(slug.replace("-", "_"), self.settings.lang),
             Attr(classes=[f"doc-{slug}", "doc-pages"]),
         )
 
@@ -376,13 +378,14 @@ class __RenderDocMembersMixin(RenderDoc):
                 griffe_to_doc(page.obj, deep=False),
                 contained=False,
                 page_path=f"{page.path}.qmd",
+                settings=self.settings,
             )
             for page in pages
         ]
 
         if self.show_members_summary and show_summary:
             rows = [row for r in render_objs for row in r.render_summary()]
-            summary = summary_table(rows)
+            summary = summary_table(rows, self.settings.lang)
         else:
             summary = None
 

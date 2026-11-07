@@ -1,3 +1,4 @@
+from great_docs._apiref._settings import Settings
 import textwrap
 
 import griffe as gf
@@ -338,7 +339,7 @@ def test_empty_docstring_value_has_no_subject():
     obj = _obj("")
     assert obj.docstring is not None
     obj.docstring.__dict__["parsed"] = [gf.DocstringSectionText("")]
-    renderer = RenderDocFunction(content.Doc.from_griffe(obj.name, obj))
+    renderer = RenderDocFunction(content.Doc.from_griffe(obj.name, obj), settings=Settings())
 
     assert renderer.docstring_subject is None
 
@@ -346,7 +347,7 @@ def test_empty_docstring_value_has_no_subject():
 def test_directive_only_seealso_renders_every_reference_without_a_subject():
     obj = _obj("%seealso first : First reference, second : Second reference")
     add_seealso(obj)
-    renderer = RenderDocFunction(content.Doc.from_griffe(obj.name, obj))
+    renderer = RenderDocFunction(content.Doc.from_griffe(obj.name, obj), settings=Settings())
 
     body = str(renderer.render_body())
 

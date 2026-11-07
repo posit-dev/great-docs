@@ -4,13 +4,11 @@ The settings of an API reference, read from its Quarto config block
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from dataclasses import fields as dc_fields
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
     from pathlib import Path
 
 
@@ -128,32 +126,3 @@ class Settings:
 # and dropped, per spec.)
 # The site configuration supplies the language; the project supplies source links.
 _SETTINGS_KEYS = {f.name for f in dc_fields(Settings)} - {"version", "lang", "source_links"}
-
-
-@contextmanager
-def active_settings(settings: Settings) -> Generator[None]:
-    """
-    Make `settings` the ones the render classes read, for one build
-
-    `RenderBase` receives a node and display flags only, so settings reach the
-    render classes through module state, as exclusions already do. The state
-    is put back on the way out, because one process can build more than one
-    API reference and the settings of one must not govern the next.
-
-    Parameters
-    ----------
-    settings
-        The settings of the API reference being built.
-
-    Yields
-    ------
-    :
-    """
-    from . import _globals
-
-    previous = _globals.SETTINGS
-    _globals.SETTINGS = settings
-    try:
-        yield
-    finally:
-        _globals.SETTINGS = previous

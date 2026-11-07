@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from great_docs._apiref._settings import Settings
 import sys
 import textwrap
 
@@ -333,7 +334,7 @@ def test_valueless_alias_omits_default_clause():
     assert obj.value is None
 
     doc = Doc.from_griffe("Empty", obj)
-    qmd = str(get_render_type(doc)(doc, 1))
+    qmd = str(get_render_type(doc)(doc, 1, settings=Settings()))
 
     assert "None" not in qmd
     assert "doc-parameter-default-sep" not in qmd

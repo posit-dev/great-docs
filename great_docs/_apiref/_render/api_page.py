@@ -65,6 +65,7 @@ class __RenderAPIPage(RenderPageMixin, RenderBase):
                 c,
                 level,
                 page_path=self.path,
+                settings=self.settings,
             )
             for c in self.page.contents
         ]

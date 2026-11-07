@@ -13,7 +13,7 @@ from great_docs._build.steps import USER_CODE_ERRORS
 from great_docs._layout import PACKAGE_DIRS
 from great_docs._manifest import ManifestError
 from great_docs._subprocess import TEXT_MODE_KWARGS
-from great_docs._translations import get_translation
+from great_docs._translations import translate
 
 if TYPE_CHECKING:
     from griffe import Alias, Object
@@ -1673,7 +1673,7 @@ def evolution_table_html(
         if summary_text:
             label = summary_text
         else:
-            template = get_translation("evo_disclosure_summary")
+            template = translate("evo_disclosure_summary")
             label = template.format(symbol=_escape_html(history.symbol_name))
         return (
             f'<details class="gd-evolution-disclosure">\n'
@@ -1983,7 +1983,7 @@ def render_evolution_table_from_dict(
         if summary_text:
             label = summary_text
         else:
-            template = get_translation("evo_disclosure_summary")
+            template = translate("evo_disclosure_summary")
             label = template.format(symbol=_escape_html(symbol_name))
         table_html = (
             f'<details class="gd-evolution-disclosure">\n'

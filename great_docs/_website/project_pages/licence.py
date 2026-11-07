@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ..._translations import get_translation
+from ..._translations import translate
 from .. import page_dates
 from ..spdx import BADGE_TOOLTIP_KEYS, build_license_features_html, get_license_info
 
@@ -67,13 +67,11 @@ def write_page(
         lang = config.lang
         features_html = build_license_features_html(
             licence_info,
-            features_label=get_translation("license_features", lang),
-            permissions_label=get_translation("license_permissions", lang),
-            conditions_label=get_translation("license_conditions", lang),
-            limitations_label=get_translation("license_limitations", lang),
-            tooltips={
-                label: get_translation(key, lang) for label, key in BADGE_TOOLTIP_KEYS.items()
-            },
+            features_label=translate("license_features", lang),
+            permissions_label=translate("license_permissions", lang),
+            conditions_label=translate("license_conditions", lang),
+            limitations_label=translate("license_limitations", lang),
+            tooltips={label: translate(key, lang) for label, key in BADGE_TOOLTIP_KEYS.items()},
         )
         # Raw blocks make Quarto pass the HTML through unchanged
         if features_html:

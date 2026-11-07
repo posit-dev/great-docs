@@ -8,7 +8,7 @@ import html
 import re
 from typing import TYPE_CHECKING, Protocol, Sequence
 
-from .._globals import translate
+from great_docs._translations import translate
 
 if TYPE_CHECKING:
 
@@ -123,7 +123,7 @@ def pipe_table(
     return "\n".join(lines)
 
 
-def summary_table(rows: Sequence[tuple[Stringable, Stringable | None]]) -> str:
+def summary_table(rows: Sequence[tuple[Stringable, Stringable | None]], lang: str) -> str:
     """
     Render a two-column summary of documented objects
 
@@ -137,15 +137,17 @@ def summary_table(rows: Sequence[tuple[Stringable, Stringable | None]]) -> str:
         One `(name, description)` pair per object. The name is usually a
         Markdown link to the object's documentation; a missing description
         leaves its cell empty.
+    lang
+        The language of the column headers, as a BCP 47 tag.
 
     Returns
     -------
     :
-        A pipe table whose headers are in the site language.
+        A pipe table whose headers are in `lang`.
     """
     return pipe_table(
         [(str(name), "" if desc is None else str(desc)) for name, desc in rows],
-        headers=[translate("name"), translate("description")],
+        headers=[translate("name", lang), translate("description", lang)],
         classes=["gd-summary-table"],
     )
 

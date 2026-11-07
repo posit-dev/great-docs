@@ -10,7 +10,7 @@ import griffe as gf
 
 import great_docs._apiref._render.doc as docmod
 from great_docs._apiref._render.doc import RenderDoc
-from great_docs._apiref._settings import Settings, SourceLinks, active_settings
+from great_docs._apiref._settings import Settings, SourceLinks
 
 
 def _get_private_cls():
@@ -134,11 +134,11 @@ class TestSourceLinkCompiledExtension:
         cls = _get_private_cls()
 
         fake_self = types.SimpleNamespace(
-            _source_relative_path=lambda: "mymod.cpython-313-x86_64-linux-gnu.so"
+            _source_relative_path=lambda: "mymod.cpython-313-x86_64-linux-gnu.so",
+            settings=Settings(source_links=LINKED),
         )
 
-        with active_settings(Settings(source_links=LINKED)):
-            result = cls.__dict__["source_link"].func(fake_self)
+        result = cls.__dict__["source_link"].func(fake_self)
 
         assert result is None
 
@@ -147,10 +147,11 @@ class TestSourceLinkCompiledExtension:
 
         cls = _get_private_cls()
 
-        fake_self = types.SimpleNamespace(_source_relative_path=lambda: "mymod.pyd")
+        fake_self = types.SimpleNamespace(
+            _source_relative_path=lambda: "mymod.pyd", settings=Settings(source_links=LINKED)
+        )
 
-        with active_settings(Settings(source_links=LINKED)):
-            result = cls.__dict__["source_link"].func(fake_self)
+        result = cls.__dict__["source_link"].func(fake_self)
 
         assert result is None
 
@@ -165,11 +166,10 @@ class TestSourceRelativePathValueError:
             filepath="/unrelated/path/to/mod.py",
             relative_package_filepath="mod.py",
         )
-        fake_self = types.SimpleNamespace(obj=obj)
-
         links = SourceLinks(package_root=Path("/completely/different/root"))
-        with active_settings(Settings(source_links=links)):
-            result = cls.__dict__["_source_relative_path"](fake_self)
+        fake_self = types.SimpleNamespace(obj=obj, settings=Settings(source_links=links))
+
+        result = cls.__dict__["_source_relative_path"](fake_self)
 
         assert result == "mod.py"
 
@@ -184,9 +184,9 @@ class TestSourceRelativePathNamespacePackage:
             filepath=[Path("/repo/a/ns"), Path("/repo/b/ns")],
             relative_package_filepath="ns",
         )
-        fake_self = types.SimpleNamespace(obj=obj)
+        links = SourceLinks(package_root=Path("/repo"))
+        fake_self = types.SimpleNamespace(obj=obj, settings=Settings(source_links=links))
 
-        with active_settings(Settings(source_links=SourceLinks(package_root=Path("/repo")))):
-            result = cls.__dict__["_source_relative_path"](fake_self)
+        result = cls.__dict__["_source_relative_path"](fake_self)
 
         assert result == "ns"
