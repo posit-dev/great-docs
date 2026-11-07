@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+    from ..._layout import Layout
     from ..._manifest import Dependency, Manifest
     from ..._remote import Remote
     from ...config import Config
@@ -37,7 +38,7 @@ _COL_WIDTHS: dict[tuple[bool, bool], tuple[int, ...]] = {
 
 def write_page(
     config: Config,
-    build_dir: Path,
+    layout: Layout,
     metadata: Manifest,
     remote: Remote,
     *,
@@ -59,8 +60,8 @@ def write_page(
         The Great Docs configuration. No page is written when `package_info_page` is off
         or the project has no Python component. Set `package_info_page.release_dates`
         to `false` to omit the release-date column and skip PyPI requests.
-    build_dir
-        The Quarto project directory to write the page into.
+    layout
+        Project directories, including the build directory for `package-info.qmd`.
     metadata
         The project metadata, read for `dependencies`, `optional_dependencies` and
         `requires_python`. No page is written when all three are empty.
@@ -197,7 +198,7 @@ def write_page(
     )
     content = f"---\n{front_matter.rstrip()}\n---\n\n{body}\n"
 
-    path = build_dir / FILENAME
+    path = layout.build_dir / FILENAME
     _ = path.write_text(content, encoding="utf-8")
     report(f"Created {path}")
     return path

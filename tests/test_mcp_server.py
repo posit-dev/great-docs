@@ -17,6 +17,7 @@ import great_docs.mcp as mcp_module
 from great_docs._layout import Layout
 from great_docs._project import Project
 from great_docs._utils import QUARTO_YML_HEADER
+from great_docs._yaml import split_front_matter
 from great_docs.config import ConfigError
 from great_docs.mcp import (
     _build_output_dirs,
@@ -624,7 +625,7 @@ class TestHandleAddPage:
         monkeypatch.chdir(tmp_path)
         asyncio.run(_handle_add_page({"title": "Hello World"}))
         content = (tmp_path / "user_guide" / "hello-world.qmd").read_text(encoding="utf-8")
-        assert 'title: "Hello World"' in content
+        assert "title: Hello World\n" in content
 
     def test_initial_content_written_to_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
@@ -663,6 +664,17 @@ class TestCallToolDispatch:
         monkeypatch.chdir(tmp_path)
         result = asyncio.run(call_tool("gd_add_page", {"title": "Test"}))
         assert "Created" in result[0].text
+
+    def test_gd_add_page_quotes_the_title(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Preserve quotes and colons in the MCP page title after a YAML round trip"""
+        monkeypatch.chdir(tmp_path)
+        title = 'Say "hi": now'
+
+        result = asyncio.run(call_tool("gd_add_page", {"title": title}))
+
+        created = result[0].text.split("Created page: ")[1].splitlines()[0]
+        front_matter, _ = split_front_matter((tmp_path / created).read_text(encoding="utf-8"))
+        assert front_matter.get("title") == title
 
     def test_dispatches_gd_build(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)

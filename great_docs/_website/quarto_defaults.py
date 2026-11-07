@@ -206,10 +206,7 @@ def register_extensions(quarto_config: dict[str, Any]) -> None:
     -------
     :
     """
-    filters = quarto_yml.entries(quarto_config, "filters")
-    for name in _FILTERS:
-        if name not in filters:
-            filters.append(name)
+    quarto_yml.entries(quarto_config, "filters").extend(_FILTERS)
     quarto_yml.add_resources(quarto_config, [INVENTORY_FILENAME])
 
 

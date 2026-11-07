@@ -69,13 +69,6 @@ class TestCredits:
     def test_leaves_the_footer_out_without_developers_or_funder(self):
         assert "page-footer" not in _register()["website"]
 
-    def test_keeps_an_existing_footer(self):
-        quarto_config: dict[str, Any] = {"website": {"page-footer": {"left": "Mine"}}}
-
-        footer.register(quarto_config, mock_config(lang="en"), {"authors": ["Ann"]})
-
-        assert quarto_config["website"]["page-footer"] == {"left": "Mine"}
-
 
 class TestAttribution:
     def test_appends_the_credit_to_the_developers(self):

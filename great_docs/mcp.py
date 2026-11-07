@@ -780,6 +780,8 @@ async def _handle_status(arguments: dict) -> list[TextContent]:
 
 async def _handle_add_page(arguments: dict) -> list[TextContent]:
     """Add a new documentation page."""
+    from yaml12 import format_yaml
+
     project_path = arguments.get("project_path")
     title = arguments["title"]
     section = arguments.get("section", "user_guide")
@@ -816,7 +818,7 @@ async def _handle_add_page(arguments: dict) -> list[TextContent]:
     # Build page content
     page_lines = [
         "---",
-        f'title: "{title}"',
+        format_yaml({"title": title}).rstrip(),
         "---",
         "",
     ]

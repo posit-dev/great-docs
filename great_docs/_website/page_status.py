@@ -14,7 +14,6 @@ from . import page_scan
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from pathlib import Path
 
     from .._layout import Layout
     from ..config import Config
@@ -59,9 +58,19 @@ def collect(config: Config, layout: Layout) -> dict[str, str]:
     return statuses
 
 
-def write(config: Config, build_dir: Path, statuses: Mapping[str, str]) -> dict[str, Any]:
+def write(config: Config, layout: Layout, statuses: Mapping[str, str]) -> dict[str, Any]:
     """
     Write the page status data and resolved badge definitions
+
+    Parameters
+    ----------
+    config
+        The Great Docs configuration, including the status definitions and the
+        user's label and description overrides.
+    layout
+        Project directories, including the build directory for `_page_status.json`.
+    statuses
+        A map from build-relative page paths to known status names.
 
     Returns
     -------
@@ -100,7 +109,7 @@ def write(config: Config, build_dir: Path, statuses: Mapping[str, str]) -> dict[
         "show_in_sidebar": config.page_status_show_in_sidebar,
         "show_on_pages": config.page_status_show_on_pages,
     }
-    _ = (build_dir / "_page_status.json").write_text(json.dumps(data), encoding="utf-8")
+    _ = (layout.build_dir / "_page_status.json").write_text(json.dumps(data), encoding="utf-8")
     return data
 
 
@@ -125,7 +134,7 @@ def process(config: Config, layout: Layout) -> Contribution | None:
     statuses = collect(config, layout)
     if not statuses:
         return None
-    data = write(config, layout.build_dir, statuses)
+    data = write(config, layout, statuses)
     return Contribution(
         inline_data=(InlineData("__GD_STATUS_DATA__", data, before="page-status-badges.js"),)
     )

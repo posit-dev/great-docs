@@ -684,7 +684,7 @@ def test_L3_cli_sidebar_flat_paths(pkg_name: str, tmp_path: Path):
     cli_info = _discover_cli(docs, config, detected_name)
     assert cli_info is not None
 
-    sidebar_items = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
+    sidebar_items = cli_render.write_pages(docs._config, docs.layout, cli_info, report=print)
     assert len(sidebar_items) >= 1, "No sidebar items generated"
 
     # First item should be the labeled index link
@@ -718,7 +718,7 @@ def test_L3_cli_sidebar_nested_structure(pkg_name: str, tmp_path: Path):
     cli_info = _discover_cli(docs, config, detected_name)
     assert cli_info is not None
 
-    sidebar_items = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
+    sidebar_items = cli_render.write_pages(docs._config, docs.layout, cli_info, report=print)
     assert len(sidebar_items) >= 2, "Too few sidebar items for a grouped CLI"
 
     # First item should be the labeled index link
@@ -767,7 +767,7 @@ def test_L3_cli_sidebar_no_wrong_level_paths(pkg_name: str, tmp_path: Path):
     cli_info = _discover_cli(docs, config, detected_name)
     assert cli_info is not None
 
-    sidebar_items = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
+    sidebar_items = cli_render.write_pages(docs._config, docs.layout, cli_info, report=print)
 
     # Collect all string paths (including those inside section dicts)
     def _collect_paths(items: list) -> list[str]:
@@ -836,7 +836,7 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
     cli_info = _discover_cli(docs, config, detected_name)
     assert cli_info is not None
 
-    cli_files = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
+    cli_files = cli_render.write_pages(docs._config, docs.layout, cli_info, report=print)
     assert cli_files, "No CLI files generated"
 
     run.contributions.append(cli_render.contribution(docs._config, cli_files))
@@ -890,7 +890,7 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     assert detected_name is not None
     cli_info = _discover_cli(docs, config, detected_name)
     assert cli_info is not None
-    cli_files = cli_render.write_pages(docs._config, docs.build_dir, cli_info, report=print)
+    cli_files = cli_render.write_pages(docs._config, docs.layout, cli_info, report=print)
     run.contributions.append(cli_render.contribution(docs._config, cli_files))
 
     # Process user guide

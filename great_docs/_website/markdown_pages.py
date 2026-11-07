@@ -30,6 +30,4 @@ def register(quarto_config: dict[str, Any], config: Config) -> None:
     """
     if not config.markdown_pages:
         return
-    filters = quarto_config.setdefault("filters", [])
-    if FILTER not in filters:
-        filters.append(FILTER)
+    quarto_config.setdefault("filters", []).append(FILTER)

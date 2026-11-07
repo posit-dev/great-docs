@@ -14,6 +14,8 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from yaml12 import format_yaml
+
 from .._content.naming import title_from_name
 from .._contribution import Contribution, InlineData, NavbarLink
 from .._icons import get_icon_svg
@@ -219,12 +221,17 @@ def render_index(groups: Mapping[str, Sequence[TaggedPage]], config: Config) -> 
         The page source, front matter included.
     """
     lang = config.lang
+    front_matter = format_yaml(
+        {
+            "title": get_translation("site_tags", lang),
+            "bread-crumbs": False,
+            "toc": False,
+            "body-classes": "gd-tags-index",
+        }
+    )
     lines = [
         "---",
-        f'title: "{get_translation("site_tags", lang)}"',
-        "bread-crumbs: false",
-        "toc: false",
-        "body-classes: gd-tags-index",
+        front_matter.rstrip(),
         "---",
         "",
         get_translation("tags_intro", lang),

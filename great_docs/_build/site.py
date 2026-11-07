@@ -145,7 +145,6 @@ def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Re
         run.quarto_config,
         config,
         layout,
-        layout.build_dir,
         repo=repo,
         facts=Facts.make(config, repo, remote),
         identity=run.identity,

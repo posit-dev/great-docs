@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     from pathlib import Path
     from types import ModuleType
 
+    from ..._layout import Layout
+
 __all__ = ["docstring_summary", "is_planned", "write_full", "write_index"]
 
 _SEPARATOR = "-" * 70
@@ -74,7 +76,7 @@ def is_planned(api_block: Mapping[str, Any] | None) -> bool:
 
 
 def write_index(
-    build_dir: Path,
+    layout: Layout,
     api_block: Mapping[str, Any] | None,
     metadata: Manifest,
     *,
@@ -90,8 +92,8 @@ def write_index(
 
     Parameters
     ----------
-    build_dir
-        The Quarto project directory where the file will be written.
+    layout
+        Project directories, including the build directory for `llms.txt`.
     api_block
         The API reference configuration, or `None` when the site has none.
     metadata
@@ -154,7 +156,7 @@ def write_index(
 
         lines.append("")
 
-    path = build_dir / "llms.txt"
+    path = layout.build_dir / "llms.txt"
     _ = path.write_text("\n".join(lines), encoding="utf-8")
     report(f"Created {path}")
     return path
@@ -194,7 +196,7 @@ def docstring_summary(package_name: str, item_name: str) -> str:
 
 
 def write_full(
-    build_dir: Path,
+    layout: Layout,
     api_block: Mapping[str, Any] | None,
     *,
     cli: Mapping[str, Any] | None,
@@ -209,8 +211,8 @@ def write_full(
 
     Parameters
     ----------
-    build_dir
-        The Quarto project directory where the file will be written.
+    layout
+        Project directories, including the build directory for `llms-full.txt`.
     api_block
         The API reference configuration, or `None` when the site has none.
     cli
@@ -290,7 +292,7 @@ def write_full(
             user_guide_text,
         ]
 
-    path = build_dir / "llms-full.txt"
+    path = layout.build_dir / "llms-full.txt"
     _ = path.write_text("\n".join(lines), encoding="utf-8")
     report(f"Created {path}")
     return path

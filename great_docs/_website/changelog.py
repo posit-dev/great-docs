@@ -7,6 +7,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
+from yaml12 import format_yaml
+
 from .._contribution import Contribution, NavbarLink
 from .._translations import get_translation
 from . import page_dates
@@ -14,9 +16,9 @@ from .navigation import navbar
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
-    from pathlib import Path
 
     from .._github import GithubRepo
+    from .._layout import Layout
     from .._remote import Remote
     from ..config import Config
 
@@ -37,7 +39,7 @@ _CODE = re.compile(
 
 def write_page(
     config: Config,
-    build_dir: Path,
+    layout: Layout,
     repo: GithubRepo,
     remote: Remote,
     *,
@@ -56,8 +58,8 @@ def write_page(
     ----------
     config
         The Great Docs configuration.
-    build_dir
-        The Quarto project directory to write the page into.
+    layout
+        Project directories, including the build directory for `changelog.qmd`.
     repo
         The repository whose releases the page lists.
     remote
@@ -85,15 +87,20 @@ def write_page(
     # Pin the heading shift so release headings always render at level 1. This keeps the TOC
     # limited to release headings: without it, `toc-depth: 1` could include release-note
     # subsections or list nothing.
+    front_matter = format_yaml(
+        {
+            "title": "Changelog",
+            page_dates.AUTO_GENERATED: True,
+            "body-classes": "gd-changelog-page",
+            "toc": True,
+            "toc-depth": 1,
+            "toc-title": toc_title,
+            "shift-heading-level-by": -1,
+        }
+    )
     lines: list[str] = [
         "---",
-        'title: "Changelog"',
-        f"{page_dates.AUTO_GENERATED}: true",
-        "body-classes: gd-changelog-page",
-        "toc: true",
-        "toc-depth: 1",
-        f'toc-title: "{toc_title}"',
-        "shift-heading-level-by: -1",
+        front_matter.rstrip(),
         "---",
         "",
         "This changelog is generated automatically from ",
@@ -103,7 +110,7 @@ def write_page(
     for release in releases:
         lines.extend(_release_lines(release, repo))
 
-    page = build_dir / FILENAME
+    page = layout.build_dir / FILENAME
     _ = page.write_text("\n".join(lines), encoding="utf-8")
     report(f"Created {page}")
     return Contribution(navbar=(NavbarLink(text=navbar.CHANGELOG.label(config), href=FILENAME),))

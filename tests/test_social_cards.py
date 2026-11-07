@@ -192,9 +192,7 @@ class TestPublishImage:
         config = write_config(root, {"social_cards": {"image": image}} if image else "")
         layout = Layout.make(root)
         warnings: list[str] = []
-        url = social_cards.publish_image(
-            config, layout, layout.build_dir, base_url, report=warnings.append
-        )
+        url = social_cards.publish_image(config, layout, base_url, report=warnings.append)
         return url, layout.build_dir, warnings
 
     def test_without_an_image(self, tmp_path: Path):

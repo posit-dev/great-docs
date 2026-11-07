@@ -130,7 +130,6 @@ def register(
 def publish_image(
     config: Config,
     layout: Layout,
-    build_dir: Path,
     base_url: str | None,
     *,
     report: Callable[[str], None],
@@ -146,9 +145,8 @@ def publish_image(
     config
         Project configuration, whose `social_cards.image` names the image.
     layout
-        The project's directories.
-    build_dir
-        The Quarto project directory.
+        Project directories for resolving the source image and copying it to the
+        build directory.
     base_url
         The preferred site address with a trailing slash, or `None`.
     report
@@ -175,7 +173,7 @@ def publish_image(
         return None
 
     # The image must be at the site root to match the returned address.
-    _ = publish.copy_asset(layout, source, build_dir / source.name)
+    _ = publish.copy_asset(layout, source, layout.build_dir / source.name)
     path = base_url + source.name if base_url else source.name
     return urlunsplit(("", "", path, image_url.query, image_url.fragment))
 

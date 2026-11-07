@@ -67,7 +67,6 @@ def _register(
         quarto_config,
         config,
         layout,
-        layout.build_dir,
         identity=identity,
         package_name="pkg",
         repo=repo,
@@ -127,24 +126,6 @@ class TestNavbar:
         [item] = navbar["right"]
         assert item["href"] == "https://github.com/owner/repo"
         assert 'data-stars="5"' in item["text"]
-
-    def test_replaces_the_github_entry_and_drops_a_home_link(self, tmp_path: Path):
-        reference = {"text": "Reference", "href": "reference/index.qmd"}
-        quarto_config: dict[str, Any] = {
-            "website": {
-                "navbar": {
-                    "left": [{"text": "Home", "href": "index.qmd"}, reference],
-                    "right": [{"icon": "github", "href": "https://github.com/old/repo"}],
-                }
-            },
-            "format": {"html": {}},
-        }
-
-        _register(tmp_path, "github_style: icon\n", quarto_config, repo=REPO)
-
-        navbar = quarto_config["website"]["navbar"]
-        assert navbar["left"] == [reference]
-        assert navbar["right"] == [{"icon": "github", "href": "https://github.com/owner/repo"}]
 
 
 class TestLogo:

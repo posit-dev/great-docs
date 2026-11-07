@@ -133,16 +133,12 @@ class TestRegisterSite:
 
 
 class TestRegisterExtensions:
-    def test_filters_follow_the_users_and_inventory_is_published(self):
-        quarto_config: dict[str, Any] = {
-            "project": {"resources": "data.csv"},
-            "filters": ["mine", "details"],
-        }
+    def test_filters_run_in_order_and_inventory_is_published(self):
+        quarto_config: dict[str, Any] = {"project": {"resources": "data.csv"}}
         quarto_defaults.register_extensions(quarto_config)
         assert quarto_config["filters"] == [
-            "mine",
-            "details",
             "output-title",
+            "details",
             "gd-lightbox",
             "interlinks",
         ]

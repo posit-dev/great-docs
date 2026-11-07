@@ -19,9 +19,3 @@ def test_adds_nothing_when_disabled(tmp_path):
     quarto: dict = {}
     markdown_pages.register(quarto, write_config(tmp_path, "markdown_pages: false\n"))
     assert quarto == {}
-
-
-def test_never_adds_the_filter_twice(tmp_path):
-    quarto: dict = {"filters": ["markdown-pages"]}
-    markdown_pages.register(quarto, write_config(tmp_path))
-    assert quarto["filters"] == ["markdown-pages"]

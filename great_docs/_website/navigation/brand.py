@@ -31,7 +31,6 @@ def register(
     quarto_config: dict[str, Any],
     config: Config,
     layout: Layout,
-    build_dir: Path,
     *,
     identity: Identity,
     package_name: str | None,
@@ -45,15 +44,13 @@ def register(
 
     Set `website.site-url` to the site address when available. Enable page
     navigation unless the Quarto configuration already sets it. Set a missing
-    site title to the site's name when the name is non-empty. Create a missing
-    navbar, or remove the legacy `Home` link from the left side of an existing
-    navbar. Add the GitHub entry on the right when the project has a GitHub
-    repository.
+    site title to the site's name when the name is non-empty. Create the navbar.
+    Include a GitHub entry on the right when the project has a GitHub repository.
 
     Show a configured logo, or one found at a conventional path, in place of
     the navbar title unless `logo.show_title` is set. Copy local logo images into
-    `build_dir`. Generate favicons from the configured `favicon`, even without
-    a logo, or use a local logo image when no favicon is configured. Link the
+    the build directory. Generate favicons from the configured `favicon`, even
+    without a logo, or use a local logo image when no favicon is configured. Link the
     favicons from every page.
 
     Parameters
@@ -64,9 +61,8 @@ def register(
     config
         Project configuration.
     layout
-        The project's directories, for finding the logo and favicon sources.
-    build_dir
-        The Quarto project directory that receives logo and favicon files.
+        Project directories for locating logo and favicon sources and writing
+        their published files to the build directory.
     identity
         The site's name and address.
     package_name
@@ -88,7 +84,7 @@ def register(
     Raises
     ------
     ValueError
-        If a logo would overwrite a different file in `build_dir`.
+        If a logo would overwrite a different file in the build directory.
     """
     website = cast("dict[str, Any]", quarto_config.setdefault("website", {}))
     if identity.url:
@@ -104,8 +100,12 @@ def register(
         logo = branding.detect_logo(layout.source_dir, package_name)
     logo_file = None
     if logo is not None:
-        logo_file = _add_logo(quarto_config, config, layout, build_dir, logo, package_name, report)
-    _add_favicons(quarto_config, config, layout, build_dir, logo_file, documentation_url, report)
+        logo_file = _add_logo(
+            quarto_config, config, layout, layout.build_dir, logo, package_name, report
+        )
+    _add_favicons(
+        quarto_config, config, layout, layout.build_dir, logo_file, documentation_url, report
+    )
 
 
 def register_release(quarto_config: dict[str, Any], config: Config, facts: Facts) -> None:
@@ -132,7 +132,7 @@ def _add_navbar(
     website: dict[str, Any], config: Config, repo: GithubRepo | None, facts: Facts
 ) -> None:
     """
-    Create the navbar or update an existing one, with the GitHub entry on the right
+    Create the navbar with the GitHub entry on the right
 
     Parameters
     ----------
@@ -149,28 +149,14 @@ def _add_navbar(
     -------
     :
     """
-    item = (
-        github.navbar_item(repo.url, repo.owner, repo.name, config.github_style, facts.github_stats)
-        if repo is not None
-        else None
-    )
-    if "navbar" not in website:
-        navbar: dict[str, Any] = {"left": []}
-        if item:
-            navbar["right"] = [item]
-        website["navbar"] = navbar
-        return
-
-    navbar = cast("dict[str, Any]", website["navbar"])
-    if item:
-        github.set_navbar_item(navbar, item)
-    # The site title in the navbar already links to the home page.
-    if "left" in navbar:
-        navbar["left"] = [
-            entry
-            for entry in cast("list[Any]", navbar["left"])
-            if not (isinstance(entry, dict) and cast("dict[str, Any]", entry).get("text") == "Home")
+    navbar: dict[str, Any] = {"left": []}
+    if repo is not None:
+        navbar["right"] = [
+            github.navbar_item(
+                repo.url, repo.owner, repo.name, config.github_style, facts.github_stats
+            )
         ]
+    website["navbar"] = navbar
 
 
 def _add_logo(

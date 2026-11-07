@@ -60,12 +60,11 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
     :
         The result line or skip reason.
     """
-    build_dir = layout.build_dir
     api_block = run.api_block
     if not llms_files.is_planned(api_block):
         return Skipped("no API reference")
     _ = llms_files.write_index(
-        build_dir, api_block, run.project.manifest, site_url=config.site_url, report=print
+        layout, api_block, run.project.manifest, site_url=config.site_url, report=print
     )
 
     cli: CliCommand | None = None
@@ -85,9 +84,7 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
             # The CLI reference step reports import and Typer conversion failures.
             # Omit CLI help here so `llms-full.txt` is still written.
             pass
-    _ = llms_files.write_full(
-        build_dir, api_block, cli=cli, user_guide=run.user_guide, report=print
-    )
+    _ = llms_files.write_full(layout, api_block, cli=cli, user_guide=run.user_guide, report=print)
     return "Created llms.txt + llms-full.txt"
 
 
@@ -172,7 +169,7 @@ def changelog(run: Run, config: Config, layout: Layout, *, remote: Remote) -> Ou
     repo = run.project.github
     if repo is None:
         return Skipped("no GitHub repo info")
-    contribution = changelog_page.write_page(config, layout.build_dir, repo, remote, report=print)
+    contribution = changelog_page.write_page(config, layout, repo, remote, report=print)
     if contribution is None:
         return "No releases found; skipped"
     run.contributions.append(contribution)
