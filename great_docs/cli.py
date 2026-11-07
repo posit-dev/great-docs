@@ -3274,6 +3274,7 @@ def api_diff_cmd(
     import shutil
 
     from ._api_diff import (
+        _detect_package_name,
         api_diff,
         build_dependency_graph,
         build_timeline,
@@ -3286,6 +3287,9 @@ def api_diff_cmd(
     )
 
     project_root = Path(project_path) if project_path else Path.cwd()
+    importable_name = package or _detect_package_name(
+        project_root, Path(config_path) if config_path else None
+    )
 
     try:
         # --- Symbol history mode ---
@@ -3311,7 +3315,9 @@ def api_diff_cmd(
                 )
                 sys.exit(1)
 
-            hist = symbol_history(project_root, symbol, package_name=package, tags=selected_tags)
+            hist = symbol_history(
+                project_root, symbol, package_name=importable_name, tags=selected_tags
+            )
             if hist is None:
                 click.echo("Could not determine package name.", err=True)
                 sys.exit(1)
@@ -3368,7 +3374,7 @@ def api_diff_cmd(
 
         # --- Timeline mode ---
         if timeline:
-            tl = build_timeline(project_root, package or "")
+            tl = build_timeline(project_root, importable_name)
             if not tl:
                 click.echo("No version tags found or could not build snapshots.", err=True)
                 sys.exit(1)
@@ -3379,7 +3385,7 @@ def api_diff_cmd(
             return
 
         # --- Diff ---
-        result = api_diff(project_root, old_version, new_version, package_name=package)
+        result = api_diff(project_root, old_version, new_version, package_name=importable_name)
 
         if result is None:
             click.echo(
@@ -3664,7 +3670,9 @@ def api_snapshot_cmd(
     project_root = Path(project_path) if project_path else Path.cwd()
 
     # Resolve package name
-    pkg_name = package or _detect_package_name(project_root)
+    pkg_name = package or _detect_package_name(
+        project_root, Path(config_path) if config_path else None
+    )
     if not pkg_name:
         click.echo(
             "Could not detect package name. Pass --package or add [project] "

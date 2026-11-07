@@ -2331,6 +2331,53 @@ def test_detect_package_name_from_poetry(tmp_path):
     assert _detect_package_name(tmp_path) == "my_package"
 
 
+@pytest.mark.parametrize("module", ["yaml12", "firebird.base"])
+def test_detect_package_name_uses_configured_module(tmp_path: Path, module: str) -> None:
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "py-yaml12"\n')
+    (tmp_path / "great-docs.yml").write_text(f"module: {module}\n")
+
+    assert _detect_package_name(tmp_path) == module
+
+
+def test_detect_package_name_uses_selected_config(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "py-yaml12"\n')
+    config_path = tmp_path / "custom.yml"
+    config_path.write_text("module: yaml12\n")
+
+    assert _detect_package_name(tmp_path, config_path) == "yaml12"
+
+
+def test_tagged_api_uses_configured_importable_module(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from great_docs.cli import cli
+
+    package = tmp_path / "src" / "yaml12"
+    package.mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "py-yaml12"\n')
+    (tmp_path / "great-docs.yml").write_text("module: yaml12\n")
+    (package / "__init__.py").write_text("def load(): ...\n")
+    _git(tmp_path, "init")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "-c", "user.email=t@t.co", "-c", "user.name=t", "commit", "-m", "v100")
+    _git(tmp_path, "tag", "v1.0.0")
+    (package / "__init__.py").write_text("def load(): ...\ndef dump(): ...\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "-c", "user.email=t@t.co", "-c", "user.name=t", "commit", "-m", "v200")
+    _git(tmp_path, "tag", "v2.0.0")
+
+    diff = api_diff(tmp_path, "v1.0.0", "v2.0.0")
+    assert diff is not None
+    assert diff.package_name == "yaml12"
+    assert any(change.symbol == "dump" for change in diff.added)
+
+    result = CliRunner().invoke(cli, ["api-snapshot", "v1.0.0", "--project-path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    snapshot = ApiSnapshot.load(tmp_path / ".great-docs" / "snapshots" / "v1.0.0.json")
+    assert snapshot.package_name == "yaml12"
+    assert set(snapshot.symbols) == {"load"}
+
+
 @patch("great_docs._api_diff.subprocess.run")
 def test_list_version_tags_success(mock_run):
     """Returns sorted version tags."""
@@ -2728,6 +2775,36 @@ class TestSnapshotAtTagLayouts:
 
         assert snap is not None
         assert set(snap.symbols) == {"Widget"}
+
+    @pytest.mark.parametrize("filename", ["single.py", "single.pyi"])
+    def test_single_file_module(self, tmp_path: Path, filename: str) -> None:
+        source = tmp_path / "src"
+        source.mkdir()
+        (source / filename).write_text("def load() -> str: ...\n")
+        _git(tmp_path, "init")
+        _git(tmp_path, "add", "-A")
+        _git(tmp_path, "-c", "user.email=t@t.co", "-c", "user.name=t", "commit", "-m", "v100")
+        _git(tmp_path, "tag", "v1.0.0")
+
+        snap = snapshot_at_tag(tmp_path, "v1.0.0", "single")
+
+        assert snap is not None
+        assert set(snap.symbols) == {"load"}
+
+    def test_stub_only_package(self, tmp_path: Path) -> None:
+        package = tmp_path / "src" / "compiled"
+        package.mkdir(parents=True)
+        (package / "__init__.pyi").write_text("def load() -> str: ...\n")
+        (package / "_native.so").write_bytes(b"compiled extension placeholder")
+        _git(tmp_path, "init")
+        _git(tmp_path, "add", "-A")
+        _git(tmp_path, "-c", "user.email=t@t.co", "-c", "user.name=t", "commit", "-m", "v100")
+        _git(tmp_path, "tag", "v1.0.0")
+
+        snap = snapshot_at_tag(tmp_path, "v1.0.0", "compiled")
+
+        assert snap is not None
+        assert set(snap.symbols) == {"load"}
 
 
 def test_render_evolution_table_callable_via_top_level_import():
