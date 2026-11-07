@@ -505,10 +505,21 @@ def _extract_decorators(obj) -> list[str]:
 
 
 def _symbol_info_for_dotted(pkg, dotted: str) -> SymbolInfo | None:
-    """SymbolInfo for the symbol named `dotted` in `pkg`, or None if absent
+    """
+    Look up API information for a documented symbol
 
-    None means the symbol does not exist in this source — a name component is
-    missing, or an alias cannot be resolved to a real object.
+    Parameters
+    ----------
+    pkg
+        The loaded package.
+    dotted
+        The symbol's dotted name relative to the package.
+
+    Returns
+    -------
+    :
+        The symbol's API information, or `None` if a name component is missing
+        or an alias target is missing or cyclic.
     """
     from griffe import AliasResolutionError, CyclicAliasError
 
@@ -522,9 +533,9 @@ def _symbol_info_for_dotted(pkg, dotted: str) -> SymbolInfo | None:
             return None
         obj = members[part]
 
-    try:
-        kind = obj.kind.value
-    except (AliasResolutionError, CyclicAliasError):
+    # An unresolved alias still reports kind `alias`; accessing its API details would raise.
+    kind = obj.kind.value
+    if kind == "alias":
         return None
 
     return SymbolInfo(

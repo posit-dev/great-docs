@@ -2579,6 +2579,19 @@ class TestDeepSnapshot:
 
         assert set(snap.symbols) == {"sub.Widget"}
 
+    def test_omits_names_whose_import_does_not_resolve(self, tmp_path: Path):
+        """Omit documented re-exports whose source module is missing"""
+        _write_griffe_pkg(tmp_path)
+        (tmp_path / "mypkg" / "extra.py").write_text("from ext_missing import Missing\n")
+        snap = snapshot_from_griffe(
+            "mypkg",
+            version="dev",
+            documented_names=["TopClass", "extra.Missing"],
+            search_paths=[str(tmp_path)],
+        )
+
+        assert set(snap.symbols) == {"TopClass"}
+
     def test_default_behavior_unchanged_top_level(self, tmp_path: Path):
         """Default behavior (no documented_names) unchanged — captures top-level only."""
         _write_griffe_pkg(tmp_path)
@@ -2870,33 +2883,6 @@ def test_symbol_info_for_dotted_alias_error_on_members():
         @property
         def members(self):
             raise CyclicAliasError(["foo", "bar"])
-
-    result = _symbol_info_for_dotted(FakePkg(), "foo")
-
-    assert result is None
-
-
-def test_symbol_info_for_dotted_alias_error_on_kind():
-    """_symbol_info_for_dotted returns None when kind.value raises CyclicAliasError."""
-    from griffe import CyclicAliasError
-
-    class FakeKind:
-        @property
-        def value(self):
-            raise CyclicAliasError(["foo", "bar"])
-
-    class FakeObj:
-        kind = FakeKind()
-        bases = []
-        decorators = []
-        is_async = False
-        annotation = None
-        returns = None
-
-    class FakePkg:
-        @property
-        def members(self):
-            return {"foo": FakeObj()}
 
     result = _symbol_info_for_dotted(FakePkg(), "foo")
 
