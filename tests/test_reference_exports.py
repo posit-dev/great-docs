@@ -15,7 +15,12 @@ from yaml12 import write_yaml
 
 from great_docs import BuildError, GreatDocs
 from great_docs._reference import sections as reference_sections
-from great_docs._reference.discovery import empty_categories
+from great_docs._reference.discovery import (
+    categorise_exports,
+    categorise_references,
+    discover_exports,
+    empty_categories,
+)
 from great_docs._reference.exports import Exports
 from tests.support import make_exports, mock_config, write_config
 
@@ -1117,6 +1122,42 @@ def test_categorise_module_export():
             assert "sub.SubClass" in result["classes"] or "sub" in result["other"]
         finally:
             sys.path.remove(tmp_dir)
+
+
+def test_submodule_dunder_all_limits_discovered_and_explicit_members(tmp_path: Path) -> None:
+    """Use each submodule's `__all__` when expanding its reference entry"""
+    package_dir = tmp_path / "exportpkg"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text("from . import selected, legacy, empty\n")
+    (package_dir / "selected.py").write_text(
+        '__all__ = ["chosen", "_intentional"]\n'
+        "def omitted(): pass\n"
+        "def chosen(): pass\n"
+        "def _intentional(): pass\n"
+    )
+    (package_dir / "legacy.py").write_text("def public(): pass\ndef _private(): pass\n")
+    (package_dir / "empty.py").write_text("__all__ = []\ndef omitted(): pass\n")
+
+    package = griffe.load("exportpkg", search_paths=[tmp_path])
+    exports = discover_exports(package, mock_config(), report=lambda line: None)
+    assert exports is not None
+
+    discovered = categorise_exports(
+        package, exports, renderable=lambda path: True, report=lambda line: None
+    )
+    explicit = categorise_references(package, [{"contents": ["selected", "legacy", "empty"]}])
+    for categories in (discovered, explicit):
+        assert set(categories["functions"]) == {
+            "selected.chosen",
+            "selected._intentional",
+            "legacy.public",
+        }
+        assert categories["functions"].index("selected.chosen") < categories["functions"].index(
+            "selected._intentional"
+        )
+        assert "selected.omitted" not in categories["functions"]
+        assert "empty.omitted" not in categories["functions"]
+        assert "legacy._private" not in categories["functions"]
 
 
 def test_sections_without_reference_or_exports():

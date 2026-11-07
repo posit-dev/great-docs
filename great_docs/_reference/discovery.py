@@ -429,11 +429,11 @@ def categorise_exports(
     Sort a package's exports into the groups of the API reference
 
     Classes are grouped by kind, functions by whether they are asynchronous, and attributes by
-    whether they declare a type alias or type variable. An exported module contributes its
-    public members under qualified names, except those the package exports itself; a module
-    with none goes under `other`, as does a name the package does not define. Metadata names
-    such as `__version__` are dropped, and so is an alias that forms a cycle or cannot be
-    resolved.
+    whether they declare a type alias or type variable. An exported module contributes names in
+    its `__all__`, or its public members when `__all__` is absent, under qualified names. Members
+    the package exports itself are left out. A module with none goes under `other`, as does a
+    name the package does not define. Metadata names such as `__version__` are dropped, as are
+    aliases that form a cycle or cannot be resolved.
 
     For each class, the result also lists its public methods and documented dunder methods in
     source order. A method, or a member of an exported module, stays only if the renderer can
@@ -547,7 +547,7 @@ def _categorise_module(
     report: Callable[[str], None],
 ) -> bool:
     """
-    Add an exported module's public members to the categories under qualified names
+    Add an exported module's declared exports or public members under qualified names
 
     Parameters
     ----------
@@ -573,12 +573,12 @@ def _categorise_module(
     """
     contributed = False
     try:
-        members = list(module.members.items())
+        members = _module_export_members(module)
     except _ALIAS_ERRORS:
         return False
 
     for member_name, member in members:
-        if member_name.startswith("_") or member_name in exported:
+        if member_name in exported:
             continue
         try:
             kind = member.kind
@@ -600,6 +600,35 @@ def _categorise_module(
             _add_flat(qualified, member, categories)
             contributed = True
     return contributed
+
+
+def _module_export_members(module: gf.Object | gf.Alias) -> list[tuple[str, gf.Object | gf.Alias]]:
+    """
+    List a module's exported members, or its public members without `__all__`
+
+    A defined but empty `__all__` exports no members. An undefined name in `__all__` cannot be
+    documented and is omitted.
+
+    Parameters
+    ----------
+    module
+        The module whose members are listed.
+
+    Returns
+    -------
+    :
+        Members in `__all__` order, or in the module's definition order when it has no
+        `__all__`.
+    """
+    members = module.members
+    exports = module.exports
+    if exports is None:
+        return [(name, member) for name, member in members.items() if not name.startswith("_")]
+    return [
+        (name, members[name])
+        for name in dict.fromkeys(str(export) for export in exports)
+        if name in members
+    ]
 
 
 def _add_flat(name: str, obj: gf.Object | gf.Alias, categories: Categories) -> None:
@@ -806,7 +835,8 @@ def categorise_references(
     Sort the names a `reference:` setting lists into the groups of the API reference
 
     Only the listed objects are classified: `Class.method` counts as `Class`, and a listed
-    module contributes its public members under qualified names. A class's method count
+    module contributes names in its `__all__`, or public members when `__all__` is absent,
+    under qualified names. A class's method count
     includes its properties, and no method is checked with the renderer.
 
     Parameters
@@ -937,7 +967,7 @@ def _referenced_class_methods(cls: gf.Object | gf.Alias) -> list[str]:
 
 def _add_module_members(name: str, module: gf.Object | gf.Alias, categories: Categories) -> None:
     """
-    Add a listed module's public members to the categories under qualified names
+    Add a listed module's declared exports or public members under qualified names
 
     Classes are grouped by kind; every function is a plain function and every attribute a
     constant.
@@ -952,13 +982,11 @@ def _add_module_members(name: str, module: gf.Object | gf.Alias, categories: Cat
         The categories to add to.
     """
     try:
-        members = list(module.members.items())
+        members = _module_export_members(module)
     except _ALIAS_ERRORS:
         return
 
     for member_name, member in members:
-        if member_name.startswith("_"):
-            continue
         try:
             kind = member.kind
         except _ALIAS_ERRORS:
