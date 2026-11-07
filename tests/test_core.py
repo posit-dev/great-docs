@@ -1819,15 +1819,29 @@ class TestSaveFreezeCache:
         gd = _make_gd(tmp_path)
         assert freeze.save(gd.layout) is None
 
-    def test_merges_freeze_caches(self, tmp_path):
+    def test_keeps_each_historical_cache_apart(self, tmp_path):
         gd = _make_gd(tmp_path)
         gd.build_dir.mkdir(parents=True, exist_ok=True)
         (_historical_cache(tmp_path, "great-docs-v1") / "page1.json").write_text('{"v": 1}')
         (_historical_cache(tmp_path, "great-docs-v2") / "page1.json").write_text('{"v": 2}')
+        removed = tmp_path / "_freeze" / "_versions" / "great-docs-v0"
+        removed.mkdir(parents=True)
+        (removed / "page1.json").write_text('{"v": 0}')
+
+        assert freeze.save(gd.layout) == 2
+        versions = tmp_path / "_freeze" / "_versions"
+        assert {path.name for path in versions.iterdir()} == {"great-docs-v1", "great-docs-v2"}
+        assert (versions / "great-docs-v1" / "page1.json").read_text() == '{"v": 1}'
+        assert (versions / "great-docs-v2" / "page1.json").read_text() == '{"v": 2}'
+        assert not (tmp_path / "_freeze" / "page1.json").exists()
+
+    def test_non_versioned_build_persists_at_top_level(self, tmp_path):
+        gd = _make_gd(tmp_path)
+        (gd.layout.build_dir / "_freeze").mkdir(parents=True)
+        (gd.layout.build_dir / "_freeze" / "page1.json").write_text('{"v": 1}')
 
         assert freeze.save(gd.layout) == 1
-        merged = tmp_path / "_freeze" / "page1.json"
-        assert '"v": 2' in merged.read_text()
+        assert [path.name for path in (tmp_path / "_freeze").iterdir()] == ["page1.json"]
 
     def test_js_newline_appended(self, tmp_path):
         gd = _make_gd(tmp_path)
@@ -1835,8 +1849,8 @@ class TestSaveFreezeCache:
         (_historical_cache(tmp_path, "great-docs-v1") / "chunk.js").write_bytes(b"var x = 1;")
 
         freeze.save(gd.layout)
-        merged_js = tmp_path / "_freeze" / "chunk.js"
-        assert merged_js.read_bytes().endswith(b"\n")
+        saved_js = tmp_path / "_freeze" / "_versions" / "great-docs-v1" / "chunk.js"
+        assert saved_js.read_bytes().endswith(b"\n")
 
 
 def test_constructing_a_project_runs_no_git(tmp_path: Path):

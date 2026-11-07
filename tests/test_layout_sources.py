@@ -128,17 +128,14 @@ def test_unsafe_historical_build_names(source_project: tuple[Path, Path], tag: s
     assert not gd.build_dir.parent.exists()
 
 
-def test_freeze_round_trip(
-    source_project: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import runpy
+def cache_versions(gd: GreatDocs, caches: dict[str, dict[str, str]]) -> None:
+    """
+    Create versioned Quarto projects and their freeze caches
 
-    root, source = source_project
-    gd = make_docs(root, source)
-    for tag, files in [
-        ("1.0", {"guide/old.json": "old", "guide/shared.json": "historical"}),
-        ("2.0", {"guide/new.json": "new", "guide/shared.json": "latest"}),
-    ]:
+    Treat `2.0` as the latest version. Each version's mapping gives cache-relative
+    paths and their file contents.
+    """
+    for tag, files in caches.items():
         build = gd.layout.build_dir_for(tag, "2.0")
         build.mkdir(parents=True)
         (build / "_quarto.yml").write_text(QUARTO_YML_HEADER)
@@ -146,15 +143,63 @@ def test_freeze_round_trip(
             cache = build / "_freeze" / name
             cache.parent.mkdir(parents=True, exist_ok=True)
             cache.write_text(content)
-    assert freeze.save(gd.layout) == 3
-    assert (gd.layout.freeze_dir / "guide/old.json").read_text() == "old"
-    assert (gd.layout.freeze_dir / "guide/shared.json").read_text() == "latest"
-    assert freeze.save(gd.layout) == 3
-    monkeypatch.chdir(gd.layout.build_dir_for("1.0", "2.0"))
+
+
+def restore_freeze(gd: GreatDocs, tag: str, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """
+    Restore a version's freeze cache and return its directory
+
+    Treat `2.0` as the latest version. Run the script from the version's Quarto
+    project, matching Quarto's working directory for pre-render scripts.
+    """
+    import runpy
+
+    build = gd.layout.build_dir_for(tag, "2.0")
+    build.mkdir(parents=True, exist_ok=True)
+    monkeypatch.chdir(build)
     runpy.run_path(str(gd.assets_path / "restore-freeze.py"))
-    assert (Path.cwd() / "_freeze/guide/shared.json").read_text() == "latest"
+    return build / "_freeze"
+
+
+def test_freeze_round_trip(source_project: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch):
+    root, source = source_project
+    gd = make_docs(root, source)
+    cache_versions(
+        gd,
+        {
+            "1.0": {"guide/old.json": "old", "guide/shared.json": "1.0"},
+            "1.5": {"guide/shared.json": "1.5"},
+            "2.0": {"guide/shared.json": "2.0"},
+        },
+    )
+    assert freeze.save(gd.layout) == 4
+    assert freeze.save(gd.layout) == 4
+    assert (gd.layout.freeze_dir / "guide/shared.json").read_text() == "2.0"
+    assert not (gd.layout.freeze_dir / "guide/old.json").exists()
+    for tag in ("1.0", "1.5", "2.0"):
+        restored = restore_freeze(gd, tag, monkeypatch)
+        assert (restored / "guide/shared.json").read_text() == tag
+        assert (restored / "guide/old.json").exists() == (tag == "1.0")
+        assert not (restored / "_versions").exists()
     if root != source:
         assert not (root / "_freeze").exists()
+
+
+def test_freeze_restore_without_own_cache(
+    source_project: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+):
+    """
+    Restore the latest version's cache when a historical version has no cache
+
+    A historical version may have no separate cache after an upgrade or on its first build.
+    """
+    root, source = source_project
+    gd = make_docs(root, source)
+    cache_versions(gd, {"1.0": {"guide/shared.json": "1.0"}, "2.0": {"guide/shared.json": "2.0"}})
+    _ = freeze.save(gd.layout)
+    restored = restore_freeze(gd, "1.5", monkeypatch)
+    assert (restored / "guide/shared.json").read_text() == "2.0"
+    assert not (restored / "_versions").exists()
 
 
 @pytest.mark.parametrize("symlink", [False, True])
