@@ -661,6 +661,10 @@ def extract_option(param: Any) -> CliOption | None:
     return info
 
 
+# Click names its string type `text`; Typer names the type of a `str` annotation `str`.
+_TEXT_TYPE_NAMES = frozenset({"text", "str"})
+
+
 def extract_argument(param: Any) -> CliArgument:
     """
     Describe a Click argument for the reference pages
@@ -681,7 +685,7 @@ def extract_argument(param: Any) -> CliArgument:
     info: CliArgument = {
         "name": param.name,
         "name_display": param.human_readable_name,
-        "type": type_name.upper() if type_name != "TEXT" else None,
+        "type": None if type_name.lower() in _TEXT_TYPE_NAMES else type_name.upper(),
         "required": param.required,
         "nargs": param.nargs,
         "deprecated": getattr(param, "deprecated", False),
