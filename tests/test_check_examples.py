@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import textwrap
 from concurrent.futures import Future
 from concurrent.futures.process import BrokenProcessPool
@@ -1662,6 +1663,21 @@ class TestCheckExamplesOrchestrator:
             result = check_examples(tmp_path, no_docstrings=True)
         assert result.pages[0].status == "error"
         assert result.pages[0].message.startswith(type(error).__name__)
+
+    @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
+    def test_render_time_limit_scales_with_cell_count(self, mock_quarto, tmp_path):
+        """A page's render limit is `timeout` seconds per cell plus 60 seconds"""
+        self._write_qmd(
+            tmp_path / "page.qmd", "```{python}\nx = 1\n```\n\n```{python}\ny = 2\n```\n"
+        )
+        with patch(
+            "great_docs._checks.examples.subprocess.run",
+            side_effect=subprocess.TimeoutExpired("quarto", 80),
+        ) as run:
+            result = check_examples(tmp_path, no_docstrings=True, timeout=10)
+        assert run.call_args.kwargs["timeout"] == 80
+        assert result.pages[0].status == "error"
+        assert result.pages[0].message == "Quarto render timed out after 80s"
 
     @patch("great_docs._checks.examples._check_quarto_available", return_value=None)
     def test_render_bug_propagates(self, mock_quarto, tmp_path):

@@ -2151,7 +2151,10 @@ cli.add_command(check_links)
     "--timeout",
     type=int,
     default=30,
-    help="Per-cell timeout in seconds (default: 30)",
+    help=(
+        "Seconds budgeted per cell. Each page's render stops after the cell count "
+        "times this value plus 60 seconds (default: 30)"
+    ),
 )
 @click.option(
     "--json-output",
