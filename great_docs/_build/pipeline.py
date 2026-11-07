@@ -557,6 +557,15 @@ def _finishing_steps(
         )
     steps += [
         Step(
+            "Write the WebMCP manifest",
+            lambda: finish.webmcp_manifest(run, config, layout, log),
+            warn=Warn(
+                (OSError, ValueError),
+                "Could not write the WebMCP manifest",
+                "WebMCP manifest had issues",
+            ),
+        ),
+        Step(
             "Generate SEO files",
             lambda: finish.seo_files(config, layout, run.identity.base_url),
             warn=Warn((OSError,), "Error generating SEO files", "SEO files had issues"),
