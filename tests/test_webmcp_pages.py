@@ -122,7 +122,8 @@ class TestPrepare:
         _write(build_dir / "index.qmd", "---\ntitle: Home\n---\n")
         _write(
             build_dir / "user-guide" / "intro.qmd",
-            "---\ntitle: Intro\ndescription: Start here\ndraft: true\n---\n",
+            "---\ntitle: Intro\ndescription: Start here\ndraft: true\ntags: [setup, basics]\n"
+            "status: new\n---\n",
         )
         _write(build_dir / "notes" / "plain.md", "# Plain\n")
         _write(build_dir / "_private" / "hidden.qmd", "---\ntitle: Hidden\n---\n")
@@ -133,45 +134,86 @@ class TestPrepare:
 
         data = json.loads((build_dir / webmcp_pages.FACTS_FILE).read_text())
         assert data["schema"] == 1
+        assert data["sections"] == [{"id": "user-guide", "title": "User Guide", "kind": "guide"}]
+        defaults = {
+            "title": None,
+            "description": None,
+            "section": "",
+            "tags": [],
+            "status": None,
+            "date": None,
+            "draft": False,
+            "webmcp": True,
+            "listed": True,
+        }
         assert data["pages"] == [
+            {**defaults, "path": "index.html", "source": "index.qmd", "title": "Home"},
+            {**defaults, "path": "notes/plain.html", "source": "notes/plain.md"},
             {
-                "path": "index.html",
-                "source": "index.qmd",
-                "title": "Home",
-                "description": None,
-                "section": "",
-                "draft": False,
-                "webmcp": True,
-            },
-            {
-                "path": "notes/plain.html",
-                "source": "notes/plain.md",
-                "title": None,
-                "description": None,
-                "section": "",
-                "draft": False,
-                "webmcp": True,
-            },
-            {
+                **defaults,
                 "path": "user-guide/intro.html",
                 "source": "user-guide/intro.qmd",
                 "title": "Intro",
                 "description": "Start here",
-                "section": "User Guide",
+                "section": "user-guide",
+                "tags": ["setup", "basics"],
+                "status": "new",
                 "draft": True,
-                "webmcp": True,
             },
             {
+                **defaults,
                 "path": "user-guide/secret.html",
                 "source": "user-guide/secret.qmd",
-                "title": None,
-                "description": None,
-                "section": "User Guide",
-                "draft": False,
+                "section": "user-guide",
                 "webmcp": False,
             },
         ]
-        assert [page.path for page in facts] == [page["path"] for page in data["pages"]]
+        assert [page.path for page in facts.pages] == [page["path"] for page in data["pages"]]
+
+    def test_the_facts_file_reads_back_as_written(self, tmp_path: Path):
+        layout = _project(tmp_path, {"webmcp": True})
+        _write(layout.build_dir / "user-guide" / "intro.qmd", "---\ntags: [a, b]\n---\n")
+
+        facts = webmcp_pages.prepare(layout.load_config(), layout)
+
+        assert webmcp_pages.read(layout.build_dir) == facts
+
+    @pytest.mark.parametrize("content", ["", "[]", '{"schema": 99, "sections": [], "pages": []}'])
+    def test_an_unreadable_or_foreign_facts_file_reads_as_none(self, tmp_path: Path, content: str):
+        if content:
+            _write(tmp_path / webmcp_pages.FACTS_FILE, content)
+
+        assert webmcp_pages.read(tmp_path) is None
+
+    def test_a_blog_section_has_the_blog_kind(self, tmp_path: Path):
+        sections = [
+            {"title": "News", "dir": "news", "type": "blog"},
+            {"title": "", "dir": "examples"},
+        ]
+        layout = _project(tmp_path, {"webmcp": True, "sections": sections})
+        _write(
+            layout.build_dir / "news" / "launch.qmd", "---\ntitle: Launch\ndate: 2026-01-02\n---\n"
+        )
+        _write(layout.build_dir / "examples" / "one.qmd", "---\ntitle: One\n---\n")
+
+        facts = webmcp_pages.prepare(layout.load_config(), layout)
+
+        assert facts.sections == (
+            webmcp_pages.SectionFacts("news", "News", "blog"),
+            webmcp_pages.SectionFacts("examples", "examples", "guide"),
+        )
+        sections_by_path = {page.path: page.section for page in facts.pages}
+        assert sections_by_path == {"news/launch.html": "news", "examples/one.html": "examples"}
+        assert facts.pages[1].date == "2026-01-02"
+
+    def test_a_listed_false_mapping_keeps_tools_but_leaves_the_manifest(self, tmp_path: Path):
+        layout = _project(tmp_path, {"webmcp": True})
+        page = _write(layout.build_dir / "draft.qmd", "---\nwebmcp:\n  listed: false\n---\n")
+
+        facts = webmcp_pages.prepare(layout.load_config(), layout)
+
+        assert [(fact.webmcp, fact.listed) for fact in facts.pages] == [(True, False)]
+        assert CLASS not in page.read_text()
 
     def test_only_a_false_value_opts_out(self, tmp_path: Path):
         layout = _project(tmp_path, {"webmcp": True})
@@ -180,4 +222,4 @@ class TestPrepare:
 
         facts = webmcp_pages.prepare(layout.load_config(), layout)
 
-        assert all(page.webmcp for page in facts)
+        assert all(page.webmcp and page.listed for page in facts.pages)
