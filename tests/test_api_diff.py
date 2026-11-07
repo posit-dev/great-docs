@@ -2359,23 +2359,23 @@ def test_list_version_tags_timeout(mock_run):
 
 
 @patch("great_docs._api_diff.subprocess.run")
-def test_extract_package_at_tag_not_found(mock_run):
-    """Returns None when package dir not in git tree."""
-    mock_run.return_value = MagicMock(returncode=1, stdout="")
-    result = _extract_package_at_tag(Path("/project"), "v1.0", "mypkg")
+def test_extract_package_at_tag_not_found(mock_run, tmp_path: Path):
+    """Return `None` when the package is absent from the tagged source"""
+    mock_run.return_value = MagicMock(returncode=0, stdout="")
+    result = _extract_package_at_tag(Path("/project"), "v1.0", "mypkg", tmp_path)
 
     assert result is None
 
 
 @patch("great_docs._api_diff.subprocess.run")
-def test_extract_package_at_tag_archive_fails(mock_run):
-    """Returns None when git archive fails."""
+def test_extract_package_at_tag_archive_fails(mock_run, tmp_path: Path):
+    """Return `None` when `git archive` fails"""
 
     def fake_run(cmd, **kwargs):
         mock = MagicMock()
         if "ls-tree" in cmd:
             mock.returncode = 0
-            mock.stdout = "mypkg/\n"
+            mock.stdout = "mypkg\n"
             return mock
         # archive fails
         mock.returncode = 1
@@ -2383,7 +2383,7 @@ def test_extract_package_at_tag_archive_fails(mock_run):
         return mock
 
     mock_run.side_effect = fake_run
-    result = _extract_package_at_tag(Path("/project"), "v1.0", "mypkg")
+    result = _extract_package_at_tag(Path("/project"), "v1.0", "mypkg", tmp_path)
 
     assert result is None
 
@@ -2652,6 +2652,42 @@ class TestSnapshotAtTagDeep:
         snap = snapshot_at_tag(tmp_path, "v0.1.0", "mypkg", documented_names=documented)
 
         assert set(snap.symbols) == {"sub.Widget"}
+
+
+def _tag_package(root: Path, package_dir: str) -> None:
+    """
+    Tag a package exporting `Widget` as `v1.0.0`
+
+    Create the package in `package_dir` relative to `root`.
+    """
+    package = root / package_dir
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("class Widget:\n    def fit(self): ...\n")
+    _git(root, "init")
+    _git(root, "add", "-A")
+    _git(root, "-c", "user.email=t@t.co", "-c", "user.name=t", "commit", "-m", "v100")
+    _git(root, "tag", "v1.0.0")
+
+
+class TestSnapshotAtTagLayouts:
+    """API snapshots from tagged packages in different source layouts"""
+
+    @pytest.mark.parametrize("source_dir", ["src", "python", "lib"])
+    def test_package_in_source_directory(self, tmp_path: Path, source_dir: str):
+        """Find a package below the project's `src`, `python` or `lib` directory"""
+        _tag_package(tmp_path, f"{source_dir}/mypkg")
+        snap = snapshot_at_tag(tmp_path, "v1.0.0", "mypkg")
+
+        assert snap is not None
+        assert set(snap.symbols) == {"Widget"}
+
+    def test_dotted_module_in_namespace_package(self, tmp_path: Path):
+        """Find a subpackage of a namespace package by its dotted name"""
+        _tag_package(tmp_path, "src/firebird/base")
+        snap = snapshot_at_tag(tmp_path, "v1.0.0", "firebird.base")
+
+        assert snap is not None
+        assert set(snap.symbols) == {"Widget"}
 
 
 def test_render_evolution_table_callable_via_top_level_import():
@@ -2970,46 +3006,6 @@ def test_get_tag_date_timeout(mock_run):
     assert result is None
 
 
-# --- _extract_package_at_tag src layout path ---
-
-
-@patch("great_docs._api_diff.subprocess.run")
-@patch("great_docs._api_diff.shutil.move")
-@patch("great_docs._api_diff.tempfile.mkdtemp")
-def test_extract_package_at_tag_src_layout(mock_mkdtemp, mock_move, mock_run, tmp_path):
-    """_extract_package_at_tag moves pkg dir for src-layout."""
-    src_dir = tmp_path / "src" / "mypkg"
-    src_dir.mkdir(parents=True)
-
-    mock_mkdtemp.return_value = str(tmp_path)
-
-    def fake_run(cmd, **kwargs):
-        m = MagicMock()
-        if "ls-tree" in cmd:
-            # succeed for src/mypkg, fail for mypkg
-            if "src/mypkg/" in cmd:
-                m.returncode = 0
-                m.stdout = "src/mypkg/\n"
-            else:
-                m.returncode = 1
-                m.stdout = ""
-        elif "archive" in cmd:
-            m.returncode = 0
-            m.stdout = b""
-        else:
-            # tar
-            m.returncode = 0
-            m.stdout = b""
-        return m
-
-    mock_run.side_effect = fake_run
-
-    result = _extract_package_at_tag(Path("/project"), "v1.0", "mypkg")
-
-    # move should have been called if src_dir existed
-    assert result is not None or mock_move.called or True  # just verifying no exception
-
-
 # --- CLI module configuration in pyproject.toml ---
 
 
@@ -3189,12 +3185,12 @@ def test_snapshot_at_tag_with_cli_module(mock_extract, mock_griffe, mock_read_cl
     mock_read_cli.return_value = "mypkg.cli"
     mock_import_cli.return_value = CliCommandInfo(name="mypkg", is_group=True)
 
-    with patch("great_docs._api_diff.shutil.rmtree"):
-        result = snapshot_at_tag(Path("/project"), "v1.0", "mypkg")
+    result = snapshot_at_tag(Path("/project"), "v1.0", "mypkg")
 
     assert result is not None
     assert result.cli_commands is not None
     assert result.cli_commands.name == "mypkg"
+    mock_import_cli.assert_called_once_with(tmp_dir, "mypkg.cli")
 
 
 # --- _diff_symbol: added decorators ---
@@ -3823,14 +3819,14 @@ def test_snapshot_from_source_import_error(tmp_path):
     assert result is None
 
 
-# --- _extract_package_at_tag: exception in inner loop ---
+# --- Tagged-source extraction timeout ---
 
 
 @patch("great_docs._api_diff.subprocess.run")
-def test_extract_package_at_tag_timeout_exception(mock_run):
-    """_extract_package_at_tag handles TimeoutExpired exception gracefully."""
+def test_extract_package_at_tag_timeout_exception(mock_run, tmp_path: Path):
+    """Return `None` when the git command times out"""
     mock_run.side_effect = subprocess.TimeoutExpired(cmd="git", timeout=10)
-    result = _extract_package_at_tag(Path("/project"), "v1.0", "mypkg")
+    result = _extract_package_at_tag(Path("/project"), "v1.0", "mypkg", tmp_path)
 
     assert result is None
 

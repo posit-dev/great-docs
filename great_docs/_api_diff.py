@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 import tempfile
 import tomllib
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from great_docs import _manifest
 from great_docs._build.steps import USER_CODE_ERRORS
+from great_docs._layout import PACKAGE_DIRS
 from great_docs._manifest import ManifestError
 from great_docs._subprocess import TEXT_MODE_KWARGS
 from great_docs._translations import get_translation
@@ -692,66 +692,75 @@ def _extract_package_at_tag(
     project_root: Path,
     tag: str,
     package_name: str,
+    destination: Path,
 ) -> Path | None:
     """
-    Extract the package source at a given git tag into a temp directory.
+    Extract tagged source for a Python package
 
-    Uses `git archive` to avoid modifying the working tree. Returns the temp directory path (caller
-    is responsible for cleanup), or `None` on failure.
+    Search the project root, then its `src`, `python` and `lib` directories as they were at
+    the tag. Use the first directory containing `package_name` and extract only the
+    top-level package that contains it.
+
+    Parameters
+    ----------
+    project_root
+        The project's root directory. Git paths are relative to this directory, which may
+        be a subdirectory of the repository.
+    tag
+        The git tag, branch or commit.
+    package_name
+        The importable module name, which may be dotted, such as `firebird.base`.
+    destination
+        The directory in which to extract the package.
+
+    Returns
+    -------
+    :
+        The directory within `destination` to use as a search path for `package_name`, or
+        `None` if the module is absent at the tag or extraction fails.
     """
-    normalized = package_name.replace("-", "_")
+    parts = package_name.replace("-", "_").split(".")
+    source_dirs = [PurePosixPath(directory) for directory in ("", *PACKAGE_DIRS)]
+    candidates = {source_dir.joinpath(*parts).as_posix(): source_dir for source_dir in source_dirs}
 
-    # Determine the package directory path within the repo
-    # Try common layouts: src/<pkg>, <pkg>/
-    candidates = [normalized, f"src/{normalized}"]
+    try:
+        # git reads these paths relative to its working directory, the project root
+        listing = subprocess.run(
+            ["git", "ls-tree", "--name-only", tag, "--", *candidates],
+            cwd=project_root,
+            capture_output=True,
+            **TEXT_MODE_KWARGS,
+            timeout=10,
+        )
+        if listing.returncode != 0:
+            return None
+        present = set(listing.stdout.splitlines())
+        source_dir = next((candidates[path] for path in candidates if path in present), None)
+        if source_dir is None:
+            return None
 
-    for candidate in candidates:
-        try:
-            # Check if this path exists at that tag
-            check = subprocess.run(
-                ["git", "ls-tree", "--name-only", tag, candidate + "/"],
-                cwd=project_root,
-                capture_output=True,
-                **TEXT_MODE_KWARGS,
-                timeout=10,
-            )
-            if check.returncode != 0 or not check.stdout.strip():
-                continue
+        # Loading a dotted module requires its containing top-level package.
+        archive = subprocess.run(
+            ["git", "archive", tag, (source_dir / parts[0]).as_posix()],
+            cwd=project_root,
+            capture_output=True,
+            timeout=30,
+        )
+        if archive.returncode != 0:
+            return None
+        untar = subprocess.run(
+            ["tar", "xf", "-"],
+            cwd=destination,
+            input=archive.stdout,
+            capture_output=True,
+            timeout=30,
+        )
+        if untar.returncode != 0:
+            return None
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return None
 
-            # Extract the package source via git archive
-            tmp_dir = tempfile.mkdtemp(prefix="gd_api_diff_")
-            result = subprocess.run(
-                ["git", "archive", tag, candidate],
-                cwd=project_root,
-                capture_output=True,
-                timeout=30,
-            )
-            if result.returncode != 0:
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-                continue
-
-            # Untar the archive into the temp directory
-            subprocess.run(
-                ["tar", "xf", "-"],
-                cwd=tmp_dir,
-                input=result.stdout,
-                capture_output=True,
-                timeout=30,
-            )
-
-            # For src-layout, move the package up one level so griffe can find it
-            if candidate.startswith("src/"):
-                src_pkg = Path(tmp_dir) / "src" / normalized
-                dest_pkg = Path(tmp_dir) / normalized
-                if src_pkg.exists():
-                    shutil.move(str(src_pkg), str(dest_pkg))
-
-            return Path(tmp_dir)
-
-        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-            continue
-
-    return None
+    return destination / source_dir
 
 
 def snapshot_at_tag(
@@ -761,35 +770,41 @@ def snapshot_at_tag(
     documented_names: list[str] | None = None,
 ) -> ApiSnapshot | None:
     """
-    Build an API snapshot of a package at a specific git tag.
+    Build an API snapshot from a package's tagged source
+
+    Search the project root, then its `src`, `python` and `lib` directories at the tag.
+    Extract only the top-level package containing `package_name` from the first matching
+    source directory.
 
     Parameters
     ----------
     project_root
-        Root of the git repository.
+        The project's root directory. Git paths are relative to this directory, which may
+        be a subdirectory of the repository.
     tag
-        Git tag name (e.g., `"v1.0.0"`).
+        The git tag name, such as `"v1.0.0"`.
     package_name
-        Python package name.
+        The importable module name, which may be dotted, such as `firebird.base`.
     documented_names
         Dotted names to capture, including submodule-qualified and method symbols. When `None`,
         the snapshot holds only the package's top-level public exports.
 
     Returns
     -------
-    ApiSnapshot | None
-        The snapshot, or None if the tag's source could not be extracted.
+    :
+        The snapshot, or `None` if the package's source is absent at the tag or extraction
+        fails.
     """
-    tmp_dir = _extract_package_at_tag(project_root, tag, package_name)
-    if tmp_dir is None:
-        return None
+    with tempfile.TemporaryDirectory(prefix="gd_api_diff_", ignore_cleanup_errors=True) as tmp:
+        source_dir = _extract_package_at_tag(project_root, tag, package_name, Path(tmp))
+        if source_dir is None:
+            return None
 
-    try:
         snap = snapshot_from_griffe(
             package_name,
             version=tag,
             documented_names=documented_names,
-            search_paths=[str(tmp_dir)],
+            search_paths=[str(source_dir)],
         )
 
         # Attempt CLI introspection from the version-specific source
@@ -797,11 +812,9 @@ def snapshot_at_tag(
 
         cli_module = cli_click.read_module_at_tag(project_root, tag, package_name)
         if cli_module:
-            snap.cli_commands = cli_click.snapshot_from_source(tmp_dir, cli_module)
+            snap.cli_commands = cli_click.snapshot_from_source(source_dir, cli_module)
 
         return snap
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
