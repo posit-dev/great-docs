@@ -71,11 +71,11 @@ Technical documentation often includes domain-specific terms that aren't in stan
 great-docs proofread -d myterm -d anotherterm
 ```
 
-For persistent dictionary additions, create a file with one word per line and use shell expansion:
+To reuse custom words, save one word per line in a file and pass it with `--dictionary-file`:
 
 ```{.bash filename="Terminal"}
 # words.txt contains one word per line
-great-docs proofread -d $(cat words.txt | tr '\n' ' ')
+great-docs proofread --dictionary-file words.txt
 ```
 
 Great Docs includes a built-in dictionary of common technical terms (like "API", "CLI", "PyPI", "navbar", etc.) that are automatically accepted.
@@ -169,7 +169,7 @@ Use `--strict` to enable all rules if you want maximum coverage.
 Harper supports different English dialects. The default is American English. To use British English:
 
 ```{.bash filename="Terminal"}
-great-docs proofread --dialect British
+great-docs proofread --dialect uk
 ```
 
-Available dialects: `American` (default), `British`, `Australian`, `Canadian`.
+Available values are `us` (American, the default), `uk` (British), `au` (Australian), `in` (Indian) and `ca` (Canadian).

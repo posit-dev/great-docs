@@ -127,13 +127,13 @@ great-docs proofread --grammar-only
 
 ## English Dialect
 
-Harper supports different English dialects. The default is American English:
+Harper supports different English dialects. The default is American English. To use British English:
 
 ```bash
-great-docs proofread --dialect British
+great-docs proofread --dialect uk
 ```
 
-Available dialects: `American` (default), `British`, `Australian`, `Canadian`.
+Available values are `us` (American, the default), `uk` (British), `au` (Australian), `in` (Indian) and `ca` (Canadian).
 
 ## Output Formats
 
