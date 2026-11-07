@@ -1173,6 +1173,30 @@ def test_lint_warnings_only(mock_lint, tmp_path, monkeypatch):
     assert "warning" in result.output.lower()
 
 
+@pytest.mark.parametrize("json_output", [False, True])
+def test_lint_invalid_versions_list_reports_project_error(
+    tmp_path: Path, json_output: bool
+) -> None:
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "sample"\n')
+    package = tmp_path / "sample"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    (tmp_path / "great-docs.yml").write_text("versions:\n  - 3\n")
+
+    args = ["lint", "--project-path", str(tmp_path), "--check", "stale-versions"]
+    if json_output:
+        args.append("--json")
+    result = CliRunner().invoke(cli, args)
+
+    assert result.exit_code == 1
+    expected = "versions[0]: expected a string or dict, got int"
+    if json_output:
+        assert json.loads(result.output) == {"status": "error", "error": expected}
+    else:
+        assert f"Error: {expected}" in result.output
+        assert "Traceback" not in result.output
+
+
 @patch("great_docs._checks.lint.run_lint", side_effect=RuntimeError("boom"))
 def test_lint_exception(mock_lint, tmp_path, monkeypatch):
     """lint handles runtime errors gracefully."""

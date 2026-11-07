@@ -3175,7 +3175,7 @@ def lint(
         if result.errors:
             sys.exit(1)
 
-    except (*PROJECT_ERRORS, *USER_CODE_ERRORS) as e:
+    except (*PROJECT_ERRORS, *USER_CODE_ERRORS, ValueError) as e:
         if json_output:
             click.echo(json.dumps({"status": "error", "error": str(e)}))
         else:
