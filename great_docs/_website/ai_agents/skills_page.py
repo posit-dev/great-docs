@@ -83,12 +83,12 @@ class SkillsPageWriter:
         """
         import html
 
-        from ..._translations import get_translation
+        from ..._translations import translate
 
         lang = self.config.lang
 
         def _t(key: str, fallback: str) -> str:
-            return get_translation(key, lang) if lang != "en" else fallback
+            return translate(key, lang) if lang != "en" else fallback
 
         if not skill_path.exists():
             return

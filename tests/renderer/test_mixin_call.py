@@ -4,6 +4,7 @@ RST directive handling, overload signatures, parameter exclusion, and **kwargs r
 
 from __future__ import annotations
 
+from great_docs._apiref._settings import Settings
 import griffe as gf
 import pytest
 
@@ -149,71 +150,6 @@ def test_normal_items_and_directive_parts():
 
     assert "x" in qmd
     assert "y" in qmd
-
-
-def test_exclude_single_parameter_as_string():
-    """When EXCLUSIONS.parameters value is a string, it's coerced to a tuple."""
-    code = '''
-    def func(a, b, c):
-        """
-        A function.
-
-        Parameters
-        ----------
-        a : int
-            First.
-        b : int
-            Second.
-        c : int
-            Third.
-        """
-        pass
-    '''
-    from great_docs._apiref import _globals
-
-    original = _globals.EXCLUSIONS.parameters.copy()
-    try:
-        _globals.EXCLUSIONS.parameters["package.func"] = "b"
-        qmd = render_code_variable(code, "func")
-    finally:
-        _globals.EXCLUSIONS.parameters.clear()
-        _globals.EXCLUSIONS.parameters.update(original)
-
-    # "b" should be excluded from the signature
-    assert "func(\n    a,\n    c,\n)" in qmd
-    assert "    b,\n" not in qmd
-
-
-def test_exclude_multiple_parameters_as_tuple():
-    """When EXCLUSIONS.parameters value is a tuple, parameters are excluded."""
-    code = '''
-    def func(a, b, c):
-        """
-        A function.
-
-        Parameters
-        ----------
-        a : int
-            First.
-        b : int
-            Second.
-        c : int
-            Third.
-        """
-        pass
-    '''
-    from great_docs._apiref import _globals
-
-    original = _globals.EXCLUSIONS.parameters.copy()
-    try:
-        _globals.EXCLUSIONS.parameters["package.func"] = ("a", "c")
-        qmd = render_code_variable(code, "func")
-    finally:
-        _globals.EXCLUSIONS.parameters.clear()
-        _globals.EXCLUSIONS.parameters.update(original)
-
-    # Only b should remain in the signature
-    assert "func(b)" in qmd
 
 
 def test_function_with_overloads():
@@ -634,7 +570,7 @@ def test_annotation_in_signature():
         obj = m["func"]
 
     doc = content.Doc.from_griffe(obj.name, obj)
-    rd = RenderDocFunction(doc, show_signature_annotation=True)
+    rd = RenderDocFunction(doc, show_signature_annotation=True, settings=Settings())
     qmd = str(rd)
 
     # Annotations should appear in the signature with ': type' format

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from .._manifest import Manifest
 from .._subprocess import TEXT_MODE_KWARGS
-from .._translations import get_translation
+from .._translations import translate
 from . import quarto_yml
 
 if TYPE_CHECKING:
@@ -63,7 +63,7 @@ def register(quarto_config: dict[str, Any], config: Config, metadata: Manifest) 
         lines.append(credits)
     if config.attribution:
         lines.append(
-            f"{get_translation('site_created_with', config.lang)} "
+            f"{translate('site_created_with', config.lang)} "
             f"<strong>Great&nbsp;Docs</strong>{_commit_label()}."
         )
     if lines:
@@ -108,10 +108,10 @@ def _credits(config: Config, metadata: Manifest, funder: str | None) -> str:
 
     sentences: list[str] = []
     if names_html:
-        developed_by = get_translation("developed_by", config.lang)
+        developed_by = translate("developed_by", config.lang)
         sentences.append(f"{developed_by} {_join(names_html, config.lang)}.")
     if funder:
-        sentences.append(f"{get_translation('supported_by', config.lang)} {funder}.")
+        sentences.append(f"{translate('supported_by', config.lang)} {funder}.")
     return " ".join(sentences)
 
 
@@ -182,7 +182,7 @@ def _join(items: list[str], lang: str) -> str:
     :
         `a`, `a and b`, or `a, b, and c`.
     """
-    and_ = get_translation("and", lang)
+    and_ = translate("and", lang)
     if len(items) == 1:
         return items[0]
     if len(items) == 2:

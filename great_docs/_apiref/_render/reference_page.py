@@ -42,6 +42,8 @@ class __RenderReferencePage(RenderPageMixin, RenderBase):
 
         self.options = api_ref.options
 
+        self.settings = api_ref.settings
+
         self.level = level
         self.show_title = True
         self.show_description = True
@@ -95,7 +97,9 @@ class __RenderReferencePage(RenderPageMixin, RenderBase):
         """
         from . import get_render_type
 
-        render_objs = [get_render_type(s)(s, self.level) for s in self.sections]
+        render_objs = [
+            get_render_type(s)(s, self.level, settings=self.settings) for s in self.sections
+        ]
         return Blocks(render_objs)
 
 

@@ -18,6 +18,7 @@ from .._yaml import locate_front_matter
 from .content import Page, Section
 
 if TYPE_CHECKING:
+    from ._settings import Settings
     from .api_reference import APIReference
 
 _log = logging.getLogger(__name__)
@@ -299,35 +300,25 @@ def write_typing_information(
 # ---------------------------------------------------------------------------
 
 
-def write_pages(
-    pages: list[Page],
-    *,
-    dir: str,
-    out_page_suffix: str,
-    rewrite_all_pages: bool,
-    header_level: int,
-    site_toc_depth: int,
-) -> None:
-    """Write API doc pages to `<dir>/<page.path><out_page_suffix>`
+def write_pages(pages: list[Page], settings: Settings, *, site_toc_depth: int) -> None:
+    """
+    Write API reference pages to the configured output directory
 
-    Each page is Quarto Markdown whose frontmatter carries navigation and
-    table-processing directives. A file whose content has not changed is
-    left untouched (unless `rewrite_all_pages` is `True`).
+    Each page lands at its path under `settings.dir`, with
+    `settings.out_page_suffix` appended. Each page is Quarto Markdown with
+    navigation and table-processing directives in its front matter. A file
+    whose content is unchanged is left untouched, unless
+    `settings.rewrite_all_pages` is `True`.
 
     Parameters
     ----------
-    pages :
+    pages
         Resolved page nodes to render and write.
-    dir :
-        Output directory (created per-page if absent).
-    out_page_suffix :
-        File suffix appended to each page path (e.g. `".qmd"`).
-    rewrite_all_pages :
-        When `True`, overwrite every file regardless of whether content
-        changed.
-    header_level :
-        Heading depth for the rendered page content.
-    site_toc_depth :
+    settings
+        The settings of the API reference. The pages render with them, and
+        their `dir`, `out_page_suffix`, `rewrite_all_pages` and `header_level`
+        place and head each page.
+    site_toc_depth
         Merged site table-of-contents depth. A page overrides it only when
         member headings require a greater depth.
     """
@@ -335,16 +326,22 @@ def write_pages(
 
     for page in pages:
         _log.info(f"Rendering {page.path}")
-        rendered = str(RenderAPIPage(page, header_level, toc_depth=site_toc_depth))
+        rendered = str(
+            RenderAPIPage(page, settings.header_level, toc_depth=site_toc_depth, settings=settings)
+        )
 
         rendered = merge_frontmatter(
             rendered, {"page-navigation": False, "html-table-processing": "none"}
         )
 
-        html_path = Path(dir) / (page.path + out_page_suffix)
+        html_path = Path(settings.dir) / (page.path + settings.out_page_suffix)
         html_path.parent.mkdir(exist_ok=True, parents=True)
 
-        if rewrite_all_pages or (not html_path.exists()) or (html_path.read_text() != rendered):
+        if (
+            settings.rewrite_all_pages
+            or (not html_path.exists())
+            or (html_path.read_text() != rendered)
+        ):
             _log.info(f"Writing: {page.path}")
             _ = html_path.write_text(rendered)
         else:

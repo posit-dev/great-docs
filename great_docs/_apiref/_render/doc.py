@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, cast
 import griffe as gf
 
 from great_docs._apiref._render._label import get_label
+from great_docs._translations import translate, translate_versioned
 from great_docs.pandoc.blocks import (
     Block,
     BlockContent,
@@ -25,7 +26,7 @@ from great_docs.pandoc.blocks import (
 from great_docs.pandoc.components import Attr
 from great_docs.pandoc.inlines import Code, Inline, Inlines, Inlines0, Link, Span
 
-from .. import _globals, content
+from .. import content
 from .._docstring_sections import (
     DocstringSectionNotes,
     DocstringSectionSeeAlso,
@@ -45,7 +46,6 @@ from .._format import (
     render_formatted_expr,
     repr_obj,
 )
-from .._globals import translate, translate_versioned
 from ._section_dispatch import SECTION_METHOD
 from .base import RenderBase
 
@@ -494,7 +494,7 @@ class __RenderDoc(RenderBase):
                 key = _SECTION_TITLE_KEYS.get(title)
                 header = Header(
                     self.level + 1,
-                    translate(key) if key else title,
+                    translate(key, self.settings.lang) if key else title,
                     Attr(classes=section_classes),
                 )
                 content = Blocks([header, body])
@@ -613,11 +613,14 @@ class __RenderDoc(RenderBase):
 
     def render_deprecated_section(self, el: gf.DocstringSectionDeprecated) -> BlockContent:
         """Render a `Deprecated` section"""
+        label = translate_versioned(
+            "deprecated_since_version", self.settings.lang, el.value.version
+        )
         content = Div(
             Inlines(
                 [
                     Span(
-                        f"{translate_versioned('deprecated_since_version', el.value.version)}:",
+                        f"{label}:",
                         Attr(classes=["versionmodified", "deprecated"]),
                     ),
                     el.value.description.strip(),
@@ -763,7 +766,7 @@ class __RenderDoc(RenderBase):
         """
         source = self.source_link if self.show_source_link else None
         return Div(
-            [translate("usage"), source],
+            [translate("usage", self.settings.lang), source],
             attr=Attr(classes=["doc-usage-source"]),
         )
 
@@ -779,7 +782,7 @@ class __RenderDoc(RenderBase):
             available, the file is a compiled extension, or the starting line
             is unknown.
         """
-        links = _globals.SETTINGS.source_links
+        links = self.settings.source_links
         if not links.repo_url:
             return None
         rel_str = self._source_relative_path()
@@ -796,7 +799,9 @@ class __RenderDoc(RenderBase):
         anchor = f"#L{start}-L{end}" if end is not None and start != end else f"#L{start}"
         url = f"{links.repo_url}/blob/{links.ref}/{rel_str}{anchor}"
         return Link(
-            translate("source"), url, attr=Attr(attributes={"target": "_blank", "rel": "noopener"})
+            translate("source", self.settings.lang),
+            url,
+            attr=Attr(attributes={"target": "_blank", "rel": "noopener"}),
         )
 
     def _source_relative_path(self) -> str | None:
@@ -831,7 +836,7 @@ class __RenderDoc(RenderBase):
         if isinstance(filepath, list):
             filepath = None
 
-        links = _globals.SETTINGS.source_links
+        links = self.settings.source_links
 
         # 1. Explicit override for monorepos: `<source.path>/<filename>`.
         if links.path and filepath is not None:

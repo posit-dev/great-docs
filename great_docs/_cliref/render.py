@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .._contribution import Contribution, NavbarLink, Sidebar, SidebarItem
-from .._translations import get_translation
+from .._translations import translate
 from .._website.navigation import navbar
 from .model import CliArgument, CliCommand, CliOption
 
@@ -76,7 +76,7 @@ def write_pages(
     _ = index_path.write_text(index_page(config, cli, entry_safe), encoding="utf-8")
     # Label the index entry so it reads apart from the enclosing "CLI Reference" section title,
     # as the "API Index" link does.
-    cli_index_label = get_translation("cli_index", config.lang)
+    cli_index_label = translate("cli_index", config.lang)
     generated_files.append({"text": cli_index_label, "href": INDEX_PAGE})
     generated_paths.append(str(index_path.relative_to(build_dir)))
 
@@ -120,7 +120,7 @@ def contribution(config: Config, items: Sequence[SidebarItem]) -> Contribution:
         site's language. Applying the contribution does not add the link if the navbar
         already has a Reference item, such as one for the API reference.
     """
-    title = config.cli_title or get_translation("cli_reference", config.lang)
+    title = config.cli_title or translate("cli_reference", config.lang)
     return Contribution(
         navbar=(NavbarLink(text=navbar.REFERENCE.label(config), href=INDEX_PAGE),),
         sidebars=(Sidebar(id="cli-reference", title=title, contents=tuple(items)),),
@@ -206,7 +206,7 @@ def index_page(config: Config, cli: CliCommand, entry_safe: str) -> str:
         The Quarto Markdown for `reference/cli/index.qmd`.
     """
     lang = config.lang
-    title = config.cli_title or get_translation("cli_reference", lang)
+    title = config.cli_title or translate("cli_reference", lang)
 
     lines: list[str] = []
 
@@ -303,7 +303,7 @@ def index_page(config: Config, cli: CliCommand, entry_safe: str) -> str:
         groups = [c for c in top_commands if c.get("is_group")]
 
         if leaf:
-            emit_section(get_translation("cli_commands", lang))
+            emit_section(translate("cli_commands", lang))
             for cmd in leaf:
                 emit_entry(cmd, f"{cmd['name'].replace('-', '_')}.qmd")
 
@@ -382,7 +382,7 @@ def command_page(config: Config, cmd: CliCommand, is_main: bool = False) -> str:
     deprecated = cmd.get("deprecated")
     if deprecated:
         # A warning callout, as API pages render a `deprecated` directive.
-        label = get_translation("status_label_deprecated", config.lang)
+        label = translate("status_label_deprecated", config.lang)
         lines.append(f'::: {{.callout-warning title="{label}"}}')
         if isinstance(deprecated, str):
             lines.append(backtick_prose(deprecated.strip(), option_names))
@@ -448,7 +448,7 @@ def command_page(config: Config, cmd: CliCommand, is_main: bool = False) -> str:
 
     help_text = cmd.get("help_text", "")
     if help_text:
-        help_summary = get_translation("cli_full_help", config.lang)
+        help_summary = translate("cli_full_help", config.lang)
         lines.append(f'::: {{.details summary="{help_summary}"}}')
         lines.append("")
         lines.append("::: {.cli-manpage}")
@@ -632,7 +632,7 @@ def _mark_deprecated(
     """
     if not deprecated:
         return text
-    notice = f"**{get_translation('status_label_deprecated', config.lang)}.**"
+    notice = f"**{translate('status_label_deprecated', config.lang)}.**"
     if isinstance(deprecated, str) and deprecated.strip():
         notice += " " + backtick_prose(deprecated.strip(), option_names)
     # A hard line break keeps the description separate in a tight definition list, even

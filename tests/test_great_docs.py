@@ -33,7 +33,7 @@ from yaml12 import format_yaml as _format_yaml
 from yaml12 import parse_yaml as _parse_yaml
 
 from great_docs import BuildError, Config, GreatDocs, _manifest, create_default_config, load_config
-from great_docs._apiref import _globals, content, spec, write
+from great_docs._apiref import content, spec, write
 from great_docs._apiref._docstring_sections import (
     DCDocstringSection,
     DocstringSectionNotes,
@@ -54,7 +54,6 @@ from great_docs._apiref._format import (
     format_value,
     repr_obj,
 )
-from great_docs._apiref._globals import EXCLUSIONS
 from great_docs._apiref._preview import Formatter
 from great_docs._apiref._render import (
     RenderDocAttribute,
@@ -70,11 +69,6 @@ from great_docs._apiref._render._label import (
 from great_docs._apiref._render.api_page import RenderAPIPage
 from great_docs._apiref._render.base import RenderBase
 from great_docs._apiref._render.extending import (
-    exclude_attributes,
-    exclude_classes,
-    exclude_functions,
-    exclude_parameters,
-    exclude_type_aliases,
     extend_base_class,
     set_class_attr,
 )
@@ -85,7 +79,7 @@ from great_docs._apiref._render.mixin_members import (
 from great_docs._apiref._render.mixin_page import RenderPageMixin
 from great_docs._apiref._render.reference_page import RenderReferencePage
 from great_docs._apiref._render.reference_section import RenderReferenceSection
-from great_docs._apiref._settings import SourceLinks, active_settings
+from great_docs._apiref._settings import SourceLinks
 from great_docs._apiref._signature import make_call_signature_text
 from great_docs._apiref._tools import render_code_variable, render_type_object
 from great_docs._apiref._type_checks import (
@@ -6067,9 +6061,8 @@ def _render_doc_source_relative_path(obj, links: SourceLinks):
     import great_docs._apiref._render.doc as docmod
 
     cls = vars(docmod)["__RenderDoc"]
-    fake_self = types.SimpleNamespace(obj=obj)
-    with active_settings(Settings(source_links=links)):
-        return cls.__dict__["_source_relative_path"](fake_self)
+    fake_self = types.SimpleNamespace(obj=obj, settings=Settings(source_links=links))
+    return cls.__dict__["_source_relative_path"](fake_self)
 
 
 def test_render_source_relative_path_preserves_src_layout():
@@ -14049,7 +14042,7 @@ def test_mixin_render_body_with_doc_members():
     """render_body renders docstring + member groups for Doc members."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     body = render.render_body()
     body_str = str(body)
@@ -14062,7 +14055,7 @@ def test_mixin_render_body_with_member_pages():
     """render_body renders docstring + member page groups for MemberPage members."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     body = render.render_body()
     body_str = str(body)
@@ -14074,7 +14067,7 @@ def test_mixin_render_body_no_members():
 
     cls_obj = gf.Class(name="Empty", lineno=1)
     doc_cls = content.DocClass(name="Empty", obj=cls_obj, members=[])
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     body = render.render_body()
 
@@ -14102,7 +14095,7 @@ def test_render_section_text_converts_sphinx_fields():
     emit_docstring_parsed(func)
 
     doc_fn = content.DocFunction(name="f", obj=func)
-    out = str(RenderDocFunction(doc_fn, level=1).render_body())
+    out = str(RenderDocFunction(doc_fn, level=1, settings=Settings()).render_body())
     assert ".doc-parameters" in out
     assert "The x value." in out
 
@@ -14127,7 +14120,7 @@ def test_render_section_text_converts_google_sections():
     emit_docstring_parsed(func)
 
     doc_fn = content.DocFunction(name="f", obj=func)
-    out = str(RenderDocFunction(doc_fn, level=1).render_body())
+    out = str(RenderDocFunction(doc_fn, level=1, settings=Settings()).render_body())
     assert ".doc-parameters" in out
     assert ".doc-returns" in out
 
@@ -14147,7 +14140,7 @@ def test_render_section_text_fences_doctests():
     emit_docstring_parsed(func)
 
     doc_fn = content.DocFunction(name="f", obj=func)
-    out = str(RenderDocFunction(doc_fn, level=1).render_body())
+    out = str(RenderDocFunction(doc_fn, level=1, settings=Settings()).render_body())
     assert "```" in out
 
 
@@ -14161,7 +14154,7 @@ def test_render_example_text_fences_doctests():
     assert emit_object_resolved(func) is func
 
     doc_fn = content.DocFunction(name="f", obj=func)
-    render = RenderDocFunction(doc_fn, level=1)
+    render = RenderDocFunction(doc_fn, level=1, settings=Settings())
     out = str(render._render_example_fragment(ExampleText(func.docstring.value)))
     assert "```" in out
 
@@ -14172,7 +14165,7 @@ def test_mixin_render_body_invalid_member_type_raises():
     cls_obj = gf.Class(name="Bad", lineno=1)
     # Use a plain string as a member — not Doc or MemberPage
     doc_cls = content.DocClass(name="Bad", obj=cls_obj, members=["not_a_doc"])
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     with pytest.raises(ValueError, match="Cannot render members of type"):
         render.render_body()
@@ -14182,7 +14175,7 @@ def test_mixin_render_members_returns_groups():
     """render_members returns [type aliases, attributes, classes, functions] groups."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     members = render.render_members()
     assert len(members) == 4
@@ -14196,7 +14189,7 @@ def test_mixin_render_members_show_members_false():
     """render_members returns empty list when show_members=False."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_members = False
 
     assert render.render_members() == []
@@ -14206,7 +14199,7 @@ def test_mixin_render_member_pages_returns_groups():
     """render_member_pages returns [type aliases, attributes, classes, functions] page groups."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     pages = render.render_member_pages()
     assert len(pages) == 4
@@ -14220,7 +14213,7 @@ def test_mixin_render_member_pages_show_members_false():
     """render_member_pages returns empty list when show_members=False."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_members = False
 
     assert render.render_member_pages() == []
@@ -14242,45 +14235,18 @@ def test_mixin_type_alias_member_pages_property():
     """type_alias_member_pages filters MemberPage members by is_type_alias."""
 
     _, doc_cls = _build_class_with_member_pages_and_type_alias()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     pages = render.type_alias_member_pages
     assert len(pages) == 1
     assert pages[0].path == "Inline"
 
 
-def test_mixin_type_alias_member_pages_honours_exclusions():
-    """exclude_type_aliases drops a type alias from type_alias_member_pages."""
-
-    cls_obj, doc_cls = _build_class_with_member_pages_and_type_alias()
-    render = RenderDocClass(doc_cls, level=1)
-
-    original = dict(EXCLUSIONS.type_aliases)
-    try:
-        exclude_type_aliases({cls_obj.path: "Inline"})
-        assert render.type_alias_member_pages == []
-    finally:
-        EXCLUSIONS.type_aliases.clear()
-        EXCLUSIONS.type_aliases.update(original)
-
-
-def test_exclude_type_aliases_updates_globals():
-    """exclude_type_aliases updates the EXCLUSIONS.type_aliases global dict."""
-
-    original = dict(EXCLUSIONS.type_aliases)
-    try:
-        exclude_type_aliases({"test.MyClass": "Contract"})
-        assert EXCLUSIONS.type_aliases["test.MyClass"] == "Contract"
-    finally:
-        EXCLUSIONS.type_aliases.clear()
-        EXCLUSIONS.type_aliases.update(original)
-
-
 def test_mixin_render_type_alias_member_pages():
     """render_type_alias_member_pages returns RenderedMemberPagesGroup."""
 
     _, doc_cls = _build_class_with_member_pages_and_type_alias()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     result = render.render_type_alias_member_pages()
     assert isinstance(result, RenderedMemberPagesGroup)
@@ -14291,7 +14257,7 @@ def test_mixin_render_type_alias_member_pages_show_false():
     """render_type_alias_member_pages returns None when show_type_aliases=False."""
 
     _, doc_cls = _build_class_with_member_pages_and_type_alias()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_type_aliases = False
 
     assert render.render_type_alias_member_pages() is None
@@ -14301,7 +14267,7 @@ def test_mixin_render_member_pages_includes_type_alias_group():
     """render_member_pages fills the type-alias slot when a MemberPage alias exists."""
 
     _, doc_cls = _build_class_with_member_pages_and_type_alias()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     pages = render.render_member_pages()
     assert len(pages) == 4
@@ -14313,7 +14279,7 @@ def test_mixin_attributes_property():
     """attributes property filters Doc members by is_attribute."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     attrs = render.attributes
     assert len(attrs) == 1
@@ -14324,7 +14290,7 @@ def test_mixin_classes_property():
     """classes property filters Doc members by is_class."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     classes = render.classes
     assert len(classes) == 1
@@ -14335,7 +14301,7 @@ def test_mixin_functions_property():
     """functions property filters Doc members by is_function."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     funcs = render.functions
     assert len(funcs) == 1
@@ -14346,7 +14312,7 @@ def test_mixin_attribute_member_pages_property():
     """attribute_member_pages filters MemberPage members by is_attribute."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     pages = render.attribute_member_pages
     assert len(pages) == 1
@@ -14357,7 +14323,7 @@ def test_mixin_class_member_pages_property():
     """class_member_pages filters MemberPage members by is_class."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     pages = render.class_member_pages
     assert len(pages) == 1
@@ -14368,126 +14334,18 @@ def test_mixin_function_member_pages_property():
     """function_member_pages filters MemberPage members by is_function."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     pages = render.function_member_pages
     assert len(pages) == 1
     assert pages[0].path == "method"
 
 
-def test_mixin_attributes_exclude_filter():
-    """attributes property respects EXCLUSIONS.attributes."""
-
-    _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
-
-    old = _globals.EXCLUSIONS.attributes.copy()
-    try:
-        _globals.EXCLUSIONS.attributes["MyClass"] = ("my_attr",)
-        if "attributes" in render.__dict__:
-            del render.__dict__["attributes"]
-        attrs = render.attributes
-        assert len(attrs) == 0
-    finally:
-        _globals.EXCLUSIONS.attributes.clear()
-        _globals.EXCLUSIONS.attributes.update(old)
-
-
-def test_mixin_functions_exclude_filter():
-    """functions property respects EXCLUSIONS.functions."""
-
-    _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
-
-    old = _globals.EXCLUSIONS.functions.copy()
-    try:
-        _globals.EXCLUSIONS.functions["MyClass"] = ("method",)
-        if "functions" in render.__dict__:
-            del render.__dict__["functions"]
-        funcs = render.functions
-        assert len(funcs) == 0
-    finally:
-        _globals.EXCLUSIONS.functions.clear()
-        _globals.EXCLUSIONS.functions.update(old)
-
-
-def test_mixin_classes_exclude_filter():
-    """classes property respects EXCLUSIONS.classes."""
-
-    _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
-
-    old = _globals.EXCLUSIONS.classes.copy()
-    try:
-        _globals.EXCLUSIONS.classes["MyClass"] = "Inner"
-        if "classes" in render.__dict__:
-            del render.__dict__["classes"]
-        classes = render.classes
-        assert len(classes) == 0
-    finally:
-        _globals.EXCLUSIONS.classes.clear()
-        _globals.EXCLUSIONS.classes.update(old)
-
-
-def test_mixin_attribute_member_pages_exclude_filter():
-    """attribute_member_pages respects EXCLUSIONS.attributes."""
-
-    _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
-
-    old = _globals.EXCLUSIONS.attributes.copy()
-    try:
-        _globals.EXCLUSIONS.attributes["MyClass"] = "my_attr"
-        if "attribute_member_pages" in render.__dict__:
-            del render.__dict__["attribute_member_pages"]
-        pages = render.attribute_member_pages
-        assert len(pages) == 0
-    finally:
-        _globals.EXCLUSIONS.attributes.clear()
-        _globals.EXCLUSIONS.attributes.update(old)
-
-
-def test_mixin_class_member_pages_exclude_filter():
-    """class_member_pages respects EXCLUSIONS.classes."""
-
-    _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
-
-    old = _globals.EXCLUSIONS.classes.copy()
-    try:
-        _globals.EXCLUSIONS.classes["MyClass"] = ("Inner",)
-        if "class_member_pages" in render.__dict__:
-            del render.__dict__["class_member_pages"]
-        pages = render.class_member_pages
-        assert len(pages) == 0
-    finally:
-        _globals.EXCLUSIONS.classes.clear()
-        _globals.EXCLUSIONS.classes.update(old)
-
-
-def test_mixin_function_member_pages_exclude_filter():
-    """function_member_pages respects EXCLUSIONS.functions."""
-
-    _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
-
-    old = _globals.EXCLUSIONS.functions.copy()
-    try:
-        _globals.EXCLUSIONS.functions["MyClass"] = "method"
-        if "function_member_pages" in render.__dict__:
-            del render.__dict__["function_member_pages"]
-        pages = render.function_member_pages
-        assert len(pages) == 0
-    finally:
-        _globals.EXCLUSIONS.functions.clear()
-        _globals.EXCLUSIONS.functions.update(old)
-
-
 def test_mixin_render_classes():
     """render_classes returns a RenderedMembersGroup with 'Classes' title."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     result = render.render_classes()
     assert isinstance(result, RenderedMembersGroup)
@@ -14498,7 +14356,7 @@ def test_mixin_render_functions():
     """render_functions returns a RenderedMembersGroup with 'Methods' title for classes."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     result = render.render_functions()
     assert isinstance(result, RenderedMembersGroup)
@@ -14509,7 +14367,7 @@ def test_mixin_render_attributes():
     """render_attributes returns a RenderedMembersGroup with 'Attributes' title."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     result = render.render_attributes()
     assert isinstance(result, RenderedMembersGroup)
@@ -14520,7 +14378,7 @@ def test_mixin_render_classes_show_false():
     """render_classes returns None when show_classes=False."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_classes = False
 
     assert render.render_classes() is None
@@ -14530,7 +14388,7 @@ def test_mixin_render_functions_show_false():
     """render_functions returns None when show_functions=False."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_functions = False
 
     assert render.render_functions() is None
@@ -14540,7 +14398,7 @@ def test_mixin_render_attributes_show_false():
     """render_attributes returns None when show_attributes=False."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_attributes = False
 
     assert render.render_attributes() is None
@@ -14550,7 +14408,7 @@ def test_mixin_render_class_member_pages():
     """render_class_member_pages returns RenderedMemberPagesGroup."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     result = render.render_class_member_pages()
     assert isinstance(result, RenderedMemberPagesGroup)
@@ -14560,7 +14418,7 @@ def test_mixin_render_function_member_pages():
     """render_function_member_pages returns RenderedMemberPagesGroup."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     result = render.render_function_member_pages()
     assert isinstance(result, RenderedMemberPagesGroup)
@@ -14570,7 +14428,7 @@ def test_mixin_render_attribute_member_pages():
     """render_attribute_member_pages returns RenderedMemberPagesGroup."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     result = render.render_attribute_member_pages()
     assert isinstance(result, RenderedMemberPagesGroup)
@@ -14580,7 +14438,7 @@ def test_mixin_render_class_member_pages_show_false():
     """render_class_member_pages returns None when show_classes=False."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_classes = False
 
     assert render.render_class_member_pages() is None
@@ -14590,7 +14448,7 @@ def test_mixin_render_function_member_pages_show_false():
     """render_function_member_pages returns None when show_functions=False."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_functions = False
 
     assert render.render_function_member_pages() is None
@@ -14600,7 +14458,7 @@ def test_mixin_render_attribute_member_pages_show_false():
     """render_attribute_member_pages returns None when show_attributes=False."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_attributes = False
 
     assert render.render_attribute_member_pages() is None
@@ -14610,7 +14468,7 @@ def test_mixin_render_members_group_no_summary():
     """_render_members_group skips summary when show_*_summary=False."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_functions_summary = False
 
     result = render.render_functions()
@@ -14622,7 +14480,7 @@ def test_mixin_render_members_group_no_body():
     """_render_members_group skips body when show_*_body=False."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_functions_body = False
 
     result = render.render_functions()
@@ -14634,7 +14492,7 @@ def test_mixin_render_members_group_no_summary_global():
     """_render_members_group skips summary when show_members_summary=False."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_members_summary = False
 
     result = render.render_functions()
@@ -14651,7 +14509,7 @@ def test_mixin_render_members_group_empty_returns_none():
     doc_func = content.DocFunction(name="method", obj=func_obj)
     doc_cls = content.DocClass(name="FuncOnly", obj=cls_obj, members=[doc_func])
 
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     assert render.render_attributes() is None
     assert render.render_classes() is None
@@ -14662,7 +14520,7 @@ def test_mixin_render_members_group_attributes_summary_and_body():
     """_render_members_group for attributes respects show_attributes_summary/body."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_attributes_summary = False
     render.show_attributes_body = False
 
@@ -14676,7 +14534,7 @@ def test_mixin_render_members_group_classes_summary_and_body():
     """_render_members_group for classes respects show_classes_summary/body."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_classes_summary = False
     render.show_classes_body = False
 
@@ -14690,7 +14548,7 @@ def test_mixin_render_member_pages_group_no_summary():
     """_render_member_pages_group skips summary when show_*_summary=False."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_functions_summary = False
 
     result = render.render_function_member_pages()
@@ -14709,7 +14567,7 @@ def test_mixin_render_member_pages_group_empty_returns_none():
     page_func = content.MemberPage(path="method", contents=[doc_func])
     doc_cls = content.DocClass(name="FuncOnly", obj=cls_obj, members=[page_func])
 
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     assert render.render_attribute_member_pages() is None
     assert render.render_class_member_pages() is None
@@ -14720,7 +14578,7 @@ def test_mixin_render_member_pages_group_functions_slug_for_class():
     """_render_member_pages_group uses 'Functions' slug for DocClass function pages."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     result = render.render_function_member_pages()
     assert result is not None
@@ -14732,7 +14590,7 @@ def test_mixin_render_member_pages_group_attributes_no_summary():
     """_render_member_pages_group for attributes skips summary when disabled."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_attributes_summary = False
 
     result = render.render_attribute_member_pages()
@@ -14744,7 +14602,7 @@ def test_mixin_render_member_pages_group_classes_no_summary():
     """_render_member_pages_group for classes skips summary when disabled."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_classes_summary = False
 
     result = render.render_class_member_pages()
@@ -14756,7 +14614,7 @@ def test_mixin_render_member_pages_group_global_summary_off():
     """_render_member_pages_group skips summary when show_members_summary=False."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     render.show_members_summary = False
 
     result = render.render_function_member_pages()
@@ -14768,7 +14626,7 @@ def test_mixin_render_members_group_has_summary_table():
     """_render_members_group produces a tabulate summary."""
 
     _, doc_cls = _build_class_with_members()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     result = render.render_functions()
     assert result is not None
@@ -14780,7 +14638,7 @@ def test_mixin_render_member_pages_group_has_summary_table():
     """_render_member_pages_group produces a tabulate summary."""
 
     _, doc_cls = _build_class_with_member_pages()
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     result = render.render_function_member_pages()
     assert result is not None
@@ -14798,7 +14656,7 @@ def test_mixin_render_functions_module_uses_functions_slug():
     doc_func = content.DocFunction(name="func", obj=func_obj)
     doc_mod = content.DocModule(name="mymod", obj=mod_obj, members=[doc_func])
 
-    render = RenderDocModule(doc_mod, level=1)
+    render = RenderDocModule(doc_mod, level=1, settings=Settings())
 
     result = render.render_functions()
     assert result is not None
@@ -14821,7 +14679,7 @@ def test_mixin_render_members_module_uses_functions_slug():
     doc_attr = content.DocAttribute(name="val", obj=attr_obj)
     doc_mod = content.DocModule(name="mymod", obj=mod_obj, members=[doc_attr, doc_cls, doc_func])
 
-    render = RenderDocModule(doc_mod, level=1)
+    render = RenderDocModule(doc_mod, level=1, settings=Settings())
 
     members = render.render_members()
     assert len(members) == 4
@@ -15289,7 +15147,7 @@ def test_docclass_attributes_excludes_dataclass_params():
     doc_attr_y = content.DocAttribute(name="y", obj=attr_y)
     doc_cls = content.DocClass(name="DC", obj=cls_obj, members=[doc_attr_x, doc_attr_y])
 
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
 
     # is_dataclass should be True
     assert render.is_dataclass is True
@@ -15322,7 +15180,7 @@ def test_docclass_parameter_attributes_with_dataclass():
     doc_attr_a = content.DocAttribute(name="a", obj=attr_a)
     doc_cls = content.DocClass(name="DC2", obj=cls_obj, members=[doc_attr_a])
 
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     pa = render.parameter_attributes
     assert len(pa) == 1
     assert pa[0].name == "a"
@@ -15354,7 +15212,7 @@ def test_docclass_init_parameters_with_dataclass():
     doc_attr_a = content.DocAttribute(name="a", obj=attr_a)
     doc_cls = content.DocClass(name="DC3", obj=cls_obj, members=[doc_attr_a])
 
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     ip = render.init_parameters
 
     # "self" and "b" are not in class attributes; "a" is
@@ -15370,7 +15228,7 @@ def test_docmodule_render_signature_no_signature_name():
     mod_obj = gf.Module(name="my_module")
     doc_mod = content.DocModule(name="my_module", obj=mod_obj)
 
-    render = RenderDocModule(doc_mod, level=1)
+    render = RenderDocModule(doc_mod, level=1, settings=Settings())
     # Override the cached_property by setting in instance __dict__
     render.__dict__["signature_name"] = ""
     result = render.render_signature()
@@ -15383,7 +15241,7 @@ def test_docmodule_render_signature_with_name():
     mod_obj = gf.Module(name="my_module")
     doc_mod = content.DocModule(name="my_module", obj=mod_obj)
 
-    render = RenderDocModule(doc_mod, level=1)
+    render = RenderDocModule(doc_mod, level=1, settings=Settings())
     # Ensure signature_name is non-empty
     render.__dict__["signature_name"] = "my_module"
     result = render.render_signature()
@@ -15398,7 +15256,7 @@ def test_docmodule_post_init_narrows_types():
     mod_obj = gf.Module(name="test_mod")
     doc_mod = content.DocModule(name="test_mod", obj=mod_obj)
 
-    render = RenderDocModule(doc_mod, level=1)
+    render = RenderDocModule(doc_mod, level=1, settings=Settings())
 
     # After __post_init__, self.doc and self.obj should be set
     assert render.doc is doc_mod
@@ -15421,7 +15279,7 @@ def test_renderbase_title_property():
     mod_obj = gf.Module(name="tmod")
     doc_mod = content.DocModule(name="tmod", obj=mod_obj)
 
-    render = RenderDocModule(doc_mod, level=1)
+    render = RenderDocModule(doc_mod, level=1, settings=Settings())
 
     # Access the 'title' cached property, which calls render_title()
     title = render.title
@@ -15451,7 +15309,7 @@ def test_docattribute_render_signature_type_kind():
 
     doc_attr = content.DocAttribute(name="MyType", obj=attr_obj)
 
-    render = RenderDocAttribute(doc_attr, level=1)
+    render = RenderDocAttribute(doc_attr, level=1, settings=Settings())
 
     assert "type" in render.kind
 
@@ -15523,7 +15381,7 @@ def test_docclass_attribute_member_pages_dataclass():
     page_y = content.MemberPage(path="y", contents=[doc_attr_y])
     doc_cls = content.DocClass(name="DC4", obj=cls_obj, members=[page_x, page_y])
 
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     pages = render.attribute_member_pages
     page_names = [p.obj.name for p in pages]
     assert "x" not in page_names
@@ -15536,7 +15394,7 @@ def test_docclass_parameter_attributes_non_dataclass():
     cls_obj = gf.Class(name="RegularClass", lineno=1)
     doc_cls = content.DocClass(name="RegularClass", obj=cls_obj, members=[])
 
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     assert render.is_dataclass is False
     pa = render.parameter_attributes
     assert len(pa) == 0
@@ -15548,7 +15406,7 @@ def test_docclass_init_parameters_non_dataclass():
     cls_obj = gf.Class(name="RegularClass2", lineno=1)
     doc_cls = content.DocClass(name="RegularClass2", obj=cls_obj, members=[])
 
-    render = RenderDocClass(doc_cls, level=1)
+    render = RenderDocClass(doc_cls, level=1, settings=Settings())
     assert render.is_dataclass is False
     ip = render.init_parameters
     assert len(ip) == 0
@@ -16059,7 +15917,7 @@ def test_make_call_signature_text_long_params():
     """make_call_signature_text wraps lines when params are long."""
     params = [f"parameter_number_{i}=None" for i in range(6)]
 
-    result = make_call_signature_text("my_function", params)
+    result = make_call_signature_text("my_function", params, "width")
 
     assert "\n" in result
     assert result.startswith("my_function(")
@@ -16345,61 +16203,12 @@ def test_set_class_attr_cached_property():
     assert Target().cached_val == 99
 
 
-def test_exclude_parameters_updates_globals():
-    """exclude_parameters updates the EXCLUSIONS.parameters global dict."""
-
-    original = dict(EXCLUSIONS.parameters)
-    try:
-        exclude_parameters({"test.MyClass": "param1"})
-        assert "test.MyClass" in EXCLUSIONS.parameters
-        assert EXCLUSIONS.parameters["test.MyClass"] == "param1"
-    finally:
-        EXCLUSIONS.parameters.clear()
-        EXCLUSIONS.parameters.update(original)
-
-
-def test_exclude_attributes_updates_globals():
-    """exclude_attributes updates the EXCLUSIONS.attributes global dict."""
-
-    original = dict(EXCLUSIONS.attributes)
-    try:
-        exclude_attributes({"test.MyClass": ("a", "b")})
-        assert "test.MyClass" in EXCLUSIONS.attributes
-    finally:
-        EXCLUSIONS.attributes.clear()
-        EXCLUSIONS.attributes.update(original)
-
-
-def test_exclude_functions_updates_globals():
-    """exclude_functions updates the EXCLUSIONS.functions global dict."""
-
-    original = dict(EXCLUSIONS.functions)
-    try:
-        exclude_functions({"test.MyClass": "func_a"})
-        assert "test.MyClass" in EXCLUSIONS.functions
-    finally:
-        EXCLUSIONS.functions.clear()
-        EXCLUSIONS.functions.update(original)
-
-
-def test_exclude_classes_updates_globals():
-    """exclude_classes updates the EXCLUSIONS.classes global dict."""
-
-    original = dict(EXCLUSIONS.classes)
-    try:
-        exclude_classes({"test.MyClass": "Contained1"})
-        assert "test.MyClass" in EXCLUSIONS.classes
-    finally:
-        EXCLUSIONS.classes.clear()
-        EXCLUSIONS.classes.update(original)
-
-
 def test_render_reference_section_title():
     """RenderReferenceSection.render_title() returns a Header."""
 
     section = content.Section(title="Functions", contents=[spec.SpecObject(name="x")])
 
-    rs = RenderReferenceSection(node=section, level=1)
+    rs = RenderReferenceSection(node=section, level=1, settings=Settings())
     title = rs.render_title()
 
     assert title is not None
@@ -16411,7 +16220,7 @@ def test_render_reference_section_subtitle():
 
     section = content.Section(subtitle="Helper Functions", contents=[spec.SpecObject(name="x")])
 
-    rs = RenderReferenceSection(node=section, level=1)
+    rs = RenderReferenceSection(node=section, level=1, settings=Settings())
     title = rs.render_title()
 
     assert title is not None
@@ -16423,7 +16232,7 @@ def test_render_reference_section_no_title():
 
     section = content.Section(contents=[spec.SpecObject(name="x")])
 
-    rs = RenderReferenceSection(node=section, level=1)
+    rs = RenderReferenceSection(node=section, level=1, settings=Settings())
     title = rs.render_title()
 
     assert title is None
@@ -16436,7 +16245,7 @@ def test_render_reference_section_description():
         title="Test", desc="A description", contents=[spec.SpecObject(name="x")]
     )
 
-    rs = RenderReferenceSection(node=section, level=1)
+    rs = RenderReferenceSection(node=section, level=1, settings=Settings())
     desc = rs.render_description()
 
     assert "A description" in str(desc)
@@ -16447,7 +16256,7 @@ def test_render_reference_section_body_empty():
 
     section = content.Section(title="Empty", contents=[])
 
-    rs = RenderReferenceSection(node=section, level=1)
+    rs = RenderReferenceSection(node=section, level=1, settings=Settings())
     body = rs.render_body()
 
     assert body is None
@@ -16520,7 +16329,7 @@ def test_render_api_page_post_init():
     doc_obj = griffe_to_doc(func_obj)
     page = content.Page(path="reference/my_func", contents=[doc_obj])
 
-    ap = RenderAPIPage(node=page, level=1)
+    ap = RenderAPIPage(node=page, level=1, settings=Settings())
 
     assert ap.page is page
     assert ap.path == "reference/my_func.qmd"
@@ -16533,7 +16342,7 @@ def test_render_api_page_has_one_object():
     doc_obj = griffe_to_doc(func_obj)
     page = content.Page(path="reference/my_func", contents=[doc_obj])
 
-    ap = RenderAPIPage(node=page, level=1)
+    ap = RenderAPIPage(node=page, level=1, settings=Settings())
 
     assert ap._has_one_object is True
 
@@ -16545,7 +16354,7 @@ def test_render_api_page_metadata():
     doc_obj = griffe_to_doc(func_obj)
     page = content.Page(path="reference/my_func", contents=[doc_obj])
 
-    ap = RenderAPIPage(node=page, level=1)
+    ap = RenderAPIPage(node=page, level=1, settings=Settings())
     meta = ap.render_metadata()
     meta_str = str(meta)
 
@@ -16566,7 +16375,7 @@ def test_render_api_page_metadata_description_from_docstring():
     )
     page = content.Page(path="reference/my_func", contents=[griffe_to_doc(func_obj)])
 
-    meta = RenderAPIPage(node=page, level=1).render_metadata()
+    meta = RenderAPIPage(node=page, level=1, settings=Settings()).render_metadata()
 
     assert _description_meta(meta) == "Add the values of Frame and \\*rest."
 
@@ -16582,7 +16391,7 @@ def test_render_api_page_metadata_description_from_summary():
         summary=content.SummaryItem(name="my_func", desc="From the summary"),
     )
 
-    meta = RenderAPIPage(node=page, level=1).render_metadata()
+    meta = RenderAPIPage(node=page, level=1, settings=Settings()).render_metadata()
 
     assert _description_meta(meta) == "From the summary"
 
@@ -16592,7 +16401,10 @@ def test_render_api_page_metadata_without_docstring_has_no_description():
 
     page = content.Page(path="reference/my_func", contents=[griffe_to_doc(gf.Function("f"))])
 
-    assert _description_meta(RenderAPIPage(node=page, level=1).render_metadata()) is None
+    assert (
+        _description_meta(RenderAPIPage(node=page, level=1, settings=Settings()).render_metadata())
+        is None
+    )
 
 
 @pytest.mark.parametrize(("desc", "expected"), [("The `mypkg` API", "The mypkg API"), (None, None)])
@@ -16614,7 +16426,7 @@ def test_render_api_page_render_body():
     doc_obj = griffe_to_doc(func_obj)
     page = content.Page(path="reference/my_func", contents=[doc_obj])
 
-    ap = RenderAPIPage(node=page, level=1)
+    ap = RenderAPIPage(node=page, level=1, settings=Settings())
     body = ap.render_body()
 
     assert body is not None
@@ -16632,7 +16444,7 @@ def test_render_api_page_summary_with_summary_details():
         summary=summary,
     )
 
-    ap = RenderAPIPage(node=page, level=1)
+    ap = RenderAPIPage(node=page, level=1, settings=Settings())
     result = ap.render_summary()
 
     assert len(result) == 1
@@ -16650,7 +16462,7 @@ def test_render_api_page_summary_multi_no_flatten_raises():
         flatten=False,
     )
 
-    ap = RenderAPIPage(node=page, level=1)
+    ap = RenderAPIPage(node=page, level=1, settings=Settings())
     with pytest.raises(ValueError, match="Cannot summarize page"):
         ap.render_summary()
 
@@ -16745,54 +16557,6 @@ def test_set_class_attr_static_method():
     assert hasattr(Target4, "my_static")
 
 
-def test_exclude_parameters_function():
-    """exclude_parameters updates EXCLUSIONS.parameters."""
-
-    original = dict(EXCLUSIONS.parameters)
-    try:
-        exclude_parameters({"pkg.Cls": ("p1", "p2")})
-        assert EXCLUSIONS.parameters["pkg.Cls"] == ("p1", "p2")
-    finally:
-        EXCLUSIONS.parameters.clear()
-        EXCLUSIONS.parameters.update(original)
-
-
-def test_exclude_attributes_function():
-    """exclude_attributes updates EXCLUSIONS.attributes."""
-
-    original = dict(EXCLUSIONS.attributes)
-    try:
-        exclude_attributes({"pkg.Cls": ("a", "b")})
-        assert EXCLUSIONS.attributes["pkg.Cls"] == ("a", "b")
-    finally:
-        EXCLUSIONS.attributes.clear()
-        EXCLUSIONS.attributes.update(original)
-
-
-def test_exclude_functions_function():
-    """exclude_functions updates EXCLUSIONS.functions."""
-
-    original = dict(EXCLUSIONS.functions)
-    try:
-        exclude_functions({"pkg.Cls": "fn"})
-        assert EXCLUSIONS.functions["pkg.Cls"] == "fn"
-    finally:
-        EXCLUSIONS.functions.clear()
-        EXCLUSIONS.functions.update(original)
-
-
-def test_exclude_classes_function():
-    """exclude_classes updates EXCLUSIONS.classes."""
-
-    original = dict(EXCLUSIONS.classes)
-    try:
-        exclude_classes({"pkg.Mod": "OldClass"})
-        assert EXCLUSIONS.classes["pkg.Mod"] == "OldClass"
-    finally:
-        EXCLUSIONS.classes.clear()
-        EXCLUSIONS.classes.update(original)
-
-
 def test_render_reference_page_render_body():
     """RenderReferencePage.render_body() renders sections."""
 
@@ -16820,7 +16584,7 @@ def test_render_reference_section_body_with_contents():
 
     section = content.Section(title="Functions", contents=[doc_func])
 
-    rs = RenderReferenceSection(node=section, level=1)
+    rs = RenderReferenceSection(node=section, level=1, settings=Settings())
     body = rs.render_body()
 
     assert body is not None
@@ -16835,7 +16599,7 @@ def test_render_reference_section_post_init():
 
     section = content.Section(title="Test", contents=[spec.SpecObject(name="x")])
 
-    rs = RenderReferenceSection(node=section, level=1)
+    rs = RenderReferenceSection(node=section, level=1, settings=Settings())
 
     assert rs.section is section
 
@@ -16845,13 +16609,13 @@ def test_render_reference_section_title_and_subtitle():
 
     # Title case
     sec_t = content.Section(title="Methods", contents=[spec.SpecObject(name="x")])
-    rs_t = RenderReferenceSection(node=sec_t, level=1)
+    rs_t = RenderReferenceSection(node=sec_t, level=1, settings=Settings())
 
     assert "Methods" in str(rs_t.render_title())
 
     # Subtitle case
     sec_s = content.Section(subtitle="Helpers", contents=[spec.SpecObject(name="x")])
-    rs_s = RenderReferenceSection(node=sec_s, level=1)
+    rs_s = RenderReferenceSection(node=sec_s, level=1, settings=Settings())
 
     assert "Helpers" in str(rs_s.render_title())
 
@@ -16865,7 +16629,7 @@ def test_render_api_page_full_lifecycle():
 
     page = content.Page(path="reference/my_func", contents=[doc_func])
 
-    ap = RenderAPIPage(node=page, level=1)
+    ap = RenderAPIPage(node=page, level=1, settings=Settings())
 
     # Test __post_init__
     assert ap.page is page
@@ -16903,7 +16667,7 @@ def test_render_api_page_with_summary_details():
         summary=content.SummaryItem(name="fn()", desc="Do something"),
     )
 
-    ap = RenderAPIPage(node=page, level=1)
+    ap = RenderAPIPage(node=page, level=1, settings=Settings())
     summary = ap.render_summary()
     assert len(summary) == 1
     assert "fn()" in str(summary[0][0])
@@ -16948,7 +16712,7 @@ def test_render_api_page_suppresses_inner_title_at_level_1():
     """At level=1, RenderAPIPage flips the inner object's show_title off."""
     page = _make_function_page()
 
-    ap = RenderAPIPage(node=page, level=1)
+    ap = RenderAPIPage(node=page, level=1, settings=Settings())
     inner = ap.render_objs[0]
 
     assert inner.show_title is False
@@ -16964,7 +16728,7 @@ def test_render_api_page_single_object_renders_title_once():
     """
     page = _make_function_page()
 
-    rendered = str(RenderAPIPage(node=page, level=1))
+    rendered = str(RenderAPIPage(node=page, level=1, settings=Settings()))
 
     assert "[my_func()]" in _front_matter_title(rendered)
     assert "\n# [my_func()]" not in rendered
@@ -16976,7 +16740,7 @@ def test_render_api_page_class_with_members_renders_title_once():
     """Class pages avoid the duplicate heading and keep member sections."""
     page = _make_class_page_with_members()
 
-    rendered = str(RenderAPIPage(node=page, level=1))
+    rendered = str(RenderAPIPage(node=page, level=1, settings=Settings()))
 
     assert "[MyClass]" in _front_matter_title(rendered)
     assert "\n# [MyClass]" not in rendered
@@ -16988,7 +16752,7 @@ def test_render_api_page_renders_body_header_at_level_2():
     """At level=2, the body header is H2 and coexists with the H1 title."""
     page = _make_function_page()
 
-    rendered = str(RenderAPIPage(node=page, level=2))
+    rendered = str(RenderAPIPage(node=page, level=2, settings=Settings()))
 
     assert "[my_func()]" in _front_matter_title(rendered)
     assert "\n## [my_func()]" in rendered
@@ -17012,7 +16776,7 @@ def test_render_api_page_multi_object_renders_all_inner_headers():
         flatten=True,
     )
 
-    rendered = str(RenderAPIPage(node=page, level=1))
+    rendered = str(RenderAPIPage(node=page, level=1, settings=Settings()))
 
     assert "\n## [func1()]" in rendered
     assert "\n## [func2()]" in rendered
@@ -17024,7 +16788,9 @@ def test_renderdoc_display_name_relative_level_gt1():
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_func = content.DocFunction(name="my_func", obj=func_obj)
 
-    render = RenderDocFunction(doc_func, level=2, display_name_format="relative")
+    render = RenderDocFunction(
+        doc_func, level=2, display_name_format="relative", settings=Settings()
+    )
     name = render.display_name
     # At level > 1 with "relative" format, it switches to "name"
     assert isinstance(name, str)
@@ -17036,7 +16802,7 @@ def test_renderdoc_render_annotation_non_attribute_raises():
     func_obj = gf.Function(name="fn", lineno=1)
     doc_func = content.DocFunction(name="fn", obj=func_obj)
 
-    render = RenderDocFunction(doc_func, level=1)
+    render = RenderDocFunction(doc_func, level=1, settings=Settings())
     with pytest.raises(TypeError, match="Cannot render annotation"):
         render.render_annotation()
 
@@ -17048,7 +16814,7 @@ def test_renderdoc_render_annotation_attribute():
     attr_obj.annotation = gf.ExprName("int")
     doc_attr = content.DocAttribute(name="x", obj=attr_obj)
 
-    render = RenderDocAttribute(doc_attr, level=1)
+    render = RenderDocAttribute(doc_attr, level=1, settings=Settings())
     result = render.render_annotation()
     assert isinstance(result, str)
     assert "int" in result
@@ -17061,7 +16827,7 @@ def test_renderdoc_render_annotation_none():
     attr_obj.annotation = None
     doc_attr = content.DocAttribute(name="y", obj=attr_obj)
 
-    render = RenderDocAttribute(doc_attr, level=1)
+    render = RenderDocAttribute(doc_attr, level=1, settings=Settings())
     result = render.render_annotation()
     assert result == ""
 
@@ -17077,7 +16843,7 @@ def test_renderdoc_docstring_section_deprecated():
     )
     doc_func = content.DocFunction(name="old_fn", obj=func_obj)
 
-    render = RenderDocFunction(doc_func, level=1)
+    render = RenderDocFunction(doc_func, level=1, settings=Settings())
     body = render.render_body()
     body_str = str(body)
     assert "Deprecated" in body_str or "deprecated" in body_str
@@ -17094,7 +16860,7 @@ def test_renderdoc_docstring_section_examples():
     )
     doc_func = content.DocFunction(name="ex_fn", obj=func_obj)
 
-    render = RenderDocFunction(doc_func, level=1)
+    render = RenderDocFunction(doc_func, level=1, settings=Settings())
     body = render.render_body()
     body_str = str(body)
     assert "1 + 1" in body_str or "Examples" in body_str
@@ -17111,7 +16877,7 @@ def test_renderdoc_docstring_section_text_in_div():
     )
     doc_func = content.DocFunction(name="txt_fn", obj=func_obj)
 
-    render = RenderDocFunction(doc_func, level=1)
+    render = RenderDocFunction(doc_func, level=1, settings=Settings())
     body = render.render_body()
     assert body is not None
 
@@ -17126,9 +16892,8 @@ def test_renderdoc_source_link_with_github_url():
     doc_func = content.DocFunction(name="linked_fn", obj=func_obj)
 
     links = SourceLinks(repo_url="https://github.com/test/repo")
-    with active_settings(Settings(source_links=links)):
-        render = RenderDocFunction(doc_func, level=1)
-        link = render.source_link
+    render = RenderDocFunction(doc_func, level=1, settings=Settings(source_links=links))
+    link = render.source_link
     assert link is not None
     link_str = str(link)
     assert "Source" in link_str
@@ -17146,7 +16911,7 @@ def test_renderdoc_see_also_section():
     )
     doc_func = content.DocFunction(name="sa_fn", obj=func_obj)
 
-    render = RenderDocFunction(doc_func, level=1)
+    render = RenderDocFunction(doc_func, level=1, settings=Settings())
     body = render.render_body()
     body_str = str(body) if body else ""
     assert isinstance(body_str, str)
@@ -17250,9 +17015,7 @@ def test_type_sections_empty_lists():
     """TypeSections with no items produces empty Blocks output."""
 
     ts = TypeSections(
-        protocols_items=[],
-        typevars_items=[],
-        typealiases_items=[],
+        protocols_items=[], typevars_items=[], typealiases_items=[], settings=Settings()
     )
 
     assert [category.renders for category in ts.categories] == [[], [], []]
@@ -17283,6 +17046,7 @@ def test_type_sections_items_combines_all():
             protocols_items=[p_item],
             typevars_items=[tv_item],
             typealiases_items=[ta_item],
+            settings=Settings(),
         )
 
     assert ts.items == [p_item, tv_item, ta_item]
@@ -17304,9 +17068,7 @@ def test_type_sections_post_init_protocols_no_summary():
         ),
     ):
         ts = TypeSections(
-            protocols_items=[p_item],
-            typevars_items=[],
-            typealiases_items=[],
+            protocols_items=[p_item], typevars_items=[], typealiases_items=[], settings=Settings()
         )
 
     assert mock_render.show_members_summary is False
@@ -17327,9 +17089,7 @@ def test_type_sections_post_init_typevars_no_sig_name():
         ),
     ):
         ts = TypeSections(
-            protocols_items=[],
-            typevars_items=[tv_item],
-            typealiases_items=[],
+            protocols_items=[], typevars_items=[tv_item], typealiases_items=[], settings=Settings()
         )
 
     assert mock_render.show_signature_name is False
@@ -17350,9 +17110,7 @@ def test_type_sections_post_init_typealiases_settings():
         ),
     ):
         ts = TypeSections(
-            protocols_items=[],
-            typevars_items=[],
-            typealiases_items=[ta_item],
+            protocols_items=[], typevars_items=[], typealiases_items=[ta_item], settings=Settings()
         )
 
     assert mock_render.show_signature_annotation is False
@@ -17375,9 +17133,7 @@ def test_type_sections_render_body_protocols_section():
         ),
     ):
         ts = TypeSections(
-            protocols_items=[p_item],
-            typevars_items=[],
-            typealiases_items=[],
+            protocols_items=[p_item], typevars_items=[], typealiases_items=[], settings=Settings()
         )
 
     body_str = str(ts.render_body())
@@ -17403,9 +17159,7 @@ def test_type_sections_render_body_typevars_section():
         ),
     ):
         ts = TypeSections(
-            protocols_items=[],
-            typevars_items=[tv_item],
-            typealiases_items=[],
+            protocols_items=[], typevars_items=[tv_item], typealiases_items=[], settings=Settings()
         )
 
     body_str = str(ts.render_body())
@@ -17429,9 +17183,7 @@ def test_type_sections_render_body_typealiases_section():
         ),
     ):
         ts = TypeSections(
-            protocols_items=[],
-            typevars_items=[],
-            typealiases_items=[ta_item],
+            protocols_items=[], typevars_items=[], typealiases_items=[ta_item], settings=Settings()
         )
 
     body_str = str(ts.render_body())
@@ -17460,6 +17212,7 @@ def test_type_sections_render_body_all_sections():
             protocols_items=[p_item],
             typevars_items=[tv_item],
             typealiases_items=[ta_item],
+            settings=Settings(),
         )
 
     body_str = str(ts.render_body())

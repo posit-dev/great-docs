@@ -11,7 +11,7 @@ from yaml12 import format_yaml
 
 from ..._apiref._render._tables import html_table
 from ..._icons import get_icon_svg
-from ..._translations import get_translation
+from ..._translations import translate
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -87,13 +87,13 @@ def write_page(
         return None
 
     lang = config.lang
-    title = get_translation("package_info", lang)
-    runtime_label = get_translation("runtime_dependencies", lang)
-    optional_label = get_translation("optional_dependencies", lang)
-    summary_label = get_translation("dependency_summary", lang)
-    package_header = get_translation("dep_package", lang)
-    version_header = get_translation("dep_version_constraint", lang)
-    marker_header = get_translation("dep_environment_marker", lang)
+    title = translate("package_info", lang)
+    runtime_label = translate("runtime_dependencies", lang)
+    optional_label = translate("optional_dependencies", lang)
+    summary_label = translate("dependency_summary", lang)
+    package_header = translate("dep_package", lang)
+    version_header = translate("dep_version_constraint", lang)
+    marker_header = translate("dep_environment_marker", lang)
 
     link_svg = get_icon_svg("external-link", size=14, css_class="")
 
@@ -174,7 +174,7 @@ def write_page(
     all_names = {dep["name"] for dep in runtime_deps} | all_opt_names
 
     if requires_python:
-        requires_label = get_translation("requires_python", lang)
+        requires_label = translate("requires_python", lang)
         sections.append(f"- **{requires_label}:** Python `{requires_python}`")
     sections.append(f"- **{runtime_label}:** {len(runtime_deps)}")
     if optional_deps:

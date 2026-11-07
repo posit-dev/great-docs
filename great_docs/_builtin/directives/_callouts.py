@@ -7,7 +7,8 @@ from textwrap import dedent
 
 import griffe as gf
 
-from great_docs._apiref._globals import translate_versioned
+from great_docs._apiref.resolve import resolution_lang
+from great_docs._translations import translate_versioned
 from great_docs._utils import fenced_lines
 from great_docs.hooks import on_object_resolved
 from great_docs.pandoc.blocks import Div
@@ -87,7 +88,7 @@ def render_callout(name: str, body: str, inline: str = "") -> str:
         parts = content.split(None, 1) if content else []
         version = parts[0] if parts else ""
         description = parts[1] if len(parts) > 1 else ""
-        title = translate_versioned(_VERSION_LABELS[name], version)
+        title = translate_versioned(_VERSION_LABELS[name], resolution_lang.get(), version)
         callout = "warning" if name == "deprecated" else "note"
         attr = Attr(
             classes=[f"callout-{callout}"],

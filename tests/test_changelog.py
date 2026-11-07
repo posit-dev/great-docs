@@ -128,7 +128,7 @@ def test_write_page_quotes_a_translated_toc_title(
 ):
     """Preserve quotes and colons in the translated TOC title after a YAML round trip"""
     title = 'Releases: "all"'
-    monkeypatch.setattr(changelog, "get_translation", lambda key, lang: title)
+    monkeypatch.setattr(changelog, "translate", lambda key, lang: title)
     remote = StubRemote(releases=[_release("v1.0.0")])
 
     _ = changelog.write_page(write_config(tmp_path), layout, REPO, remote, report=print)

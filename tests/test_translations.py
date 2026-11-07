@@ -10,72 +10,72 @@ from great_docs._translations import (
     SUPPORTED_LANGUAGES,
     UI_TRANSLATIONS,
     get_locale_for_dates,
-    get_translation,
     get_translations_bundle,
     is_rtl,
+    translate,
 )
 
 
-class TestGetTranslation:
-    """Tests for get_translation()."""
+class TestTranslate:
+    """Tests for translate()."""
 
     def test_default_english(self):
-        assert get_translation("back_to_top") == "Back to top"
+        assert translate("back_to_top") == "Back to top"
 
     def test_explicit_english(self):
-        assert get_translation("back_to_top", "en") == "Back to top"
+        assert translate("back_to_top", "en") == "Back to top"
 
     def test_french(self):
-        assert get_translation("back_to_top", "fr") == "Retour en haut"
+        assert translate("back_to_top", "fr") == "Retour en haut"
 
     def test_german(self):
-        assert get_translation("copied", "de") == "Kopiert!"
+        assert translate("copied", "de") == "Kopiert!"
 
     def test_japanese(self):
-        assert get_translation("back_to_top", "ja") == "トップに戻る"
+        assert translate("back_to_top", "ja") == "トップに戻る"
 
     def test_chinese_simplified(self):
-        assert get_translation("back_to_top", "zh-Hans") == "回到顶部"
+        assert translate("back_to_top", "zh-Hans") == "回到顶部"
 
     def test_arabic(self):
-        assert get_translation("back_to_top", "ar") == "العودة للأعلى"
+        assert translate("back_to_top", "ar") == "العودة للأعلى"
 
     def test_unknown_key_returns_key(self):
-        assert get_translation("nonexistent_key") == "nonexistent_key"
+        assert translate("nonexistent_key") == "nonexistent_key"
 
     def test_unknown_language_falls_back_to_english(self):
-        assert get_translation("back_to_top", "xx") == "Back to top"
+        assert translate("back_to_top", "xx") == "Back to top"
 
     def test_keyboard_overlay_title_english(self):
-        assert get_translation("kb_overlay_title") == "Keyboard shortcuts"
+        assert translate("kb_overlay_title") == "Keyboard shortcuts"
 
     def test_keyboard_overlay_title_french(self):
-        assert get_translation("kb_overlay_title", "fr") == "Raccourcis clavier"
+        assert translate("kb_overlay_title", "fr") == "Raccourcis clavier"
 
     def test_keyboard_nav_group(self):
-        assert get_translation("kb_group_navigation") == "Navigation"
+        assert translate("kb_group_navigation") == "Navigation"
 
     def test_keyboard_focus_search(self):
-        assert get_translation("kb_focus_search") == "Focus search"
+        assert translate("kb_focus_search") == "Focus search"
 
     def test_keyboard_show_menu(self):
-        assert get_translation("kb_show_menu") == "Show menu"
+        assert translate("kb_show_menu") == "Show menu"
 
     def test_keyboard_menu_title_site(self):
-        assert get_translation("kb_menu_title_site") == "Site Navigation"
+        assert translate("kb_menu_title_site") == "Site Navigation"
 
     def test_keyboard_menu_title_section(self):
-        assert get_translation("kb_menu_title_section", "fr") == "Navigation de la section"
+        assert translate("kb_menu_title_section", "fr") == "Navigation de la section"
 
     def test_keyboard_or(self):
-        assert get_translation("kb_or", "de") == "oder"
+        assert translate("kb_or", "de") == "oder"
 
     def test_placeholder_preserved(self):
-        result = get_translation("refreshed_time_ago", "en")
+        result = translate("refreshed_time_ago", "en")
         assert "{time}" in result
 
     def test_plural_pipe_format(self):
-        result = get_translation("years_ago", "en")
+        result = translate("years_ago", "en")
         assert "|" in result
         parts = result.split("|")
         assert "{n}" in parts[0]
