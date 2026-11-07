@@ -44,6 +44,7 @@ dependencies = [
     "Pillow>=9.2.0",
     "ruff>=0.9.9",
     "watchfiles>=1.0.0",
+    "packaging>=22",
 ]
 
 [project.optional-dependencies]
