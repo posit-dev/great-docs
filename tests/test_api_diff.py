@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import textwrap
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -3135,6 +3136,41 @@ def test_snapshot_from_source_module_exiting_on_import(tmp_path):
     (pkg / "__main__.py").write_text("raise SystemExit(2)\n")
 
     assert snapshot_from_source(tmp_path, "exitpkg.__main__") is None
+
+
+@pytest.mark.parametrize("error", ["ValueError", "TypeError"])
+def test_snapshot_from_source_module_raising_on_import(tmp_path, error):
+    """
+    Return `None` when a CLI import raises `ValueError` or `TypeError`
+
+    Restore `sys.path` and leave the failing CLI module out of `sys.modules`.
+    """
+    pkg = tmp_path / "oldpkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "cli.py").write_text(f"raise {error}('written for older dependencies')\n")
+    path_before = list(sys.path)
+
+    assert snapshot_from_source(tmp_path, "oldpkg.cli") is None
+    assert sys.path == path_before
+    assert "oldpkg.cli" not in sys.modules
+
+
+def test_snapshot_at_tag_without_cli_snapshot_when_release_cli_fails(tmp_path: Path):
+    """
+    Keep the Python API snapshot when the release's CLI module raises on import
+    """
+    _init_two_tag_repo(tmp_path)
+    (tmp_path / "mypkg" / "cli.py").write_text("raise ValueError('old release')\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-m", "broken cli")
+    _git(tmp_path, "tag", "v0.3.0")
+
+    snap = snapshot_at_tag(tmp_path, "v0.3.0", "mypkg", documented_names=["sub.Widget"])
+
+    assert snap is not None
+    assert set(snap.symbols) == {"sub.Widget"}
+    assert snap.cli_commands is None
 
 
 # --- CLI source attribute fallback ---
