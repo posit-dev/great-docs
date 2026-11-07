@@ -14,6 +14,7 @@ import pytest
 from yaml12 import write_yaml
 
 from great_docs import BuildError, GreatDocs
+from great_docs._apiref.resolve import _sections_from_package
 from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import (
     categorise_exports,
@@ -1158,6 +1159,50 @@ def test_submodule_dunder_all_limits_discovered_and_explicit_members(tmp_path: P
         assert "selected.omitted" not in categories["functions"]
         assert "empty.omitted" not in categories["functions"]
         assert "legacy._private" not in categories["functions"]
+
+
+def test_unexpanded_dunder_all_uses_public_members(tmp_path: Path) -> None:
+    package_dir = tmp_path / "unexpanded_pkg"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text(
+        '_names = ["chosen"]\n__all__ = _names\ndef chosen(): pass\ndef extra(): pass\n'
+    )
+
+    package = griffe.load("unexpanded_pkg", search_paths=[tmp_path])
+
+    assert discover_exports(package, mock_config(), report=lambda line: None) == [
+        "chosen",
+        "extra",
+    ]
+    assert [entry.name for entry in _sections_from_package(package)[0].contents] == [
+        "chosen",
+        "extra",
+    ]
+
+
+def test_imported_dunder_all_limits_reference_discovery(tmp_path: Path) -> None:
+    package_dir = tmp_path / "imported_pkg"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text(
+        "from .sub import __all__, chosen\ndef extra(): pass\n"
+    )
+    (package_dir / "sub.py").write_text('__all__ = ["chosen"]\ndef chosen(): pass\n')
+
+    package = griffe.load("imported_pkg", search_paths=[tmp_path])
+
+    assert discover_exports(package, mock_config(), report=lambda line: None) == ["chosen"]
+    assert [entry.name for entry in _sections_from_package(package)[0].contents] == ["chosen"]
+
+
+def test_empty_dunder_all_exports_no_members(tmp_path: Path) -> None:
+    package_dir = tmp_path / "empty_exports_pkg"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text("__all__ = []\ndef extra(): pass\n")
+
+    package = griffe.load("empty_exports_pkg", search_paths=[tmp_path])
+
+    assert discover_exports(package, mock_config(), report=lambda line: None) == []
+    assert _sections_from_package(package)[0].contents == []
 
 
 def test_sections_without_reference_or_exports():

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Literal, TypedDict, cast
 
 import griffe as gf
 
+from .._apiref._exports import declared_exports
 from .._apiref._type_checks import ClassKind, attribute_kind, class_kind, function_kind
 from .._apiref.introspect import get_object
 from .._build.steps import BuildError
@@ -336,12 +337,15 @@ def discover_exports(
     """
     Find the names a package exports that the reference can document
 
-    A package's `__all__` decides which members are exported; without one, every member whose
-    name does not start with an underscore is. The names in `AUTO_EXCLUDE` and in the `exclude`
-    setting are dropped. `auto_include` keeps names from `AUTO_EXCLUDE`, and `no_auto_exclude`
-    keeps them all. Aliases that cannot be resolved, and aliases to objects outside the
-    package, are dropped too, as is a name in `__all__` that the package does not define
-    statically, such as one a module `__getattr__` provides.
+    A package's statically resolved `__all__` decides which members are exported; without one,
+    every member whose name does not start with an underscore is. An imported `__all__` uses the
+    defining module's exports. Unresolved expressions in `__all__` are omitted; when no names
+    can be resolved, discovery falls back to public members. The names in `AUTO_EXCLUDE`
+    and in the `exclude` setting are dropped. `auto_include` keeps names from
+    `AUTO_EXCLUDE`, and `no_auto_exclude` keeps them all. Aliases that cannot be resolved,
+    and aliases to objects outside the package, are dropped too, as is a name in
+    `__all__` that the package does not define statically, such as one a module
+    `__getattr__` provides.
 
     Parameters
     ----------
@@ -355,14 +359,16 @@ def discover_exports(
     Returns
     -------
     :
-        The exported names in `__all__` order, or in the order the package defines them if it
-        has no `__all__`. `None` if `__all__` lists only names the package does not define.
+        The exported names in `__all__` order, or in the order the package defines them
+        when no export names can be resolved. `None` if `__all__` lists only names the
+        package does not define.
     """
     members = package.members
-    if package.exports:
-        candidates = list(dict.fromkeys(str(name) for name in package.exports))
+    declared = declared_exports(package)
+    if declared is not None:
+        candidates = declared
         report(f"Using __all__ with {len(candidates)} exports")
-        if not any(name in members for name in candidates):
+        if candidates and not any(name in members for name in candidates):
             return None
     else:
         candidates = [name for name in members if not name.startswith("_")]
@@ -617,18 +623,14 @@ def _module_export_members(module: gf.Object | gf.Alias) -> list[tuple[str, gf.O
     Returns
     -------
     :
-        Members in `__all__` order, or in the module's definition order when it has no
-        `__all__`.
+        Members in `__all__` order, or in the module's definition order when no export
+        names can be resolved.
     """
     members = module.members
-    exports = module.exports
+    exports = declared_exports(module)
     if exports is None:
         return [(name, member) for name, member in members.items() if not name.startswith("_")]
-    return [
-        (name, members[name])
-        for name in dict.fromkeys(str(export) for export in exports)
-        if name in members
-    ]
+    return [(name, members[name]) for name in exports if name in members]
 
 
 def _add_flat(name: str, obj: gf.Object | gf.Alias, categories: Categories) -> None:
