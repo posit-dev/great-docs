@@ -2537,6 +2537,32 @@ def test_snapshot_from_griffe_unresolved_all_falls_back(tmp_path: Path):
     assert set(snap.symbols) == {"fit"}
 
 
+def test_snapshot_from_griffe_all_from_a_name_falls_back(tmp_path: Path):
+    """Fall back to public members when griffe cannot expand `__all__`"""
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("_names = ['fit']\n__all__ = _names\ndef fit(): ...\n")
+
+    snap = snapshot_from_griffe("mypkg", version="dev", search_paths=[str(tmp_path)])
+
+    assert set(snap.symbols) == {"fit"}
+
+
+def test_snapshot_from_griffe_all_imported_from_submodule(tmp_path: Path):
+    """Capture submodule exports when the package imports its `__all__`"""
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("from .core import *\nfrom .core import __all__\n")
+    (pkg / "core.py").write_text("__all__ = ['fit', 'Widget']\ndef fit(): ...\nclass Widget: ...\n")
+
+    snap = snapshot_from_griffe("mypkg", version="dev", search_paths=[str(tmp_path)])
+
+    assert {name: info.kind for name, info in snap.symbols.items()} == {
+        "fit": "function",
+        "Widget": "class",
+    }
+
+
 def _write_griffe_pkg(root: Path) -> None:
     """A package whose public API lives under a submodule, for snapshot tests"""
     pkg = root / "mypkg"
@@ -2889,31 +2915,7 @@ def test_symbol_info_for_dotted_alias_error_on_members():
     assert result is None
 
 
-# --- snapshot_from_griffe: __all__ from pkg.members with .value ---
-
-
-def test_snapshot_from_griffe_all_in_members():
-    """snapshot_from_griffe uses __all__ from pkg.members when exports is None."""
-    mock_all = MagicMock()
-    mock_all.value = ["public_fn"]
-
-    mock_member = MagicMock()
-    mock_member.kind.value = "function"
-    mock_member.is_async = False
-    mock_member.parameters = []
-    mock_member.annotation = None
-    mock_member.returns = None
-    mock_member.decorators = []
-
-    mock_pkg = MagicMock()
-    mock_pkg.exports = None
-    mock_pkg.members = {"__all__": mock_all, "public_fn": mock_member, "_priv": MagicMock()}
-
-    with patch("griffe.load", return_value=mock_pkg):
-        snap = snapshot_from_griffe("mypkg", "v1.0")
-
-    assert "public_fn" in snap.symbols
-    assert "_priv" not in snap.symbols
+# --- Top-level export filtering ---
 
 
 def test_snapshot_from_griffe_skip_names_in_skip_set():
