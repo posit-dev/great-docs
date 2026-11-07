@@ -49,7 +49,7 @@ Run the proofreader on your documentation site:
 great-docs proofread
 ```
 
-This checks all `.qmd` and `.md` files in your site directory and reports any issues found. By default, a number of rules are disabled that tend to produce false positives in technical documentation (like flagging code terms or formatting conventions).
+This checks your site's authored `.qmd` and `.md` pages and the package's `README.md`, then reports any issues found. By default, rules that often produce false positives in technical documentation, such as those that flag code terms or formatting conventions, are disabled.
 
 ## Filtering by File
 
@@ -59,7 +59,7 @@ Check specific files or patterns:
 # Check one file
 great-docs proofread user-guide/getting-started.qmd
 
-# Check all files in a directory
+# Check .qmd and .md pages recursively in a directory
 great-docs proofread recipes/
 ```
 
@@ -148,7 +148,8 @@ The command exits with a non-zero status if any issues are found, so CI will fai
 
 The proofreader examines:
 
-- All `.qmd` and `.md` files in your site directory
+- The authored `.qmd` and `.md` pages: the homepage source and pages in the user guide, section and custom page directories. Generated pages, such as the API reference, are excluded.
+- The package's `README.md`
 - Prose content only—fenced code blocks and YAML frontmatter are automatically skipped
 - Inline code (backticked text) is checked for typos
 
