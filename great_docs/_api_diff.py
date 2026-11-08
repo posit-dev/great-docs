@@ -18,6 +18,20 @@ from great_docs.config import ConfigError
 if TYPE_CHECKING:
     from griffe import Alias, Object
 
+
+class BinaryOnlySnapshotError(RuntimeError):
+    """
+    A tagged module with compiled files but no source or stubs to snapshot
+    """
+
+    def __init__(self, module: str, tag: str) -> None:
+        super().__init__(
+            f"Cannot snapshot {module!r} at {tag!r}: the tag has compiled files but no "
+            "Python source or `.pyi` stubs. For versioned docs, set "
+            "`versions[].api_snapshot` to a prewritten snapshot file."
+        )
+
+
 # ---------------------------------------------------------------------------
 # Data models
 # ---------------------------------------------------------------------------
@@ -778,6 +792,48 @@ def _extract_package_at_tag(
     return destination / source_dir
 
 
+def _tag_has_binary_module(project_root: Path, tag: str, module: str) -> bool:
+    """
+    Check whether a Git tag contains compiled files for an importable module
+
+    A module file may carry an interpreter and platform suffix before `.so` or `.pyd`.
+    Package directories may contain compiled members under their module path.
+    """
+    try:
+        prefix = subprocess.run(
+            ["git", "rev-parse", "--show-prefix"],
+            cwd=project_root,
+            capture_output=True,
+            **TEXT_MODE_KWARGS,
+            timeout=10,
+        )
+        listing = subprocess.run(
+            ["git", "ls-tree", "-r", "--name-only", tag],
+            cwd=project_root,
+            capture_output=True,
+            **TEXT_MODE_KWARGS,
+            timeout=10,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+    if prefix.returncode != 0 or listing.returncode != 0:
+        return False
+
+    project_path = PurePosixPath(prefix.stdout.strip())
+    parts = module.replace("-", "_").split(".")
+    files = [PurePosixPath(path) for path in listing.stdout.splitlines()]
+    for source_dir in ("", *PACKAGE_DIRS):
+        module_path = project_path.joinpath(source_dir, *parts)
+        for path in files:
+            if path.suffix not in {".so", ".pyd"}:
+                continue
+            if path.is_relative_to(module_path) or (
+                path.parent == module_path.parent and path.name.startswith(f"{module_path.name}.")
+            ):
+                return True
+    return False
+
+
 def snapshot_at_tag(
     project_root: Path,
     tag: str,
@@ -807,13 +863,26 @@ def snapshot_at_tag(
     Returns
     -------
     :
-        The snapshot, or `None` if the package's source is absent at the tag or extraction
-        fails.
+        The snapshot, or `None` if the module is absent at the tag or extraction fails.
+
+    Raises
+    ------
+    BinaryOnlySnapshotError
+        If the tag has compiled module files but no Python source or stubs to inspect.
     """
     with tempfile.TemporaryDirectory(prefix="gd_api_diff_", ignore_cleanup_errors=True) as tmp:
         source_dir = _extract_package_at_tag(project_root, tag, package_name, Path(tmp))
         if source_dir is None:
+            if _tag_has_binary_module(project_root, tag, package_name):
+                raise BinaryOnlySnapshotError(package_name, tag)
             return None
+
+        module_path = source_dir.joinpath(*package_name.replace("-", "_").split("."))
+        if module_path.is_dir() and not any(
+            path.suffix in {".py", ".pyi"} for path in module_path.rglob("*")
+        ):
+            if _tag_has_binary_module(project_root, tag, package_name):
+                raise BinaryOnlySnapshotError(package_name, tag)
 
         # Griffe does not load standalone stubs by import name. Give each stub without
         # Python source a temporary source twin so tagged APIs stay statically readable.

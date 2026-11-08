@@ -4079,6 +4079,8 @@ class TestPruneCliPagesForVersionFull:
 
 class TestPreprocessVersionApiSnapshot:
     def test_api_snapshot_strategy(self, tmp_path: Path):
+        from unittest.mock import patch
+
         source = tmp_path / "source"
         _make_source_tree(source, {"index.qmd": "---\ntitle: Home\n---\nHi"})
 
@@ -4100,19 +4102,24 @@ class TestPreprocessVersionApiSnapshot:
             label="0.2",
             latest=False,
             api_snapshot="api-snapshot.json",
+            git_ref="v0.2.0",
         )
 
         dest = tmp_path / "build"
         sidebar = {"id": "reference", "contents": ["reference/my_func.qmd", "reference/gone.qmd"]}
-        pages = preprocess_version(
-            source,
-            dest,
-            entry,
-            versions,
-            project_root=project_root,
-            layout=Layout.make(tmp_path),
-            quarto_config={"website": {"sidebar": [sidebar]}},
-        )
+        with patch(
+            "great_docs._versions.build._rebuild_api_from_git_ref",
+            side_effect=AssertionError("tag introspection bypassed the prewritten snapshot"),
+        ):
+            pages = preprocess_version(
+                source,
+                dest,
+                entry,
+                versions,
+                project_root=project_root,
+                layout=Layout.make(tmp_path),
+                quarto_config={"website": {"sidebar": [sidebar]}},
+            )
 
         assert "reference/my_func.html" in pages
         assert (dest / "reference" / "my_func.qmd").exists()

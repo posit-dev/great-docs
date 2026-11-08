@@ -13,6 +13,7 @@ from great_docs._api_diff import (
     _EVOLUTION_TABLE_CSS,
     ApiDiff,
     ApiSnapshot,
+    BinaryOnlySnapshotError,
     CallEdge,
     CliChange,
     CliCommandInfo,
@@ -2805,6 +2806,43 @@ class TestSnapshotAtTagLayouts:
 
         assert snap is not None
         assert set(snap.symbols) == {"load"}
+
+
+@pytest.mark.parametrize(
+    "artifact",
+    ["single.cpython-313-darwin.so", "src/single.cpython-313-darwin.so", "src/single/_native.so"],
+)
+def test_binary_only_tag_reports_snapshot_limit(tmp_path: Path, artifact: str) -> None:
+    from click.testing import CliRunner
+
+    from great_docs.cli import cli
+
+    binary = tmp_path / artifact
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    binary.write_bytes(b"compiled extension placeholder")
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "single"\n')
+    _git(tmp_path, "init")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "-c", "user.email=t@t.co", "-c", "user.name=t", "commit", "-m", "v100")
+    _git(tmp_path, "tag", "v1.0.0")
+
+    with (
+        patch("great_docs._api_diff.snapshot_from_griffe", side_effect=AssertionError("loaded")),
+        pytest.raises(BinaryOnlySnapshotError, match=r"versions\[\]\.api_snapshot"),
+    ):
+        snapshot_at_tag(tmp_path, "v1.0.0", "single")
+
+    for args in (
+        ["api-snapshot", "v1.0.0"],
+        ["api-diff", "v1.0.0", "v1.0.0"],
+    ):
+        result = CliRunner().invoke(cli, [*args, "--project-path", str(tmp_path)])
+        assert result.exit_code == 1
+        assert "compiled files but no Python source or `.pyi` stubs" in result.output
+        assert "`versions[].api_snapshot`" in result.output
+        assert "Traceback" not in result.output
+
+    assert snapshot_at_tag(tmp_path, "missing-tag", "single") is None
 
 
 def test_render_evolution_table_callable_via_top_level_import():
