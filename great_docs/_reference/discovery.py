@@ -337,10 +337,11 @@ def discover_exports(
     """
     Find the names a package exports that the reference can document
 
-    A package's statically resolved `__all__` decides which members are exported; without one,
-    every member whose name does not start with an underscore is. An imported `__all__` uses the
-    defining module's exports. Unresolved expressions in `__all__` are omitted; when no names
-    can be resolved, discovery falls back to public members. The names in `AUTO_EXCLUDE`
+    Use a package's statically resolved `__all__` when available. Otherwise, consider its
+    public members. If the package has no `__all__` and at least one public submodule declares
+    exports, omit sibling submodules without `__all__`. An imported `__all__` uses the defining
+    module's exports. Unresolved expressions in `__all__` are omitted; when no names can be
+    resolved, discovery falls back to public members. The names in `AUTO_EXCLUDE`
     and in the `exclude` setting are dropped. `auto_include` keeps names from
     `AUTO_EXCLUDE`, and `no_auto_exclude` keeps them all. Aliases that cannot be resolved,
     and aliases to objects outside the package, are dropped too, as is a name in
@@ -372,6 +373,23 @@ def discover_exports(
             return None
     else:
         candidates = [name for name in members if not name.startswith("_")]
+        if package.exports is None and "__all__" not in members:
+            submodules: dict[str, bool] = {}
+            for name in candidates:
+                member = members[name]
+                try:
+                    if member.kind is gf.Kind.MODULE:
+                        submodules[name] = member.exports is not None or "__all__" in member.members
+                except (gf.CyclicAliasError, gf.AliasResolutionError, KeyError):
+                    continue
+            if any(submodules.values()):
+                skipped = {name for name, declares in submodules.items() if not declares}
+                candidates = [name for name in candidates if name not in skipped]
+                if skipped:
+                    report(
+                        f"Skipping {len(skipped)} submodule(s) without __all__: "
+                        f"{', '.join(sorted(skipped))}"
+                    )
         report(f"Discovered {len(candidates)} public names")
 
     exports: list[str] = []
