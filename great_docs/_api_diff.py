@@ -8,15 +8,29 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-from great_docs import _manifest
 from great_docs._build.steps import USER_CODE_ERRORS
-from great_docs._layout import PACKAGE_DIRS
-from great_docs._manifest import ManifestError
+from great_docs._layout import PACKAGE_DIRS, Layout, LayoutError
+from great_docs._project import Project
 from great_docs._subprocess import TEXT_MODE_KWARGS
 from great_docs._translations import translate
+from great_docs.config import ConfigError
 
 if TYPE_CHECKING:
     from griffe import Alias, Object
+
+
+class BinaryOnlySnapshotError(RuntimeError):
+    """
+    A tagged module with compiled files but no source or stubs to snapshot
+    """
+
+    def __init__(self, module: str, tag: str) -> None:
+        super().__init__(
+            f"Cannot snapshot {module!r} at {tag!r}: the tag has compiled files but no "
+            "Python source or `.pyi` stubs. For versioned docs, set "
+            "`versions[].api_snapshot` to a prewritten snapshot file."
+        )
+
 
 # ---------------------------------------------------------------------------
 # Data models
@@ -627,6 +641,7 @@ def snapshot_from_griffe(
         loader_kwargs["search_paths"] = search_paths
         # A same-named package in the working directory would override these source paths.
         loader_kwargs["try_relative_path"] = False
+        loader_kwargs["allow_inspection"] = False
 
     pkg = griffe.load(normalized, **loader_kwargs)
 
@@ -703,11 +718,11 @@ def _extract_package_at_tag(
     destination: Path,
 ) -> Path | None:
     """
-    Extract tagged source for a Python package
+    Extract tagged source for an importable module
 
     Search the project root, then its `src`, `python` and `lib` directories as they were at
-    the tag. Use the first directory containing `package_name` and extract only the
-    top-level package that contains it.
+    the tag. Accept package directories, module files and stubs. Extract the first matching
+    source, including its containing top-level package when the name is dotted.
 
     Parameters
     ----------
@@ -724,12 +739,17 @@ def _extract_package_at_tag(
     Returns
     -------
     :
-        The directory within `destination` to use as a search path for `package_name`, or
-        `None` if the module is absent at the tag or extraction fails.
+        The directory within `destination` to search for `package_name`, or `None` if the
+        module is absent at the tag or extraction fails.
     """
     parts = package_name.replace("-", "_").split(".")
     source_dirs = [PurePosixPath(directory) for directory in ("", *PACKAGE_DIRS)]
-    candidates = {source_dir.joinpath(*parts).as_posix(): source_dir for source_dir in source_dirs}
+    candidates: dict[str, tuple[PurePosixPath, PurePosixPath]] = {}
+    for source_dir in source_dirs:
+        module_path = source_dir.joinpath(*parts)
+        for path in (module_path, module_path.with_suffix(".py"), module_path.with_suffix(".pyi")):
+            archive_path = source_dir / parts[0] if path == module_path or len(parts) > 1 else path
+            candidates[path.as_posix()] = (source_dir, archive_path)
 
     try:
         # git reads these paths relative to its working directory, the project root
@@ -743,13 +763,14 @@ def _extract_package_at_tag(
         if listing.returncode != 0:
             return None
         present = set(listing.stdout.splitlines())
-        source_dir = next((candidates[path] for path in candidates if path in present), None)
-        if source_dir is None:
+        selected = next((candidates[path] for path in candidates if path in present), None)
+        if selected is None:
             return None
+        source_dir, archive_path = selected
 
         # Loading a dotted module requires its containing top-level package.
         archive = subprocess.run(
-            ["git", "archive", tag, (source_dir / parts[0]).as_posix()],
+            ["git", "archive", tag, archive_path.as_posix()],
             cwd=project_root,
             capture_output=True,
             timeout=30,
@@ -771,6 +792,48 @@ def _extract_package_at_tag(
     return destination / source_dir
 
 
+def _tag_has_binary_module(project_root: Path, tag: str, module: str) -> bool:
+    """
+    Check whether a Git tag contains compiled files for an importable module
+
+    A module file may carry an interpreter and platform suffix before `.so` or `.pyd`.
+    Package directories may contain compiled members under their module path.
+    """
+    try:
+        prefix = subprocess.run(
+            ["git", "rev-parse", "--show-prefix"],
+            cwd=project_root,
+            capture_output=True,
+            **TEXT_MODE_KWARGS,
+            timeout=10,
+        )
+        listing = subprocess.run(
+            ["git", "ls-tree", "-r", "--name-only", tag],
+            cwd=project_root,
+            capture_output=True,
+            **TEXT_MODE_KWARGS,
+            timeout=10,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+    if prefix.returncode != 0 or listing.returncode != 0:
+        return False
+
+    project_path = PurePosixPath(prefix.stdout.strip())
+    parts = module.replace("-", "_").split(".")
+    files = [PurePosixPath(path) for path in listing.stdout.splitlines()]
+    for source_dir in ("", *PACKAGE_DIRS):
+        module_path = project_path.joinpath(source_dir, *parts)
+        for path in files:
+            if path.suffix not in {".so", ".pyd"}:
+                continue
+            if path.is_relative_to(module_path) or (
+                path.parent == module_path.parent and path.name.startswith(f"{module_path.name}.")
+            ):
+                return True
+    return False
+
+
 def snapshot_at_tag(
     project_root: Path,
     tag: str,
@@ -778,11 +841,11 @@ def snapshot_at_tag(
     documented_names: list[str] | None = None,
 ) -> ApiSnapshot | None:
     """
-    Build an API snapshot from a package's tagged source
+    Build an API snapshot from an importable module's tagged source
 
     Search the project root, then its `src`, `python` and `lib` directories at the tag.
-    Extract only the top-level package containing `package_name` from the first matching
-    source directory.
+    Extract the first matching package, module file or stub, including its containing
+    top-level package when the name is dotted.
 
     Parameters
     ----------
@@ -800,13 +863,33 @@ def snapshot_at_tag(
     Returns
     -------
     :
-        The snapshot, or `None` if the package's source is absent at the tag or extraction
-        fails.
+        The snapshot, or `None` if the module is absent at the tag or extraction fails.
+
+    Raises
+    ------
+    BinaryOnlySnapshotError
+        If the tag has compiled module files but no Python source or stubs to inspect.
     """
     with tempfile.TemporaryDirectory(prefix="gd_api_diff_", ignore_cleanup_errors=True) as tmp:
         source_dir = _extract_package_at_tag(project_root, tag, package_name, Path(tmp))
         if source_dir is None:
+            if _tag_has_binary_module(project_root, tag, package_name):
+                raise BinaryOnlySnapshotError(package_name, tag)
             return None
+
+        module_path = source_dir.joinpath(*package_name.replace("-", "_").split("."))
+        if module_path.is_dir() and not any(
+            path.suffix in {".py", ".pyi"} for path in module_path.rglob("*")
+        ):
+            if _tag_has_binary_module(project_root, tag, package_name):
+                raise BinaryOnlySnapshotError(package_name, tag)
+
+        # Griffe does not load standalone stubs by import name. Give each stub without
+        # Python source a temporary source twin so tagged APIs stay statically readable.
+        for stub in source_dir.rglob("*.pyi"):
+            source = stub.with_suffix(".py")
+            if not source.exists():
+                source.write_bytes(stub.read_bytes())
 
         snap = snapshot_from_griffe(
             package_name,
@@ -1221,7 +1304,7 @@ def build_dependency_graph(snapshot: ApiSnapshot) -> DependencyGraph:
 
 def build_timeline(
     project_root: Path,
-    package_name: str,
+    package_name: str | None = None,
     tags: list[str] | None = None,
 ) -> list[dict]:
     """
@@ -1232,7 +1315,7 @@ def build_timeline(
     project_root
         Root of the git repository.
     package_name
-        Python package name.
+        Importable module name. Detect it from the project when omitted.
     tags
         Specific tags to include. If `None`, all version tags are used.
 
@@ -1241,6 +1324,11 @@ def build_timeline(
     list[dict]
         Each entry has `version`, `symbols`, `classes`, `functions`.
     """
+    if package_name is None:
+        package_name = _detect_package_name(project_root)
+        if package_name is None:
+            return []
+
     if tags is None:
         tags = list_version_tags(project_root)
 
@@ -2201,26 +2289,29 @@ def api_diff(
     return diff_snapshots(old_snap, new_snap)
 
 
-def _detect_package_name(project_root: Path) -> str | None:
+def _detect_package_name(project_root: Path, config_path: Path | None = None) -> str | None:
     """
-    Detect the package name from the project's metadata
+    Detect the project's importable module name
 
     Parameters
     ----------
     project_root
-        The directory holding the packaging files.
+        The directory holding the packaging files and Great Docs configuration.
+    config_path
+        An explicitly selected Great Docs configuration file, if any.
 
     Returns
     -------
     :
-        The distribution name with hyphens replaced by underscores, or `None` when the project
-        declares no name or its metadata cannot be read.
+        The configured or discovered importable module, or `None` when the project does not
+        identify one.
     """
     try:
-        name = _manifest.read(project_root)["name"]
-    except ManifestError:
+        layout = Layout.make(project_root, config_path)
+        project = Project.make(layout.load_config(), layout)
+    except (ConfigError, LayoutError):
         return None
-    return name.replace("-", "_") if name else None
+    return project.importable_name
 
 
 # ---------------------------------------------------------------------------

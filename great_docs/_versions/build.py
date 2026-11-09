@@ -1562,7 +1562,7 @@ def _rebuild_api_from_git_ref(
     if cache_path.exists():
         snap = ApiSnapshot.load(cache_path)
     else:
-        pkg_name = _detect_package_name(project_root)
+        pkg_name = _detect_package_name(project_root, config.config_path if config else None)
         if not pkg_name:
             return []
 
