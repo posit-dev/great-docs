@@ -225,8 +225,13 @@ def interlinks(
     )
     for note in notes:
         log.detail(note)
-    for alias, targets in sorted(index.dropped.items()):
-        log.detail(f"'{alias}' is ambiguous ({', '.join(targets)}); references to it stay unlinked")
+    # A collision matters only where a page names it, which this step can't see, so name no
+    # aliases here. `great-docs lint` reports each reference that hits one.
+    if index.dropped:
+        log.detail(
+            f"{len(index.dropped)} short name(s) are claimed by more than one object; run "
+            "`great-docs lint --check cross-refs` to find the references to qualify"
+        )
     return f"Indexed {len(index.names)} name(s)"
 
 
