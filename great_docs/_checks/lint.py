@@ -216,8 +216,12 @@ def run_lint(
         _check_cross_references(
             pkg, importable_name, exports, documented, index, sources.unread, result
         )
+        prose = _gather_prose(documented, project_root, layout)
         _check_ambiguous_references(
-            index.dropped, _gather_prose(documented, project_root, layout), result
+            index.dropped,
+            prose,
+            result,
+            autolinked=_published_origins(prose, documented, config, layout, project_root),
         )
 
     if "style" in checks:
@@ -486,6 +490,14 @@ _INTERLINK_RE = re.compile(r"\[[^\]]*\]\(`(~?)([\w.]+)`\)")
 _CODE_SPAN_RE = re.compile(r"(`{2,})(?:(?!\1).)*?\1", re.DOTALL)
 """A multi-backtick span that Markdown renders as literal text"""
 
+_AUTOLINK_RE = re.compile(
+    r"(?<!`)`(?:~~\.?)?([A-Za-z_][\w.]*)(?:\(\))?`(?!`)(?!\{[^}\n]*\.gd-no-link\b)"
+)
+"""A code span the build links when it names a documented object, as `name()` or `~~pkg.name`"""
+
+_LINK_RE = re.compile(r"\[[^\]]*\]\([^)\s]*\)")
+"""A Markdown link, whose text the build leaves as written"""
+
 
 _LIST_MARKER_RE = re.compile(r"(?:[-*+]|\d+[.)])\s")
 """The start of a Markdown list item"""
@@ -572,7 +584,10 @@ def _gather_prose(
     Gather the text the ambiguity check scans
 
     Read the docstring of every object the reference documents, and the pages
-    an author writes under the project root.
+    an author writes under the project root. An object documented under both
+    its public path and its module path is read once, under the path that
+    claims short names, so a docstring's findings are not reported twice and a
+    docstring can be matched to the object it documents.
 
     Parameters
     ----------
@@ -589,9 +604,17 @@ def _gather_prose(
     prose: dict[str, str] = {}
     project_root = project_root.resolve()
 
-    for item in items:
+    seen = set()
+    for item in sorted(items, key=lambda item: not item.aliases):
         docstring = _get_docstring(item.obj)
-        if docstring:
+        if not docstring:
+            continue
+        try:
+            obj = item.obj.canonical_path
+        except (gf.AliasResolutionError, gf.CyclicAliasError):
+            obj = item.name
+        if obj not in seen:
+            seen.add(obj)
             prose[item.name] = docstring
 
     for dirpath, dirnames, filenames in os.walk(project_root):
@@ -622,13 +645,62 @@ def _gather_prose(
     return prose
 
 
+def _published_origins(
+    prose: dict[str, str],
+    documented: list[InventoryItem],
+    config: Config,
+    layout: Layout,
+    project_root: Path,
+) -> set[str]:
+    """
+    Pick out the prose the site renders, whose code spans the build links
+
+    Parameters
+    ----------
+    prose :
+        The prose gathered for the ambiguity check, keyed by symbol or file.
+    documented :
+        The objects the reference documents.
+    config :
+        The project's configuration.
+    layout :
+        The project's directories.
+    project_root :
+        Root of the project, which the files in `prose` are relative to.
+
+    Returns
+    -------
+    :
+        The keys of `prose` for documented docstrings and for the pages the site publishes.
+        Notes and plans elsewhere in the project are left out.
+    """
+    root = project_root.resolve()
+    pages = set()
+    for path in authored.find_pages(config, layout, report=lambda _: None):
+        try:
+            pages.add(str(path.resolve().relative_to(root)))
+        except ValueError:
+            continue
+    names = {item.name for item in documented}
+    return {origin for origin in prose if origin in names or origin in pages}
+
+
 def _check_ambiguous_references(
     dropped: dict[str, tuple[str, ...]],
     prose: dict[str, str],
     result: LintResult,
+    *,
+    autolinked: set[str] | None = None,
 ) -> None:
     """
     Check prose for references to a short name that two objects claim
+
+    An explicit reference such as `[](`flush`)` is an error. A code span such as
+    `` `flush()` `` is a warning: the build would link it if one object claimed the
+    name, but the span may be plain code, like a dictionary key, rather than a
+    reference. A docstring naming its own object is not reported, and neither is a
+    span marked `{.gd-no-link}` or one inside the text of a link, which the build
+    leaves alone.
 
     Parameters
     ----------
@@ -638,12 +710,16 @@ def _check_ambiguous_references(
         Text to scan, keyed by the symbol or file it came from.
     result :
         Aggregated results to append to.
+    autolinked :
+        The keys of `prose` whose code spans are checked: the docstrings and pages the site
+        renders. `None` checks every key.
     """
     if not dropped:
         return
 
     for origin, text in prose.items():
-        for _, name in _INTERLINK_RE.findall(_strip_code(text)):
+        text = _strip_code(text)
+        for _, name in _INTERLINK_RE.findall(text):
             targets = dropped.get(name)
             if targets is None:
                 continue
@@ -655,6 +731,24 @@ def _check_ambiguous_references(
                     message=(
                         f"'{name}' is claimed by {' and '.join(targets)}, so the "
                         "reference stays unlinked. Qualify it."
+                    ),
+                )
+            )
+        if autolinked is not None and origin not in autolinked:
+            continue
+        for name in _AUTOLINK_RE.findall(_LINK_RE.sub("", text)):
+            targets = dropped.get(name)
+            if targets is None or origin in targets:
+                continue
+            result.issues.append(
+                LintIssue(
+                    check="ambiguous-autolink",
+                    severity="warning",
+                    symbol=origin,
+                    message=(
+                        f"`{name}` is claimed by {' and '.join(targets)}, so the code span "
+                        f"stays unlinked. Qualify it, as in `~~{targets[0]}`, or mark it "
+                        "`{.gd-no-link}` if it isn't a reference."
                     ),
                 )
             )
