@@ -9,7 +9,7 @@ import pytest
 
 from great_docs import GreatDocs
 from great_docs._build import content as content_steps
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from great_docs._website.homepage import landing, page, readme, source
 from great_docs._website.homepage.readme import Badge
 from great_docs._yaml import split_front_matter

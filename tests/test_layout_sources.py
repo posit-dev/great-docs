@@ -13,7 +13,7 @@ from great_docs._build.pipeline import Run
 from great_docs._build.steps import Outcome
 from great_docs._content import publish
 from great_docs._content.pages import output_destination, section_destination
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._versions.build import assemble_site, run_versioned_build
 from great_docs._versions.model import VersionEntry, build_version_map, parse_versions_config

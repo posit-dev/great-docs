@@ -17,7 +17,7 @@ import watchfiles
 
 from great_docs import GreatDocs
 from great_docs._build import watch
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 
 CONFIG = "reference: false\nchangelog:\n  enabled: false\nskill:\n  enabled: false\n"
 MARKER = "A line added while watching."

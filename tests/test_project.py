@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from great_docs._github import GithubRepo
-from great_docs._layout import Layout
-from great_docs._project import Project, locate_package_init, read_manifest
+from great_docs._project.github import GithubRepo
+from great_docs._project.layout import Layout
+from great_docs._project.model import Project, locate_package_init, read_manifest
 from great_docs.config import Config
 from tests.support import write_pyproject
 

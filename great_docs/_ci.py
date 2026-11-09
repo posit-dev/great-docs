@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import os
 
-from ._github import GithubRepo, token_from_env
 from ._pr_preview import GITHUB_API, PreviewError, _parse_owner_repo
+from ._project.github import GithubRepo, token_from_env
 
 _TIMEOUT = 15
 

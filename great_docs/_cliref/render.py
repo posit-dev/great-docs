@@ -20,7 +20,7 @@ from .._website.navigation import navbar
 from .model import CliArgument, CliCommand, CliOption
 
 if TYPE_CHECKING:
-    from .._layout import Layout
+    from .._project.layout import Layout
     from ..config import Config
 
 INDEX_PAGE = "reference/cli/index.qmd"

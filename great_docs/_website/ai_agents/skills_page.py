@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from ..._layout import Layout
-from ..._manifest import Manifest
+from ..._project.layout import Layout
+from ..._project.manifest import Manifest
 from ..._yaml import split_front_matter
 from ...config import Config
 from .. import page_dates

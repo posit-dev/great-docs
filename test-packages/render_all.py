@@ -65,7 +65,7 @@ from catalog import (
 )
 from synthetic.generator import generate_package
 
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 
 # ── Constants ────────────────────────────────────────────────────────────────
 

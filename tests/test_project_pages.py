@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from great_docs._website.project_pages import package_info
 from great_docs._yaml import split_front_matter
 from tests.support import StubRemote, mock_config

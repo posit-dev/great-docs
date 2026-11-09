@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from great_docs._build import generated
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from great_docs._website.ai_agents import llms_txt
 from great_docs._website.ai_agents.webmcp_tools import TOOLS
 from tests.support import write_config, write_pyproject

@@ -11,7 +11,7 @@ import pytest
 from yaml12 import read_yaml
 
 from great_docs._api_diff import ApiSnapshot, ParameterInfo, SymbolInfo
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from great_docs._versions.build import (
     _version_build_dir,
     assemble_site,

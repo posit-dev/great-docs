@@ -22,7 +22,7 @@ from .steps import USER_CODE_ERRORS, Outcome, Skipped, StepError, print_warning
 if TYPE_CHECKING:
     from .._apiref.api_reference import APIReference
     from .._cliref.model import CliCommand
-    from .._layout import Layout
+    from .._project.layout import Layout
     from ..config import Config
     from .log import BuildLog
     from .pipeline import Run

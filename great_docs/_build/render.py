@@ -22,7 +22,7 @@ from .steps import Outcome, StepError
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from .._layout import Layout
+    from .._project.layout import Layout
     from .._website.seo.structured_data import StructuredData
     from ..config import Config
     from . import parallel_render

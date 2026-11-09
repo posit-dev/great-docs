@@ -24,8 +24,8 @@ from .site import default_description
 from .steps import USER_CODE_ERRORS, Outcome, Skipped
 
 if TYPE_CHECKING:
-    from .._layout import Layout
     from .._project import Project
+    from .._project.layout import Layout
     from ..config import Config
     from .log import BuildLog
     from .pipeline import Run

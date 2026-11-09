@@ -12,14 +12,14 @@ from html import unescape
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from .. import _manifest
 from .._build import quarto
 from .._build.steps import USER_CODE_ERRORS
 from .._content.walk import find_files
+from .._project import manifest as _manifest
 from .._subprocess import TEXT_MODE_KWARGS
 
 if TYPE_CHECKING:
-    from .._layout import Layout
+    from .._project.layout import Layout
 
 # Copies of the fence and hashpipe regexes in `_website/mock_code.py`
 _EXEC_FENCE_RE = re.compile(r"^```\{python\}\s*$")

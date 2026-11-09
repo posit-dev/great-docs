@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
-    from .._github import GithubRepo
+    from .._project.github import GithubRepo
     from .._remote import Remote
     from ..config import Config
 

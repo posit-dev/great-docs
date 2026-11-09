@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from great_docs._github import GithubRepo
+from great_docs._project.github import GithubRepo
 from great_docs._remote import HttpRemote, OfflineRemote
 
 REPO = GithubRepo("owner", "repo")

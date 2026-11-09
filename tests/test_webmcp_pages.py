@@ -9,7 +9,7 @@ import pytest
 
 from great_docs._build import generated
 from great_docs._build.steps import Skipped
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from great_docs._website.ai_agents import webmcp_pages
 from great_docs._yaml import add_body_class, split_front_matter
 from tests.support import write_config, write_pyproject

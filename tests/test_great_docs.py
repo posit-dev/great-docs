@@ -32,7 +32,7 @@ from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
 from yaml12 import format_yaml as _format_yaml
 from yaml12 import parse_yaml as _parse_yaml
 
-from great_docs import BuildError, Config, GreatDocs, _manifest, create_default_config, load_config
+from great_docs import BuildError, Config, GreatDocs, create_default_config, load_config
 from great_docs._apiref import content, spec, write
 from great_docs._apiref._docstring_sections import (
     DCDocstringSection,
@@ -149,9 +149,10 @@ from great_docs._cliref import render as cli_render
 from great_docs._content import user_guide
 from great_docs._content.naming import strip_numeric_prefix
 from great_docs._contribution import NavbarLink
-from great_docs._github import GithubRepo
-from great_docs._layout import Layout
-from great_docs._project import Project, locate_package_init, read_manifest
+from great_docs._project import manifest as _manifest
+from great_docs._project.github import GithubRepo
+from great_docs._project.layout import Layout
+from great_docs._project.model import Project, locate_package_init, read_manifest
 from great_docs._reference import block as reference_block
 from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import (
@@ -13466,7 +13467,8 @@ def test_cli_changelog_unexpected_error_propagates():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         with patch(
-            "great_docs._layout.Layout.load_config", side_effect=RuntimeError("changelog failed")
+            "great_docs._project.layout.Layout.load_config",
+            side_effect=RuntimeError("changelog failed"),
         ):
             result = runner.invoke(changelog, ["--project-path", tmp_dir])
             assert isinstance(result.exception, RuntimeError)

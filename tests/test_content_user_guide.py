@@ -9,7 +9,7 @@ import pytest
 
 from great_docs import GreatDocs
 from great_docs._content import user_guide
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from tests.support import discover_user_guide, find_user_guide_dir, write_config
 
 

@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from great_docs import _manifest
-from great_docs._manifest import ManifestError
+from great_docs._project import manifest as _manifest
+from great_docs._project.manifest import ManifestError
 
 
 def write(root: Path, name: str, text: str) -> None:

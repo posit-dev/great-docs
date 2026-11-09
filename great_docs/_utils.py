@@ -10,7 +10,7 @@ from typing import Any
 
 from yaml12 import write_yaml
 
-from ._layout import Layout
+from ._project.layout import Layout
 
 _SEEALSO_RE = re.compile(
     r"^[^\S\r\n]*%seealso[^\S\r\n]+(.+?)[^\S\r\n]*$",

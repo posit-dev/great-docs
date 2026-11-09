@@ -28,7 +28,7 @@ from .sections import source_dirs as section_source_dirs
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from .._layout import Layout
+    from .._project.layout import Layout
     from .._website.seo.structured_data import StructuredData
     from ..config import Config
     from .pages import PageMap

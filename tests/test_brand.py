@@ -10,8 +10,8 @@ from typing import Any
 from PIL import Image
 
 from great_docs._build.facts import Facts
-from great_docs._github import GithubRepo
-from great_docs._layout import Layout
+from great_docs._project.github import GithubRepo
+from great_docs._project.layout import Layout
 from great_docs._website.identity import Identity
 from great_docs._website.navigation import brand
 from great_docs._website.navigation.release import Release

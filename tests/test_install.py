@@ -11,8 +11,8 @@ from yaml12 import parse_yaml, read_yaml
 
 from great_docs import Config
 from great_docs._install import format_authors_yaml, update_gitignore, write_initial_config
-from great_docs._layout import Layout
 from great_docs._project import Project
+from great_docs._project.layout import Layout
 from great_docs._reference.exports import Exports
 from tests.support import write_pyproject
 

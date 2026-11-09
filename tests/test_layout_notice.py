@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from great_docs._layout import Layout
 from great_docs._layout_migration.model import MigrationError
 from great_docs._layout_migration.notice import layout_notice
+from great_docs._project.layout import Layout
 from great_docs.cli import cli
 
 

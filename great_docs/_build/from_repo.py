@@ -20,9 +20,9 @@ from typing import TYPE_CHECKING, Literal
 
 from yaml12 import read_yaml
 
-from .. import _manifest
-from .._layout import Layout, LayoutError
-from .._manifest import ManifestError
+from .._project import manifest as _manifest
+from .._project.layout import Layout, LayoutError
+from .._project.manifest import ManifestError
 from .._subprocess import TEXT_MODE_KWARGS
 from .._utils import record_site_ownership, validate_site_dir
 from .._yaml import YamlMapping, YamlValue

@@ -13,7 +13,7 @@ import pytest
 from great_docs._build import quarto, render
 from great_docs._build.log import BuildLog
 from great_docs._build.steps import StepError
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from tests.support import mock_config, write_config
 
 TRANSIENT = quarto.RenderResult(1, "ENOENT: No such file or directory, rename", [])

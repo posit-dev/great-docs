@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, TextIO, cast
 
 import griffe
 
-from great_docs._layout import LayoutError
+from great_docs._project.layout import LayoutError
 from great_docs.config import ConfigError
 
 if TYPE_CHECKING:

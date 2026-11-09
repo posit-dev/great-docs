@@ -15,7 +15,7 @@ from . import page_scan
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from .._layout import Layout
+    from .._project.layout import Layout
     from ..config import Config
 
 __all__ = ["add_upcoming", "collect", "process", "write"]

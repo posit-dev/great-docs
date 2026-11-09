@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from .._manifest import Manifest
+from .._project.manifest import Manifest
 from .._subprocess import TEXT_MODE_KWARGS
 from .._translations import translate
 from . import quarto_yml

@@ -22,7 +22,7 @@ from .steps import Outcome, Skipped
 
 if TYPE_CHECKING:
     from .._cliref.model import CliCommand
-    from .._layout import Layout
+    from .._project.layout import Layout
     from .._remote import Remote
     from ..config import Config
     from .log import BuildLog

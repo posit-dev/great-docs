@@ -17,8 +17,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from ..._layout import Layout
-    from ..._manifest import Dependency, Manifest
+    from ..._project.layout import Layout
+    from ..._project.manifest import Dependency, Manifest
     from ..._remote import Remote
     from ...config import Config
 

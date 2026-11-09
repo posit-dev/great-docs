@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from great_docs._build import from_repo, serve
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from great_docs.cli import cli
 from great_docs.core import GreatDocs
 

@@ -11,7 +11,7 @@ from typing import Any
 from great_docs._build import finish
 from great_docs._build.steps import Skipped
 from great_docs._interlinks.sphinx_inventory import Inventory, InventoryEntry, encode
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from great_docs._website.ai_agents import webmcp_manifest, webmcp_pages
 from great_docs._website.ai_agents.webmcp_manifest import MANIFEST_FILE, Root, SiteInfo
 from great_docs._website.ai_agents.webmcp_pages import PageFacts, SectionFacts

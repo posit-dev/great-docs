@@ -17,8 +17,8 @@ from .navigation import navbar
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from .._github import GithubRepo
-    from .._layout import Layout
+    from .._project.github import GithubRepo
+    from .._project.layout import Layout
     from .._remote import Remote
     from ..config import Config
 

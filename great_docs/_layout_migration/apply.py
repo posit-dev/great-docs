@@ -14,7 +14,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import cast
 
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 
 from .content import read_config
 from .model import (

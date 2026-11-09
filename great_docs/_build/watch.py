@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 import watchfiles
 
-from .._layout import Layout
+from .._project.layout import Layout
 from .steps import BuildError
 
 if TYPE_CHECKING:

@@ -9,13 +9,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .._content import authored
-from .._layout import PACKAGE_DIRS
+from .._project.layout import PACKAGE_DIRS
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
     from pathlib import Path
 
-    from .._layout import Layout
+    from .._project.layout import Layout
     from ..config import Config
 
 __all__ = ["expand_directories", "find_modules", "find_pages", "find_pages_in"]

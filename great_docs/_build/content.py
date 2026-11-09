@@ -30,8 +30,8 @@ from .steps import Outcome, Skipped, print_warning
 
 if TYPE_CHECKING:
     from .._content.user_guide import UserGuide
-    from .._layout import Layout
     from .._project import Project
+    from .._project.layout import Layout
     from .._remote import Remote
     from .._website.identity import Identity
     from .._website.seo.structured_data import StructuredData

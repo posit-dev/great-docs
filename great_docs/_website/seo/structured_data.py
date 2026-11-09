@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from ..._manifest import Manifest
+from ..._project.manifest import Manifest
 from .. import head
 
 if TYPE_CHECKING:

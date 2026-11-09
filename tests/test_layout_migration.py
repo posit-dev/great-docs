@@ -9,10 +9,10 @@ import pytest
 from click.testing import CliRunner
 from yaml12 import read_yaml
 
-from great_docs._layout import CONVENTIONAL_DOC_DIRS, Layout
 from great_docs._layout_migration import analyse
 from great_docs._layout_migration.model import MigrationError, Move, Note, fingerprint
 from great_docs._project import Project
+from great_docs._project.layout import CONVENTIONAL_DOC_DIRS, Layout
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website import branding
 from great_docs.cli import _print_notes, cli

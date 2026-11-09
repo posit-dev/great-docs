@@ -16,8 +16,8 @@ from .._build.steps import USER_CODE_ERRORS
 from .._builtin.directives import DIRECTIVES
 from .._content import authored
 from .._interlinks import AliasClaims, LoadedSources, build_index, load_sources
-from .._layout import Layout
 from .._project import Project
+from .._project.layout import Layout
 from .._reference.exports import Exports
 from .._utils import fenced_lines, is_in_great_docs_build_dir, parse_seealso
 from .._website.homepage import source as homepage_source

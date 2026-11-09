@@ -13,9 +13,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from great_docs._layout import Layout
 from great_docs._layout_migration import Edit, MigrationError, Move, analyse
 from great_docs._layout_migration.model import fingerprint
+from great_docs._project.layout import Layout
 
 if TYPE_CHECKING:
     from great_docs._layout_migration.apply import _Manifest, _Operation

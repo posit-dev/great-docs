@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from great_docs._content import code_includes
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 
 
 @pytest.fixture

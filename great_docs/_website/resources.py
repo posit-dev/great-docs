@@ -18,7 +18,7 @@ from .._contribution import Contribution
 from . import quarto_yml
 
 if TYPE_CHECKING:
-    from .._layout import Layout
+    from .._project.layout import Layout
     from ..config import Config
 
 __all__ = ["register"]

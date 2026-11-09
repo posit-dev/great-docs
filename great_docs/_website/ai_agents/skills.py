@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..._layout import Layout
-from ..._manifest import Manifest
+from ..._project.layout import Layout
+from ..._project.manifest import Manifest
 from ...config import Config
 from .skill_md import compose
 from .skills_page import SkillsPageWriter

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from ..._layout import Layout
+    from ..._project.layout import Layout
     from ...config import Config
 
 __all__ = ["FILENAME", "write_page"]

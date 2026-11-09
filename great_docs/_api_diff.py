@@ -9,8 +9,8 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from great_docs._build.steps import USER_CODE_ERRORS
-from great_docs._layout import PACKAGE_DIRS, Layout, LayoutError
 from great_docs._project import Project
+from great_docs._project.layout import PACKAGE_DIRS, Layout, LayoutError
 from great_docs._subprocess import TEXT_MODE_KWARGS
 from great_docs._translations import translate
 from great_docs.config import ConfigError

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from .. import page_dates
 
 if TYPE_CHECKING:
-    from ..._layout import Layout
+    from ..._project.layout import Layout
     from ...config import Config
 
 __all__ = ["PAGES", "SECURITY", "CommunityPage", "write_pages"]

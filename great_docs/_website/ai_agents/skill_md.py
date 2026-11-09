@@ -9,8 +9,8 @@ from typing import Any, cast
 
 from yaml12 import format_yaml
 
-from ..._layout import Layout
-from ..._manifest import Manifest
+from ..._project.layout import Layout
+from ..._project.manifest import Manifest
 from ...config import Config
 from . import llms_txt
 
