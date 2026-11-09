@@ -16,7 +16,7 @@ from great_docs._interlinks.sphinx_inventory import Inventory, InventoryEntry, e
 from great_docs._website.ai_agents import webmcp_manifest, webmcp_pages
 from great_docs._website.ai_agents.webmcp_manifest import Root, SiteInfo
 from great_docs._website.ai_agents.webmcp_pages import PageFacts, SectionFacts
-from great_docs._website.ai_agents.webmcp_tools import TOOLS
+from great_docs._website.ai_agents.webmcp_tools import TOOLS, registered
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "great_docs" / "assets" / "webmcp.js"
@@ -214,6 +214,13 @@ class TestRegistration:
         assert observed["status"] == "registered"
         assert observed["registered"] == SITE_TOOLS
         assert observed["warnings"] == []
+
+    def test_the_python_table_lists_the_registered_tools(self):
+        # `llms.txt` lists the tools from the Python table, so it must match the runtime.
+        observed = _run(SETTLE, settings={"exclude": ["get_page"], "actions": False})
+        expected = registered({"site", "api"}, actions=False, exclude=["get_page"])
+
+        assert observed["registered"] == [tool.name for tool in expected]
 
     def test_navigator_model_context_is_a_fallback(self):
         observed = _run(SETTLE, modelContext="navigator")
