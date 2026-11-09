@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
-from great_docs._website.ai_agents.webmcp_tools import TOOL_NAMES, TOOLS
+import pytest
+
+from great_docs._website.ai_agents import webmcp_tools
+from great_docs._website.ai_agents.webmcp_tools import TOOL_NAMES, TOOLS, WebMCPTool
+from tests.support import write_config
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # The site features a tool can depend on.
 _FEATURES = {"site", "api", "cli", "versions", "changelog", "skills", "blog", "theme"}
+
+_SITE_TOOLS = ["get_site_overview", "get_current_page", "list_pages", "get_page", "search_docs"]
 
 
 def test_names_are_unique():
@@ -42,3 +52,63 @@ def test_site_tools_need_no_feature():
         "get_page",
         "search_docs",
     }
+
+
+def test_the_site_tools_are_implemented():
+    assert [tool.name for tool in TOOLS if tool.implemented] == _SITE_TOOLS
+
+
+def _names(tools: list[WebMCPTool]) -> list[str]:
+    return [tool.name for tool in tools]
+
+
+class TestRegistered:
+    @pytest.fixture
+    def table(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Replace the tool table with one implemented tool of each kind"""
+        monkeypatch.setattr(
+            webmcp_tools,
+            "TOOLS",
+            (
+                WebMCPTool("get_one", "Get one", "One", "site", implemented=True),
+                WebMCPTool("list_api", "List the API", "API", "api", implemented=True),
+                WebMCPTool("get_cli_help", "Get CLI help", "CLI", "cli"),
+                WebMCPTool("open_page", "Open", "Go", "site", action=True, implemented=True),
+            ),
+        )
+
+    @pytest.mark.usefixtures("table")
+    def test_only_implemented_tools_of_the_site_features_are_registered(self):
+        tools = webmcp_tools.registered(_FEATURES, actions=True, exclude=())
+
+        assert _names(tools) == ["get_one", "list_api", "open_page"]
+        assert _names(webmcp_tools.registered({"site"}, actions=True, exclude=())) == [
+            "get_one",
+            "open_page",
+        ]
+
+    @pytest.mark.usefixtures("table")
+    def test_actions_and_excluded_tools_are_left_out(self):
+        assert _names(webmcp_tools.registered({"site"}, actions=False, exclude=())) == ["get_one"]
+        assert _names(webmcp_tools.registered({"site"}, actions=True, exclude=["get_one"])) == [
+            "open_page"
+        ]
+
+
+class TestSiteTools:
+    def test_no_tools_without_webmcp(self, tmp_path: Path):
+        config = write_config(tmp_path, {"webmcp": False})
+
+        assert webmcp_tools.site_tools(config, _FEATURES) == []
+
+    def test_the_configuration_chooses_the_tools(self, tmp_path: Path):
+        config = write_config(
+            tmp_path, {"webmcp": {"enabled": True, "exclude_tools": ["get_page"]}}
+        )
+
+        assert _names(webmcp_tools.site_tools(config, _FEATURES)) == [
+            "get_site_overview",
+            "get_current_page",
+            "list_pages",
+            "search_docs",
+        ]

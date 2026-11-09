@@ -1,8 +1,9 @@
 """
 The `llms.txt` and `llms-full.txt` files that describe the API reference to language models
 
-`llms.txt` links to each documented object with a one-line summary. `llms-full.txt` contains
-each object's signature and docstring, followed by command-line help and the user guide.
+`llms.txt` links to each documented object with a one-line summary and, when the site has
+WebMCP tools, lists them. `llms-full.txt` contains each object's signature and docstring,
+followed by command-line help and the user guide.
 """
 
 from __future__ import annotations
@@ -14,17 +15,27 @@ from typing import TYPE_CHECKING, Any, TypeGuard, cast
 from ..._build.steps import USER_CODE_ERRORS
 from ..._manifest import Manifest
 from ..._yaml import locate_front_matter
+from .webmcp_manifest import MANIFEST_FILE
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
     from types import ModuleType
 
     from ..._layout import Layout
+    from .webmcp_tools import WebMCPTool
 
 __all__ = ["docstring_summary", "is_planned", "write_full", "write_index"]
 
 _SEPARATOR = "-" * 70
+
+# Inputs for the example call in the WebMCP section; the first listed tool is used.
+_WEBMCP_EXAMPLES = (
+    ("search_docs", '{ query: "install" }'),
+    ("get_site_overview", "{}"),
+    ("list_pages", "{}"),
+    ("get_current_page", "{}"),
+)
 
 
 def _describes_api(api_block: Mapping[str, Any] | None) -> TypeGuard[Mapping[str, Any]]:
@@ -82,13 +93,17 @@ def write_index(
     *,
     site_url: str | None,
     report: Callable[[str], None],
+    webmcp_tools: Sequence[WebMCPTool] = (),
+    webmcp_js_api: bool = False,
 ) -> Path | None:
     """
     Write `llms.txt` with a link and one-line summary for each API reference page
 
     The file follows the llms.txt format: the package name, its description, and a list of
     links grouped by reference section. Links are absolute when the project has a
-    documentation URL or a site URL.
+    documentation URL or a site URL. A "WebMCP tools" section follows when the site
+    registers tools, so that an agent reading the file learns what a browser agent on the
+    site can call.
 
     Parameters
     ----------
@@ -102,6 +117,10 @@ def write_index(
         The configured address of the site, or `None`.
     report
         A callback that receives the line announcing the written file.
+    webmcp_tools
+        The WebMCP tools the site registers, in registration order, or none.
+    webmcp_js_api
+        Whether pages expose the tools to scripts through `window.greatDocs.tools`.
 
     Returns
     -------
@@ -156,10 +175,65 @@ def write_index(
 
         lines.append("")
 
+    if webmcp_tools:
+        lines += _webmcp_lines(webmcp_tools, site_url, js_api=webmcp_js_api)
+
     path = layout.build_dir / "llms.txt"
     _ = path.write_text("\n".join(lines), encoding="utf-8")
     report(f"Created {path}")
     return path
+
+
+def _webmcp_lines(tools: Sequence[WebMCPTool], site_url: str, *, js_api: bool) -> list[str]:
+    """
+    Describe the site's WebMCP tools for `llms.txt`
+
+    Parameters
+    ----------
+    tools
+        The tools the site registers, in registration order.
+    site_url
+        The base of the site's links, ending in `/`, or `""` for relative links.
+    js_api
+        Whether to show how page scripts call the tools.
+
+    Returns
+    -------
+    :
+        The section's lines, ending with a blank line.
+    """
+    lines = [
+        "## WebMCP tools",
+        "",
+        "An AI agent in a browser that supports WebMCP can call these tools on this site's "
+        "pages. Results are JSON objects with absolute URLs.",
+        "",
+        f"- [WebMCP manifest]({site_url}{MANIFEST_FILE}): The site's sections, pages and API "
+        "names, which the tools read",
+        "",
+    ]
+    lines += [f"- `{tool.name}`: {tool.purpose}" for tool in tools]
+    lines.append("")
+    if js_api:
+        names = {tool.name for tool in tools}
+        call = next(
+            (
+                f'await window.greatDocs.tools.call("{name}", {example});'
+                for name, example in _WEBMCP_EXAMPLES
+                if name in names
+            ),
+            None,
+        )
+        lines += [
+            "Scripts on the site's pages can call the same tools:",
+            "",
+            "```js",
+            "window.greatDocs.tools.list();",
+            *([call] if call else []),
+            "```",
+            "",
+        ]
+    return lines
 
 
 def docstring_summary(package_name: str, item_name: str) -> str:

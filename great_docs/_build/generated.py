@@ -16,6 +16,7 @@ from .._website import page_status
 from .._website import tags as page_tags
 from .._website.ai_agents import llms_txt as llms_files
 from .._website.ai_agents import webmcp_pages as webmcp_page_data
+from .._website.ai_agents import webmcp_tools
 from .._website.ai_agents.skills import SkillsWriter
 from .steps import Outcome, Skipped
 
@@ -42,8 +43,8 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
     """
     Write `llms.txt` and `llms-full.txt`
 
-    `llms-full.txt` includes user guide pages and, when `cli.enabled` is set, Click
-    command-line help.
+    `llms.txt` lists the WebMCP tools when WebMCP is on. `llms-full.txt` includes user guide
+    pages and, when `cli.enabled` is set, Click command-line help.
 
     Parameters
     ----------
@@ -64,7 +65,14 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
     if not llms_files.is_planned(api_block):
         return Skipped("no API reference")
     _ = llms_files.write_index(
-        layout, api_block, run.project.manifest, site_url=config.site_url, report=print
+        layout,
+        api_block,
+        run.project.manifest,
+        site_url=config.site_url,
+        report=print,
+        # `llms.txt` is written only for a site with an API reference.
+        webmcp_tools=webmcp_tools.site_tools(config, {"site", "api"}),
+        webmcp_js_api=config.webmcp_js_api,
     )
 
     cli: CliCommand | None = None
