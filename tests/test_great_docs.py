@@ -12490,17 +12490,62 @@ def test_api_reference_drops_interlinks_fast():
     assert not hasattr(ref.settings, "fast_inventory")
 
 
-def test_cli_ordered_group_list_commands():
-    """OrderedGroup.list_commands returns commands in insertion order."""
+def test_cli_ordered_group_list_commands() -> None:
+    """Preserve command registration order in every CLI group"""
+    expected = {
+        (): [
+            "init",
+            "build",
+            "preview",
+            "uninstall",
+            "config",
+            "ci",
+            "migrate-layout",
+            "scan",
+            "freeze",
+            "timings",
+            "setup-github-pages",
+            "check-links",
+            "check-examples",
+            "changelog",
+            "proofread",
+            "seo",
+            "lint",
+            "api-diff",
+            "versions",
+            "api-snapshot",
+            "skill",
+            "termshow",
+        ],
+        ("ci",): ["pr-comment", "notice"],
+        ("skill",): ["install", "check", "list"],
+        ("termshow",): [
+            "assets",
+            "check",
+            "edit",
+            "export",
+            "import-cast",
+            "import-tape",
+            "play",
+            "record",
+            "render",
+            "snap",
+            "transcript",
+            "validate",
+        ],
+    }
+    observed: dict[tuple[str, ...], list[str]] = {}
 
-    # Use standalone_mode=False and resilient_parsing to avoid help error
-    ctx = click.Context(cli, info_name="great-docs", resilient_parsing=True)
-    commands = cli.list_commands(ctx)
-    assert isinstance(commands, list)
-    assert len(commands) > 0
-    # Verify they come in insertion order (init, build, preview, uninstall, config, ...)
-    assert commands[0] == "init"
-    assert commands[1] == "build"
+    def collect(group: click.Group, path: tuple[str, ...] = ()) -> None:
+        with click.Context(group, resilient_parsing=True) as ctx:
+            observed[path] = group.list_commands(ctx)
+            for name in observed[path]:
+                command = group.get_command(ctx, name)
+                if isinstance(command, click.Group):
+                    collect(command, (*path, name))
+
+    collect(cli)
+    assert observed == expected
 
 
 def test_cli_group_help():

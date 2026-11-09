@@ -2004,6 +2004,27 @@ def test_python_bridge_parses_args():
     assert "symbol" in result.stdout.lower()
 
 
+def test_python_bridge_renders_demo_json(tmp_path: Path) -> None:
+    """Render evolution JSON through the installed shortcode bridge"""
+    import sys
+
+    bridge = _ext_dir() / "_evolution_shortcode.py"
+    demo = bridge.parents[2] / "api-evolution-demo.json"
+    result = subprocess.run(
+        [sys.executable, str(bridge), "build", "--json_file", str(demo)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert '<table class="gd-evolution-table">' in result.stdout
+    assert "project_path" in result.stdout
+    assert "v0.1.0" in result.stdout
+
+
 def test_python_bridge_reports_a_missing_json_file(tmp_path: Path):
     """Report a missing JSON file as an error comment without a traceback"""
     import sys
