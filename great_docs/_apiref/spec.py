@@ -9,10 +9,13 @@ strings and dicts that name an object to document.
 from __future__ import annotations
 
 import dataclasses
+import re
+import warnings
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from dataclasses import fields as dc_fields
 from enum import Enum
-from functools import cached_property
+from functools import partial
 from typing import Any, Final, Self, cast
 
 from ._walkable import MISSING, MissingType, Walkable
@@ -150,15 +153,28 @@ class SpecObject(SpecOptions):
     kind: str = "object"
     name: Final[str] = ""
 
-    @cached_property
+    # A page path assigned by `unique_page_paths()` when the name-derived one
+    # would share a file with another entry on a case-insensitive filesystem.
+    _page_path: str | None = field(default=None, init=False, repr=False, compare=False)
+
+    @property
     def page_path(self) -> str:
         """
         Return the entry's reference page path without a directory or suffix
 
         Replace the module separator in `module:Item` with a dot to produce
-        `module.Item`. Keep the entry name unchanged for object lookup.
+        `module.Item`. Keep the entry name unchanged for object lookup. A path
+        assigned by `with_page_path()` takes precedence.
         """
+        if self._page_path is not None:
+            return self._page_path
         return self.name.replace(":", ".")
+
+    def with_page_path(self, path: str) -> Self:
+        """Return a copy whose reference page is written to `path`"""
+        new = self.copy()
+        object.__setattr__(new, "_page_path", path)
+        return new
 
 
 @dataclass
@@ -205,3 +221,104 @@ def _coerce_spec_object(value: str | dict[str, Any]) -> SpecObject:
     if isinstance(value, dict):
         return SpecObject(**value)
     return SpecObject(name=value)
+
+
+def claim_page_path(
+    path: str, claimed: dict[str, str], label: Callable[[], str | None] | None = None
+) -> str:
+    """
+    Claim a reference page path that no other page shares on a case-insensitive filesystem
+
+    Two pages whose paths differ only by case (a `template()` function and a
+    `Template` class) would be written to the same file on macOS and Windows,
+    so the later page would silently replace the earlier one. The first path
+    claimed keeps its name. A later path that matches it case-insensitively is
+    suffixed with the label shown on its page (`template-function`), then with
+    a number if that is taken too (`FOO-class-2`). Claiming the exact same path
+    twice returns it unchanged.
+
+    Parameters
+    ----------
+    path
+        The page path to claim, without a directory or suffix.
+    claimed
+        Paths claimed so far, keyed by their casefolded form. Updated in place.
+    label
+        Returns the label of the object documented on the page, or `None` when
+        it cannot be determined. Only called when `path` collides, so no object
+        is looked up for a page that keeps its name.
+
+    Returns
+    -------
+    :
+        `path`, or `path` with a suffix when its case-insensitive form is
+        already claimed by a different path.
+    """
+
+    def is_free(candidate: str) -> bool:
+        owner = claimed.get(candidate.casefold())
+        return owner is None or owner == candidate
+
+    candidate = path
+    if not is_free(path):
+        kind = label() if label is not None else None
+        slug = re.sub(r"[^a-z0-9]+", "-", kind.lower()).strip("-") if kind else ""
+        base = f"{path}-{slug}" if slug else path
+        candidate = base
+        n = 2
+        while not is_free(candidate):
+            candidate = f"{base}-{n}"
+            n += 1
+        warnings.warn(
+            f"Reference page `{path}` differs from `{claimed[path.casefold()]}` only by "
+            f"case; writing it to `{candidate}` so both pages survive on "
+            "case-insensitive filesystems.",
+            stacklevel=2,
+        )
+    claimed[candidate.casefold()] = candidate
+    return candidate
+
+
+def unique_page_paths(
+    sections: list[SpecSection],
+    label: Callable[[SpecSection, SpecObject], str | None] | None = None,
+) -> list[SpecSection]:
+    """
+    Give every documented entry a page path no other entry shares case-insensitively
+
+    Entries are claimed in config order, so the first of two colliding entries
+    keeps its usual page and only the later one moves (see `claim_page_path()`).
+
+    Parameters
+    ----------
+    sections
+        The reference sections from the config, in order.
+    label
+        Returns the label of the object that an entry of a section documents,
+        or `None` when it cannot be determined. Only called for an entry whose
+        page path collides.
+
+    Returns
+    -------
+    :
+        The sections, with colliding entries carrying their assigned page path.
+        Sections without a collision are returned as-is.
+    """
+    claimed: dict[str, str] = {}
+
+    def visit(section: SpecSection) -> SpecSection:
+        contents: list[SpecEntry] = []
+        for entry in section.contents:
+            if isinstance(entry, SpecSection):
+                contents.append(visit(entry))
+            elif isinstance(entry, SpecObject):
+                entry_label = None if label is None else partial(label, section, entry)
+                path = claim_page_path(entry.page_path, claimed, entry_label)
+                contents.append(entry if path == entry.page_path else entry.with_page_path(path))
+            else:
+                contents.append(entry)
+        if all(new is old for new, old in zip(contents, section.contents, strict=True)):
+            return section
+        return section.replace(contents=contents)
+
+    return [visit(section) for section in sections]
