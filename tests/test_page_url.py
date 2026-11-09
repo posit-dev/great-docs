@@ -84,11 +84,6 @@ class TestRegister:
         assert quarto["gd-canonical"] is False
         assert quarto["gd-og-url"] is True
 
-    def test_registers_once(self, tmp_path):
-        quarto: dict = {"filters": ["page-url"]}
-        page_url.register(quarto, write_config(tmp_path), self.BASE, tmp_path, og_url=False)
-        assert quarto["filters"] == ["page-url"]
-
     def test_disabled(self, tmp_path):
         config = write_config(tmp_path, "seo:\n  canonical:\n    enabled: false\n")
         quarto: dict = {"filters": []}

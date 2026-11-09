@@ -43,8 +43,8 @@ def register(
     Add the site's address, title, navbar, logo and favicons
 
     Set `website.site-url` to the site address when available. Enable page
-    navigation unless the Quarto configuration already sets it. Set a missing
-    site title to the site's name when the name is non-empty. Create the navbar.
+    navigation. Set the site title to the site's name when the name is
+    non-empty. Create the navbar.
     Include a GitHub entry on the right when the project has a GitHub repository.
 
     Show a configured logo, or one found at a conventional path, in place of
@@ -89,8 +89,8 @@ def register(
     website = cast("dict[str, Any]", quarto_config.setdefault("website", {}))
     if identity.url:
         website["site-url"] = identity.url
-    _ = website.setdefault("page-navigation", True)
-    if "title" not in website and identity.name:
+    website["page-navigation"] = True
+    if identity.name:
         website["title"] = identity.name
 
     _add_navbar(website, config, repo, facts)

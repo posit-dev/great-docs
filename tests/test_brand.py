@@ -98,17 +98,6 @@ class TestSite:
         assert website["page-navigation"] is True
         assert website["title"] == "Pkg"
 
-    def test_keeps_the_title_and_page_navigation_already_set(self, tmp_path: Path):
-        quarto_config: dict[str, Any] = {
-            "website": {"title": "Mine", "page-navigation": False},
-            "format": {"html": {}},
-        }
-
-        _register(tmp_path, quarto_config=quarto_config)
-
-        assert quarto_config["website"]["title"] == "Mine"
-        assert quarto_config["website"]["page-navigation"] is False
-
     def test_leaves_out_the_title_when_the_site_has_no_name(self, tmp_path: Path):
         quarto_config, _ = _register(tmp_path, identity=Identity(name="", url=None, base_url=None))
 

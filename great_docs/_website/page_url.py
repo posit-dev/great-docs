@@ -110,9 +110,7 @@ def register(
     )
     if not base_url or not (canonical or og_url):
         return
-    filters = quarto_config.setdefault("filters", [])
-    if FILTER not in filters:
-        filters.append(FILTER)
+    quarto_config.setdefault("filters", []).append(FILTER)
     quarto_config[BASE_URL_KEY] = base_url
     quarto_config[CANONICAL_KEY] = canonical
     quarto_config[OG_URL_KEY] = og_url
