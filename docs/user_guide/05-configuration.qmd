@@ -945,6 +945,25 @@ For the full guide — including how to write a skill, the resolution order, mul
 the `great-docs skill` CLI, freshness checking, and the Python API — see
 [Agent Skills](38-agent-skills.qmd).
 
+## WebMCP [version-badge new 0.18]
+
+With [WebMCP](https://github.com/webmachinelearning/webmcp) turned on, every page registers
+read-only tools that an AI agent in the reader's browser can call to search and read the site.
+This is experimental and off by default. `webmcp: true` turns it on with the defaults below; use a
+mapping to change them:
+
+```{.yaml filename="docs/great-docs.yml"}
+webmcp:
+  enabled: true          # Register WebMCP tools on every page
+  actions: true          # Register tools that change the page (none yet)
+  js_api: true           # Expose the tools as window.greatDocs.tools
+  exclude_tools: []      # Tool names to leave out, such as [search_docs]
+  origin_trials: []      # Origin-trial tokens to add to every page
+```
+
+A page can opt out with `webmcp: false` in its front matter. For the tools, browser support,
+local testing and the JavaScript API, see [WebMCP](47-webmcp.qmd).
+
 ## Page Metadata [version-badge new 0.2]
 
 Display page creation and modification dates at the bottom of documentation pages, giving readers a

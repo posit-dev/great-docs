@@ -62,6 +62,30 @@ The content is derived from:
 This file is typically small (a few KB) and is designed to give an LLM a quick overview of the
 API surface without overwhelming its context window.
 
+When [WebMCP](47-webmcp.qmd) is turned on, `llms.txt` ends with a "WebMCP tools" section, so an
+agent that reads the file learns that it can also call tools on the site's pages:
+
+````markdown
+## WebMCP tools
+
+An AI agent in a browser that supports WebMCP can call these tools on this site's pages. Results are JSON objects with absolute URLs.
+
+- [WebMCP manifest](https://example.com/gd-webmcp.json): The site's sections, pages and API names, which the tools read
+
+- `get_site_overview`: The package, its version and install commands, the site's sections and these tools
+- `get_current_page`: The open page as Markdown, or as an outline of its headings
+- `list_pages`: The site's pages grouped by section
+- `get_page`: One page, or one section of it, as Markdown
+- `search_docs`: Ranked matches for a query, by page section
+
+Scripts on the site's pages can call the same tools:
+
+```js
+window.greatDocs.tools.list();
+await window.greatDocs.tools.call("search_docs", { query: "install" });
+```
+````
+
 ### `llms-full.txt`
 
 The comprehensive file includes everything in `llms.txt` plus:
@@ -139,6 +163,7 @@ The `llms.txt` files are generated automatically with no configuration required.
 AI agent context, consider authoring a `SKILL.md` alongside them.
 
 - [Agent Skills](38-agent-skills.qmd): hand-crafted context for AI coding agents
+- [WebMCP](47-webmcp.qmd): tools that AI agents in the reader's browser can call
 - [Configuration](05-configuration.qmd): all `great-docs.yml` options
 - [Building](13-building.qmd): the full build pipeline and step order
 - [API Documentation](06-api-documentation.qmd): configuring the `api-reference` sections that

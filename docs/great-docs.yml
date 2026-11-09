@@ -69,6 +69,11 @@ site:
 # Enable interactive WASM notebooks via marimo islands
 marimo: true
 
+# WebMCP
+# ------
+# Register read-only tools that AI agents in the reader's browser can call
+webmcp: true
+
 # Dark Mode Toggle
 # ----------------
 # Enable/disable the dark mode toggle in navbar (default: true)
@@ -184,6 +189,7 @@ nav_icons:
     Agent Skills: brain-circuit
     "llms.txt": file-text
     MCP Documentation: plug
+    WebMCP: bot
     Build & Quality: circle-check
     Cross-Referencing: link
     Internationalization: globe
