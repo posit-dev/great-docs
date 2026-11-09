@@ -884,6 +884,7 @@ class TestCategoriseReferences:
 
         mod_obj = MagicMock()
         mod_obj.kind = griffe.Kind.MODULE
+        mod_obj.exports = None
         mod_obj.members = {
             "SubClass": sub_class,
             "sub_func": sub_func,
@@ -916,6 +917,7 @@ class TestCategoriseReferences:
 
         mod_obj = MagicMock()
         mod_obj.kind = griffe.Kind.MODULE
+        mod_obj.exports = None
         # Dict order is the order the expansion visits the members in.
         mod_obj.members = {
             "AFunc": _member("function"),
@@ -951,6 +953,7 @@ class TestCategoriseReferences:
 
         mod_obj = MagicMock()
         mod_obj.kind = griffe.Kind.MODULE
+        mod_obj.exports = None
         mod_obj.members = {"broken": bad_member}
 
         pkg = MagicMock()
@@ -966,6 +969,7 @@ class TestCategoriseReferences:
 
         mod_obj = MagicMock()
         mod_obj.kind = griffe.Kind.MODULE
+        mod_obj.exports = None
         type(mod_obj).members = property(
             lambda s: (_ for _ in ()).throw(griffe.CyclicAliasError(["x", "y"]))
         )
