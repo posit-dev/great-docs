@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path, PurePosixPath
 from types import ModuleType
-from typing import Any, cast
+from typing import Any, cast, get_args
 
 from .. import _manifest
 from .._api_diff import CliCommandInfo, CliOptionInfo
@@ -620,7 +620,7 @@ def extract_option(param: Any) -> CliOption | None:
     decls = param.opts + param.secondary_opts
     names = sorted(decls, key=len)  # short first, long second
 
-    type_name = param.type.name if hasattr(param.type, "name") else str(param.type)
+    type_name = _type_name(param)
 
     # Click marks an unset default with a sentinel object.
     default = param.default
@@ -681,11 +681,15 @@ def extract_argument(param: Any) -> CliArgument:
         The argument's description, including non-empty help text when available.
         Its type is `None` for text.
     """
-    type_name = param.type.name if hasattr(param.type, "name") else str(param.type)
+    type_name = _type_name(param)
+    # Typer 0.29 and later call Click's `human_readable_name` `display_name_raw`.
+    name_display = getattr(param, "human_readable_name", None)
+    if name_display is None:
+        name_display = param.display_name_raw
 
     info: CliArgument = {
         "name": param.name,
-        "name_display": param.human_readable_name,
+        "name_display": name_display,
         "type": None if type_name.lower() in _TEXT_TYPE_NAMES else type_name.upper(),
         "required": param.required,
         "nargs": param.nargs,
@@ -712,14 +716,112 @@ def extract_choices(param: Any) -> list[str] | None:
     Returns
     -------
     :
-        The accepted values in declaration order, with `Enum` members represented by their
-        names. `None` if the parameter's type does not declare choices.
+        The accepted values in declaration order. Click matches an `Enum` member by its name
+        and Typer by its value, so a member is represented by the one its parser accepts.
+        `None` if the parameter's type does not declare choices.
     """
+    descriptor = _typer_type_descriptor(param)
+    if descriptor is not None:
+        choices = descriptor.choices
+        if not isinstance(choices, (list, tuple)):
+            return None
+        return [
+            str(c.value) if isinstance(c, Enum) else str(c) for c in cast(Sequence[object], choices)
+        ]
     # Typer vendors Click, so recognise choices without relying on class identity.
     choices = getattr(param.type, "choices", None)
     if not isinstance(choices, (list, tuple)):
         return None
     return [c.name if isinstance(c, Enum) else str(c) for c in cast(Sequence[object], choices)]
+
+
+def _typer_type_descriptor(param: Any) -> Any | None:
+    """
+    Return the type descriptor of a parameter from Typer 0.29 or later
+
+    These Typer releases coerce values themselves, so their parameters describe their type with
+    a `type_descriptor` instead of a Click `type`.
+
+    Parameters
+    ----------
+    param
+        The Click option or argument.
+
+    Returns
+    -------
+    :
+        The descriptor, or `None` for a parameter with a Click `type`.
+    """
+    if getattr(param, "type", None) is not None:
+        return None
+    return getattr(param, "type_descriptor", None)
+
+
+def _type_name(param: Any) -> str:
+    """
+    Name the type of a Click option or argument
+
+    For a parameter from Typer 0.29 or later, the name is the one earlier Typer releases gave
+    the Click type they chose for the annotation, so the reference pages don't depend on the
+    Typer version.
+
+    Parameters
+    ----------
+    param
+        The Click option or argument.
+
+    Returns
+    -------
+    :
+        The type's name, such as `int`, `path` or `int range`. `""` when the parameter has no
+        type.
+    """
+    descriptor = _typer_type_descriptor(param)
+    if descriptor is None:
+        param_type = getattr(param, "type", None)
+        if param_type is None:
+            return ""
+        return param_type.name if hasattr(param_type, "name") else str(param_type)
+    if descriptor.is_choice:
+        return "choice"
+    if descriptor.is_file:
+        return "filename"
+    if descriptor.is_path:
+        return "path"
+    if descriptor.is_datetime:
+        return "datetime"
+    if descriptor.is_ranged:
+        return f"{descriptor.ranged_type_name} range"
+    annotation = descriptor.annotation
+    if descriptor.is_tuple:
+        return "<" + " ".join(_annotation_name(arg) for arg in get_args(annotation)) + ">"
+    if descriptor.is_list:
+        # A list option is described by the type of its items.
+        items = get_args(annotation)
+        annotation = items[0] if items else str
+    return _annotation_name(annotation)
+
+
+def _annotation_name(annotation: object) -> str:
+    """
+    Name the type of a Typer parameter's annotation as earlier Typer releases did
+
+    Parameters
+    ----------
+    annotation
+        The annotation, without `Optional`.
+
+    Returns
+    -------
+    :
+        `boolean` for `bool`, the class name for another class, such as `int` or `UUID`, and the
+        annotation's text otherwise.
+    """
+    if annotation is bool:
+        return "boolean"
+    if isinstance(annotation, type):
+        return annotation.__name__
+    return str(annotation)
 
 
 def parse_help_parts(help_text: str) -> tuple[str, list[str]]:
