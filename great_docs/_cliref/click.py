@@ -761,9 +761,9 @@ def _type_name(param: Any) -> str:
     """
     Name the type of a Click option or argument
 
-    For a parameter from Typer 0.29 or later, the name is the one earlier Typer releases gave
-    the Click type they chose for the annotation, so the reference pages don't depend on the
-    Typer version.
+    For a parameter from Typer 0.29 or later, the name is the one Typer 0.27 and 0.28 gave
+    the Click type they chose for the annotation, such as `int` where Typer 0.26 and earlier
+    said `integer`.
 
     Parameters
     ----------
@@ -804,7 +804,7 @@ def _type_name(param: Any) -> str:
 
 def _annotation_name(annotation: object) -> str:
     """
-    Name the type of a Typer parameter's annotation as earlier Typer releases did
+    Name the type of a Typer parameter's annotation as Typer 0.27 and 0.28 did
 
     Parameters
     ----------
