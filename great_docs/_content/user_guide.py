@@ -401,10 +401,40 @@ def entry(guide: UserGuide) -> str:
     Returns
     -------
     :
-        The first page's path relative to the build directory, such as
-        `"user-guide/basics/setup.qmd"`.
+        The path, relative to the build directory, of the guide's first page that the
+        sidebar lists, such as `"user-guide/basics/setup.qmd"`. A subdirectory's
+        `index.qmd` only titles its section, so a guide without a root `index.qmd` opens on
+        the first section's first page. A sidebar that lists no pages falls back to the
+        guide's first file.
     """
-    return f"{SIDEBAR_ID}/{published(guide, guide['files'][0])}"
+    hrefs = [f"{SIDEBAR_ID}/{published(guide, page)}" for page in guide["files"]]
+    listed = set(_hrefs(sidebar(guide)["contents"]))
+    return next((href for href in hrefs if href in listed), hrefs[0])
+
+
+def _hrefs(contents: list[Any]) -> list[str]:
+    """
+    List the pages a sidebar links to
+
+    Parameters
+    ----------
+    contents
+        Sidebar entries: page paths, linked entries and sections.
+
+    Returns
+    -------
+    :
+        The pages' paths, in sidebar order.
+    """
+    hrefs: list[str] = []
+    for item in contents:
+        if isinstance(item, str):
+            hrefs.append(item)
+        elif href := item.get("href"):
+            hrefs.append(href)
+        else:
+            hrefs.extend(_hrefs(item.get("contents", [])))
+    return hrefs
 
 
 def copy_pages(

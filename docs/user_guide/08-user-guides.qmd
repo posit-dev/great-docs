@@ -156,9 +156,10 @@ User Guide
     └── Deployment
 ```
 
-A root-level `index.qmd` is recommended so the "User Guide" navbar link has a landing page.
-Subdirectory `index.qmd` files provide section titles but don't appear as separate pages in the
-sidebar. Rather, their title is used as the collapsible section heading.
+A root-level `index.qmd` gives the "User Guide" navbar link a landing page. Without one, the link
+opens the guide's first page, here `getting-started/installation.qmd`. Subdirectory `index.qmd`
+files provide section titles but don't appear as separate pages in the sidebar. Rather, their title
+is used as the collapsible section heading.
 
 Subdirectories are sorted alphabetically by directory name. To control the order of sections and
 pages within them, use numeric prefixes. They are stripped from both directory names and filenames
