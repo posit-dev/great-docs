@@ -125,7 +125,9 @@ def test_llms_full_is_written_without_cli_when_typer_cannot_convert_the_app(impo
     _ = pytest.importorskip("typer")
     docs = _cli_project(
         importable,
-        "import typer\n\napp = typer.Typer()\n\n\n@app.command()\ndef load(options: dict):\n"
+        # Typer rejects a parameter with two Typer annotations.
+        "from typing import Annotated\n\nimport typer\n\napp = typer.Typer()\n\n\n"
+        "@app.command()\ndef load(options: Annotated[str, typer.Option(), typer.Option()]):\n"
         '    """Load."""\n',
     )
 
