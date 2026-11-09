@@ -2080,12 +2080,17 @@ def test_user_guide_file_with_a_list_block_derives_its_title(tmp_path: Path) -> 
         (["01-basics/02-setup.qmd", "02-more/intro.qmd"], "", "user-guide/basics/setup.qmd"),
         (["index.qmd", "01-intro.qmd"], "", "user-guide/index.qmd"),
         (
+            ["01-start/index.qmd", "01-start/01-quickstart.qmd", "02-more/intro.qmd"],
+            "",
+            "user-guide/start/quickstart.qmd",
+        ),
+        (
             ["01-intro.qmd", "guides/index.qmd"],
             "user_guide:\n  - section: Start\n    contents: [01-intro.qmd, guides/index.qmd]\n",
             "user-guide/01-intro.qmd",
         ),
     ],
-    ids=["nested", "root-index", "explicit"],
+    ids=["nested", "root-index", "section-index", "explicit"],
 )
 def test_entry_links_to_the_first_published_page(
     tmp_path: Path, pages: list[str], settings: str, href: str
