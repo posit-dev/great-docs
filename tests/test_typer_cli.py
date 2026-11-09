@@ -9,6 +9,8 @@ tests cover conversion, page extraction and API snapshots.
 
 from __future__ import annotations
 
+import datetime
+import enum
 import importlib
 import sys
 import types
@@ -23,6 +25,13 @@ import pytest
 from great_docs._cliref import click as cli_click
 
 typer = pytest.importorskip("typer")
+
+
+class Level(str, enum.Enum):
+    """A choice whose member names differ from the values Typer accepts."""
+
+    LOW = "low"
+    HIGH = "high"
 
 
 def _sample_app() -> "typer.Typer":
@@ -123,8 +132,8 @@ class TestTyperHelpers:
         app = typer.Typer()
 
         @app.command()
-        def load(options: dict):
-            """Typer has no option type for a dictionary."""
+        def load(options: Annotated[str, typer.Option(), typer.Option()]):
+            """Typer rejects a parameter with two Typer annotations."""
 
         with pytest.raises(RuntimeError, match="Typer cannot convert"):
             _ = to_click_command(app)
@@ -170,6 +179,52 @@ class TestTyperHelpers:
         info = cli_click.extract_command(to_click_command(app), "greet")
 
         assert info["arguments"][0]["help"] == "Who to greet."
+
+    def test_extract_command_names_typer_types_the_same_in_every_release(self):
+        """
+        Name each annotation's type as Typer releases before 0.29 named its Click type
+
+        Typer 0.29 replaced Click's parameter types with its own type descriptors.
+        """
+        from great_docs._cliref.click import to_click_command
+
+        app = typer.Typer()
+
+        @app.command()
+        def load(
+            source: Path,
+            when: Annotated[datetime.datetime, typer.Argument()],
+            count: int = 1,
+            ratio: float = 0.5,
+            level: Level = Level.LOW,
+            tags: Annotated[list[str] | None, typer.Option()] = None,
+            pair: tuple[int, str] = (1, "a"),
+            retries: Annotated[int, typer.Option(min=0, max=5)] = 1,
+            log: Annotated[typer.FileText | None, typer.Option()] = None,
+        ):
+            """Load."""
+
+        @app.command()
+        def other():
+            """Other."""
+
+        info = cli_click.extract_command(to_click_command(app).commands["load"], "load")
+        arguments = {a["name"]: a for a in info["arguments"]}
+        options = {o["names"][-1]: o for o in info["options"]}
+
+        assert arguments["source"]["type"] == "PATH"
+        assert arguments["when"]["type"] == "DATETIME"
+        assert {name: options[f"--{name}"]["type"] for name in ["count", "ratio", "level"]} == {
+            "count": "INT",
+            "ratio": "FLOAT",
+            "level": "CHOICE",
+        }
+        assert options["--tags"]["type"] == "STR"
+        assert options["--pair"]["type"] == "<INT STR>"
+        assert options["--retries"]["type"] == "INT RANGE"
+        assert options["--log"]["type"] == "FILENAME"
+        # Typer matches an `Enum` choice by its value, not its name.
+        assert options["--level"]["choices"] == ["low", "high"]
 
 
 # ---------------------------------------------------------------------------
@@ -249,15 +304,17 @@ class TestTyperDiscovery:
         assert [c["name"] for c in db["commands"]] == ["migrate"]
 
 
-# Typer has no parameter type for a dictionary, so it cannot convert this app.
+# Typer rejects a parameter with two Typer annotations, so it cannot convert this app.
 _UNCONVERTIBLE_APP = """
+from typing import Annotated
+
 import typer
 
 app = typer.Typer()
 
 
 @app.command()
-def load(options: dict):
+def load(options: Annotated[str, typer.Option(), typer.Option()]):
     \"\"\"Load.\"\"\"
 """
 
