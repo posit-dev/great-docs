@@ -1,10 +1,16 @@
+import contextlib
+import io
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
+from great_docs._build import generated
 from great_docs._layout import Layout
 from great_docs._website.ai_agents import llms_txt
+from great_docs._website.ai_agents.webmcp_tools import TOOLS
+from tests.support import write_config, write_pyproject
 
 # The standard library's `json` always imports; its `dumps` and `JSONDecoder.decode`
 # docstrings provide stable expectations for the documented package.
@@ -345,3 +351,116 @@ def test_full_file_keeps_a_page_whose_front_matter_contains_three_dashes(
 
     assert text.endswith("\n# Body\n\n")
     assert "after" not in text
+
+
+def _webmcp_section(text: str) -> list[str]:
+    """Return the lines of the WebMCP section, which ends the file"""
+    return text.split("\n## WebMCP tools\n")[1].split("\n")
+
+
+def _write_index_with_tools(
+    layout: Layout, *names: str, site_url: str | None = None, js_api: bool = True
+) -> str:
+    tools = [tool for tool in TOOLS if tool.name in names]
+    path = llms_txt.write_index(
+        layout,
+        _api_reference("json", SECTION),
+        {},
+        site_url=site_url,
+        report=lambda _: None,
+        webmcp_tools=tools,
+        webmcp_js_api=js_api,
+    )
+    assert path is not None
+    return path.read_text(encoding="utf-8")
+
+
+class TestWebMCPSection:
+    def test_no_section_without_tools(self, layout: Layout):
+        text = _write_index(layout, _api_reference("json", SECTION))
+
+        assert "WebMCP" not in text
+        assert text.endswith(f"{DUMPS_SUMMARY}\n")
+
+    def test_the_section_lists_the_manifest_tools_and_js_api(self, layout: Layout):
+        text = _write_index_with_tools(layout, "get_site_overview", "search_docs")
+
+        assert text.startswith("# json\n\n## Docs\n")
+        assert _webmcp_section(text) == [
+            "",
+            "An AI agent in a browser that supports WebMCP can call these tools on this site's "
+            "pages. Results are JSON objects with absolute URLs.",
+            "",
+            "- [WebMCP manifest](gd-webmcp.json): The site's sections, pages and API names, "
+            "which the tools read",
+            "",
+            "- `get_site_overview`: The package, its version and install commands, the site's "
+            "sections and these tools",
+            "- `search_docs`: Ranked matches for a query, by page section",
+            "",
+            "Scripts on the site's pages can call the same tools:",
+            "",
+            "```js",
+            "window.greatDocs.tools.list();",
+            'await window.greatDocs.tools.call("search_docs", { query: "install" });',
+            "```",
+            "",
+        ]
+
+    def test_the_manifest_link_is_absolute_with_a_site_url(self, layout: Layout):
+        text = _write_index_with_tools(layout, "search_docs", site_url="https://example.com/docs")
+
+        assert "- [WebMCP manifest](https://example.com/docs/gd-webmcp.json): " in text
+
+    def test_no_js_api_example_without_the_js_api(self, layout: Layout):
+        text = _write_index_with_tools(layout, "search_docs", js_api=False)
+
+        assert "window.greatDocs" not in text
+        assert text.endswith("- `search_docs`: Ranked matches for a query, by page section\n")
+
+    @pytest.mark.parametrize(
+        ("names", "call"),
+        [
+            (["get_page", "list_pages"], 'call("list_pages", {})'),
+            (["get_page"], None),
+        ],
+    )
+    def test_the_example_calls_a_listed_tool(
+        self, names: list[str], call: str | None, layout: Layout
+    ):
+        lines = _webmcp_section(_write_index_with_tools(layout, *names))
+
+        calls = [line for line in lines if ".call(" in line]
+        assert calls == ([f"await window.greatDocs.tools.{call};"] if call else [])
+        assert "window.greatDocs.tools.list();" in lines
+
+
+def _build_llms_txt(tmp_path: Path, settings: dict[str, Any]) -> str:
+    """Run the build step that writes `llms.txt` and return the file's text"""
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    write_pyproject(tmp_path, "json")
+    config = write_config(tmp_path, settings)
+    layout = Layout.make(tmp_path)
+    layout.build_dir.mkdir(parents=True)
+    run = SimpleNamespace(
+        api_block=_api_reference("json", SECTION),
+        project=SimpleNamespace(manifest={}, name="json", importable_name=None),
+        user_guide=None,
+    )
+    with contextlib.redirect_stdout(io.StringIO()):
+        _ = generated.llms_txt(run, config, layout)  # type: ignore[arg-type]
+    return (layout.build_dir / "llms.txt").read_text(encoding="utf-8")
+
+
+class TestBuildStep:
+    def test_the_section_is_written_only_with_webmcp_on(self, tmp_path: Path):
+        assert "## WebMCP tools" not in _build_llms_txt(tmp_path / "off", {})
+        assert "## WebMCP tools" in _build_llms_txt(tmp_path / "on", {"webmcp": True})
+
+    def test_the_configuration_chooses_the_tools_and_example(self, tmp_path: Path):
+        webmcp = {"enabled": True, "exclude_tools": ["search_docs"], "js_api": False}
+        text = _build_llms_txt(tmp_path, {"webmcp": webmcp})
+
+        tools = [line.split("`")[1] for line in _webmcp_section(text) if line.startswith("- `")]
+        assert tools == ["get_site_overview", "get_current_page", "list_pages", "get_page"]
+        assert "window.greatDocs" not in text
