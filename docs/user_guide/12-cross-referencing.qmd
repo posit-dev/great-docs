@@ -69,8 +69,8 @@ You can reference an object by a short name, writing `` [](`Cache`) `` rather th
 neither claims it: the reference renders unlinked rather than pointing at whichever object came
 first. Qualify the reference to fix it.
 
-The build reports each ambiguous name it drops, and `great-docs lint` reports each reference
-that hits one, so you do not have to find them by reading the built pages.
+The build reports how many ambiguous names it drops, and `great-docs lint` reports each reference
+and code span that hits one, so you do not have to find them by reading the built pages.
 
 Only your own objects compete for a short name. If a linked project publishes the same
 spelling, an unambiguous local name still wins and the external object remains reachable
