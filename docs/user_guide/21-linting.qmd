@@ -107,6 +107,7 @@ produces no finding.
 |---------|----------|-------------|
 | `broken-xref` | Error | A reference names no object documented by this project or a linked source |
 | `ambiguous-xref` | Error | A reference names a short form claimed by two documented objects |
+| `ambiguous-autolink` | Warning | A code span names a short form claimed by two documented objects |
 | `unread-source` | Info | A linked source inventory could not be read, so `%seealso` was not checked |
 
 For example, this would flag an error:
@@ -136,6 +137,14 @@ unlinked. Qualify it.
 Writing `` [](`StoreCache.flush`) `` resolves it. The linter judges `%seealso` entries and inline
 references identically because the build resolves both through one index. It scans docstrings and
 documentation pages.
+
+A code span such as `` `flush()` `` hits the same collision. The build links a code span that names
+a documented object, but not one whose name is ambiguous, so the linter reports it as an
+`ambiguous-autolink` warning. Write `` `~~demo.StoreCache.flush()` `` to link it while still
+showing `flush()`. The finding is a warning because a code span isn't always a reference: if
+`` `flush` `` names a dictionary key, write `` `flush`{.gd-no-link} `` instead. The linter checks
+code spans only in docstrings and the pages the site publishes, and doesn't report a docstring that
+names its own object.
 
 References to linked projects use the same index. `%seealso numpy.ndarray` passes whenever
 the built page resolves it, by full name or source alias. Great Docs uses a fresh cached
