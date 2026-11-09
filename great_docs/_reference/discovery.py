@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Literal, TypedDict, cast
 
 import griffe as gf
 
+from .._apiref._exports import declared_exports
 from .._apiref._type_checks import ClassKind, attribute_kind, class_kind, function_kind
 from .._apiref.introspect import get_object
 from .._build.steps import BuildError
@@ -336,12 +337,16 @@ def discover_exports(
     """
     Find the names a package exports that the reference can document
 
-    A package's `__all__` decides which members are exported; without one, every member whose
-    name does not start with an underscore is. The names in `AUTO_EXCLUDE` and in the `exclude`
-    setting are dropped. `auto_include` keeps names from `AUTO_EXCLUDE`, and `no_auto_exclude`
-    keeps them all. Aliases that cannot be resolved, and aliases to objects outside the
-    package, are dropped too, as is a name in `__all__` that the package does not define
-    statically, such as one a module `__getattr__` provides.
+    Use a package's statically resolved `__all__` when available. Otherwise, consider its
+    public members. If the package has no `__all__` and at least one public submodule declares
+    exports, omit sibling submodules without `__all__`. An imported `__all__` uses the defining
+    module's exports. Unresolved expressions in `__all__` are omitted; when no names can be
+    resolved, discovery falls back to public members. The names in `AUTO_EXCLUDE`
+    and in the `exclude` setting are dropped. `auto_include` keeps names from
+    `AUTO_EXCLUDE`, and `no_auto_exclude` keeps them all. Aliases that cannot be resolved,
+    and aliases to objects outside the package, are dropped too, as is a name in
+    `__all__` that the package does not define statically, such as one a module
+    `__getattr__` provides.
 
     Parameters
     ----------
@@ -355,17 +360,36 @@ def discover_exports(
     Returns
     -------
     :
-        The exported names in `__all__` order, or in the order the package defines them if it
-        has no `__all__`. `None` if `__all__` lists only names the package does not define.
+        The exported names in `__all__` order, or in the order the package defines them
+        when no export names can be resolved. `None` if `__all__` lists only names the
+        package does not define.
     """
     members = package.members
-    if package.exports:
-        candidates = list(dict.fromkeys(str(name) for name in package.exports))
+    declared = declared_exports(package)
+    if declared is not None:
+        candidates = declared
         report(f"Using __all__ with {len(candidates)} exports")
-        if not any(name in members for name in candidates):
+        if candidates and not any(name in members for name in candidates):
             return None
     else:
         candidates = [name for name in members if not name.startswith("_")]
+        if package.exports is None and "__all__" not in members:
+            submodules: dict[str, bool] = {}
+            for name in candidates:
+                member = members[name]
+                try:
+                    if member.kind is gf.Kind.MODULE:
+                        submodules[name] = member.exports is not None or "__all__" in member.members
+                except (gf.CyclicAliasError, gf.AliasResolutionError, KeyError):
+                    continue
+            if any(submodules.values()):
+                skipped = {name for name, declares in submodules.items() if not declares}
+                candidates = [name for name in candidates if name not in skipped]
+                if skipped:
+                    report(
+                        f"Skipping {len(skipped)} submodule(s) without __all__: "
+                        f"{', '.join(sorted(skipped))}"
+                    )
         report(f"Discovered {len(candidates)} public names")
 
     exports: list[str] = []
@@ -429,11 +453,11 @@ def categorise_exports(
     Sort a package's exports into the groups of the API reference
 
     Classes are grouped by kind, functions by whether they are asynchronous, and attributes by
-    whether they declare a type alias or type variable. An exported module contributes its
-    public members under qualified names, except those the package exports itself; a module
-    with none goes under `other`, as does a name the package does not define. Metadata names
-    such as `__version__` are dropped, and so is an alias that forms a cycle or cannot be
-    resolved.
+    whether they declare a type alias or type variable. An exported module contributes names in
+    its `__all__`, or its public members when `__all__` is absent, under qualified names. Members
+    the package exports itself are left out. A module with none goes under `other`, as does a
+    name the package does not define. Metadata names such as `__version__` are dropped, as are
+    aliases that form a cycle or cannot be resolved.
 
     For each class, the result also lists its public methods and documented dunder methods in
     source order. A method, or a member of an exported module, stays only if the renderer can
@@ -547,7 +571,7 @@ def _categorise_module(
     report: Callable[[str], None],
 ) -> bool:
     """
-    Add an exported module's public members to the categories under qualified names
+    Add an exported module's declared exports or public members under qualified names
 
     Parameters
     ----------
@@ -573,12 +597,12 @@ def _categorise_module(
     """
     contributed = False
     try:
-        members = list(module.members.items())
+        members = _module_export_members(module)
     except _ALIAS_ERRORS:
         return False
 
     for member_name, member in members:
-        if member_name.startswith("_") or member_name in exported:
+        if member_name in exported:
             continue
         try:
             kind = member.kind
@@ -600,6 +624,31 @@ def _categorise_module(
             _add_flat(qualified, member, categories)
             contributed = True
     return contributed
+
+
+def _module_export_members(module: gf.Object | gf.Alias) -> list[tuple[str, gf.Object | gf.Alias]]:
+    """
+    List a module's exported members, or its public members without `__all__`
+
+    A defined but empty `__all__` exports no members. An undefined name in `__all__` cannot be
+    documented and is omitted.
+
+    Parameters
+    ----------
+    module
+        The module whose members are listed.
+
+    Returns
+    -------
+    :
+        Members in `__all__` order, or in the module's definition order when no export
+        names can be resolved.
+    """
+    members = module.members
+    exports = declared_exports(module)
+    if exports is None:
+        return [(name, member) for name, member in members.items() if not name.startswith("_")]
+    return [(name, members[name]) for name in exports if name in members]
 
 
 def _add_flat(name: str, obj: gf.Object | gf.Alias, categories: Categories) -> None:
@@ -806,7 +855,8 @@ def categorise_references(
     Sort the names a `reference:` setting lists into the groups of the API reference
 
     Only the listed objects are classified: `Class.method` counts as `Class`, and a listed
-    module contributes its public members under qualified names. A class's method count
+    module contributes names in its `__all__`, or public members when `__all__` is absent,
+    under qualified names. A class's method count
     includes its properties, and no method is checked with the renderer.
 
     Parameters
@@ -937,7 +987,7 @@ def _referenced_class_methods(cls: gf.Object | gf.Alias) -> list[str]:
 
 def _add_module_members(name: str, module: gf.Object | gf.Alias, categories: Categories) -> None:
     """
-    Add a listed module's public members to the categories under qualified names
+    Add a listed module's declared exports or public members under qualified names
 
     Classes are grouped by kind; every function is a plain function and every attribute a
     constant.
@@ -952,13 +1002,11 @@ def _add_module_members(name: str, module: gf.Object | gf.Alias, categories: Cat
         The categories to add to.
     """
     try:
-        members = list(module.members.items())
+        members = _module_export_members(module)
     except _ALIAS_ERRORS:
         return
 
     for member_name, member in members:
-        if member_name.startswith("_"):
-            continue
         try:
             kind = member.kind
         except _ALIAS_ERRORS:

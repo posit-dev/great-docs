@@ -15,6 +15,7 @@ from great_docs._translations import DEFAULT_LANGUAGE
 from great_docs.hooks._docstring_parsed import emit_docstring_parsed
 from great_docs.hooks._object_resolved import emit_object_resolved
 
+from ._exports import declared_exports
 from ._type_checks import is_enum
 from ._walkable import MISSING, MissingType, Walkable
 from .content import Doc, Link, MemberPage, Page, Section, Text
@@ -110,9 +111,16 @@ def _is_documented_dunder(name: str, obj: gf.Object | gf.Alias) -> bool:
 
 
 def _sections_from_package(mod: gf.Module) -> list[SpecSection]:
-    """Derive default API sections from a package module's exported members"""
+    """
+    Derive default API sections from a package module's exported members
+
+    Use declared export names when they can be resolved, including names from an
+    imported `__all__`. When an `__all__` expression cannot be resolved, use public
+    members without treating the expression's variable name as an export.
+    """
 
     has_all = "__all__" in mod.members
+    declared = declared_exports(mod)
 
     if not has_all:
         print(
@@ -122,15 +130,18 @@ def _sections_from_package(mod: gf.Module) -> list[SpecSection]:
             " functions it exports (and should be documented).\n"
         )
 
+    if declared is None:
+        names = [name for name in mod.members if not has_all or not name.startswith("_")]
+    else:
+        names = declared
+
     contents: list[SpecObject] = []
-    for name, member in mod.members.items():
+    for name in names:
+        member = mod.members.get(name)
+        if member is None:
+            continue
         external_alias = _is_external_alias(member, mod)
-        if (
-            external_alias
-            or member.is_module
-            or name.startswith("__")
-            or (has_all and not member.is_exported)
-        ):
+        if external_alias or member.is_module or name.startswith("__"):
             continue
 
         contents.append(SpecObject(name=name))

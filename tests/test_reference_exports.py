@@ -14,8 +14,14 @@ import pytest
 from yaml12 import write_yaml
 
 from great_docs import BuildError, GreatDocs
+from great_docs._apiref.resolve import _sections_from_package
 from great_docs._reference import sections as reference_sections
-from great_docs._reference.discovery import empty_categories
+from great_docs._reference.discovery import (
+    categorise_exports,
+    categorise_references,
+    discover_exports,
+    empty_categories,
+)
 from great_docs._reference.exports import Exports
 from tests.support import make_exports, mock_config, write_config
 
@@ -1117,6 +1123,171 @@ def test_categorise_module_export():
             assert "sub.SubClass" in result["classes"] or "sub" in result["other"]
         finally:
             sys.path.remove(tmp_dir)
+
+
+def test_submodule_dunder_all_limits_discovered_and_explicit_members(tmp_path: Path) -> None:
+    """Use each submodule's `__all__` when expanding its reference entry"""
+    package_dir = tmp_path / "exportpkg"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text(
+        "from . import selected, legacy, empty\ndef direct(): pass\n"
+    )
+    (package_dir / "selected.py").write_text(
+        '__all__ = ["chosen", "_intentional"]\n'
+        "def omitted(): pass\n"
+        "def chosen(): pass\n"
+        "def _intentional(): pass\n"
+    )
+    (package_dir / "legacy.py").write_text("def public(): pass\ndef _private(): pass\n")
+    (package_dir / "empty.py").write_text("__all__ = []\ndef omitted(): pass\n")
+
+    package = griffe.load("exportpkg", search_paths=[tmp_path])
+    exports = discover_exports(package, mock_config(), report=lambda line: None)
+    assert exports is not None
+    assert "selected" in exports
+    assert "empty" in exports
+    assert "legacy" not in exports
+
+    discovered = categorise_exports(
+        package, exports, renderable=lambda path: True, report=lambda line: None
+    )
+    explicit = categorise_references(package, [{"contents": ["selected", "legacy", "empty"]}])
+    assert set(discovered["functions"]) == {"selected.chosen", "selected._intentional", "direct"}
+    assert set(explicit["functions"]) == {
+        "selected.chosen",
+        "selected._intentional",
+        "legacy.public",
+    }
+    for categories in (discovered, explicit):
+        assert categories["functions"].index("selected.chosen") < categories["functions"].index(
+            "selected._intentional"
+        )
+        assert "selected.omitted" not in categories["functions"]
+        assert "empty.omitted" not in categories["functions"]
+        assert "legacy._private" not in categories["functions"]
+
+
+def test_root_dunder_all_keeps_submodules_without_exports(tmp_path: Path) -> None:
+    """
+    Keep a listed submodule when the package itself declares its exports
+    """
+    package_dir = tmp_path / "root_exports_pkg"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text(
+        'from . import selected, legacy\n__all__ = ["selected", "legacy"]\n'
+    )
+    (package_dir / "selected.py").write_text('__all__ = ["chosen"]\ndef chosen(): pass\n')
+    (package_dir / "legacy.py").write_text("def public(): pass\n")
+
+    package = griffe.load("root_exports_pkg", search_paths=[tmp_path])
+    exports = discover_exports(package, mock_config(), report=lambda line: None)
+
+    assert exports == ["selected", "legacy"]
+    categories = categorise_exports(
+        package, exports, renderable=lambda path: True, report=lambda line: None
+    )
+    assert set(categories["functions"]) == {"selected.chosen", "legacy.public"}
+
+
+def test_empty_submodule_dunder_all_limits_generated_discovery(tmp_path: Path) -> None:
+    """
+    Treat an empty submodule export list as a declaration
+    """
+    package_dir = tmp_path / "empty_sibling_pkg"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text("from . import empty, legacy\n")
+    (package_dir / "empty.py").write_text("__all__ = []\ndef hidden(): pass\n")
+    (package_dir / "legacy.py").write_text("def public(): pass\n")
+
+    package = griffe.load("empty_sibling_pkg", search_paths=[tmp_path])
+
+    assert discover_exports(package, mock_config(), report=lambda line: None) == ["empty"]
+
+
+def test_unresolved_root_dunder_all_keeps_submodules_without_exports(tmp_path: Path) -> None:
+    """
+    Keep the public-member fallback when a root export list cannot be resolved
+    """
+    package_dir = tmp_path / "dynamic_exports_pkg"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text(
+        'from . import selected, legacy\n_names = ["selected", "legacy"]\n__all__ = _names\n'
+    )
+    (package_dir / "selected.py").write_text('__all__ = ["chosen"]\ndef chosen(): pass\n')
+    (package_dir / "legacy.py").write_text("def public(): pass\n")
+
+    package = griffe.load("dynamic_exports_pkg", search_paths=[tmp_path])
+
+    exports = discover_exports(package, mock_config(), report=lambda line: None)
+    assert exports is not None
+    assert set(exports) == {
+        "selected",
+        "legacy",
+    }
+
+
+def test_all_public_submodules_without_exports_keep_fallback(tmp_path: Path) -> None:
+    """
+    Keep every public submodule when none declares exports
+    """
+    package_dir = tmp_path / "public_modules_pkg"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text("from . import first, second\n")
+    (package_dir / "first.py").write_text("def one(): pass\n")
+    (package_dir / "second.py").write_text("def two(): pass\n")
+
+    package = griffe.load("public_modules_pkg", search_paths=[tmp_path])
+
+    exports = discover_exports(package, mock_config(), report=lambda line: None)
+    assert exports is not None
+    assert set(exports) == {
+        "first",
+        "second",
+    }
+
+
+def test_unexpanded_dunder_all_uses_public_members(tmp_path: Path) -> None:
+    package_dir = tmp_path / "unexpanded_pkg"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text(
+        '_names = ["chosen"]\n__all__ = _names\ndef chosen(): pass\ndef extra(): pass\n'
+    )
+
+    package = griffe.load("unexpanded_pkg", search_paths=[tmp_path])
+
+    assert discover_exports(package, mock_config(), report=lambda line: None) == [
+        "chosen",
+        "extra",
+    ]
+    assert [entry.name for entry in _sections_from_package(package)[0].contents] == [
+        "chosen",
+        "extra",
+    ]
+
+
+def test_imported_dunder_all_limits_reference_discovery(tmp_path: Path) -> None:
+    package_dir = tmp_path / "imported_pkg"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text(
+        "from .sub import __all__, chosen\ndef extra(): pass\n"
+    )
+    (package_dir / "sub.py").write_text('__all__ = ["chosen"]\ndef chosen(): pass\n')
+
+    package = griffe.load("imported_pkg", search_paths=[tmp_path])
+
+    assert discover_exports(package, mock_config(), report=lambda line: None) == ["chosen"]
+    assert [entry.name for entry in _sections_from_package(package)[0].contents] == ["chosen"]
+
+
+def test_empty_dunder_all_exports_no_members(tmp_path: Path) -> None:
+    package_dir = tmp_path / "empty_exports_pkg"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text("__all__ = []\ndef extra(): pass\n")
+
+    package = griffe.load("empty_exports_pkg", search_paths=[tmp_path])
+
+    assert discover_exports(package, mock_config(), report=lambda line: None) == []
+    assert _sections_from_package(package)[0].contents == []
 
 
 def test_sections_without_reference_or_exports():
