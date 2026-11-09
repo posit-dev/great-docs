@@ -15,6 +15,7 @@ test: ## Run core tests (fast, no package builds)
 		-n auto \
 		-o faulthandler_timeout=60 \
 		--cov=great_docs \
+		--cov-config=pyproject.toml \
 		--cov-report=term-missing \
 		--ignore=tests/test_integration.py \
 		--ignore=tests/test_synthetic.py
@@ -43,6 +44,7 @@ test-all: ## Run all tests (core + synthetic + integration)
 test-coverage: ## Run tests with coverage report
 	@$(PYTHON) -m pytest \
 		--cov=great_docs \
+		--cov-config=pyproject.toml \
 		--cov-report=term-missing \
 		--cov-report=html \
 		tests/ -v
