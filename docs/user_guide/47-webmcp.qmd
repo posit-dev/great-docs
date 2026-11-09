@@ -1,0 +1,283 @@
+---
+title: "WebMCP"
+guide-section: "AI & Agents"
+tags: [AI, LLM]
+status: experimental
+versions: ">=0.18"
+---
+
+# WebMCP
+
+[WebMCP](https://github.com/webmachinelearning/webmcp) lets a web page offer tools to an AI agent
+that works in the reader's browser. Instead of reading the screen, the agent calls a tool such as
+`search_docs` and gets back structured results. With WebMCP turned on, every page of a Great Docs
+site registers a small set of read-only tools for finding and reading the site's documentation. In
+browsers without WebMCP, nothing visible changes.
+
+This complements the files Great Docs already writes for agents that fetch content directly, such
+as [`llms.txt`](39-llms-txt.qmd) and [Agent Skills](38-agent-skills.qmd). WebMCP serves agents that
+are in the tab with the reader.
+
+::: {.callout-warning}
+## This feature is experimental
+
+WebMCP is a proposed web standard from the W3C Web Machine Learning Community Group, and the
+browser API is still changing. Great Docs' support is off by default, and the tools and their
+results may change in future releases. If something doesn't work as described here, please [open
+an issue](https://github.com/posit-dev/great-docs/issues).
+:::
+
+## Browser Support
+
+Chrome 149 and later support WebMCP behind a flag: turn on `chrome://flags/#enable-webmcp-testing`
+(or start Chrome with `--enable-features=WebMCP`). Stable Chrome doesn't turn it on by default yet,
+and other browsers don't support it.
+
+Tools register on `https://` sites and on `localhost`. A page embedded in a cross-origin `<iframe>`
+registers no tools unless the embedding page allows it through the `tools` Permissions Policy.
+
+## Turning It On
+
+Add `webmcp: true` to `great-docs.yml`:
+
+```{.yaml filename="docs/great-docs.yml"}
+webmcp: true
+```
+
+The next build then:
+
+- adds the WebMCP runtime, `webmcp.js`, to every page
+- writes `gd-webmcp.json` at the site root, a manifest of the site's sections, pages and API names
+  that the tools read
+- adds a "WebMCP tools" section to `llms.txt`, so agents that read the file learn about the tools
+
+The runtime loads nothing until a tool is called. Each tool fetches the files it needs, such as
+the manifest, a page's Markdown companion or Quarto's search index, and keeps them for later calls.
+
+A [versioned site](30-multi-version-docs.qmd) gets a manifest for each version, and the tools on a
+page read the manifest of that page's version.
+
+## Trying It Locally
+
+To see the tools in action:
+
+1. Turn on `chrome://flags/#enable-webmcp-testing` and restart Chrome.
+2. Install Chrome's **Model Context Tool Inspector** extension, which lists a page's tools and lets
+   you call them by hand.
+3. Build the site with `webmcp: true`, then serve it:
+
+   ```{.bash filename="Terminal"}
+   great-docs build
+   great-docs preview
+   ```
+
+4. Open any page and the Inspector. It lists the tools, and you can call one with input such as
+   `{"query": "install"}`.
+
+Serve the site rather than opening its HTML files directly. Chrome blocks the requests the tools
+make from a `file://` page, so most tools would fail.
+
+## The Tools
+
+Every page registers these five tools. Each one's description tells the agent when to use it and
+gives an example question.
+
+| Tool | Returns | Example question |
+|---|---|---|
+| `get_site_overview` | The package's name, description, version, install commands, license and repository; the site's sections; files for agents such as `llms.txt`; the open page; and the tools on the page | "What is this package and how do I install it?" |
+| `get_current_page` | The open page as Markdown, or with `format: "outline"`, its headings | "Summarise this page." |
+| `list_pages` | The site's pages grouped by section, with titles, URLs, descriptions, tags and status. Blog posts come newest first | "What guides are there?" |
+| `get_page` | One page, or one `section` of it, as Markdown. `page` can be a path, URL, title, file name or API name | "Show me the GitHub Pages part of the deployment guide." |
+| `search_docs` | The best-matching page sections for a `query`, with excerpts, URLs and scores. `scope` limits the search to one kind of page (such as `guide`, `api` or `blog`) or one section | "How do I deploy to GitHub Pages?" |
+
+A few details apply to all of them:
+
+- **Results are JSON objects with absolute URLs**, so an agent can link the reader to what it found.
+- **Long pages are cut.** `get_page` and `get_current_page` return at most `max_chars` characters
+  (40,000 by default), and a cut page comes with its outline so the agent can ask for one section.
+- **Errors come back as results**, never as exceptions, so the agent sees what went wrong. An error
+  is `{"error": {"code": ..., "message": ...}}`, with one of these codes: `invalid_input`,
+  `not_found`, `ambiguous` (with `candidates` to choose from), `fetch_failed`, `unavailable` or
+  `internal`.
+- **The Markdown comes from the page's companion `.md` file**, so code blocks and tables arrive
+  intact. With [`markdown_pages: false`](05-configuration.qmd#markdown-pages), `get_page` can't read
+  pages and reports `unavailable` with the page's URL, and `get_current_page` falls back to the
+  page's text.
+
+## Calling the Tools from Scripts
+
+The same tools are available to scripts on the page through `window.greatDocs.tools`, in every
+browser, whether or not it supports WebMCP. Browser-automation agents and your own scripts can use
+them this way:
+
+```js
+const result = await window.greatDocs.tools.call("search_docs", { query: "install" });
+```
+
+`window.greatDocs.tools` has these members:
+
+| Member | What it does |
+|---|---|
+| `status` | The registration status, as described under [Troubleshooting](#troubleshooting) |
+| `list()` | Each tool's name, title, description, input schema and annotations |
+| `call(name, input)` | Runs a tool and returns a promise of its result. The promise never rejects: failures are error results |
+| `add(toolOrTools)` | Registers one tool or an array of tools of your own, returning `{added, rejected}` |
+
+When registration has finished, whatever its status, the runtime fires a `gd-webmcp:ready` event
+on `document`, with `window.greatDocs.tools` as the event's `detail`. `window.greatDocs.tools`
+itself exists from the moment the runtime starts, so `list()`, `call()` and `add()` work before
+then.
+
+### Adding Your Own Tools
+
+A site can register its own tools with `add()`. Each tool needs:
+
+- a `name` of 1 to 128 letters, digits, `_`, `-` or `.`, other than one of Great Docs' tool names
+- a `description` that tells the agent when to use the tool
+- an `execute` function that returns the result, or a promise of it
+
+A tool can also have a `title`, an `inputSchema` (a JSON Schema with `type: "object"`, against
+which the input is checked before `execute` runs) and `annotations`. Set `readOnlyHint: true` for a
+tool that only looks things up: agents treat a tool without it as one that may change something.
+
+This example adds a tool through [`include_in_header`](11-theming.qmd#include-in-header). The
+script may run before or after the runtime, so it uses `window.greatDocs.tools` if it exists and
+otherwise waits for the ready event:
+
+```{.yaml filename="docs/great-docs.yml"}
+include_in_header:
+  - text: |
+      <script>
+        function addSupportTool(tools) {
+          const { rejected } = tools.add({
+            name: "get_support_policy",
+            title: "Get the support policy",
+            description:
+              "Use this when the user asks which Python versions the package supports. " +
+              'Example: "Does it work on Python 3.9?"',
+            annotations: { readOnlyHint: true },
+            execute: () => ({
+              python: ["3.10", "3.11", "3.12", "3.13"],
+              url: new URL("user-guide/installation.html", document.baseURI).href,
+            }),
+          });
+          if (rejected.length) console.warn("Tool not added:", rejected);
+        }
+        if (window.greatDocs?.tools) {
+          addSupportTool(window.greatDocs.tools);
+        } else {
+          document.addEventListener("gd-webmcp:ready", (event) => addSupportTool(event.detail), {
+            once: true,
+          });
+        }
+      </script>
+```
+
+`add()` runs your tools through the same checks as the built-in ones: input that doesn't match the
+schema comes back as an `invalid_input` error, and an `execute` that throws comes back as an
+`internal` error. On a page that has opted out of WebMCP, `add()` rejects every tool.
+
+## Options
+
+`webmcp: true` turns the feature on with these defaults. Use a mapping to change them:
+
+```{.yaml filename="docs/great-docs.yml"}
+webmcp:
+  enabled: true
+  actions: true       # Register tools that change the page (none yet)
+  js_api: true        # Expose the tools as window.greatDocs.tools
+  exclude_tools: []   # Tool names to leave out, such as [search_docs]
+  origin_trials: []   # Origin-trial tokens to add to every page
+```
+
+- **`actions`**: whether to register tools that change the page rather than read it, such as
+  going to another page. Great Docs doesn't have any yet; set this to `false` to keep them off when
+  it does.
+- **`js_api`**: set this to `false` to keep `window.greatDocs.tools` and the `gd-webmcp:ready`
+  event off the page. The tools still register with the browser.
+- **`exclude_tools`**: tools to leave out on every page. They're also left out of `llms.txt`. A
+  name Great Docs doesn't know produces a warning rather than an error.
+- **`origin_trials`**: see [Origin Trials](#origin-trials).
+
+## Leaving Pages Out
+
+To keep a page from registering tools, set `webmcp: false` in its front matter:
+
+```{.yaml filename="user_guide/internal-notes.qmd"}
+---
+title: Internal Notes
+webmcp: false
+---
+```
+
+To keep the tools working on a page but leave the page out of the manifest, so that `list_pages`,
+`get_page` and `search_docs` don't offer it, set `listed: false`:
+
+```{.yaml filename="user_guide/changelog-archive.qmd"}
+---
+title: Changelog Archive
+webmcp:
+  listed: false
+---
+```
+
+Draft pages are always left out of the manifest.
+
+## Origin Trials
+
+Chrome sometimes makes a feature available on stable Chrome, without the flag, through an [origin
+trial](https://developer.chrome.com/docs/web-platform/origin-trials): you register your site's
+origin and get a token to put on its pages. If WebMCP has an origin trial, add your token to
+`origin_trials`, and Great Docs writes it into every page's `<head>`:
+
+```{.yaml filename="docs/great-docs.yml"}
+webmcp:
+  enabled: true
+  origin_trials:
+    - "AqW8...your token..."
+```
+
+Tokens are tied to an origin, so a token for your deployed site doesn't work on `localhost`. They
+aren't secret.
+
+## Privacy and Security
+
+- **The tools only read what the site already publishes**: its pages, their Markdown companions,
+  `search.json` and `gd-webmcp.json`. They don't read cookies or storage, and they only fetch from
+  the site's own origin.
+- **Every built-in tool is read-only.** The tools are registered with `readOnlyHint: true`, which
+  tells agents they don't change anything.
+- **Results are data.** Nothing a tool returns is run as code.
+
+## Troubleshooting
+
+The runtime records how registration went in a `data-gd-webmcp` attribute on the `<html>` element,
+which you can check in DevTools (and which `window.greatDocs.tools.status` also returns):
+
+| Status | Meaning |
+|---|---|
+| `pending` | The tools are still registering |
+| `registered` | The browser accepted every tool |
+| `partial` | The browser refused some tools; the console says which |
+| `failed` | The browser refused every tool, as it does in a cross-origin frame |
+| `unavailable` | The browser doesn't support WebMCP. `window.greatDocs.tools` still works |
+| `off` | The page has opted out, or `exclude_tools` leaves no tools |
+
+If the attribute is missing, the page doesn't load the runtime: check that the site was built with
+`webmcp: true`.
+
+Some other problems and their causes:
+
+- **`list_pages`, `get_page` and `search_docs` report `fetch_failed`, and `get_site_overview` has
+  no site details.** The page was probably opened from a `file://` URL, where Chrome blocks the
+  requests the tools make. Serve the site with `great-docs preview` instead.
+- **`search_docs` reports `fetch_failed` but other tools work.** The site has no `search.json`,
+  which Quarto writes when the site has search turned on.
+- **A page is missing from `list_pages`.** It's a draft, sets `webmcp: {listed: false}`, or wasn't
+  rendered in this build.
+
+## Next Steps
+
+- [llms.txt](39-llms-txt.qmd): the index of your API that agents can fetch directly
+- [Agent Skills](38-agent-skills.qmd): hand-written context for AI coding agents
+- [Configuration](05-configuration.qmd): all `great-docs.yml` options
