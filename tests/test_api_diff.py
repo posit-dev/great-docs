@@ -3113,6 +3113,48 @@ def test_get_tag_date_timeout(mock_run):
 # --- CLI module configuration in pyproject.toml ---
 
 
+def _tag_cli_files(repo: Path) -> None:
+    """
+    Commit prepared project files as a tagged release
+    """
+    _git(repo, "init")
+    _git(repo, "config", "user.email", "t@t.co")
+    _git(repo, "config", "user.name", "t")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-m", "release")
+    _git(repo, "tag", "v1.0")
+
+
+@pytest.mark.parametrize(
+    ("config_file", "project_content", "root_content"),
+    [
+        (
+            "pyproject.toml",
+            '[tool.great-docs.cli]\nenabled = true\nmodule = "mypkg.cli"\n',
+            '[tool.great-docs.cli]\nenabled = true\nmodule = "wrong.cli"\n',
+        ),
+        (
+            "great-docs.yml",
+            "cli:\n  enabled: true\n  module: mypkg.cli\n",
+            "cli:\n  enabled: true\n  module: wrong.cli\n",
+        ),
+    ],
+)
+def test_read_cli_module_from_nested_project_config(
+    tmp_path: Path, config_file: str, project_content: str, root_content: str
+) -> None:
+    """
+    Read tagged CLI settings from the project rather than the repository root
+    """
+    project = tmp_path / "packages" / "demo"
+    project.mkdir(parents=True)
+    (project / config_file).write_text(project_content)
+    (tmp_path / config_file).write_text(root_content)
+    _tag_cli_files(tmp_path)
+
+    assert read_module_at_tag(project, "v1.0", "mypkg") == "mypkg.cli"
+
+
 @patch("great_docs._cliref.click.subprocess.run")
 def test_read_cli_module_pyproject_enabled(mock_run):
     """
@@ -3184,6 +3226,55 @@ def test_read_cli_module_yaml_enabled(mock_run):
 
 
 # --- CLI module fallback ---
+
+
+@pytest.mark.parametrize("source_dir", ["", "src", "python", "lib"])
+@pytest.mark.parametrize("suffix", ["cli", "__main__"])
+def test_read_cli_module_from_nested_project_source(
+    tmp_path: Path, source_dir: str, suffix: str
+) -> None:
+    """
+    Find a tagged CLI module in each conventional project source directory
+    """
+    project = tmp_path / "packages" / "demo"
+    package = project / source_dir / "mypkg"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    (package / f"{suffix}.py").write_text("")
+    _tag_cli_files(tmp_path)
+
+    assert read_module_at_tag(project, "v1.0", "mypkg") == f"mypkg.{suffix}"
+
+
+def test_read_cli_module_from_dotted_package_at_tag(tmp_path: Path) -> None:
+    """
+    Find a CLI module below a tagged namespace package
+    """
+    project = tmp_path / "packages" / "demo"
+    package = project / "src" / "firebird" / "base"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    (package / "cli.py").write_text("")
+    _tag_cli_files(tmp_path)
+
+    assert read_module_at_tag(project, "v1.0", "firebird.base") == "firebird.base.cli"
+
+
+def test_snapshot_at_tag_includes_nested_project_cli(tmp_path: Path) -> None:
+    """
+    Capture a release's CLI from a package below a nested project's source directory
+    """
+    project = tmp_path / "packages" / "demo"
+    package = project / "src" / "mypkg"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("__all__ = []\n")
+    (package / "cli.py").write_text("import click\n\n@click.command()\ndef main():\n    pass\n")
+    _tag_cli_files(tmp_path)
+
+    snap = snapshot_at_tag(project, "v1.0", "mypkg")
+
+    assert snap is not None
+    assert snap.cli_commands is not None
 
 
 @patch("great_docs._cliref.click.subprocess.run")

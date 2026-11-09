@@ -21,13 +21,14 @@ import tomllib
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import ModuleType
 from typing import Any, cast
 
 from .. import _manifest
 from .._api_diff import CliCommandInfo, CliOptionInfo
 from .._build.steps import USER_CODE_ERRORS
+from .._layout import PACKAGE_DIRS
 from .._manifest import ManifestError
 from .._subprocess import TEXT_MODE_KWARGS
 from .model import CliArgument, CliCommand, CliOption
@@ -806,25 +807,26 @@ def read_module_at_tag(project_root: Path, tag: str, package_name: str) -> str |
     Parameters
     ----------
     project_root
-        The root of the git repository.
+        The project root, which may be inside the git repository.
     tag
         The release's git tag.
     package_name
-        The package's name.
+        The importable package name, including any namespace components.
 
     Returns
     -------
     :
         `cli.module` from `pyproject.toml` or `great-docs.yml` at the tag when the CLI reference
-        is enabled there, else the package's `cli` or `__main__` module if the tag has one, else
-        `None`.
+        is enabled there, else the package's `cli` or `__main__` module in the project root or
+        a conventional source directory if the tag has one, else `None`.
     """
     normalized = package_name.replace("-", "_")
+    package_path = normalized.replace(".", "/")
 
     for cfg_file in ("pyproject.toml", "great-docs.yml"):
         try:
             result = subprocess.run(
-                ["git", "show", f"{tag}:{cfg_file}"],
+                ["git", "show", f"{tag}:./{cfg_file}"],
                 cwd=project_root,
                 capture_output=True,
                 **TEXT_MODE_KWARGS,
@@ -852,21 +854,21 @@ def read_module_at_tag(project_root: Path, tag: str, package_name: str) -> str |
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
             continue
 
-    # Fallback: check if common CLI module exists at this tag
-    for suffix in ("cli", "__main__"):
-        mod_path = f"{normalized}/{suffix}.py"
-        try:
-            check = subprocess.run(
-                ["git", "cat-file", "-t", f"{tag}:{mod_path}"],
-                cwd=project_root,
-                capture_output=True,
-                **TEXT_MODE_KWARGS,
-                timeout=5,
-            )
-            if check.returncode == 0:
-                return f"{normalized}.{suffix}"
-        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-            continue
+    for source_dir in ("", *PACKAGE_DIRS):
+        for suffix in ("cli", "__main__"):
+            mod_path = PurePosixPath(source_dir, package_path, f"{suffix}.py")
+            try:
+                check = subprocess.run(
+                    ["git", "cat-file", "-t", f"{tag}:./{mod_path}"],
+                    cwd=project_root,
+                    capture_output=True,
+                    **TEXT_MODE_KWARGS,
+                    timeout=5,
+                )
+                if check.returncode == 0:
+                    return f"{normalized}.{suffix}"
+            except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+                continue
     return None
 
 
