@@ -2679,7 +2679,7 @@ class TestFreezeInfo:
             _freeze_info(tmp_path, persist_dir)
         out = capsys.readouterr().out
 
-        assert "contains no entries" in out
+        assert "contains no current page entries" in out
 
     def test_cache_with_valid_json_timestamp(self, tmp_path, capsys):
         persist_dir = tmp_path / "_freeze"
@@ -2694,6 +2694,32 @@ class TestFreezeInfo:
         out = capsys.readouterr().out
 
         assert "2024-01-15 10:30:00" in out
+
+    def test_historical_version_cache_is_not_counted_as_current(self, tmp_path, capsys):
+        persist_dir = tmp_path / "_freeze"
+        current = persist_dir / "user_guide" / "current" / "execute-results"
+        historical = persist_dir / "_versions" / "v1" / "user_guide" / "old" / "execute-results"
+        current.mkdir(parents=True)
+        historical.mkdir(parents=True)
+        (current / "html.json").write_text("{}")
+        (historical / "html.json").write_text("{}")
+
+        with patch("great_docs._layout.Layout.load_config", return_value=self._make_mock_config()):
+            _freeze_info(tmp_path, persist_dir)
+        out = capsys.readouterr().out
+
+        assert "1 cached page(s):" in out
+        assert "✓  user_guide/current" in out
+        assert "_versions" not in out
+        assert "1 page(s) cached" in out
+
+        (current / "html.json").unlink()
+        with patch("great_docs._layout.Layout.load_config", return_value=self._make_mock_config()):
+            _freeze_info(tmp_path, persist_dir)
+        out = capsys.readouterr().out
+
+        assert "contains no current page entries" in out
+        assert "_versions" not in out
 
     def test_cache_unparseable_json(self, tmp_path, capsys):
         persist_dir = tmp_path / "_freeze"
