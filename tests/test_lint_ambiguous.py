@@ -192,3 +192,128 @@ def test_a_reference_in_an_indented_list_continuation_is_reported():
     )
 
     assert len(result.issues) == 1
+
+
+_FLUSH = {"flush": ("demo.NetCache.flush", "demo.StoreCache.flush")}
+
+
+def test_a_code_span_naming_an_ambiguous_short_name_is_a_warning():
+    """The build would link the span if one object claimed the name"""
+    result = LintResult()
+
+    _check_ambiguous_references(_FLUSH, {"guide.qmd": "Call `flush()` when done."}, result)
+
+    assert len(result.issues) == 1
+    assert result.issues[0].check == "ambiguous-autolink"
+    assert result.issues[0].severity == "warning"
+    assert result.issues[0].symbol == "guide.qmd"
+    assert "`~~demo.NetCache.flush`" in result.issues[0].message
+
+
+def test_code_spans_with_and_without_parentheses_and_shortening_are_reported():
+    result = LintResult()
+
+    _check_ambiguous_references(
+        _FLUSH, {"guide.qmd": "Use `flush`, `~~flush()` or `~~.flush()`."}, result
+    )
+
+    assert [issue.check for issue in result.issues] == ["ambiguous-autolink"] * 3
+
+
+def test_a_qualified_code_span_is_not_reported():
+    result = LintResult()
+
+    _check_ambiguous_references(
+        _FLUSH,
+        {"guide.qmd": "Use `~~demo.StoreCache.flush()` or `NetCache.flush()`."},
+        result,
+    )
+
+    assert result.issues == []
+
+
+def test_a_docstring_naming_its_own_object_is_not_reported():
+    """The page of `demo.StoreCache.flush` saying "`flush()` writes..." links nowhere new"""
+    result = LintResult()
+
+    _check_ambiguous_references(
+        _FLUSH,
+        {
+            "demo.StoreCache.flush": "The `flush()` method writes the cache.",
+            "demo.StoreCache": "Call `flush()` to write the cache.",
+        },
+        result,
+    )
+
+    assert [issue.symbol for issue in result.issues] == ["demo.StoreCache"]
+
+
+def test_a_code_span_the_build_leaves_alone_is_not_reported():
+    """A span marked `.gd-no-link`, in link text, or in example code is never linked"""
+    result = LintResult()
+
+    _check_ambiguous_references(
+        _FLUSH,
+        {
+            "guide.qmd": (
+                "The `flush`{.gd-no-link} key, [`flush()`](https://example.com) and "
+                "[`flush()`](`StoreCache.flush`) aren't reported.\n"
+                "\n"
+                "```python\n"
+                "cache.flush()  # `flush()`\n"
+                "```\n"
+                "\n"
+                "Nor is `` `flush()` `` written as example text.\n"
+            )
+        },
+        result,
+    )
+
+    assert result.issues == []
+
+
+def test_an_explicit_reference_is_reported_once_as_an_error():
+    """The code span inside an explicit reference is the reference's text, not a second finding"""
+    result = LintResult()
+
+    _check_ambiguous_references(_FLUSH, {"guide.qmd": "See [](`flush`)."}, result)
+
+    assert [(issue.check, issue.severity) for issue in result.issues] == [
+        ("ambiguous-xref", "error")
+    ]
+
+
+def test_the_prose_walk_reads_an_object_documented_under_two_paths_once(tmp_path):
+    """The reference lists `demo.Cache` and the `demo.store.Cache` it re-exports"""
+    from great_docs._checks.lint import _gather_prose
+
+    module_path = _fake_item("demo.store.Cache", "A cache.")
+    module_path.aliases = ()
+    public_path = _fake_item("demo.Cache", "A cache.")
+    public_path.aliases = ("Cache",)
+    for item in (module_path, public_path):
+        item.obj.canonical_path = "demo.store.Cache"
+
+    prose = _gather_prose([module_path, public_path], tmp_path)
+
+    assert prose == {"demo.Cache": "A cache."}
+
+
+def test_code_spans_are_checked_only_in_the_prose_the_site_renders():
+    """A planning note isn't published, so its code spans are never linked"""
+    result = LintResult()
+
+    _check_ambiguous_references(
+        _FLUSH,
+        {
+            "user_guide/caching.qmd": "Call `flush()`.",
+            "NOTES.md": "Call `flush()`, see [](`flush`).",
+        },
+        result,
+        autolinked={"user_guide/caching.qmd"},
+    )
+
+    assert [(issue.symbol, issue.check) for issue in result.issues] == [
+        ("user_guide/caching.qmd", "ambiguous-autolink"),
+        ("NOTES.md", "ambiguous-xref"),
+    ]
