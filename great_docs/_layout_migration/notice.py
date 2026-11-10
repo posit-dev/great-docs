@@ -10,7 +10,7 @@ from pathlib import Path
 
 import click
 
-from .._layout import Layout
+from .._project.layout import Layout
 from .analyse import analyse, select_destination
 
 

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from great_docs._build.facts import Facts
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from great_docs._website import assembly
 from great_docs._website.identity import Identity
 from tests.support import write_config

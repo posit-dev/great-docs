@@ -32,8 +32,8 @@ from urllib.parse import unquote, urlsplit
 
 import pytest
 
-from great_docs._layout import Layout
 from great_docs._layout_migration import analyse, apply
+from great_docs._project.layout import Layout
 
 pytestmark = pytest.mark.xdist_group("layout_rendered")
 

@@ -10,16 +10,17 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import click
 
-from . import __version__, _manifest
+from . import __version__
 from ._build import freeze as freeze_cache
 from ._build import from_repo as repository
 from ._build import quarto, serve, site
 from ._build.steps import PROJECT_ERRORS, USER_CODE_ERRORS, BuildError, print_warning
 from ._content import user_guide
 from ._install import update_gitignore
-from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
-from ._manifest import ManifestError
 from ._project import Project
+from ._project import manifest as _manifest
+from ._project.layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
+from ._project.manifest import ManifestError
 from ._reference.exports import Exports
 from ._remote import HttpRemote
 from ._website import changelog as changelog_page
@@ -3163,8 +3164,8 @@ def lint(
                     click.echo(f"⚠️  {n_warnings} warning(s)")
 
             try:
-                from ._layout import Layout
                 from ._layout_migration.notice import layout_notice
+                from ._project.layout import Layout
 
                 layout = Layout.make(
                     project_root,

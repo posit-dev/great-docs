@@ -21,8 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from ..._build.facts import Facts
-    from ..._github import GithubRepo
-    from ..._layout import Layout
+    from ..._project.github import GithubRepo
+    from ..._project.layout import Layout
     from ...config import Config
     from ..identity import Identity
 

@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from ..._layout import Layout
+    from ..._project.layout import Layout
 
 __all__ = ["INDEX_NAMES", "NAMES", "README_NAMES", "Source", "find", "read", "rst_to_markdown"]
 

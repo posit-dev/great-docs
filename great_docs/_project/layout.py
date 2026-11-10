@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import Config
+from ..config import Config
 
 _PROJECT_MANIFESTS = ("pyproject.toml", "setup.py", "go.mod", "Cargo.toml")
 CONVENTIONAL_DOC_DIRS = ("docs", "docs-website", "doc", "website")

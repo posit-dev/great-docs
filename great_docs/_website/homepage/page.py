@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 from yaml12 import format_yaml
 
 from ..._content import publish
-from ..._manifest import Manifest
+from ..._project.manifest import Manifest
 from ..._yaml import YamlValue, locate_front_matter, set_front_matter_option
 from ..project_pages import community
 from ..seo import description as seo_description
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from ..._content.pages import PageMap
-    from ..._layout import Layout
+    from ..._project.layout import Layout
     from ...config import Config
 
 __all__ = ["Placement", "write", "write_blended", "write_readme"]

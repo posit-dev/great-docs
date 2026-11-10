@@ -4,7 +4,7 @@ import pytest
 
 from great_docs._content import user_guide
 from great_docs._content.pages import PageMap, output_destination, section_destination
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from tests.support import write_config
 
 

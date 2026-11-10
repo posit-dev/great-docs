@@ -30,7 +30,7 @@ from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
 from great_docs._cliref.model import CliCommand
 from great_docs._content import code_includes
-from great_docs._project import locate_package_init
+from great_docs._project.model import locate_package_init
 from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import discover_exports, parse_dunder_all
 from great_docs._reference.probe import detect_docstring_style

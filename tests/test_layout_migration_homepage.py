@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from great_docs._layout import Layout
 from great_docs._layout_migration import analyse, apply
+from great_docs._project.layout import Layout
 
 
 @pytest.mark.parametrize("suffix", ["qmd", "html"])

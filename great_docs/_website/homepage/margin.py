@@ -10,7 +10,7 @@ from __future__ import annotations
 import html
 from typing import TYPE_CHECKING, Any, cast
 
-from ..._manifest import Manifest
+from ..._project.manifest import Manifest
 from ..._translations import translate
 from ..spdx import get_license_info
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
-    from ..._layout import Layout
+    from ..._project.layout import Layout
     from ...config import Config
     from ..project_pages.community import CommunityPage
 

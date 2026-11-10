@@ -12,7 +12,7 @@ import pytest
 
 from great_docs._apiref._settings import SourceLinks
 from great_docs._build.facts import Facts, source_links, source_ref
-from great_docs._github import GithubRepo
+from great_docs._project.github import GithubRepo
 from great_docs._website.navigation.release import Release
 from tests.support import StubRemote, mock_config
 

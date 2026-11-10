@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from great_docs._build import quarto, timings
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 
 # ---------------------------------------------------------------------------
 # Page progress in Quarto output

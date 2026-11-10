@@ -11,7 +11,7 @@ from .naming import published_path, section_slug
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from .._layout import Layout
+    from .._project.layout import Layout
     from ..config import Config
     from .user_guide import UserGuide
 

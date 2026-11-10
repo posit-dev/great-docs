@@ -13,7 +13,7 @@ import pytest
 from great_docs._build import finish
 from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from tests.support import write_config, write_pyproject
 
 

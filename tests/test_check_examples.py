@@ -40,7 +40,7 @@ from great_docs._checks.examples import (
     format_json,
     write_log_file,
 )
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from great_docs.cli import cli
 from tests.support import mock_config
 

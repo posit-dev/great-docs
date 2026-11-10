@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from great_docs._api_diff import ApiSnapshot
     from great_docs._interlinks import AliasClaims
     from great_docs._interlinks.sphinx_inventory import InventoryEntry
-    from great_docs._layout import Layout
+    from great_docs._project.layout import Layout
     from great_docs._versions.model import BadgeExpiry
     from great_docs._website.seo.structured_data import StructuredData
     from great_docs.config import Config

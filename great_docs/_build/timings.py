@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
-    from .._layout import Layout
+    from .._project.layout import Layout
 
 __all__ = ["write"]
 

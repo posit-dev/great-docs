@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from great_docs._layout import Layout, LayoutError
+from great_docs._project.layout import Layout, LayoutError
 from great_docs.config import Config
 
 

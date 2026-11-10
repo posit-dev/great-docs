@@ -23,7 +23,7 @@ from .steps import count_listed, run_steps
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from .._layout import Layout
+    from .._project.layout import Layout
     from ..config import Config
     from .log import BuildLog
     from .steps import Step

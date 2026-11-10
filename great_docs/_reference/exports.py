@@ -11,13 +11,13 @@ from typing import TYPE_CHECKING, Any, cast
 import griffe as gf
 
 from .._build.steps import USER_CODE_ERRORS, BuildError
-from .._project import Project, locate_package_init
+from .._project.model import Project, locate_package_init
 from ..config import Config
 from . import discovery, probe
 from . import sections as reference_sections
 
 if TYPE_CHECKING:
-    from .._layout import Layout
+    from .._project.layout import Layout
     from .discovery import Categories
 
 __all__ = ["Exports"]

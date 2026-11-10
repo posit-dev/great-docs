@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from great_docs import BuildError
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 
 # These packages cover both citation backlink forms. The first has three
 # definitions and one reference, which produces a caret backlink. The second

@@ -15,7 +15,7 @@ from .._website.navigation import shared_sidebar
 from .steps import Outcome, Skipped
 
 if TYPE_CHECKING:
-    from .._layout import Layout
+    from .._project.layout import Layout
     from .._website.seo.structured_data import StructuredData
     from ..config import Config
     from .log import BuildLog

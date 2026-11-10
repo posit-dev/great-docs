@@ -26,7 +26,7 @@ from .pages import section_destination
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
 
-    from .._layout import Layout
+    from .._project.layout import Layout
     from ..config import Config
     from .pages import PageMap
 

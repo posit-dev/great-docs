@@ -48,8 +48,8 @@ from great_docs._website.project_pages import community
 
 if TYPE_CHECKING:
     from great_docs._content.user_guide import UserGuide
-    from great_docs._github import GithubRepo
-    from great_docs._layout import Layout
+    from great_docs._project.github import GithubRepo
+    from great_docs._project.layout import Layout
 
 # Stub calls within step actions to preserve the step table and build control flow.
 # List functions in first-call order by dotted path relative to `great_docs._build`.

@@ -23,7 +23,7 @@ from . import i18n, quarto_yml
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from .._layout import Layout
+    from .._project.layout import Layout
 
 _FILTERS = ("output-title", "details", "gd-lightbox", "interlinks")
 """Great Docs' Lua filters, in the order Quarto runs them"""

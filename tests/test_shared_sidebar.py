@@ -29,7 +29,7 @@ from great_docs._website.navigation import shared_sidebar
 
 if TYPE_CHECKING:
     from great_docs._build.pipeline import Run
-    from great_docs._layout import Layout
+    from great_docs._project.layout import Layout
     from great_docs.config import Config
 
 _SCRIPT = Path(__file__).parent.parent / "great_docs" / "assets" / shared_sidebar.SCRIPT

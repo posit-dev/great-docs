@@ -25,11 +25,11 @@ from pathlib import Path, PurePosixPath
 from types import ModuleType
 from typing import Any, cast, get_args
 
-from .. import _manifest
 from .._api_diff import CliCommandInfo, CliOptionInfo
 from .._build.steps import USER_CODE_ERRORS
-from .._layout import PACKAGE_DIRS
-from .._manifest import ManifestError
+from .._project import manifest as _manifest
+from .._project.layout import PACKAGE_DIRS
+from .._project.manifest import ManifestError
 from .._subprocess import TEXT_MODE_KWARGS
 from .model import CliArgument, CliCommand, CliOption
 

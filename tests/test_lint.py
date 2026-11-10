@@ -23,8 +23,8 @@ from great_docs._checks.lint import (
 )
 from great_docs._interlinks import Source
 from great_docs._interlinks.sphinx_inventory import Inventory, InventoryEntry
-from great_docs._layout import Layout
 from great_docs._project import Project
+from great_docs._project.layout import Layout
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs.config import Config
 from tests.support import mock_config, write_pyproject
@@ -45,7 +45,7 @@ def test_lint_includes_shared_sources(
         _check_stale_versions,
         _gather_prose,
     )
-    from great_docs._layout import Layout
+    from great_docs._project.layout import Layout
 
     source = tmp_path / directory
     source.mkdir(exist_ok=True)

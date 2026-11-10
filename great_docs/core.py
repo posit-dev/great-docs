@@ -10,8 +10,8 @@ from ._checks import inputs, links, proofread
 from ._checks.links import LinkReport
 from ._checks.proofread import CheckedFile
 from ._install import update_gitignore, write_initial_config
-from ._layout import Layout
 from ._project import Project
+from ._project.layout import Layout
 from ._reference.exports import Exports
 from ._remote import HttpRemote, Remote
 

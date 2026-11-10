@@ -21,9 +21,9 @@ if TYPE_CHECKING:
 
     import griffe as gf
 
-    from ._layout import Layout
-    from ._manifest import Manifest
     from ._project import Project
+    from ._project.layout import Layout
+    from ._project.manifest import Manifest
     from ._reference.exports import Exports
     from .config import Config
 

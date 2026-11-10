@@ -19,7 +19,7 @@ from .seo import title as seo_title
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from .._layout import Layout
+    from .._project.layout import Layout
     from ..config import Config
 
 __all__ = ["FILENAME", "title_element", "write"]

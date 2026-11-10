@@ -19,7 +19,7 @@ from .naming import fix_numeric_prefix_links, published_path
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    from .._layout import Layout
+    from .._project.layout import Layout
     from .pages import PageMap
 
 _PAGE_SUFFIXES = {".qmd", ".md", ".rst", ".html", ".htm"}

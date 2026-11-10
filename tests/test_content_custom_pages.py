@@ -6,7 +6,7 @@ from pathlib import Path
 
 from great_docs._content import custom_pages
 from great_docs._content.pages import PageMap
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from great_docs._yaml import YamlMapping
 from tests.support import write_config
 

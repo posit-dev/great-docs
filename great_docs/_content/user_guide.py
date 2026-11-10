@@ -20,7 +20,7 @@ from .sections import source_dirs as section_source_dirs
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from .._layout import Layout
+    from .._project.layout import Layout
     from ..config import Config
     from .pages import PageMap
 

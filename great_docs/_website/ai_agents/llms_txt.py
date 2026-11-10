@@ -13,7 +13,7 @@ import inspect
 from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 from ..._build.steps import USER_CODE_ERRORS
-from ..._manifest import Manifest
+from ..._project.manifest import Manifest
 from ..._yaml import locate_front_matter
 from .webmcp_manifest import MANIFEST_FILE
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from pathlib import Path
     from types import ModuleType
 
-    from ..._layout import Layout
+    from ..._project.layout import Layout
     from .webmcp_tools import WebMCPTool
 
 __all__ = ["docstring_summary", "is_planned", "write_full", "write_index"]

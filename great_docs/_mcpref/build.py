@@ -14,7 +14,7 @@ from ..config import Config
 from . import reference
 
 if TYPE_CHECKING:
-    from .._layout import Layout
+    from .._project.layout import Layout
 
 
 def discover_server(config: Config, package: str | None) -> dict[str, Any] | None:

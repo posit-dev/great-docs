@@ -11,16 +11,16 @@ import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from . import _manifest
-from ._github import GithubRepo
-from ._layout import PACKAGE_DIRS
-from ._manifest import Manifest, ManifestError
+from . import manifest as _manifest
+from .github import GithubRepo
+from .layout import PACKAGE_DIRS
+from .manifest import Manifest, ManifestError
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from ._layout import Layout
-    from .config import Config
+    from ..config import Config
+    from .layout import Layout
 
 __all__ = ["Project", "locate_package_init", "package_name", "read_manifest"]
 

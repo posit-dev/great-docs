@@ -14,7 +14,7 @@ import pytest
 from great_docs._build import generated
 from great_docs._build.steps import Skipped
 from great_docs._contribution import Contribution, InlineData, NavbarLink
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from great_docs._utils import validate_build_dir
 from great_docs._website import inline_data, page_scan, quarto_yml, tags
 from great_docs._yaml import split_front_matter

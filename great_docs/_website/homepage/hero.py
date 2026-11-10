@@ -12,7 +12,7 @@ from html import escape
 from typing import TYPE_CHECKING, Any
 
 from ..._content import publish
-from ..._manifest import Manifest
+from ..._project.manifest import Manifest
 from .. import branding
 from ..scripts import script_tag
 from .readme import Badge, HeroElements, extract_hero_elements
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from ..._content.pages import PageMap
-    from ..._layout import Layout
+    from ..._project.layout import Layout
     from ...config import Config
 
 __all__ = ["Hero", "find", "render"]

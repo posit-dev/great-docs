@@ -45,7 +45,7 @@ from .steps import USER_CODE_ERRORS, BuildError, Outcome, Step, Warn, count_list
 if TYPE_CHECKING:
     from .._apiref.api_reference import APIReference
     from .._content.user_guide import UserGuide
-    from .._layout import Layout
+    from .._project.layout import Layout
     from .._remote import Remote
     from .._website.identity import Identity
 

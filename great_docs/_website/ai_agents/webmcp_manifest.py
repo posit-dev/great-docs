@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
     from pathlib import Path
 
-    from ..._layout import Layout
+    from ..._project.layout import Layout
     from ...config import Config
     from .webmcp_pages import SectionFacts
 

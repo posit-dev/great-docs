@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
-from .._manifest import Manifest
+from .._project.manifest import Manifest
 from .._versions import selector as version_selector
 from . import (
     appearance,
@@ -33,8 +33,8 @@ from .navigation import navbar as nav_navbar
 if TYPE_CHECKING:
     from .._build.facts import Facts
     from .._contribution import Contribution
-    from .._github import GithubRepo
-    from .._layout import Layout
+    from .._project.github import GithubRepo
+    from .._project.layout import Layout
     from ..config import Config
     from .identity import Identity
 

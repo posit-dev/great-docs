@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from great_docs._github import GithubRepo, token_from_env
+from great_docs._project.github import GithubRepo, token_from_env
 
 
 @pytest.mark.parametrize(

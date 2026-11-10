@@ -8,7 +8,7 @@ import pytest
 from great_docs import Config
 from great_docs._content import sections
 from great_docs._content.pages import PageMap
-from great_docs._layout import Layout
+from great_docs._project.layout import Layout
 from great_docs._yaml import split_front_matter
 from tests.support import write_config
 
