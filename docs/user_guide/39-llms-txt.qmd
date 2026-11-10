@@ -77,6 +77,8 @@ An AI agent in a browser that supports WebMCP can call these tools on this site'
 - `list_pages`: The site's pages grouped by section
 - `get_page`: One page, or one section of it, as Markdown
 - `search_docs`: Ranked matches for a query, by page section
+- `list_api`: The documented objects grouped by reference section
+- `get_api_reference`: One object's signature, parameters, returns and examples
 
 Scripts on the site's pages can call the same tools:
 

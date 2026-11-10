@@ -54,8 +54,12 @@ def test_site_tools_need_no_feature():
     }
 
 
-def test_the_site_tools_are_implemented():
-    assert [tool.name for tool in TOOLS if tool.implemented] == _SITE_TOOLS
+def test_the_site_and_api_tools_are_implemented():
+    assert [tool.name for tool in TOOLS if tool.implemented] == [
+        *_SITE_TOOLS,
+        "list_api",
+        "get_api_reference",
+    ]
 
 
 def _names(tools: list[WebMCPTool]) -> list[str]:
@@ -111,4 +115,6 @@ class TestSiteTools:
             "get_current_page",
             "list_pages",
             "search_docs",
+            "list_api",
+            "get_api_reference",
         ]

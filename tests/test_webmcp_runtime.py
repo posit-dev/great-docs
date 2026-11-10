@@ -28,6 +28,9 @@ pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is no
 SETTLE = "await settle();"
 BASE = "https://docs.example.org/"
 SITE_TOOLS = ["get_site_overview", "get_current_page", "list_pages", "get_page", "search_docs"]
+API_TOOLS = ["list_api", "get_api_reference"]
+# The settings of a site with an API reference.
+WITH_API = {"features": {"api": True}}
 
 _QUARTO_YML = """\
 project:
@@ -81,7 +84,15 @@ _HTML_CLASSES = {
 _API = [
     ("example.Widget", "class", "reference/Widget.html#example.Widget"),
     ("example.Widget.spin", "method", "reference/Widget.spin.html#example.Widget.spin"),
+    ("example.Widget.stop", "method", "reference/Widget.html#stop"),
+    # A page without a Markdown copy.
+    ("example.stop", "function", "reference/stop.html#example.stop"),
 ]
+
+_SUMMARIES = {
+    "reference/Widget.html": "A widget that spins.",
+    "reference/Widget.spin.html": "Spin the widget.",
+}
 
 
 def _page_facts(path: str, fields: dict[str, Any]) -> PageFacts:
@@ -131,8 +142,10 @@ def _build_site(directory: Path) -> Path:
     for path in {entry["href"].split("#")[0] for entry in search}:
         html = site_dir / path
         html.parent.mkdir(parents=True, exist_ok=True)
+        summary = _SUMMARIES.get(path)
+        head = f'<head><meta name="description" content="{summary}"></head>' if summary else ""
         _ = html.write_text(
-            f'<html><body class="{_HTML_CLASSES.get(path, "")}"><main></main></body></html>',
+            f'<html>{head}<body class="{_HTML_CLASSES.get(path, "")}"><main></main></body></html>',
             encoding="utf-8",
         )
     inventory = Inventory(
@@ -217,7 +230,7 @@ class TestRegistration:
 
     def test_the_python_table_lists_the_registered_tools(self):
         # `llms.txt` lists the tools from the Python table, so it must match the runtime.
-        observed = _run(SETTLE, settings={"exclude": ["get_page"], "actions": False})
+        observed = _run(SETTLE, settings={**WITH_API, "exclude": ["get_page"], "actions": False})
         expected = registered({"site", "api"}, actions=False, exclude=["get_page"])
 
         assert observed["registered"] == [tool.name for tool in expected]
@@ -689,9 +702,11 @@ def _variant(tmp_path: Path, search: list[dict[str, str]] | None = None) -> Path
 
 
 class TestToolDescriptions:
-    @pytest.mark.parametrize("name", SITE_TOOLS)
-    def test_descriptions_say_when_to_use_the_tool(self, name: str):
-        [tool] = [tool for tool in _run("return tools.list();")["result"] if tool["name"] == name]
+    @pytest.mark.parametrize("name", [*SITE_TOOLS, *API_TOOLS])
+    @pytest.mark.parametrize("body", [[], ["doc-api-page", "doc-py-api-page"]])
+    def test_descriptions_say_when_to_use_the_tool(self, name: str, body: list[str]):
+        listed = _run("return tools.list();", settings=WITH_API, bodyClasses=body)["result"]
+        [tool] = [tool for tool in listed if tool["name"] == name]
 
         description = tool["description"]
         assert description.startswith("Use this")
@@ -898,7 +913,9 @@ class TestGetPage:
         result = _call("get_page", {"page": "Widget", "section": "#widget-params"})
 
         assert result["url"] == f"{BASE}reference/Widget.html#widget-params"
-        assert result["markdown"] == "## Parameters\n\nspeed\n: How fast the widget spins.\n"
+        assert result["markdown"] == (
+            "## Parameters\n\n`speed: int = 1`  \nHow fast the widget spins.\n"
+        )
 
     def test_the_anchor_of_a_page_url_names_the_section(self):
         result = _call("get_page", {"page": f"{BASE}user-guide/02-deploy.html#netlify"})
@@ -1078,6 +1095,278 @@ class TestSearchDocs:
 
         assert result["error"]["code"] == "fetch_failed"
         assert result["error"]["fallback"] == [f"{BASE}llms.txt", f"{BASE}llms-full.txt"]
+
+
+class TestListApi:
+    def test_objects_are_grouped_by_reference_section(self):
+        result = _call("list_api", {}, settings=WITH_API)
+
+        assert result == {
+            "url": f"{BASE}reference/index.html",
+            "sections": [
+                {
+                    "title": "Classes",
+                    "objects": [
+                        {
+                            "name": "example.Widget",
+                            "kind": "class",
+                            "summary": "A widget that spins.",
+                            "url": f"{BASE}reference/Widget.html",
+                        },
+                        {
+                            "name": "example.Widget.spin",
+                            "kind": "method",
+                            "summary": "Spin the widget.",
+                            "url": f"{BASE}reference/Widget.spin.html",
+                        },
+                        {
+                            "name": "example.Widget.stop",
+                            "kind": "method",
+                            "url": f"{BASE}reference/Widget.html",
+                        },
+                    ],
+                },
+                {
+                    "objects": [
+                        {
+                            "name": "example.stop",
+                            "kind": "function",
+                            "url": f"{BASE}reference/stop.html",
+                        }
+                    ]
+                },
+            ],
+        }
+
+    def test_a_section_is_named_by_its_title_in_any_case(self):
+        result = _call("list_api", {"section": "classes"}, settings=WITH_API)
+
+        assert [section["title"] for section in result["sections"]] == ["Classes"]
+
+    def test_an_unknown_section_lists_the_sections(self):
+        result = _call("list_api", {"section": "Functions"}, settings=WITH_API)
+
+        assert result["error"]["code"] == "not_found"
+        assert result["error"]["candidates"] == ["Classes"]
+
+    def test_a_failed_manifest_load_points_to_other_files(self):
+        result = _call("list_api", {}, settings=WITH_API, fetchFails=True)
+
+        assert result["error"]["code"] == "fetch_failed"
+        assert f"{BASE}llms.txt" in result["error"]["fallback"]
+
+
+class TestGetApiReference:
+    # The body classes of an object's reference page.
+    API_PAGE = ["doc-api-page", "doc-py-api-page"]
+
+    def test_a_reference_is_split_into_its_parts(self):
+        result = _call("get_api_reference", {"name": "example.Widget.spin"}, settings=WITH_API)
+
+        assert result == {
+            "name": "example.Widget.spin",
+            "kind": "method",
+            "url": f"{BASE}reference/Widget.spin.html",
+            "match": "name",
+            "summary": "Spin the widget.",
+            "signature": "Widget.spin(times=1)",
+            "sections": {
+                "parameters": "`times: int = 1`  \nHow many turns to make.",
+                "returns": "`int`  \nThe turns made.",
+                "raises": "`ValueError`  \nIf `times` is negative.",
+                "examples": "``` python\nWidget().spin(times=3)\n```",
+            },
+        }
+
+    def test_a_class_reference_has_its_description_and_leaves_methods_whole(self):
+        result = _call("get_api_reference", {"name": "Widget"}, settings=WITH_API)
+
+        assert result["match"] == "alias"
+        assert result["url"] == f"{BASE}reference/Widget.html"
+        assert result["signature"] == "Widget(speed=1)"
+        assert result["description"] == "Widgets spin in place until stopped."
+        assert list(result["sections"]) == ["parameters", "methods", "examples"]
+        assert result["sections"]["methods"].endswith("Whether the widget was spinning.")
+
+    def test_a_method_documented_with_its_class_is_read_from_its_heading(self):
+        result = _call("get_api_reference", {"name": "Widget.stop"}, settings=WITH_API)
+
+        assert result == {
+            "name": "example.Widget.stop",
+            "kind": "method",
+            "url": f"{BASE}reference/Widget.html#stop",
+            "match": "alias",
+            "summary": "Stop the widget.",
+            "signature": "Widget.stop(now=False)",
+            "sections": {"returns": "`bool`  \nWhether the widget was spinning."},
+        }
+
+    @pytest.mark.parametrize(
+        ("name", "match"),
+        [
+            ("spin", "alias"),
+            ("spin()", "alias"),
+            ("WIDGET.SPIN", "case"),
+            (".Widget.spin", "suffix"),
+            ("example.widget.stop", "case"),
+        ],
+    )
+    def test_a_name_can_be_short_in_any_case_or_end_a_full_name(self, name: str, match: str):
+        result = _call("get_api_reference", {"name": name}, settings=WITH_API)
+
+        assert result["match"] == match
+
+    def test_a_shared_name_is_ambiguous(self):
+        result = _call("get_api_reference", {"name": "stop"}, settings=WITH_API)
+
+        assert result["error"]["code"] == "ambiguous"
+        assert [item["name"] for item in result["error"]["candidates"]] == [
+            "example.Widget.stop",
+            "example.stop",
+        ]
+
+    def test_an_unknown_name_suggests_objects_sharing_its_words(self):
+        result = _call("get_api_reference", {"name": "widget turns"}, settings=WITH_API)
+
+        assert result["error"]["code"] == "not_found"
+        assert result["error"]["candidates"][0]["name"] == "example.Widget"
+        assert "list_api" in result["error"]["hint"]
+
+    def test_include_picks_the_parts(self):
+        result = _call(
+            "get_api_reference",
+            {"name": "Widget.spin", "include": ["signature", "raises"]},
+            settings=WITH_API,
+        )
+
+        assert result["signature"] == "Widget.spin(times=1)"
+        assert list(result["sections"]) == ["raises"]
+        assert "markdown" not in result
+
+    def test_markdown_is_the_whole_reference(self):
+        result = _call(
+            "get_api_reference",
+            {"name": "Widget.stop", "include": ["markdown"]},
+            settings=WITH_API,
+        )
+
+        assert "signature" not in result and "sections" not in result
+        assert result["markdown"].startswith("### stop()\n")
+        assert result["markdown"].endswith("Whether the widget was spinning.\n")
+        assert "## Examples" not in result["markdown"]
+
+    def test_an_unknown_part_is_invalid(self):
+        result = _call(
+            "get_api_reference", {"name": "Widget", "include": ["notes"]}, settings=WITH_API
+        )
+
+        assert result["error"]["code"] == "invalid_input"
+
+    def test_an_object_without_a_markdown_copy_links_its_page(self):
+        result = _call("get_api_reference", {"name": "example.stop"}, settings=WITH_API)
+
+        assert result["error"]["code"] == "unavailable"
+        assert result["error"]["url"] == f"{BASE}reference/stop.html"
+
+    def test_a_missing_markdown_copy_points_to_other_files(self, tmp_path: Path):
+        site_dir = _variant(tmp_path)
+        (site_dir / "reference" / "Widget.spin.md").unlink()
+
+        result = _call(
+            "get_api_reference", {"name": "spin"}, settings=WITH_API, siteDir=str(site_dir)
+        )
+
+        assert result["error"]["code"] == "fetch_failed"
+        assert "reference/Widget.spin.md" in result["error"]["message"]
+
+    def test_the_name_is_required_off_an_object_page(self):
+        result = _call("get_api_reference", {}, settings=WITH_API)
+
+        assert result["error"]["code"] == "invalid_input"
+
+    @pytest.mark.parametrize(
+        ("path", "name"),
+        [
+            ("/reference/Widget.html", "example.Widget"),
+            ("/reference/Widget.spin.html", "example.Widget.spin"),
+        ],
+    )
+    def test_on_an_object_page_the_name_defaults_to_its_object(self, path: str, name: str):
+        result = _call(
+            "get_api_reference", {}, settings=WITH_API, pathname=path, bodyClasses=self.API_PAGE
+        )
+
+        assert (result["name"], result["match"]) == (name, "page")
+
+    def test_on_an_object_page_another_object_can_be_named(self):
+        result = _call(
+            "get_api_reference",
+            {"name": "Widget.stop"},
+            settings=WITH_API,
+            pathname="/reference/Widget.spin.html",
+            bodyClasses=self.API_PAGE,
+        )
+
+        assert result["name"] == "example.Widget.stop"
+
+    def test_a_reference_page_without_an_object_needs_a_name(self):
+        result = _call(
+            "get_api_reference",
+            {},
+            settings=WITH_API,
+            pathname="/reference/typing.html",
+            bodyClasses=self.API_PAGE,
+        )
+
+        assert result["error"]["code"] == "invalid_input"
+        assert "name" in result["error"]["message"]
+
+    @pytest.mark.parametrize(
+        ("body", "required"),
+        [
+            (["doc-api-page", "doc-py-api-page"], None),
+            (["doc-api-page", "doc-cli-api-page"], ["name"]),
+            ([], ["name"]),
+        ],
+    )
+    def test_only_an_object_page_makes_the_name_optional(
+        self, body: list[str], required: list[str] | None
+    ):
+        listed = _run("return tools.list();", settings=WITH_API, bodyClasses=body)["result"]
+        [tool] = [tool for tool in listed if tool["name"] == "get_api_reference"]
+
+        assert tool["inputSchema"].get("required") == required
+        assert ("this page" in tool["description"]) is (required is None)
+
+    def test_the_tools_need_an_api_reference(self):
+        observed = _run(
+            f"{SETTLE} return await tools.call('list_api', {{}});",
+            settings={"features": {"api": False}},
+        )
+
+        assert observed["registered"] == SITE_TOOLS
+        assert observed["result"]["error"]["code"] == "not_found"
+
+    def test_with_an_api_reference_the_tools_register(self):
+        observed = _run(SETTLE, settings=WITH_API)
+
+        assert observed["registered"] == [*SITE_TOOLS, *API_TOOLS]
+
+    def test_a_reference_without_a_code_block_has_a_summary_and_description(self):
+        markdown = "# helper()\n\nHelp out.\n\nIn more detail.\n\n## Returns\n\nNothing.\n"
+
+        parts = _internal(
+            f"internals.referenceParts({json.dumps(markdown)}, {{name: 'example.helper'}})"
+        )
+
+        assert parts == {
+            "anchor": None,
+            "summary": "Help out.",
+            "signature": None,
+            "description": "In more detail.",
+            "sections": {"returns": "Nothing."},
+            "markdown": markdown,
+        }
 
 
 class TestWords:

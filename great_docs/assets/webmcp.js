@@ -59,7 +59,10 @@
         'switch_version'
     ];
 
-    var DEFAULT_SETTINGS = { markdown_pages: true, actions: true, js_api: true, exclude: [] };
+    // `features` names the site's features that tools beyond the site tools need.
+    var DEFAULT_SETTINGS = {
+        markdown_pages: true, features: {}, actions: true, js_api: true, exclude: []
+    };
 
     function readSettings() {
         var settings = Object.assign({}, DEFAULT_SETTINGS);
@@ -76,6 +79,7 @@
             console.warn('Great Docs WebMCP: ignoring unreadable settings.', e);
         }
         if (!Array.isArray(settings.exclude)) settings.exclude = [];
+        if (typeOf(settings.features) !== 'object') settings.features = {};
         return settings;
     }
 
@@ -208,6 +212,7 @@
             inputSchema: spec.inputSchema || EMPTY_SCHEMA,
             annotations: spec.annotations || {},
             example: spec.example || {},
+            feature: spec.feature || 'site',
             action: Boolean(spec.action),
             run: spec.run
         };
@@ -1384,7 +1389,303 @@
         }
     });
 
-    var BUILT_IN_TOOLS = [GET_SITE_OVERVIEW, GET_CURRENT_PAGE, LIST_PAGES, GET_PAGE, SEARCH_DOCS];
+    // ------------------------------------------------------------------------------------
+    // API tools
+    // ------------------------------------------------------------------------------------
+
+    // The body class of a page documenting objects of the package's API.
+    var API_PAGE_CLASS = 'doc-py-api-page';
+    var API_PARTS = ['signature', 'description', 'parameters', 'returns', 'raises', 'examples',
+        'markdown'];
+    var API_HINT = 'Call list_api to see every object.';
+    var FENCED_BLOCK = /^ {0,3}(`{3,}|~{3,})[^\n]*\n([\s\S]*?)\n {0,3}\1[ \t]*$/m;
+
+    function apiEntry(item) {
+        return compact({
+            name: item.name,
+            kind: item.kind,
+            summary: item.summary,
+            url: absolute(item.path)
+        });
+    }
+
+    function objectNames(item) {
+        return [item.name].concat(item.aliases || []);
+    }
+
+    // Find the object `query` names: by its full name, a short name, either in any case, or
+    // the end of its full name. Failing those, suggest the objects sharing words with it.
+    function resolveObject(api, query) {
+        var text = query.trim().replace(/\(\)$/, '');
+        var lower = text.toLowerCase();
+        var end = '.' + lower.replace(/^\./, '');
+        var tiers = [
+            ['name', function (item) {
+                return item.name === text;
+            }],
+            ['alias', function (item) {
+                return (item.aliases || []).indexOf(text) !== -1;
+            }],
+            ['case', function (item) {
+                return objectNames(item).some(function (name) {
+                    return name.toLowerCase() === lower;
+                });
+            }],
+            ['suffix', function (item) {
+                return ('.' + item.name.toLowerCase()).slice(-end.length) === end;
+            }]
+        ];
+        for (var i = 0; i < tiers.length; i++) {
+            var found = api.filter(tiers[i][1]);
+            if (found.length === 1) return { item: found[0], match: tiers[i][0] };
+            if (found.length) {
+                return { error: errorResult('ambiguous', 'Several objects match "' + text + '".', {
+                    candidates: found.slice(0, 5).map(apiEntry),
+                    hint: 'Pass one of their names.'
+                }) };
+            }
+        }
+        var words = queryWords(text);
+        var scored = api.map(function (item) {
+            var found = terms(objectNames(item).join(' '));
+            var score = 0;
+            words.forEach(function (word) {
+                score += wordMatch(found, word);
+            });
+            return { item: item, score: score };
+        }).filter(function (entry) {
+            return entry.score > 0;
+        }).sort(function (a, b) {
+            return b.score - a.score;
+        });
+        return { error: errorResult('not_found', 'No object is named "' + text + '".', {
+            candidates: scored.slice(0, 5).map(function (entry) {
+                return apiEntry(entry.item);
+            }),
+            hint: API_HINT
+        }) };
+    }
+
+    // The object documented on the open page. Of several, such as a class and the methods
+    // documented with it, the one with the shortest name.
+    function pageObject(api) {
+        var path = currentPath();
+        return api.filter(function (item) {
+            return item.path === path;
+        }).sort(function (a, b) {
+            return a.name.split('.').length - b.name.split('.').length;
+        })[0] || null;
+    }
+
+    function sectionKey(text) {
+        return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_|_$/g, '');
+    }
+
+    // An object's reference in its page's Markdown: the heading naming it and what follows,
+    // up to the next heading of its level. Before its first subheading come its summary,
+    // its signature as a code block and its description. Each subheading of the next level
+    // starts a docstring section, keyed by its text: `parameters`, `see_also`.
+    function referenceParts(markdown, item) {
+        var list = parseHeadings(markdown);
+        var heading = list.filter(function (h) {
+            var text = h.text.replace(/\(\)$/, '');
+            return ('.' + item.name).slice(-text.length - 1) === '.' + text;
+        })[0] || list[0];
+        var lines = markdown.split('\n');
+        var start = heading ? heading.line : -1;
+        var next = list.filter(function (h) {
+            return h.line > start && h.level <= (heading ? heading.level : 0);
+        })[0];
+        var end = next ? next.line : lines.length;
+        var within = list.filter(function (h) {
+            return h.line > start && h.line < end;
+        });
+        var level = Math.min.apply(null, within.map(function (h) {
+            return h.level;
+        }));
+        var sections = {};
+        within.forEach(function (h) {
+            var key = sectionKey(h.text);
+            if (h.level !== level || key in sections) return;
+            sections[key] = sliceSection(markdown, h, list).split('\n').slice(1).join('\n').trim();
+        });
+        var intro = lines.slice(start + 1, within.length ? within[0].line : end).join('\n');
+        var code = FENCED_BLOCK.exec(intro);
+        var paragraphs = (code ? intro.slice(0, code.index) : intro).trim().split(/\n[ \t]*\n/);
+        return {
+            anchor: heading && heading.level > 1 ? heading.anchor : null,
+            summary: paragraphs[0].replace(/\s+/g, ' ').trim(),
+            signature: code ? code[2] : null,
+            description: (code ? intro.slice(code.index + code[0].length)
+                : paragraphs.slice(1).join('\n\n')).trim(),
+            sections: sections,
+            markdown: lines.slice(Math.max(start, 0), end).join('\n').replace(/\s+$/, '') + '\n'
+        };
+    }
+
+    function apiReference(item, markdown, include, match) {
+        var parts = referenceParts(markdown, item);
+        function wanted(part) {
+            return include ? include.indexOf(part) !== -1 : part !== 'markdown';
+        }
+        var url = absolute(item.path);
+        var result = compact({
+            name: item.name,
+            kind: item.kind,
+            url: parts.anchor ? url + '#' + parts.anchor : url,
+            match: match,
+            summary: parts.summary || item.summary,
+            signature: wanted('signature') ? parts.signature : null,
+            description: wanted('description') ? parts.description : null
+        });
+        var sections = {};
+        Object.keys(parts.sections).forEach(function (key) {
+            if (!include || include.indexOf(key) !== -1) sections[key] = parts.sections[key];
+        });
+        if (Object.keys(sections).length) result.sections = sections;
+        if (wanted('markdown')) result.markdown = parts.markdown;
+        return result;
+    }
+
+    var LIST_API = defineTool({
+        name: 'list_api',
+        title: 'List the API',
+        purpose: 'The documented objects grouped by reference section',
+        description:
+            "Use this to see what the package's API offers. Returns the documented classes, " +
+            'functions and methods grouped by reference section, each with its full name, ' +
+            'kind, summary and URL. Pass section, a section title, for one group. To read ' +
+            'one object, use get_api_reference. Example: "Which functions does this package ' +
+            'have?"',
+        feature: 'api',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                section: {
+                    type: 'string',
+                    minLength: 1,
+                    maxLength: 200,
+                    description: 'A reference section title, such as "Classes". Omit for all.'
+                }
+            },
+            additionalProperties: false
+        },
+        example: { section: 'Classes' },
+        annotations: { readOnlyHint: true },
+        run: function (input, context) {
+            return loadManifest(context.signal).then(function (manifest) {
+                var groups = [];
+                var byTitle = Object.create(null);
+                manifest.api.forEach(function (item) {
+                    var title = item.section || '';
+                    if (!byTitle[title]) {
+                        groups.push(byTitle[title] = { title: title, objects: [] });
+                    }
+                    byTitle[title].objects.push(apiEntry(item));
+                });
+                if (input.section) {
+                    var wanted = input.section.toLowerCase();
+                    var kept = groups.filter(function (group) {
+                        return group.title.toLowerCase() === wanted;
+                    });
+                    if (!kept.length) {
+                        var message = 'No reference section is named "' + input.section + '".';
+                        return errorResult('not_found', message, {
+                            candidates: groups.map(function (group) {
+                                return group.title;
+                            }).filter(Boolean)
+                        });
+                    }
+                    groups = kept;
+                }
+                var index = manifest.pages.filter(function (page) {
+                    return page.kind === 'reference';
+                })[0];
+                return {
+                    url: index ? absolute(index.path) : siteRoot,
+                    sections: groups.map(compact)
+                };
+            }, function (error) {
+                return loadFailed(MANIFEST_FILE, error, context.signal);
+            });
+        }
+    });
+
+    // On an object's reference page, `name` defaults to that object.
+    function apiReferenceTool(onObjectPage) {
+        var schema = {
+            type: 'object',
+            properties: {
+                name: {
+                    type: 'string',
+                    minLength: 1,
+                    maxLength: 300,
+                    description: 'A full or short name, such as "Widget.spin".' +
+                        (onObjectPage ? ' Omit for the object documented on this page.' : '')
+                },
+                include: {
+                    type: 'array',
+                    items: { type: 'string', enum: API_PARTS },
+                    description: 'The parts to return. Omit for all but markdown, the whole ' +
+                        'reference.'
+                }
+            },
+            additionalProperties: false
+        };
+        if (!onObjectPage) schema.required = ['name'];
+        return defineTool({
+            name: 'get_api_reference',
+            title: 'Get an API reference',
+            purpose: "One object's signature, parameters, returns and examples",
+            description:
+                'Use this to read about one class, function or method: its signature, ' +
+                'parameters, returns, raises and examples, as Markdown. name can be full or ' +
+                'short, such as "pkg.Widget.spin" or "spin"; an ambiguous name returns ' +
+                'candidates. ' + (onObjectPage
+                    ? 'name defaults to the object documented on this page. '
+                    : '') +
+                'include picks the parts to return. For other pages, use get_page. ' +
+                'Example: "What arguments does spin() take?"',
+            feature: 'api',
+            inputSchema: schema,
+            example: { name: 'Widget.spin', include: ['signature', 'parameters'] },
+            annotations: { readOnlyHint: true },
+            run: function (input, context) {
+                var signal = context.signal;
+                return loadManifest(signal).then(function (manifest) {
+                    var found = input.name ? resolveObject(manifest.api, input.name) : null;
+                    if (!found) {
+                        var current = pageObject(manifest.api);
+                        found = current ? { item: current, match: 'page' } : {
+                            error: errorResult('invalid_input',
+                                'This page documents no object, so name is required.',
+                                { hint: API_HINT })
+                        };
+                    }
+                    if (found.error) return found.error;
+                    var item = found.item;
+                    if (!item.md) {
+                        return errorResult('unavailable', item.name + ' has no Markdown copy.', {
+                            url: absolute(item.path)
+                        });
+                    }
+                    return fetchText(absolute(item.md), signal).then(function (markdown) {
+                        return apiReference(item, markdown, input.include, found.match);
+                    }, function (error) {
+                        return loadFailed(item.md, error, signal);
+                    });
+                }, function (error) {
+                    return loadFailed(MANIFEST_FILE, error, signal);
+                });
+            }
+        });
+    }
+
+    var GET_API_REFERENCE = apiReferenceTool(Boolean(document.body &&
+        document.body.classList && document.body.classList.contains(API_PAGE_CLASS)));
+
+    var BUILT_IN_TOOLS = [GET_SITE_OVERVIEW, GET_CURRENT_PAGE, LIST_PAGES, GET_PAGE, SEARCH_DOCS,
+        LIST_API, GET_API_REFERENCE];
 
     // ------------------------------------------------------------------------------------
     // Registration
@@ -1463,6 +1764,7 @@
     if (!off) {
         BUILT_IN_TOOLS.forEach(function (tool) {
             if (settings.exclude.indexOf(tool.name) !== -1) return;
+            if (tool.feature !== 'site' && !settings.features[tool.feature]) return;
             if (tool.action && !settings.actions) return;
             addTool(tool);
         });
@@ -1542,7 +1844,8 @@
                 return Array.from(tokenize(text));
             },
             queryWords: queryWords,
-            excerpt: excerpt
+            excerpt: excerpt,
+            referenceParts: referenceParts
         };
     }
 

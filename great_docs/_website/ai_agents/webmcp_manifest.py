@@ -526,16 +526,24 @@ def _api(
     # A re-exported object is listed again under its canonical name; keep the public one.
     public = [entry for entry in entries if entry.dispname == entry.name]
     aliases = _aliases(public, entries, root_modules(inventory))
+    # A page's description summarizes the object it documents, such as a class, and not the
+    # methods documented with it.
+    owners: dict[str, str] = {}
+    for entry in public:
+        page = _clean(entry.uri.partition("#")[0])
+        if page not in owners or entry.name.count(".") < owners[page].count("."):
+            owners[page] = entry.name
     found: list[dict[str, Any]] = []
     for entry in public:
         page = _clean(entry.uri.partition("#")[0])
         position = sidebar.get(page)
+        owner = bool(page) and owners[page] == entry.name
         found.append(
             _entry(
                 name=entry.name,
                 kind=entry.role,
                 section=position[1] if position else None,
-                summary=heads.description(page, _SUMMARY_CHARS) if page else None,
+                summary=heads.description(page, _SUMMARY_CHARS) if owner else None,
                 path=page,
                 md=_markdown(site_dir, page) if page else None,
                 aliases=aliases.get(entry.name, []),
