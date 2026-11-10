@@ -188,10 +188,13 @@ def test_a_file_is_copied_and_listed_exactly_when_it_is_used(
             assert (script.name in included) == used, script.name
 
 
-def _webmcp_headers(tmp_path: Path, settings: dict[str, Any]) -> list[str]:
+def _webmcp_headers(
+    tmp_path: Path, settings: dict[str, Any], *, has_api_reference: bool = True
+) -> list[str]:
     config = write_config(tmp_path, settings)
     quarto_config: dict[str, Any] = {}
     scripts.include(config, quarto_config, tmp_path, has_repository=False)
+    scripts.include_webmcp_settings(config, quarto_config, has_api_reference=has_api_reference)
     return [entry["text"] for entry in quarto_config["format"]["html"]["include-in-header"]]
 
 
@@ -237,10 +240,31 @@ def test_webmcp_settings_carry_the_configuration(tmp_path: Path):
         "schema": 1,
         "generator": f"great-docs {__version__}",
         "markdown_pages": False,
+        "features": {"api": True},
         "actions": False,
         "js_api": False,
         "exclude": ["get_page"],
     }
+
+
+@pytest.mark.parametrize("has_api_reference", [True, False])
+def test_webmcp_settings_say_whether_the_site_has_an_api_reference(
+    tmp_path: Path, has_api_reference: bool
+):
+    headers = _webmcp_headers(tmp_path, {"webmcp": True}, has_api_reference=has_api_reference)
+
+    assert _webmcp_settings(headers)["features"] == {"api": has_api_reference}
+
+
+def test_webmcp_settings_are_added_once(tmp_path: Path):
+    config = write_config(tmp_path, {"webmcp": True})
+    quarto_config: dict[str, Any] = {}
+    scripts.include(config, quarto_config, tmp_path, has_repository=False)
+    for _ in range(2):
+        scripts.include_webmcp_settings(config, quarto_config, has_api_reference=True)
+
+    headers = _includes(quarto_config, "include-in-header")
+    assert sum("gd-webmcp-settings" in entry for entry in headers) == 1
 
 
 def test_webmcp_settings_cannot_close_their_script_element(tmp_path: Path):
