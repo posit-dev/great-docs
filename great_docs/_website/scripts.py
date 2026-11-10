@@ -36,6 +36,7 @@ __all__ = [
     "copy_asset",
     "include",
     "include_libraries",
+    "include_webmcp_settings",
     "named",
     "script_include",
     "script_tag",
@@ -279,7 +280,7 @@ def _dark_mode_disabled(config: Config) -> str | None:
     return '<meta name="gd-dark-mode" content="disabled">'
 
 
-def _webmcp_head(config: Config) -> str:
+def _webmcp_head(config: Config, *, has_api_reference: bool) -> str:
     """
     Build the header tags that configure `webmcp.js`
 
@@ -287,6 +288,8 @@ def _webmcp_head(config: Config) -> str:
     ----------
     config
         The Great Docs configuration.
+    has_api_reference
+        Whether the site has an API reference, which the API tools read.
 
     Returns
     -------
@@ -300,6 +303,7 @@ def _webmcp_head(config: Config) -> str:
         "schema": 1,
         "generator": f"great-docs {__version__}",
         "markdown_pages": config.markdown_pages,
+        "features": {"api": has_api_reference},
         "actions": config.webmcp_actions,
         "js_api": config.webmcp_js_api,
         "exclude": config.webmcp_exclude_tools,
@@ -335,7 +339,8 @@ SCRIPTS: tuple[Script, ...] = (
     Script("gd-lightbox-annotate.css", _HEADER, library=True, directory=_LIGHTBOX),
     Script("gd-lightbox-annotate.js", _HEADER, defer=True, library=True, directory=_LIGHTBOX),
     Script("theme-init.js", _HEADER, data=_dark_mode_disabled),
-    Script("webmcp.js", _HEADER, lambda c: c.webmcp_enabled, defer=True, data=_webmcp_head),
+    # `include_webmcp_settings` adds the settings, which depend on the build's results.
+    Script("webmcp.js", _HEADER, lambda c: c.webmcp_enabled, defer=True),
     Script("announcement-banner.js", gate=lambda c: c.announcement is not None),
     Script(
         "github-widget.js",
@@ -524,6 +529,33 @@ def include(
             and script.used(config, has_repository=has_repository)
         ):
             _include(config, quarto_config, script, build_dir)
+
+
+def include_webmcp_settings(
+    config: Config, quarto_config: dict[str, Any], *, has_api_reference: bool
+) -> None:
+    """
+    Configure `webmcp.js` in every page, ahead of the script's own entry
+
+    Parameters
+    ----------
+    config
+        The Great Docs configuration.
+    quarto_config
+        The Quarto configuration, changed in place.
+    has_api_reference
+        Whether the site has an API reference.
+
+    Returns
+    -------
+    :
+    """
+    if not config.webmcp_enabled:
+        return
+    script = named("webmcp.js")
+    assert script.slot is not None
+    data = _webmcp_head(config, has_api_reference=has_api_reference)
+    quarto_yml.add_include(quarto_config, script.slot, {"text": data}, before=script.name)
 
 
 def _include(

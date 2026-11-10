@@ -130,6 +130,7 @@ def assemble(
 
     # Table order preserves the order in which pages load the site's scripts.
     scripts.include(config, quarto_config, build_dir, has_repository=has_repository)
+    scripts.include_webmcp_settings(config, quarto_config, has_api_reference=has_api_reference)
 
     # Contributed links and data require the navbar and script includes to exist.
     # Apply them before configuring the reference switcher, icons and navbar order.
