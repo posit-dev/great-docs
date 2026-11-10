@@ -10,9 +10,9 @@ import pytest
 from yaml12 import parse_yaml, read_yaml
 
 from great_docs import Config
-from great_docs._install import format_authors_yaml, update_gitignore, write_initial_config
 from great_docs._project import Project
 from great_docs._project.layout import Layout
+from great_docs._project.scaffold import format_authors_yaml, update_gitignore, write_initial_config
 from great_docs._reference.exports import Exports
 from tests.support import write_pyproject
 
@@ -373,8 +373,8 @@ def _detected(
         patch.object(Exports, "package", return_value=MagicMock()),
         patch.object(Exports, "names", return_value=names),
         patch.object(Exports, "categorise", return_value=categories),
-        patch("great_docs._install.probe.detect_docstring_style", return_value=style),
-        patch("great_docs._install.probe.detect_dynamic_mode", return_value=dynamic),
+        patch("great_docs._project.scaffold.probe.detect_docstring_style", return_value=style),
+        patch("great_docs._project.scaffold.probe.detect_dynamic_mode", return_value=dynamic),
     ):
         yield
 
@@ -455,8 +455,8 @@ def test_initial_config_with_package(tmp_path: Path):
     )
 
     with (
-        patch("great_docs._install.probe.detect_docstring_style", return_value="numpy"),
-        patch("great_docs._install.probe.detect_dynamic_mode", return_value=True),
+        patch("great_docs._project.scaffold.probe.detect_docstring_style", return_value="numpy"),
+        patch("great_docs._project.scaffold.probe.detect_dynamic_mode", return_value=True),
     ):
         _ = _write_initial_config(tmp_path)
 

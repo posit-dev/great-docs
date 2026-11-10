@@ -11,21 +11,21 @@ from typing import TYPE_CHECKING
 
 from yaml12 import format_yaml
 
-from ._build.steps import USER_CODE_ERRORS
-from ._reference import block as reference_block
-from ._reference import probe
-from .config import create_default_config
+from .._build.steps import USER_CODE_ERRORS
+from .._reference import block as reference_block
+from .._reference import probe
+from ..config import create_default_config
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     import griffe as gf
 
-    from ._project import Project
-    from ._project.layout import Layout
-    from ._project.manifest import Manifest
-    from ._reference.exports import Exports
-    from .config import Config
+    from .._reference.exports import Exports
+    from ..config import Config
+    from . import Project
+    from .layout import Layout
+    from .manifest import Manifest
 
 __all__ = ["format_authors_yaml", "update_gitignore", "write_initial_config"]
 

@@ -23,7 +23,7 @@ from .steps import Outcome, Skipped
 if TYPE_CHECKING:
     from .._cliref.model import CliCommand
     from .._project.layout import Layout
-    from .._remote import Remote
+    from .._project.remote import Remote
     from ..config import Config
     from .log import BuildLog
     from .pipeline import Run

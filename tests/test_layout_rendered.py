@@ -80,7 +80,7 @@ def latest_only() -> str:
 BUILD = """
 import sys
 from great_docs import GreatDocs
-from great_docs._remote import OfflineRemote
+from great_docs._project.remote import OfflineRemote
 docs = GreatDocs(project_path=sys.argv[1], config_path=sys.argv[2])
 docs._remote = OfflineRemote()
 docs.build()
