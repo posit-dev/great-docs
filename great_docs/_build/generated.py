@@ -39,6 +39,29 @@ __all__ = [
 ]
 
 
+def _webmcp_features(config: Config) -> set[str]:
+    """
+    Name the site's features that the WebMCP tools listed in `llms.txt` need
+
+    `llms.txt` is written only for a site with an API reference, and before the CLI reference
+    steps run, so a configured CLI reference counts even if its pages turn out empty.
+
+    Parameters
+    ----------
+    config
+        The project's configuration.
+
+    Returns
+    -------
+    :
+        `site` and `api`, and `cli` when a CLI reference is configured.
+    """
+    features = {"site", "api"}
+    if config.cli_enabled or config.go_cli_enabled or config.rust_cli_enabled:
+        features.add("cli")
+    return features
+
+
 def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
     """
     Write `llms.txt` and `llms-full.txt`
@@ -70,8 +93,7 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
         run.project.manifest,
         site_url=config.site_url,
         report=print,
-        # `llms.txt` is written only for a site with an API reference.
-        webmcp_tools=webmcp_tools.site_tools(config, {"site", "api"}),
+        webmcp_tools=webmcp_tools.site_tools(config, _webmcp_features(config)),
         webmcp_js_api=config.webmcp_js_api,
     )
 
