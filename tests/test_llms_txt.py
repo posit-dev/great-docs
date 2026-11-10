@@ -471,3 +471,9 @@ class TestBuildStep:
             "get_api_reference",
         ]
         assert "window.greatDocs" not in text
+
+    def test_a_configured_cli_reference_adds_the_cli_tool(self, tmp_path: Path):
+        text = _build_llms_txt(tmp_path, {"webmcp": True, "cli": {"enabled": True}})
+
+        tools = [line.split("`")[1] for line in _webmcp_section(text) if line.startswith("- `")]
+        assert tools[-1] == "get_cli_help"

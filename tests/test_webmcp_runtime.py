@@ -31,6 +31,7 @@ SITE_TOOLS = ["get_site_overview", "get_current_page", "list_pages", "get_page",
 API_TOOLS = ["list_api", "get_api_reference"]
 # The settings of a site with an API reference.
 WITH_API = {"features": {"api": True}}
+WITH_ALL = {"features": {"api": True, "cli": True}}
 
 _QUARTO_YML = """\
 project:
@@ -54,6 +55,10 @@ website:
         - section: CLI
           contents:
             - reference/cli/index.qmd
+            - reference/cli/example.qmd
+            - reference/cli/build.qmd
+            - reference/cli/config.qmd
+            - reference/cli/config/show.qmd
 """
 
 _PAGES = [
@@ -78,7 +83,11 @@ _HTML_CLASSES = {
     "reference/index.html": "doc-reference",
     "reference/Widget.html": "doc-api-page doc-py-api-page",
     "reference/Widget.spin.html": "doc-api-page doc-py-api-page",
-    "reference/cli/index.html": "doc-cli-api-page",
+    "reference/cli/index.html": "doc-reference doc-cli-reference",
+    "reference/cli/example.html": "doc-api-page doc-cli-api-page",
+    "reference/cli/build.html": "doc-api-page doc-cli-api-page",
+    "reference/cli/config.html": "doc-api-page doc-cli-api-page",
+    "reference/cli/config/show.html": "doc-api-page doc-cli-api-page",
 }
 
 _API = [
@@ -230,8 +239,8 @@ class TestRegistration:
 
     def test_the_python_table_lists_the_registered_tools(self):
         # `llms.txt` lists the tools from the Python table, so it must match the runtime.
-        observed = _run(SETTLE, settings={**WITH_API, "exclude": ["get_page"], "actions": False})
-        expected = registered({"site", "api"}, actions=False, exclude=["get_page"])
+        observed = _run(SETTLE, settings={**WITH_ALL, "exclude": ["get_page"], "actions": False})
+        expected = registered({"site", "api", "cli"}, actions=False, exclude=["get_page"])
 
         assert observed["registered"] == [tool.name for tool in expected]
 
@@ -735,9 +744,9 @@ class TestGetSiteOverview:
         assert result["sections"] == [
             {"id": "user-guide", "title": "User Guide", "kind": "guide", "pages": 3},
             {"id": "blog", "title": "Blog", "kind": "blog", "pages": 3},
-            {"id": "reference", "title": "Reference", "kind": "reference", "pages": 4},
+            {"id": "reference", "title": "Reference", "kind": "reference", "pages": 8},
         ]
-        assert result["pages"] == 12
+        assert result["pages"] == 16
         assert result["resources"] == {
             "llms_txt": f"{BASE}llms.txt",
             "search": f"{BASE}search.json",
@@ -1369,6 +1378,97 @@ class TestGetApiReference:
         }
 
 
+class TestGetCliHelp:
+    # The settings of a site with CLI reference pages.
+    WITH_CLI = {"features": {"cli": True}}
+
+    def _call(self, tool_input: object = None, **options: Any) -> dict[str, Any]:
+        return _call("get_cli_help", tool_input, settings=self.WITH_CLI, **options)
+
+    def test_without_a_command_the_root_command_is_returned(self):
+        result = self._call({})
+
+        assert result == {
+            "command": "example",
+            "url": f"{BASE}reference/cli/example.html",
+            "subcommands": [
+                {"command": "example build", "url": f"{BASE}reference/cli/build.html"},
+                {"command": "example config", "url": f"{BASE}reference/cli/config.html"},
+            ],
+            "markdown": (SITE / "reference" / "cli" / "example.md").read_text(encoding="utf-8"),
+        }
+
+    @pytest.mark.parametrize(
+        "command",
+        ["config show", "example config show", "  Config   SHOW ", "example  config show"],
+    )
+    def test_a_nested_command_is_named_with_or_without_the_program(self, command: str):
+        result = self._call({"command": command})
+
+        assert result["command"] == "example config show"
+        assert result["url"] == f"{BASE}reference/cli/config/show.html"
+        assert result["subcommands"] == []
+        assert result["markdown"].startswith("# example config show\n")
+
+    def test_a_group_lists_only_its_direct_subcommands(self):
+        result = self._call({"command": "example"})
+
+        assert [item["command"] for item in result["subcommands"]] == [
+            "example build",
+            "example config",
+        ]
+
+    def test_an_unknown_command_suggests_commands_sharing_its_words(self):
+        result = self._call({"command": "config edit"})
+
+        assert result["error"]["code"] == "not_found"
+        assert [item["command"] for item in result["error"]["candidates"]] == [
+            "example config",
+            "example config show",
+        ]
+        assert result["error"]["hint"]
+
+    def test_on_a_command_page_the_command_defaults_to_its_own(self):
+        result = self._call(
+            {},
+            pathname="/reference/cli/build.html",
+            bodyClasses=["doc-api-page", "doc-cli-api-page"],
+        )
+
+        assert result["command"] == "example build"
+
+    def test_a_missing_markdown_copy_points_to_other_files(self, tmp_path: Path):
+        site_dir = _variant(tmp_path)
+        (site_dir / "reference" / "cli" / "build.md").unlink()
+
+        result = self._call({"command": "build"}, siteDir=str(site_dir))
+
+        assert result["error"]["code"] == "fetch_failed"
+        assert "reference/cli/build.md" in result["error"]["message"]
+
+    def test_a_site_without_commands_says_so(self, tmp_path: Path):
+        site_dir = _variant(tmp_path)
+        manifest_file = site_dir / "gd-webmcp.json"
+        manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+        _ = manifest_file.write_text(json.dumps({**manifest, "cli": []}), encoding="utf-8")
+
+        result = self._call({}, siteDir=str(site_dir))
+
+        assert result["error"]["code"] == "unavailable"
+
+    def test_the_tool_needs_a_cli_reference(self):
+        assert _run(SETTLE)["registered"] == SITE_TOOLS
+        assert _run(SETTLE, settings=self.WITH_CLI)["registered"] == [*SITE_TOOLS, "get_cli_help"]
+
+    def test_the_description_says_when_to_use_the_tool(self):
+        listed = _run("return tools.list();", settings=self.WITH_CLI)["result"]
+        [tool] = [tool for tool in listed if tool["name"] == "get_cli_help"]
+
+        assert tool["description"].startswith("Use this")
+        assert len(tool["description"]) <= 450
+        assert 'Example: "' in tool["description"]
+
+
 class TestWords:
     def test_identifiers_are_kept_whole_and_split(self):
         assert _internal("internals.tokenize('Use GT.fmt_number() here')") == [
@@ -1397,7 +1497,8 @@ class TestWords:
 
 
 def test_the_runtime_stays_small():
+    # Servers send the runtime compressed, so the compressed size is the tighter limit.
     raw = RUNTIME.read_bytes()
 
-    assert len(raw) <= 80 * 1024
+    assert len(raw) <= 96 * 1024
     assert len(gzip.compress(raw)) <= 20 * 1024
