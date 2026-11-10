@@ -86,12 +86,14 @@ TOOLS: tuple[WebMCPTool, ...] = (
         "List the API",
         "The documented objects grouped by reference section",
         "api",
+        implemented=True,
     ),
     WebMCPTool(
         "get_api_reference",
         "Get an API reference",
         "One object's signature, parameters, returns and examples",
         "api",
+        implemented=True,
     ),
     WebMCPTool("get_cli_help", "Get CLI help", "The help text of a CLI command", "cli"),
     WebMCPTool(
