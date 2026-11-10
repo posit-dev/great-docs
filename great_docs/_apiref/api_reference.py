@@ -207,11 +207,11 @@ class APIReference:
     @cached_property
     def documented_symbols(self) -> list[str]:
         """
-        Dotted stems of every documented object, `%nodoc` excluded
+        Return the authored Python names of documented objects, `%nodoc` excluded
 
-        One stem per documented target, first-occurrence order, deduped: a
-        top-level object (its page stem) and each documented member
-        (`stem.member`), recursively.
+        Preserve first-occurrence order and include each documented member
+        recursively. Convert module separators to dots and keep names independent
+        of the filenames assigned to reference pages.
         """
         stems: list[str] = []
 
@@ -224,7 +224,7 @@ class APIReference:
             for entry in section.contents:
                 if isinstance(entry, Page):
                     for doc in entry.contents:
-                        visit(doc, entry.path)
+                        visit(doc, doc.name.replace(":", "."))
         return list(dict.fromkeys(stems))
 
     @cached_property

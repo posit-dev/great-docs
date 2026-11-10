@@ -9,10 +9,43 @@ from types import ModuleType
 import pytest
 
 from great_docs import BuildError
+from great_docs._api_diff import snapshot_from_griffe
+from great_docs._apiref.api_reference import APIReference
 from great_docs._apiref.inventory import InventoryItem
 from great_docs._reference import documented
 from great_docs.core import GreatDocs
 from tests.support import make_exports, make_project
+
+
+@pytest.mark.parametrize("contents", [["Foo", "foo"], ["foo", "Foo"]])
+def test_case_collision_symbols_keep_their_python_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, contents: list[str]
+) -> None:
+    """Retain renamed objects and their members in API snapshots"""
+    name = "case_snapshot_names"
+    package = tmp_path / name
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        'from .impl import Target as Foo\ndef foo():\n    """The foo function"""\n',
+        encoding="utf-8",
+    )
+    (package / "impl.py").write_text(
+        'class Target:\n    """The exported class"""\n\n'
+        '    def fit(self):\n        """Fit the model"""\n',
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    with pytest.warns(UserWarning, match="only by case"):
+        ref = APIReference({"package": name, "sections": [{"title": "API", "contents": contents}]})
+
+    expected = ["Foo", "Foo.fit", "foo"] if contents[0] == "Foo" else ["foo", "Foo", "Foo.fit"]
+    expected_paths = ["Foo", "foo-function"] if contents[0] == "Foo" else ["foo", "Foo-class"]
+    assert [page.path for page in ref.manifest.pages] == expected_paths
+    assert ref.documented_symbols == expected
+    snapshot = snapshot_from_griffe(
+        name, "dev", documented_names=ref.documented_symbols, search_paths=[str(tmp_path)]
+    )
+    assert list(snapshot.symbols) == expected
 
 
 def _symbol_names(gd: GreatDocs, package_name: str) -> list[str]:
