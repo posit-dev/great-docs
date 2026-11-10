@@ -10,12 +10,14 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from griffe import AliasResolutionError, CyclicAliasError
+
 from .._interlinks.sphinx_inventory import INVENTORY_FILENAME
 from ._settings import Settings, SourceLinks
 from .content import Doc, Link, Page
 from .inventory import create_inventory, write_inventory
-from .resolve import Resolver, resolution_lang
-from .spec import SpecOptions, SpecSection
+from .resolve import ObjectNotFoundError, Resolver, resolution_lang
+from .spec import SpecObject, SpecOptions, SpecSection, unique_page_paths
 from .write import (
     write_index,
     write_pages,
@@ -79,13 +81,16 @@ class APIReference:
         self.options = block.get("options")
         # Raw config dicts become `SpecSection` objects; their `contents` are
         # upgraded to `SpecObject` inside `SpecSection.__post_init__`.
-        raw_sections: list[Any] = block.get("sections", []) or []
-        self.sections = [
-            s if isinstance(s, SpecSection) else SpecSection(**s) for s in raw_sections
-        ]
-
         self._resolver = Resolver(self.settings)
         self._resolver.current_package = self.package
+
+        raw_sections: list[Any] = block.get("sections", []) or []
+        # Page paths are settled here, before anything reads them, so the pages,
+        # the index, the sidebar and `llms.txt` all agree on where each page lives.
+        self.sections = unique_page_paths(
+            [s if isinstance(s, SpecSection) else SpecSection(**s) for s in raw_sections],
+            self._entry_label,
+        )
 
     @staticmethod
     def _read_lang(cfg: dict[str, Any]) -> str:
@@ -169,24 +174,46 @@ class APIReference:
             raise KeyError("No `api-reference:` section found in your _quarto.yml.")
         return dict(cast("dict[str, Any]", block))
 
+    def _entry_label(self, section: SpecSection, entry: SpecObject) -> str | None:
+        """
+        The label shown on the page of the object an entry documents
+
+        Used to name the page of an entry whose path collides with another's.
+        Returns `None` when the object cannot be found, so the page falls back
+        to a numbered suffix.
+        """
+        from ._render._label import get_label
+
+        s = self.settings
+        if s.source_dir and (source_dir := str(Path(s.source_dir).absolute())) not in sys.path:
+            sys.path.append(source_dir)
+        try:
+            return get_label(self._resolver.entry_object(section, entry))
+        except (ObjectNotFoundError, ImportError, AliasResolutionError, CyclicAliasError):
+            return None
+
     @cached_property
     def resolved(self) -> list[Section]:
         """The resolved section tree, computed once per instance"""
+        from .collect import unique_member_page_paths
+
         token = resolution_lang.set(self.settings.lang)
         try:
-            secs = self.sections or self._resolver.autogenerate_sections(self.package)
-            return self._resolver.resolve_sections(secs)
+            secs = self.sections or unique_page_paths(
+                self._resolver.autogenerate_sections(self.package), self._entry_label
+            )
+            return unique_member_page_paths(self._resolver.resolve_sections(secs))
         finally:
             resolution_lang.reset(token)
 
     @cached_property
     def documented_symbols(self) -> list[str]:
         """
-        Dotted stems of every documented object, `%nodoc` excluded
+        Return the authored Python names of documented objects, `%nodoc` excluded
 
-        One stem per documented target, first-occurrence order, deduped: a
-        top-level object (its page stem) and each documented member
-        (`stem.member`), recursively.
+        Preserve first-occurrence order and include each documented member
+        recursively. Convert module separators to dots and keep names independent
+        of the filenames assigned to reference pages.
         """
         stems: list[str] = []
 
@@ -199,7 +226,7 @@ class APIReference:
             for entry in section.contents:
                 if isinstance(entry, Page):
                     for doc in entry.contents:
-                        visit(doc, entry.path)
+                        visit(doc, doc.name.replace(":", "."))
         return list(dict.fromkeys(stems))
 
     @cached_property

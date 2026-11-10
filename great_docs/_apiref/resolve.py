@@ -299,16 +299,33 @@ class Resolver:
         with self._scoped(package=el.package):
             return self._resolve_documented_object(el)
 
-    def _resolve_documented_object(self, el: SpecObject) -> Doc | None:
-        """Locate the subject object in griffe and rebuild it with its resolved members"""
+    def entry_object(self, section: SpecSection, el: SpecObject) -> gf.Object | gf.Alias:
+        """
+        Locate the griffe object an entry of a section documents, without resolving it
+
+        Looks the object up exactly as resolving the section would, but skips
+        the resolution hooks, docstring parsing and members.
+        """
+        with self._scoped(package=section.package, options=section.options):
+            with self._scoped(package=el.package):
+                path, el, dynamic = self._locate(el)
+                return self.get_object_or_raise(path, dynamic=dynamic)
+
+    def _locate(self, el: SpecObject) -> tuple[str, SpecObject, bool]:
+        """The lookup path, the entry with inherited options merged in, and its dynamic mode"""
         path = _join_path(self.current_package, el.name)
 
         # Merge inherited section-level options under the entry's own settings.
         el = el.with_defaults(self.options)
 
-        _log.info(f"Getting object for {path}")
-
         dynamic = el.dynamic if el.dynamic is not None else self.dynamic
+        return path, el, dynamic
+
+    def _resolve_documented_object(self, el: SpecObject) -> Doc | None:
+        """Locate the subject object in griffe and rebuild it with its resolved members"""
+        path, el, dynamic = self._locate(el)
+
+        _log.info(f"Getting object for {path}")
 
         # The subject object being documented (the class/module/function itself).
         obj = self.get_object_or_raise(path, dynamic=dynamic)

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 
+from ._render._label import get_label
 from ._visitor import NodeTransformer, NodeVisitor, ctx_node
-from .content import Doc, Page, Section
+from .content import Doc, MemberPage, Page, Section
 from .inventory import InventoryItem, reference_uri
+from .spec import claim_page_path
 
 
 @dataclass
@@ -111,3 +114,36 @@ def remove_package_prefix(sections: list[Section], package: str) -> list[Section
 
     remover = _PackagePrefixRemover(package)
     return remover.visit(sections)  # type: ignore[return-value]
+
+
+class _MemberPagePathClaimer(NodeTransformer):
+    """A node tree whose member pages have paths no other page shares case-insensitively"""
+
+    def __init__(self, claimed: dict[str, str]) -> None:
+        self.claimed = claimed
+
+    def exit(self, el: object) -> object:
+        if isinstance(el, MemberPage):
+            path = claim_page_path(el.path, self.claimed, partial(get_label, el.obj))
+            return el if path == el.path else el.replace(path=path)
+        return super().exit(el)
+
+
+def unique_member_page_paths(sections: list[Section]) -> list[Section]:
+    """
+    Give every member page a path no other page shares case-insensitively
+
+    Top-level pages already carry unique paths (see `spec.unique_page_paths()`)
+    and the sidebar and `llms.txt` link to them by those paths, so they are
+    claimed first and never move. A member page (from `children: separate`)
+    that would share a file with another page on a case-insensitive filesystem
+    gets the member's label as a suffix instead (`Widget.Run-method`).
+    """
+    claimed: dict[str, str] = {}
+    for section in sections:
+        for entry in section.contents:
+            if isinstance(entry, Page) and not isinstance(entry, MemberPage):
+                _ = claim_page_path(entry.path, claimed)
+
+    claimer = _MemberPagePathClaimer(claimed)
+    return claimer.visit(sections)  # type: ignore[return-value]
