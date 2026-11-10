@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path, PurePosixPath
 from types import ModuleType
-from typing import Any, cast, get_args
+from typing import TYPE_CHECKING, Any, cast, get_args
 
 from .._api_diff import CliCommandInfo, CliOptionInfo
 from .._build.steps import USER_CODE_ERRORS
@@ -32,6 +32,10 @@ from .._project.layout import PACKAGE_DIRS
 from .._project.manifest import ManifestError
 from .._subprocess import TEXT_MODE_KWARGS
 from .model import CliArgument, CliCommand, CliOption
+
+if TYPE_CHECKING:
+    from rich_click import RichContext
+    from rich_click.rich_help_configuration import RichHelpConfiguration
 
 
 def is_typer_app(obj: Any) -> bool:
@@ -534,47 +538,69 @@ def entry_point_name(package_root: Path, target: str) -> str | None:
     return next(iter(scripts), None)
 
 
-def _strip_rich_markup(text: str, cmd: Any) -> str:
+def _rich_context(cmd: Any, name: str, parent: RichContext | None) -> RichContext | None:
     """
-    Strip Rich tags from help whose command uses Rich markup
+    Resolve a Rich command's local and inherited context settings without parsing arguments
+
+    Parameters
+    ----------
+    cmd
+        The command that owns the help text.
+    name
+        The command's name.
+    parent
+        The parent Rich command's context, or `None` for the root.
+
+    Returns
+    -------
+    :
+        The configured context, or `None` when the command does not use rich-click.
+    """
+    try:
+        from rich_click import RichCommand
+    except ImportError:
+        return None
+
+    if not isinstance(cmd, RichCommand):
+        return None
+
+    # Argument parsing would run parameter callbacks during documentation builds.
+    return cmd.context_class(cmd, info_name=name, parent=parent, **cmd.context_settings)
+
+
+def _strip_rich_markup(text: str, config: RichHelpConfiguration | None) -> str:
+    """
+    Strip Rich tags from structured help according to its formatter configuration
 
     Parameters
     ----------
     text
         The structured help text.
-    cmd
-        The command that owns the help text.
+    config
+        The command's effective Rich formatter configuration, or `None` for a
+        command that does not use rich-click.
 
     Returns
     -------
     :
-        Plain text for Rich markup, or the original text for other markup modes,
-        unavailable rich-click, or malformed tags.
+        Plain text with the configured emoji substitution for Rich markup, or the
+        original text for other markup modes and malformed tags.
     """
-    if not text:
+    if not text or config is None or config.text_markup != "rich":
         return text
+
+    from rich.errors import MarkupError
+    from rich.text import Text
 
     try:
-        from rich.errors import MarkupError
-        from rich.text import Text
-        from rich_click import RichCommand
-    except ImportError:
-        return text
-
-    if not isinstance(cmd, RichCommand):
-        return text
-
-    formatter = cmd.context_class(cmd, info_name="").make_formatter()
-    if formatter.config.text_markup != "rich":
-        return text
-
-    try:
-        return Text.from_markup(text).plain
+        return Text.from_markup(text, emoji=config.text_emojis).plain
     except MarkupError:
         return text
 
 
-def extract_command(cmd: Any, name: str, parent_path: str = "") -> CliCommand:
+def extract_command(
+    cmd: Any, name: str, parent_path: str = "", *, parent_context: RichContext | None = None
+) -> CliCommand:
     """
     Describe a Click command and its visible subcommands for the reference pages
 
@@ -589,6 +615,8 @@ def extract_command(cmd: Any, name: str, parent_path: str = "") -> CliCommand:
         The command's name.
     parent_path
         The invocation of the parent command, empty for the root.
+    parent_context
+        The parent Rich command's context, used to inherit formatter settings.
 
     Returns
     -------
@@ -598,6 +626,9 @@ def extract_command(cmd: Any, name: str, parent_path: str = "") -> CliCommand:
     """
     full_path = f"{parent_path} {name}".strip() if parent_path else name
 
+    context = _rich_context(cmd, name, parent_context)
+    config = context.make_formatter().config if context is not None else None
+
     options: list[CliOption] = []
     arguments: list[CliArgument] = []
     for param in cmd.params:
@@ -605,19 +636,19 @@ def extract_command(cmd: Any, name: str, parent_path: str = "") -> CliCommand:
         if kind == "option":
             opt_info = extract_option(param)
             if opt_info:
-                opt_info["help"] = _strip_rich_markup(opt_info.get("help", ""), cmd)
+                opt_info["help"] = _strip_rich_markup(opt_info.get("help", ""), config)
                 options.append(opt_info)
         elif kind == "argument":
             arguments.append(extract_argument(param))
 
-    command_help = _strip_rich_markup(cmd.help or "", cmd)
+    command_help = _strip_rich_markup(cmd.help or "", config)
     description, examples = parse_help_parts(command_help)
 
     # Click leaves `short_help` empty for some subcommands; derive it from the help string.
     short_help = getattr(cmd, "short_help", "") or ""
     if not short_help and command_help:
         short_help = cmd.get_short_help_str(limit=150)
-    short_help = _strip_rich_markup(short_help, cmd)
+    short_help = _strip_rich_markup(short_help, config)
 
     info: CliCommand = {
         "name": name,
@@ -638,7 +669,9 @@ def extract_command(cmd: Any, name: str, parent_path: str = "") -> CliCommand:
     if is_cli_group(cmd):
         for subcmd_name, subcmd in cmd.commands.items():
             if not getattr(subcmd, "hidden", False):
-                info["commands"].append(extract_command(subcmd, subcmd_name, full_path))
+                info["commands"].append(
+                    extract_command(subcmd, subcmd_name, full_path, parent_context=context)
+                )
 
     return info
 
