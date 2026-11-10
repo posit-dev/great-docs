@@ -39,7 +39,7 @@ from great_docs._website import page_metadata, page_status, quarto_yml
 from great_docs._website.navigation import shared_sidebar
 
 if TYPE_CHECKING:
-    from great_docs._api_diff import ApiSnapshot
+    from great_docs._api_evolution.model import ApiSnapshot
     from great_docs._interlinks import AliasClaims
     from great_docs._interlinks.sphinx_inventory import InventoryEntry
     from great_docs._project.layout import Layout
@@ -501,7 +501,7 @@ def _prune_cli_pages_for_version(
     if not cache_path.exists():
         return
 
-    from great_docs._api_diff import ApiSnapshot
+    from great_docs._api_evolution.model import ApiSnapshot
 
     try:
         snap = ApiSnapshot.load(cache_path)
@@ -860,7 +860,7 @@ def _rebuild_api_from_snapshot(
     :
         Relative paths of API pages, with `.html` extensions.
     """
-    from great_docs._api_diff import ApiSnapshot
+    from great_docs._api_evolution.model import ApiSnapshot
 
     snap = ApiSnapshot.load(snapshot_path)
     ref_dir = dest_dir / "reference"
@@ -1535,11 +1535,8 @@ def _rebuild_api_from_git_ref(
     :
         Relative paths of generated API pages, with `.html` extensions.
     """
-    from great_docs._api_diff import (
-        ApiSnapshot,
-        _detect_package_name,
-        snapshot_at_tag,
-    )
+    from great_docs._api_diff import _detect_package_name, snapshot_at_tag
+    from great_docs._api_evolution.model import ApiSnapshot
 
     git_ref = entry.git_ref
     if not git_ref:

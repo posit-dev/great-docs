@@ -4,6 +4,13 @@ import json
 from pathlib import Path
 
 from great_docs._api_diff import (
+    compute_version_badges,
+    diff_snapshots,
+    inject_badges_into_qmd,
+    load_snapshots_for_annotations,
+    render_badge_html,
+)
+from great_docs._api_evolution.model import (
     ApiDiff,
     ApiSnapshot,
     CliChange,
@@ -11,11 +18,6 @@ from great_docs._api_diff import (
     CliOptionInfo,
     ParameterInfo,
     SymbolInfo,
-    compute_version_badges,
-    diff_snapshots,
-    inject_badges_into_qmd,
-    load_snapshots_for_annotations,
-    render_badge_html,
 )
 from great_docs._cliref.click import extract_snapshot, snapshot_from_source
 

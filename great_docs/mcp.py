@@ -41,7 +41,7 @@ from ._project.layout import CONVENTIONAL_DOC_DIRS, Layout, LayoutError
 from ._utils import is_in_great_docs_build_dir, recognised_build_dirs
 
 if TYPE_CHECKING:
-    from ._api_diff import ApiSnapshot
+    from ._api_evolution.model import ApiSnapshot
     from ._project import Project
     from ._reference.exports import Exports
 

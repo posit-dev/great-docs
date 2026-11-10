@@ -25,7 +25,7 @@ from pathlib import Path, PurePosixPath
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, cast, get_args
 
-from .._api_diff import CliCommandInfo, CliOptionInfo
+from .._api_evolution.model import CliCommandInfo, CliOptionInfo
 from .._build.steps import USER_CODE_ERRORS
 from .._project import manifest as _manifest
 from .._project.layout import PACKAGE_DIRS

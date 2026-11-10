@@ -11,21 +11,12 @@ import pytest
 
 from great_docs._api_diff import (
     _EVOLUTION_TABLE_CSS,
-    ApiDiff,
-    ApiSnapshot,
     BinaryOnlySnapshotError,
     CallEdge,
-    CliChange,
-    CliCommandInfo,
-    CliOptionInfo,
     DependencyGraph,
     InheritanceEdge,
-    ParameterChange,
-    ParameterInfo,
-    SymbolChange,
     SymbolHistory,
     SymbolHistoryEntry,
-    SymbolInfo,
     _annotation_str,
     _augment_params_with_separators,
     _describe_param_change,
@@ -41,7 +32,6 @@ from great_docs._api_diff import (
     _get_tag_date,
     _mermaid_id,
     _parse_marker_attrs,
-    _symbol_change_to_dict,
     _symbol_info_for_dotted,
     api_diff,
     build_dependency_graph,
@@ -62,6 +52,18 @@ from great_docs._api_diff import (
     snapshot_from_griffe,
     symbol_history,
     timeline_to_mermaid,
+)
+from great_docs._api_evolution.model import (
+    ApiDiff,
+    ApiSnapshot,
+    CliChange,
+    CliCommandInfo,
+    CliOptionInfo,
+    ParameterChange,
+    ParameterInfo,
+    SymbolChange,
+    SymbolInfo,
+    _symbol_change_to_dict,
 )
 from great_docs._cliref.click import extract_snapshot, read_module_at_tag, snapshot_from_source
 

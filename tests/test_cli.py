@@ -1247,7 +1247,7 @@ def test_api_diff_help():
 @patch("great_docs._api_diff.api_diff")
 def test_api_diff_text_output(mock_diff, tmp_path, monkeypatch):
     """api-diff renders text output with diff summary."""
-    from great_docs._api_diff import ApiDiff, SymbolChange
+    from great_docs._api_evolution.model import ApiDiff, SymbolChange
 
     mock_diff.return_value = ApiDiff(
         old_version="v1.0",
@@ -1280,7 +1280,7 @@ def test_api_diff_text_output(mock_diff, tmp_path, monkeypatch):
 @patch("great_docs._api_diff.api_diff")
 def test_api_diff_json_output(mock_diff, tmp_path, monkeypatch):
     """api-diff --json outputs valid JSON."""
-    from great_docs._api_diff import ApiDiff
+    from great_docs._api_evolution.model import ApiDiff
 
     mock_diff.return_value = ApiDiff(
         old_version="v1.0",
@@ -1314,7 +1314,7 @@ def test_api_diff_no_snapshots(mock_diff, tmp_path, monkeypatch):
 @patch("great_docs._api_diff.api_diff")
 def test_api_diff_no_changes(mock_diff, tmp_path, monkeypatch):
     """api-diff with no changes shows success message."""
-    from great_docs._api_diff import ApiDiff
+    from great_docs._api_evolution.model import ApiDiff
 
     mock_diff.return_value = ApiDiff(
         old_version="v1.0",
@@ -1387,14 +1387,15 @@ def test_api_diff_timeline_empty(mock_timeline, tmp_path, monkeypatch):
 @patch("great_docs._api_diff.api_diff")
 def test_api_diff_graph_text(mock_diff, mock_snap, mock_graph, tmp_path, monkeypatch):
     """api-diff --graph outputs Mermaid dependency graph."""
-    from great_docs._api_diff import ApiDiff, DependencyGraph
+    from great_docs._api_diff import DependencyGraph
+    from great_docs._api_evolution.model import ApiDiff
 
     mock_diff.return_value = ApiDiff(
         old_version="v1.0",
         new_version="v2.0",
         package_name="pkg",
     )
-    from great_docs._api_diff import ApiSnapshot, SymbolInfo
+    from great_docs._api_evolution.model import ApiSnapshot, SymbolInfo
 
     mock_snap.return_value = ApiSnapshot(
         version="v2.0",
@@ -1417,7 +1418,8 @@ def test_api_diff_graph_text(mock_diff, mock_snap, mock_graph, tmp_path, monkeyp
 @patch("great_docs._api_diff.api_diff")
 def test_api_diff_graph_json(mock_diff, mock_snap, mock_graph, tmp_path, monkeypatch):
     """api-diff --graph --json outputs graph as JSON."""
-    from great_docs._api_diff import ApiDiff, ApiSnapshot, DependencyGraph, SymbolInfo
+    from great_docs._api_diff import DependencyGraph
+    from great_docs._api_evolution.model import ApiDiff, ApiSnapshot, SymbolInfo
 
     mock_diff.return_value = ApiDiff(
         old_version="v1.0",
@@ -1453,11 +1455,8 @@ def test_api_diff_graph_json(mock_diff, mock_snap, mock_graph, tmp_path, monkeyp
 @patch("great_docs._api_diff.list_version_tags", return_value=["v1.0", "v2.0"])
 def test_api_diff_symbol_text(mock_tags, mock_hist, tmp_path, monkeypatch):
     """api-diff --symbol outputs symbol history text."""
-    from great_docs._api_diff import (
-        SymbolHistory,
-        SymbolHistoryEntry,
-        SymbolInfo,
-    )
+    from great_docs._api_diff import SymbolHistory, SymbolHistoryEntry
+    from great_docs._api_evolution.model import SymbolInfo
 
     sym = SymbolInfo(name="build", kind="function")
     mock_hist.return_value = SymbolHistory(
@@ -1501,11 +1500,8 @@ def test_api_diff_symbol_text(mock_tags, mock_hist, tmp_path, monkeypatch):
 @patch("great_docs._api_diff.list_version_tags", return_value=["v1.0", "v2.0"])
 def test_api_diff_symbol_json(mock_tags, mock_hist, tmp_path, monkeypatch):
     """api-diff --symbol --json outputs JSON."""
-    from great_docs._api_diff import (
-        SymbolHistory,
-        SymbolHistoryEntry,
-        SymbolInfo,
-    )
+    from great_docs._api_diff import SymbolHistory, SymbolHistoryEntry
+    from great_docs._api_evolution.model import SymbolInfo
 
     sym = SymbolInfo(name="fn", kind="function")
     mock_hist.return_value = SymbolHistory(
@@ -1545,11 +1541,8 @@ def test_api_diff_symbol_json(mock_tags, mock_hist, tmp_path, monkeypatch):
 @patch("great_docs._api_diff.list_version_tags", return_value=["v1.0", "v2.0"])
 def test_api_diff_symbol_table_text(mock_tags, mock_hist, mock_table, tmp_path, monkeypatch):
     """api-diff --symbol --table outputs text table."""
-    from great_docs._api_diff import (
-        SymbolHistory,
-        SymbolHistoryEntry,
-        SymbolInfo,
-    )
+    from great_docs._api_diff import SymbolHistory, SymbolHistoryEntry
+    from great_docs._api_evolution.model import SymbolInfo
 
     sym = SymbolInfo(name="fn", kind="function")
     mock_hist.return_value = SymbolHistory(
@@ -1589,11 +1582,8 @@ def test_api_diff_symbol_table_text(mock_tags, mock_hist, mock_table, tmp_path, 
 @patch("great_docs._api_diff.list_version_tags", return_value=["v1.0", "v2.0"])
 def test_api_diff_symbol_table_html(mock_tags, mock_hist, mock_html, tmp_path, monkeypatch):
     """api-diff --symbol --table --html outputs HTML."""
-    from great_docs._api_diff import (
-        SymbolHistory,
-        SymbolHistoryEntry,
-        SymbolInfo,
-    )
+    from great_docs._api_diff import SymbolHistory, SymbolHistoryEntry
+    from great_docs._api_evolution.model import SymbolInfo
 
     sym = SymbolInfo(name="fn", kind="function")
     mock_hist.return_value = SymbolHistory(
@@ -1702,12 +1692,8 @@ def test_api_diff_exception_json(mock_diff, tmp_path, monkeypatch):
 @patch("great_docs._api_diff.list_version_tags", return_value=["v1.0", "v2.0", "v3.0"])
 def test_api_diff_symbol_changes_only(mock_tags, mock_hist, tmp_path, monkeypatch):
     """api-diff --symbol --changes-only filters to changed entries."""
-    from great_docs._api_diff import (
-        SymbolChange,
-        SymbolHistory,
-        SymbolHistoryEntry,
-        SymbolInfo,
-    )
+    from great_docs._api_diff import SymbolHistory, SymbolHistoryEntry
+    from great_docs._api_evolution.model import SymbolChange, SymbolInfo
 
     sym = SymbolInfo(name="fn", kind="function")
     mock_hist.return_value = SymbolHistory(
@@ -1762,7 +1748,7 @@ def test_api_diff_symbol_changes_only(mock_tags, mock_hist, tmp_path, monkeypatc
 @patch("great_docs._api_diff.api_diff")
 def test_api_diff_migration_hint(mock_diff, tmp_path, monkeypatch):
     """api-diff shows migration hints for removed symbols."""
-    from great_docs._api_diff import ApiDiff, SymbolChange
+    from great_docs._api_evolution.model import ApiDiff, SymbolChange
 
     mock_diff.return_value = ApiDiff(
         old_version="v1.0",
@@ -1791,7 +1777,7 @@ def test_api_diff_migration_hint(mock_diff, tmp_path, monkeypatch):
 @patch("great_docs._api_diff.api_diff")
 def test_api_diff_graph_no_snapshot(mock_diff, mock_snap, tmp_path, monkeypatch):
     """api-diff --graph exits with error when snapshot fails."""
-    from great_docs._api_diff import ApiDiff
+    from great_docs._api_evolution.model import ApiDiff
 
     mock_diff.return_value = ApiDiff(
         old_version="v1.0",
