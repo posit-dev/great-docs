@@ -30,6 +30,13 @@ if TYPE_CHECKING:
 __all__ = ["add_api_block", "api", "api_config", "cli", "go_cli", "interlinks", "mcp", "rust_cli"]
 
 
+def _prepare_imports(config: Config) -> None:
+    """Make the project's packages importable using Quarto's source paths"""
+    for path in quarto.environment(config).get("PYTHONPATH", "").split(os.pathsep):
+        if path and path not in sys.path:
+            sys.path.insert(0, path)
+
+
 def add_api_block(run: Run, config: Config, *, refresh: bool) -> None:
     """
     Add the API reference configuration to the build's Quarto configuration
@@ -92,6 +99,9 @@ def add_api_block(run: Run, config: Config, *, refresh: bool) -> None:
         return
 
     run.api_block = reference_block.configure(config, run.quarto_config, importable_name, sections)
+    # Navigation allocates collision suffixes before the reference pages are written.
+    # Both stages need to resolve the same objects to choose the same labels.
+    _prepare_imports(config)
     print("Added API reference configuration")
 
 
@@ -152,10 +162,7 @@ def api(
 
     from .._apiref.api_reference import APIReference
 
-    # Use the same package import paths as Quarto to document the same code.
-    for path in quarto.environment(config).get("PYTHONPATH", "").split(os.pathsep):
-        if path and path not in sys.path:
-            sys.path.insert(0, path)
+    _prepare_imports(config)
 
     from .._apiref.resolve import ObjectNotFoundError
 

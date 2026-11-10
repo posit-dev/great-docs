@@ -21,11 +21,91 @@ from great_docs._build import reference
 from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
 from great_docs._build.steps import Outcome, Skipped
+from great_docs._interlinks.sphinx_inventory import decode
 from great_docs._reference import discovery_cache
 from great_docs._reference.exports import Exports
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website import quarto_yml
-from tests.support import make_run, write_config, write_pyproject
+from great_docs._website.ai_agents import llms_txt
+from tests.support import (
+    StubRemote,
+    make_run,
+    prepare_build_directory,
+    write_config,
+    write_pyproject,
+)
+
+
+@pytest.mark.parametrize("dynamic", [False, True])
+def test_case_collision_links_match_pages_from_an_uninstalled_source_package(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, dynamic: bool
+) -> None:
+    """Keep early navigation links consistent with the pages generated later"""
+    name = "case_paths_source"
+    source = tmp_path / "src"
+    package = source / name
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text(
+        'class Foo:\n    """The Foo class"""\n\ndef foo():\n    """The foo function"""\n',
+        encoding="utf-8",
+    )
+    write_pyproject(tmp_path, name)
+    write_config(
+        tmp_path,
+        {"dynamic": dynamic, "reference": [{"title": "API", "contents": ["Foo", "foo"]}]},
+    )
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs._remote = StubRemote()
+    original_paths = list(sys.path)
+    assert str(source) not in original_paths
+
+    try:
+        for _ in range(2):
+            monkeypatch.chdir(tmp_path)
+            monkeypatch.setattr(sys, "path", original_paths.copy())
+            sys.modules.pop(name, None)
+            run = make_run(docs)
+            prepare_build_directory(docs, run)
+            sidebar = run.contributions[0].sidebars[0]
+            index_path = llms_txt.write_index(
+                docs.layout,
+                run.api_block,
+                {},
+                site_url=None,
+                report=lambda _: None,
+            )
+            assert index_path is not None
+            llms_index = index_path.read_text(encoding="utf-8")
+            monkeypatch.chdir(docs.layout.build_dir)
+            outcome, ref = reference.api(
+                run, docs._config, docs.layout, BuildLog(stream=io.StringIO())
+            )
+
+            assert outcome == "API reference generated"
+            assert ref is not None
+            assert [page.path for page in ref.manifest.pages] == ["Foo", "foo-function"]
+            assert [link["href"] for link in sidebar.contents[1]["contents"]] == [
+                "reference/Foo.qmd",
+                "reference/foo-function.qmd",
+            ]
+            assert "[Foo](reference/Foo.html)" in llms_index
+            assert "[foo](reference/foo-function.html)" in llms_index
+            reference_dir = docs.layout.build_dir / "reference"
+            assert {p.name for p in reference_dir.glob("*.qmd")} == {
+                "index.qmd",
+                "Foo.qmd",
+                "foo-function.qmd",
+            }
+            index = (reference_dir / "index.qmd").read_text(encoding="utf-8")
+            assert "Foo.qmd#" in index
+            assert "foo-function.qmd#" in index
+            inventory = decode((docs.layout.build_dir / "objects.inv").read_bytes())
+            assert {entry.uri.split("#")[0] for entry in inventory.entries} == {
+                "reference/Foo.html",
+                "reference/foo-function.html",
+            }
+    finally:
+        sys.modules.pop(name, None)
 
 
 def _source_linked_project(root: Path, name: str, branch: str) -> GreatDocs:
