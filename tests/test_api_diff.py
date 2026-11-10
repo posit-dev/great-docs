@@ -9,23 +9,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from great_docs._api_diff import (
-    _EVOLUTION_TABLE_CSS,
-    _augment_params_with_separators,
-    _escape_html,
-    _filter_tag_range,
-    _parse_marker_attrs,
-    evolution_table,
-    evolution_table_html,
-    evolution_table_text,
-    evolution_table_to_dict,
-    process_evolution_markers,
-    process_evolution_markers_in_file,
-    render_badge_html,
-    render_evolution_table,
-    render_evolution_table_from_dict,
-    timeline_to_mermaid,
-)
 from great_docs._api_evolution.compare import (
     _describe_param_change,
     _diff_cli_command,
@@ -46,6 +29,12 @@ from great_docs._api_evolution.history import (
     format_signature,
     symbol_history,
 )
+from great_docs._api_evolution.markers import (
+    _parse_marker_attrs,
+    process_evolution_markers,
+    process_evolution_markers_in_file,
+    render_badge_html,
+)
 from great_docs._api_evolution.model import (
     ApiDiff,
     ApiSnapshot,
@@ -57,6 +46,19 @@ from great_docs._api_evolution.model import (
     SymbolChange,
     SymbolInfo,
     _symbol_change_to_dict,
+)
+from great_docs._api_evolution.render import (
+    _EVOLUTION_TABLE_CSS,
+    _augment_params_with_separators,
+    _escape_html,
+    _filter_tag_range,
+    evolution_table,
+    evolution_table_html,
+    evolution_table_text,
+    evolution_table_to_dict,
+    render_evolution_table,
+    render_evolution_table_from_dict,
+    timeline_to_mermaid,
 )
 from great_docs._api_evolution.snapshot import (
     BinaryOnlySnapshotError,
@@ -1639,7 +1641,7 @@ def test_missing_new_returns_all():
     assert _filter_tag_range(tags, None, "v99") == ["v1", "v2"]
 
 
-@patch("great_docs._api_diff.list_version_tags")
+@patch("great_docs._api_evolution.render.list_version_tags")
 def test_no_tags(mock_tags):
     mock_tags.return_value = []
     result = render_evolution_table("/fake", "build")
@@ -1648,8 +1650,8 @@ def test_no_tags(mock_tags):
     assert result.startswith("<!--")
 
 
-@patch("great_docs._api_diff.symbol_history")
-@patch("great_docs._api_diff.list_version_tags")
+@patch("great_docs._api_evolution.render.symbol_history")
+@patch("great_docs._api_evolution.render.list_version_tags")
 def test_no_history(mock_tags, mock_hist):
     mock_tags.return_value = ["v1", "v2"]
     mock_hist.return_value = None
@@ -1658,8 +1660,8 @@ def test_no_history(mock_tags, mock_hist):
     assert "no evolution data" in result
 
 
-@patch("great_docs._api_diff.symbol_history")
-@patch("great_docs._api_diff.list_version_tags")
+@patch("great_docs._api_evolution.render.symbol_history")
+@patch("great_docs._api_evolution.render.list_version_tags")
 def test_returns_css_and_table(mock_tags, mock_hist):
     mock_tags.return_value = ["v1", "v2"]
     sym = SymbolInfo(
@@ -1690,8 +1692,8 @@ def test_returns_css_and_table(mock_tags, mock_hist):
     assert "<details" not in result  # disclosure=False by default
 
 
-@patch("great_docs._api_diff.symbol_history")
-@patch("great_docs._api_diff.list_version_tags")
+@patch("great_docs._api_evolution.render.symbol_history")
+@patch("great_docs._api_evolution.render.list_version_tags")
 def test_include_css_false(mock_tags, mock_hist):
     mock_tags.return_value = ["v1"]
     sym = SymbolInfo(
@@ -1717,8 +1719,8 @@ def test_include_css_false(mock_tags, mock_hist):
     assert "<table" in result or "<details" in result
 
 
-@patch("great_docs._api_diff.symbol_history")
-@patch("great_docs._api_diff.list_version_tags")
+@patch("great_docs._api_evolution.render.symbol_history")
+@patch("great_docs._api_evolution.render.list_version_tags")
 def test_disclosure_false(mock_tags, mock_hist):
     mock_tags.return_value = ["v1"]
     sym = SymbolInfo(
@@ -1744,8 +1746,8 @@ def test_disclosure_false(mock_tags, mock_hist):
     assert "<table" in result
 
 
-@patch("great_docs._api_diff.symbol_history")
-@patch("great_docs._api_diff.list_version_tags")
+@patch("great_docs._api_evolution.render.symbol_history")
+@patch("great_docs._api_evolution.render.list_version_tags")
 def test_tag_range_filtering(mock_tags, mock_hist):
     mock_tags.return_value = ["v1", "v2", "v3", "v4"]
     sym = SymbolInfo(
@@ -1817,7 +1819,7 @@ def test_whitespace_around_equals():
     assert _parse_marker_attrs('symbol = "build"') == {"symbol": "build"}
 
 
-@patch("great_docs._api_diff.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_table")
 def test_replaces_marker(mock_render):
     mock_render.return_value = "<table>mock</table>"
     content = 'Before\n<!-- %evolution symbol="build" -->\nAfter'
@@ -1829,7 +1831,7 @@ def test_replaces_marker(mock_render):
     assert "<!-- %evolution" not in result
 
 
-@patch("great_docs._api_diff.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_table")
 def test_passes_attributes(mock_render):
     mock_render.return_value = "<table/>"
     content = '<!-- %evolution symbol="build" old_version="v1" new_version="v2" changes_only="false" disclosure="false" css="false" -->'
@@ -1852,7 +1854,7 @@ def test_missing_symbol_gives_error():
     assert result.startswith("<!--")
 
 
-@patch("great_docs._api_diff.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_table")
 def test_multiple_markers(mock_render):
     mock_render.side_effect = ["<table>A</table>", "<table>B</table>"]
     content = '<!-- %evolution symbol="foo" -->\n<!-- %evolution symbol="bar" -->'
@@ -1863,7 +1865,7 @@ def test_multiple_markers(mock_render):
     assert mock_render.call_count == 2
 
 
-@patch("great_docs._api_diff.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_table")
 def test_no_markers_returns_unchanged(mock_render):
     content = "No markers here."
     result = process_evolution_markers(content, "/fake")
@@ -1890,14 +1892,14 @@ def test_package_that_fails_to_load_gives_error_comment(tmp_path: Path):
     assert result.startswith("<!-- %evolution error for build: Syntax error")
 
 
-@patch("great_docs._api_diff.render_evolution_table", side_effect=TypeError("bug"))
+@patch("great_docs._api_evolution.markers.render_evolution_table", side_effect=TypeError("bug"))
 def test_unexpected_error_propagates(mock_render):
     """Propagate unexpected errors raised while rendering an evolution table"""
     with pytest.raises(TypeError, match="bug"):
         process_evolution_markers('<!-- %evolution symbol="build" -->', "/fake")
 
 
-@patch("great_docs._api_diff.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_table")
 def test_summary_attr(mock_render):
     mock_render.return_value = "<table/>"
     content = '<!-- %evolution symbol="build" summary="Build history" -->'
@@ -1908,7 +1910,7 @@ def test_summary_attr(mock_render):
     assert kwargs["summary_text"] == "Build history"
 
 
-@patch("great_docs._api_diff.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_table")
 def test_package_attr_overrides_argument(mock_render):
     mock_render.return_value = "<table/>"
     content = '<!-- %evolution symbol="fn" package="other_pkg" -->'
@@ -1919,7 +1921,7 @@ def test_package_attr_overrides_argument(mock_render):
     assert kwargs["package"] == "other_pkg"
 
 
-@patch("great_docs._api_diff.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_table")
 def test_reads_and_processes(mock_render, tmp_path):
     mock_render.return_value = "<table>result</table>"
     qmd = tmp_path / "test.qmd"
@@ -1933,7 +1935,7 @@ def test_reads_and_processes(mock_render, tmp_path):
     assert "<!-- %evolution" in qmd.read_text()
 
 
-@patch("great_docs._api_diff.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_table")
 def test_in_place(mock_render, tmp_path):
     mock_render.return_value = "<table>replaced</table>"
     qmd = tmp_path / "test.qmd"
@@ -1946,7 +1948,7 @@ def test_in_place(mock_render, tmp_path):
     assert "<!-- %evolution symbol" not in written
 
 
-@patch("great_docs._api_diff.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_table")
 def test_no_markers_skips_write(mock_render, tmp_path):
     qmd = tmp_path / "test.qmd"
     qmd.write_text("No markers.")
@@ -2878,10 +2880,12 @@ def test_binary_only_tag_reports_snapshot_limit(tmp_path: Path, artifact: str) -
 
 
 def test_render_evolution_table_callable_via_top_level_import():
-    """great_docs.render_evolution_table wraps _api_diff.render_evolution_table."""
+    """Render a table through the package-level convenience function"""
     import great_docs
 
-    with patch("great_docs._api_diff.render_evolution_table", return_value="<html/>") as mock:
+    with patch(
+        "great_docs._api_evolution.render.render_evolution_table", return_value="<html/>"
+    ) as mock:
         result = great_docs.render_evolution_table("/fake", "sym")
 
     mock.assert_called_once_with("/fake", "sym")
@@ -3623,7 +3627,7 @@ def test_symbol_history_explicit_tags(mock_date, mock_snap):
 # --- render_evolution_table: no matching tags in range ---
 
 
-@patch("great_docs._api_diff.list_version_tags")
+@patch("great_docs._api_evolution.render.list_version_tags")
 def test_render_evolution_table_no_matching_tags(mock_tags):
     """render_evolution_table returns comment when tag range is empty."""
     mock_tags.return_value = ["v1", "v2", "v3"]
@@ -3637,8 +3641,8 @@ def test_render_evolution_table_no_matching_tags(mock_tags):
 # --- render_evolution_table: html starts with <!-- --+
 
 
-@patch("great_docs._api_diff.symbol_history")
-@patch("great_docs._api_diff.list_version_tags")
+@patch("great_docs._api_evolution.render.symbol_history")
+@patch("great_docs._api_evolution.render.list_version_tags")
 def test_render_evolution_table_passes_through_comment(mock_tags, mock_hist):
     """render_evolution_table passes through comment from evolution_table_html."""
     mock_tags.return_value = ["v1"]

@@ -32,8 +32,8 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        from great_docs._api_diff import (
-            EVOLUTION_ERRORS,
+        from great_docs._api_evolution.markers import EVOLUTION_ERRORS
+        from great_docs._api_evolution.render import (
             render_evolution_table,
             render_evolution_table_from_dict,
         )

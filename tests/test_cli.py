@@ -1536,7 +1536,7 @@ def test_api_diff_symbol_json(mock_tags, mock_hist, tmp_path, monkeypatch):
     assert data["symbol"] == "fn"
 
 
-@patch("great_docs._api_diff.evolution_table_text")
+@patch("great_docs._api_evolution.render.evolution_table_text")
 @patch("great_docs._api_evolution.history.symbol_history")
 @patch("great_docs._api_evolution.snapshot.list_version_tags", return_value=["v1.0", "v2.0"])
 def test_api_diff_symbol_table_text(mock_tags, mock_hist, mock_table, tmp_path, monkeypatch):
@@ -1577,7 +1577,7 @@ def test_api_diff_symbol_table_text(mock_tags, mock_hist, mock_table, tmp_path, 
     assert "fn" in result.output
 
 
-@patch("great_docs._api_diff.evolution_table_html")
+@patch("great_docs._api_evolution.render.evolution_table_html")
 @patch("great_docs._api_evolution.history.symbol_history")
 @patch("great_docs._api_evolution.snapshot.list_version_tags", return_value=["v1.0", "v2.0"])
 def test_api_diff_symbol_table_html(mock_tags, mock_hist, mock_html, tmp_path, monkeypatch):

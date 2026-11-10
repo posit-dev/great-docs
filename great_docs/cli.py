@@ -3280,9 +3280,13 @@ def api_diff_cmd(
     import json
     import shutil
 
-    from ._api_diff import evolution_table_html, evolution_table_text, timeline_to_mermaid
     from ._api_evolution.compare import api_diff
     from ._api_evolution.history import build_dependency_graph, build_timeline, symbol_history
+    from ._api_evolution.render import (
+        evolution_table_html,
+        evolution_table_text,
+        timeline_to_mermaid,
+    )
     from ._api_evolution.snapshot import _detect_package_name, snapshot_at_tag, snapshot_from_griffe
 
     project_root = Path(project_path) if project_path else Path.cwd()
