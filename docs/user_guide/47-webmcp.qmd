@@ -79,8 +79,9 @@ make from a `file://` page, so most tools would fail.
 
 ## The Tools
 
-Every page registers these five tools, and a site with an API reference adds two more. Each tool's
-description tells the agent when to use it and gives an example question.
+Every page registers these five tools. A site with an API reference adds two more, and a site with
+a [CLI reference](07-cli-documentation.qmd) adds one. Each tool's description tells the agent when
+to use it and gives an example question.
 
 | Tool | Returns | Example question |
 |---|---|---|
@@ -106,6 +107,15 @@ The docstring sections are named after the reference's headings. On a site in an
 [language](23-internationalization.qmd), the headings are translated, so `include` can pick only the
 signature, the description and the Markdown. Leave `include` out to get every section.
 
+A site with CLI reference pages adds a tool for them:
+
+| Tool | Returns | Example question |
+|---|---|---|
+| `get_cli_help` | One command's page as Markdown, with its usage, options, arguments and full `--help` text, and its subcommands. `command` can leave out the program's name, so `config show` and `pkg config show` are the same command | "What options does the build command take?" |
+
+Without `command`, `get_cli_help` returns the command documented on the open page, or else the
+root command. A command it doesn't know comes back as an error listing the closest commands.
+
 A few details apply to all of them:
 
 - **Results are JSON objects with absolute URLs**, so an agent can link the reader to what it found.
@@ -116,9 +126,9 @@ A few details apply to all of them:
   `not_found`, `ambiguous` (with `candidates` to choose from), `fetch_failed`, `unavailable` or
   `internal`.
 - **The Markdown comes from the page's companion `.md` file**, so code blocks and tables arrive
-  intact. With [`markdown_pages: false`](05-configuration.qmd#markdown-pages), `get_page` and
-  `get_api_reference` can't read pages and report `unavailable` with the page's URL, and
-  `get_current_page` falls back to the page's text.
+  intact. With [`markdown_pages: false`](05-configuration.qmd#markdown-pages), `get_page`,
+  `get_api_reference` and `get_cli_help` can't read pages and report `unavailable` with the page's
+  URL, and `get_current_page` falls back to the page's text.
 
 ## Calling the Tools from Scripts
 
@@ -289,6 +299,8 @@ Some other problems and their causes:
   requests the tools make. Serve the site with `great-docs preview` instead.
 - **`list_api` and `get_api_reference` aren't registered.** The site has no API reference, or
   the build skipped it.
+- **`get_cli_help` isn't registered.** The site has no CLI reference pages: check the build log
+  for the CLI reference step.
 - **`search_docs` reports `fetch_failed` but other tools work.** The site has no `search.json`,
   which Quarto writes when the site has search turned on.
 - **A page is missing from `list_pages`.** It's a draft, sets `webmcp: {listed: false}`, or wasn't
