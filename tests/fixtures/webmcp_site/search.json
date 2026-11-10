@@ -154,9 +154,41 @@
  {
   "objectID": "reference/cli/index.html",
   "href": "reference/cli/index.html",
+  "title": "CLI Reference",
+  "section": "",
+  "text": "example build config show",
+  "crumbs": []
+ },
+ {
+  "objectID": "reference/cli/example.html",
+  "href": "reference/cli/example.html",
   "title": "example",
   "section": "",
-  "text": "Usage: example [OPTIONS] COMMAND",
+  "text": "Run the example tool. Usage: example [OPTIONS] COMMAND",
+  "crumbs": []
+ },
+ {
+  "objectID": "reference/cli/build.html",
+  "href": "reference/cli/build.html",
+  "title": "example build",
+  "section": "",
+  "text": "Build the widgets. --fast Skip the checks.",
+  "crumbs": []
+ },
+ {
+  "objectID": "reference/cli/config.html",
+  "href": "reference/cli/config.html",
+  "title": "example config",
+  "section": "",
+  "text": "Manage configuration.",
+  "crumbs": []
+ },
+ {
+  "objectID": "reference/cli/config/show.html",
+  "href": "reference/cli/config/show.html",
+  "title": "example config show",
+  "section": "",
+  "text": "Show the configuration.",
   "crumbs": []
  }
 ]
