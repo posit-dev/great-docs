@@ -354,6 +354,32 @@ class TestBuild:
             },
         ]
 
+    def test_a_method_on_its_class_page_has_no_summary(self, tmp_path: Path):
+        # The page's description summarizes the class.
+        root = _site(tmp_path)
+        _write(
+            root.site_dir / "objects.inv",
+            _inventory(
+                (
+                    "example.Widget.stop",
+                    "method",
+                    "reference/Widget.html#stop",
+                    "example.Widget.stop",
+                ),
+                (
+                    "example.Widget",
+                    "class",
+                    "reference/Widget.html#example.Widget",
+                    "example.Widget",
+                ),
+            ),
+        )
+
+        manifest, _ = _build(root)
+
+        summaries = {item["name"]: item.get("summary") for item in manifest["api"]}
+        assert summaries == {"example.Widget.stop": None, "example.Widget": "A widget."}
+
     def test_cli_pages_and_the_changelog_are_indexed(self, tmp_path: Path):
         manifest, _ = _build(_site(tmp_path))
 
