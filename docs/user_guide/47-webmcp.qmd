@@ -79,8 +79,8 @@ make from a `file://` page, so most tools would fail.
 
 ## The Tools
 
-Every page registers these five tools. Each one's description tells the agent when to use it and
-gives an example question.
+Every page registers these five tools, and a site with an API reference adds two more. Each tool's
+description tells the agent when to use it and gives an example question.
 
 | Tool | Returns | Example question |
 |---|---|---|
@@ -89,6 +89,22 @@ gives an example question.
 | `list_pages` | The site's pages grouped by section, with titles, URLs, descriptions, tags and status. Blog posts come newest first | "What guides are there?" |
 | `get_page` | One page, or one `section` of it, as Markdown. `page` can be a path, URL, title, file name or API name | "Show me the GitHub Pages part of the deployment guide." |
 | `search_docs` | The best-matching page sections for a `query`, with excerpts, URLs and scores. `scope` limits the search to one kind of page (such as `guide`, `api` or `blog`) or one section | "How do I deploy to GitHub Pages?" |
+
+The API tools read the API reference:
+
+| Tool | Returns | Example question |
+|---|---|---|
+| `list_api` | The documented classes, functions and methods grouped by reference section, each with its full name, kind, summary and URL. `section` picks one section by title | "Which functions does this package have?" |
+| `get_api_reference` | One object's summary, signature and description, and its docstring sections, such as `parameters`, `returns`, `raises` and `examples`, as Markdown. `include` picks the parts to return, and `"markdown"` adds the whole reference | "What arguments does `spin()` take?" |
+
+`get_api_reference` finds an object by its full name (`pkg.Widget.spin`), a short name (`spin` or
+`Widget.spin`) in any case, or the end of its full name. A name that fits more than one object, or
+none, comes back as an error listing the closest objects. On an object's reference page, `name` is
+optional and defaults to that object.
+
+The docstring sections are named after the reference's headings. On a site in another
+[language](23-internationalization.qmd), the headings are translated, so `include` can pick only the
+signature, the description and the Markdown. Leave `include` out to get every section.
 
 A few details apply to all of them:
 
@@ -100,9 +116,9 @@ A few details apply to all of them:
   `not_found`, `ambiguous` (with `candidates` to choose from), `fetch_failed`, `unavailable` or
   `internal`.
 - **The Markdown comes from the page's companion `.md` file**, so code blocks and tables arrive
-  intact. With [`markdown_pages: false`](05-configuration.qmd#markdown-pages), `get_page` can't read
-  pages and reports `unavailable` with the page's URL, and `get_current_page` falls back to the
-  page's text.
+  intact. With [`markdown_pages: false`](05-configuration.qmd#markdown-pages), `get_page` and
+  `get_api_reference` can't read pages and report `unavailable` with the page's URL, and
+  `get_current_page` falls back to the page's text.
 
 ## Calling the Tools from Scripts
 
@@ -271,6 +287,8 @@ Some other problems and their causes:
 - **`list_pages`, `get_page` and `search_docs` report `fetch_failed`, and `get_site_overview` has
   no site details.** The page was probably opened from a `file://` URL, where Chrome blocks the
   requests the tools make. Serve the site with `great-docs preview` instead.
+- **`list_api` and `get_api_reference` aren't registered.** The site has no API reference, or
+  the build skipped it.
 - **`search_docs` reports `fetch_failed` but other tools work.** The site has no `search.json`,
   which Quarto writes when the site has search turned on.
 - **A page is missing from `list_pages`.** It's a draft, sets `webmcp: {listed: false}`, or wasn't
