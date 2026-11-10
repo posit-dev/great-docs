@@ -205,6 +205,28 @@ def test_an_unfindable_object_falls_back_to_a_number(monkeypatch: pytest.MonkeyP
     assert ref.sections[0].contents[1].page_path == "foo-2"  # type: ignore[union-attr]
 
 
+def test_an_unresolved_alias_falls_back_to_a_number(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = gf.Module("mypkg", modules_collection=gf.ModulesCollection())
+    objects: dict[str, gf.Object | gf.Alias] = {
+        "mypkg:Foo": _class("Foo"),
+        "mypkg:foo": gf.Alias("foo", "missing.target", parent=module),
+    }
+    ref = _api_ref(monkeypatch, objects, ["Foo", "foo"])
+
+    assert ref.sections[0].contents[1].page_path == "foo-2"  # type: ignore[union-attr]
+
+
+def test_unexpected_label_lookup_errors_propagate(monkeypatch: pytest.MonkeyPatch) -> None:
+    def get_object(path: str, **kwargs: object) -> gf.Object:
+        raise RuntimeError("broken label lookup")
+
+    monkeypatch.setattr(introspect, "get_object", get_object)
+    with pytest.raises(RuntimeError, match="broken label lookup"):
+        APIReference(
+            {"package": "mypkg", "sections": [{"title": "API", "contents": ["Foo", "foo"]}]}
+        )
+
+
 def test_sidebar_links_to_the_moved_page():
     """Without an importable package the label is unknown, and the sidebar still agrees"""
     api_block = {

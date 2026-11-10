@@ -10,11 +10,13 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from griffe import AliasResolutionError, CyclicAliasError
+
 from .._interlinks.sphinx_inventory import INVENTORY_FILENAME
 from ._settings import Settings, SourceLinks
 from .content import Doc, Link, Page
 from .inventory import create_inventory, write_inventory
-from .resolve import Resolver, resolution_lang
+from .resolve import ObjectNotFoundError, Resolver, resolution_lang
 from .spec import SpecObject, SpecOptions, SpecSection, unique_page_paths
 from .write import (
     write_index,
@@ -187,7 +189,7 @@ class APIReference:
             sys.path.append(source_dir)
         try:
             return get_label(self._resolver.entry_object(section, entry))
-        except Exception:  # noqa: BLE001
+        except (ObjectNotFoundError, ImportError, AliasResolutionError, CyclicAliasError):
             return None
 
     @cached_property
