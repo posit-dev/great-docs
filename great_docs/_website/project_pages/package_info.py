@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
     from ..._project.layout import Layout
     from ..._project.manifest import Dependency, Manifest
-    from ..._remote import Remote
+    from ..._project.remote import Remote
     from ...config import Config
 
 __all__ = ["FILENAME", "write_page"]

@@ -16,13 +16,13 @@ from ._build import from_repo as repository
 from ._build import quarto, serve, site
 from ._build.steps import PROJECT_ERRORS, USER_CODE_ERRORS, BuildError, print_warning
 from ._content import user_guide
-from ._install import update_gitignore
 from ._project import Project
 from ._project import manifest as _manifest
 from ._project.layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
 from ._project.manifest import ManifestError
+from ._project.remote import HttpRemote
+from ._project.scaffold import update_gitignore
 from ._reference.exports import Exports
-from ._remote import HttpRemote
 from ._website import changelog as changelog_page
 from ._website import quarto_yml
 from .config import ConfigError

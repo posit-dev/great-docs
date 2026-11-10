@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from .._apiref.api_reference import APIReference
     from .._content.user_guide import UserGuide
     from .._project.layout import Layout
-    from .._remote import Remote
+    from .._project.remote import Remote
     from .._website.identity import Identity
 
 __all__ = ["Run", "prepare_for_freeze", "preparation_steps", "run"]

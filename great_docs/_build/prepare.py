@@ -27,7 +27,7 @@ from .steps import Outcome, print_warning
 
 if TYPE_CHECKING:
     from .._project.layout import Layout
-    from .._remote import Remote
+    from .._project.remote import Remote
     from ..config import Config
     from .pipeline import Run
 

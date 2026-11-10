@@ -12,7 +12,7 @@ from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from ._project.github import GithubRepo, token_from_env
+from .github import GithubRepo, token_from_env
 
 __all__ = ["HttpRemote", "OfflineRemote", "Remote"]
 

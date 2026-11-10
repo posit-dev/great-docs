@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from .._project.github import GithubRepo
-    from .._remote import Remote
+    from .._project.remote import Remote
     from ..config import Config
 
 __all__ = ["Facts", "exact_tag", "source_links", "source_ref"]
