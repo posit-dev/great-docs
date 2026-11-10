@@ -1535,8 +1535,8 @@ def _rebuild_api_from_git_ref(
     :
         Relative paths of generated API pages, with `.html` extensions.
     """
-    from great_docs._api_diff import _detect_package_name, snapshot_at_tag
     from great_docs._api_evolution.model import ApiSnapshot
+    from great_docs._api_evolution.snapshot import _detect_package_name, snapshot_at_tag
 
     git_ref = entry.git_ref
     if not git_ref:

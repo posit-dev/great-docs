@@ -3330,8 +3330,10 @@ class TestRebuildApiFromGitRefCache:
                 "great_docs._versions.build._validate_git_ref_is_tag",
                 return_value=True,
             ),
-            patch("great_docs._api_diff._detect_package_name", return_value="pkg"),
-            patch("great_docs._api_diff.snapshot_at_tag", return_value=mock_snap) as snapshot,
+            patch("great_docs._api_evolution.snapshot._detect_package_name", return_value="pkg"),
+            patch(
+                "great_docs._api_evolution.snapshot.snapshot_at_tag", return_value=mock_snap
+            ) as snapshot,
         ):
             pages = _rebuild_api_from_git_ref(
                 dest, tmp_path, entry, documented_symbols=lambda name: ["func2"], quarto_config={}
@@ -3357,7 +3359,7 @@ class TestRebuildApiFromGitRefCache:
                 "great_docs._versions.build._validate_git_ref_is_tag",
                 return_value=True,
             ),
-            patch("great_docs._api_diff._detect_package_name", return_value=None),
+            patch("great_docs._api_evolution.snapshot._detect_package_name", return_value=None),
         ):
             pages = _rebuild_api_from_git_ref(dest, tmp_path, entry, quarto_config={})
 
@@ -3377,8 +3379,8 @@ class TestRebuildApiFromGitRefCache:
                 "great_docs._versions.build._validate_git_ref_is_tag",
                 return_value=True,
             ),
-            patch("great_docs._api_diff._detect_package_name", return_value="pkg"),
-            patch("great_docs._api_diff.snapshot_at_tag", return_value=None),
+            patch("great_docs._api_evolution.snapshot._detect_package_name", return_value="pkg"),
+            patch("great_docs._api_evolution.snapshot.snapshot_at_tag", return_value=None),
         ):
             pages = _rebuild_api_from_git_ref(dest, tmp_path, entry, quarto_config={})
 

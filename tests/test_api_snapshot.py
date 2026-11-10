@@ -3,13 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from great_docs._api_diff import (
-    compute_version_badges,
-    diff_snapshots,
-    inject_badges_into_qmd,
-    load_snapshots_for_annotations,
-    render_badge_html,
-)
+from great_docs._api_diff import compute_version_badges, inject_badges_into_qmd, render_badge_html
+from great_docs._api_evolution.compare import diff_snapshots
 from great_docs._api_evolution.model import (
     ApiDiff,
     ApiSnapshot,
@@ -19,6 +14,7 @@ from great_docs._api_evolution.model import (
     ParameterInfo,
     SymbolInfo,
 )
+from great_docs._api_evolution.snapshot import load_snapshots_for_annotations
 from great_docs._cliref.click import extract_snapshot, snapshot_from_source
 
 # ---------------------------------------------------------------------------

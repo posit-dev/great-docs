@@ -9,7 +9,7 @@ from types import ModuleType
 import pytest
 
 from great_docs import BuildError
-from great_docs._api_diff import snapshot_from_griffe
+from great_docs._api_evolution.snapshot import snapshot_from_griffe
 from great_docs._apiref.api_reference import APIReference
 from great_docs._apiref.inventory import InventoryItem
 from great_docs._reference import documented

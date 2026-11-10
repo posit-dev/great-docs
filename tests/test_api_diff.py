@@ -11,47 +11,40 @@ import pytest
 
 from great_docs._api_diff import (
     _EVOLUTION_TABLE_CSS,
-    BinaryOnlySnapshotError,
-    CallEdge,
-    DependencyGraph,
-    InheritanceEdge,
-    SymbolHistory,
-    SymbolHistoryEntry,
-    _annotation_str,
     _augment_params_with_separators,
-    _describe_param_change,
-    _detect_package_name,
-    _diff_cli_command,
-    _diff_parameters,
-    _diff_symbol,
     _escape_html,
-    _extract_bases,
-    _extract_decorators,
-    _extract_package_at_tag,
     _filter_tag_range,
-    _get_tag_date,
-    _mermaid_id,
     _parse_marker_attrs,
-    _symbol_info_for_dotted,
-    api_diff,
-    build_dependency_graph,
-    build_timeline,
-    diff_snapshots,
     evolution_table,
     evolution_table_html,
     evolution_table_text,
     evolution_table_to_dict,
-    format_signature,
-    list_version_tags,
     process_evolution_markers,
     process_evolution_markers_in_file,
     render_badge_html,
     render_evolution_table,
     render_evolution_table_from_dict,
-    snapshot_at_tag,
-    snapshot_from_griffe,
-    symbol_history,
     timeline_to_mermaid,
+)
+from great_docs._api_evolution.compare import (
+    _describe_param_change,
+    _diff_cli_command,
+    _diff_parameters,
+    _diff_symbol,
+    api_diff,
+    diff_snapshots,
+)
+from great_docs._api_evolution.history import (
+    CallEdge,
+    DependencyGraph,
+    InheritanceEdge,
+    SymbolHistory,
+    SymbolHistoryEntry,
+    _mermaid_id,
+    build_dependency_graph,
+    build_timeline,
+    format_signature,
+    symbol_history,
 )
 from great_docs._api_evolution.model import (
     ApiDiff,
@@ -64,6 +57,19 @@ from great_docs._api_evolution.model import (
     SymbolChange,
     SymbolInfo,
     _symbol_change_to_dict,
+)
+from great_docs._api_evolution.snapshot import (
+    BinaryOnlySnapshotError,
+    _annotation_str,
+    _detect_package_name,
+    _extract_bases,
+    _extract_decorators,
+    _extract_package_at_tag,
+    _get_tag_date,
+    _symbol_info_for_dotted,
+    list_version_tags,
+    snapshot_at_tag,
+    snapshot_from_griffe,
 )
 from great_docs._cliref.click import extract_snapshot, read_module_at_tag, snapshot_from_source
 
@@ -557,7 +563,7 @@ def test_timeline_to_mermaid_empty():
     assert "xychart-beta" in m
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._api_evolution.snapshot.subprocess.run")
 def test_parses_tags(mock_run):
     mock_run.return_value = MagicMock(
         returncode=0,
@@ -568,7 +574,7 @@ def test_parses_tags(mock_run):
     assert tags == ["v0.1.0", "v0.2.0", "v1.0.0"]
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._api_evolution.snapshot.subprocess.run")
 def test_handles_no_v_prefix(mock_run):
     mock_run.return_value = MagicMock(returncode=0, stdout="1.0.0\n2.0\n")
     tags = list_version_tags(Path("/fake"))
@@ -576,7 +582,7 @@ def test_handles_no_v_prefix(mock_run):
     assert tags == ["1.0.0", "2.0"]
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._api_evolution.snapshot.subprocess.run")
 def test_handles_failure(mock_run):
     mock_run.return_value = MagicMock(returncode=1, stdout="")
     tags = list_version_tags(Path("/fake"))
@@ -584,7 +590,7 @@ def test_handles_failure(mock_run):
     assert tags == []
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._api_evolution.snapshot.subprocess.run")
 def test_handles_timeout(mock_run):
     mock_run.side_effect = subprocess.TimeoutExpired(cmd="git", timeout=10)
     tags = list_version_tags(Path("/fake"))
@@ -830,8 +836,8 @@ def test_symbol_history_to_dict_roundtrip_json():
     assert loaded["symbol"] == "foo"
 
 
-@patch("great_docs._api_diff.list_version_tags")
-@patch("great_docs._api_diff.snapshot_at_tag")
+@patch("great_docs._api_evolution.history.list_version_tags")
+@patch("great_docs._api_evolution.history.snapshot_at_tag")
 def test_tracks_across_versions(mock_snap, mock_tags):
     mock_tags.return_value = ["v1", "v2", "v3"]
 
@@ -867,8 +873,8 @@ def test_tracks_across_versions(mock_snap, mock_tags):
     assert hist.entries[2].change is None  # unchanged from v2
 
 
-@patch("great_docs._api_diff.list_version_tags")
-@patch("great_docs._api_diff.snapshot_at_tag")
+@patch("great_docs._api_evolution.history.list_version_tags")
+@patch("great_docs._api_evolution.history.snapshot_at_tag")
 def test_symbol_not_present(mock_snap, mock_tags):
     mock_tags.return_value = ["v1", "v2"]
 
@@ -883,8 +889,8 @@ def test_symbol_not_present(mock_snap, mock_tags):
     assert all(not e.present for e in hist.entries)
 
 
-@patch("great_docs._api_diff.list_version_tags")
-@patch("great_docs._api_diff.snapshot_at_tag")
+@patch("great_docs._api_evolution.history.list_version_tags")
+@patch("great_docs._api_evolution.history.snapshot_at_tag")
 def test_symbol_added_later(mock_snap, mock_tags):
     mock_tags.return_value = ["v1", "v2"]
 
@@ -908,8 +914,8 @@ def test_symbol_added_later(mock_snap, mock_tags):
     assert hist.entries[1].change.change_type == "added"
 
 
-@patch("great_docs._api_diff.list_version_tags")
-@patch("great_docs._api_diff.snapshot_at_tag")
+@patch("great_docs._api_evolution.history.list_version_tags")
+@patch("great_docs._api_evolution.history.snapshot_at_tag")
 def test_symbol_removed(mock_snap, mock_tags):
     mock_tags.return_value = ["v1", "v2"]
 
@@ -2402,7 +2408,7 @@ def test_tagged_api_uses_configured_importable_module(tmp_path: Path) -> None:
     assert set(snapshot.symbols) == {"load"}
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._api_evolution.snapshot.subprocess.run")
 def test_list_version_tags_success(mock_run):
     """Returns sorted version tags."""
     mock_run.return_value = MagicMock(
@@ -2414,7 +2420,7 @@ def test_list_version_tags_success(mock_run):
     assert tags == ["v0.1.0", "v1.0.0", "v1.1.0"]
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._api_evolution.snapshot.subprocess.run")
 def test_list_version_tags_failure(mock_run):
     """Returns empty list on git failure."""
     mock_run.return_value = MagicMock(returncode=128, stdout="")
@@ -2422,7 +2428,7 @@ def test_list_version_tags_failure(mock_run):
     assert list_version_tags(Path("/project")) == []
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._api_evolution.snapshot.subprocess.run")
 def test_list_version_tags_timeout(mock_run):
     """Returns empty list on timeout."""
     mock_run.side_effect = subprocess.TimeoutExpired(cmd="git", timeout=10)
@@ -2430,7 +2436,7 @@ def test_list_version_tags_timeout(mock_run):
     assert list_version_tags(Path("/project")) == []
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._api_evolution.snapshot.subprocess.run")
 def test_extract_package_at_tag_not_found(mock_run, tmp_path: Path):
     """Return `None` when the package is absent from the tagged source"""
     mock_run.return_value = MagicMock(returncode=0, stdout="")
@@ -2439,7 +2445,7 @@ def test_extract_package_at_tag_not_found(mock_run, tmp_path: Path):
     assert result is None
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._api_evolution.snapshot.subprocess.run")
 def test_extract_package_at_tag_archive_fails(mock_run, tmp_path: Path):
     """Return `None` when `git archive` fails"""
 
@@ -2460,7 +2466,7 @@ def test_extract_package_at_tag_archive_fails(mock_run, tmp_path: Path):
     assert result is None
 
 
-@patch("great_docs._api_diff._extract_package_at_tag", return_value=None)
+@patch("great_docs._api_evolution.snapshot._extract_package_at_tag", return_value=None)
 def test_snapshot_at_tag_extraction_fails(mock_extract):
     """Returns None when extraction fails."""
     result = snapshot_at_tag(Path("/project"), "v1.0", "mypkg")
@@ -2468,8 +2474,8 @@ def test_snapshot_at_tag_extraction_fails(mock_extract):
     assert result is None
 
 
-@patch("great_docs._api_diff.snapshot_at_tag")
-@patch("great_docs._api_diff.list_version_tags", return_value=["v1.0", "v2.0"])
+@patch("great_docs._api_evolution.history.snapshot_at_tag")
+@patch("great_docs._api_evolution.history.list_version_tags", return_value=["v1.0", "v2.0"])
 def test_build_timeline_success(mock_tags, mock_snap):
     """Builds timeline entries for each tag."""
     snap1 = ApiSnapshot(
@@ -2495,8 +2501,8 @@ def test_build_timeline_success(mock_tags, mock_snap):
     assert timeline[1]["classes"] == 1
 
 
-@patch("great_docs._api_diff.snapshot_at_tag", return_value=None)
-@patch("great_docs._api_diff.list_version_tags", return_value=["v1.0"])
+@patch("great_docs._api_evolution.history.snapshot_at_tag", return_value=None)
+@patch("great_docs._api_evolution.history.list_version_tags", return_value=["v1.0"])
 def test_build_timeline_skip_failed(mock_tags, mock_snap):
     """Skips tags where snapshot fails."""
     timeline = build_timeline(Path("/project"), "pkg")
@@ -2504,7 +2510,7 @@ def test_build_timeline_skip_failed(mock_tags, mock_snap):
     assert timeline == []
 
 
-@patch("great_docs._api_diff._detect_package_name", return_value=None)
+@patch("great_docs._api_evolution.snapshot._detect_package_name", return_value=None)
 def test_api_diff_no_package_name(mock_detect):
     """Returns None when package name not detected."""
     result = api_diff(Path("/project"), "v1.0", "v2.0")
@@ -2512,8 +2518,8 @@ def test_api_diff_no_package_name(mock_detect):
     assert result is None
 
 
-@patch("great_docs._api_diff.snapshot_at_tag", return_value=None)
-@patch("great_docs._api_diff.snapshot_from_griffe")
+@patch("great_docs._api_evolution.snapshot.snapshot_at_tag", return_value=None)
+@patch("great_docs._api_evolution.snapshot.snapshot_from_griffe")
 def test_api_diff_head_version(mock_griffe, mock_tag):
     """Uses snapshot_from_griffe for HEAD version."""
     mock_griffe.return_value = ApiSnapshot(version="HEAD", package_name="pkg", symbols={})
@@ -2524,8 +2530,8 @@ def test_api_diff_head_version(mock_griffe, mock_tag):
     assert result is None
 
 
-@patch("great_docs._api_diff.diff_snapshots")
-@patch("great_docs._api_diff.snapshot_at_tag")
+@patch("great_docs._api_evolution.compare.diff_snapshots")
+@patch("great_docs._api_evolution.snapshot.snapshot_at_tag")
 def test_api_diff_success(mock_tag, mock_diff):
     """Successfully diffs two versions."""
     snap = ApiSnapshot(version="v1.0", package_name="pkg", symbols={})
@@ -2850,7 +2856,10 @@ def test_binary_only_tag_reports_snapshot_limit(tmp_path: Path, artifact: str) -
     _git(tmp_path, "tag", "v1.0.0")
 
     with (
-        patch("great_docs._api_diff.snapshot_from_griffe", side_effect=AssertionError("loaded")),
+        patch(
+            "great_docs._api_evolution.snapshot.snapshot_from_griffe",
+            side_effect=AssertionError("loaded"),
+        ),
         pytest.raises(BinaryOnlySnapshotError, match=r"versions\[\]\.api_snapshot"),
     ):
         snapshot_at_tag(tmp_path, "v1.0.0", "single")
@@ -3106,7 +3115,7 @@ def test_snapshot_from_griffe_skip_missing_member():
 # --- _get_tag_date success path ---
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._api_evolution.snapshot.subprocess.run")
 def test_get_tag_date_success(mock_run):
     """_get_tag_date returns date string on success."""
     mock_run.return_value = MagicMock(returncode=0, stdout="2024-03-15 12:00:00 -0500\n")
@@ -3115,7 +3124,7 @@ def test_get_tag_date_success(mock_run):
     assert result == "2024-03-15"
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._api_evolution.snapshot.subprocess.run")
 def test_get_tag_date_failure(mock_run):
     """_get_tag_date returns None on non-zero returncode."""
     mock_run.return_value = MagicMock(returncode=1, stdout="")
@@ -3124,7 +3133,7 @@ def test_get_tag_date_failure(mock_run):
     assert result is None
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._api_evolution.snapshot.subprocess.run")
 def test_get_tag_date_timeout(mock_run):
     """_get_tag_date returns None on timeout."""
     mock_run.side_effect = subprocess.TimeoutExpired(cmd="git", timeout=10)
@@ -3427,8 +3436,8 @@ def test_snapshot_from_source_fallback_attr_search(tmp_path):
 
 @patch("great_docs._cliref.click.snapshot_from_source")
 @patch("great_docs._cliref.click.read_module_at_tag")
-@patch("great_docs._api_diff.snapshot_from_griffe")
-@patch("great_docs._api_diff._extract_package_at_tag")
+@patch("great_docs._api_evolution.snapshot.snapshot_from_griffe")
+@patch("great_docs._api_evolution.snapshot._extract_package_at_tag")
 def test_snapshot_at_tag_with_cli_module(mock_extract, mock_griffe, mock_read_cli, mock_import_cli):
     """snapshot_at_tag sets cli_commands when CLI module is found."""
     tmp_dir = Path("/tmp/fake_extracted")
@@ -3565,9 +3574,9 @@ def test_extract_snapshot_success():
 # --- symbol_history: snap is None ---
 
 
-@patch("great_docs._api_diff.list_version_tags")
-@patch("great_docs._api_diff.snapshot_at_tag")
-@patch("great_docs._api_diff._get_tag_date")
+@patch("great_docs._api_evolution.history.list_version_tags")
+@patch("great_docs._api_evolution.history.snapshot_at_tag")
+@patch("great_docs._api_evolution.history._get_tag_date")
 def test_symbol_history_skip_none_snapshot(mock_date, mock_snap, mock_tags):
     """symbol_history skips tags where snapshot_at_tag returns None."""
     mock_tags.return_value = ["v1", "v2", "v3"]
@@ -3595,8 +3604,8 @@ def test_symbol_history_skip_none_snapshot(mock_date, mock_snap, mock_tags):
 # --- symbol_history: tags provided explicitly --+
 
 
-@patch("great_docs._api_diff.snapshot_at_tag")
-@patch("great_docs._api_diff._get_tag_date")
+@patch("great_docs._api_evolution.history.snapshot_at_tag")
+@patch("great_docs._api_evolution.history._get_tag_date")
 def test_symbol_history_explicit_tags(mock_date, mock_snap):
     """symbol_history uses provided tags without calling list_version_tags."""
     mock_date.return_value = "2024-01-01"
@@ -3782,7 +3791,7 @@ def test_format_signature_param_no_annotation():
 # --- build_timeline: tags provided explicitly ---
 
 
-@patch("great_docs._api_diff.snapshot_at_tag")
+@patch("great_docs._api_evolution.history.snapshot_at_tag")
 def test_build_timeline_explicit_tags(mock_snap):
     """build_timeline uses provided tags without calling list_version_tags."""
     snap = ApiSnapshot(
@@ -3800,10 +3809,10 @@ def test_build_timeline_explicit_tags(mock_snap):
 # --- symbol_history: package_name is None but _detect_package_name succeeds ---
 
 
-@patch("great_docs._api_diff.list_version_tags")
-@patch("great_docs._api_diff.snapshot_at_tag")
-@patch("great_docs._api_diff._get_tag_date")
-@patch("great_docs._api_diff._detect_package_name")
+@patch("great_docs._api_evolution.history.list_version_tags")
+@patch("great_docs._api_evolution.history.snapshot_at_tag")
+@patch("great_docs._api_evolution.history._get_tag_date")
+@patch("great_docs._api_evolution.history._detect_package_name")
 def test_symbol_history_detects_package_name(mock_detect, mock_date, mock_snap, mock_tags):
     """symbol_history calls _detect_package_name when package_name is None."""
     mock_detect.return_value = "mypkg"
@@ -4075,7 +4084,7 @@ def test_snapshot_from_source_import_error(tmp_path):
 # --- Tagged-source extraction timeout ---
 
 
-@patch("great_docs._api_diff.subprocess.run")
+@patch("great_docs._api_evolution.snapshot.subprocess.run")
 def test_extract_package_at_tag_timeout_exception(mock_run, tmp_path: Path):
     """Return `None` when the git command times out"""
     mock_run.side_effect = subprocess.TimeoutExpired(cmd="git", timeout=10)

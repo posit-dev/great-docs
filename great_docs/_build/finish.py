@@ -225,7 +225,7 @@ def _save_snapshot(config: Config, layout: Layout, project: Project) -> None:
     ImportError, SyntaxError, AttributeError, RuntimeError, OSError, griffe.GriffeError
         If the package cannot be loaded or the snapshot cannot be written.
     """
-    from .._api_diff import snapshot_from_griffe
+    from .._api_evolution.snapshot import snapshot_from_griffe
 
     # griffe loads by importable module name, which can differ from the PyPI project name.
     importable_name = project.importable_name

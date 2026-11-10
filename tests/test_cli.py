@@ -1244,7 +1244,7 @@ def test_api_diff_help():
     assert "--symbol" in result.output
 
 
-@patch("great_docs._api_diff.api_diff")
+@patch("great_docs._api_evolution.compare.api_diff")
 def test_api_diff_text_output(mock_diff, tmp_path, monkeypatch):
     """api-diff renders text output with diff summary."""
     from great_docs._api_evolution.model import ApiDiff, SymbolChange
@@ -1277,7 +1277,7 @@ def test_api_diff_text_output(mock_diff, tmp_path, monkeypatch):
     assert "BREAKING" in result.output
 
 
-@patch("great_docs._api_diff.api_diff")
+@patch("great_docs._api_evolution.compare.api_diff")
 def test_api_diff_json_output(mock_diff, tmp_path, monkeypatch):
     """api-diff --json outputs valid JSON."""
     from great_docs._api_evolution.model import ApiDiff
@@ -1298,7 +1298,7 @@ def test_api_diff_json_output(mock_diff, tmp_path, monkeypatch):
     assert data["old_version"] == "v1.0"
 
 
-@patch("great_docs._api_diff.api_diff", return_value=None)
+@patch("great_docs._api_evolution.compare.api_diff", return_value=None)
 def test_api_diff_no_snapshots(mock_diff, tmp_path, monkeypatch):
     """api-diff exits with error when snapshots can't be built."""
     runner = CliRunner()
@@ -1311,7 +1311,7 @@ def test_api_diff_no_snapshots(mock_diff, tmp_path, monkeypatch):
     assert "Could not" in result.output
 
 
-@patch("great_docs._api_diff.api_diff")
+@patch("great_docs._api_evolution.compare.api_diff")
 def test_api_diff_no_changes(mock_diff, tmp_path, monkeypatch):
     """api-diff with no changes shows success message."""
     from great_docs._api_evolution.model import ApiDiff
@@ -1331,7 +1331,7 @@ def test_api_diff_no_changes(mock_diff, tmp_path, monkeypatch):
     assert "No API changes" in result.output
 
 
-@patch("great_docs._api_diff.build_timeline")
+@patch("great_docs._api_evolution.history.build_timeline")
 def test_api_diff_timeline_json(mock_timeline, tmp_path, monkeypatch):
     """api-diff --timeline --json outputs timeline data."""
     mock_timeline.return_value = [
@@ -1352,7 +1352,7 @@ def test_api_diff_timeline_json(mock_timeline, tmp_path, monkeypatch):
     assert data[0]["version"] == "v1.0"
 
 
-@patch("great_docs._api_diff.build_timeline")
+@patch("great_docs._api_evolution.history.build_timeline")
 def test_api_diff_timeline_mermaid(mock_timeline, tmp_path, monkeypatch):
     """api-diff --timeline outputs Mermaid chart."""
     mock_timeline.return_value = [
@@ -1369,7 +1369,7 @@ def test_api_diff_timeline_mermaid(mock_timeline, tmp_path, monkeypatch):
     assert "xychart-beta" in result.output
 
 
-@patch("great_docs._api_diff.build_timeline", return_value=[])
+@patch("great_docs._api_evolution.history.build_timeline", return_value=[])
 def test_api_diff_timeline_empty(mock_timeline, tmp_path, monkeypatch):
     """api-diff --timeline with no tags exits with error."""
     runner = CliRunner()
@@ -1382,12 +1382,12 @@ def test_api_diff_timeline_empty(mock_timeline, tmp_path, monkeypatch):
     assert result.exit_code != 0
 
 
-@patch("great_docs._api_diff.build_dependency_graph")
-@patch("great_docs._api_diff.snapshot_at_tag")
-@patch("great_docs._api_diff.api_diff")
+@patch("great_docs._api_evolution.history.build_dependency_graph")
+@patch("great_docs._api_evolution.snapshot.snapshot_at_tag")
+@patch("great_docs._api_evolution.compare.api_diff")
 def test_api_diff_graph_text(mock_diff, mock_snap, mock_graph, tmp_path, monkeypatch):
     """api-diff --graph outputs Mermaid dependency graph."""
-    from great_docs._api_diff import DependencyGraph
+    from great_docs._api_evolution.history import DependencyGraph
     from great_docs._api_evolution.model import ApiDiff
 
     mock_diff.return_value = ApiDiff(
@@ -1413,12 +1413,12 @@ def test_api_diff_graph_text(mock_diff, mock_snap, mock_graph, tmp_path, monkeyp
     assert "graph TD" in result.output
 
 
-@patch("great_docs._api_diff.build_dependency_graph")
-@patch("great_docs._api_diff.snapshot_at_tag")
-@patch("great_docs._api_diff.api_diff")
+@patch("great_docs._api_evolution.history.build_dependency_graph")
+@patch("great_docs._api_evolution.snapshot.snapshot_at_tag")
+@patch("great_docs._api_evolution.compare.api_diff")
 def test_api_diff_graph_json(mock_diff, mock_snap, mock_graph, tmp_path, monkeypatch):
     """api-diff --graph --json outputs graph as JSON."""
-    from great_docs._api_diff import DependencyGraph
+    from great_docs._api_evolution.history import DependencyGraph
     from great_docs._api_evolution.model import ApiDiff, ApiSnapshot, SymbolInfo
 
     mock_diff.return_value = ApiDiff(
@@ -1451,11 +1451,11 @@ def test_api_diff_graph_json(mock_diff, mock_snap, mock_graph, tmp_path, monkeyp
     assert "nodes" in data
 
 
-@patch("great_docs._api_diff.symbol_history")
-@patch("great_docs._api_diff.list_version_tags", return_value=["v1.0", "v2.0"])
+@patch("great_docs._api_evolution.history.symbol_history")
+@patch("great_docs._api_evolution.snapshot.list_version_tags", return_value=["v1.0", "v2.0"])
 def test_api_diff_symbol_text(mock_tags, mock_hist, tmp_path, monkeypatch):
     """api-diff --symbol outputs symbol history text."""
-    from great_docs._api_diff import SymbolHistory, SymbolHistoryEntry
+    from great_docs._api_evolution.history import SymbolHistory, SymbolHistoryEntry
     from great_docs._api_evolution.model import SymbolInfo
 
     sym = SymbolInfo(name="build", kind="function")
@@ -1496,11 +1496,11 @@ def test_api_diff_symbol_text(mock_tags, mock_hist, tmp_path, monkeypatch):
     assert "NOT PRESENT" in result.output
 
 
-@patch("great_docs._api_diff.symbol_history")
-@patch("great_docs._api_diff.list_version_tags", return_value=["v1.0", "v2.0"])
+@patch("great_docs._api_evolution.history.symbol_history")
+@patch("great_docs._api_evolution.snapshot.list_version_tags", return_value=["v1.0", "v2.0"])
 def test_api_diff_symbol_json(mock_tags, mock_hist, tmp_path, monkeypatch):
     """api-diff --symbol --json outputs JSON."""
-    from great_docs._api_diff import SymbolHistory, SymbolHistoryEntry
+    from great_docs._api_evolution.history import SymbolHistory, SymbolHistoryEntry
     from great_docs._api_evolution.model import SymbolInfo
 
     sym = SymbolInfo(name="fn", kind="function")
@@ -1537,11 +1537,11 @@ def test_api_diff_symbol_json(mock_tags, mock_hist, tmp_path, monkeypatch):
 
 
 @patch("great_docs._api_diff.evolution_table_text")
-@patch("great_docs._api_diff.symbol_history")
-@patch("great_docs._api_diff.list_version_tags", return_value=["v1.0", "v2.0"])
+@patch("great_docs._api_evolution.history.symbol_history")
+@patch("great_docs._api_evolution.snapshot.list_version_tags", return_value=["v1.0", "v2.0"])
 def test_api_diff_symbol_table_text(mock_tags, mock_hist, mock_table, tmp_path, monkeypatch):
     """api-diff --symbol --table outputs text table."""
-    from great_docs._api_diff import SymbolHistory, SymbolHistoryEntry
+    from great_docs._api_evolution.history import SymbolHistory, SymbolHistoryEntry
     from great_docs._api_evolution.model import SymbolInfo
 
     sym = SymbolInfo(name="fn", kind="function")
@@ -1578,11 +1578,11 @@ def test_api_diff_symbol_table_text(mock_tags, mock_hist, mock_table, tmp_path, 
 
 
 @patch("great_docs._api_diff.evolution_table_html")
-@patch("great_docs._api_diff.symbol_history")
-@patch("great_docs._api_diff.list_version_tags", return_value=["v1.0", "v2.0"])
+@patch("great_docs._api_evolution.history.symbol_history")
+@patch("great_docs._api_evolution.snapshot.list_version_tags", return_value=["v1.0", "v2.0"])
 def test_api_diff_symbol_table_html(mock_tags, mock_hist, mock_html, tmp_path, monkeypatch):
     """api-diff --symbol --table --html outputs HTML."""
-    from great_docs._api_diff import SymbolHistory, SymbolHistoryEntry
+    from great_docs._api_evolution.history import SymbolHistory, SymbolHistoryEntry
     from great_docs._api_evolution.model import SymbolInfo
 
     sym = SymbolInfo(name="fn", kind="function")
@@ -1619,8 +1619,8 @@ def test_api_diff_symbol_table_html(mock_tags, mock_hist, mock_html, tmp_path, m
     assert "<table" in result.output
 
 
-@patch("great_docs._api_diff.symbol_history", return_value=None)
-@patch("great_docs._api_diff.list_version_tags", return_value=["v1.0", "v2.0"])
+@patch("great_docs._api_evolution.history.symbol_history", return_value=None)
+@patch("great_docs._api_evolution.snapshot.list_version_tags", return_value=["v1.0", "v2.0"])
 def test_api_diff_symbol_no_package(mock_tags, mock_hist, tmp_path, monkeypatch):
     """api-diff --symbol exits with error when package can't be determined."""
     runner = CliRunner()
@@ -1641,7 +1641,7 @@ def test_api_diff_symbol_no_package(mock_tags, mock_hist, tmp_path, monkeypatch)
     assert "package" in result.output.lower()
 
 
-@patch("great_docs._api_diff.list_version_tags", return_value=[])
+@patch("great_docs._api_evolution.snapshot.list_version_tags", return_value=[])
 def test_api_diff_symbol_no_tags(mock_tags, tmp_path, monkeypatch):
     """api-diff --symbol exits with error when no tags in range."""
     runner = CliRunner()
@@ -1662,7 +1662,7 @@ def test_api_diff_symbol_no_tags(mock_tags, tmp_path, monkeypatch):
     assert "No version tags" in result.output
 
 
-@patch("great_docs._api_diff.api_diff", side_effect=RuntimeError("boom"))
+@patch("great_docs._api_evolution.compare.api_diff", side_effect=RuntimeError("boom"))
 def test_api_diff_exception_text(mock_diff, tmp_path, monkeypatch):
     """api-diff handles exceptions with text error."""
     runner = CliRunner()
@@ -1674,7 +1674,7 @@ def test_api_diff_exception_text(mock_diff, tmp_path, monkeypatch):
     assert result.exit_code != 0
 
 
-@patch("great_docs._api_diff.api_diff", side_effect=RuntimeError("boom"))
+@patch("great_docs._api_evolution.compare.api_diff", side_effect=RuntimeError("boom"))
 def test_api_diff_exception_json(mock_diff, tmp_path, monkeypatch):
     """api-diff --json handles exceptions with JSON error."""
     runner = CliRunner()
@@ -1688,11 +1688,13 @@ def test_api_diff_exception_json(mock_diff, tmp_path, monkeypatch):
     assert "boom" in data["error"]
 
 
-@patch("great_docs._api_diff.symbol_history")
-@patch("great_docs._api_diff.list_version_tags", return_value=["v1.0", "v2.0", "v3.0"])
+@patch("great_docs._api_evolution.history.symbol_history")
+@patch(
+    "great_docs._api_evolution.snapshot.list_version_tags", return_value=["v1.0", "v2.0", "v3.0"]
+)
 def test_api_diff_symbol_changes_only(mock_tags, mock_hist, tmp_path, monkeypatch):
     """api-diff --symbol --changes-only filters to changed entries."""
-    from great_docs._api_diff import SymbolHistory, SymbolHistoryEntry
+    from great_docs._api_evolution.history import SymbolHistory, SymbolHistoryEntry
     from great_docs._api_evolution.model import SymbolChange, SymbolInfo
 
     sym = SymbolInfo(name="fn", kind="function")
@@ -1745,7 +1747,7 @@ def test_api_diff_symbol_changes_only(mock_tags, mock_hist, tmp_path, monkeypatc
     assert "changes" in result.output.lower()
 
 
-@patch("great_docs._api_diff.api_diff")
+@patch("great_docs._api_evolution.compare.api_diff")
 def test_api_diff_migration_hint(mock_diff, tmp_path, monkeypatch):
     """api-diff shows migration hints for removed symbols."""
     from great_docs._api_evolution.model import ApiDiff, SymbolChange
@@ -1773,8 +1775,8 @@ def test_api_diff_migration_hint(mock_diff, tmp_path, monkeypatch):
     assert "Use new_fn instead" in result.output
 
 
-@patch("great_docs._api_diff.snapshot_at_tag", return_value=None)
-@patch("great_docs._api_diff.api_diff")
+@patch("great_docs._api_evolution.snapshot.snapshot_at_tag", return_value=None)
+@patch("great_docs._api_evolution.compare.api_diff")
 def test_api_diff_graph_no_snapshot(mock_diff, mock_snap, tmp_path, monkeypatch):
     """api-diff --graph exits with error when snapshot fails."""
     from great_docs._api_evolution.model import ApiDiff
@@ -2317,8 +2319,8 @@ def test_versions_with_git_ref(tmp_path, monkeypatch):
 # =========================================================================
 
 
-@patch("great_docs._api_diff.snapshot_from_griffe")
-@patch("great_docs._api_diff._detect_package_name", return_value="mypkg")
+@patch("great_docs._api_evolution.snapshot.snapshot_from_griffe")
+@patch("great_docs._api_evolution.snapshot._detect_package_name", return_value="mypkg")
 def test_api_snapshot_head(mock_detect, mock_snap, tmp_path, monkeypatch):
     """api-snapshot with no args snapshots HEAD."""
     mock_snap_obj = MagicMock()
@@ -2334,7 +2336,7 @@ def test_api_snapshot_head(mock_detect, mock_snap, tmp_path, monkeypatch):
     mock_snap_obj.save.assert_called_once()
 
 
-@patch("great_docs._api_diff._detect_package_name", return_value=None)
+@patch("great_docs._api_evolution.snapshot._detect_package_name", return_value=None)
 def test_api_snapshot_no_package(mock_detect, tmp_path, monkeypatch):
     """api-snapshot fails when no package can be detected."""
     runner = CliRunner()
@@ -2345,8 +2347,8 @@ def test_api_snapshot_no_package(mock_detect, tmp_path, monkeypatch):
     assert "Could not detect package name" in result.output
 
 
-@patch("great_docs._api_diff.snapshot_at_tag")
-@patch("great_docs._api_diff._detect_package_name", return_value="mypkg")
+@patch("great_docs._api_evolution.snapshot.snapshot_at_tag")
+@patch("great_docs._api_evolution.snapshot._detect_package_name", return_value="mypkg")
 def test_api_snapshot_specific_tag(mock_detect, mock_snap, tmp_path, monkeypatch):
     """api-snapshot with a specific version tag."""
     mock_snap_obj = MagicMock()
@@ -2361,9 +2363,9 @@ def test_api_snapshot_specific_tag(mock_detect, mock_snap, tmp_path, monkeypatch
     assert "10 symbols" in result.output
 
 
-@patch("great_docs._api_diff.list_version_tags", return_value=["v0.1.0", "v0.2.0"])
-@patch("great_docs._api_diff.snapshot_at_tag")
-@patch("great_docs._api_diff._detect_package_name", return_value="mypkg")
+@patch("great_docs._api_evolution.snapshot.list_version_tags", return_value=["v0.1.0", "v0.2.0"])
+@patch("great_docs._api_evolution.snapshot.snapshot_at_tag")
+@patch("great_docs._api_evolution.snapshot._detect_package_name", return_value="mypkg")
 def test_api_snapshot_all_tags(mock_detect, mock_snap, mock_tags, tmp_path, monkeypatch):
     """api-snapshot --all-tags snapshots all versions."""
     mock_snap_obj = MagicMock()
@@ -2378,8 +2380,8 @@ def test_api_snapshot_all_tags(mock_detect, mock_snap, mock_tags, tmp_path, monk
     assert "Saved" in result.output
 
 
-@patch("great_docs._api_diff.list_version_tags", return_value=[])
-@patch("great_docs._api_diff._detect_package_name", return_value="mypkg")
+@patch("great_docs._api_evolution.snapshot.list_version_tags", return_value=[])
+@patch("great_docs._api_evolution.snapshot._detect_package_name", return_value="mypkg")
 def test_api_snapshot_all_tags_no_tags(mock_detect, mock_tags, tmp_path, monkeypatch):
     """api-snapshot --all-tags with no tags exits with error."""
     runner = CliRunner()
@@ -2390,8 +2392,8 @@ def test_api_snapshot_all_tags_no_tags(mock_detect, mock_tags, tmp_path, monkeyp
     assert "No version tags found" in result.output
 
 
-@patch("great_docs._api_diff.snapshot_from_griffe")
-@patch("great_docs._api_diff._detect_package_name", return_value="mypkg")
+@patch("great_docs._api_evolution.snapshot.snapshot_from_griffe")
+@patch("great_docs._api_evolution.snapshot._detect_package_name", return_value="mypkg")
 def test_api_snapshot_skip_existing(mock_detect, mock_snap, tmp_path, monkeypatch):
     """api-snapshot skips existing files without --force."""
     runner = CliRunner()
@@ -2407,8 +2409,8 @@ def test_api_snapshot_skip_existing(mock_detect, mock_snap, tmp_path, monkeypatc
     mock_snap.assert_not_called()
 
 
-@patch("great_docs._api_diff.snapshot_from_griffe")
-@patch("great_docs._api_diff._detect_package_name", return_value="mypkg")
+@patch("great_docs._api_evolution.snapshot.snapshot_from_griffe")
+@patch("great_docs._api_evolution.snapshot._detect_package_name", return_value="mypkg")
 def test_api_snapshot_force_overwrite(mock_detect, mock_snap, tmp_path, monkeypatch):
     """api-snapshot --force overwrites existing files."""
     mock_snap_obj = MagicMock()
@@ -3576,8 +3578,8 @@ class TestLintInfoOutput:
 
 
 class TestApiDiffMissedBranches:
-    @patch("great_docs._api_diff.symbol_history")
-    @patch("great_docs._api_diff.list_version_tags", return_value=["v1.0", "v2.0"])
+    @patch("great_docs._api_evolution.history.symbol_history")
+    @patch("great_docs._api_evolution.snapshot.list_version_tags", return_value=["v1.0", "v2.0"])
     def test_symbol_history_output(self, mock_tags, mock_hist, tmp_path, monkeypatch):
         """--symbol flag triggers the symbol history display path."""
         monkeypatch.chdir(tmp_path)
@@ -3609,7 +3611,7 @@ class TestApiDiffMissedBranches:
         assert result.exit_code == 0
         assert "pkg.my_func" in result.output
 
-    @patch("great_docs._api_diff.api_diff")
+    @patch("great_docs._api_evolution.compare.api_diff")
     def test_migration_hint_output(self, mock_diff, tmp_path, monkeypatch):
         """Changed symbols with migration_hint show the hint line."""
         monkeypatch.chdir(tmp_path)
@@ -3635,7 +3637,7 @@ class TestApiDiffMissedBranches:
         assert result.exit_code == 0
         assert "Use new_func()" in result.output
 
-    @patch("great_docs._api_diff.api_diff", side_effect=RuntimeError("diff failed"))
+    @patch("great_docs._api_evolution.compare.api_diff", side_effect=RuntimeError("diff failed"))
     def test_exception_in_api_diff(self, mock_diff, tmp_path, monkeypatch):
         """An exception during api-diff with --json outputs error JSON."""
         monkeypatch.chdir(tmp_path)
@@ -3666,8 +3668,8 @@ class TestVersionsExceptionPath:
 
 
 class TestApiSnapshotMissedBranches:
-    @patch("great_docs._api_diff._detect_package_name", return_value="pkg")
-    @patch("great_docs._api_diff.snapshot_from_griffe")
+    @patch("great_docs._api_evolution.snapshot._detect_package_name", return_value="pkg")
+    @patch("great_docs._api_evolution.snapshot.snapshot_from_griffe")
     def test_head_no_version_tag(self, mock_snap, mock_detect, tmp_path, monkeypatch):
         """No VERSION_TAG argument defaults to HEAD snapshot."""
         monkeypatch.chdir(tmp_path)
@@ -3683,8 +3685,8 @@ class TestApiSnapshotMissedBranches:
         )
         assert result.exit_code in (0, 1)
 
-    @patch("great_docs._api_diff._detect_package_name", return_value="pkg")
-    @patch("great_docs._api_diff.snapshot_from_griffe", return_value=None)
+    @patch("great_docs._api_evolution.snapshot._detect_package_name", return_value="pkg")
+    @patch("great_docs._api_evolution.snapshot.snapshot_from_griffe", return_value=None)
     def test_snapshot_none_counted_as_failed(self, mock_snap, mock_detect, tmp_path, monkeypatch):
         """snapshot_from_griffe returning None increments failed count."""
         monkeypatch.chdir(tmp_path)
@@ -3697,8 +3699,8 @@ class TestApiSnapshotMissedBranches:
         assert result.exit_code == 1
         assert "could not build" in result.output or "Failed" in result.output
 
-    @patch("great_docs._api_diff._detect_package_name", return_value="pkg")
-    @patch("great_docs._api_diff.snapshot_from_griffe")
+    @patch("great_docs._api_evolution.snapshot._detect_package_name", return_value="pkg")
+    @patch("great_docs._api_evolution.snapshot.snapshot_from_griffe")
     def test_force_overwrites_existing(self, mock_snap, mock_detect, tmp_path, monkeypatch):
         """--force overwrites an existing snapshot file."""
         monkeypatch.chdir(tmp_path)
@@ -3917,8 +3919,8 @@ class TestSeoCanonicalMissedBranches:
 
 
 class TestApiDiffSymbolHistoryNotPresent:
-    @patch("great_docs._api_diff.symbol_history")
-    @patch("great_docs._api_diff.list_version_tags", return_value=["v1.0", "v2.0"])
+    @patch("great_docs._api_evolution.history.symbol_history")
+    @patch("great_docs._api_evolution.snapshot.list_version_tags", return_value=["v1.0", "v2.0"])
     def test_not_present_entry_output(self, mock_tags, mock_hist, tmp_path, monkeypatch):
         """Symbol absent in a version shows 'NOT PRESENT' output."""
         monkeypatch.chdir(tmp_path)
@@ -3953,8 +3955,8 @@ class TestApiDiffSymbolHistoryNotPresent:
 
 
 class TestApiSnapshotOutputAndException:
-    @patch("great_docs._api_diff._detect_package_name", return_value="pkg")
-    @patch("great_docs._api_diff.snapshot_from_griffe")
+    @patch("great_docs._api_evolution.snapshot._detect_package_name", return_value="pkg")
+    @patch("great_docs._api_evolution.snapshot.snapshot_from_griffe")
     def test_explicit_output_path(self, mock_snap, mock_detect, tmp_path, monkeypatch):
         """--output <path> with a single tag writes to that specific file."""
         monkeypatch.chdir(tmp_path)
@@ -3973,8 +3975,11 @@ class TestApiSnapshotOutputAndException:
         if snap.save.called:
             assert snap.save.call_args[0][0] == out_file
 
-    @patch("great_docs._api_diff._detect_package_name", return_value="pkg")
-    @patch("great_docs._api_diff.snapshot_from_griffe", side_effect=RuntimeError("snap error"))
+    @patch("great_docs._api_evolution.snapshot._detect_package_name", return_value="pkg")
+    @patch(
+        "great_docs._api_evolution.snapshot.snapshot_from_griffe",
+        side_effect=RuntimeError("snap error"),
+    )
     def test_snapshot_exception_counted_as_failed(
         self, mock_snap, mock_detect, tmp_path, monkeypatch
     ):
@@ -4525,8 +4530,8 @@ class TestSeoSkipInternalFiles:
 
 
 class TestApiDiffSymbolNoEntries:
-    @patch("great_docs._api_diff.list_version_tags")
-    @patch("great_docs._api_diff.symbol_history")
+    @patch("great_docs._api_evolution.snapshot.list_version_tags")
+    @patch("great_docs._api_evolution.history.symbol_history")
     def test_symbol_no_entries(self, mock_hist, mock_tags, tmp_path, monkeypatch):
         """Symbol history with no entries shows '(no entries)'."""
         monkeypatch.chdir(tmp_path)
@@ -4556,8 +4561,8 @@ class TestApiDiffSymbolNoEntries:
 
 
 class TestApiDiffSymbolEntryTags:
-    @patch("great_docs._api_diff.list_version_tags")
-    @patch("great_docs._api_diff.symbol_history")
+    @patch("great_docs._api_evolution.snapshot.list_version_tags")
+    @patch("great_docs._api_evolution.history.symbol_history")
     def test_symbol_added_tag(self, mock_hist, mock_tags, tmp_path, monkeypatch):
         """Entry with change_type 'added' shows ✚ NEW."""
         monkeypatch.chdir(tmp_path)
@@ -4596,8 +4601,8 @@ class TestApiDiffSymbolEntryTags:
         )
         assert "✚ NEW" in result.output
 
-    @patch("great_docs._api_diff.list_version_tags")
-    @patch("great_docs._api_diff.symbol_history")
+    @patch("great_docs._api_evolution.snapshot.list_version_tags")
+    @patch("great_docs._api_evolution.history.symbol_history")
     def test_symbol_changed_tag(self, mock_hist, mock_tags, tmp_path, monkeypatch):
         """Entry with non-breaking, non-added change shows ∆ CHANGED."""
         monkeypatch.chdir(tmp_path)
@@ -4638,9 +4643,9 @@ class TestApiDiffSymbolEntryTags:
 
 
 class TestApiDiffGraphHead:
-    @patch("great_docs._api_diff.build_dependency_graph")
-    @patch("great_docs._api_diff.snapshot_from_griffe")
-    @patch("great_docs._api_diff.api_diff")
+    @patch("great_docs._api_evolution.history.build_dependency_graph")
+    @patch("great_docs._api_evolution.snapshot.snapshot_from_griffe")
+    @patch("great_docs._api_evolution.compare.api_diff")
     def test_graph_head_uses_snapshot_from_griffe(
         self, mock_diff, mock_snap, mock_graph, tmp_path, monkeypatch
     ):

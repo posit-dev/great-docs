@@ -42,7 +42,7 @@ def _save_snapshot(root: Path, name: str, settings: str = "") -> MagicMock:
     return log
 
 
-@patch("great_docs._api_diff.snapshot_from_griffe")
+@patch("great_docs._api_evolution.snapshot.snapshot_from_griffe")
 def test_snapshot_loads_the_importable_module(mock_snapshot: MagicMock, tmp_path: Path):
     """
     The snapshot loads the configured module when it differs from the distribution name
@@ -65,7 +65,7 @@ def test_snapshot_loads_the_importable_module(mock_snapshot: MagicMock, tmp_path
         ),
     ],
 )
-@patch("great_docs._api_diff.snapshot_from_griffe")
+@patch("great_docs._api_evolution.snapshot.snapshot_from_griffe")
 def test_snapshot_is_named_after_the_exact_tag(
     mock_snapshot: MagicMock, tmp_path: Path, outcomes: list[object], version: str
 ):
@@ -78,7 +78,9 @@ def test_snapshot_is_named_after_the_exact_tag(
     assert mock_snapshot.call_args.kwargs["version"] == version
 
 
-@patch("great_docs._api_diff.snapshot_from_griffe", side_effect=ImportError("no mypkg"))
+@patch(
+    "great_docs._api_evolution.snapshot.snapshot_from_griffe", side_effect=ImportError("no mypkg")
+)
 def test_snapshot_failure_warns(_mock_snapshot: MagicMock, tmp_path: Path):
     """
     A package that cannot be loaded leaves no snapshot and a warning in the build log
