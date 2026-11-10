@@ -1400,6 +1400,25 @@
     var API_HINT = 'Call list_api to see every object.';
     var FENCED_BLOCK = /^ {0,3}(`{3,}|~{3,})[^\n]*\n([\s\S]*?)\n {0,3}\1[ \t]*$/m;
 
+    // Up to five of `items` whose text shares the most words with `query`, best first.
+    function closest(items, query, textOf) {
+        var words = queryWords(query);
+        return items.map(function (item) {
+            var found = terms(textOf(item));
+            var score = 0;
+            words.forEach(function (word) {
+                score += wordMatch(found, word);
+            });
+            return { item: item, score: score };
+        }).filter(function (entry) {
+            return entry.score > 0;
+        }).sort(function (a, b) {
+            return b.score - a.score;
+        }).slice(0, 5).map(function (entry) {
+            return entry.item;
+        });
+    }
+
     function apiEntry(item) {
         return compact({
             name: item.name,
@@ -1445,23 +1464,10 @@
                 }) };
             }
         }
-        var words = queryWords(text);
-        var scored = api.map(function (item) {
-            var found = terms(objectNames(item).join(' '));
-            var score = 0;
-            words.forEach(function (word) {
-                score += wordMatch(found, word);
-            });
-            return { item: item, score: score };
-        }).filter(function (entry) {
-            return entry.score > 0;
-        }).sort(function (a, b) {
-            return b.score - a.score;
-        });
         return { error: errorResult('not_found', 'No object is named "' + text + '".', {
-            candidates: scored.slice(0, 5).map(function (entry) {
-                return apiEntry(entry.item);
-            }),
+            candidates: closest(api, text, function (item) {
+                return objectNames(item).join(' ');
+            }).map(apiEntry),
             hint: API_HINT
         }) };
     }
@@ -1684,8 +1690,113 @@
     var GET_API_REFERENCE = apiReferenceTool(Boolean(document.body &&
         document.body.classList && document.body.classList.contains(API_PAGE_CLASS)));
 
+    // ------------------------------------------------------------------------------------
+    // CLI tool
+    // ------------------------------------------------------------------------------------
+
+    function commandWords(text) {
+        return String(text).trim().toLowerCase().split(/\s+/).filter(Boolean);
+    }
+
+    function commandEntry(item) {
+        return { command: item.command, url: absolute(item.path) };
+    }
+
+    // The command `query` names, with or without the program's name, as `{item}` or `{error}`.
+    // Without a query, the command documented on the open page, or else the root command.
+    function findCommand(cli, query) {
+        if (!query) {
+            var path = currentPath();
+            return { item: cli.filter(function (item) {
+                return item.path === path;
+            })[0] || cli.slice().sort(function (a, b) {
+                return commandWords(a.command).length - commandWords(b.command).length;
+            })[0] };
+        }
+        var wanted = commandWords(query).join(' ');
+        function named(skip) {
+            return cli.filter(function (item) {
+                return commandWords(item.command).slice(skip).join(' ') === wanted;
+            });
+        }
+        var found = named(0).length ? named(0) : named(1);
+        if (found.length === 1) return { item: found[0] };
+        var text = query.trim();
+        if (found.length) {
+            return { error: errorResult('ambiguous', 'Several commands match "' + text + '".', {
+                candidates: found.map(commandEntry),
+                hint: 'Pass the program name too.'
+            }) };
+        }
+        return { error: errorResult('not_found', 'No command is named "' + text + '".', {
+            candidates: closest(cli, text, function (item) {
+                return item.command;
+            }).map(commandEntry),
+            hint: 'Leave command out for the root command.'
+        }) };
+    }
+
+    var GET_CLI_HELP = defineTool({
+        name: 'get_cli_help',
+        title: 'Get CLI help',
+        purpose: 'The help text of a CLI command',
+        description:
+            "Use this to learn how to run the package's command-line tool: a command's usage, " +
+            'options, arguments and full --help text as Markdown, with its subcommands. ' +
+            'command may leave out the program name, such as "build" for "pkg build". Leave ' +
+            'command out for the command on this page, or else the root command. ' +
+            'Example: "What options does the build command take?"',
+        feature: 'cli',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                command: {
+                    type: 'string',
+                    minLength: 1,
+                    maxLength: 200,
+                    description: 'A command, such as "build" or "config show".'
+                }
+            },
+            additionalProperties: false
+        },
+        example: { command: 'build' },
+        annotations: { readOnlyHint: true },
+        run: function (input, context) {
+            var signal = context.signal;
+            return loadManifest(signal).then(function (manifest) {
+                var cli = manifest.cli;
+                if (!cli.length) {
+                    return errorResult('unavailable', 'This site documents no command-line tool.');
+                }
+                var found = findCommand(cli, input.command);
+                if (found.error) return found.error;
+                var item = found.item;
+                var words = commandWords(item.command);
+                var result = commandEntry(item);
+                result.subcommands = cli.filter(function (other) {
+                    var parts = commandWords(other.command);
+                    return parts.length === words.length + 1 &&
+                        parts.slice(0, -1).join(' ') === words.join(' ');
+                }).map(commandEntry);
+                if (!item.md) {
+                    return errorResult('unavailable', item.command + ' has no Markdown copy.', {
+                        url: result.url
+                    });
+                }
+                return fetchText(absolute(item.md), signal).then(function (markdown) {
+                    result.markdown = markdown;
+                    return result;
+                }, function (error) {
+                    return loadFailed(item.md, error, signal);
+                });
+            }, function (error) {
+                return loadFailed(MANIFEST_FILE, error, signal);
+            });
+        }
+    });
+
     var BUILT_IN_TOOLS = [GET_SITE_OVERVIEW, GET_CURRENT_PAGE, LIST_PAGES, GET_PAGE, SEARCH_DOCS,
-        LIST_API, GET_API_REFERENCE];
+        LIST_API, GET_API_REFERENCE, GET_CLI_HELP];
 
     // ------------------------------------------------------------------------------------
     // Registration

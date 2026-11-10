@@ -374,6 +374,7 @@ def _write_cli_pages(
     if not cli_files:
         return f"No {kind} pages generated"
     run.contributions.append(cli_render.contribution(config, cli_files))
+    run.has_cli_reference = True
     n_pages = cli_render.count_pages(cli_files)
     print(f"Updated sidebar with {n_pages} CLI reference page(s)")
     return f"{n_pages} {kind} reference page(s){suffix}"

@@ -63,7 +63,8 @@ This file is typically small (a few KB) and is designed to give an LLM a quick o
 API surface without overwhelming its context window.
 
 When [WebMCP](47-webmcp.qmd) is turned on, `llms.txt` ends with a "WebMCP tools" section, so an
-agent that reads the file learns that it can also call tools on the site's pages:
+agent that reads the file learns that it can also call tools on the site's pages. The
+`get_cli_help` line appears when the site has a [CLI reference](07-cli-documentation.qmd):
 
 ````markdown
 ## WebMCP tools
@@ -79,6 +80,7 @@ An AI agent in a browser that supports WebMCP can call these tools on this site'
 - `search_docs`: Ranked matches for a query, by page section
 - `list_api`: The documented objects grouped by reference section
 - `get_api_reference`: One object's signature, parameters, returns and examples
+- `get_cli_help`: The help text of a CLI command
 
 Scripts on the site's pages can call the same tools:
 

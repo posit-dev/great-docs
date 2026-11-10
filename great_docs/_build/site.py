@@ -151,6 +151,7 @@ def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Re
         package_name=run.project.name,
         metadata=run.project.manifest,
         has_api_reference=run.has_api_reference,
+        has_cli_reference=run.has_cli_reference,
         contributions=run.contributions,
         report=print,
         warn=print_warning,

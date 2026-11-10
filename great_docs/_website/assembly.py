@@ -52,6 +52,7 @@ def assemble(
     package_name: str | None,
     metadata: Manifest,
     has_api_reference: bool,
+    has_cli_reference: bool,
     contributions: Sequence[Contribution],
     report: Callable[[str], None],
     warn: Callable[[str], None],
@@ -86,6 +87,8 @@ def assemble(
         The project's package metadata, including its authors, maintainers and URLs.
     has_api_reference
         Whether the site has an API reference.
+    has_cli_reference
+        Whether the site has command-line reference pages.
     contributions
         Navigation, resources, render exclusions and script data recorded by build
         steps, in build step order.
@@ -130,7 +133,12 @@ def assemble(
 
     # Table order preserves the order in which pages load the site's scripts.
     scripts.include(config, quarto_config, build_dir, has_repository=has_repository)
-    scripts.include_webmcp_settings(config, quarto_config, has_api_reference=has_api_reference)
+    scripts.include_webmcp_settings(
+        config,
+        quarto_config,
+        has_api_reference=has_api_reference,
+        has_cli_reference=has_cli_reference,
+    )
 
     # Contributed links and data require the navbar and script includes to exist.
     # Apply them before configuring the reference switcher, icons and navbar order.

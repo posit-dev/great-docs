@@ -54,11 +54,12 @@ def test_site_tools_need_no_feature():
     }
 
 
-def test_the_site_and_api_tools_are_implemented():
+def test_the_site_api_and_cli_tools_are_implemented():
     assert [tool.name for tool in TOOLS if tool.implemented] == [
         *_SITE_TOOLS,
         "list_api",
         "get_api_reference",
+        "get_cli_help",
     ]
 
 
@@ -117,4 +118,5 @@ class TestSiteTools:
             "search_docs",
             "list_api",
             "get_api_reference",
+            "get_cli_help",
         ]

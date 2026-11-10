@@ -95,7 +95,9 @@ TOOLS: tuple[WebMCPTool, ...] = (
         "api",
         implemented=True,
     ),
-    WebMCPTool("get_cli_help", "Get CLI help", "The help text of a CLI command", "cli"),
+    WebMCPTool(
+        "get_cli_help", "Get CLI help", "The help text of a CLI command", "cli", implemented=True
+    ),
     WebMCPTool(
         "list_versions",
         "List the versions",

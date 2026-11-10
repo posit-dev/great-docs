@@ -76,6 +76,9 @@ class Run:
         Whether the site has an API reference. Preparing the build directory sets it to
         `False` when the reference is disabled, the project is not a Python project, no
         package name is detected, or the package has nothing to document.
+    has_cli_reference
+        Whether the site has command-line reference pages. A CLI reference step sets it when
+        it writes them.
     quarto_config
         The site's Quarto configuration, initially empty and updated in memory during
         preparation. Preparation writes the finished configuration to `_quarto.yml`
@@ -100,6 +103,7 @@ class Run:
     watch: bool
     page_authors: list[dict[str, Any]]
     has_api_reference: bool = True
+    has_cli_reference: bool = False
     quarto_config: dict[str, Any] = field(default_factory=lambda: dict[str, Any]())
     api_block: dict[str, Any] | None = None
     api_discovery_reused: bool = False
