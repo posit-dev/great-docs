@@ -462,5 +462,12 @@ class TestBuildStep:
         text = _build_llms_txt(tmp_path, {"webmcp": webmcp})
 
         tools = [line.split("`")[1] for line in _webmcp_section(text) if line.startswith("- `")]
-        assert tools == ["get_site_overview", "get_current_page", "list_pages", "get_page"]
+        assert tools == [
+            "get_site_overview",
+            "get_current_page",
+            "list_pages",
+            "get_page",
+            "list_api",
+            "get_api_reference",
+        ]
         assert "window.greatDocs" not in text
