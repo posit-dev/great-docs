@@ -32,7 +32,9 @@ SITE_TOOLS = ["get_site_overview", "get_current_page", "list_pages", "get_page",
 API_TOOLS = ["list_api", "get_api_reference"]
 # The settings of a site with an API reference.
 WITH_API = {"features": {"api": True}}
-WITH_ALL = {"features": {"api": True, "cli": True, "versions": True, "changelog": True}}
+WITH_ALL = {
+    "features": {"api": True, "cli": True, "versions": True, "changelog": True, "skills": True}
+}
 
 _QUARTO_YML = """\
 project:
@@ -121,6 +123,17 @@ def _page_facts(path: str, fields: dict[str, Any]) -> PageFacts:
     return PageFacts(path=path, **{**values, **fields})
 
 
+_SITE_INFO = SiteInfo(
+    name="example",
+    title="Example",
+    description="A package for examples.",
+    version="1.2.0",
+    repo="https://github.com/acme/example",
+    license="MIT",
+    install=("pip install example",),
+)
+
+
 def _build_site(directory: Path) -> Path:
     """
     Copy the fixture site and write what a build adds to it, including `gd-webmcp.json`
@@ -166,17 +179,10 @@ def _build_site(directory: Path) -> Path:
         tuple(InventoryEntry(name, "py", role, 1, uri, name) for name, role, uri in _API),
     )
     _ = (site_dir / "objects.inv").write_bytes(encode(inventory))
-    info = SiteInfo(
-        name="example",
-        title="Example",
-        description="A package for examples.",
-        version="1.2.0",
-        repo="https://github.com/acme/example",
-        license="MIT",
-        install=("pip install example",),
-    )
     warnings: list[str] = []
-    _ = webmcp_manifest.write([Root(site_dir, project_dir, None, BASE)], info, warn=warnings.append)
+    _ = webmcp_manifest.write(
+        [Root(site_dir, project_dir, None, BASE)], _SITE_INFO, warn=warnings.append
+    )
     assert warnings == []
     return site_dir
 
@@ -244,7 +250,9 @@ class TestRegistration:
         # `llms.txt` lists the tools from the Python table, so it must match the runtime.
         observed = _run(SETTLE, settings={**WITH_ALL, "exclude": ["get_page"], "actions": False})
         expected = registered(
-            {"site", "api", "cli", "versions", "changelog"}, actions=False, exclude=["get_page"]
+            {"site", "api", "cli", "versions", "changelog", "skills"},
+            actions=False,
+            exclude=["get_page"],
         )
 
         assert observed["registered"] == [tool.name for tool in expected]
@@ -754,6 +762,7 @@ class TestGetSiteOverview:
         assert result["pages"] == 16
         assert result["resources"] == {
             "llms_txt": f"{BASE}llms.txt",
+            "skills": f"{BASE}.well-known/agent-skills/index.json",
             "search": f"{BASE}search.json",
             "changelog": f"{BASE}changelog.md",
         }
@@ -1699,8 +1708,111 @@ class TestGetChangelog:
         ]
 
 
-@pytest.mark.parametrize("name", ["list_versions", "get_changelog"])
-def test_the_version_and_changelog_descriptions_say_when_to_use_the_tool(name: str):
+SKILLS = f"{BASE}.well-known/agent-skills/"
+
+
+class TestGetAgentSkill:
+    WITH_SKILLS = {"features": {"skills": True}}
+
+    def _call(self, tool_input: object = None, **options: Any) -> dict[str, Any]:
+        return _call("get_agent_skill", tool_input, settings=self.WITH_SKILLS, **options)
+
+    def test_without_a_name_the_skills_are_listed(self):
+        assert self._call({}) == {
+            "url": f"{SKILLS}index.json",
+            "skills": [
+                {
+                    "name": "example",
+                    "description": "Write code that uses example's widgets.",
+                    "url": f"{SKILLS}example/SKILL.md",
+                },
+                {
+                    "name": "reviewing",
+                    "description": "Review a pull request to example.",
+                    "url": f"{SKILLS}reviewing/SKILL.md",
+                },
+            ],
+        }
+
+    @pytest.mark.parametrize("name", ["example", "Example", " example "])
+    def test_a_skill_comes_with_its_markdown_and_files(self, name: str):
+        result = self._call({"name": name})
+
+        assert result["name"] == "example"
+        assert result["url"] == f"{SKILLS}example/SKILL.md"
+        assert result["markdown"].startswith("---\nname: example\n")
+        assert "Call `Widget.spin()`" in result["markdown"]
+        assert result["files"] == [
+            {"path": "references/widgets.md", "url": f"{SKILLS}example/references/widgets.md"}
+        ]
+
+    def test_a_skill_without_other_files_lists_none(self):
+        result = self._call({"name": "reviewing"})
+
+        assert result["files"] == []
+        assert result["markdown"].endswith("Check that each change has a test.\n")
+
+    def test_an_unknown_skill_lists_the_skills(self):
+        result = self._call({"name": "deploying"})
+
+        error = result["error"]
+        assert error["code"] == "not_found"
+        assert [skill["name"] for skill in error["candidates"]] == ["example", "reviewing"]
+        assert error["hint"]
+
+    def test_the_index_and_skill_are_each_fetched_once(self):
+        observed = _run(
+            "await tools.call('get_agent_skill', {});"
+            " await tools.call('get_agent_skill', {name: 'reviewing'});",
+            settings=self.WITH_SKILLS,
+        )
+
+        assert observed["fetched"] == [
+            f"{BASE}gd-webmcp.json",
+            f"{SKILLS}index.json",
+            f"{SKILLS}reviewing/SKILL.md",
+        ]
+
+    def test_a_site_without_skills_says_so(self, tmp_path: Path):
+        site_dir = _variant(tmp_path)
+        shutil.rmtree(site_dir / ".well-known")
+        _ = webmcp_manifest.write(
+            [Root(site_dir, tmp_path, None, BASE)], _SITE_INFO, warn=lambda _: None
+        )
+
+        result = self._call({}, siteDir=str(site_dir))
+
+        assert result["error"]["code"] == "unavailable"
+
+    def test_an_index_without_skills_says_so(self, tmp_path: Path):
+        site_dir = _variant(tmp_path)
+        index = site_dir / ".well-known" / "agent-skills" / "index.json"
+        _ = index.write_text('{"skills": [{"description": "No name."}]}', encoding="utf-8")
+
+        result = self._call({}, siteDir=str(site_dir))
+
+        assert result["error"]["code"] == "unavailable"
+
+    def test_a_missing_skill_file_points_to_other_files(self, tmp_path: Path):
+        site_dir = _variant(tmp_path)
+        (site_dir / ".well-known" / "agent-skills" / "reviewing" / "SKILL.md").unlink()
+
+        result = self._call({"name": "reviewing"}, siteDir=str(site_dir))
+
+        assert result["error"]["code"] == "fetch_failed"
+        assert "reviewing/SKILL.md" in result["error"]["message"]
+        assert f"{BASE}llms.txt" in result["error"]["fallback"]
+
+    def test_the_tool_needs_skills(self):
+        assert _run(SETTLE)["registered"] == SITE_TOOLS
+        assert _run(SETTLE, settings=self.WITH_SKILLS)["registered"] == [
+            *SITE_TOOLS,
+            "get_agent_skill",
+        ]
+
+
+@pytest.mark.parametrize("name", ["list_versions", "get_changelog", "get_agent_skill"])
+def test_the_version_changelog_and_skills_descriptions_say_when_to_use_the_tool(name: str):
     listed = _run("return tools.list();", settings=WITH_ALL)["result"]
     [tool] = [tool for tool in listed if tool["name"] == name]
 

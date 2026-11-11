@@ -1,0 +1,14 @@
+{
+  "skills": [
+    {
+      "name": "example",
+      "description": "Write code that uses example's widgets.",
+      "files": ["SKILL.md", "references/widgets.md"]
+    },
+    {
+      "name": "reviewing",
+      "description": "Review a pull request to example.",
+      "files": ["SKILL.md"]
+    }
+  ]
+}

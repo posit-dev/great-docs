@@ -80,8 +80,9 @@ make from a `file://` page, so most tools would fail.
 ## The Tools
 
 Every page registers these five tools. A site with an API reference, a
-[CLI reference](07-cli-documentation.qmd), [versions](30-multi-version-docs.qmd) or a
-[changelog](17-changelog.qmd) adds the tools that read them. Each tool's description
+[CLI reference](07-cli-documentation.qmd), [versions](30-multi-version-docs.qmd), a
+[changelog](17-changelog.qmd) or [Agent Skills](38-agent-skills.qmd) adds the tools that read
+them. Each tool's description
 tells the agent when to use it and gives an example question.
 
 | Tool | Returns | Example question |
@@ -127,6 +128,16 @@ A versioned site adds `list_versions`, and a site with a changelog adds `get_cha
 `get_changelog` splits the changelog page at its level-two headings, one per release, and takes
 each entry's version from the first version number in its heading. A version the changelog doesn't
 list comes back as an error listing the versions it does.
+
+A site that publishes [Agent Skills](38-agent-skills.qmd) adds a tool for reading them:
+
+| Tool | Returns | Example question |
+|---|---|---|
+| `get_agent_skill` | Without `name`, each skill's name, description and URL. With `name`, that skill's `SKILL.md` as Markdown and the URLs of its other files | "What should I know before writing code with this package?" |
+
+`get_agent_skill` reads the skills from `.well-known/agent-skills/`, so it's registered only when
+`skill.well_known` is on (the default). A name it doesn't know, in any case, comes back as an error
+listing the skills.
 
 A few details apply to all of them:
 
@@ -281,7 +292,7 @@ aren't secret.
 ## Privacy and Security
 
 - **The tools only read what the site already publishes**: its pages, their Markdown companions,
-  `search.json` and `gd-webmcp.json`. They don't read cookies or storage, and they only fetch from
+  its skills, `search.json` and `gd-webmcp.json`. They don't read cookies or storage, and they only fetch from
   the site's own origin.
 - **Every built-in tool is read-only.** The tools are registered with `readOnlyHint: true`, which
   tells agents they don't change anything.
@@ -315,6 +326,9 @@ Some other problems and their causes:
   for the CLI reference step.
 - **`get_changelog` isn't registered.** The site has no changelog page. Great Docs writes one from
   the repository's GitHub Releases, so the build needs the repository and at least one release.
+- **`get_agent_skill` reports `fetch_failed`.** The deployed site has no `.well-known/`
+  directory. Some hosts drop directories whose names start with a dot: see
+  [Deployment Considerations](38-agent-skills.qmd#deployment-considerations).
 - **`search_docs` reports `fetch_failed` but other tools work.** The site has no `search.json`,
   which Quarto writes when the site has search turned on.
 - **A page is missing from `list_pages`.** It's a draft, sets `webmcp: {listed: false}`, or wasn't

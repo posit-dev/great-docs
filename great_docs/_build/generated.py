@@ -17,6 +17,7 @@ from .._website import tags as page_tags
 from .._website.ai_agents import llms_txt as llms_files
 from .._website.ai_agents import webmcp_pages as webmcp_page_data
 from .._website.ai_agents import webmcp_tools
+from .._website.ai_agents import well_known
 from .._website.ai_agents.skills import SkillsWriter
 from .steps import Outcome, Skipped
 
@@ -43,9 +44,10 @@ def _webmcp_features(run: Run, config: Config) -> set[str]:
     """
     Name the site's features that the WebMCP tools listed in `llms.txt` need
 
-    `llms.txt` is written only for a site with an API reference, and before the changelog and
-    CLI reference steps run. So a configured CLI reference counts even if its pages turn out
-    empty, and a changelog counts for a GitHub repository even if it has no releases.
+    `llms.txt` is written only for a site with an API reference, and before the skills,
+    changelog and CLI reference steps run. So a configured CLI reference counts even if its
+    pages turn out empty, a changelog counts for a GitHub repository even if it has no
+    releases, and skills count when their discovery files are turned on.
 
     Parameters
     ----------
@@ -58,8 +60,8 @@ def _webmcp_features(run: Run, config: Config) -> set[str]:
     -------
     :
         `site` and `api`; `cli` when a CLI reference is configured; `versions` for a versioned
-        site; and `changelog` when the changelog is enabled and the project has a GitHub
-        repository.
+        site; `changelog` when the changelog is enabled and the project has a GitHub
+        repository; and `skills` when skills and their discovery files are enabled.
     """
     features = {"site", "api"}
     if config.cli_enabled or config.go_cli_enabled or config.rust_cli_enabled:
@@ -68,6 +70,8 @@ def _webmcp_features(run: Run, config: Config) -> set[str]:
         features.add("versions")
     if config.changelog_enabled and run.project.github is not None:
         features.add("changelog")
+    if config.skill_enabled and config.skill_well_known:
+        features.add("skills")
     return features
 
 
@@ -135,7 +139,7 @@ def skills(run: Run, config: Config, layout: Layout) -> Outcome:
     ----------
     run
         The current build, which supplies the package's name and metadata and the API
-        reference configuration.
+        reference configuration, and records whether the skills' index was published.
     config
         The project's configuration.
     layout
@@ -149,6 +153,8 @@ def skills(run: Run, config: Config, layout: Layout) -> Outcome:
     if not config.skill_enabled:
         return Skipped("disabled in config")
     SkillsWriter(config, layout, run.project.name, run.project.manifest).write(run.api_block)
+    index = layout.build_dir / well_known.WELL_KNOWN_ROOT / well_known.INDEX_FILE
+    run.has_skills = index.is_file()
     return "Created skill.md"
 
 

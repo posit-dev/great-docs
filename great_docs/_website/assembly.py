@@ -54,6 +54,7 @@ def assemble(
     has_api_reference: bool,
     has_cli_reference: bool,
     has_changelog: bool,
+    has_skills: bool,
     contributions: Sequence[Contribution],
     report: Callable[[str], None],
     warn: Callable[[str], None],
@@ -92,6 +93,8 @@ def assemble(
         Whether the site has command-line reference pages.
     has_changelog
         Whether the site has a changelog page.
+    has_skills
+        Whether the site publishes an index of agent skills.
     contributions
         Navigation, resources, render exclusions and script data recorded by build
         steps, in build step order.
@@ -142,6 +145,7 @@ def assemble(
         has_api_reference=has_api_reference,
         has_cli_reference=has_cli_reference,
         has_changelog=has_changelog,
+        has_skills=has_skills,
     )
 
     # Contributed links and data require the navbar and script includes to exist.

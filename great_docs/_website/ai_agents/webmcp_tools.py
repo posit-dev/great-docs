@@ -117,6 +117,7 @@ TOOLS: tuple[WebMCPTool, ...] = (
         "Get an agent skill",
         "A published SKILL.md and its companion files",
         "skills",
+        implemented=True,
     ),
     WebMCPTool(
         "get_post_summary",

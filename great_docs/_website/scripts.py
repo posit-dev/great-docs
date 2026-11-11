@@ -281,7 +281,12 @@ def _dark_mode_disabled(config: Config) -> str | None:
 
 
 def _webmcp_head(
-    config: Config, *, has_api_reference: bool, has_cli_reference: bool, has_changelog: bool
+    config: Config,
+    *,
+    has_api_reference: bool,
+    has_cli_reference: bool,
+    has_changelog: bool,
+    has_skills: bool,
 ) -> str:
     """
     Build the header tags that configure `webmcp.js`
@@ -296,6 +301,8 @@ def _webmcp_head(
         Whether the site has command-line reference pages, which `get_cli_help` reads.
     has_changelog
         Whether the site has a changelog page, which `get_changelog` reads.
+    has_skills
+        Whether the site publishes an index of agent skills, which `get_agent_skill` reads.
 
     Returns
     -------
@@ -314,6 +321,7 @@ def _webmcp_head(
             "cli": has_cli_reference,
             "versions": config.has_versions,
             "changelog": has_changelog,
+            "skills": has_skills,
         },
         "actions": config.webmcp_actions,
         "js_api": config.webmcp_js_api,
@@ -549,6 +557,7 @@ def include_webmcp_settings(
     has_api_reference: bool,
     has_cli_reference: bool,
     has_changelog: bool,
+    has_skills: bool,
 ) -> None:
     """
     Configure `webmcp.js` in every page, ahead of the script's own entry
@@ -565,6 +574,8 @@ def include_webmcp_settings(
         Whether the site has command-line reference pages.
     has_changelog
         Whether the site has a changelog page.
+    has_skills
+        Whether the site publishes an index of agent skills.
 
     Returns
     -------
@@ -579,6 +590,7 @@ def include_webmcp_settings(
         has_api_reference=has_api_reference,
         has_cli_reference=has_cli_reference,
         has_changelog=has_changelog,
+        has_skills=has_skills,
     )
     quarto_yml.add_include(quarto_config, script.slot, {"text": data}, before=script.name)
 

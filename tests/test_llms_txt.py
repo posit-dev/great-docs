@@ -469,6 +469,7 @@ class TestBuildStep:
             "get_page",
             "list_api",
             "get_api_reference",
+            "get_agent_skill",
         ]
         assert "window.greatDocs" not in text
 
@@ -476,13 +477,13 @@ class TestBuildStep:
         text = _build_llms_txt(tmp_path, {"webmcp": True, "cli": {"enabled": True}})
 
         tools = [line.split("`")[1] for line in _webmcp_section(text) if line.startswith("- `")]
-        assert tools[-1] == "get_cli_help"
+        assert "get_cli_help" in tools
 
     def test_a_versioned_site_adds_the_versions_tool(self, tmp_path: Path):
         text = _build_llms_txt(tmp_path, {"webmcp": True, "versions": ["0.2", "0.1"]})
 
         tools = [line.split("`")[1] for line in _webmcp_section(text) if line.startswith("- `")]
-        assert tools[-1] == "list_versions"
+        assert "list_versions" in tools
 
     def test_a_github_repository_adds_the_changelog_tool_unless_disabled(self, tmp_path: Path):
         def tools(directory: str, settings: dict[str, Any]) -> list[str]:
@@ -490,6 +491,15 @@ class TestBuildStep:
             lines = _webmcp_section(text)
             return [line.split("`")[1] for line in lines if line.startswith("- `")]
 
-        assert tools("on", {"webmcp": True})[-1] == "get_changelog"
+        assert "get_changelog" in tools("on", {"webmcp": True})
         off = tools("off", {"webmcp": True, "changelog": {"enabled": False}})
         assert "get_changelog" not in off
+
+    def test_published_skills_add_the_skills_tool(self, tmp_path: Path):
+        def tools(directory: str, settings: dict[str, Any]) -> list[str]:
+            lines = _webmcp_section(_build_llms_txt(tmp_path / directory, settings))
+            return [line.split("`")[1] for line in lines if line.startswith("- `")]
+
+        assert tools("on", {"webmcp": True})[-1] == "get_agent_skill"
+        for name, skill in [("unpublished", {"well_known": False}), ("off", {"enabled": False})]:
+            assert "get_agent_skill" not in tools(name, {"webmcp": True, "skill": skill})
