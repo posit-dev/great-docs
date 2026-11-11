@@ -14,13 +14,13 @@ import griffe as gf
 
 from .._build.ownership import is_in_great_docs_build_dir
 from .._build.steps import USER_CODE_ERRORS
-from .._builtin.directives import DIRECTIVES
+from .._builtin.directives import DIRECTIVES, _seealso
 from .._content import authored
 from .._interlinks import AliasClaims, LoadedSources, build_index, load_sources
 from .._project import Project
 from .._project.layout import Layout
 from .._reference.exports import Exports
-from .._utils import fenced_lines, parse_seealso
+from .._source_refs import fenced_lines
 from .._website.homepage import source as homepage_source
 from .._yaml import YamlMapping, YamlValue, split_front_matter
 from ..config import _PARSERS
@@ -434,7 +434,7 @@ def _check_cross_references(
         -------
         :
         """
-        for ref_name, _ in parse_seealso(text):
+        for ref_name, _ in _seealso.parse(text):
             claimants = index.dropped.get(ref_name)
             if claimants is not None:
                 result.issues.append(

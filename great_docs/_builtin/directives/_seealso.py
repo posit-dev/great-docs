@@ -6,14 +6,38 @@ import re
 
 import griffe as gf
 
-from great_docs._utils import fenced_lines, parse_seealso
+from great_docs._source_refs import fenced_lines
 from great_docs.hooks import on_object_resolved
+
+_SEEALSO_RE = re.compile(
+    r"^[^\S\r\n]*%seealso[^\S\r\n]+(.+?)[^\S\r\n]*$",
+    re.MULTILINE,
+)
 
 _SEEALSO_LINE_RE = re.compile(r"^[ \t]*%seealso(?:[ \t]+.*)?[ \t]*$")
 _EXCESS_GAP_RE = re.compile(r"\n{3,}")
 _SEEALSO_ENTRY_NAME_RE = re.compile(r"\s*([\w.]+)")
 _SEE_ALSO_HEADER_RE = re.compile(r"(?m)^See Also[ \t]*\n-{3,}[ \t]*$")
 _SECTION_HEADER_RE = re.compile(r"(?m)^[^ \t\n].*\n-{3,}[ \t]*$")
+
+
+def parse(docstring: str) -> list[tuple[str, str]]:
+    """
+    Parse the `%seealso` directive of a docstring into `(name, description)` pairs
+
+    The directive is a comma-separated list of entries, each an optionally
+    `name : description` pair. Undescribed entries get an empty description;
+    entries with a blank name are dropped. Returns an empty list when no
+    `%seealso` directive is present.
+    """
+    entries: list[tuple[str, str]] = []
+    for match in _SEEALSO_RE.finditer(docstring):
+        for entry in match.group(1).split(","):
+            name, _, desc = entry.partition(":")
+            name = name.strip()
+            if name:
+                entries.append((name, desc.strip()))
+    return entries
 
 
 @on_object_resolved(priority=0)  # pyright: ignore[reportArgumentType]
@@ -78,7 +102,7 @@ def _extract_seealso(text: str) -> tuple[str, list[tuple[str, str]]]:
     for line, is_fenced in zip(lines, fenced):
         candidate = not is_fenced and "%seealso" in line
         if candidate and _SEEALSO_LINE_RE.match(line):
-            entries.extend(parse_seealso(line))
+            entries.extend(parse(line))
         else:
             cleaned.append(line)
 
