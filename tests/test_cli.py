@@ -14,17 +14,19 @@ from click.testing import CliRunner
 from great_docs import BuildError, GreatDocs
 from great_docs._build import from_repo, quarto, serve
 from great_docs._build.quarto import QuartoVersionError
-from great_docs.cli import (
-    _detect_current_package,
-    _detect_optional_dependencies,
-    _detect_python_version,
+from great_docs._cli.build import (
     _find_build_timing,
     _format_seconds,
     _freeze_info,
     _print_page_table,
     _print_timing_table,
-    cli,
 )
+from great_docs._cli.ci import (
+    _detect_optional_dependencies,
+    _detect_python_version,
+)
+from great_docs._cli.skills import _detect_current_package
+from great_docs.cli import cli
 from tests.support import mock_config
 
 
@@ -130,7 +132,7 @@ def test_freeze_requires_supported_quarto(tmp_path: Path, monkeypatch: pytest.Mo
         raise QuartoVersionError("great-docs requires Quarto 1.9.18 or later")
 
     monkeypatch.setattr("great_docs._build.quarto.ensure_installed", too_old)
-    with patch("great_docs.cli.GreatDocs") as docs:
+    with patch("great_docs._cli.build.GreatDocs") as docs:
         result = CliRunner().invoke(
             cli, ["freeze", "page.qmd", "--clean", "--project-path", str(tmp_path)]
         )
@@ -2823,7 +2825,7 @@ class TestFreezeInfo:
 class TestFreezeCommand:
     def test_info_flag_calls_freeze_info(self, tmp_path):
         runner = CliRunner()
-        with patch("great_docs.cli._freeze_info") as mock_fi:
+        with patch("great_docs._cli.build._freeze_info") as mock_fi:
             result = runner.invoke(cli, ["freeze", "--info", "--project-path", str(tmp_path)])
         mock_fi.assert_called_once()
 
@@ -2858,7 +2860,7 @@ class TestFreezeCommand:
         qmd = tmp_path / "page.qmd"
         qmd.write_text("---\ntitle: Test\n---\n")
 
-        with patch("great_docs.cli.GreatDocs"):
+        with patch("great_docs._cli.build.GreatDocs"):
             runner.invoke(
                 cli,
                 ["freeze", "--clean", "page.qmd", "--project-path", str(tmp_path)],
@@ -2871,7 +2873,7 @@ class TestFreezeCommand:
         runner = CliRunner()
         qmd = tmp_path / "page.qmd"
         qmd.write_text("---\ntitle: Test\n---\n")
-        with patch("great_docs.cli.GreatDocs"):
+        with patch("great_docs._cli.build.GreatDocs"):
             result = runner.invoke(
                 cli,
                 ["freeze", "--clean", "page.qmd", "--project-path", str(tmp_path)],
@@ -2969,7 +2971,7 @@ class TestSkillListCommand:
     def test_no_source_no_pyproject_exits_error(self, tmp_path):
         runner = CliRunner()
         # Invoke from a tmp dir with no pyproject.toml by patching Path.cwd
-        with patch("great_docs.cli.Path") as mock_path_cls:
+        with patch("great_docs._cli.skills.Path") as mock_path_cls:
             mock_cwd = MagicMock()
             mock_cwd.__truediv__ = lambda self, other: tmp_path / other
             mock_path_cls.cwd.return_value = tmp_path
@@ -3109,7 +3111,7 @@ class TestFreezeInfoFrontmatterEdgeCases:
 
 
 class TestBuildVersionFilter:
-    @patch("great_docs.cli.GreatDocs")
+    @patch("great_docs._cli.build.GreatDocs")
     def test_version_filter_passed_to_build(self, mock_gd_cls, tmp_path, monkeypatch):
         """Comma-separated version_filter is parsed and forwarded to docs.build()."""
         monkeypatch.chdir(tmp_path)
@@ -3212,7 +3214,7 @@ class TestFreezeCommandRenderLoop:
         freeze_dir.mkdir(parents=True)
         (freeze_dir / "html.json").write_text("{}")
 
-    @patch("great_docs.cli.GreatDocs")
+    @patch("great_docs._cli.build.GreatDocs")
     @patch("subprocess.run")
     def test_page_renders_successfully(self, mock_run, mock_gd_cls, tmp_path, monkeypatch):
         """A page found in the build dir renders → persisted to .great-docs/_freeze."""
@@ -3228,7 +3230,7 @@ class TestFreezeCommandRenderLoop:
 
         assert "mypage" in result.output or result.exit_code in (0, 1)
 
-    @patch("great_docs.cli.GreatDocs")
+    @patch("great_docs._cli.build.GreatDocs")
     @patch("subprocess.run")
     def test_page_render_fails(self, mock_run, mock_gd_cls, tmp_path, monkeypatch):
         """A page that fails to render is counted in the failed list."""
@@ -3243,7 +3245,7 @@ class TestFreezeCommandRenderLoop:
         )
         assert result.exit_code == 1
 
-    @patch("great_docs.cli.GreatDocs")
+    @patch("great_docs._cli.build.GreatDocs")
     @patch("subprocess.run")
     def test_preparation_failure_stops_freezing(self, mock_run, mock_gd_cls, tmp_path, monkeypatch):
         """Stop freezing after preparation fails, without rendering or reporting again"""
@@ -3259,7 +3261,7 @@ class TestFreezeCommandRenderLoop:
         assert "not found" not in result.output
         mock_run.assert_not_called()
 
-    @patch("great_docs.cli.GreatDocs")
+    @patch("great_docs._cli.build.GreatDocs")
     @patch("subprocess.run")
     def test_clean_and_render(self, mock_run, mock_gd_cls, tmp_path, monkeypatch):
         """--clean wipes existing cache then renders."""
@@ -3333,7 +3335,7 @@ class TestSetupGithubPagesMissedBranches:
 
 
 class TestCheckLinksAutodiscover:
-    @patch("great_docs.cli.GreatDocs")
+    @patch("great_docs._cli.checks.GreatDocs")
     def test_auto_discover_user_guide(self, mock_gd_cls, tmp_path, monkeypatch):
         """Without --file, user_guide/ and README.md are auto-discovered."""
         monkeypatch.chdir(tmp_path)
@@ -3746,7 +3748,7 @@ class TestSkillListMissedBranches:
         mock_list.assert_called_once_with(package="mypkg")
 
     @patch("great_docs._skills.install.list_skills")
-    @patch("great_docs.cli._detect_current_package", return_value="detected-pkg")
+    @patch("great_docs._cli.skills._detect_current_package", return_value="detected-pkg")
     def test_no_source_auto_detects_package(self, mock_detect, mock_list, tmp_path, monkeypatch):
         """No source auto-detects package from pyproject.toml."""
         monkeypatch.chdir(tmp_path)
@@ -3760,7 +3762,7 @@ class TestSkillListMissedBranches:
         """No source and no package in CWD exits 1."""
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
-        with patch("great_docs.cli._detect_current_package", return_value=None):
+        with patch("great_docs._cli.skills._detect_current_package", return_value=None):
             result = runner.invoke(cli, ["skill", "list"])
         assert result.exit_code == 1
         assert "Error" in result.output
@@ -3768,7 +3770,7 @@ class TestSkillListMissedBranches:
 
 class TestSkillInstallMissedBranches:
     @patch("great_docs._skills.install.install_skill")
-    @patch("great_docs.cli._detect_current_package", return_value="auto-pkg")
+    @patch("great_docs._cli.skills._detect_current_package", return_value="auto-pkg")
     def test_no_source_auto_detects(self, mock_detect, mock_install, tmp_path, monkeypatch):
         """No source argument triggers auto-detection from pyproject.toml."""
         monkeypatch.chdir(tmp_path)
@@ -3778,7 +3780,7 @@ class TestSkillInstallMissedBranches:
         result = runner.invoke(cli, ["skill", "install", "my-skill"])
         assert result.exit_code == 0
 
-    @patch("great_docs.cli._detect_current_package", return_value=None)
+    @patch("great_docs._cli.skills._detect_current_package", return_value=None)
     def test_no_source_no_package_exits_error(self, mock_detect, tmp_path, monkeypatch):
         """No source and no detectable package exits 1 with error."""
         monkeypatch.chdir(tmp_path)
@@ -4006,7 +4008,7 @@ class TestSkillListEmptyResults:
         assert "No skills found" in result.output
 
     @patch("great_docs._skills.install.list_skills", return_value=[])
-    @patch("great_docs.cli._detect_current_package", return_value="mypkg")
+    @patch("great_docs._cli.skills._detect_current_package", return_value="mypkg")
     def test_empty_results_with_package(self, mock_detect, mock_list, tmp_path, monkeypatch):
         """No skills for auto-detected package shows 'No skills found.' and exits 1."""
         monkeypatch.chdir(tmp_path)

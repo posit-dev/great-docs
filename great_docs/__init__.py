@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from importlib.metadata import PackageNotFoundError, version
 
 try:
@@ -11,7 +13,6 @@ from ._skills.install import check_skill, install_skill, list_skills
 from ._tables.display import disable_tbl_preview, enable_tbl_preview
 from ._tables.explorer import tbl_explorer
 from ._tables.preview import tbl_preview
-from .cli import main
 from .config import Config, create_default_config, load_config
 from .core import GreatDocs
 
@@ -31,6 +32,13 @@ __all__ = [
     "tbl_explorer",
     "tbl_preview",
 ]
+
+
+def main() -> None:
+    """Main CLI entry point for great-docs."""
+    from .cli import main as _main
+
+    _main()
 
 
 def render_evolution_table(
