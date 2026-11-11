@@ -56,6 +56,7 @@ def _assemble(root: Path, settings: str) -> dict[str, Any]:
         has_api_reference=True,
         has_cli_reference=False,
         has_changelog=False,
+        has_skills=False,
         contributions=(),
         report=lambda _: None,
         warn=lambda _: None,
