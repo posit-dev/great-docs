@@ -1,0 +1,3 @@
+# Widgets
+
+Every widget spins.
