@@ -103,12 +103,14 @@ TOOLS: tuple[WebMCPTool, ...] = (
         "List the versions",
         "The documented versions, with this page's URL in each",
         "versions",
+        implemented=True,
     ),
     WebMCPTool(
         "get_changelog",
         "Get the changelog",
         "One release's changelog entry, or the latest few",
         "changelog",
+        implemented=True,
     ),
     WebMCPTool(
         "get_agent_skill",
