@@ -3335,7 +3335,7 @@ class TestSetupGithubPagesMissedBranches:
 
 
 class TestCheckLinksAutodiscover:
-    @patch("great_docs.cli.GreatDocs")
+    @patch("great_docs._cli.checks.GreatDocs")
     def test_auto_discover_user_guide(self, mock_gd_cls, tmp_path, monkeypatch):
         """Without --file, user_guide/ and README.md are auto-discovered."""
         monkeypatch.chdir(tmp_path)

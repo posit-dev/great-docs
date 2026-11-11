@@ -13105,7 +13105,7 @@ def test_cli_check_links_success():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.checks.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.check_links.return_value = {
@@ -13127,7 +13127,7 @@ def test_cli_check_links_broken():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.checks.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.check_links.return_value = {
@@ -13156,7 +13156,7 @@ def test_cli_check_links_with_redirects():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.checks.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.check_links.return_value = {
@@ -13185,7 +13185,7 @@ def test_cli_check_links_source_only():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.checks.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.check_links.return_value = {
@@ -13209,7 +13209,7 @@ def test_cli_check_links_docs_only():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.checks.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.check_links.return_value = {
@@ -13230,7 +13230,7 @@ def test_cli_check_links_json_output_no_broken():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.checks.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.check_links.return_value = {
@@ -13252,7 +13252,7 @@ def test_cli_check_links_json_output_with_broken():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.checks.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.check_links.return_value = {
@@ -13272,7 +13272,7 @@ def test_cli_check_links_custom_ignore():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.checks.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.check_links.return_value = {
@@ -13297,7 +13297,7 @@ def test_cli_check_links_import_error():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.checks.GreatDocs") as MockGD:
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs.check_links.side_effect = ImportError("No module named 'requests'")
@@ -13312,7 +13312,7 @@ def test_cli_check_links_error():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.checks.GreatDocs") as MockGD:
             MockGD.side_effect = OSError("check failed")
 
             result = runner.invoke(check_links, ["--project-path", tmp_dir])
