@@ -4,17 +4,21 @@ import os
 import re
 import sys
 import zipfile
-from functools import wraps
+from functools import wraps as wraps
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING
+from typing import Any as Any
+from typing import Callable as Callable
 
 import click
 
-from . import __version__
 from ._build import freeze as freeze_cache
 from ._build import from_repo as repository
 from ._build import quarto, serve, site
 from ._build.steps import PROJECT_ERRORS, USER_CODE_ERRORS, BuildError, print_warning
+from ._cli import options as _options
+from ._cli.app import OrderedGroup as OrderedGroup
+from ._cli.app import cli as cli
 from ._content import user_guide
 from ._project import Project
 from ._project import manifest as _manifest
@@ -25,7 +29,7 @@ from ._project.scaffold import update_gitignore
 from ._reference.exports import Exports
 from ._website import changelog as changelog_page
 from ._website import quarto_yml
-from .config import ConfigError
+from .config import ConfigError as ConfigError
 from .core import GreatDocs
 
 if TYPE_CHECKING:
@@ -35,41 +39,6 @@ if TYPE_CHECKING:
 # status 1. Handlers that load the project's package also report `USER_CODE_ERRORS`.
 # Commands may handle additional errors separately. Unhandled exceptions show a traceback
 # and exit with status 1.
-
-
-def _config_option(function: Callable[..., Any]) -> Callable[..., Any]:
-    """Select and validate project configuration after the subcommand"""
-
-    @click.option(
-        "--config",
-        "config_path",
-        type=str if function.__name__ == "migrate_layout" else click.Path(dir_okay=False),
-        help="Path to the project configuration file",
-    )
-    @wraps(function)
-    def selected(*args: Any, **kwargs: Any) -> Any:
-        standalone_preview = function.__name__ == "preview" and any(
-            kwargs.get(option) for option in ("site_dir", "pr", "run", "branch", "clear_cache")
-        )
-        if (
-            function.__name__ != "migrate_layout"
-            and not kwargs.get("from_repo")
-            and not standalone_preview
-        ):
-            try:
-                Layout.make(
-                    Path(kwargs.get("project_path") or Path.cwd()),
-                    Path(kwargs["config_path"]) if kwargs.get("config_path") else None,
-                    create=function.__name__ in {"init", "config"},
-                )
-            except ValueError as error:
-                raise click.ClickException(str(error)) from error
-        try:
-            return function(*args, **kwargs)
-        except ConfigError as error:
-            raise click.ClickException(str(error)) from error
-
-    return selected
 
 
 def _detect_python_version(project_root: Path) -> str | None:
@@ -154,27 +123,6 @@ def _detect_optional_dependencies(project_root: Path) -> list[str]:
     return sorted(extra for extra in extras if any(term in extra.lower() for term in terms))
 
 
-class OrderedGroup(click.Group):
-    """Click group that lists commands in the order they were added."""
-
-    def list_commands(self, ctx: click.Context) -> list[str]:
-        return list(self.commands.keys())
-
-
-@click.group(cls=OrderedGroup)
-@click.version_option(version=__version__, prog_name="great-docs")
-def cli():
-    """Great Docs: Beautiful documentation for Python packages.
-
-    Great Docs generates professional documentation sites with auto-generated
-    API references, CLI documentation, smart navigation, and modern styling.
-
-    Get started with 'great-docs init' to set up your docs, then use
-    'great-docs build' to generate your site.
-    """
-    pass
-
-
 @click.command()
 @click.option(
     "--project-path",
@@ -186,7 +134,7 @@ def cli():
     is_flag=True,
     help="Delete existing great-docs.yml and generate a fresh default config",
 )
-@_config_option
+@_options.config_option
 def init(project_path: str | None, force: bool, config_path: str | None = None) -> None:
     """
     Initialise documentation in your project
@@ -285,7 +233,7 @@ def init(project_path: str | None, force: bool, config_path: str | None = None) 
     default=None,
     help="Render pages with this many Quarto processes (a number or 'auto'; experimental)",
 )
-@_config_option
+@_options.config_option
 def build(
     project_path: str | None,
     watch: bool,
@@ -417,7 +365,7 @@ def build(
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
     help="Path to your project root directory (default: current directory)",
 )
-@_config_option
+@_options.config_option
 def uninstall(project_path: str | None, config_path: str | None = None) -> None:
     """
     Remove documentation configuration and generated output
@@ -499,7 +447,7 @@ def uninstall(project_path: str | None, config_path: str | None = None) -> None:
     default=None,
     help="Load a .env for GITHUB_TOKEN/GH_TOKEN (default: auto-detect .env).",
 )
-@_config_option
+@_options.config_option
 def preview(
     project_path: str | None,
     port: int,
@@ -630,7 +578,7 @@ def preview(
     is_flag=True,
     help="Overwrite existing great-docs.yml without prompting",
 )
-@_config_option
+@_options.config_option
 def config(project_path: str | None, force: bool, config_path: str | None = None) -> None:
     """
     Generate a documentation configuration file
@@ -945,7 +893,7 @@ def _print_notes(
 @click.option(
     "--yes", is_flag=True, help="Apply the reviewed changes without an interactive confirmation"
 )
-@_config_option
+@_options.config_option
 @click.pass_context
 def migrate_layout(
     ctx: click.Context,
@@ -1090,7 +1038,7 @@ cli.add_command(migrate_layout)
     is_flag=True,
     help="Show method names for each class",
 )
-@_config_option
+@_options.config_option
 def scan(
     project_path: str | None, docs_dir: str | None, verbose: bool, config_path: str | None = None
 ) -> None:
@@ -1373,7 +1321,7 @@ def _freeze_info(project_root: Path, persist_dir: Path, layout: Layout | None = 
     default=False,
     help="Show freeze settings and cached pages for the current version.",
 )
-@_config_option
+@_options.config_option
 def freeze(
     pages: tuple[str, ...],
     project_path: str | None,
@@ -1679,7 +1627,7 @@ def _print_page_table(pages: list[dict]) -> None:
     default=None,
     help="Path to the build output directory (if different from default _site).",
 )
-@_config_option
+@_options.config_option
 def timings(
     project_path: str | None,
     top: int | None,
@@ -1761,7 +1709,7 @@ cli.add_command(timings)
     is_flag=True,
     help="Install Great Docs from GitHub main branch instead of PyPI release",
 )
-@_config_option
+@_options.config_option
 def setup_github_pages(
     project_path: str | None,
     main_branch: str,
@@ -1996,7 +1944,7 @@ cli.add_command(setup_github_pages)
     is_flag=True,
     help="Output results as JSON",
 )
-@_config_option
+@_options.config_option
 def check_links(
     project_path: str | None,
     source_only: bool,
@@ -2207,7 +2155,7 @@ cli.add_command(check_links)
     default=None,
     help="Where to write full tracebacks (default: .great-docs/check-examples.log)",
 )
-@_config_option
+@_options.config_option
 def check_examples(
     paths: tuple[str, ...],
     project_path: str | None,
@@ -2355,7 +2303,7 @@ cli.add_command(check_examples)
     default=None,
     help="Maximum number of releases to include (default: from config or 50)",
 )
-@_config_option
+@_options.config_option
 def changelog(
     project_path: str | None, max_releases: int | None, config_path: str | None = None
 ) -> None:
@@ -2500,7 +2448,7 @@ cli.add_command(changelog)
     help="Don't add built-in technical terms to dictionary",
 )
 @click.argument("files", nargs=-1, type=click.Path(exists=True))
-@_config_option
+@_options.config_option
 def proofread(
     project_path,
     docs_dir,
@@ -2784,7 +2732,7 @@ cli.add_command(proofread)
     is_flag=True,
     help="Output results as JSON for CI integration",
 )
-@_config_option
+@_options.config_option
 def seo(
     project_path: str | None, fix: bool, json_output: bool, config_path: str | None = None
 ) -> None:
@@ -3047,7 +2995,7 @@ cli.add_command(seo)
     is_flag=True,
     help="Output results as JSON for CI integration",
 )
-@_config_option
+@_options.config_option
 def lint(
     project_path: str | None,
     checks: tuple[str, ...],
@@ -3240,7 +3188,7 @@ cli.add_command(lint)
     is_flag=True,
     help="With --symbol --table, output HTML (with disclosure wrapper)",
 )
-@_config_option
+@_options.config_option
 def api_diff_cmd(
     old_version: str,
     new_version: str,
@@ -3533,7 +3481,7 @@ cli.add_command(api_diff_cmd)
     is_flag=True,
     help="Validate version configuration and exit with non-zero on errors",
 )
-@_config_option
+@_options.config_option
 def versions(project_path: str | None, check: bool, config_path: str | None = None) -> None:
     """List configured documentation versions.
 
@@ -3632,7 +3580,7 @@ cli.add_command(versions)
     is_flag=True,
     help="Overwrite existing snapshot files",
 )
-@_config_option
+@_options.config_option
 def api_snapshot_cmd(
     version_tag: str | None,
     project_path: str | None,
