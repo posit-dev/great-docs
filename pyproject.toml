@@ -196,6 +196,7 @@ include = [
     "great_docs/_mcpref",
     "great_docs/_project",
     "great_docs/_reference",
+    "great_docs/_skills",
     "great_docs/_source_refs.py",
     "great_docs/_subprocess.py",
     "great_docs/_term_player/prerender.py",

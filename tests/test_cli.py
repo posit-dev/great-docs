@@ -2925,7 +2925,7 @@ class TestTimingsCommand:
 class TestSkillCheckCommand:
     def test_no_installed_skills(self):
         runner = CliRunner()
-        with patch("great_docs._skill_install.check_skill", return_value=[]):
+        with patch("great_docs._skills.install.check_skill", return_value=[]):
             result = runner.invoke(cli, ["skill", "check"])
 
         assert result.exit_code == 0
@@ -2939,7 +2939,7 @@ class TestSkillCheckCommand:
             {"status": "updated", "name": "pointblank"},
             {"status": "local", "name": "myskill"},
         ]
-        with patch("great_docs._skill_install.check_skill", return_value=skills):
+        with patch("great_docs._skills.install.check_skill", return_value=skills):
             result = runner.invoke(cli, ["skill", "check"])
 
         assert result.exit_code == 0
@@ -2953,7 +2953,7 @@ class TestSkillListCommand:
     def test_url_source_calls_list_skills_with_url(self):
         runner = CliRunner()
         with patch(
-            "great_docs._skill_install.list_skills", return_value=[{"name": "x"}]
+            "great_docs._skills.install.list_skills", return_value=[{"name": "x"}]
         ) as mock_ls:
             result = runner.invoke(cli, ["skill", "list", "https://example.com/docs/"])
         mock_ls.assert_called_once_with(url="https://example.com/docs/")
@@ -2961,7 +2961,7 @@ class TestSkillListCommand:
     def test_package_name_source_calls_list_skills_with_package(self):
         runner = CliRunner()
         with patch(
-            "great_docs._skill_install.list_skills", return_value=[{"name": "x"}]
+            "great_docs._skills.install.list_skills", return_value=[{"name": "x"}]
         ) as mock_ls:
             result = runner.invoke(cli, ["skill", "list", "great-tables"])
         mock_ls.assert_called_once_with(package="great-tables")
@@ -2981,7 +2981,7 @@ class TestSkillListCommand:
 
     def test_empty_results_exits_one(self):
         runner = CliRunner()
-        with patch("great_docs._skill_install.list_skills", return_value=[]):
+        with patch("great_docs._skills.install.list_skills", return_value=[]):
             result = runner.invoke(cli, ["skill", "list", "great-tables"])
 
         assert result.exit_code == 1
@@ -3722,7 +3722,7 @@ class TestApiSnapshotMissedBranches:
 
 
 class TestSkillListMissedBranches:
-    @patch("great_docs._skill_install.list_skills")
+    @patch("great_docs._skills.install.list_skills")
     def test_url_source_displays_url(self, mock_list, tmp_path, monkeypatch):
         """--url source calls _list_skills(url=...) and echoes the URL."""
         monkeypatch.chdir(tmp_path)
@@ -3735,7 +3735,7 @@ class TestSkillListMissedBranches:
         assert "https://example.com" in result.output
         mock_list.assert_called_once_with(url="https://example.com/")
 
-    @patch("great_docs._skill_install.list_skills")
+    @patch("great_docs._skills.install.list_skills")
     def test_package_source_displays_package(self, mock_list, tmp_path, monkeypatch):
         """Positional SOURCE calls _list_skills(package=source)."""
         monkeypatch.chdir(tmp_path)
@@ -3745,7 +3745,7 @@ class TestSkillListMissedBranches:
         assert "mypkg" in result.output
         mock_list.assert_called_once_with(package="mypkg")
 
-    @patch("great_docs._skill_install.list_skills")
+    @patch("great_docs._skills.install.list_skills")
     @patch("great_docs.cli._detect_current_package", return_value="detected-pkg")
     def test_no_source_auto_detects_package(self, mock_detect, mock_list, tmp_path, monkeypatch):
         """No source auto-detects package from pyproject.toml."""
@@ -3767,7 +3767,7 @@ class TestSkillListMissedBranches:
 
 
 class TestSkillInstallMissedBranches:
-    @patch("great_docs._skill_install.install_skill")
+    @patch("great_docs._skills.install.install_skill")
     @patch("great_docs.cli._detect_current_package", return_value="auto-pkg")
     def test_no_source_auto_detects(self, mock_detect, mock_install, tmp_path, monkeypatch):
         """No source argument triggers auto-detection from pyproject.toml."""
@@ -3996,7 +3996,7 @@ class TestApiSnapshotOutputAndException:
 
 
 class TestSkillListEmptyResults:
-    @patch("great_docs._skill_install.list_skills", return_value=[])
+    @patch("great_docs._skills.install.list_skills", return_value=[])
     def test_empty_results_with_url(self, mock_list, tmp_path, monkeypatch):
         """No skills at URL shows 'No skills found.' and exits 1."""
         monkeypatch.chdir(tmp_path)
@@ -4005,7 +4005,7 @@ class TestSkillListEmptyResults:
         assert result.exit_code == 1
         assert "No skills found" in result.output
 
-    @patch("great_docs._skill_install.list_skills", return_value=[])
+    @patch("great_docs._skills.install.list_skills", return_value=[])
     @patch("great_docs.cli._detect_current_package", return_value="mypkg")
     def test_empty_results_with_package(self, mock_detect, mock_list, tmp_path, monkeypatch):
         """No skills for auto-detected package shows 'No skills found.' and exits 1."""
@@ -4687,7 +4687,7 @@ class TestApiDiffGraphHead:
 
 
 class TestSkillInstallAutoDetect:
-    @patch("great_docs._skill_install.install_skill")
+    @patch("great_docs._skills.install.install_skill")
     def test_auto_detect_package_from_pyproject(self, mock_install, tmp_path, monkeypatch):
         """skill install without source auto-detects package."""
         monkeypatch.chdir(tmp_path)

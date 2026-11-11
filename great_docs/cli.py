@@ -3844,7 +3844,7 @@ def skill_install(
       great-docs skill install great-tables --path .claude/skills/gt # custom path
       great-docs skill install --detect           # find and refresh all skills
     """
-    from ._skill_install import install_skill as _install_skill
+    from ._skills.install import install_skill as _install_skill
 
     kwargs: dict = {
         "global_": global_,
@@ -3919,7 +3919,7 @@ def skill_check(
       great-docs skill check --global       # check global installations only
       great-docs skill check --update       # reinstall any that have changed
     """
-    from ._skill_install import check_skill as _check_skill
+    from ._skills.install import check_skill as _check_skill
 
     click.echo("Checking installed skills...")
     results = _check_skill(
@@ -3969,7 +3969,7 @@ def skill_list(source: str | None, url: str | None) -> None:
       great-docs skill list great-tables      # any installed package
       great-docs skill list https://posit-dev.github.io/great-tables/
     """
-    from ._skill_install import list_skills as _list_skills
+    from ._skills.install import list_skills as _list_skills
 
     if source:
         if source.startswith(("http://", "https://")):
