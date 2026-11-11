@@ -263,7 +263,8 @@ include `include-hidden-files: true`:
 ```
 
 Without this, the `.well-known/agent-skills/` directory is silently dropped and `npx skills add`
-will return a 404.
+will return a 404. So will [WebMCP](47-webmcp.qmd)'s `get_agent_skill` tool, which reads the
+skills from the same directory.
 
 ::: {.callout-tip}
 Great Docs generates this workflow for you with the correct settings. See the
@@ -557,6 +558,8 @@ result is a discoverable, installable cheat sheet that makes agents more effecti
 
 - [Agent Skills Specification](https://agentskills.io/specification): the full open standard
 - [llms.txt](39-llms-txt.qmd): the auto-generated LLM context files that complement skills
+- [WebMCP](47-webmcp.qmd): tools, including `get_agent_skill`, that agents in the reader's browser
+  can call
 - [Configuration](05-configuration.qmd): all `great-docs.yml` options including the `skill` block
 - [Deployment](14-deployment.qmd): deploying your site to GitHub Pages (with the `include-hidden-files` setting)
 - [Building](13-building.qmd): the full build pipeline, including how skill generation fits in
