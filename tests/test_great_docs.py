@@ -145,6 +145,11 @@ from great_docs._build import freeze, pipeline, quarto, reference, site
 from great_docs._build.log import BuildLog
 from great_docs._build.ownership import QUARTO_YML_HEADER, validate_build_dir
 from great_docs._build.steps import Skipped, Step, count_listed
+from great_docs._cli.ci import (
+    _detect_optional_dependencies,
+    _detect_package_manager,
+    _detect_python_version,
+)
 from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
 from great_docs._content import user_guide
@@ -178,9 +183,6 @@ from great_docs._website.scripts import script_include, stylesheet_include
 from great_docs._website.seo import robots, sitemap
 from great_docs._yaml import split_front_matter
 from great_docs.cli import (
-    _detect_optional_dependencies,
-    _detect_package_manager,
-    _detect_python_version,
     build,
     changelog,
     check_links,

@@ -21,10 +21,12 @@ from great_docs._cli.build import (
     _print_page_table,
     _print_timing_table,
 )
-from great_docs.cli import (
-    _detect_current_package,
+from great_docs._cli.ci import (
     _detect_optional_dependencies,
     _detect_python_version,
+)
+from great_docs.cli import (
+    _detect_current_package,
     cli,
 )
 from tests.support import mock_config
