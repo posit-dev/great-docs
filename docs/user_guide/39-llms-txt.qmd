@@ -63,9 +63,10 @@ This file is typically small (a few KB) and is designed to give an LLM a quick o
 API surface without overwhelming its context window.
 
 When [WebMCP](47-webmcp.qmd) is turned on, `llms.txt` ends with a "WebMCP tools" section, so an
-agent that reads the file learns that it can also call tools on the site's pages. The last three
+agent that reads the file learns that it can also call tools on the site's pages. The last four
 tools appear when the site has a [CLI reference](07-cli-documentation.qmd),
-[versions](30-multi-version-docs.qmd) or a [changelog](17-changelog.qmd):
+[versions](30-multi-version-docs.qmd), a [changelog](17-changelog.qmd) or
+[Agent Skills](38-agent-skills.qmd):
 
 ````markdown
 ## WebMCP tools
@@ -84,6 +85,7 @@ An AI agent in a browser that supports WebMCP can call these tools on this site'
 - `get_cli_help`: The help text of a CLI command
 - `list_versions`: The documented versions, with this page's URL in each
 - `get_changelog`: One release's changelog entry, or the latest few
+- `get_agent_skill`: A published SKILL.md and its companion files
 
 Scripts on the site's pages can call the same tools:
 
