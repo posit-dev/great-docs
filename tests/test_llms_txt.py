@@ -435,7 +435,7 @@ class TestWebMCPSection:
         assert "window.greatDocs.tools.list();" in lines
 
 
-def _build_llms_txt(tmp_path: Path, settings: dict[str, Any]) -> str:
+def _build_llms_txt(tmp_path: Path, settings: dict[str, Any], *, github: object = None) -> str:
     """Run the build step that writes `llms.txt` and return the file's text"""
     tmp_path.mkdir(parents=True, exist_ok=True)
     write_pyproject(tmp_path, "json")
@@ -444,7 +444,7 @@ def _build_llms_txt(tmp_path: Path, settings: dict[str, Any]) -> str:
     layout.build_dir.mkdir(parents=True)
     run = SimpleNamespace(
         api_block=_api_reference("json", SECTION),
-        project=SimpleNamespace(manifest={}, name="json", importable_name=None),
+        project=SimpleNamespace(manifest={}, name="json", importable_name=None, github=github),
         user_guide=None,
     )
     with contextlib.redirect_stdout(io.StringIO()):
@@ -477,3 +477,19 @@ class TestBuildStep:
 
         tools = [line.split("`")[1] for line in _webmcp_section(text) if line.startswith("- `")]
         assert tools[-1] == "get_cli_help"
+
+    def test_a_versioned_site_adds_the_versions_tool(self, tmp_path: Path):
+        text = _build_llms_txt(tmp_path, {"webmcp": True, "versions": ["0.2", "0.1"]})
+
+        tools = [line.split("`")[1] for line in _webmcp_section(text) if line.startswith("- `")]
+        assert tools[-1] == "list_versions"
+
+    def test_a_github_repository_adds_the_changelog_tool_unless_disabled(self, tmp_path: Path):
+        def tools(directory: str, settings: dict[str, Any]) -> list[str]:
+            text = _build_llms_txt(tmp_path / directory, settings, github=object())
+            lines = _webmcp_section(text)
+            return [line.split("`")[1] for line in lines if line.startswith("- `")]
+
+        assert tools("on", {"webmcp": True})[-1] == "get_changelog"
+        off = tools("off", {"webmcp": True, "changelog": {"enabled": False}})
+        assert "get_changelog" not in off
