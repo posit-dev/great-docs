@@ -6,15 +6,16 @@ import pytest
 from mcp.types import CompletionArgument, ResourceTemplateReference
 
 from great_docs._build.ownership import QUARTO_YML_HEADER, is_in_great_docs_build_dir
+from great_docs._mcp.context import sibling_build_dirs as _sibling_build_dirs
 from great_docs._project.layout import Layout
-from great_docs.mcp import _sibling_build_dirs, handle_completion
+from great_docs.mcp import handle_completion
 
 
 @pytest.mark.parametrize("conflict", ["versions", "ownership"])
 def test_clean_build_validates_before_removing_historical_output(
     tmp_path: Path, conflict: str
 ) -> None:
-    from great_docs.mcp import _handle_build
+    from great_docs._mcp.tools import _handle_build
 
     source = tmp_path / "docs"
     source.mkdir()
