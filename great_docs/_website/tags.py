@@ -18,9 +18,9 @@ from yaml12 import format_yaml
 
 from .._content.naming import title_from_name
 from .._contribution import Contribution, InlineData, NavbarLink
-from .._icons import get_icon_svg
 from .._translations import translate
 from . import page_scan
+from .icons import get_icon_svg
 from .navigation import navbar
 
 if TYPE_CHECKING:

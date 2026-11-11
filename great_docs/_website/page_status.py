@@ -8,9 +8,9 @@ import json
 from typing import TYPE_CHECKING, Any, cast
 
 from .._contribution import Contribution, InlineData
-from .._icons import get_icon_svg
 from .._translations import translate
 from . import page_scan
+from .icons import get_icon_svg
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

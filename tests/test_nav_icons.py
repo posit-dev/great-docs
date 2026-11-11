@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from great_docs._icons import LUCIDE_ICONS, get_icon_svg, list_icons
+from great_docs._website.icons import LUCIDE_ICONS, get_icon_svg, list_icons
 from great_docs._website.navigation import icons
 from great_docs.config import Config
 from tests.support import write_config

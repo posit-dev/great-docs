@@ -9,7 +9,7 @@
 --   {{< icon heart label="Favorite" >}}
 --
 -- Calls the companion _icon_shortcode.py script, which imports
--- get_icon_svg() from great_docs._icons and prints the resulting
+-- get_icon_svg() from great_docs._website.icons and prints the resulting
 -- SVG markup to stdout.
 
 local function kwarg_str(kwargs, key)

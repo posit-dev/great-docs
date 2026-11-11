@@ -11,8 +11,8 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from ..._icons import get_icon_svg
 from .. import quarto_yml
+from ..icons import get_icon_svg
 from . import navbar as nav_navbar
 
 if TYPE_CHECKING:

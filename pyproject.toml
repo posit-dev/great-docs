@@ -191,7 +191,6 @@ include = [
     "great_docs/_cliref",
     "great_docs/_content",
     "great_docs/_contribution.py",
-    "great_docs/_icons.py",
     "great_docs/_interlinks",
     "great_docs/_layout_migration",
     "great_docs/_mcpref",
