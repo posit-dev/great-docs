@@ -54,7 +54,7 @@ def test_site_tools_need_no_feature():
     }
 
 
-def test_the_site_reference_version_and_changelog_tools_are_implemented():
+def test_the_site_reference_version_changelog_and_skills_tools_are_implemented():
     assert [tool.name for tool in TOOLS if tool.implemented] == [
         *_SITE_TOOLS,
         "list_api",
@@ -62,6 +62,7 @@ def test_the_site_reference_version_and_changelog_tools_are_implemented():
         "get_cli_help",
         "list_versions",
         "get_changelog",
+        "get_agent_skill",
     ]
 
 
@@ -123,4 +124,5 @@ class TestSiteTools:
             "get_cli_help",
             "list_versions",
             "get_changelog",
+            "get_agent_skill",
         ]
