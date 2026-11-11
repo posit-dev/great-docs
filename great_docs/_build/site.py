@@ -153,6 +153,7 @@ def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Re
         has_api_reference=run.has_api_reference,
         has_cli_reference=run.has_cli_reference,
         has_changelog=run.has_changelog,
+        has_skills=run.has_skills,
         contributions=run.contributions,
         report=print,
         warn=print_warning,

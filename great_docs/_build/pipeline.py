@@ -81,6 +81,9 @@ class Run:
         it writes them.
     has_changelog
         Whether the site has a changelog page. The changelog step sets it when it writes one.
+    has_skills
+        Whether the site publishes an index of agent skills. The skills step sets it when it
+        writes one.
     quarto_config
         The site's Quarto configuration, initially empty and updated in memory during
         preparation. Preparation writes the finished configuration to `_quarto.yml`
@@ -107,6 +110,7 @@ class Run:
     has_api_reference: bool = True
     has_cli_reference: bool = False
     has_changelog: bool = False
+    has_skills: bool = False
     quarto_config: dict[str, Any] = field(default_factory=lambda: dict[str, Any]())
     api_block: dict[str, Any] | None = None
     api_discovery_reused: bool = False
