@@ -12614,7 +12614,7 @@ def test_cli_build_success():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.build.GreatDocs") as MockGD:
             mock_instance = MagicMock()
             MockGD.return_value = mock_instance
 
@@ -12630,7 +12630,7 @@ def test_cli_build_with_watch():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.build.GreatDocs") as MockGD:
             mock_instance = MagicMock()
             MockGD.return_value = mock_instance
 
@@ -12646,7 +12646,7 @@ def test_cli_build_no_refresh():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.build.GreatDocs") as MockGD:
             mock_instance = MagicMock()
             MockGD.return_value = mock_instance
 
@@ -12662,7 +12662,7 @@ def test_cli_build_jobs():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.build.GreatDocs") as MockGD:
             mock_instance = MagicMock()
             MockGD.return_value = mock_instance
 
@@ -12678,7 +12678,7 @@ def test_cli_build_keyboard_interrupt():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.build.GreatDocs") as MockGD:
             MockGD.return_value.build.side_effect = KeyboardInterrupt()
 
             result = runner.invoke(build, ["--project-path", tmp_dir])
@@ -12691,7 +12691,7 @@ def test_cli_build_error():
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.build.GreatDocs") as MockGD:
             MockGD.return_value.build.side_effect = RuntimeError("build failed")
 
             result = runner.invoke(build, ["--project-path", tmp_dir])
@@ -12732,7 +12732,7 @@ def test_cli_preview_success():
     from great_docs.cli import preview
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.build.GreatDocs") as MockGD:
             mock_instance = MagicMock()
             MockGD.return_value = mock_instance
 
@@ -12749,7 +12749,7 @@ def test_cli_preview_custom_port():
     from great_docs.cli import preview
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.build.GreatDocs") as MockGD:
             mock_instance = MagicMock()
             MockGD.return_value = mock_instance
 
@@ -12766,7 +12766,7 @@ def test_cli_preview_keyboard_interrupt():
     from great_docs.cli import preview
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.build.GreatDocs") as MockGD:
             MockGD.return_value.preview.side_effect = KeyboardInterrupt()
 
             result = runner.invoke(preview, ["--project-path", tmp_dir])
@@ -12780,7 +12780,7 @@ def test_cli_preview_error():
     from great_docs.cli import preview
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("great_docs.cli.GreatDocs") as MockGD:
+        with patch("great_docs._cli.build.GreatDocs") as MockGD:
             MockGD.return_value.preview.side_effect = RuntimeError("preview failed")
 
             result = runner.invoke(preview, ["--project-path", tmp_dir])
