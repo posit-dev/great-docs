@@ -1795,8 +1795,220 @@
         }
     });
 
+    // ------------------------------------------------------------------------------------
+    // Versions and changelog tools
+    // ------------------------------------------------------------------------------------
+
+    var VERSION_MAP_META = 'gd-version-map';
+
+    // The versions in the page's version map, or null without one.
+    function readVersions() {
+        var meta = document.querySelector('meta[name="' + VERSION_MAP_META + '"]');
+        var map = null;
+        try {
+            map = meta ? JSON.parse(meta.getAttribute('content')) : null;
+        } catch (e) {
+            warnOnce('versions', 'ignoring an unreadable version map.', e);
+        }
+        if (!map || !Array.isArray(map.versions) || !map.versions.length) return null;
+        if (typeOf(map.pages) !== 'object') map.pages = {};
+        return map;
+    }
+
+    // The version this page belongs to, whose root holds this script, and the root of the
+    // latest version, which holds the others under their path prefixes.
+    function versionRoots(map) {
+        var pathname = new URL(siteRoot).pathname;
+        for (var i = 0; i < map.versions.length; i++) {
+            var prefix = map.versions[i].path_prefix ? map.versions[i].path_prefix + '/' : '';
+            var at = pathname.length - prefix.length;
+            if (prefix && pathname.slice(at) === prefix && pathname.charAt(at - 1) === '/') {
+                var root = new URL(pathname.slice(0, at), siteRoot).href;
+                return { current: map.versions[i], root: root };
+            }
+        }
+        var latest = map.versions.filter(function (version) {
+            return version.latest;
+        })[0];
+        return { current: latest || map.versions[0], root: siteRoot };
+    }
+
+    // The root of a version, from the root of the latest version and its path prefix.
+    function versionRoot(root, prefix) {
+        return new URL(prefix ? prefix + '/' : '', root).href;
+    }
+
+    var LIST_VERSIONS = defineTool({
+        name: 'list_versions',
+        title: 'List the versions',
+        purpose: "The documented versions, with this page's URL in each",
+        description:
+            'Use this to see which versions of the package these docs cover and which one ' +
+            "this page belongs to. Returns each version's tag, label and URL, marked current, " +
+            'latest, prerelease or eol (no longer supported), with page_url where this page ' +
+            'is known to exist in that version. Example: "Are there docs for version 0.2?"',
+        feature: 'versions',
+        annotations: { readOnlyHint: true },
+        run: function () {
+            var map = readVersions();
+            if (!map) return errorResult('unavailable', 'This page has no list of versions.');
+            var found = versionRoots(map);
+            var path = currentPath();
+            var listed = Array.isArray(map.pages[path]) ? map.pages[path] : [];
+            return {
+                url: found.root,
+                current: found.current.tag,
+                path: path,
+                versions: map.versions.map(function (version) {
+                    var current = version === found.current;
+                    var url = versionRoot(found.root, version.path_prefix);
+                    return compact({
+                        tag: version.tag,
+                        label: version.label,
+                        url: url,
+                        page_url: current ? location.href.split('#')[0]
+                            : listed.indexOf(version.tag) !== -1 ? url + path : null,
+                        current: current,
+                        latest: Boolean(version.latest),
+                        prerelease: Boolean(version.prerelease),
+                        eol: Boolean(version.eol)
+                    });
+                })
+            };
+        }
+    });
+
+    // A version number in text, such as `v1.2.0` or `1.2.0rc1`.
+    var VERSION_NUMBER = /\bv?(\d+(?:\.\d+)+(?:[-+.]?[0-9a-z]+)*)/i;
+    var ISO_DATE = /\b\d{4}-\d{2}-\d{2}\b/;
+
+    function versionKey(text) {
+        return String(text).trim().toLowerCase().replace(/^v(?=\d)/, '');
+    }
+
+    // The changelog's entries, newest first as the page lists them: one for each `##`
+    // heading, with its version, the date and pre-release mark of its first line, and its
+    // Markdown.
+    function changelogEntries(markdown, url) {
+        var list = parseHeadings(markdown);
+        return list.filter(function (heading) {
+            return heading.level === 2;
+        }).map(function (heading) {
+            var text = sliceSection(markdown, heading, list);
+            var first = text.split('\n').slice(1).filter(function (line) {
+                return line.trim();
+            })[0] || '';
+            var number = VERSION_NUMBER.exec(heading.text);
+            var date = ISO_DATE.exec(heading.text) ||
+                (/^[\s*_(]*\d{4}-\d{2}-\d{2}/.test(first) ? ISO_DATE.exec(first) : null);
+            return {
+                key: number ? number[1].toLowerCase() : heading.text.toLowerCase(),
+                heading: heading.text.toLowerCase(),
+                entry: compact({
+                    version: number ? number[0] : heading.text,
+                    date: date ? date[0] : null,
+                    prerelease: first.indexOf('(pre-release)') !== -1 || null,
+                    url: url + '#' + heading.anchor,
+                    markdown: text
+                })
+            };
+        });
+    }
+
+    // The entries for `query`: the version or heading it names, with or without a leading
+    // "v", or else the versions of the series it names, such as every 1.2 release for "1.2".
+    function findEntries(entries, query) {
+        var wanted = versionKey(query);
+        var exact = entries.filter(function (item) {
+            return item.key === wanted || item.heading === query.trim().toLowerCase();
+        });
+        if (exact.length) return exact;
+        return entries.filter(function (item) {
+            return item.key.indexOf(wanted) === 0 && !/^\d/.test(item.key.slice(wanted.length));
+        });
+    }
+
+    var GET_CHANGELOG = defineTool({
+        name: 'get_changelog',
+        title: 'Get the changelog',
+        purpose: "One release's changelog entry, or the latest few",
+        description:
+            'Use this to learn what changed in a release of the package. Returns changelog ' +
+            'entries as Markdown, newest first, each with its version, date and URL. version ' +
+            'picks one release, with or without a leading "v", or a series such as "1.2"; ' +
+            'leave it out for the latest entries. limit caps how many are returned. ' +
+            'Example: "What changed in version 1.2?"',
+        feature: 'changelog',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                version: {
+                    type: 'string',
+                    minLength: 1,
+                    maxLength: 100,
+                    description: 'A version, such as "1.2.0" or "v1.2.0", or a series such as ' +
+                        '"1.2". Omit for the latest entries.'
+                },
+                limit: {
+                    type: 'integer',
+                    minimum: 1,
+                    maximum: 20,
+                    default: 3,
+                    description: 'The most entries to return.'
+                }
+            },
+            additionalProperties: false
+        },
+        example: { version: '1.2.0' },
+        annotations: { readOnlyHint: true },
+        run: function (input, context) {
+            var signal = context.signal;
+            return loadManifest(signal).then(function (manifest) {
+                var changelog = manifest.changelog;
+                if (!changelog || !changelog.path) {
+                    return errorResult('unavailable', 'This site has no changelog.');
+                }
+                var url = absolute(changelog.path);
+                if (!changelog.md) {
+                    return errorResult('unavailable', 'The changelog has no Markdown copy.', {
+                        url: url
+                    });
+                }
+                return fetchText(absolute(changelog.md), signal).then(function (markdown) {
+                    var entries = changelogEntries(markdown, url);
+                    if (!entries.length) {
+                        return errorResult('unavailable', 'The changelog lists no versions.', {
+                            url: url
+                        });
+                    }
+                    var found = input.version ? findEntries(entries, input.version) : entries;
+                    if (!found.length) {
+                        var message = 'The changelog has no entry for "' + input.version + '".';
+                        return errorResult('not_found', message, {
+                            candidates: entries.slice(0, 30).map(function (item) {
+                                return item.entry.version;
+                            }),
+                            hint: 'Leave version out for the latest entries.'
+                        });
+                    }
+                    return {
+                        url: url,
+                        total: found.length,
+                        entries: found.slice(0, input.limit).map(function (item) {
+                            return item.entry;
+                        })
+                    };
+                }, function (error) {
+                    return loadFailed(changelog.md, error, signal);
+                });
+            }, function (error) {
+                return loadFailed(MANIFEST_FILE, error, signal);
+            });
+        }
+    });
+
     var BUILT_IN_TOOLS = [GET_SITE_OVERVIEW, GET_CURRENT_PAGE, LIST_PAGES, GET_PAGE, SEARCH_DOCS,
-        LIST_API, GET_API_REFERENCE, GET_CLI_HELP];
+        LIST_API, GET_API_REFERENCE, GET_CLI_HELP, LIST_VERSIONS, GET_CHANGELOG];
 
     // ------------------------------------------------------------------------------------
     // Registration

@@ -194,6 +194,7 @@ def _webmcp_headers(
     *,
     has_api_reference: bool = True,
     has_cli_reference: bool = False,
+    has_changelog: bool = False,
 ) -> list[str]:
     config = write_config(tmp_path, settings)
     quarto_config: dict[str, Any] = {}
@@ -203,6 +204,7 @@ def _webmcp_headers(
         quarto_config,
         has_api_reference=has_api_reference,
         has_cli_reference=has_cli_reference,
+        has_changelog=has_changelog,
     )
     return [entry["text"] for entry in quarto_config["format"]["html"]["include-in-header"]]
 
@@ -249,28 +251,40 @@ def test_webmcp_settings_carry_the_configuration(tmp_path: Path):
         "schema": 1,
         "generator": f"great-docs {__version__}",
         "markdown_pages": False,
-        "features": {"api": True, "cli": False},
+        "features": {"api": True, "cli": False, "versions": False, "changelog": False},
         "actions": False,
         "js_api": False,
         "exclude": ["get_page"],
     }
 
 
-@pytest.mark.parametrize(("has_api_reference", "has_cli_reference"), [(True, False), (False, True)])
-def test_webmcp_settings_name_the_reference_features(
-    tmp_path: Path, has_api_reference: bool, has_cli_reference: bool
+@pytest.mark.parametrize(
+    ("has_api_reference", "has_cli_reference", "has_changelog"),
+    [(True, False, False), (False, True, False), (False, False, True)],
+)
+def test_webmcp_settings_name_the_site_features(
+    tmp_path: Path, has_api_reference: bool, has_cli_reference: bool, has_changelog: bool
 ):
     headers = _webmcp_headers(
         tmp_path,
         {"webmcp": True},
         has_api_reference=has_api_reference,
         has_cli_reference=has_cli_reference,
+        has_changelog=has_changelog,
     )
 
     assert _webmcp_settings(headers)["features"] == {
         "api": has_api_reference,
         "cli": has_cli_reference,
+        "versions": False,
+        "changelog": has_changelog,
     }
+
+
+def test_webmcp_settings_name_a_versioned_site(tmp_path: Path):
+    headers = _webmcp_headers(tmp_path, {"webmcp": True, "versions": ["0.2", "0.1"]})
+
+    assert _webmcp_settings(headers)["features"]["versions"] is True
 
 
 def test_webmcp_settings_are_added_once(tmp_path: Path):
@@ -279,7 +293,11 @@ def test_webmcp_settings_are_added_once(tmp_path: Path):
     scripts.include(config, quarto_config, tmp_path, has_repository=False)
     for _ in range(2):
         scripts.include_webmcp_settings(
-            config, quarto_config, has_api_reference=True, has_cli_reference=False
+            config,
+            quarto_config,
+            has_api_reference=True,
+            has_cli_reference=False,
+            has_changelog=False,
         )
 
     headers = _includes(quarto_config, "include-in-header")

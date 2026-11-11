@@ -39,26 +39,35 @@ __all__ = [
 ]
 
 
-def _webmcp_features(config: Config) -> set[str]:
+def _webmcp_features(run: Run, config: Config) -> set[str]:
     """
     Name the site's features that the WebMCP tools listed in `llms.txt` need
 
-    `llms.txt` is written only for a site with an API reference, and before the CLI reference
-    steps run, so a configured CLI reference counts even if its pages turn out empty.
+    `llms.txt` is written only for a site with an API reference, and before the changelog and
+    CLI reference steps run. So a configured CLI reference counts even if its pages turn out
+    empty, and a changelog counts for a GitHub repository even if it has no releases.
 
     Parameters
     ----------
+    run
+        The current build, which supplies the project's GitHub repository.
     config
         The project's configuration.
 
     Returns
     -------
     :
-        `site` and `api`, and `cli` when a CLI reference is configured.
+        `site` and `api`; `cli` when a CLI reference is configured; `versions` for a versioned
+        site; and `changelog` when the changelog is enabled and the project has a GitHub
+        repository.
     """
     features = {"site", "api"}
     if config.cli_enabled or config.go_cli_enabled or config.rust_cli_enabled:
         features.add("cli")
+    if config.has_versions:
+        features.add("versions")
+    if config.changelog_enabled and run.project.github is not None:
+        features.add("changelog")
     return features
 
 
@@ -93,7 +102,7 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
         run.project.manifest,
         site_url=config.site_url,
         report=print,
-        webmcp_tools=webmcp_tools.site_tools(config, _webmcp_features(config)),
+        webmcp_tools=webmcp_tools.site_tools(config, _webmcp_features(run, config)),
         webmcp_js_api=config.webmcp_js_api,
     )
 
@@ -203,6 +212,7 @@ def changelog(run: Run, config: Config, layout: Layout, *, remote: Remote) -> Ou
     if contribution is None:
         return "No releases found; skipped"
     run.contributions.append(contribution)
+    run.has_changelog = True
     return "Changelog from GitHub Releases"
 
 

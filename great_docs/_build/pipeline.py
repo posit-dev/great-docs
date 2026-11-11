@@ -79,6 +79,8 @@ class Run:
     has_cli_reference
         Whether the site has command-line reference pages. A CLI reference step sets it when
         it writes them.
+    has_changelog
+        Whether the site has a changelog page. The changelog step sets it when it writes one.
     quarto_config
         The site's Quarto configuration, initially empty and updated in memory during
         preparation. Preparation writes the finished configuration to `_quarto.yml`
@@ -104,6 +106,7 @@ class Run:
     page_authors: list[dict[str, Any]]
     has_api_reference: bool = True
     has_cli_reference: bool = False
+    has_changelog: bool = False
     quarto_config: dict[str, Any] = field(default_factory=lambda: dict[str, Any]())
     api_block: dict[str, Any] | None = None
     api_discovery_reused: bool = False
