@@ -545,7 +545,7 @@ def preview(
       great-docs preview --pr 302 --path reference/mcp/gd_config.html
     """
     if clear_cache:
-        from ._pr_preview import clear_cache as _clear_cache
+        from ._build.pr_preview import clear_cache as _clear_cache
 
         existed, path = _clear_cache()
         if existed:
@@ -568,7 +568,7 @@ def preview(
         if given:
             if site_dir:
                 click.echo("Warning: --site-dir is ignored with --pr/--run/--branch", err=True)
-            from ._pr_preview import PreviewError, preview_pr
+            from ._build.pr_preview import PreviewError, preview_pr
 
             try:
                 preview_pr(
@@ -703,8 +703,8 @@ def ci_pr_comment(run_id: int, pr: int, repo: str | None) -> None:
 
     Reads the token from GITHUB_TOKEN / GH_TOKEN and needs 'pull-requests: write'.
     """
-    from ._ci import post_preview_comment
-    from ._pr_preview import PreviewError
+    from ._build.ci import post_preview_comment
+    from ._build.pr_preview import PreviewError
 
     try:
         action, repo_slug = post_preview_comment(run_id=run_id, pr=pr, repo_override=repo)
@@ -721,7 +721,7 @@ def ci_pr_comment(run_id: int, pr: int, repo: str | None) -> None:
 @click.option("--pr", type=int, default=None, help="Pull request number (adds the --pr hint).")
 def ci_notice(run_id: int, pr: int | None) -> None:
     """Print a workflow log notice with the local-preview command."""
-    from ._ci import render_notice_lines
+    from ._build.ci import render_notice_lines
 
     for line in render_notice_lines(run_id, pr):
         click.echo(line)

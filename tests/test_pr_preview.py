@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from great_docs import _pr_preview as pp
+from great_docs._build import pr_preview as pp
 from great_docs._build import serve
 from great_docs.cli import preview
 
