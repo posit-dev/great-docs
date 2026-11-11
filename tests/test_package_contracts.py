@@ -104,8 +104,17 @@ def test_root_main_shows_cli_help_in_fresh_interpreter(tmp_path: Path) -> None:
     result = _run_python(
         """
         import sys
+
+        sys.modules["mcp"] = None
         import great_docs
 
+        assert "great_docs.cli" not in sys.modules
+        assert "great_docs.mcp" not in sys.modules
+        assert not any(
+            name == prefix or name.startswith(prefix + ".")
+            for name in sys.modules
+            for prefix in ("great_docs._cli", "great_docs._mcp")
+        )
         sys.argv = ["great-docs", "--help"]
         great_docs.main()
         """,
