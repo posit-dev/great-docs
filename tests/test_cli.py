@@ -25,10 +25,8 @@ from great_docs._cli.ci import (
     _detect_optional_dependencies,
     _detect_python_version,
 )
-from great_docs.cli import (
-    _detect_current_package,
-    cli,
-)
+from great_docs._cli.skills import _detect_current_package
+from great_docs.cli import cli
 from tests.support import mock_config
 
 
@@ -2973,7 +2971,7 @@ class TestSkillListCommand:
     def test_no_source_no_pyproject_exits_error(self, tmp_path):
         runner = CliRunner()
         # Invoke from a tmp dir with no pyproject.toml by patching Path.cwd
-        with patch("great_docs.cli.Path") as mock_path_cls:
+        with patch("great_docs._cli.skills.Path") as mock_path_cls:
             mock_cwd = MagicMock()
             mock_cwd.__truediv__ = lambda self, other: tmp_path / other
             mock_path_cls.cwd.return_value = tmp_path
@@ -3750,7 +3748,7 @@ class TestSkillListMissedBranches:
         mock_list.assert_called_once_with(package="mypkg")
 
     @patch("great_docs._skills.install.list_skills")
-    @patch("great_docs.cli._detect_current_package", return_value="detected-pkg")
+    @patch("great_docs._cli.skills._detect_current_package", return_value="detected-pkg")
     def test_no_source_auto_detects_package(self, mock_detect, mock_list, tmp_path, monkeypatch):
         """No source auto-detects package from pyproject.toml."""
         monkeypatch.chdir(tmp_path)
@@ -3764,7 +3762,7 @@ class TestSkillListMissedBranches:
         """No source and no package in CWD exits 1."""
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
-        with patch("great_docs.cli._detect_current_package", return_value=None):
+        with patch("great_docs._cli.skills._detect_current_package", return_value=None):
             result = runner.invoke(cli, ["skill", "list"])
         assert result.exit_code == 1
         assert "Error" in result.output
@@ -3772,7 +3770,7 @@ class TestSkillListMissedBranches:
 
 class TestSkillInstallMissedBranches:
     @patch("great_docs._skills.install.install_skill")
-    @patch("great_docs.cli._detect_current_package", return_value="auto-pkg")
+    @patch("great_docs._cli.skills._detect_current_package", return_value="auto-pkg")
     def test_no_source_auto_detects(self, mock_detect, mock_install, tmp_path, monkeypatch):
         """No source argument triggers auto-detection from pyproject.toml."""
         monkeypatch.chdir(tmp_path)
@@ -3782,7 +3780,7 @@ class TestSkillInstallMissedBranches:
         result = runner.invoke(cli, ["skill", "install", "my-skill"])
         assert result.exit_code == 0
 
-    @patch("great_docs.cli._detect_current_package", return_value=None)
+    @patch("great_docs._cli.skills._detect_current_package", return_value=None)
     def test_no_source_no_package_exits_error(self, mock_detect, tmp_path, monkeypatch):
         """No source and no detectable package exits 1 with error."""
         monkeypatch.chdir(tmp_path)
@@ -4010,7 +4008,7 @@ class TestSkillListEmptyResults:
         assert "No skills found" in result.output
 
     @patch("great_docs._skills.install.list_skills", return_value=[])
-    @patch("great_docs.cli._detect_current_package", return_value="mypkg")
+    @patch("great_docs._cli.skills._detect_current_package", return_value="mypkg")
     def test_empty_results_with_package(self, mock_detect, mock_list, tmp_path, monkeypatch):
         """No skills for auto-detected package shows 'No skills found.' and exits 1."""
         monkeypatch.chdir(tmp_path)
