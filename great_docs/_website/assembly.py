@@ -53,6 +53,7 @@ def assemble(
     metadata: Manifest,
     has_api_reference: bool,
     has_cli_reference: bool,
+    has_changelog: bool,
     contributions: Sequence[Contribution],
     report: Callable[[str], None],
     warn: Callable[[str], None],
@@ -89,6 +90,8 @@ def assemble(
         Whether the site has an API reference.
     has_cli_reference
         Whether the site has command-line reference pages.
+    has_changelog
+        Whether the site has a changelog page.
     contributions
         Navigation, resources, render exclusions and script data recorded by build
         steps, in build step order.
@@ -138,6 +141,7 @@ def assemble(
         quarto_config,
         has_api_reference=has_api_reference,
         has_cli_reference=has_cli_reference,
+        has_changelog=has_changelog,
     )
 
     # Contributed links and data require the navbar and script includes to exist.
