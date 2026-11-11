@@ -477,7 +477,7 @@ def test_notebooks_use_documentation_root(source_project: tuple[Path, Path]) -> 
     marimo.get_islands_head_html.return_value = ""
     with (
         patch("importlib.util.find_spec", return_value=object()),
-        patch.dict("sys.modules", {"great_docs._marimo": marimo}),
+        patch.dict("sys.modules", {"great_docs._content.marimo": marimo}),
     ):
         prepare_build_directory(gd, make_run(gd))
     assert (gd.layout.build_dir / "notebooks/data.json").read_text() == "{}"

@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .._marimo import get_islands_head_html
+from .._content.marimo import get_islands_head_html
 from . import quarto_yml
 
 if TYPE_CHECKING:

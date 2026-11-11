@@ -725,7 +725,7 @@ class Config:
         if version:
             return str(version)
 
-        from great_docs._marimo import islands_runtime_version
+        from great_docs._content.marimo import islands_runtime_version
 
         return islands_runtime_version()
 

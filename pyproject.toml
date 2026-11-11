@@ -194,7 +194,6 @@ include = [
     "great_docs/_icons.py",
     "great_docs/_interlinks",
     "great_docs/_layout_migration",
-    "great_docs/_marimo.py",
     "great_docs/_mcpref",
     "great_docs/_project",
     "great_docs/_reference",

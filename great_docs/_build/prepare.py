@@ -16,8 +16,7 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .. import _marimo
-from .._content import publish
+from .._content import marimo, publish
 from .._content import user_guide as authored_guide
 from .._reference import sections as reference_sections
 from .._utils import GITIGNORE_CONTENT
@@ -148,7 +147,7 @@ def build_directory(
 
     # Embedded marimo notebooks need island HTML and WASM exports before Quarto renders them.
     if config.marimo_enabled:
-        _marimo.prepare_notebooks(
+        marimo.prepare_notebooks(
             layout.source_dir,
             build_dir,
             report=print,
