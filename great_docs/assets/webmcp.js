@@ -2007,8 +2007,109 @@
         }
     });
 
+    // ------------------------------------------------------------------------------------
+    // Skills tool
+    // ------------------------------------------------------------------------------------
+
+    var SKILL_FILE = 'SKILL.md';
+
+    // The skills in the index at `file`, each with the address of its directory.
+    function loadSkills(file, signal) {
+        return loadJson(file, signal, function (index) {
+            var skills = index && Array.isArray(index.skills) ? index.skills : [];
+            return skills.filter(function (skill) {
+                return skill && typeof skill.name === 'string' && skill.name;
+            }).map(function (skill) {
+                return {
+                    name: skill.name,
+                    description: typeof skill.description === 'string' ? skill.description : '',
+                    files: (Array.isArray(skill.files) ? skill.files : []).filter(function (path) {
+                        return typeof path === 'string' && path && path !== SKILL_FILE;
+                    }),
+                    root: new URL(encodeURIComponent(skill.name) + '/', absolute(file)).href
+                };
+            });
+        });
+    }
+
+    function skillEntry(skill) {
+        return compact({
+            name: skill.name,
+            description: skill.description || null,
+            url: new URL(SKILL_FILE, skill.root).href
+        });
+    }
+
+    var GET_AGENT_SKILL = defineTool({
+        name: 'get_agent_skill',
+        title: 'Get an agent skill',
+        purpose: 'A published SKILL.md and its companion files',
+        description:
+            'Use this to read the Agent Skills the package publishes for coding agents: ' +
+            'instructions for writing code with the package, such as its gotchas and best ' +
+            'practices. ' +
+            "Leave name out for each skill's name, description and URL; with name, returns " +
+            "that skill's SKILL.md as Markdown and its other files' URLs. " +
+            'Example: "What should I know before writing code with this package?"',
+        feature: 'skills',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                name: {
+                    type: 'string',
+                    minLength: 1,
+                    maxLength: 128,
+                    description: "A skill's name. Omit to list the skills."
+                }
+            },
+            additionalProperties: false
+        },
+        example: { name: 'my-package' },
+        annotations: { readOnlyHint: true },
+        run: function (input, context) {
+            var signal = context.signal;
+            return loadManifest(signal).then(function (manifest) {
+                var file = manifest.resources.skills;
+                if (!file) return errorResult('unavailable', 'This site publishes no skills.');
+                return loadSkills(file, signal).then(function (skills) {
+                    if (!skills.length) {
+                        return errorResult('unavailable', 'This site publishes no skills.');
+                    }
+                    if (!input.name) {
+                        return { url: absolute(file), skills: skills.map(skillEntry) };
+                    }
+                    var wanted = input.name.trim().toLowerCase();
+                    var skill = skills.filter(function (item) {
+                        return item.name.toLowerCase() === wanted;
+                    })[0];
+                    if (!skill) {
+                        var message = 'No skill is named "' + input.name.trim() + '".';
+                        return errorResult('not_found', message, {
+                            candidates: skills.map(skillEntry),
+                            hint: 'Leave name out to list the skills.'
+                        });
+                    }
+                    var result = skillEntry(skill);
+                    return fetchText(result.url, signal).then(function (markdown) {
+                        result.markdown = markdown;
+                        result.files = skill.files.map(function (path) {
+                            return { path: path, url: new URL(path, skill.root).href };
+                        });
+                        return result;
+                    }, function (error) {
+                        return loadFailed(result.url, error, signal);
+                    });
+                }, function (error) {
+                    return loadFailed(file, error, signal);
+                });
+            }, function (error) {
+                return loadFailed(MANIFEST_FILE, error, signal);
+            });
+        }
+    });
+
     var BUILT_IN_TOOLS = [GET_SITE_OVERVIEW, GET_CURRENT_PAGE, LIST_PAGES, GET_PAGE, SEARCH_DOCS,
-        LIST_API, GET_API_REFERENCE, GET_CLI_HELP, LIST_VERSIONS, GET_CHANGELOG];
+        LIST_API, GET_API_REFERENCE, GET_CLI_HELP, LIST_VERSIONS, GET_CHANGELOG, GET_AGENT_SKILL];
 
     // ------------------------------------------------------------------------------------
     // Registration
