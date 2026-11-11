@@ -23,6 +23,7 @@
 // - `fetchFails`: whether every `fetch` fails as a network error would
 // - `main`: the page's `<main>` element, as `[tag, attributes, ...children]` with string text
 // - `title`: the page's `<title>`
+// - `meta`: the page's `<meta>` elements, as an object mapping names to content
 // - `testMode`: whether `window.__GD_WEBMCP_TEST__` is set (default `true`)
 
 'use strict';
@@ -97,8 +98,13 @@ function descendants(node) {
     return found;
 }
 
-// Supports `tag`, `tag.class` and `ancestor descendant`.
+// Supports `tag`, `tag.class`, `tag[attribute="value"]` and `ancestor descendant`.
 function matches(node, simple) {
+    const attribute = /^(\w+)\[(\w+)="([^"]*)"\]$/.exec(simple);
+    if (attribute) {
+        return node.nodeName === attribute[1].toUpperCase() &&
+            node.getAttribute(attribute[2]) === attribute[3];
+    }
     const [tag, cls] = simple.split('.');
     return node.nodeName === tag.toUpperCase() && (!cls || node.classList.contains(cls));
 }
@@ -130,7 +136,8 @@ function track(promise) {
 const body = element('body', { class: (options.bodyClasses || []).join(' ') }, [
     options.main || ['main', {}, ['p', {}, 'Page text.']],
 ]);
-const head = element('head', {}, []);
+const head = element('head', {}, Object.entries(options.meta || {}).map(
+    ([name, content]) => ['meta', { name, content }]));
 const html = element('html', {}, []);
 html.childNodes.push(head, body);
 
