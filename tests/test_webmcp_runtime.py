@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from great_docs._interlinks.sphinx_inventory import Inventory, InventoryEntry, encode
+from great_docs._versions.model import build_version_map, parse_versions_config
 from great_docs._website.ai_agents import webmcp_manifest, webmcp_pages
 from great_docs._website.ai_agents.webmcp_manifest import Root, SiteInfo
 from great_docs._website.ai_agents.webmcp_pages import PageFacts, SectionFacts
@@ -31,7 +32,7 @@ SITE_TOOLS = ["get_site_overview", "get_current_page", "list_pages", "get_page",
 API_TOOLS = ["list_api", "get_api_reference"]
 # The settings of a site with an API reference.
 WITH_API = {"features": {"api": True}}
-WITH_ALL = {"features": {"api": True, "cli": True}}
+WITH_ALL = {"features": {"api": True, "cli": True, "versions": True, "changelog": True}}
 
 _QUARTO_YML = """\
 project:
@@ -157,6 +158,8 @@ def _build_site(directory: Path) -> Path:
             f'<html>{head}<body class="{_HTML_CLASSES.get(path, "")}"><main></main></body></html>',
             encoding="utf-8",
         )
+    # The manifest describes the changelog apart from the pages it lists from the search index.
+    _ = (site_dir / "changelog.html").write_text("<html><body></body></html>", encoding="utf-8")
     inventory = Inventory(
         "example",
         "1.2.0",
@@ -240,7 +243,9 @@ class TestRegistration:
     def test_the_python_table_lists_the_registered_tools(self):
         # `llms.txt` lists the tools from the Python table, so it must match the runtime.
         observed = _run(SETTLE, settings={**WITH_ALL, "exclude": ["get_page"], "actions": False})
-        expected = registered({"site", "api", "cli"}, actions=False, exclude=["get_page"])
+        expected = registered(
+            {"site", "api", "cli", "versions", "changelog"}, actions=False, exclude=["get_page"]
+        )
 
         assert observed["registered"] == [tool.name for tool in expected]
 
@@ -750,6 +755,7 @@ class TestGetSiteOverview:
         assert result["resources"] == {
             "llms_txt": f"{BASE}llms.txt",
             "search": f"{BASE}search.json",
+            "changelog": f"{BASE}changelog.md",
         }
         assert result["current_page"]["path"] == "user-guide/intro.html"
 
@@ -1469,6 +1475,240 @@ class TestGetCliHelp:
         assert 'Example: "' in tool["description"]
 
 
+def _version_map(pages: dict[str, list[str]] | None = None) -> str:
+    """The version map of a site documenting 0.4 (in development), 0.3, 0.2 and 0.1 (retired)"""
+    versions = parse_versions_config(
+        [
+            {"tag": "0.4", "label": "0.4 (dev)", "prerelease": True},
+            {"tag": "0.3"},
+            {"tag": "0.2"},
+            {"tag": "0.1", "eol": True},
+        ]
+    )
+    by_version: dict[str, list[str]] = {version.tag: [] for version in versions}
+    for path, tags in (pages or {}).items():
+        for tag in tags:
+            by_version[tag].append(path)
+    return json.dumps(build_version_map(versions, by_version))
+
+
+class TestListVersions:
+    WITH_VERSIONS = {"features": {"versions": True}}
+
+    def _call(self, version_map: str | None = None, **options: Any) -> dict[str, Any]:
+        meta = {"gd-version-map": version_map or _version_map()}
+        return _call("list_versions", {}, settings=self.WITH_VERSIONS, meta=meta, **options)
+
+    def test_the_latest_version_lists_every_version(self):
+        result = self._call()
+
+        assert result == {
+            "url": BASE,
+            "current": "0.3",
+            "path": "user-guide/intro.html",
+            "versions": [
+                {
+                    "tag": "0.4",
+                    "label": "0.4 (dev)",
+                    "url": f"{BASE}v/0.4/",
+                    "current": False,
+                    "latest": False,
+                    "prerelease": True,
+                    "eol": False,
+                },
+                {
+                    "tag": "0.3",
+                    "label": "0.3",
+                    "url": BASE,
+                    "page_url": f"{BASE}user-guide/intro.html",
+                    "current": True,
+                    "latest": True,
+                    "prerelease": False,
+                    "eol": False,
+                },
+                {
+                    "tag": "0.2",
+                    "label": "0.2",
+                    "url": f"{BASE}v/0.2/",
+                    "current": False,
+                    "latest": False,
+                    "prerelease": False,
+                    "eol": False,
+                },
+                {
+                    "tag": "0.1",
+                    "label": "0.1",
+                    "url": f"{BASE}v/0.1/",
+                    "current": False,
+                    "latest": False,
+                    "prerelease": False,
+                    "eol": True,
+                },
+            ],
+        }
+
+    def test_an_older_version_is_found_from_the_script_directory(self):
+        result = self._call(
+            pathname="/docs/v/0.2/user-guide/intro.html", scriptSrc="/docs/v/0.2/webmcp.js"
+        )
+
+        assert result["url"] == f"{BASE}docs/"
+        assert result["current"] == "0.2"
+        assert result["path"] == "user-guide/intro.html"
+        urls = {version["tag"]: version["url"] for version in result["versions"]}
+        assert urls == {
+            "0.4": f"{BASE}docs/v/0.4/",
+            "0.3": f"{BASE}docs/",
+            "0.2": f"{BASE}docs/v/0.2/",
+            "0.1": f"{BASE}docs/v/0.1/",
+        }
+        [current] = [version for version in result["versions"] if version["current"]]
+        assert current["page_url"] == f"{BASE}docs/v/0.2/user-guide/intro.html"
+
+    def test_the_page_is_linked_in_the_versions_listing_it(self):
+        version_map = _version_map({"user-guide/intro.html": ["0.3", "0.1"]})
+
+        result = self._call(
+            version_map, pathname="/v/0.2/user-guide/intro.html", scriptSrc="/v/0.2/webmcp.js"
+        )
+
+        page_urls = {version["tag"]: version.get("page_url") for version in result["versions"]}
+        assert page_urls == {
+            "0.4": None,
+            "0.3": f"{BASE}user-guide/intro.html",
+            "0.2": f"{BASE}v/0.2/user-guide/intro.html",
+            "0.1": f"{BASE}v/0.1/user-guide/intro.html",
+        }
+
+    @pytest.mark.parametrize("version_map", [None, "{not json", '{"versions": []}'])
+    def test_a_page_without_a_version_map_says_so(self, version_map: str | None):
+        meta = {} if version_map is None else {"gd-version-map": version_map}
+
+        result = _call("list_versions", {}, settings=self.WITH_VERSIONS, meta=meta)
+
+        assert result["error"]["code"] == "unavailable"
+
+    def test_the_tool_needs_a_versioned_site(self):
+        assert _run(SETTLE)["registered"] == SITE_TOOLS
+        assert _run(SETTLE, settings=self.WITH_VERSIONS)["registered"] == [
+            *SITE_TOOLS,
+            "list_versions",
+        ]
+
+
+class TestGetChangelog:
+    WITH_CHANGELOG = {"features": {"changelog": True}}
+
+    def _call(self, tool_input: object = None, **options: Any) -> dict[str, Any]:
+        return _call("get_changelog", tool_input, settings=self.WITH_CHANGELOG, **options)
+
+    def test_without_a_version_the_latest_entries_are_returned(self):
+        result = self._call({})
+
+        assert result["url"] == f"{BASE}changelog.html"
+        assert result["total"] == 4
+        entries = result["entries"]
+        assert [entry["version"] for entry in entries] == ["v1.2.0", "v1.2.0rc1", "v1.1.1"]
+        assert {key: value for key, value in entries[0].items() if key != "markdown"} == {
+            "version": "v1.2.0",
+            "date": "2026-05-01",
+            "url": f"{BASE}changelog.html#v1.2.0",
+        }
+        assert entries[0]["markdown"].startswith("## v1.2.0\n")
+        # A heading in a code block doesn't start an entry.
+        assert "## Not a release" in entries[0]["markdown"]
+        assert entries[1]["prerelease"] is True
+
+    def test_the_limit_caps_the_entries(self):
+        result = self._call({"limit": 1})
+
+        assert [entry["version"] for entry in result["entries"]] == ["v1.2.0"]
+        assert result["total"] == 4
+
+    @pytest.mark.parametrize("version", ["1.1.0", "v1.1.0", "V1.1.0", "First steps (v1.1.0)"])
+    def test_a_version_is_named_with_or_without_its_v(self, version: str):
+        result = self._call({"version": version})
+
+        [entry] = result["entries"]
+        assert entry["version"] == "v1.1.0"
+        assert entry["date"] == "2026-01-15"
+        assert entry["url"] == f"{BASE}changelog.html#first-steps-v1.1.0"
+
+    def test_an_exact_version_leaves_out_its_prereleases(self):
+        result = self._call({"version": "1.2.0"})
+
+        assert [entry["version"] for entry in result["entries"]] == ["v1.2.0"]
+
+    @pytest.mark.parametrize(
+        ("version", "expected"),
+        [
+            ("1.2", ["v1.2.0", "v1.2.0rc1"]),
+            ("v1.1", ["v1.1.1", "v1.1.0"]),
+            ("1", ["v1.2.0", "v1.2.0rc1", "v1.1.1"]),
+        ],
+    )
+    def test_a_series_returns_its_releases(self, version: str, expected: list[str]):
+        result = self._call({"version": version})
+
+        assert [entry["version"] for entry in result["entries"]] == expected
+
+    @pytest.mark.parametrize("version", ["0.9", "1.10", "1.2.01"])
+    def test_an_unknown_version_lists_the_versions(self, version: str):
+        result = self._call({"version": version})
+
+        assert result["error"]["code"] == "not_found"
+        assert result["error"]["candidates"] == ["v1.2.0", "v1.2.0rc1", "v1.1.1", "v1.1.0"]
+        assert result["error"]["hint"]
+
+    def test_a_site_without_a_changelog_says_so(self, tmp_path: Path):
+        site_dir = _variant(tmp_path)
+        manifest_file = site_dir / "gd-webmcp.json"
+        manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+        del manifest["changelog"]
+        _ = manifest_file.write_text(json.dumps(manifest), encoding="utf-8")
+
+        result = self._call({}, siteDir=str(site_dir))
+
+        assert result["error"]["code"] == "unavailable"
+
+    def test_a_missing_markdown_copy_points_to_other_files(self, tmp_path: Path):
+        site_dir = _variant(tmp_path)
+        (site_dir / "changelog.md").unlink()
+
+        result = self._call({}, siteDir=str(site_dir))
+
+        assert result["error"]["code"] == "fetch_failed"
+        assert "changelog.md" in result["error"]["message"]
+
+    def test_a_changelog_without_versions_says_so(self, tmp_path: Path):
+        site_dir = _variant(tmp_path)
+        _ = (site_dir / "changelog.md").write_text(
+            "# Changelog\n\nNothing yet.\n", encoding="utf-8"
+        )
+
+        result = self._call({}, siteDir=str(site_dir))
+
+        assert result["error"]["code"] == "unavailable"
+        assert result["error"]["url"] == f"{BASE}changelog.html"
+
+    def test_the_tool_needs_a_changelog(self):
+        assert _run(SETTLE)["registered"] == SITE_TOOLS
+        assert _run(SETTLE, settings=self.WITH_CHANGELOG)["registered"] == [
+            *SITE_TOOLS,
+            "get_changelog",
+        ]
+
+
+@pytest.mark.parametrize("name", ["list_versions", "get_changelog"])
+def test_the_version_and_changelog_descriptions_say_when_to_use_the_tool(name: str):
+    listed = _run("return tools.list();", settings=WITH_ALL)["result"]
+    [tool] = [tool for tool in listed if tool["name"] == name]
+
+    assert tool["description"].startswith("Use this")
+    assert len(tool["description"]) <= 450
+    assert 'Example: "' in tool["description"]
+
+
 class TestWords:
     def test_identifiers_are_kept_whole_and_split(self):
         assert _internal("internals.tokenize('Use GT.fmt_number() here')") == [
@@ -1501,4 +1741,4 @@ def test_the_runtime_stays_small():
     raw = RUNTIME.read_bytes()
 
     assert len(raw) <= 96 * 1024
-    assert len(gzip.compress(raw)) <= 20 * 1024
+    assert len(gzip.compress(raw)) <= 24 * 1024
