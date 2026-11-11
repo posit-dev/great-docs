@@ -11999,3 +11999,130 @@ def test_DED_resp_tables_assets_deployed():
     css = re.sub(r"\s+", "", _deployed_css(_RESP_TABLES_PKG))
     assert ".gd-table-auto>.gd-table-scroll>table" in css
     assert ".gd-table-explicit>.gd-table-scroll>table" in css
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: WebMCP (gdtest_webmcp) — the manifest, settings and runtime on every page
+#
+# The tools run in the browser, so these tests check what the build gives them:
+# `gd-webmcp.json`, the settings block and `webmcp.js` on each page, the opt-out
+# body class, the origin-trial token and the `llms.txt` section.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_WEBMCP_PKG = "gdtest_webmcp"
+
+
+def _webmcp_site() -> Path:
+    if not _has_rendered_site(_WEBMCP_PKG):
+        pytest.skip(f"{_WEBMCP_PKG} not rendered")
+    return _site_dir(_WEBMCP_PKG)
+
+
+def _webmcp_manifest() -> dict[str, Any]:
+    import json
+
+    return json.loads((_webmcp_site() / "gd-webmcp.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.dedicated
+def test_DED_webmcp_manifest_pages():
+    """gdtest_webmcp: the manifest lists the guide, blog and opted-out pages but not the draft."""
+    paths = {page["path"] for page in _webmcp_manifest()["pages"]}
+    assert {
+        "index.html",
+        "skills.html",
+        "user-guide/getting-started.html",
+        "user-guide/internal-notes.html",
+        "blog/first-post/index.html",
+        "reference/Widget.html",
+        "reference/cli/spin.html",
+    } <= paths
+    assert "user-guide/roadmap.html" not in paths
+
+
+@pytest.mark.dedicated
+def test_DED_webmcp_manifest_api_aliases():
+    """gdtest_webmcp: a short name claimed by a method and a function is no one's alias."""
+    api = {entry["name"]: entry.get("aliases", []) for entry in _webmcp_manifest()["api"]}
+    assert api["gdtest_webmcp.Widget.spin"] == ["Widget.spin"]
+    assert api["gdtest_webmcp.spin"] == []
+    assert "stop" in api["gdtest_webmcp.Widget.stop"]
+
+
+@pytest.mark.dedicated
+def test_DED_webmcp_manifest_cli_and_resources():
+    """gdtest_webmcp: the manifest lists every CLI command and the skills index."""
+    manifest = _webmcp_manifest()
+    commands = [entry["command"] for entry in manifest["cli"]]
+    assert commands == [
+        "gdtest-webmcp",
+        "gdtest-webmcp spin",
+        "gdtest-webmcp config",
+        "gdtest-webmcp config show",
+    ]
+    assert manifest["resources"]["skills"] == ".well-known/agent-skills/index.json"
+    skill = _webmcp_site() / ".well-known" / "agent-skills" / "gdtest-webmcp"
+    assert (skill / "SKILL.md").is_file()
+    assert (skill / "references" / "widgets.md").is_file()
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_webmcp_settings_on_every_page():
+    """gdtest_webmcp: each page loads `webmcp.js` after a settings block naming the features."""
+    import json
+
+    site = _webmcp_site()
+    pages = [p for p in sorted(site.rglob("*.html")) if p.name != "roadmap.html"]
+    assert len(pages) > 10
+    for page in pages:
+        scripts = _load_html(page).find_all("script")
+        ids = [s.get("id") for s in scripts]
+        srcs = [s.get("src") or "" for s in scripts]
+        assert "gd-webmcp-settings" in ids, f"No settings block on {page.relative_to(site)}"
+        runtime = [i for i, src in enumerate(srcs) if src.endswith("webmcp.js")]
+        assert len(runtime) == 1, f"Expected one webmcp.js on {page.relative_to(site)}"
+        assert ids.index("gd-webmcp-settings") < runtime[0]
+
+    soup = _load_html(site / "index.html")
+    settings = json.loads(soup.find("script", id="gd-webmcp-settings").string)
+    assert settings["features"] == {
+        "api": True,
+        "cli": True,
+        "versions": False,
+        "changelog": False,
+        "skills": True,
+    }
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_webmcp_opt_out_body_class():
+    """gdtest_webmcp: only the page with `webmcp: false` carries `gd-no-webmcp`."""
+    site = _webmcp_site()
+    opted_out = _load_html(site / "user-guide" / "internal-notes.html")
+    assert "gd-no-webmcp" in opted_out.body.get("class", [])
+    other = _load_html(site / "user-guide" / "getting-started.html")
+    assert "gd-no-webmcp" not in other.body.get("class", [])
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_webmcp_origin_trial_meta():
+    """gdtest_webmcp: the origin-trial token is a `<meta>` in `<head>`."""
+    soup = _load_html(_webmcp_site() / "user-guide" / "getting-started.html")
+    meta = soup.head.find("meta", attrs={"http-equiv": "origin-trial"})
+    assert meta is not None
+    assert meta["content"] == "gdtest-webmcp-origin-trial-token"
+
+
+@pytest.mark.dedicated
+def test_DED_webmcp_llms_txt_section():
+    """gdtest_webmcp: `llms.txt` lists the tools the site supports, without `get_changelog`."""
+    text = (_webmcp_site() / "llms.txt").read_text(encoding="utf-8")
+    assert "## WebMCP tools" in text
+    assert "(gd-webmcp.json)" in text
+    for tool in ("list_api", "get_cli_help", "get_agent_skill"):
+        assert f"`{tool}`" in text
+    assert "get_changelog" not in text
+    assert "list_versions" not in text
