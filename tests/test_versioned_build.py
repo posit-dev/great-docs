@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 import pytest
 from yaml12 import format_yaml, parse_yaml
 
-from great_docs._api_diff import ApiSnapshot, ParameterInfo, SymbolInfo
+from great_docs._api_evolution.model import ApiSnapshot, ParameterInfo, SymbolInfo
 from great_docs._project.layout import Layout
 from great_docs._utils import QUARTO_YML_HEADER, is_great_docs_build_dir
 from great_docs._versions.build import (
@@ -1580,7 +1580,7 @@ class TestRebuildApiFromGitRefCustomCacheDir:
 
 class TestPruneCliPagesForVersionCustomCacheDir:
     def test_uses_config_cache_dir_over_project_root(self, tmp_path: Path) -> None:
-        from great_docs._api_diff import ApiSnapshot, CliCommandInfo
+        from great_docs._api_evolution.model import ApiSnapshot, CliCommandInfo
         from great_docs._versions.build import _prune_cli_pages_for_version
         from great_docs.config import Config
 
@@ -3330,8 +3330,10 @@ class TestRebuildApiFromGitRefCache:
                 "great_docs._versions.build._validate_git_ref_is_tag",
                 return_value=True,
             ),
-            patch("great_docs._api_diff._detect_package_name", return_value="pkg"),
-            patch("great_docs._api_diff.snapshot_at_tag", return_value=mock_snap) as snapshot,
+            patch("great_docs._api_evolution.snapshot._detect_package_name", return_value="pkg"),
+            patch(
+                "great_docs._api_evolution.snapshot.snapshot_at_tag", return_value=mock_snap
+            ) as snapshot,
         ):
             pages = _rebuild_api_from_git_ref(
                 dest, tmp_path, entry, documented_symbols=lambda name: ["func2"], quarto_config={}
@@ -3357,7 +3359,7 @@ class TestRebuildApiFromGitRefCache:
                 "great_docs._versions.build._validate_git_ref_is_tag",
                 return_value=True,
             ),
-            patch("great_docs._api_diff._detect_package_name", return_value=None),
+            patch("great_docs._api_evolution.snapshot._detect_package_name", return_value=None),
         ):
             pages = _rebuild_api_from_git_ref(dest, tmp_path, entry, quarto_config={})
 
@@ -3377,8 +3379,8 @@ class TestRebuildApiFromGitRefCache:
                 "great_docs._versions.build._validate_git_ref_is_tag",
                 return_value=True,
             ),
-            patch("great_docs._api_diff._detect_package_name", return_value="pkg"),
-            patch("great_docs._api_diff.snapshot_at_tag", return_value=None),
+            patch("great_docs._api_evolution.snapshot._detect_package_name", return_value="pkg"),
+            patch("great_docs._api_evolution.snapshot.snapshot_at_tag", return_value=None),
         ):
             pages = _rebuild_api_from_git_ref(dest, tmp_path, entry, quarto_config={})
 
@@ -4022,7 +4024,7 @@ class TestPruneSidebarContentsHref:
 
 class TestPruneCliPagesForVersionFull:
     def test_prunes_cli_pages_via_snapshot(self, tmp_path: Path):
-        from great_docs._api_diff import ApiSnapshot, CliCommandInfo
+        from great_docs._api_evolution.model import ApiSnapshot, CliCommandInfo
         from great_docs._versions.build import _prune_cli_pages_for_version
 
         entry = VersionEntry(tag="0.2", label="0.2", latest=False, git_ref="v0.2.0")

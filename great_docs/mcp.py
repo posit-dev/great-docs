@@ -41,7 +41,7 @@ from ._project.layout import CONVENTIONAL_DOC_DIRS, Layout, LayoutError
 from ._utils import is_in_great_docs_build_dir, recognised_build_dirs
 
 if TYPE_CHECKING:
-    from ._api_diff import ApiSnapshot
+    from ._api_evolution.model import ApiSnapshot
     from ._project import Project
     from ._reference.exports import Exports
 
@@ -853,7 +853,7 @@ def _api_snapshot(
     :
         The snapshot, or `None` when the package source cannot be read at `ref`.
     """
-    from ._api_diff import snapshot_at_tag, snapshot_from_griffe
+    from ._api_evolution.snapshot import snapshot_at_tag, snapshot_from_griffe
 
     if ref is None or ref.upper() == "HEAD":
         # Read the project source even when the package is uninstalled.
@@ -879,7 +879,7 @@ async def _handle_api_diff(arguments: dict) -> list[TextContent]:
     :
         MCP text responses containing the API listing, comparison or error message.
     """
-    from ._api_diff import diff_snapshots
+    from ._api_evolution.compare import diff_snapshots
 
     project_path = arguments.get("project_path")
     base_ref = arguments.get("base")

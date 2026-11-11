@@ -3280,18 +3280,14 @@ def api_diff_cmd(
     import json
     import shutil
 
-    from ._api_diff import (
-        _detect_package_name,
-        api_diff,
-        build_dependency_graph,
-        build_timeline,
+    from ._api_evolution.compare import api_diff
+    from ._api_evolution.history import build_dependency_graph, build_timeline, symbol_history
+    from ._api_evolution.render import (
         evolution_table_html,
         evolution_table_text,
-        snapshot_at_tag,
-        snapshot_from_griffe,
-        symbol_history,
         timeline_to_mermaid,
     )
+    from ._api_evolution.snapshot import _detect_package_name, snapshot_at_tag, snapshot_from_griffe
 
     project_root = Path(project_path) if project_path else Path.cwd()
     importable_name = package or _detect_package_name(
@@ -3301,7 +3297,7 @@ def api_diff_cmd(
     try:
         # --- Symbol history mode ---
         if symbol:
-            from ._api_diff import list_version_tags
+            from ._api_evolution.snapshot import list_version_tags
 
             all_tags = list_version_tags(project_root)
             # Filter to tags between old_version and new_version (inclusive)
@@ -3667,7 +3663,7 @@ def api_snapshot_cmd(
     \b
     Snapshots are saved to '.great-docs/snapshots/<version>.json' by default.
     """
-    from ._api_diff import (
+    from ._api_evolution.snapshot import (
         _detect_package_name,
         list_version_tags,
         snapshot_at_tag,

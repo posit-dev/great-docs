@@ -38,11 +38,7 @@ def render_evolution_table(
     symbol="",
     **kwargs,
 ):
-    """Generate a self-contained HTML evolution table for a symbol.
-
-    Convenience re-export of :func:`great_docs._api_diff.render_evolution_table`.
-    See that function for the full parameter list.
-    """
-    from ._api_diff import render_evolution_table as _render
+    """Generate a self-contained HTML evolution table for a symbol"""
+    from ._api_evolution.render import render_evolution_table as _render
 
     return _render(project_path, symbol, **kwargs)
