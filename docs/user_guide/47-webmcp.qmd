@@ -79,9 +79,10 @@ make from a `file://` page, so most tools would fail.
 
 ## The Tools
 
-Every page registers these five tools. A site with an API reference adds two more, and a site with
-a [CLI reference](07-cli-documentation.qmd) adds one. Each tool's description tells the agent when
-to use it and gives an example question.
+Every page registers these five tools. A site with an API reference, a
+[CLI reference](07-cli-documentation.qmd), [versions](30-multi-version-docs.qmd) or a
+[changelog](17-changelog.qmd) adds the tools that read them. Each tool's description
+tells the agent when to use it and gives an example question.
 
 | Tool | Returns | Example question |
 |---|---|---|
@@ -115,6 +116,17 @@ A site with CLI reference pages adds a tool for them:
 
 Without `command`, `get_cli_help` returns the command documented on the open page, or else the
 root command. A command it doesn't know comes back as an error listing the closest commands.
+
+A versioned site adds `list_versions`, and a site with a changelog adds `get_changelog`:
+
+| Tool | Returns | Example question |
+|---|---|---|
+| `list_versions` | Each documented version's tag, label and URL, marked as the current, latest, pre-release or end-of-life version, with the open page's URL in the versions where the page is known to exist | "Are there docs for version 0.2?" |
+| `get_changelog` | Changelog entries as Markdown, newest first, each with its version, date and URL. `version` picks one release, with or without a leading `v`, or a series such as `1.2`; without it, the tool returns the latest `limit` entries (3 by default) | "What changed in version 1.2?" |
+
+`get_changelog` splits the changelog page at its level-two headings, one per release, and takes
+each entry's version from the first version number in its heading. A version the changelog doesn't
+list comes back as an error listing the versions it does.
 
 A few details apply to all of them:
 
@@ -301,6 +313,8 @@ Some other problems and their causes:
   the build skipped it.
 - **`get_cli_help` isn't registered.** The site has no CLI reference pages: check the build log
   for the CLI reference step.
+- **`get_changelog` isn't registered.** The site has no changelog page. Great Docs writes one from
+  the repository's GitHub Releases, so the build needs the repository and at least one release.
 - **`search_docs` reports `fetch_failed` but other tools work.** The site has no `search.json`,
   which Quarto writes when the site has search turned on.
 - **A page is missing from `list_pages`.** It's a draft, sets `webmcp: {listed: false}`, or wasn't
