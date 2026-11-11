@@ -280,7 +280,9 @@ def _dark_mode_disabled(config: Config) -> str | None:
     return '<meta name="gd-dark-mode" content="disabled">'
 
 
-def _webmcp_head(config: Config, *, has_api_reference: bool, has_cli_reference: bool) -> str:
+def _webmcp_head(
+    config: Config, *, has_api_reference: bool, has_cli_reference: bool, has_changelog: bool
+) -> str:
     """
     Build the header tags that configure `webmcp.js`
 
@@ -292,6 +294,8 @@ def _webmcp_head(config: Config, *, has_api_reference: bool, has_cli_reference: 
         Whether the site has an API reference, which the API tools read.
     has_cli_reference
         Whether the site has command-line reference pages, which `get_cli_help` reads.
+    has_changelog
+        Whether the site has a changelog page, which `get_changelog` reads.
 
     Returns
     -------
@@ -305,7 +309,12 @@ def _webmcp_head(config: Config, *, has_api_reference: bool, has_cli_reference: 
         "schema": 1,
         "generator": f"great-docs {__version__}",
         "markdown_pages": config.markdown_pages,
-        "features": {"api": has_api_reference, "cli": has_cli_reference},
+        "features": {
+            "api": has_api_reference,
+            "cli": has_cli_reference,
+            "versions": config.has_versions,
+            "changelog": has_changelog,
+        },
         "actions": config.webmcp_actions,
         "js_api": config.webmcp_js_api,
         "exclude": config.webmcp_exclude_tools,
@@ -539,6 +548,7 @@ def include_webmcp_settings(
     *,
     has_api_reference: bool,
     has_cli_reference: bool,
+    has_changelog: bool,
 ) -> None:
     """
     Configure `webmcp.js` in every page, ahead of the script's own entry
@@ -553,6 +563,8 @@ def include_webmcp_settings(
         Whether the site has an API reference.
     has_cli_reference
         Whether the site has command-line reference pages.
+    has_changelog
+        Whether the site has a changelog page.
 
     Returns
     -------
@@ -563,7 +575,10 @@ def include_webmcp_settings(
     script = named("webmcp.js")
     assert script.slot is not None
     data = _webmcp_head(
-        config, has_api_reference=has_api_reference, has_cli_reference=has_cli_reference
+        config,
+        has_api_reference=has_api_reference,
+        has_cli_reference=has_cli_reference,
+        has_changelog=has_changelog,
     )
     quarto_yml.add_include(quarto_config, script.slot, {"text": data}, before=script.name)
 
