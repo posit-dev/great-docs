@@ -3,8 +3,8 @@ from pathlib import Path
 import pytest
 
 from great_docs._build import outputs
+from great_docs._build.ownership import QUARTO_YML_HEADER
 from great_docs._project.layout import Layout
-from great_docs._utils import QUARTO_YML_HEADER
 from tests.support import write_config
 
 

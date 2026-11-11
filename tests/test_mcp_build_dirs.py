@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from mcp.types import CompletionArgument, ResourceTemplateReference
 
+from great_docs._build.ownership import QUARTO_YML_HEADER, is_in_great_docs_build_dir
 from great_docs._project.layout import Layout
-from great_docs._utils import QUARTO_YML_HEADER, is_in_great_docs_build_dir
 from great_docs.mcp import _sibling_build_dirs, handle_completion
 
 

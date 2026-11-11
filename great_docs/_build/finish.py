@@ -15,11 +15,11 @@ from importlib import metadata
 from typing import TYPE_CHECKING
 
 from .._cliref import click as cli_click
-from .._utils import record_site_ownership as record_ownership
 from .._website.ai_agents import webmcp_manifest as manifest_file
 from .._website.seo import site_files
 from . import freeze, timings
 from .facts import exact_tag
+from .ownership import record_site_ownership as record_ownership
 from .site import default_description
 from .steps import USER_CODE_ERRORS, Outcome, Skipped
 

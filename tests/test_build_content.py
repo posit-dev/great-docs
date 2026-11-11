@@ -15,9 +15,9 @@ from yaml12 import format_yaml, read_yaml, write_yaml
 
 from great_docs import GreatDocs
 from great_docs._build import content
+from great_docs._build.ownership import QUARTO_YML_HEADER
 from great_docs._build.steps import Outcome, Skipped
 from great_docs._contribution import Contribution, NavbarLink
-from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website.quarto_yml import apply as apply_contribution
 from great_docs._website.quarto_yml import edit as edit_quarto_yml
 from great_docs._website.quarto_yml import read as read_quarto_yml

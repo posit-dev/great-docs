@@ -35,10 +35,10 @@ from mcp.types import (
 )
 
 from ._build import outputs
+from ._build.ownership import is_in_great_docs_build_dir, recognised_build_dirs
 from ._build.steps import PROJECT_ERRORS, USER_CODE_ERRORS, BuildError
 from ._content import user_guide
 from ._project.layout import CONVENTIONAL_DOC_DIRS, Layout, LayoutError
-from ._utils import is_in_great_docs_build_dir, recognised_build_dirs
 
 if TYPE_CHECKING:
     from ._api_evolution.model import ApiSnapshot

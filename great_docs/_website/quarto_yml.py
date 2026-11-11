@@ -11,9 +11,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from yaml12 import parse_yaml
+from yaml12 import parse_yaml, write_yaml
 
-from .._utils import write_quarto_yml
+from .._build.ownership import QUARTO_YML_HEADER
 from . import inline_data
 from .navigation import navbar as nav_navbar
 
@@ -74,6 +74,7 @@ def write(build_dir: Path, quarto_config: dict[str, Any]) -> None:
     Write a build directory's Quarto configuration
 
     The file includes the header that marks the build directory as generated.
+    Keep `api-reference` last without changing `quarto_config`.
 
     Parameters
     ----------
@@ -86,7 +87,12 @@ def write(build_dir: Path, quarto_config: dict[str, Any]) -> None:
     -------
     :
     """
-    write_quarto_yml(path(build_dir), quarto_config)
+    ordered = {key: value for key, value in quarto_config.items() if key != "api-reference"}
+    if "api-reference" in quarto_config:
+        ordered["api-reference"] = quarto_config["api-reference"]
+    with open(path(build_dir), "w", encoding="utf-8") as f:
+        _ = f.write(QUARTO_YML_HEADER)
+        write_yaml(ordered, f)
 
 
 def write_initial(build_dir: Path) -> dict[str, Any]:

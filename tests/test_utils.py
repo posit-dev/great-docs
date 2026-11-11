@@ -1,13 +1,13 @@
 import pytest
 
-from great_docs._utils import (
+from great_docs._build.ownership import (
     GITIGNORE_CONTENT,
     QUARTO_YML_HEADER,
-    fenced_lines,
     is_great_docs_build_dir,
     is_in_great_docs_build_dir,
     validate_build_dir,
 )
+from great_docs._utils import fenced_lines
 
 
 def test_fenced_lines_without_markers_returns_lines_and_clear_mask():

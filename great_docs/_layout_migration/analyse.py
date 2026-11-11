@@ -9,12 +9,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from great_docs._build.ownership import is_great_docs_build_dir, recognised_build_dirs
 from great_docs._content.naming import section_slug
 from great_docs._project import manifest as _manifest
 from great_docs._project.layout import CONVENTIONAL_DOC_DIRS, Layout
 from great_docs._project.manifest import ManifestError
 from great_docs._project.model import package_name
-from great_docs._utils import is_great_docs_build_dir, recognised_build_dirs
 from great_docs._website import branding
 from great_docs._website.homepage import source as homepage_source
 from great_docs._yaml import YamlMapping, YamlValue

@@ -9,12 +9,12 @@ from yaml12 import write_yaml
 from great_docs import GreatDocs
 from great_docs._build import content as content_steps
 from great_docs._build import freeze, prepare
+from great_docs._build.ownership import QUARTO_YML_HEADER
 from great_docs._build.pipeline import Run
 from great_docs._build.steps import Outcome
 from great_docs._content import publish
 from great_docs._content.pages import output_destination, section_destination
 from great_docs._project.layout import Layout
-from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._versions.build import assemble_site, run_versioned_build
 from great_docs._versions.model import VersionEntry, build_version_map, parse_versions_config
 from great_docs._website.homepage import source as homepage_source

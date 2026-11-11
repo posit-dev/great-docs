@@ -17,6 +17,7 @@ import yaml
 
 from great_docs import GreatDocs
 from great_docs._build import freeze, site
+from great_docs._build.ownership import QUARTO_YML_HEADER
 from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
 from great_docs._contribution import Contribution, NavbarLink, Sidebar
@@ -28,7 +29,6 @@ from great_docs._reference.discovery import (
     empty_categories,
 )
 from great_docs._reference.exports import Exports
-from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website.seo import robots
 from tests.support import (
     StubRemote,

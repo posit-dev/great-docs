@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING
 
 from .._content.naming import strip_numeric_prefix
 from .._subprocess import TEXT_MODE_KWARGS
-from .._utils import recognised_build_dirs, validate_tree_symlinks
 from . import quarto
+from .ownership import recognised_build_dirs, validate_tree_symlinks
 from .steps import count_listed, run_steps
 
 if TYPE_CHECKING:

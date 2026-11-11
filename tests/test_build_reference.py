@@ -19,12 +19,12 @@ from great_docs import GreatDocs
 from great_docs._apiref.api_reference import APIReference
 from great_docs._build import reference
 from great_docs._build.log import BuildLog
+from great_docs._build.ownership import QUARTO_YML_HEADER
 from great_docs._build.pipeline import Run
 from great_docs._build.steps import Outcome, Skipped
 from great_docs._interlinks.sphinx_inventory import decode
 from great_docs._reference import discovery_cache
 from great_docs._reference.exports import Exports
-from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website import quarto_yml
 from great_docs._website.ai_agents import llms_txt
 from tests.support import (

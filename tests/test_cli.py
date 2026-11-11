@@ -44,7 +44,7 @@ def quarto_installed(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_freeze_clean_rejects_unsafe_paths_before_removing_cache(
     tmp_path: Path, unsafe: str
 ) -> None:
-    from great_docs._utils import QUARTO_YML_HEADER
+    from great_docs._build.ownership import QUARTO_YML_HEADER
 
     source = tmp_path / "docs"
     source.mkdir()
@@ -753,7 +753,7 @@ def test_preview_override_ignores_ambiguous_project(
 
 def test_uninstall_removes_only_selected_project(tmp_path: Path) -> None:
     from great_docs import GreatDocs
-    from great_docs._utils import QUARTO_YML_HEADER
+    from great_docs._build.ownership import QUARTO_YML_HEADER
 
     (tmp_path / "great-docs.yml").write_text("name: preserved\n")
     (tmp_path / "website").mkdir()
@@ -997,7 +997,7 @@ def test_seo_missing_alt_text(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("unknown", [False, True])
 def test_seo_fix_preserves_deployment_ownership(tmp_path: Path, unknown: bool) -> None:
-    from great_docs._utils import record_site_ownership, validate_site_dir
+    from great_docs._build.ownership import record_site_ownership, validate_site_dir
 
     source = tmp_path / "docs"
     source.mkdir()

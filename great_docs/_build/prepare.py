@@ -19,9 +19,9 @@ from typing import TYPE_CHECKING, Any
 from .._content import marimo, publish
 from .._content import user_guide as authored_guide
 from .._reference import sections as reference_sections
-from .._utils import GITIGNORE_CONTENT
 from .._website import page_dates, quarto_yml, scripts
 from . import content, outputs, reference
+from .ownership import GITIGNORE_CONTENT
 from .steps import Outcome, print_warning
 
 if TYPE_CHECKING:

@@ -1440,7 +1440,7 @@ def freeze(
         raise click.ClickException(str(error)) from error
 
     if clean:
-        from ._utils import validate_layout_outputs, validate_tree_symlinks
+        from ._build.ownership import validate_layout_outputs, validate_tree_symlinks
 
         try:
             validate_layout_outputs(layout)
@@ -2830,7 +2830,7 @@ def seo(
 
         separate_site = layout.source_dir != layout.package_root
         if fix and separate_site:
-            from ._utils import validate_site_dir
+            from ._build.ownership import validate_site_dir
 
             validate_site_dir(site_dir)
             ownership_path = site_dir / ".great-docs-site.json"

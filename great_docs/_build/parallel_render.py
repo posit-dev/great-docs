@@ -56,7 +56,6 @@ from typing import Any
 from yaml12 import parse_yaml, write_yaml
 
 from .._subprocess import TEXT_MODE_KWARGS
-from .._utils import write_quarto_yml
 from .._website import quarto_yml
 from . import quarto
 
@@ -634,7 +633,7 @@ def _copy_project(build_dir: Path, dest: Path, quarto_config: Mapping[str, Any])
     project.pop("pre-render", None)
     project.pop("post-render", None)
     _slim_config(config, dest)
-    write_quarto_yml(dest / "_quarto.yml", config)
+    quarto_yml.write(dest, config)
 
 
 def _slim_config(config: dict[str, Any], dest: Path) -> None:
