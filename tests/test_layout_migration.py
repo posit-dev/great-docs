@@ -9,11 +9,11 @@ import pytest
 from click.testing import CliRunner
 from yaml12 import read_yaml
 
+from great_docs._build.ownership import QUARTO_YML_HEADER
 from great_docs._layout_migration import analyse
 from great_docs._layout_migration.model import MigrationError, Move, Note, fingerprint
 from great_docs._project import Project
 from great_docs._project.layout import CONVENTIONAL_DOC_DIRS, Layout
-from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._website import branding
 from great_docs.cli import _print_notes, cli
 from great_docs.config import Config
@@ -2174,7 +2174,7 @@ def test_destination_with_only_dotfiles_does_not_block(project: Path) -> None:
 
 
 def test_destination_holding_only_a_nested_build_dir_does_not_block(project: Path) -> None:
-    from great_docs._utils import GITIGNORE_CONTENT
+    from great_docs._build.ownership import GITIGNORE_CONTENT
 
     put(project, "great-docs.yml", "sections: [{dir: user_guide}]\n")
     put(project, "user_guide/page.md", "# Page\n")
@@ -2184,7 +2184,7 @@ def test_destination_holding_only_a_nested_build_dir_does_not_block(project: Pat
 
 
 def test_destination_that_is_itself_a_recognised_build_dir_does_not_block(project: Path) -> None:
-    from great_docs._utils import GITIGNORE_CONTENT
+    from great_docs._build.ownership import GITIGNORE_CONTENT
 
     put(project, "great-docs.yml", "sections: [{dir: user_guide}]\n")
     put(project, "user_guide/page.md", "# Page\n")

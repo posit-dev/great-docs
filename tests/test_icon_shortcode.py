@@ -129,7 +129,7 @@ class TestIconBridgeScript:
         """Load icon code from the source tree when the package import fails"""
         import importlib.util
 
-        monkeypatch.setitem(sys.modules, "great_docs._icons", None)
+        monkeypatch.setitem(sys.modules, "great_docs._website.icons", None)
         spec = importlib.util.spec_from_file_location(
             "_icon_shortcode", _ext_dir() / "_icon_shortcode.py"
         )

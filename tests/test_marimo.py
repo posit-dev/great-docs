@@ -1,4 +1,4 @@
-"""Tests for great_docs._marimo: marimo notebook integration utilities."""
+"""Tests for Marimo notebook preparation and runtime markup"""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from great_docs import _marimo
-from great_docs._marimo import (
+from great_docs._content import marimo as _marimo
+from great_docs._content.marimo import (
     _FALLBACK_VERSION,
     _ISLANDS_CDN,
     _tag_setup_islands,

@@ -545,7 +545,7 @@ def preview(
       great-docs preview --pr 302 --path reference/mcp/gd_config.html
     """
     if clear_cache:
-        from ._pr_preview import clear_cache as _clear_cache
+        from ._build.pr_preview import clear_cache as _clear_cache
 
         existed, path = _clear_cache()
         if existed:
@@ -568,7 +568,7 @@ def preview(
         if given:
             if site_dir:
                 click.echo("Warning: --site-dir is ignored with --pr/--run/--branch", err=True)
-            from ._pr_preview import PreviewError, preview_pr
+            from ._build.pr_preview import PreviewError, preview_pr
 
             try:
                 preview_pr(
@@ -703,8 +703,8 @@ def ci_pr_comment(run_id: int, pr: int, repo: str | None) -> None:
 
     Reads the token from GITHUB_TOKEN / GH_TOKEN and needs 'pull-requests: write'.
     """
-    from ._ci import post_preview_comment
-    from ._pr_preview import PreviewError
+    from ._build.ci import post_preview_comment
+    from ._build.pr_preview import PreviewError
 
     try:
         action, repo_slug = post_preview_comment(run_id=run_id, pr=pr, repo_override=repo)
@@ -721,7 +721,7 @@ def ci_pr_comment(run_id: int, pr: int, repo: str | None) -> None:
 @click.option("--pr", type=int, default=None, help="Pull request number (adds the --pr hint).")
 def ci_notice(run_id: int, pr: int | None) -> None:
     """Print a workflow log notice with the local-preview command."""
-    from ._ci import render_notice_lines
+    from ._build.ci import render_notice_lines
 
     for line in render_notice_lines(run_id, pr):
         click.echo(line)
@@ -1440,7 +1440,7 @@ def freeze(
         raise click.ClickException(str(error)) from error
 
     if clean:
-        from ._utils import validate_layout_outputs, validate_tree_symlinks
+        from ._build.ownership import validate_layout_outputs, validate_tree_symlinks
 
         try:
             validate_layout_outputs(layout)
@@ -2830,7 +2830,7 @@ def seo(
 
         separate_site = layout.source_dir != layout.package_root
         if fix and separate_site:
-            from ._utils import validate_site_dir
+            from ._build.ownership import validate_site_dir
 
             validate_site_dir(site_dir)
             ownership_path = site_dir / ".great-docs-site.json"
@@ -3844,7 +3844,7 @@ def skill_install(
       great-docs skill install great-tables --path .claude/skills/gt # custom path
       great-docs skill install --detect           # find and refresh all skills
     """
-    from ._skill_install import install_skill as _install_skill
+    from ._skills.install import install_skill as _install_skill
 
     kwargs: dict = {
         "global_": global_,
@@ -3919,7 +3919,7 @@ def skill_check(
       great-docs skill check --global       # check global installations only
       great-docs skill check --update       # reinstall any that have changed
     """
-    from ._skill_install import check_skill as _check_skill
+    from ._skills.install import check_skill as _check_skill
 
     click.echo("Checking installed skills...")
     results = _check_skill(
@@ -3969,7 +3969,7 @@ def skill_list(source: str | None, url: str | None) -> None:
       great-docs skill list great-tables      # any installed package
       great-docs skill list https://posit-dev.github.io/great-tables/
     """
-    from ._skill_install import list_skills as _list_skills
+    from ._skills.install import list_skills as _list_skills
 
     if source:
         if source.startswith(("http://", "https://")):

@@ -8,32 +8,32 @@ from pathlib import Path
 
 
 def _load_icons_module():
-    """Load `great_docs._icons` without requiring great_docs to be installed.
+    """
+    Load icon rendering without requiring an installed Great Docs package
 
-    Walks up the directory tree from this script's location until it
-    finds `great_docs/_icons.py` and imports it directly.  This avoids
-    requiring the full great_docs package (and its dependencies) to be
-    installed in whatever Python interpreter Quarto happens to use.
+    Search the script's ancestors for `great_docs/_website/icons.py` when the
+    package import fails. Load that file directly so Quarto's interpreter does
+    not need the package dependencies.
     """
     # Fast path: great_docs is installed
     try:
-        from great_docs._icons import get_icon_svg
+        from great_docs._website.icons import get_icon_svg
 
         return get_icon_svg
     except ImportError:
         pass
 
-    # Walk ancestors to find the _icons.py source file
+    # Walk ancestors to find the icon source file
     cur = Path(__file__).resolve().parent
     for ancestor in cur.parents:
-        icons_path = ancestor / "great_docs" / "_icons.py"
+        icons_path = ancestor / "great_docs" / "_website" / "icons.py"
         if icons_path.exists():
             spec = importlib.util.spec_from_file_location("_icons", icons_path)
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
             return mod.get_icon_svg
 
-    raise ImportError("Cannot locate great_docs/_icons.py")
+    raise ImportError("Cannot locate great_docs/_website/icons.py")
 
 
 def _apply_inline_text_style(svg: str, size_px: int | None) -> str:

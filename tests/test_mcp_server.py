@@ -19,9 +19,9 @@ from mcp.types import (
 )
 
 import great_docs.mcp as mcp_module
+from great_docs._build.ownership import QUARTO_YML_HEADER
 from great_docs._project import Project
 from great_docs._project.layout import Layout
-from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._yaml import split_front_matter
 from great_docs.config import ConfigError
 from great_docs.mcp import (
@@ -761,7 +761,7 @@ class TestHandleBuild:
         assert "Build complete" in result[0].text
 
     def test_clean_removes_sibling_dirs(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        from great_docs._utils import QUARTO_YML_HEADER
+        from great_docs._build.ownership import QUARTO_YML_HEADER
 
         monkeypatch.chdir(tmp_path)
         old_dir = tmp_path / "great-docs-0.1"

@@ -9,8 +9,8 @@ import pytest
 from yaml12 import format_yaml, parse_yaml
 
 from great_docs._api_evolution.model import ApiSnapshot, ParameterInfo, SymbolInfo
+from great_docs._build.ownership import QUARTO_YML_HEADER, is_great_docs_build_dir
 from great_docs._project.layout import Layout
-from great_docs._utils import QUARTO_YML_HEADER, is_great_docs_build_dir
 from great_docs._versions.build import (
     _adjust_quarto_config_for_version,
     _clean_stale_version_dirs,

@@ -8,8 +8,8 @@ from textwrap import dedent
 import griffe as gf
 
 from great_docs._apiref.resolve import resolution_lang
+from great_docs._source_refs import fenced_lines
 from great_docs._translations import translate_versioned
-from great_docs._utils import fenced_lines
 from great_docs.hooks import on_object_resolved
 from great_docs.pandoc.blocks import Div
 from great_docs.pandoc.components import Attr

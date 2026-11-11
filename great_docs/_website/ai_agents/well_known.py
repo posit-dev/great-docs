@@ -9,11 +9,9 @@ import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
+from ..._skills.sources import INDEX_FILE, SKILL_FILE, WELL_KNOWN_ROOT
 from ..._yaml import split_front_matter
 
-WELL_KNOWN_ROOT = ".well-known/agent-skills"
-INDEX_FILE = "index.json"
-SKILL_FILE = "SKILL.md"
 LEGACY_DIR = ".well-known/skills/default"
 
 

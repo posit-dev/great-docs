@@ -143,6 +143,7 @@ from great_docs._apiref.write import _insert_contents
 from great_docs._apiref.write import merge_frontmatter as _merge_frontmatter
 from great_docs._build import freeze, pipeline, quarto, reference, site
 from great_docs._build.log import BuildLog
+from great_docs._build.ownership import QUARTO_YML_HEADER, validate_build_dir
 from great_docs._build.steps import Skipped, Step, count_listed
 from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
@@ -164,7 +165,6 @@ from great_docs._reference.discovery import (
 )
 from great_docs._reference.exports import Exports
 from great_docs._reference.probe import detect_docstring_style, detect_dynamic_mode
-from great_docs._utils import QUARTO_YML_HEADER, validate_build_dir
 from great_docs._website import page_status
 from great_docs._website.ai_agents import llms_txt
 from great_docs._website.ai_agents.skills import SkillsWriter
@@ -21480,7 +21480,7 @@ def test_build_reference_yaml_empty():
 
 class TestSaveFreezeCacheVersioned:
     def test_collects_freeze_from_sibling_version_dirs(self, tmp_path: Path):
-        from great_docs._utils import QUARTO_YML_HEADER
+        from great_docs._build.ownership import QUARTO_YML_HEADER
 
         docs = GreatDocs(project_path=str(tmp_path))
 
@@ -21514,7 +21514,7 @@ class TestSaveFreezeCacheVersioned:
         Store different results for the shared page and retain pages that only the
         latest version caches.
         """
-        from great_docs._utils import QUARTO_YML_HEADER
+        from great_docs._build.ownership import QUARTO_YML_HEADER
 
         docs = GreatDocs(project_path=str(tmp_path))
 

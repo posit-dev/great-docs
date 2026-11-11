@@ -13,9 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from great_docs._build import quarto
-from great_docs._content.pages import section_destination
-from great_docs._subprocess import TEXT_MODE_KWARGS
-from great_docs._utils import (
+from great_docs._build.ownership import (
     is_great_docs_build_dir,
     record_site_ownership,
     validate_build_dir,
@@ -23,6 +21,8 @@ from great_docs._utils import (
     validate_site_dir,
     validate_tree_symlinks,
 )
+from great_docs._content.pages import section_destination
+from great_docs._subprocess import TEXT_MODE_KWARGS
 from great_docs._versions.model import (
     VersionEntry,
     build_version_map,

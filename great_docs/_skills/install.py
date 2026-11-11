@@ -1,13 +1,17 @@
+"""
+Install skills and check installed content for supported coding agents
+"""
+
 from __future__ import annotations
 
 import json
 import shutil
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, TypedDict, cast
 
-from ._website.ai_agents.well_known import INDEX_FILE, SKILL_FILE, WELL_KNOWN_ROOT
-from ._yaml import split_front_matter
+from .._yaml import split_front_matter
+from . import sources
 
 # ---------------------------------------------------------------------------
 # Agent format definitions
@@ -22,9 +26,46 @@ AgentFormat = Literal[
     "codex",
 ]
 
+
+class _AgentDetails(TypedDict):
+    """
+    Detection markers and installation paths for a coding agent
+    """
+
+    markers: list[str]
+    skill_dir: str
+    global_dir: str
+    description: str
+
+
+class _SkillStatus(TypedDict):
+    """
+    Installed skill location and content freshness
+    """
+
+    path: Path
+    name: str
+    agent: AgentFormat
+    installed_pkg_version: str
+    package_version: str
+    status: str
+
+
+class _SkillEntry(TypedDict):
+    """
+    Available skill description and source location
+    """
+
+    name: str
+    description: str
+    path: Path | None
+    version: str | None
+    source: str
+
+
 # Maps agent format -> (detection markers, default skill directory template)
 # The template uses {name} for the skill name.
-_AGENT_FORMATS: dict[AgentFormat, dict] = {
+_AGENT_FORMATS: dict[AgentFormat, _AgentDetails] = {
     "claude": {
         "markers": [".claude"],
         "skill_dir": ".claude/skills/{name}",
@@ -62,97 +103,6 @@ _AGENT_FORMATS: dict[AgentFormat, dict] = {
         "description": "Codex",
     },
 }
-
-
-# ---------------------------------------------------------------------------
-# Skill source resolution
-# ---------------------------------------------------------------------------
-
-
-def _find_package_skills(package: str) -> list[Path]:
-    """Find bundled SKILL.md files shipped inside a Python package.
-
-    Looks for `skills/<name>/SKILL.md` inside the installed package directory. Returns a list of
-    SKILL.md paths found.
-    """
-    # Strategy: locate the package's top-level directory and look for skills/
-    import importlib
-
-    try:
-        # Normalize package name for import (hyphens -> underscores)
-        import_name = package.replace("-", "_")
-        mod = importlib.import_module(import_name)
-    except ImportError:
-        return []
-
-    if not hasattr(mod, "__file__") or mod.__file__ is None:
-        return []
-
-    pkg_dir = Path(mod.__file__).parent
-
-    # Check for skills/ directory inside the package
-    skills_dir = pkg_dir / "skills"
-    if not skills_dir.is_dir():
-        # Also check at the project root (one level up from package dir)
-        project_root = pkg_dir.parent
-        skills_dir = project_root / "skills"
-        if not skills_dir.is_dir():
-            return []
-
-    skill_files = sorted(skills_dir.glob("*/SKILL.md"))
-    return skill_files
-
-
-def _find_skill_from_url(url: str) -> list[tuple[str, str]] | None:
-    """Fetch skills from a well-known URL.
-
-    Tries the agent-skills discovery protocol:
-
-    1. `{url}/.well-known/agent-skills/index.json` — fetches *all* listed skills
-    2. falls back to `{url}/skill.md` (single skill)
-
-    Returns a list of `(skill_name, content)` tuples, or `None` on failure.
-    """
-    import urllib.error
-    import urllib.request
-
-    base = url.rstrip("/")
-
-    # Try the agent-skills discovery protocol
-    index_url = f"{base}/{WELL_KNOWN_ROOT}/{INDEX_FILE}"
-    try:
-        with urllib.request.urlopen(index_url, timeout=10) as resp:  # noqa: S310
-            index_data = json.loads(resp.read().decode("utf-8"))
-
-        skills = index_data.get("skills", [])
-        if skills:
-            results: list[tuple[str, str]] = []
-            for skill_entry in skills:
-                name = skill_entry.get("name", "default")
-                skill_url = f"{base}/{WELL_KNOWN_ROOT}/{name}/{SKILL_FILE}"
-                try:
-                    with urllib.request.urlopen(skill_url, timeout=10) as resp:  # noqa: S310
-                        content = resp.read().decode("utf-8")
-                    results.append((name, content))
-                except (urllib.error.URLError, OSError):
-                    pass  # Skip skills that fail to download
-            if results:
-                return results
-    except (urllib.error.URLError, json.JSONDecodeError, KeyError, OSError):
-        pass
-
-    # Fallback: try direct skill.md
-    try:
-        skill_url = f"{base}/skill.md"
-        with urllib.request.urlopen(skill_url, timeout=10) as resp:  # noqa: S310
-            content = resp.read().decode("utf-8")
-        fm, _ = split_front_matter(content)
-        name = fm.string("name") or "default"
-        return [(name, content)]
-    except (urllib.error.URLError, OSError):
-        pass
-
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +238,7 @@ def install_skill(
         skills_to_install.append((name, skill_content, extra_files or {}))
 
     elif url:
-        results = _find_skill_from_url(url)
+        results = sources.find_at_url(url)
         if results is None:
             if not quiet:
                 print(f"Error: Could not find skills at {url}")
@@ -298,7 +248,7 @@ def install_skill(
             skills_to_install.append((name, content, extra_files or {}))
 
     elif package:
-        skill_files = _find_package_skills(package)
+        skill_files = sources.find_in_package(package)
         if not skill_files:
             if not quiet:
                 print(f"Error: No skills found in package '{package}'")
@@ -324,6 +274,7 @@ def install_skill(
         return []
 
     # --- Resolve target agent(s) ---
+    agents: list[AgentFormat] | list[None]
     if detect:
         agents = _find_existing_installations(root, global_=global_)
         if not agents:
@@ -334,9 +285,9 @@ def install_skill(
         agents = [agent]
     elif path:
         # Explicit path — install directly without agent detection
-        agents = [None]  # type: ignore[list-item]
+        agents = [None]
     else:
-        detected = detect_agents_global() if global_ else detect_agents(root)
+        detected: list[AgentFormat] = detect_agents_global() if global_ else detect_agents(root)
         if not detected:
             # Default to Claude Code if nothing detected
             detected = ["claude"]
@@ -367,13 +318,13 @@ def install_skill(
 
             target_dir.mkdir(parents=True, exist_ok=True)
             skill_path = target_dir / "SKILL.md"
-            skill_path.write_text(content, encoding="utf-8")
+            _ = skill_path.write_text(content, encoding="utf-8")
 
             # Write extra files
             for rel_path, file_content in extras.items():
                 extra_target = target_dir / rel_path
                 extra_target.parent.mkdir(parents=True, exist_ok=True)
-                extra_target.write_text(file_content, encoding="utf-8")
+                _ = extra_target.write_text(file_content, encoding="utf-8")
 
             installed.append(skill_path)
             if not quiet:
@@ -385,7 +336,7 @@ def install_skill(
     return installed
 
 
-def check_skill(
+def check_skill(  # pyright: ignore[reportUnknownParameterType]
     *,
     package: str | None = None,
     global_: bool = False,
@@ -393,7 +344,7 @@ def check_skill(
     root: Path | None = None,
     update: bool = False,
     quiet: bool = False,
-) -> list[dict]:
+) -> list[dict]:  # pyright: ignore[reportMissingTypeArgument]
     """Check if installed skills are up to date.
 
     Scans for installed SKILL.md files and compares their version with the version bundled in the
@@ -421,7 +372,7 @@ def check_skill(
         "package_version": str, "status": "current"|"outdated"|"unknown"}`.
     """
     root = root or Path.cwd()
-    results: list[dict] = []
+    results: list[_SkillStatus] = []
 
     scan_roots: list[Path] = []
     if local:
@@ -463,7 +414,7 @@ def check_skill(
                     # No metadata at all — assume outdated
                     status = "outdated"
 
-                entry = {
+                entry: _SkillStatus = {
                     "path": skill_md,
                     "name": skill_name,
                     "agent": fmt,
@@ -491,7 +442,7 @@ def check_skill(
         outdated = [r for r in results if r["status"] == "outdated"]
         for entry in outdated:
             pkg_name = package or entry["name"]
-            skill_files = _find_package_skills(pkg_name)
+            skill_files = sources.find_in_package(pkg_name)
             for sf in skill_files:
                 sf_content = sf.read_text(encoding="utf-8")
                 sf_fm, _ = split_front_matter(sf_content)
@@ -502,28 +453,28 @@ def check_skill(
                     pkg_ver = _get_package_version(pkg_name)
                     if pkg_ver:
                         stamped_content = _stamp_install_metadata(sf_content, pkg_ver)
-                    (target_dir / "SKILL.md").write_text(stamped_content, encoding="utf-8")
+                    _ = (target_dir / "SKILL.md").write_text(stamped_content, encoding="utf-8")
                     # Copy extra files
                     for extra in sf.parent.rglob("*"):
                         if extra.is_file() and extra.name != "SKILL.md":
                             rel = extra.relative_to(sf.parent)
                             dest = target_dir / rel
                             dest.parent.mkdir(parents=True, exist_ok=True)
-                            shutil.copy2(extra, dest)
+                            _ = shutil.copy2(extra, dest)
                     if not quiet:
                         print(f"  Updated '{entry['name']}' to v{entry['package_version']}")
                     entry["status"] = "updated"
                     break
 
-    return results
+    return cast("list[dict[str, Any]]", results)
 
 
-def list_skills(
+def list_skills(  # pyright: ignore[reportUnknownParameterType]
     *,
     package: str | None = None,
     url: str | None = None,
     quiet: bool = False,
-) -> list[dict]:
+) -> list[dict]:  # pyright: ignore[reportMissingTypeArgument]
     """List available skills from a package or URL.
 
     Parameters
@@ -541,10 +492,10 @@ def list_skills(
         Skill entries: `{"name": str, "description": str, "path": Path|None,
         "version": str|None}`.
     """
-    results: list[dict] = []
+    results: list[_SkillEntry] = []
 
     if package:
-        skill_files = _find_package_skills(package)
+        skill_files = sources.find_in_package(package)
         for sf in skill_files:
             content = sf.read_text(encoding="utf-8")
             fm, _ = split_front_matter(content)
@@ -564,7 +515,7 @@ def list_skills(
         import urllib.error
         import urllib.request
 
-        index_url = f"{base}/{WELL_KNOWN_ROOT}/{INDEX_FILE}"
+        index_url = f"{base}/{sources.WELL_KNOWN_ROOT}/{sources.INDEX_FILE}"
         try:
             with urllib.request.urlopen(index_url, timeout=10) as resp:  # noqa: S310
                 index_data = json.loads(resp.read().decode("utf-8"))
@@ -587,7 +538,7 @@ def list_skills(
             ver = f" (v{skill['version']})" if skill.get("version") else ""
             print(f"  {skill['name']}{ver}: {skill['description']}")
 
-    return results
+    return cast("list[dict[str, Any]]", results)
 
 
 # ---------------------------------------------------------------------------
@@ -661,7 +612,7 @@ def _check_content_freshness(
     Returns `"current"` if the content hasn't changed, `"outdated"` if it has, or `"outdated"` if
     the bundled source can't be found.
     """
-    skill_files = _find_package_skills(pkg_name)
+    skill_files = sources.find_in_package(pkg_name)
     for sf in skill_files:
         sf_content = sf.read_text(encoding="utf-8")
         sf_fm, _ = split_front_matter(sf_content)

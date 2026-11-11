@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING
 from yaml12 import format_yaml
 
 from ..._apiref._render._tables import html_table
-from ..._icons import get_icon_svg
 from ..._translations import translate
+from ..icons import get_icon_svg
 
 if TYPE_CHECKING:
     from collections.abc import Callable

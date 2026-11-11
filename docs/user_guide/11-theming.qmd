@@ -826,7 +826,7 @@ find icons by concept: search "chart" for data visualization icons, "file" for d
 To list all available icon names programmatically:
 
 ```python
-from great_docs._icons import list_icons
+from great_docs._website.icons import list_icons
 
 print(list_icons())  # sorted list of 1,900+ names
 ```

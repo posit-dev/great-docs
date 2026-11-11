@@ -334,7 +334,7 @@ def test_external_reviewed_input_is_rechecked_and_never_mutated(project: Path) -
 def test_recovered_new_cache_files_roll_back_without_touching_builds(
     project: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from great_docs._utils import QUARTO_YML_HEADER
+    from great_docs._build.ownership import QUARTO_YML_HEADER
 
     cache = project / "_freeze"
     cache.rename(project / "saved-cache")

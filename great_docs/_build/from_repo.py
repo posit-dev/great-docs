@@ -24,8 +24,8 @@ from .._project import manifest as _manifest
 from .._project.layout import Layout, LayoutError
 from .._project.manifest import ManifestError
 from .._subprocess import TEXT_MODE_KWARGS
-from .._utils import record_site_ownership, validate_site_dir
 from .._yaml import YamlMapping, YamlValue
+from .ownership import record_site_ownership, validate_site_dir
 
 if TYPE_CHECKING:
     from collections.abc import Callable

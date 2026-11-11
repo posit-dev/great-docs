@@ -1,13 +1,13 @@
 import pytest
 
-from great_docs._utils import (
+from great_docs._build.ownership import (
     GITIGNORE_CONTENT,
     QUARTO_YML_HEADER,
-    fenced_lines,
     is_great_docs_build_dir,
     is_in_great_docs_build_dir,
     validate_build_dir,
 )
+from great_docs._source_refs import fenced_lines
 
 
 def test_fenced_lines_without_markers_returns_lines_and_clear_mask():
@@ -137,11 +137,11 @@ def test_fenced_lines_backtick_fence_with_backtick_in_info_not_fenced():
 
 
 def test_parse_seealso_blank_name_entry_is_dropped():
-    """parse_seealso silently drops %seealso entries whose name is blank."""
-    from great_docs._utils import parse_seealso
+    """Discard blank names in standalone seealso directives"""
+    from great_docs._builtin.directives import _seealso
 
     # The entry " : desc" has a blank name after strip()
-    result = parse_seealso("Some docs\n%seealso  : no-name, real_func\n")
+    result = _seealso.parse("Some docs\n%seealso  : no-name, real_func\n")
     names = [name for name, _ in result]
     assert "" not in names
     assert "real_func" in names

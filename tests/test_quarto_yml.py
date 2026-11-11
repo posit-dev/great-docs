@@ -6,9 +6,9 @@ import pytest
 from yaml12 import parse_yaml
 
 from great_docs import GreatDocs
+from great_docs._build.ownership import QUARTO_YML_HEADER, validate_build_dir
 from great_docs._content import user_guide
 from great_docs._contribution import Contribution, InlineData, NavbarLink, Sidebar
-from great_docs._utils import QUARTO_YML_HEADER, validate_build_dir
 from great_docs._website import inline_data, quarto_yml
 from great_docs._website.navigation import navbar
 from tests.support import discover_user_guide, mock_config, user_guide_step, write_config

@@ -11,7 +11,7 @@ import shutil
 from typing import TYPE_CHECKING
 
 from .._content import sections
-from .._utils import recognised_build_dirs, validate_build_dir, validate_layout_outputs
+from .ownership import recognised_build_dirs, validate_build_dir, validate_layout_outputs
 
 if TYPE_CHECKING:
     from collections.abc import Callable

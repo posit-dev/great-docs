@@ -1,17 +1,16 @@
-"""Helpers for `great-docs ci`: small utilities meant to run inside CI.
+"""
+CI notices and pull request comments for downloaded documentation previews
 
-These render (and post) the "preview this build locally" hints that tell reviewers how to open a
-PR's docs without a preview host. Keeping the message text here (rather than inline in workflow
-YAML) means it lives in one place, is unit-testable, and stays consistent between the log notice and
-the sticky PR comment. See `great_docs._pr_preview` for the `preview` command these hints point at.
+Render consistent `great-docs preview` instructions for workflow notices and
+sticky pull request comments.
 """
 
 from __future__ import annotations
 
 import os
 
-from ._pr_preview import GITHUB_API, PreviewError, _parse_owner_repo
-from ._project.github import GithubRepo, token_from_env
+from .._project.github import GithubRepo, token_from_env
+from .pr_preview import GITHUB_API, PreviewError, _parse_owner_repo
 
 _TIMEOUT = 15
 
@@ -108,7 +107,7 @@ def resolve_ci_repo(repo_override: str | None) -> tuple[str, str]:
         if owner and repo:
             return owner, repo
 
-    from ._pr_preview import resolve_repo
+    from .pr_preview import resolve_repo
 
     return resolve_repo(None, None)
 

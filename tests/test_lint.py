@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import griffe as gf
 import pytest
 
+from great_docs._build.ownership import QUARTO_YML_HEADER
 from great_docs._builtin.directives import DIRECTIVES
 from great_docs._checks.lint import (
     LintIssue,
@@ -25,7 +26,6 @@ from great_docs._interlinks import Source
 from great_docs._interlinks.sphinx_inventory import Inventory, InventoryEntry
 from great_docs._project import Project
 from great_docs._project.layout import Layout
-from great_docs._utils import QUARTO_YML_HEADER
 from great_docs.config import Config
 from tests.support import mock_config, write_pyproject
 
