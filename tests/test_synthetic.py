@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from great_docs import Config, GreatDocs
+from great_docs._build import content as build_content
 from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
 from great_docs._cliref.model import CliCommand
@@ -893,8 +894,10 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     cli_files = cli_render.write_pages(docs._config, docs.layout, cli_info, report=print)
     run.contributions.append(cli_render.contribution(docs._config, cli_files))
 
-    # Process user guide
-    user_guide_step(docs, run.user_guide)
+    # Process the user guide in the same build, so its navbar link reaches the assembly
+    build_content.user_guide(
+        run, docs._config, docs.layout, page_authors=run.page_authors, remote=docs._remote
+    )
     update_quarto_config(docs, run)
 
     quarto_yml = docs.layout.build_dir / "_quarto.yml"
