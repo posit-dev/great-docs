@@ -424,6 +424,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_mermaid",  # 211
     # 212: Markdown table column sizing (default, explicit widths, opt-out)
     "gdtest_responsive_tables",  # 212
+    # 213: WebMCP tools with every feature they read
+    "gdtest_webmcp",  # 213
 ]
 
 
@@ -2353,6 +2355,13 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "`tbl-colwidths` sets explicit widths, many-column tables scroll, and a "
         "`.gd-table-nowrap` div restores one-line cells. Also covers spanning rows, "
         "long URLs, hidden tabs, and custom-class tables left alone."
+    ),
+    "gdtest_webmcp": (
+        "WebMCP turned on with an origin-trial token, on a site with something for "
+        "each tool: an API whose method and function share a short name, a Click CLI "
+        "with a nested group, a guide page that opts out with `webmcp: false`, a "
+        "draft, a blog post and a curated skill. `gd-webmcp.json` should list them "
+        "all except the draft, and every page should load `webmcp.js`."
     ),
 }
 
