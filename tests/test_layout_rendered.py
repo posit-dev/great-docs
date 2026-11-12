@@ -34,6 +34,7 @@ import pytest
 
 from great_docs._layout_migration import analyse, apply
 from great_docs._project.layout import Layout
+from tests.version_selector_page import run_selector
 
 pytestmark = pytest.mark.xdist_group("layout_rendered")
 
@@ -591,48 +592,27 @@ def test_emitted_version_navigation(rendered: Rendered) -> None:
     site = rendered.layout.site_dir
     manifest = json.loads((site / "_version_map.json").read_text())
     assert manifest["pages"]["reference/latest_only.html"] == ["2.0.0"]
-    script = (site / "version-selector.js").read_text()
     html = (site / "v/1.5.0/user-guide/frozen.html").read_text()
     assert re.findall(r'<link rel="canonical" href="([^"]*)">', html) == [
         "https://layout.example.test/user-guide/frozen.html"
     ]
-    # Run the real version-selector.js against a stubbed browser.
-    harness = r"""
-const fs = require("fs"), vm = require("vm");
-const input = JSON.parse(fs.readFileSync(0, "utf8"));
-const context = {
-  window: {location: {pathname: "/v/1.5.0/user-guide/frozen.html"}},
-  document: {readyState: "loading", addEventListener() {}}
-};
-const source = input.script.replace('if (document.readyState === "loading")',
-  'globalThis.selector = {getSiteBasePath, detectCurrentVersion, getCurrentRelPath, buildVersionUrl}; if (document.readyState === "loading")');
-vm.runInNewContext(source, context);
-const selector = context.selector, map = input.map;
-const base = selector.getSiteBasePath(map);
-const result = {
-  base, tag: selector.detectCurrentVersion(map),
-  page: selector.getCurrentRelPath(map, base),
-  latest: selector.buildVersionUrl(map, "2.0.0", "user-guide/frozen.html", base),
-  historical: selector.buildVersionUrl(map, input.tag, "user-guide/frozen.html", base),
-  absent: selector.buildVersionUrl(map, input.tag, "reference/latest_only.html", base)
-};
-process.stdout.write(JSON.stringify(result));
-"""
-    result = subprocess.run(
-        ["node", "-e", harness],
-        input=json.dumps({"script": script, "map": manifest, "tag": rendered.tag}),
-        text=True,
-        capture_output=True,
-        check=True,
+    # Run the emitted version-selector.js against a stubbed browser.
+    script = site / "version-selector.js"
+    frozen = run_selector(
+        script,
+        map=manifest,
+        pathname="/v/1.5.0/user-guide/frozen.html",
+        tags=["2.0.0", rendered.tag],
     )
-    assert json.loads(result.stdout) == {
-        "base": "",
-        "tag": rendered.tag,
-        "page": "user-guide/frozen.html",
-        "latest": "/user-guide/frozen.html",
-        "historical": "/v/1.5.0/user-guide/frozen.html",
-        "absent": "/v/1.5.0/index.html",
+    assert frozen["current"] == rendered.tag
+    assert frozen["urls"] == {
+        "2.0.0": "/user-guide/frozen.html",
+        rendered.tag: "/v/1.5.0/user-guide/frozen.html",
     }
+    latest_only = run_selector(
+        script, map=manifest, pathname="/reference/latest_only.html", tags=[rendered.tag]
+    )
+    assert latest_only["urls"] == {rendered.tag: "/v/1.5.0/index.html"}
     for alias in ("latest", "stable"):
         redirect = (site / "v" / alias / "index.html").read_text()
         assert '<meta http-equiv="refresh" content="0; url=/">' in redirect
