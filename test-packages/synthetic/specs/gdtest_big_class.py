@@ -4,7 +4,7 @@ gdtest_big_class — Class with >5 public methods.
 Dimensions: A1, B1, C3, D1, E6, F6, G1, H7
 Focus: One class with 8 methods plus 2 standalone functions.
        Tests the method-section threshold: classes with >5 methods should get
-       `members: []` in the config and a separate "ClassName Methods" section.
+       separate member pages linked from the parent page.
 """
 
 SPEC = {
@@ -213,9 +213,9 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["DataProcessor", "load_data", "save_data"],
         "num_exports": 3,
-        "section_titles": ["Classes", "DataProcessor Methods", "Functions"],
+        "section_titles": ["Classes", "Functions"],
         "big_class_name": "DataProcessor",
-        "big_class_method_count": 8,
+        "big_class_member_count": 8,
         "has_user_guide": False,
         "coverage_exclude": ["nodoc", "ug", "supp"],
     },

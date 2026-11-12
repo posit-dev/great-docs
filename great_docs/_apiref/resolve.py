@@ -159,7 +159,14 @@ def _sections_from_package(mod: gf.Module) -> list[SpecSection]:
 
 
 def _to_simple_dict(el: object) -> object:
-    """Recursively convert a spec node tree to a plain-dict representation, suitable for YAML"""
+    """
+    Convert reference nodes to YAML-compatible mappings
+
+    Leave unspecified options out so a later build can still choose their
+    values automatically.
+    """
+    if isinstance(el, SpecOptions):
+        return {name: _to_simple_dict(value) for name, value in el.specified_options().items()}
     if isinstance(el, Walkable):
         return {k: _to_simple_dict(v) for k, v in el.iter_fields()}
     if isinstance(el, (list, tuple)):
@@ -205,6 +212,10 @@ class Resolver:
         self.options: SpecOptions | None = None
         self.dynamic: bool = (
             settings.dynamic if (settings is not None and settings.dynamic is not None) else False
+        )
+        self.members_on_same_page = settings.members_on_same_page if settings is not None else None
+        self.max_members_on_same_page = (
+            settings.max_members_on_same_page if settings is not None else 5
         )
 
     def get_object_or_raise(self, path: str, **kwargs: object) -> gf.Object | gf.Alias:
@@ -356,11 +367,11 @@ class Resolver:
         """
         Resolve selected members on their parent page or separate pages
         """
-        # Member precedence: the member's own name, then `member_options`,
-        # then the parent-derived defaults.
-        member_defaults = SpecOptions(dynamic=dynamic, package=path)
+        # Global placement applies only to top-level entries. Nested members
+        # share their immediate parent's page unless `member_options` sets placement.
+        member_defaults = SpecOptions(dynamic=dynamic, package=path, members_on_same_page=True)
 
-        children: list[object] = []
+        children: list[Doc] = []
         for entry in self._fetch_members(el, obj):
             member_spec = (
                 SpecObject(name=entry)
@@ -376,14 +387,18 @@ class Resolver:
             if member_obj.kind.value == "module":
                 continue
 
-            if not el.members_on_same_page:
-                res: object = MemberPage(path=member_obj.path, contents=[member_doc])
-            else:
-                res = member_doc
+            children.append(member_doc)
 
-            children.append(res)
+        if "members_on_same_page" in el.specified_options():
+            same_page = el.members_on_same_page
+        elif self.members_on_same_page is not None:
+            same_page = self.members_on_same_page
+        else:
+            same_page = len(children) <= self.max_members_on_same_page
 
-        return children
+        if same_page:
+            return list(children)
+        return [MemberPage(path=child.obj.path, contents=[child]) for child in children]
 
     def _fetch_members(self, el: SpecObject, obj: gf.Object | gf.Alias) -> list[str]:
         """Fetch the member paths to document for a given `SpecObject` element and its resolved object"""

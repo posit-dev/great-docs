@@ -6,7 +6,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from dataclasses import fields as dc_fields
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
+
+from .._config_compat import normalise_member_placement
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -62,6 +64,10 @@ class Settings:
     parser: str = "numpy"
     callable_signatures: CallableSignatures = field(default_factory=CallableSignatures)
     dynamic: bool | None = None
+    members_on_same_page: bool | None = None
+    """Same-page override for top-level entries, or `None` to use the member limit"""
+    max_members_on_same_page: int = 5
+    """Automatic limit on documented direct members sharing their parent page"""
     source_dir: str | None = None
     dir: str = "reference"
     out_index: str = "index.qmd"
@@ -76,6 +82,17 @@ class Settings:
     """The reference language as a BCP 47 tag"""
     source_links: SourceLinks = field(default_factory=SourceLinks)
     """The source-link destinations for documented objects"""
+
+    def __post_init__(self) -> None:
+        """
+        Validate global member placement settings
+        """
+        same_page = cast("object", self.members_on_same_page)
+        if same_page is not None and not isinstance(same_page, bool):
+            raise ValueError("Global `members_on_same_page` must be true, false or null.")
+        maximum = cast("object", self.max_members_on_same_page)
+        if isinstance(maximum, bool) or not isinstance(maximum, int) or maximum < 0:
+            raise ValueError("`max_members_on_same_page` must be a non-negative integer.")
 
     @classmethod
     def make(
@@ -101,6 +118,7 @@ class Settings:
         :
             Settings with the supplied generation options, language and source links.
         """
+        block = normalise_member_placement(block, default_limit=cls.max_members_on_same_page)
         kwargs: dict[str, Any] = {
             k: block[k]
             for k in _SETTINGS_KEYS

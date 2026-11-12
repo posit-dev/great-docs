@@ -1,21 +1,18 @@
 """
-gdtest_inline_threshold — Tests inline_methods: 10 (custom numeric threshold).
+Automatic member placement with a limit of ten
 
-Dimensions: K54
-Focus: When inline_methods is set to a custom integer (10), classes with
-≤10 methods stay inline while classes with >10 methods get split into
-separate method pages.
+Keep CompactClient's eight methods together and give FullClient's twelve methods separate pages.
 """
 
 SPEC = {
     "name": "gdtest_inline_threshold",
-    "description": "Tests inline_methods: 10 (custom numeric threshold)",
+    "description": "Places class members automatically with max_members_on_same_page: 10",
     "dimensions": ["K54"],
     "pyproject_toml": {
         "project": {
             "name": "gdtest-inline-threshold",
             "version": "0.1.0",
-            "description": "Test package for inline_methods: 10",
+            "description": "Automatic member placement with a limit of ten",
         },
         "build-system": {
             "requires": ["setuptools"],
@@ -23,11 +20,11 @@ SPEC = {
         },
     },
     "config": {
-        "inline_methods": 10,
+        "max_members_on_same_page": 10,
     },
     "files": {
         "gdtest_inline_threshold/__init__.py": '''\
-            """Package testing inline_methods: 10 (custom threshold)."""
+            """Automatic member placement with a limit of ten"""
 
             __version__ = "0.1.0"
             __all__ = ["CompactClient", "FullClient", "connect"]
@@ -373,9 +370,8 @@ SPEC = {
         "README.md": """\
             # gdtest-inline-threshold
 
-            Package testing `inline_methods: 10`. CompactClient (8 methods)
-            stays inline while FullClient (12 methods) gets split to
-            separate pages.
+            Set `max_members_on_same_page: 10` to keep `CompactClient`'s 8 methods
+            on its class page. Each of `FullClient`'s 12 methods gets a separate page.
         """,
     },
     "expected": {
@@ -384,11 +380,11 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["CompactClient", "FullClient", "connect"],
         "num_exports": 3,
-        "section_titles": ["Classes", "FullClient Methods", "Functions"],
+        "section_titles": ["Classes", "Functions"],
         "big_class_name": "FullClient",
-        "big_class_method_count": 12,
+        "big_class_member_count": 12,
         "inline_class_name": "CompactClient",
-        "inline_class_method_count": 8,
+        "same_page_member_count": 8,
         "has_user_guide": False,
         "coverage_exclude": ["nodoc", "ug", "supp", "hdg"],
     },

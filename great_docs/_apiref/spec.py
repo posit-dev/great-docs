@@ -78,8 +78,8 @@ class SpecOptions(Walkable):
     def __init__(self, **kwargs: object) -> None:
         if "inline_methods" in kwargs:
             raise ValueError(
-                "Use `members_on_same_page` on reference entries. "
-                "Use `inline_methods` only as a global setting."
+                "Per-entry `inline_methods` is unsupported. Use `members_on_same_page` "
+                "to choose member placement."
             )
         if "children" in kwargs:
             raise ValueError(
@@ -90,6 +90,8 @@ class SpecOptions(Walkable):
             kwargs["members_on_same_page"], bool
         ):
             raise ValueError("Per-entry `members_on_same_page` must be true or false.")
+        if isinstance(member_options := kwargs.get("member_options"), dict):
+            kwargs["member_options"] = SpecOptions(**cast("dict[str, object]", member_options))
         # Custom __init__ to record which fields the caller supplied explicitly.
         # Subclasses must be decorated with `@dataclass(init=False)`; a plain
         # `@dataclass` regenerates `__init__` and leaves `_fields_specified`
@@ -114,6 +116,12 @@ class SpecOptions(Walkable):
         validate_dynamic(self.dynamic, allow_none=True)
         _validate_members(self.members, kwargs.get("name"))
 
+    def specified_options(self) -> dict[str, object]:
+        """
+        Return explicitly supplied option names and their current values
+        """
+        return {name: getattr(self, name) for name in self._fields_specified}
+
     def replace(self, **changes: object) -> Self:
         """Return a copy with the given fields replaced
 
@@ -128,6 +136,9 @@ class SpecOptions(Walkable):
             changes["members_on_same_page"], bool
         ):
             raise ValueError("Per-entry `members_on_same_page` must be true or false.")
+
+        if isinstance(member_options := changes.get("member_options"), dict):
+            changes["member_options"] = SpecOptions(**cast("dict[str, object]", member_options))
 
         new = self.copy()
         for name, value in changes.items():

@@ -967,6 +967,45 @@ class TestCheckConfigKeys:
         _check_config_keys(user_config, result)
         return result.issues
 
+    @pytest.mark.parametrize(
+        "value,replacement",
+        [
+            (True, "`members_on_same_page`"),
+            (False, "`members_on_same_page`"),
+            (0, "`max_members_on_same_page`"),
+            (7, "`max_members_on_same_page`"),
+            (None, "`members_on_same_page` or `max_members_on_same_page`"),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "new_settings",
+        [
+            {},
+            {"members_on_same_page": True},
+            {"max_members_on_same_page": 2},
+            {"members_on_same_page": False, "max_members_on_same_page": 0},
+        ],
+    )
+    def test_inline_methods_is_reported_even_when_overridden(
+        self, value: object, replacement: str, new_settings: dict[str, object]
+    ) -> None:
+        """
+        Report the legacy key whenever it appears in the authored global configuration
+        """
+        [issue] = self._issues({"inline_methods": value, **new_settings})
+        assert (issue.check, issue.severity, issue.symbol) == (
+            "config-key",
+            "warning",
+            "inline_methods",
+        )
+        assert issue.message == f"Replace `inline_methods` with {replacement}."
+
+    def test_member_placement_keys_are_not_reported(self) -> None:
+        """
+        Accept the current placement keys without a legacy-key diagnostic
+        """
+        assert self._issues({"members_on_same_page": True, "max_members_on_same_page": 2}) == []
+
     def test_site_language_names_site_lang(self):
         [issue] = self._issues({"site": {"language": "fr"}})
         assert (issue.check, issue.severity, issue.symbol) == (
@@ -2273,3 +2312,40 @@ class TestCheckFrontMatter:
 
     def test_ignores_keys_that_quarto_validates(self, tmp_path: Path):
         assert self._issues(tmp_path, {"01-quarto.qmd": "title: [a]\nformat: 3\n"}) == []
+
+
+@pytest.mark.parametrize(
+    "legacy_value,replacement",
+    [
+        (True, "members_on_same_page"),
+        (False, "members_on_same_page"),
+        (7, "max_members_on_same_page"),
+    ],
+)
+@pytest.mark.parametrize(
+    "new_settings",
+    [{}, {"members_on_same_page": True, "max_members_on_same_page": 0}],
+)
+def test_config_only_lint_reports_legacy_member_placement_without_building(
+    tmp_path: Path, legacy_value: bool | int, replacement: str, new_settings: dict[str, object]
+) -> None:
+    """
+    Warn about the authored legacy key without loading a package or generating reference pages
+    """
+    (tmp_path / "great-docs.yml").write_text(
+        json.dumps({"inline_methods": legacy_value, **new_settings}), encoding="utf-8"
+    )
+    with (
+        patch("great_docs._checks.lint.Exports.package") as load_package,
+        patch("great_docs._apiref.api_reference.APIReference.build") as build_reference,
+        pytest.warns(UserWarning, match="inline_methods"),
+    ):
+        result = run_lint(tmp_path, checks={"config"})
+
+    load_package.assert_not_called()
+    build_reference.assert_not_called()
+    assert result.status == "warn"
+    assert [(issue.check, issue.symbol) for issue in result.issues] == [
+        ("config-key", "inline_methods")
+    ]
+    assert result.issues[0].message == f"Replace `inline_methods` with `{replacement}`."

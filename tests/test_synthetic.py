@@ -26,6 +26,8 @@ from pathlib import Path
 import pytest
 
 from great_docs import Config, GreatDocs
+from great_docs._apiref.api_reference import APIReference
+from great_docs._apiref.content import MemberPage
 from great_docs._build import content as build_content
 from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
@@ -274,8 +276,10 @@ def test_L1_section_generation(pkg_name: str, tmp_path: Path):
 
 
 @pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
-def test_L1_big_class_method_section(pkg_name: str, tmp_path: Path):
-    """Classes with >5 methods get a separate method section."""
+def test_L1_big_class_member_pages(pkg_name: str, tmp_path: Path) -> None:
+    """
+    Resolve large-class members to linked pages without companion index sections
+    """
     pkg_dir, spec = _make_package(pkg_name, tmp_path)
     expected = spec.get("expected", {})
     if "big_class_name" not in expected:
@@ -285,49 +289,31 @@ def test_L1_big_class_method_section(pkg_name: str, tmp_path: Path):
     module_name = expected.get("detected_module", pkg_name)
     sections = make_exports(docs).sections(module_name)
     assert sections is not None
-
     big_class = expected["big_class_name"]
-    method_section_title = f"{big_class} Methods"
+    assert not any(section["title"] == f"{big_class} Methods" for section in sections)
 
-    # The class entry should have members: []
-    class_section = next((s for s in sections if s["title"] == "Classes"), None)
-    if class_section is None:
-        # Look for the class in any section
-        class_entry = None
-        for s in sections:
-            for c in s.get("contents", []):
-                if isinstance(c, dict) and c.get("name") == big_class:
-                    class_entry = c
-                    break
-        if class_entry is not None:
-            assert class_entry.get("members") == [], (
-                f"{big_class} should have members: [], got {class_entry}"
-            )
-    else:
-        class_entry = next(
-            (
-                c
-                for c in class_section["contents"]
-                if isinstance(c, dict) and c.get("name") == big_class
-            ),
-            None,
-        )
-        assert class_entry is not None, f"{big_class} not found in Classes section"
-        assert class_entry.get("members") == [], (
-            f"{big_class} should have members: [], got {class_entry}"
-        )
-
-    # There should be a separate method section
-    method_section = next((s for s in sections if s["title"] == method_section_title), None)
-    assert method_section is not None, (
-        f"No '{method_section_title}' section found. Sections: {[s['title'] for s in sections]}"
+    ref = APIReference(
+        {
+            "package": module_name,
+            "parser": docs._config.parser,
+            "dynamic": False,
+            "members_on_same_page": docs._config.members_on_same_page,
+            "max_members_on_same_page": docs._config.max_members_on_same_page,
+            "sections": sections,
+        }
     )
-
-    if "big_class_method_count" in expected:
-        assert len(method_section["contents"]) == expected["big_class_method_count"], (
-            f"Expected {expected['big_class_method_count']} methods, "
-            f"got {len(method_section['contents'])}: {method_section['contents']}"
-        )
+    parent = next(
+        doc
+        for section in ref.resolved
+        for page in section.contents
+        for doc in page.contents
+        if doc.name == big_class
+    )
+    assert parent.members
+    assert all(isinstance(member, MemberPage) for member in parent.members)
+    assert len(parent.members) == expected["big_class_member_count"]
+    page_paths = {page.path for page in ref.manifest.pages}
+    assert all(member.path in page_paths for member in parent.members)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

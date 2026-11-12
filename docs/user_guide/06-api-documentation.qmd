@@ -116,124 +116,60 @@ listing items there. The `exclude` setting only affects what `great-docs init` d
 generating your initial config. Between the built-in exclusions and the explicit list, you can keep
 the reference focused on the symbols your users actually need.
 
-## Smart Method Handling
+## Member Page Placement {#smart-method-handling}
 
-Large classes with many methods can create overwhelming documentation. Great Docs handles this
-intelligently by separating methods into their own pages when a class exceeds a threshold.
+For each top-level reference entry, Great Docs counts the direct members that will be documented.
+Depending on the object, these can include methods, attributes, functions and nested classes.
+Great Docs counts after selection, filtering and documentation hooks. A nested class counts
+once; its descendants do not add to the parent's count.
 
-### Default Behavior
+### Global policy
 
-By default, classes with **more than 5 methods** are split: the class itself gets one page, and each
-method gets its own page in a companion "Methods" section. Classes with 5 or fewer methods keep
-their methods inline on the class page.
-
-### Configuring the Threshold
-
-You can control this behavior with the `inline_methods` setting in `great-docs.yml`:
+By default, up to five selected members appear on their parent page. For larger selections,
+each member gets its own page and the parent's summary table links to it.
 
 ```{.yaml filename="docs/great-docs.yml"}
-# Keep the default (split above 5 methods)
-inline_methods: 5
-
-# Custom threshold: split above 10 methods
-inline_methods: 10
-
-# Always inline: never split methods to separate pages
-inline_methods: true
-
-# Always split: every class gets separate method pages
-inline_methods: false
+members_on_same_page: null   # Use the automatic limit (default)
+max_members_on_same_page: 5  # Split only when the selected count is greater than five
 ```
 
-| Value | Behavior |
-| --- | --- |
-| `true` | Methods always stay inline on the class page, regardless of count |
-| `false` | Methods always get their own pages (even for classes with 1–2 methods) |
-| Integer `N` | Methods stay inline for classes with ≤N methods; classes with >N get split (default: `5`) |
+Set `members_on_same_page` to `true` to keep members on their parent page, or `false` to give each
+member its own page. Either boolean overrides the automatic limit. The limit accepts non-negative
+integers; `0` splits every non-empty selection. An omitted or `null` global value uses the limit.
 
-### Member placement
+### Per-entry placement
 
-Set `members_on_same_page` on a reference entry to choose where its members are documented:
+Set `members_on_same_page` on an individual reference entry to override global placement:
 
 ```{.yaml filename="docs/great-docs.yml"}
 reference:
   - title: Classes
     contents:
       - name: DataProcessor
+        members: [load, summary]
         members_on_same_page: false
 ```
 
-The option accepts only `true` or `false`. Set it to `true` to document members on their
-parent page, or to `false` to generate separate member pages. The parent page links to
-separate pages in a summary table. This choice overrides the global policy for class
-methods and creates no companion "Methods" section. Use `members` to select which members
-to document.
+`members` selects which names to document; `members_on_same_page` chooses their pages. An explicit
+member list selects those names directly. Automatic selection applies the entry's supported
+filters. An `api-reference` block also exposes filters for private, inherited, imported or empty
+members and for object kinds. In `great-docs.yml`, `members: false` excludes member documentation
+regardless of placement.
 
-For dictionary entries in `great-docs.yml`, omitting `members_on_same_page` inherits the
-global policy for class methods, which uses the class's discovered method count. An explicit
-`members: false` still excludes members. Raw `api-reference` blocks have no global Great Docs
-policy and keep members on their parent page by default.
+Placement follows this order:
 
-Replace `children` in existing Quarto reference blocks with `members_on_same_page` for
-placement or `members` for selection.
+1. Use an explicit per-entry `members_on_same_page` boolean.
+2. Use an explicit global `members_on_same_page` boolean.
+3. Keep members together when their selected count is at most `max_members_on_same_page`.
 
-The examples below show what Great Docs generates in `_quarto.yml`. This file is regenerated on
-every build, so don't edit it by hand. Use `inline_methods` in `great-docs.yml` to control the
-behavior and let the build produce the right output.
+Global settings govern top-level reference entries. Nested members stay on their immediate
+parent's page by default. In an `api-reference` block, set `member_options` to choose nested
+placement explicitly. The block also accepts the global policy settings.
 
-### Small Classes (≤ threshold)
+### Reference navigation
 
-When a class has fewer methods than the threshold, all of its methods appear directly on the class
-page. Readers see everything in one place without navigating between pages. In the generated
-`_quarto.yml`, the class is listed as a simple entry:
-
-```{.yaml filename="_quarto.yml"}
-sections:
-  - title: Classes
-    contents:
-      - MySmallClass  # Methods shown inline
-```
-
-This keeps the sidebar compact and works well for classes where the full method list fits
-comfortably on a single page.
-
-### Large Classes (> threshold)
-
-When a class exceeds the threshold, Great Docs automatically splits it in the generated
-`_quarto.yml`. The methods are pulled out into a dedicated "Methods" section with individual pages,
-and the class entry suppresses inline method documentation so readers aren't overwhelmed:
-
-```{.yaml filename="_quarto.yml"}
-sections:
-  - title: Classes
-    contents:
-      - name: MyLargeClass
-        members: []  # Suppresses inline methods
-
-  - title: MyLargeClass Methods
-    desc: Methods for the MyLargeClass class
-    contents:
-      - MyLargeClass.method_one
-      - MyLargeClass.method_two
-      # ... all methods listed individually
-```
-
-Each method gets its own sidebar entry and its own page, making it easier to link to specific
-methods and to find them through search.
-
-### When to Adjust
-
-The right setting depends on how users interact with your API documentation:
-
-- set `inline_methods: true` if your classes have many methods but users typically need to see them
-all at once (e.g., configuration objects, builder patterns).
-- set `inline_methods: false` if every method deserves its own discoverable page (e.g., a large
-framework API where methods are searched individually).
-- set a higher number (e.g., `10` or `15`) if your classes tend to have moderate method counts and the
-default of `5` splits too aggressively.
-
-When in doubt, start with the default and adjust once you see how your rendered documentation feels
-to navigate.
+A parent page's summary table links to its member pages. The class or module stays in its
+existing reference section. Splitting creates no companion "Methods" sections in the index.
 
 ## Callable Signatures
 
@@ -282,7 +218,6 @@ is the full set of possible sections:
 | **Constants** | Module-level constants and data |
 | **Type Aliases** | Type alias definitions |
 | **Other** | Additional exports |
-| **[ClassName] Methods** | Created for classes exceeding the `inline_methods` threshold |
 
 A typical package might only produce a few of these (e.g., Classes, Functions, and Constants). The
 section structure is automatically tailored to your package's contents.

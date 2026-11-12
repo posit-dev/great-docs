@@ -1,5 +1,5 @@
 """
-Reference member placement and rejection of unsupported options
+Member selection and placement through authored reference configuration
 """
 
 from __future__ import annotations
@@ -65,27 +65,26 @@ def test_entry_members_on_same_page_overrides_inherited_options() -> None:
     )
 
 
-def test_entry_rejects_global_threshold_name() -> None:
+def test_entry_rejects_global_compatibility_key() -> None:
     """
-    Reject a global setting used on an individual reference entry
+    Reject `inline_methods` on an individual reference entry
     """
-    with pytest.raises(ValueError, match="members_on_same_page.*inline_methods.*global"):
+    with pytest.raises(ValueError, match="members_on_same_page"):
         SpecObject(name="Widget", inline_methods=False)
 
 
 @pytest.mark.parametrize("discovery", [False, True])
 @pytest.mark.parametrize("members", [True, False, ["load"]])
 def test_reference_translators_keep_members_on_same_page(
-    tmp_path: Path, discovery: bool, members: bool | list[str]
+    discovery: bool, members: bool | list[str]
 ) -> None:
     """
     Preserve explicit page placement alongside member selection
     """
-    config = GreatDocs(project_path=str(tmp_path))._config
     entry = {"name": "DataProcessor", "members": members, "members_on_same_page": False}
     authored = [{"title": "API", "contents": [entry]}]
     result = (
-        sections.from_explicit_config(config, authored, {})
+        sections.from_explicit_config(authored, {})
         if discovery
         else sections.from_reference_config(authored)
     )
@@ -96,44 +95,45 @@ def test_reference_translators_keep_members_on_same_page(
 
 
 @pytest.mark.parametrize("discovery", [False, True])
-def test_reference_translators_reject_children(tmp_path: Path, discovery: bool) -> None:
+def test_reference_translators_reject_children(discovery: bool) -> None:
     """
     Reject `children` in the authored reference configuration
     """
-    config = GreatDocs(project_path=str(tmp_path))._config
     authored = [{"title": "API", "contents": [{"name": "Widget", "children": "linked"}]}]
     with pytest.raises(ValueError, match="children.*members_on_same_page.*members"):
         if discovery:
-            sections.from_explicit_config(config, authored, {})
+            sections.from_explicit_config(authored, {})
         else:
             sections.from_reference_config(authored)
 
 
 @pytest.mark.parametrize("discovery", [False, True])
-def test_reference_translators_reject_global_threshold_name(
-    tmp_path: Path, discovery: bool
-) -> None:
+def test_reference_translators_reject_global_compatibility_key(discovery: bool) -> None:
     """
-    Reject `inline_methods` on an individual reference entry
+    Reject `inline_methods` in individual reference entries
     """
-    config = GreatDocs(project_path=str(tmp_path))._config
     authored = [{"title": "API", "contents": [{"name": "Widget", "inline_methods": False}]}]
-    with pytest.raises(ValueError, match="members_on_same_page.*inline_methods.*global"):
+    with pytest.raises(ValueError, match="members_on_same_page"):
         if discovery:
-            sections.from_explicit_config(config, authored, {})
+            sections.from_explicit_config(authored, {})
         else:
             sections.from_reference_config(authored)
 
 
 @pytest.mark.parametrize("members_on_same_page", [True, False, None])
-@pytest.mark.parametrize("global_policy", [True, False, 5, 10])
+@pytest.mark.parametrize(
+    "global_placement,limit,automatic_same_page",
+    [(None, 1, False), (None, 2, True), (True, 0, True), (False, 100, False)],
+)
 @pytest.mark.parametrize("members", [False, ["load", "summary"]])
 @pytest.mark.parametrize("dynamic", [False, True])
 def test_authored_yaml_places_synthetic_methods_on_requested_pages(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     members_on_same_page: bool | None,
-    global_policy: bool | int,
+    global_placement: bool | None,
+    limit: int,
+    automatic_same_page: bool,
     members: bool | list[str],
     dynamic: bool,
 ) -> None:
@@ -154,7 +154,8 @@ def test_authored_yaml_places_synthetic_methods_on_requested_pages(
         package_root,
         {
             "dynamic": dynamic,
-            "inline_methods": global_policy,
+            "members_on_same_page": global_placement,
+            "max_members_on_same_page": limit,
             "reference": [{"title": "API", "contents": [entry]}],
         },
     )
@@ -165,11 +166,7 @@ def test_authored_yaml_places_synthetic_methods_on_requested_pages(
     prepare_build_directory(docs, run)
     configured_entry = run.api_block["sections"][0]["contents"][0]
     if members_on_same_page is None:
-        derived_split = members is not False and global_policy is not True and global_policy != 10
-        if derived_split:
-            assert configured_entry["members_on_same_page"] is False
-        else:
-            assert "members_on_same_page" not in configured_entry
+        assert "members_on_same_page" not in configured_entry
     monkeypatch.chdir(docs.layout.build_dir)
     outcome, ref = reference.api(run, docs._config, docs.layout, BuildLog(stream=io.StringIO()))
 
@@ -187,9 +184,7 @@ def test_authored_yaml_places_synthetic_methods_on_requested_pages(
         entry for entry in entries if entry.name == "gdtest_big_class.DataProcessor.load"
     )
     expected_same_page = (
-        members_on_same_page
-        if members_on_same_page is not None
-        else global_policy is True or global_policy == 10
+        members_on_same_page if members_on_same_page is not None else automatic_same_page
     )
     if expected_same_page:
         assert method_pages == set()

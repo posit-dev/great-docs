@@ -21271,9 +21271,6 @@ def test_parse_dunder_all_dotted_name():
         assert "Beta" in exports
 
 
-# ── inline_methods integration tests ─────────────────────────────────────────
-
-
 # ── Package Info Page ──────────────────────────────────────────────────────
 
 
@@ -21363,68 +21360,60 @@ def test_announcement_position_defaults_above_in_meta_tag():
 
 
 def test_build_reference_yaml_classes_and_functions():
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        categories = {
-            "classes": ["Beta", "Alpha"],
-            "functions": ["helper"],
-            "class_methods": {"Alpha": 0, "Beta": 0},
-            "class_method_names": {},
-        }
-        result = reference_block.reference_yaml(docs._config, categories)
-        assert result.startswith("reference:")
-        assert "  - title: Classes" in result
-        assert "      - Alpha" in result  # sorted
-        assert "  - title: Functions" in result
-        assert "      - helper" in result
+    categories = {
+        "classes": ["Beta", "Alpha"],
+        "functions": ["helper"],
+        "class_methods": {"Alpha": 0, "Beta": 0},
+        "class_method_names": {},
+    }
+    result = reference_block.reference_yaml(categories)
+    assert result.startswith("reference:")
+    assert "  - title: Classes" in result
+    assert "      - Alpha" in result  # sorted
+    assert "  - title: Functions" in result
+    assert "      - helper" in result
 
 
-def test_build_reference_yaml_large_class_split():
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        categories = {
-            "classes": ["Big"],
-            "class_methods": {"Big": 42},
-            "class_method_names": {"Big": ["a", "b"]},
-        }
-        result = reference_block.reference_yaml(docs._config, categories)
-        assert "members: false" in result
-        assert "  - title: Big Methods" in result
-        assert "      - Big.a" in result
+def test_build_reference_yaml_large_class_defers_member_placement():
+    categories = {
+        "classes": ["Big"],
+        "class_methods": {"Big": 42},
+        "class_method_names": {"Big": ["a", "b"]},
+    }
+    result = reference_block.reference_yaml(categories)
+    assert "      - Big  # 42 method(s)" in result
+    assert "members: false" not in result
+    assert "Big Methods" not in result
 
 
 def test_build_reference_yaml_separates_class_like_sections_with_a_blank_line():
     """Verify that a blank line separates class and protocol YAML sections"""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        categories = {
-            "classes": ["Alpha"],
-            "protocols": ["Proto"],
-            "class_methods": {},
-            "class_method_names": {},
-        }
-        result = reference_block.reference_yaml(docs._config, categories)
-        assert "      - Alpha\n\n  - title: Protocols" in result
+    categories = {
+        "classes": ["Alpha"],
+        "protocols": ["Proto"],
+        "class_methods": {},
+        "class_method_names": {},
+    }
+    result = reference_block.reference_yaml(categories)
+    assert "      - Alpha\n\n  - title: Protocols" in result
 
 
 def test_build_reference_yaml_notes_method_count_of_small_class():
-    """Verify that small classes keep inline methods and a method count"""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        categories = {
-            "classes": ["Small"],
-            "class_methods": {"Small": 2},
-            "class_method_names": {"Small": ["a", "b"]},
-        }
-        result = reference_block.reference_yaml(docs._config, categories)
-        assert "      - Small  # 2 method(s)" in result
-        assert "members: false" not in result
+    """
+    Annotate a class entry with its discovered method count
+    """
+    categories = {
+        "classes": ["Small"],
+        "class_methods": {"Small": 2},
+        "class_method_names": {"Small": ["a", "b"]},
+    }
+    result = reference_block.reference_yaml(categories)
+    assert "      - Small  # 2 method(s)" in result
+    assert "members: false" not in result
 
 
 def test_build_reference_yaml_empty():
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        assert reference_block.reference_yaml(docs._config, {}) == "reference:"
+    assert reference_block.reference_yaml({}) == "reference:"
 
 
 class TestSaveFreezeCacheVersioned:

@@ -34,6 +34,8 @@ from typing import TYPE_CHECKING, cast
 
 from yaml12 import read_yaml
 
+from ._config_compat import normalise_member_placement
+
 if TYPE_CHECKING:
     from typing import Any, TypeAlias
 
@@ -143,12 +145,28 @@ class Config:
                     )
                 else:
                     self._user_config = cast("ConfigDict", user_config)
-                    # Deep merge user config with defaults
-                    config = self._merge(config, self._normalize_legacy_keys(self._user_config))
             except ValueError as e:
                 print(f"Warning: Error parsing great-docs.yml: {e}")
             except OSError as e:
                 print(f"Warning: Could not read great-docs.yml: {e}")
+
+        normalised = normalise_member_placement(
+            self._user_config,
+            default_limit=cast("int", DEFAULT_CONFIG["max_members_on_same_page"]),
+        )
+        config = self._merge(config, self._normalize_legacy_keys(normalised))
+        same_page = config["members_on_same_page"]
+        if same_page is not None and not isinstance(same_page, bool):
+            raise ConfigError(
+                f"{self.config_path}: members_on_same_page: {same_page!r} "
+                "must be true, false or null."
+            )
+        maximum = config["max_members_on_same_page"]
+        if isinstance(maximum, bool) or not isinstance(maximum, int) or maximum < 0:
+            raise ConfigError(
+                f"{self.config_path}: max_members_on_same_page: {maximum!r} "
+                "must be a non-negative integer."
+            )
 
         config = self._normalize_shorthands(config)
         config["parser"] = self._validate_parser(config["parser"], self.config_path)
@@ -1094,27 +1112,19 @@ class Config:
             return cast("ConfigDict", val).get("desc")
         return None
 
-    def should_split_methods(self, method_count: int) -> bool:
-        """Whether a class with this many methods should split them to separate pages.
-
-        Controlled by `inline_methods` in great-docs.yml:
-        - true: never split (always inline)
-        - false: always split
-        - int N: split when method_count > N (default: 5)
-
-        Items with no methods are never split regardless of the setting.
+    @property
+    def members_on_same_page(self) -> bool | None:
         """
-        if method_count == 0:
-            return False
-        val = self["inline_methods"]
-        if val is True:
-            return False
-        if val is False:
-            return True
-        try:
-            return method_count > int(val)
-        except (TypeError, ValueError):
-            return method_count > int(DEFAULT_CONFIG["inline_methods"])
+        Global same-page override, or `None` to use the member limit
+        """
+        return self["members_on_same_page"]
+
+    @property
+    def max_members_on_same_page(self) -> int:
+        """
+        Automatic limit on documented direct members sharing their parent page
+        """
+        return self["max_members_on_same_page"]
 
     @property
     def authors(self) -> list[ConfigDict]:

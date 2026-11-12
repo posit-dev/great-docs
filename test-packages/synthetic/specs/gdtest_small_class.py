@@ -4,7 +4,7 @@ gdtest_small_class — Classes with ≤5 public methods.
 Dimensions: A1, B1, C2, D1, E6, F6, G1, H7
 Focus: 2 classes with 3 methods each, inline method documentation
        (no separate method section). Tests that small classes don't get
-       the "ClassName Methods" treatment.
+       separate member pages.
 """
 
 SPEC = {

@@ -20,8 +20,8 @@ def _configured_entry(item: dict[str, Any]) -> str | dict[str, Any]:
     """
     if "inline_methods" in item:
         raise ValueError(
-            "Use `members_on_same_page` on reference entries. "
-            "Use `inline_methods` only as a global setting."
+            "Per-entry `inline_methods` is unsupported. Use `members_on_same_page` "
+            "to choose member placement."
         )
     if "children" in item:
         raise ValueError(
@@ -122,38 +122,11 @@ def from_categories(config: Config, categories: Categories) -> list[dict[str, An
 
     def _make_class_section(title: str, desc: str, class_names: list[str]) -> list[dict[str, Any]]:
         """
-        Build class sections with separate method lists for large classes
+        Keep documented classes in their API reference category
         """
         if not class_names:
             return []
-
-        class_contents: list[Any] = []
-        separate_methods: list[str] = []
-
-        for class_name in class_names:
-            method_count = categories["class_methods"].get(class_name, 0)
-            if config.should_split_methods(method_count):
-                class_contents.append({"name": class_name, "members": []})
-                separate_methods.append(class_name)
-            else:
-                class_contents.append(class_name)
-
-        result: list[dict[str, Any]] = [{"title": title, "desc": desc, "contents": class_contents}]
-
-        for class_name in separate_methods:
-            method_names = categories["class_method_names"].get(class_name, [])
-            method_count = len(method_names)
-            method_contents = [f"{class_name}.{method}" for method in method_names]
-            result.append(
-                {
-                    "title": f"{class_name} Methods",
-                    "desc": f"Methods for the {class_name} class",
-                    "contents": method_contents,
-                }
-            )
-            print(f"  Created separate section for {class_name} with {method_count} methods")
-
-        return result
+        return [{"title": title, "desc": desc, "contents": list(class_names)}]
 
     sections.extend(
         _make_class_section(
@@ -266,7 +239,7 @@ def from_categories(config: Config, categories: Categories) -> list[dict[str, An
 
 
 def from_explicit_config(
-    config: Config, reference_config: Sequence[object], categories: Categories
+    reference_config: Sequence[object], categories: Categories
 ) -> list[dict[str, Any]] | None:
     """
     Build sections from explicit reference entries and discovered categories
@@ -309,35 +282,16 @@ def from_explicit_config(
             continue
 
         section_contents: list[Any] = []
-        large_classes_in_section: list[str] = []
 
         for item in contents_config:
             if isinstance(item, str):
-                if item in module_members:
-                    for member in module_members[item]:
-                        method_count = categories["class_methods"].get(member, 0)
-                        if config.should_split_methods(method_count):
-                            section_contents.append({"name": member, "members": []})
-                            large_classes_in_section.append(member)
-                        else:
-                            section_contents.append(member)
-                else:
-                    method_count = categories["class_methods"].get(item, 0)
-                    if config.should_split_methods(method_count):
-                        section_contents.append({"name": item, "members": []})
-                        large_classes_in_section.append(item)
-                    else:
-                        section_contents.append(item)
+                section_contents.extend(module_members.get(item, [item]))
             elif isinstance(item, dict):
                 item = cast("dict[str, Any]", item)
                 name = item.get("name", "")
                 if not name:
                     continue
 
-                if "members_on_same_page" not in item and item.get("members", True) is not False:
-                    method_count = categories.get("class_methods", {}).get(name, 0)
-                    if config.should_split_methods(method_count):
-                        item = {**item, "members_on_same_page": False}
                 section_contents.append(_configured_entry(item))
 
         if section_contents:
@@ -352,21 +306,6 @@ def from_explicit_config(
                     "contents": section_contents,
                 }
             )
-
-        for class_name in large_classes_in_section:
-            method_names = categories["class_method_names"].get(class_name, [])
-            if method_names:
-                method_contents = [f"{class_name}.{m}" for m in method_names]
-                sections.append(
-                    {
-                        "title": f"{class_name} Methods",
-                        "desc": f"Methods for the {class_name} class",
-                        "contents": method_contents,
-                    }
-                )
-                print(
-                    f"  Created separate section for {class_name} with {len(method_names)} methods"
-                )
 
     if sections:
         print(f"Generated {len(sections)} section(s) from reference config")

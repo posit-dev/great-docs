@@ -1,21 +1,18 @@
 """
-gdtest_inline_always — Tests inline_methods: true (never split methods).
+Global same-page placement for class members
 
-Dimensions: K55
-Focus: When inline_methods is set to true, no class—regardless of method
-count—gets split into separate method pages. All methods remain inline on
-the class page.
+Keep all eight documented methods on the class page.
 """
 
 SPEC = {
     "name": "gdtest_inline_always",
-    "description": "Tests inline_methods: true (always inline, never split)",
+    "description": "Keeps class members together with members_on_same_page: true",
     "dimensions": ["K55"],
     "pyproject_toml": {
         "project": {
             "name": "gdtest-inline-always",
             "version": "0.1.0",
-            "description": "Test package for inline_methods: true",
+            "description": "Class members kept together by a global override",
         },
         "build-system": {
             "requires": ["setuptools"],
@@ -23,11 +20,11 @@ SPEC = {
         },
     },
     "config": {
-        "inline_methods": True,
+        "members_on_same_page": True,
     },
     "files": {
         "gdtest_inline_always/__init__.py": '''\
-            """Package testing inline_methods: true (never split)."""
+            """Class members kept together by a global override"""
 
             __version__ = "0.1.0"
             __all__ = ["LargeAPI", "create_api"]
@@ -37,7 +34,7 @@ SPEC = {
                 """
                 A class with many methods that would normally be split.
 
-                With inline_methods: true, all methods stay on the class page
+                With `members_on_same_page: true`, all methods stay on the class page
                 regardless of count.
 
                 Parameters
@@ -198,8 +195,8 @@ SPEC = {
         "README.md": """\
             # gdtest-inline-always
 
-            Package testing `inline_methods: true`. LargeAPI has 8 methods but
-            they all stay inline on the class page (no separate method pages).
+            Set `members_on_same_page: true` to keep all 8 of `LargeAPI`'s methods
+            on its class page.
         """,
     },
     "expected": {
@@ -208,7 +205,7 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["LargeAPI", "create_api"],
         "num_exports": 2,
-        # With inline_methods: true, NO "Methods" companion section
+        # With members_on_same_page: true, members stay on their parent page
         "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
         "methods_never_split": True,

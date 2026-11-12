@@ -184,6 +184,7 @@ line-ending = "auto"
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
 include = [
+    "great_docs/_config_compat.py",
     "great_docs/_apiref",
     "great_docs/_build",
     "great_docs/_builtin",

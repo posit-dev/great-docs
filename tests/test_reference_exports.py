@@ -199,10 +199,6 @@ class TestSectionsFromTheReferenceSetting:
 
 
 class TestFromExplicitConfig:
-    @staticmethod
-    def _config():
-        return mock_config(should_split_methods=lambda count: count > 5)
-
     def test_section_without_contents_is_skipped(self):
         """Verify that empty or missing contents exclude a reference section"""
         reference = [
@@ -210,38 +206,31 @@ class TestFromExplicitConfig:
             {"title": "Missing"},
             {"title": "Funcs", "contents": ["helper"]},
         ]
-        result = reference_sections.from_explicit_config(
-            self._config(), reference, empty_categories()
-        )
+        result = reference_sections.from_explicit_config(reference, empty_categories())
         assert result == [{"title": "Funcs", "desc": "", "contents": ["helper"]}]
 
     def test_item_without_name_is_skipped(self):
         """Verify that unnamed items are omitted while named items are retained"""
         reference = [{"title": "Funcs", "contents": [{"members": False}, {"name": "helper"}]}]
-        result = reference_sections.from_explicit_config(
-            self._config(), reference, empty_categories()
-        )
+        result = reference_sections.from_explicit_config(reference, empty_categories())
         assert result == [{"title": "Funcs", "desc": "", "contents": ["helper"]}]
 
-    def test_module_entry_splits_large_class_methods(self):
-        """Verify that module entries give large classes separate method sections"""
+    def test_module_entry_keeps_classes_in_the_authored_section(self):
+        """
+        Preserve expanded module entries without deciding member placement
+        """
         categories = empty_categories()
         categories["classes"] = ["pkg.Big", "pkg.Small"]
         categories["class_methods"] = {"pkg.Big": 8, "pkg.Small": 2}
         categories["class_method_names"] = {"pkg.Big": ["a", "b"]}
         result = reference_sections.from_explicit_config(
-            self._config(), [{"title": "API", "contents": ["pkg"]}], categories
+            [{"title": "API", "contents": ["pkg"]}], categories
         )
         assert result == [
             {
                 "title": "API",
                 "desc": "",
-                "contents": [{"name": "pkg.Big", "members": []}, "pkg.Small"],
-            },
-            {
-                "title": "pkg.Big Methods",
-                "desc": "Methods for the pkg.Big class",
-                "contents": ["pkg.Big.a", "pkg.Big.b"],
+                "contents": ["pkg.Big", "pkg.Small"],
             },
         ]
 
@@ -270,8 +259,10 @@ def test_sections():
     assert has_contents
 
 
-def test_method_section_generation():
-    """Verify that classes with more than five methods get separate method sections"""
+def test_class_sections_leave_member_placement_to_resolution():
+    """
+    Keep classes in one section regardless of their member counts
+    """
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         package_dir = Path(tmp_dir) / "testpkg"
@@ -314,33 +305,8 @@ def some_function():
 
             assert class_section is not None
 
-            # Suppress inline methods when a separate method section documents them.
-            big_class_entry = next(
-                (
-                    c
-                    for c in class_section["contents"]
-                    if isinstance(c, dict) and c.get("name") == "BigClass"
-                ),
-                None,
-            )
-
-            assert big_class_entry is not None
-            assert big_class_entry == {"name": "BigClass", "members": []}
-
-            assert "SmallClass" in class_section["contents"]
-
-            method_section = next((s for s in sections if s["title"] == "BigClass Methods"), None)
-
-            assert method_section is not None
-            assert len(method_section["contents"]) == 7
-            assert "BigClass.method1" in method_section["contents"]
-            assert "BigClass.method7" in method_section["contents"]
-
-            small_method_section = next(
-                (s for s in sections if s["title"] == "SmallClass Methods"), None
-            )
-
-            assert small_method_section is None
+            assert class_section["contents"] == ["BigClass", "SmallClass"]
+            assert all(not section["title"].endswith(" Methods") for section in sections)
 
             func_section = next((s for s in sections if s["title"] == "Functions"), None)
 
@@ -462,8 +428,10 @@ def test_module_class_methods_tracked():
             sys.path.remove(tmp_dir)
 
 
-def test_module_big_class_splitting():
-    """Verify that submodule classes with more than five methods get separate sections"""
+def test_module_class_sections_leave_member_placement_to_resolution():
+    """
+    Keep submodule classes in their category without adding member sections
+    """
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "splitpkg"
@@ -501,26 +469,8 @@ def test_module_big_class_splitting():
             class_section = next((s for s in sections if s["title"] == "Classes"), None)
             assert class_section is not None
 
-            big_class_entry = next(
-                (
-                    c
-                    for c in class_section["contents"]
-                    if isinstance(c, dict) and c.get("name") == "engine.Engine"
-                ),
-                None,
-            )
-            assert big_class_entry is not None
-            assert big_class_entry == {"name": "engine.Engine", "members": []}
-
-            method_section = next(
-                (s for s in sections if s["title"] == "engine.Engine Methods"),
-                None,
-            )
-
-            assert method_section is not None
-            assert len(method_section["contents"]) == 7
-            assert "engine.Engine.start" in method_section["contents"]
-            assert "engine.Engine.park" in method_section["contents"]
+            assert class_section["contents"] == ["engine.Engine"]
+            assert all(not section["title"].endswith(" Methods") for section in sections)
 
             func_section = next((s for s in sections if s["title"] == "Functions"), None)
 
@@ -771,7 +721,9 @@ def test_sections_basic():
 
 
 def test_sections_large_class():
-    """Verify that sections separate classes with more than five methods"""
+    """
+    Keep discovered class entries without adding member sections
+    """
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -790,9 +742,9 @@ def test_sections_large_class():
 
         assert result is not None
         titles = [s["title"] for s in result]
-        assert "BigClass Methods" in titles
-        classes_section = next(s for s in result if s["title"] == "Classes")
-        assert {"name": "BigClass", "members": []} in classes_section["contents"]
+        assert titles == ["Classes"]
+        classes_section = result[0]
+        assert classes_section["contents"] == ["BigClass"]
 
 
 def test_sections_no_exports():
@@ -1329,7 +1281,6 @@ def test_sections_from_reference_basic():
                     {"title": "Classes", "contents": ["ClassA"]},
                     {"title": "Functions", "contents": ["func_b"]},
                 ],
-                should_split_methods=lambda n: n > 5,
             )
 
             with (
@@ -1352,7 +1303,9 @@ def test_sections_from_reference_basic():
 
 
 def test_sections_from_reference_large_class():
-    """Verify that configured classes with more than five methods get a method section"""
+    """
+    Preserve an authored class entry without generating companion sections
+    """
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "lgpkg"
@@ -1370,7 +1323,6 @@ def test_sections_from_reference_large_class():
                 reference=[
                     {"title": "Classes", "contents": ["BigClass"]},
                 ],
-                should_split_methods=lambda n: n > 5,
             )
 
             with (
@@ -1381,7 +1333,8 @@ def test_sections_from_reference_large_class():
             assert result is not None
 
             titles = [s["title"] for s in result]
-            assert "BigClass Methods" in titles
+            assert titles == ["Classes"]
+            assert result[0]["contents"] == ["BigClass"]
         finally:
             sys.path.remove(tmp_dir)
 
@@ -1409,7 +1362,6 @@ def test_sections_from_reference_dict_items():
                         ],
                     },
                 ],
-                should_split_methods=lambda n: n > 5,
             )
 
             with (
@@ -1456,7 +1408,6 @@ def test_sections_from_reference_explicit_members_passthrough():
                         ],
                     },
                 ],
-                should_split_methods=lambda n: n > 5,
             )
 
             with (
@@ -1503,7 +1454,6 @@ def test_sections_from_reference_include_inherited():
                         ],
                     },
                 ],
-                should_split_methods=lambda n: n > 5,
             )
 
             with (
@@ -1719,136 +1669,6 @@ def test_categorise_cyclic_alias():
             sys.modules.pop("cyclicpkg2", None)
 
 
-def test_sections_from_reference_inline_methods_true_never_splits():
-    """Verify that `inline_methods: true` keeps methods inline regardless of class size"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "inlinepkg"
-        pkg_dir.mkdir()
-        methods = "\n".join(f"    def method{i}(self): pass\n" for i in range(10))
-        (pkg_dir / "__init__.py").write_text(
-            f'class BigClass:\n    """Big."""\n{methods}',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._config = mock_config(
-                reference=[
-                    {"title": "Classes", "contents": ["BigClass"]},
-                ],
-                should_split_methods=lambda n: False,  # never split
-            )
-
-            with (
-                patch.object(Exports, "names", return_value=["BigClass"]),
-            ):
-                result = make_exports(docs).sections("inlinepkg")
-
-            assert result is not None
-            titles = [s["title"] for s in result]
-            assert "BigClass Methods" not in titles
-            classes_section = next(s for s in result if s["title"] == "Classes")
-            assert "BigClass" in classes_section["contents"]
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_sections_from_reference_inline_methods_false_always_splits():
-    """Verify that `inline_methods: false` separates methods even for small classes"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "splitforcepkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            textwrap.dedent("""\
-            class SmallClass:
-                \"\"\"Small class with documented methods.\"\"\"
-
-                def method_a(self) -> str:
-                    \"\"\"
-                    Perform action A.
-
-                    Returns
-                    -------
-                    str
-                        The result.
-                    \"\"\"
-                    return "a"
-
-                def method_b(self) -> str:
-                    \"\"\"
-                    Perform action B.
-
-                    Returns
-                    -------
-                    str
-                        The result.
-                    \"\"\"
-                    return "b"
-            """),
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._config = mock_config(
-                reference=[
-                    {"title": "Classes", "contents": ["SmallClass"]},
-                ],
-                should_split_methods=lambda n: n > 0,  # always split
-            )
-
-            with (
-                patch.object(Exports, "names", return_value=["SmallClass"]),
-            ):
-                result = make_exports(docs).sections("splitforcepkg")
-
-            assert result is not None
-            titles = [s["title"] for s in result]
-            assert "SmallClass Methods" in titles
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_sections_from_reference_inline_methods_custom_threshold():
-    """Verify that `inline_methods: 10` keeps a class with eight methods inline"""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "threshpkg"
-        pkg_dir.mkdir()
-        methods = "\n".join(f"    def method{i}(self): pass\n" for i in range(8))
-        (pkg_dir / "__init__.py").write_text(
-            f'class MediumClass:\n    """Medium."""\n{methods}',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._config = mock_config(
-                reference=[
-                    {"title": "Classes", "contents": ["MediumClass"]},
-                ],
-                should_split_methods=lambda n: n > 10,  # threshold=10
-            )
-
-            with (
-                patch.object(Exports, "names", return_value=["MediumClass"]),
-            ):
-                result = make_exports(docs).sections("threshpkg")
-
-            assert result is not None
-            titles = [s["title"] for s in result]
-            assert "MediumClass Methods" not in titles
-            classes_section = next(s for s in result if s["title"] == "Classes")
-            assert "MediumClass" in classes_section["contents"]
-        finally:
-            sys.path.remove(tmp_dir)
-
-
 class TestSectionsFromReference:
     """Sections built from the reference setting"""
 
@@ -1895,8 +1715,10 @@ class TestSectionsFromReference:
 class TestSectionsFromReferenceMore:
     """More sections built from the reference setting"""
 
-    def test_large_class_gets_companion_section(self):
-        """Verify that a configured class with more than five methods gets a method section"""
+    def test_large_class_stays_in_its_authored_section(self):
+        """
+        Preserve the authored section when a class has many documented members
+        """
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp = Path(tmp_dir)
             pkg_name = "bigclasspkg"
@@ -1932,9 +1754,7 @@ class TestSectionsFromReferenceMore:
                     if k.startswith(pkg_name):
                         del sys.modules[k]
             if result is not None:
-                assert len(result) >= 2
-                titles = [s["title"] for s in result]
-                assert "BigClass Methods" in titles
+                assert result == [{"title": "Core", "desc": "", "contents": ["BigClass"]}]
 
     def test_dict_item_with_members_false(self):
         """Verify that configured `members: false` produces an empty member list"""

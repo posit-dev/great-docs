@@ -384,8 +384,8 @@ csl: null
 #     desc: "Main classes for working with the package"
 #     contents:
 #       - name: MyClass
-#         members: false       # Don't document methods here
-#       - SimpleClass          # Methods documented inline (default)
+#         members: false       # Exclude member documentation
+#       - SimpleClass          # Use the member placement policy
 #
 #   - title: "Utility Functions"
 #     desc: "Helper functions for common tasks"
@@ -394,14 +394,18 @@ csl: null
 #       - another_func
 reference: []
 
-# Inline Methods
-# --------------
-# Whether class methods get their own pages or stay inline.
-# : 5 - (default) inline up to 5 methods, split above that
-# : true - always inline
-# : false - always split
-# : type(int) - inline up to N methods, split above N
-inline_methods: 5
+# Member Page Placement
+# ---------------------
+# Place the selected direct members of top-level reference entries.
+# : null - (default) use max_members_on_same_page
+# : true - document members on their parent page
+# : false - document each selected member on a separate page
+members_on_same_page: null
+
+# Limit how many documented direct members share their parent page automatically.
+# : 5 - (default) split when more than five members are documented
+# : type(int) - a non-negative limit; zero splits every non-empty member list
+max_members_on_same_page: 5
 
 # Logo & Favicon
 # --------------
