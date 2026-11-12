@@ -150,7 +150,7 @@ SPEC = {
         ),
     },
     "expected": {
-        "detected_name": "gdtest_sec_blog_user_index",
+        "detected_name": "gdtest-sec-blog-user-index",
         "has_reference": True,
         "all_names": ["publish", "draft"],
         "ref_pages": ["publish.html", "draft.html"],

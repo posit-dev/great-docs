@@ -323,7 +323,7 @@ SPEC = {
             "parse_template",
         ],
         "num_exports": 4,
-        "section_titles": ["Classes", "Functions"],
+        "section_titles": ["الفئات", "الدوال"],
         "has_user_guide": True,
         "user_guide_files": [
             "01-overview.qmd",

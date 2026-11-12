@@ -216,7 +216,7 @@ SPEC = {
         "export_names": ["render", "transform"],
         "num_exports": 2,
         "has_user_guide": True,
-        "user_guide_files": ["icon-showcase.qmd", "icon-gallery.qmd"],
+        "user_guide_files": ["01-icon-showcase.qmd", "02-icon-gallery.qmd"],
         # Content assertions for dedicated tests
         "files_contain": {
             "great-docs/_site/user-guide/icon-showcase.html": [

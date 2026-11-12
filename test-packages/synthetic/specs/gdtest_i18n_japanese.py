@@ -304,7 +304,7 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["Calculator", "add", "divide", "multiply"],
         "num_exports": 4,
-        "section_titles": ["Classes", "Functions"],
+        "section_titles": ["クラス", "関数"],
         "has_user_guide": True,
         "user_guide_files": [
             "01-quickstart.qmd",

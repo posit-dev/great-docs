@@ -535,12 +535,12 @@ SPEC = {
         "num_exports": 2,
         "has_user_guide": True,
         "user_guide_files": [
-            "line-styles.qmd",
-            "colors.qmd",
-            "sizing-alignment.qmd",
-            "embedded-text.qmd",
-            "presets.qmd",
-            "combinations.qmd",
+            "01-line-styles.qmd",
+            "02-colors.qmd",
+            "03-sizing-alignment.qmd",
+            "04-embedded-text.qmd",
+            "05-presets.qmd",
+            "06-combinations.qmd",
         ],
         "files_contain": {
             "great-docs/_site/user-guide/line-styles.html": [
