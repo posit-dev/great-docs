@@ -53,6 +53,7 @@ from tests.quarto_project_diff.sides import (
     RENDER_PAGES_VARIABLE,
     Side,
 )
+from tests.quarto_project_diff.watch_startup import READY_VARIABLE, SOURCE_VARIABLE
 
 # Bumped whenever the manifest format changes; comparisons refuse mixed schemas.
 SCHEMA = 3
@@ -358,8 +359,9 @@ def run_watch(
     """
     Run a watch command through its first build, one source edit and an interrupt
 
-    The stub `quarto preview` runs until interrupted, as a server would. Once it starts, the
-    run appends `WATCH_MARKER` to the case's `watch_edit` file, waits up to `REBUILD_SECONDS`
+    The stub `quarto preview` runs until interrupted, as a server would. After preview
+    starts and its source observer reports a completed subscription, the run appends
+    `WATCH_MARKER` to the case's `watch_edit` file, waits up to `REBUILD_SECONDS`
     for the marker to reach the project that `quarto preview` serves, and then sends `SIGINT`
     to the command's process group, as Ctrl-C does in a terminal. Watch mode prepares each
     rebuild elsewhere before it updates the previewed project, so a marker found anywhere
@@ -387,14 +389,27 @@ def run_watch(
     """
     deadline = time.monotonic() + job.timeout
     preview_file = package.parent / "preview-directory.txt"
+    ready_file = package.parent / "watch-ready"
+    watch_env = {
+        **env,
+        PREVIEW_HOLD_VARIABLE: str(math.ceil(job.timeout)),
+        PREVIEW_DIRECTORY_VARIABLE: str(preview_file),
+    }
+    if job.case.watch_edit is not None:
+        startup = package.parent / "watch-startup"
+        startup.mkdir()
+        shutil.copyfile(Path(__file__).with_name("watch_startup.py"), startup / "sitecustomize.py")
+        watch_env.update(
+            {
+                "PYTHONPATH": os.pathsep.join([str(startup), env.get("PYTHONPATH", "")]),
+                SOURCE_VARIABLE: str(package / job.case.watch_edit),
+                READY_VARIABLE: str(ready_file),
+            }
+        )
     process = subprocess.Popen(
         argv,
         cwd=package.parent,
-        env={
-            **env,
-            PREVIEW_HOLD_VARIABLE: str(math.ceil(job.timeout)),
-            PREVIEW_DIRECTORY_VARIABLE: str(preview_file),
-        },
+        env=watch_env,
         stdin=subprocess.DEVNULL,
         stdout=out,
         stderr=err,
@@ -404,7 +419,12 @@ def run_watch(
     previewed = _wait_until(lambda: served_directory(preview_file) is not None, process, deadline)
     served = served_directory(preview_file)
     rebuilt = False
-    if served is not None and job.case.watch_edit is not None:
+    ready = (
+        _wait_until(ready_file.is_file, process, deadline)
+        if previewed and job.case.watch_edit is not None
+        else False
+    )
+    if ready and served is not None and job.case.watch_edit is not None:
         with (package / job.case.watch_edit).open("a", encoding="utf-8") as file:
             _ = file.write(f"\n{WATCH_MARKER}\n")
         until = min(deadline, time.monotonic() + REBUILD_SECONDS)
