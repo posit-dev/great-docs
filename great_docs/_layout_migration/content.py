@@ -150,7 +150,6 @@ _PATH_FIELDS = (
     ("skill", "skills", "*", "file"),
     ("social_cards", "image"),
     ("authors", "*", "image"),
-    ("team_author", "image"),
 )
 
 

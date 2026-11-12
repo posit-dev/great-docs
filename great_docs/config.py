@@ -67,7 +67,6 @@ DEFAULT_CONFIG: ConfigDict = _load_default_config()
 # stays a clean Quarto passthrough.
 _LEGACY_SITE_KEYS: tuple[str, ...] = (
     "show_dates",
-    "date_format",
     "show_author",
     "show_security",
 )
@@ -1169,11 +1168,6 @@ class Config:
         return bool(self["show_dates"])
 
     @property
-    def date_format(self) -> str:
-        """Get the date format string (Python strftime format)."""
-        return self["date_format"]
-
-    @property
     def show_author(self) -> bool:
         """Whether to show author attribution when dates are enabled."""
         return bool(self["show_author"])
@@ -1187,29 +1181,6 @@ class Config:
     def lang(self) -> str:
         """The site language as a BCP 47 tag, from `site.lang`"""
         return self["site.lang"]
-
-    @property
-    def team_author(self) -> ConfigDict | None:
-        """Get the team author configuration for auto-generated pages.
-
-        Returns
-        -------
-        dict | None
-            A dict with keys: name (str), image (str|None), url (str|None).
-            Returns None when not configured.
-        """
-        raw = self["team_author"]
-        if raw is None:
-            return None
-        if isinstance(raw, dict):
-            raw = cast("ConfigDict", raw)
-            if raw.get("name"):
-                return {
-                    "name": raw["name"],
-                    "image": raw.get("image"),
-                    "url": raw.get("url"),
-                }
-        return None
 
     @property
     def jupyter(self) -> str:
