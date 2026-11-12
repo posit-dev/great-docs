@@ -340,7 +340,7 @@ def write_full(
                 item_name = entry.get("name", str(entry))
             else:
                 continue
-            api_text = _api_details(module, item_name)
+            api_text = _api_details(module, item_name, parser=str(api_block.get("parser", "numpy")))
             if api_text:
                 lines += [api_text, ""]
 
@@ -372,7 +372,7 @@ def write_full(
     return path
 
 
-def _api_details(module: ModuleType, item_name: str) -> str:
+def _api_details(module: ModuleType, item_name: str, *, parser: str = "numpy") -> str:
     """
     Return the signature and docstring of an object in a module
 
@@ -387,18 +387,53 @@ def _api_details(module: ModuleType, item_name: str) -> str:
     item_name
         The object's name in the module, dotted for a nested attribute such as
         `Class.method`.
+    parser
+        The docstring style used when exclusions require structured parameter filtering.
 
     Returns
     -------
     :
         The signature followed by a blank line and the dedented docstring, if present. The
-        name alone replaces a signature that raises `ValueError` or `TypeError`. The result
+        name alone replaces a signature that raises `ValueError` or `TypeError`.
+        Objects with parameter exclusions use the rendered reference documentation. The result
         is `""` if the object is missing or a handled package error occurs.
     """
     try:
         obj: Any = module
         for part in item_name.split("."):
             obj = getattr(obj, part)
+
+        docstrings = [getattr(obj, "__doc__", None) or ""]
+        if inspect.isclass(obj):
+            docstrings += [
+                getattr(getattr(obj, name, None), "__doc__", None) or ""
+                for name in ("__init__", "__new__")
+            ]
+        if any("%nodoc_param" in text for text in docstrings):
+            from ..._apiref import APIReference
+            from ..._apiref._parameter_docs import CallableDocumentation
+            from ..._apiref._render import get_render_type
+            from ..._apiref.content import Page
+
+            reference = APIReference(
+                {
+                    "package": module.__name__,
+                    "parser": parser,
+                    "dynamic": True,
+                    "sections": [{"contents": [item_name]}],
+                }
+            )
+            docs = [
+                doc
+                for section in reference.resolved
+                for page in section.contents
+                if isinstance(page, Page)
+                for doc in page.contents
+            ]
+            if any(CallableDocumentation.make(doc.obj).excluded_names for doc in docs):
+                return "\n\n".join(
+                    str(get_render_type(doc)(doc, settings=reference.settings)) for doc in docs
+                )
 
         obj_name = getattr(obj, "__name__", item_name)
         try:

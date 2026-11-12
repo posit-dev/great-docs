@@ -49,7 +49,7 @@ class __RenderDocClass(RenderDocMembersMixin, RenderDocCallMixin, RenderDoc):
         """
         attributes = super().attributes
         if self.is_dataclass:
-            params = {p.name for p in self.parameters}
+            params = {p.name for p in self._callable.original_parameters}
             attributes = [a for a in attributes if a.name not in params]
         return attributes
 
@@ -63,7 +63,7 @@ class __RenderDocClass(RenderDocMembersMixin, RenderDocCallMixin, RenderDoc):
         """
         pages = super().attribute_member_pages
         if self.is_dataclass:
-            params = {p.name for p in self.parameters}
+            params = {p.name for p in self._callable.original_parameters}
             pages = [p for p in pages if p.obj.name not in params]
         return pages
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
@@ -10,12 +11,13 @@ from great_docs.pandoc.blocks import (
 )
 from great_docs.pandoc.components import Attr
 
-from .._constructor import Constructor, class_constructor, without_receiver
+from .._constructor import without_receiver
 from .._docstring_sections import (
     DCDocstringSectionInitParameters,
     DCDocstringSectionParameterAttributes,
 )
 from .._format import repr_obj
+from .._parameter_docs import CallableDocumentation
 from .._signature import make_call_signature_text, render_signature_block
 from .._type_checks import is_enum, is_typeddict
 from .doc import RenderDoc
@@ -98,15 +100,19 @@ class __RenderDocCallMixin(RenderDoc):
         """
         obj = self.obj
         if obj.is_class:
-            return without_receiver(self._constructor.parameters)
+            return without_receiver(self._callable.parameters)
 
-        parameters = obj.parameters
+        parameters = self._callable.parameters
 
         if not len(parameters) > 0 or not obj.parent:
             return parameters
 
-        param = obj.parameters[0].name
-        omit_first_parameter = obj.parent.is_class and param in ("self", "cls")
+        param = self._callable.original_parameters[0].name
+        omit_first_parameter = (
+            obj.parent.is_class
+            and param in ("self", "cls")
+            and ("staticmethod" not in obj.labels or not self._callable.excluded_names)
+        )
 
         if omit_first_parameter:
             parameters = gf.Parameters(*list(parameters)[1:])
@@ -114,11 +120,11 @@ class __RenderDocCallMixin(RenderDoc):
         return parameters
 
     @cached_property
-    def _constructor(self) -> Constructor:
+    def _callable(self) -> CallableDocumentation:
         """
-        The constructor behind a class's signature
+        Build the callable's documented parameter view
         """
-        return class_constructor(cast("gf.Class", self.obj))
+        return CallableDocumentation.make(self.obj)
 
     def render_signature(self) -> BlockContent:
         """
@@ -156,7 +162,7 @@ class __RenderDocCallMixin(RenderDoc):
         One pair per line: the line's text, and the parameters it was
         built from.
         """
-        overloads = self._overloads()
+        overloads = self._callable.overloads
         if overloads:
             return self._overload_signature_lines(name, overloads)
 
@@ -169,26 +175,6 @@ class __RenderDocCallMixin(RenderDoc):
         params = self.render_signature_parameters()
         wrap = self.settings.callable_signatures.wrap
         return [(make_call_signature_text(name, params, wrap), params)]
-
-    def _overloads(self) -> list[gf.Function]:
-        """
-        The `@overload` variants of this callable
-
-        For functions, `.overloads` is a `list[Function]`. For classes it is a
-        `dict[str, list[Function]]` keyed by member name, which is non-empty
-        (and thus truthy) for any class that merely defines methods, even when
-        none of them are actually overloaded. A class takes the overloads of
-        its constructor only, so dataclass constructor signatures are not
-        lost and overloaded methods do not stand in for the constructor.
-
-        Returns
-        -------
-        The overload variants, empty when the callable has none.
-        """
-        if self.obj.is_class:
-            return self._constructor.overloads
-        overloads: list[gf.Function] | None = getattr(self.obj, "overloads", None)
-        return list(overloads or [])
 
     def _overload_signature_lines(
         self, name: str, overloads: list[gf.Function]
@@ -211,22 +197,43 @@ class __RenderDocCallMixin(RenderDoc):
         calling the class returns an instance.
         """
         is_class = self.obj.is_class
+        is_method = (
+            self.obj.parent is not None
+            and self.obj.parent.is_class
+            and "staticmethod" not in self.obj.labels
+        )
         lines: list[tuple[str, list[str]]] = []
         for ov in overloads:
             if not hasattr(ov, "parameters"):
                 continue
-            params: list[str] = []
-            for p in without_receiver(ov.parameters) if is_class else ov.parameters:
+
+            def render_parameter(p: gf.Parameter) -> str:
                 ann = repr_obj(p.annotation) if p.annotation else ""
                 default = repr_obj(p.default) if p.default else ""
+                name = p.name
+                if self._callable.excluded_names:
+                    if p.kind == gf.ParameterKind.var_positional:
+                        name = f"*{name}"
+                    elif p.kind == gf.ParameterKind.var_keyword:
+                        name = f"**{name}"
                 if ann and default:
-                    params.append(f"{p.name}: {ann} = {default}")
+                    return f"{name}: {ann} = {default}"
                 elif ann:
-                    params.append(f"{p.name}: {ann}")
+                    return f"{name}: {ann}"
                 elif default:
-                    params.append(f"{p.name}={default}")
+                    return f"{name}={default}"
                 else:
-                    params.append(p.name)
+                    return name
+
+            parameters = (
+                without_receiver(ov.parameters)
+                if is_class or (self._callable.excluded_names and is_method)
+                else ov.parameters
+            )
+            if self._callable.excluded_names:
+                params = self._signature_parameters(parameters, render_parameter)
+            else:
+                params = [render_parameter(p) for p in parameters]
             ret = repr_obj(ov.returns) if ov.returns and not is_class else ""
             text = make_call_signature_text(name, params, self.settings.callable_signatures.wrap)
             if ret:
@@ -243,6 +250,12 @@ class __RenderDocCallMixin(RenderDoc):
 
         i.e. The stuff in the brackets of func(a, b, c=3, d=4, **kwargs)
         """
+        return self._signature_parameters(self.parameters, self.render_signature_parameter)
+
+    def _signature_parameters(
+        self, parameters: gf.Parameters, render: Callable[[gf.Parameter], str]
+    ) -> list[str]:
+        """Place parameter-kind separators around the retained arguments"""
         params: list[str] = []
         prev, cur = 0, 1
         state: tuple[str, str] = (
@@ -250,7 +263,7 @@ class __RenderDocCallMixin(RenderDoc):
             str(gf.ParameterKind.positional_or_keyword),
         )
 
-        for parameter in self.parameters:
+        for parameter in parameters:
             state = state[cur], str(parameter.kind)
             append_transition_token = state[prev] != state[cur] and state[prev] != str(
                 gf.ParameterKind.var_positional
@@ -262,7 +275,13 @@ class __RenderDocCallMixin(RenderDoc):
                 if state[cur] == str(gf.ParameterKind.keyword_only):
                     params.append("*")
 
-            params.append(self.render_signature_parameter(parameter))
+            params.append(render(parameter))
+        if (
+            parameters
+            and parameters[-1].kind == gf.ParameterKind.positional_only
+            and self._callable.excluded_names
+        ):
+            params.append("/")
         return params
 
     def render_signature_parameter(self, el: gf.Parameter) -> str:
