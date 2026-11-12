@@ -61,7 +61,8 @@ def class_constructor(cls: gf.Class | gf.Alias) -> Constructor:
             is_function = False
         func = cast("gf.Function", member) if is_function else None
         parameters = func.parameters if func else gf.Parameters()
-        overloads = list((func and func.overloads) or class_overloads.get(name) or [])
+        own_overloads = func.overloads if func else None
+        overloads = list(own_overloads or class_overloads.get(name) or [])
         candidates.append(Constructor(name, parameters, overloads))
 
     for candidate in candidates:
