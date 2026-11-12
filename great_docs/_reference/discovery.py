@@ -856,7 +856,8 @@ def categorise_references(
 
     Only the listed objects are classified: `Class.method` counts as `Class`, and a listed
     module contributes names in its `__all__`, or public members when `__all__` is absent,
-    under qualified names. A class's method count
+    under qualified names. Fully qualified entries within the package are equivalent to
+    relative entries. A class's method count
     includes its properties, and no method is checked with the renderer.
 
     Parameters
@@ -892,7 +893,8 @@ def categorise_references(
 
     categories = empty_categories()
     missing: list[str] = []
-    for name in sorted({name.split(".", 1)[0] for name in listed}):
+    prefix = f"{package.path}."
+    for name in sorted({name.removeprefix(prefix).split(".", 1)[0] for name in listed}):
         if name not in package.members:
             missing.append(name)
             continue
