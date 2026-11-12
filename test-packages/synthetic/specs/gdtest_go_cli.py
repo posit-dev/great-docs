@@ -12,8 +12,13 @@ SPEC = {
     "description": "Go CLI project with cobra-style --help output",
     "dimensions": ["Z1", "F6", "G1", "H7"],
     # ── Project metadata ──────────────────────────────────────────────────────
-    # No pyproject_toml: render_all.py will add a minimal one as a root barrier.
-    # The real project identity comes from go.mod.
+    # Match the project metadata used by the rendered Gauntlet fixture.
+    "pyproject_toml": {
+        "project": {
+            "name": "gdtest-go-cli",
+            "version": "0.1.0",
+        },
+    },
     # ── Source files ──────────────────────────────────────────────────────────
     "files": {
         "go.mod": """\
@@ -154,8 +159,6 @@ SPEC = {
     },
     # ── Expected outcomes ─────────────────────────────────────────────────────
     "expected": {
-        # render_all.py writes a pyproject.toml root-barrier with the spec name,
-        # so detected_name comes from that.
         "detected_name": "gdtest-go-cli",
         # No Python module — pure Go project.
         "detected_module": None,

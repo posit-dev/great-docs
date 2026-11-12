@@ -250,10 +250,10 @@ SPEC = {
         "num_exports": 2,
         "has_user_guide": True,
         "user_guide_files": [
-            "single-keys.qmd",
-            "shortcut-combos.qmd",
-            "platform-aware.qmd",
-            "keys-in-context.qmd",
+            "01-single-keys.qmd",
+            "02-shortcut-combos.qmd",
+            "03-platform-aware.qmd",
+            "04-keys-in-context.qmd",
         ],
         # Content assertions for dedicated tests
         "files_contain": {

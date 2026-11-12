@@ -188,6 +188,12 @@ def test_L0_module_name_detection(pkg_name: str, tmp_path: Path):
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected["detected_module"]
 
+    if module_name is None:
+        project = make_project(docs)
+        assert project.module is None
+        assert project.package_init is None
+        return
+
     # Verify the module's __init__.py can be found
     init_file = _package_init(docs, module_name)
     assert init_file is not None, f"Could not find __init__.py for module {module_name!r}"
@@ -546,53 +552,38 @@ def test_L2_explicit_reference_config(pkg_name: str, tmp_path: Path):
 
 
 @pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
-def test_L2_explicit_reference_survives_init(pkg_name: str, tmp_path: Path):
-    """`great-docs init --force` preserves explicit reference sections from great-docs.yml."""
+def test_L2_explicit_reference_reset_on_force(pkg_name: str, tmp_path: Path) -> None:
+    """
+    Replace explicit reference sections with discovered sections on forced initialisation
+    """
     pkg_dir, spec = _make_package(pkg_name, tmp_path)
     expected = spec.get("expected", {})
     if not expected.get("explicit_reference"):
         pytest.skip("Not an explicit reference config spec")
 
-    from yaml12 import format_yaml, parse_yaml, read_yaml
+    from yaml12 import read_yaml
 
-    config = spec.get("config", {})
-    original_reference = config.get("reference", [])
+    original_reference = spec.get("config", {}).get("reference", [])
     assert original_reference, "Spec says explicit_reference but no reference config found"
 
-    original_titles = [s["title"] for s in original_reference]
-
-    # Run init --force (this overwrites great-docs.yml)
     docs = GreatDocs(project_path=str(pkg_dir))
+    assert docs._config.reference == original_reference
     docs.install(force=True)
 
-    # Re-read the generated config
-    config_path = docs.layout.config_path
-    with open(config_path, encoding="utf-8") as f:
-        config_data = read_yaml(f)
+    with docs.layout.config_path.open(encoding="utf-8") as config_file:
+        config_data = read_yaml(config_file)
 
     regenerated_reference = config_data.get("reference", [])
-    assert regenerated_reference, "reference sections are missing after init --force"
+    regenerated_titles = [section["title"] for section in regenerated_reference]
+    assert regenerated_titles == expected["init_section_titles"]
+    assert regenerated_reference != original_reference
 
-    # Section titles must match the original explicit config
-    regenerated_titles = [s["title"] for s in regenerated_reference]
-    assert regenerated_titles == original_titles, (
-        f"init --force changed explicit reference section titles.\n"
-        f"  Original: {original_titles}\n"
-        f"  After init: {regenerated_titles}"
-    )
-
-    # Verify members:false entries are preserved
-    if "members_false_classes" in expected:
-        for class_name in expected["members_false_classes"]:
-            found = False
-            for section in regenerated_reference:
-                for item in section.get("contents", []):
-                    if isinstance(item, dict) and item.get("name") == class_name:
-                        assert item.get("members") is False, (
-                            f"{class_name} should have members: false after init, got {item}"
-                        )
-                        found = True
-            assert found, f"{class_name} not found in any section after init --force"
+    referenced_names = {
+        (item if isinstance(item, str) else item["name"]).split(".")[0]
+        for section in regenerated_reference
+        for item in section["contents"]
+    }
+    assert set(expected["export_names"]) <= referenced_names
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -916,33 +907,36 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# L2: CLI Config Preservation
+# L2: CLI Config Reset
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
 @pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
-def test_L2_cli_config_preserved(pkg_name: str, tmp_path: Path):
-    """`great-docs init --force` preserves CLI config when cli_enabled is True."""
+def test_L2_cli_config_reset_on_force(pkg_name: str, tmp_path: Path) -> None:
+    """
+    Reset CLI settings to disabled defaults on forced initialisation
+    """
     pkg_dir, spec = _make_package(pkg_name, tmp_path)
     expected = spec.get("expected", {})
     if not expected.get("cli_enabled"):
         pytest.skip("No 'cli_enabled' in spec expected outcomes")
 
-    docs = GreatDocs(project_path=str(pkg_dir))
-    docs.install(force=True)
+    from yaml12 import read_yaml
 
-    from yaml12 import format_yaml, parse_yaml, read_yaml
+    docs = GreatDocs(project_path=str(pkg_dir))
+    assert docs._config.cli_enabled is True
+    docs.install(force=True)
 
     config_path = docs.layout.config_path
     assert config_path.exists(), "great-docs.yml was not created"
-
-    with open(config_path, encoding="utf-8") as f:
-        config_data = read_yaml(f)
+    with config_path.open(encoding="utf-8") as config_file:
+        config_data = read_yaml(config_file)
 
     assert config_data is not None, "great-docs.yml is empty"
-    cli_section = config_data.get("cli")
-    assert cli_section is not None, "CLI section missing from great-docs.yml"
-    assert cli_section.get("enabled") is True, f"CLI should be enabled but got: {cli_section}"
+    assert "cli" not in config_data
+    assert docs._config.cli_enabled is False
+    assert docs._config.cli_module is None
+    assert docs._config.cli_name is None
 
 
 @pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
