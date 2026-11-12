@@ -446,13 +446,47 @@ See [Cross-Referencing](cross-referencing.qmd) for the full guide to all linking
 
 ## Docstring Directives
 
-Great Docs directives add document structure and control API-reference behavior. Write directives
+Great Docs directives add document structure and control API-reference behaviour. Write directives
 as `%<directive>` in NumPy-, Google-, or Sphinx-style docstrings.
 
 Great Docs supports two kinds of directives:
 
-- `%nodoc` excludes an object, and `%seealso` adds cross-references.
-- Callout directives add version annotations and admonitions.
+- Use `%nodoc` to exclude an object, `%nodoc_param` to exclude a parameter, and `%seealso` to add cross-references.
+- Use callout directives to add version annotations and admonitions.
+
+### Parameter Exclusion
+
+Use `%nodoc_param name` to hide a deprecated argument while the function continues to accept it
+for backwards compatibility:
+
+```python
+def configure(value: int, old_option: bool = False):
+    """
+    Configure a value
+
+    %nodoc_param old_option
+
+    Parameters
+    ----------
+    value
+        The value to configure.
+    old_option
+        The deprecated option.
+    """
+    ...
+```
+
+The documentation shows `configure(value)` and describes only `value`. Great Docs removes the
+directive line and the excluded parameter's entry from Parameters or Other Parameters, including
+sections made empty. Explicit deprecation notes elsewhere in the docstring remain visible.
+
+Repeat the directive to exclude more parameters, using one bare Python parameter name per line.
+Use `args` or `kwargs` to exclude `*args` or `**kwargs`. Malformed declarations and names absent
+from the callable's signature and overloads are errors.
+
+The directive applies to every overload that contains the parameter.
+Generated dataclass parameter descriptions honour exclusions; explicit Attributes sections remain
+under the author's control.
 
 ### Callout Directives
 

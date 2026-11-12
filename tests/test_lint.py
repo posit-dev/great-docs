@@ -2349,3 +2349,64 @@ def test_config_only_lint_reports_legacy_member_placement_without_building(
         ("config-key", "inline_methods")
     ]
     assert result.issues[0].message == f"Replace `inline_methods` with `{replacement}`."
+
+
+@pytest.mark.parametrize(
+    "declaration", ["%nodoc_param missing", "%nodoc_param", "%nodoc_param x,y"]
+)
+def test_parameter_directives_produce_structured_errors_without_mutation(declaration: str) -> None:
+    module = gf.Module("mypkg")
+    obj = gf.Function("f", parameters=gf.Parameters(gf.Parameter("x")), parent=module)
+    module.set_member("f", obj)
+    text = f"Document values\n\n{declaration}"
+    obj.docstring = gf.Docstring(text, parent=obj, parser="numpy")
+    result = LintResult()
+    _check_directive_consistency(module, "mypkg", ["f"], result)
+    assert [(issue.check, issue.severity, issue.symbol) for issue in result.issues] == [
+        ("invalid-directive", "error", "f")
+    ]
+    assert "%nodoc_param" in result.issues[0].message
+    assert obj.docstring.value == text
+    assert not obj.extra
+    assert [p.name for p in obj.parameters] == ["x"]
+
+
+def test_parameter_directive_lint_reads_unlisted_constructor() -> None:
+    module = gf.Module("mypkg")
+    cls = gf.Class("C", parent=module)
+    module.set_member("C", cls)
+    constructor = gf.Function(
+        "__init__", parent=cls, parameters=gf.Parameters(gf.Parameter("self"))
+    )
+    cls.set_member("__init__", constructor)
+    constructor.docstring = gf.Docstring("%nodoc_param missing", parent=constructor)
+    result = LintResult()
+    _check_directive_consistency(module, "mypkg", ["C"], result)
+    assert [(issue.check, issue.symbol) for issue in result.issues] == [("invalid-directive", "C")]
+    assert constructor.docstring.value == "%nodoc_param missing"
+
+
+@pytest.mark.parametrize("checks", [None, {"directives"}, {"cross-refs"}])
+def test_parameter_directive_errors_do_not_abort_lint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, checks: set[str] | None
+) -> None:
+    package = tmp_path / "paramlint"
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        '__all__ = ["f", "g"]\n'
+        'def f(x):\n    """\n    Document values\n\n    %nodoc_param missing\n    """\n'
+        "def g(): pass\n"
+    )
+    write_pyproject(tmp_path, "paramlint")
+    (tmp_path / "great-docs.yml").write_text("parser: numpy\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    result = run_lint(tmp_path, checks=checks, quiet=True)
+    issues = [issue for issue in result.issues if issue.check == "invalid-directive"]
+    assert len(issues) == 1
+    assert issues[0].symbol == "f"
+    assert result.status == "fail"
+    if checks is None:
+        assert any(
+            issue.check == "missing-docstring" and issue.symbol == "g" for issue in result.issues
+        )

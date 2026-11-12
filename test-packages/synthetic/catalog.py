@@ -49,6 +49,7 @@ ALL_PACKAGES: list[str] = [
     # 28–29: Directive combinations
     "gdtest_seealso",  # 28
     "gdtest_nodoc",  # 29
+    "gdtest_nodoc_param",
     # 33–38: User guide variants
     "gdtest_user_guide_auto",  # 33
     "gdtest_user_guide_sections",  # 34

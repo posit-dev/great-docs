@@ -4719,3 +4719,28 @@ class TestTermRenderCastFile:
         result = runner.invoke(cli, ["termshow", "render", str(cast_file), "-o", str(out_dir)])
         assert result.exit_code == 0
         assert (out_dir / "manifest.json").exists()
+
+
+def test_lint_reports_invalid_parameter_directive_as_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = tmp_path / "paramcli"
+    package.mkdir()
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "paramcli"\nversion = "0.1.0"\n')
+    (tmp_path / "great-docs.yml").write_text("parser: numpy\n")
+    (package / "__init__.py").write_text(
+        '__all__ = ["f"]\n'
+        'def f(x):\n    """\n    Configure values\n\n    %nodoc_param missing\n    """\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    result = CliRunner().invoke(cli, ["lint", "--json", "--project-path", "."])
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["status"] == "fail"
+    assert any(
+        issue["check"] == "invalid-directive"
+        and issue["symbol"] == "f"
+        and "%nodoc_param" in issue["message"]
+        for issue in payload["issues"]
+    )

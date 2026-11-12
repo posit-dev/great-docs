@@ -183,12 +183,15 @@ otherwise be silently ignored.
 | Finding | Severity | Description |
 |---------|----------|-------------|
 | `unknown-directive` | Warning | A `%`-prefixed directive is not recognized |
+| `invalid-directive` | Error | A `%nodoc_param` declaration is malformed or names an unknown parameter |
 
 Great Docs recognizes these parser-independent directives:
 
 - Cross-reference and exclusion: `%seealso` (see
   [Cross-Referencing](cross-referencing.qmd)) and `%nodoc` (see
   [Writing Docstrings](writing-docstrings.qmd#nodoc-exclude-an-item-from-documentation))
+- Parameter exclusion: `%nodoc_param name` (see
+  [Parameter Exclusion](api-documentation.qmd#parameter-exclusion))
 - Callouts: `%note`, `%warning`, `%caution`, `%danger`, `%important`, `%tip`, and `%hint`
 - Version notices: `%versionadded`, `%versionchanged`, and `%deprecated`
 
@@ -198,6 +201,11 @@ reStructuredText directives and inline cross-reference roles such as
 
 Any other `%`-prefixed token, such as `%internal`, is flagged as unknown. If you see a false
 positive, check for typos in the directive name.
+
+For `%nodoc_param`, write one bare Python parameter name per directive. Repeat the directive to
+exclude additional parameters. The name must occur in the callable's signature or at least one
+overload; use `args` or `kwargs` for variadic parameters. Directives inside fenced examples are
+treated as literal text.
 
 ### Search Descriptions
 

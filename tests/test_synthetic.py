@@ -1266,3 +1266,26 @@ def test_all_phase1_specs_loadable():
         assert spec["name"] == name
         assert "files" in spec
         assert "dimensions" in spec
+
+
+def test_L3_parameter_exclusion_pages(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Omit deprecated arguments from generated reference pages"""
+    pkg_dir, _ = _make_package("gdtest_nodoc_param", tmp_path)
+    monkeypatch.chdir(pkg_dir)
+    monkeypatch.syspath_prepend(str(pkg_dir))
+    reference = APIReference(
+        {
+            "package": "gdtest_nodoc_param",
+            "sections": [{"title": "API", "contents": ["configure", "Widget"]}],
+        }
+    )
+    reference.build()
+    for name in ("configure", "Widget"):
+        qmd = (pkg_dir / "reference" / f"{name}.qmd").read_text()
+        assert "old_option" not in qmd
+        assert "excluded" not in qmd.lower()
+        assert "retained" in qmd
+    function = (pkg_dir / "reference" / "configure.qmd").read_text()
+    assert "configure(value)" in function
+    assert "The previous option is deprecated." in function
+    assert "%nodoc_param literal_example" in function

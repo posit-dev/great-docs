@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 import griffe as gf
 
+from .._apiref._parameter_docs import CallableDocumentation, ParameterDirectiveError
 from .._build.ownership import is_in_great_docs_build_dir
 from .._build.steps import USER_CODE_ERRORS
 from .._builtin.directives import DIRECTIVES, _seealso
@@ -199,12 +200,16 @@ def run_lint(
         from .._apiref.inventory import create_inventory
         from .._reference import documented as documented_reference
 
-        documented = documented_reference.objects(
-            config,
-            importable_name=importable_name,
-            search_paths=project.search_paths(),
-            create_sections=package_exports.sections,
-        )
+        try:
+            documented = documented_reference.objects(
+                config,
+                importable_name=importable_name,
+                search_paths=project.search_paths(),
+                create_sections=package_exports.sections,
+            )
+        except ParameterDirectiveError as error:
+            _report_parameter_directive(error, importable_name, result)
+            documented = []
         # No documented objects means both checks are no-ops, so skip source
         # loading and any inventory download.
         sources = load_sources(config) if documented else LoadedSources()
@@ -893,6 +898,32 @@ _MALFORMED_DIRECTIVE = re.compile(
 )
 
 
+def _report_parameter_directive(
+    error: ParameterDirectiveError, package_name: str, result: LintResult
+) -> None:
+    """Report an invalid parameter directive once across lint checks"""
+    issue = LintIssue(
+        check="invalid-directive",
+        severity="error",
+        symbol=error.symbol.removeprefix(f"{package_name}."),
+        message=str(error),
+    )
+    if issue not in result.issues:
+        result.issues.append(issue)
+
+
+def _check_parameter_directive(
+    obj: gf.Object | gf.Alias, package_name: str, result: LintResult
+) -> None:
+    """Validate parameter declarations without changing source or metadata"""
+    try:
+        _ = CallableDocumentation.make(obj)
+    except ParameterDirectiveError as error:
+        _report_parameter_directive(error, package_name, result)
+    except (gf.AliasResolutionError, gf.CyclicAliasError):
+        return
+
+
 def _check_directive_consistency(
     pkg,
     package_name: str,
@@ -923,6 +954,8 @@ def _check_directive_consistency(
             continue
 
         obj = pkg.members[name]
+        if isinstance(obj, (gf.Object, gf.Alias)):
+            _check_parameter_directive(obj, package_name, result)
         docstring = _get_docstring(obj)
         if docstring:
             _check_one(name, docstring)
@@ -930,6 +963,8 @@ def _check_directive_consistency(
         # Check class method docstrings too
         if obj.kind.value == "class":
             for member_name, member in _iter_public_members(obj):
+                if isinstance(member, (gf.Object, gf.Alias)):
+                    _check_parameter_directive(member, package_name, result)
                 member_doc = _get_docstring(member)
                 if member_doc:
                     _check_one(f"{name}.{member_name}", member_doc)

@@ -503,3 +503,26 @@ class TestBuildStep:
         assert tools("on", {"webmcp": True})[-1] == "get_agent_skill"
         for name, skill in [("unpublished", {"well_known": False}), ("off", {"enabled": False})]:
             assert "get_agent_skill" not in tools(name, {"webmcp": True, "skill": skill})
+
+
+def test_full_file_honours_parameter_exclusions(
+    layout: Layout, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    package = tmp_path / "llms_params"
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        "def f(value: int, old=None):\n"
+        '    """\n    Configure values\n\n    %nodoc_param old\n\n'
+        "    Parameters\n    ----------\n    value\n        Retained description.\n"
+        '    old\n        Hidden description.\n    """\n'
+        "class C:\n"
+        "    def __init__(self, value: int, old=None):\n"
+        '        """\n        Configure values\n\n        %nodoc_param old\n        """\n'
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    text = _write_full(layout, _api_reference("llms_params", {"contents": ["f", "C"]}))
+    assert "old" not in text
+    assert "Hidden description." not in text
+    assert "Retained description." in text
+    assert "f(value)" in text
+    assert "C(value)" in text
