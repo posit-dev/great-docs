@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import subprocess
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -27,6 +26,7 @@ from great_docs._versions.model import (
     parse_versions_config,
 )
 from great_docs._website import quarto_yml
+from tests.version_selector_page import run_selector
 
 
 @pytest.mark.parametrize("directory", [".", "docs", "website"])
@@ -70,53 +70,19 @@ def test_layout_pipeline(tmp_path: Path, directory: str) -> None:
 
 @pytest.mark.parametrize("prefix", ["v/1.5.0", "v/v1.5.0"])
 def test_selector_uses_version_map(prefix: str) -> None:
-    node = shutil.which("node")
-    if node is None:
+    if shutil.which("node") is None:
         pytest.skip("Node.js is required to exercise the browser selector")
-    script = Path(__file__).parents[1] / "great_docs/assets/version-selector.js"
-    harness = r"""
-const fs = require("fs");
-const vm = require("vm");
-const input = JSON.parse(fs.readFileSync(0, "utf8"));
-const stored = {};
-const context = {
-  window: {location: {pathname: "/docs/" + input.prefix + "/guide.html"}},
-  document: {readyState: "loading", addEventListener() {}},
-  localStorage: {getItem(key) {return stored[key]}, setItem(key, value) {stored[key] = value}}
-};
-const source = input.script.replace('if (document.readyState === "loading")',
-  'globalThis.selector = {getSiteBasePath, detectCurrentVersion, getCurrentRelPath, ' +
-  'buildVersionUrl, getStoredVersion, setStoredVersion}; if (document.readyState === "loading")');
-vm.runInNewContext(source, context);
-const selector = context.selector;
-const map = {versions: [
-  {tag: "2.0", latest: true, path_prefix: ""},
-  {tag: "v1.5.0", latest: false, path_prefix: input.prefix}
-], pages: {"guide.html": ["2.0", "v1.5.0"]}};
-const base = selector.getSiteBasePath(map);
-selector.setStoredVersion("v1.5.0");
-process.stdout.write(JSON.stringify({
-  base, tag: selector.detectCurrentVersion(map),
-  page: selector.getCurrentRelPath(map, base), stored: selector.getStoredVersion(),
-  old: selector.buildVersionUrl(map, selector.getStoredVersion(), "guide.html", base),
-  latest: selector.buildVersionUrl(map, "2.0", "guide.html", base)
-}));
-"""
-    result = subprocess.run(
-        [node, "-e", harness],
-        input=json.dumps({"script": script.read_text(), "prefix": prefix}),
-        text=True,
-        capture_output=True,
-        check=True,
-    )
-    assert json.loads(result.stdout) == {
-        "base": "/docs",
-        "tag": "v1.5.0",
-        "page": "guide.html",
-        "stored": "v1.5.0",
-        "old": f"/docs/{prefix}/guide.html",
-        "latest": "/docs/guide.html",
+    version_map = {
+        "versions": [
+            {"tag": "2.0", "latest": True, "path_prefix": ""},
+            {"tag": "v1.5.0", "latest": False, "path_prefix": prefix},
+        ],
+        "pages": {"guide.html": ["2.0", "v1.5.0"]},
     }
+    result = run_selector(map=version_map, pathname=f"/docs/{prefix}/guide.html", click="2.0")
+    assert result["current"] == "v1.5.0"
+    assert result["urls"] == {"2.0": "/docs/guide.html", "v1.5.0": f"/docs/{prefix}/guide.html"}
+    assert result["stored"] == "2.0"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
