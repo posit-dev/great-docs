@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .._content import metadata
 from .._website import assembly, quarto_yml
 from .._website.identity import Identity
-from .._website.seo import description as seo_description
 from .._website.seo.structured_data import StructuredData
 from .facts import Facts
 from .steps import print_warning
@@ -80,7 +80,7 @@ def default_description(config: Config, project: Project) -> str | None:
         The plain text of `seo.default_description`, or the package description when no
         default is configured. Return `None` when the selected description has no text.
     """
-    return seo_description.default_description(config, project.manifest["description"])
+    return metadata.default_description(config, project.manifest["description"])
 
 
 def structured_data(run: Run, config: Config) -> StructuredData | None:

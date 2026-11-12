@@ -6,10 +6,9 @@ from typing import Any
 
 import pytest
 
-from great_docs._website.seo import description
-from great_docs._website.seo.description import (
+from great_docs._content import metadata
+from great_docs._content.metadata import (
     FirstParagraph,
-    add_to_raw_page,
     as_metadata,
     default_description,
     first_paragraph,
@@ -17,6 +16,7 @@ from great_docs._website.seo.description import (
     page_description,
     plain_text,
 )
+from great_docs._website.seo.description import add_to_raw_page
 from great_docs._yaml import YamlMapping, split_front_matter
 
 LONG = "This sentence is comfortably longer than thirty characters."
@@ -49,7 +49,7 @@ def test_plain_text(markdown: str, expected: str | None):
 def test_plain_text_truncates_at_a_word_boundary():
     text = plain_text("word " * 60)
     assert text is not None
-    assert len(text) <= description.MAX_LENGTH
+    assert len(text) <= metadata.MAX_LENGTH
     assert text.endswith("word...")
 
 
@@ -147,7 +147,7 @@ def test_first_paragraph_keeps_at_signs_that_are_not_citations(paragraph: str):
 def test_resolves_citations(bibliography: list[str], front_matter: str, expected: bool):
     config: Any = SimpleNamespace(bibliography=bibliography)
     parsed, _ = split_front_matter(f"---\n{front_matter}---\n\nText\n")
-    assert description.resolves_citations(parsed, config) is expected
+    assert metadata.resolves_citations(parsed, config) is expected
 
 
 def _config(default: str | None = None) -> Any:

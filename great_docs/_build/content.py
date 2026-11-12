@@ -22,7 +22,7 @@ from .._contribution import Contribution, NavbarLink, Sidebar
 from .._website import page_dates, social_cards
 from .._website.ai_agents import llms_txt as llms_files
 from .._website.homepage import page as homepage_page
-from .._website.homepage import source as homepage_source
+from .._content import homepage as homepage_source
 from .._website.navigation import navbar as nav_navbar
 from .._website.project_pages import citation, licence, package_info
 from . import site

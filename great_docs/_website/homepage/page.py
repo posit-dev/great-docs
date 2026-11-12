@@ -14,12 +14,13 @@ from typing import TYPE_CHECKING, Any
 
 from yaml12 import format_yaml
 
+from ..._content import homepage as source
+from ..._content import metadata as text_metadata
 from ..._content import publish
 from ..._project.manifest import Manifest
 from ..._yaml import YamlValue, locate_front_matter, set_front_matter_option
 from ..project_pages import community
-from ..seo import description as seo_description
-from . import hero, landing, margin, readme, source
+from . import hero, landing, margin, readme
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -225,9 +226,9 @@ def write_readme(
 
     # Read the README's opening paragraph before the page wrapper adds markup above it.
     if config.seo_enabled and not page_description:
-        opening = seo_description.first_paragraph(body, citations=bool(config.bibliography)).text
+        opening = text_metadata.first_paragraph(body, citations=bool(config.bibliography)).text
         if opening:
-            page_description = {"description-meta": seo_description.as_metadata(opening)}
+            page_description = {"description-meta": text_metadata.as_metadata(opening)}
 
     if sources:
         # The README's headings sit one level below the homepage's

@@ -19,9 +19,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlsplit, urlunsplit
 
-from .._content import publish
+from .._content import metadata, publish
 from . import head
-from .seo import description
 from .seo import title as seo_title
 
 if TYPE_CHECKING:
@@ -202,12 +201,12 @@ def page_title(title: str | None, site_name: str | None, config: Config) -> str 
     if title is None or not site_name:
         return None
     if not title.strip():
-        return description.as_metadata(site_name)
+        return metadata.as_metadata(site_name)
     template = seo_title.template(config)
     if template is None:
         return None
     return seo_title.apply(
-        template, title, description.as_metadata(site_name), escape=description.as_metadata
+        template, title, metadata.as_metadata(site_name), escape=metadata.as_metadata
     )
 
 
@@ -268,11 +267,11 @@ def page_entries(
     elif header_description and "description" not in front_matter:
         value = header_description
     else:
-        value = description.page_description(
+        value = metadata.page_description(
             front_matter,
             body,
             default,
-            citations=description.resolves_citations(front_matter, config),
+            citations=metadata.resolves_citations(front_matter, config),
         )
     if value:
         card["description"] = value

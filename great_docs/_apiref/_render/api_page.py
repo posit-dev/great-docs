@@ -5,7 +5,7 @@ from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
 from great_docs._apiref._render.mixin_page import RenderPageMixin
-from great_docs._website.seo.description import metadata_value
+from great_docs._content.metadata import metadata_value
 from great_docs.pandoc.blocks import (
     BlockContent,
     Blocks,
