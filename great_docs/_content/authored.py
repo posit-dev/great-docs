@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from .._website.homepage import source as homepage_source
 from . import custom_pages, user_guide
+from . import homepage as homepage_source
 
 if TYPE_CHECKING:
     from collections.abc import Callable

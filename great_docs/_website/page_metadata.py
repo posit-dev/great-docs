@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from yaml12 import format_yaml
 
+from .._content import metadata
 from .._yaml import FRONT_MATTER_OPENING, YamlMapping, split_front_matter
 from . import head, scale_to_fit, social_cards
 from .seo import description
@@ -177,11 +178,11 @@ def write_to_pages(
         page = Page.make(path, project_dir)
         entries: dict[str, Any] = {}
         if write_descriptions and (
-            value := description.page_description(
+            value := metadata.page_description(
                 page.front_matter,
                 page.body,
                 default,
-                citations=description.resolves_citations(page.front_matter, config),
+                citations=metadata.resolves_citations(page.front_matter, config),
             )
         ):
             entries["description-meta"] = value

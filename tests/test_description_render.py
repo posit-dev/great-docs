@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from great_docs._content.metadata import metadata_value
 from great_docs._website.page_metadata import add_to_page, write_to_pages
-from great_docs._website.seo.description import metadata_value
 from great_docs.config import Config
 
 pytestmark = pytest.mark.skipif(shutil.which("quarto") is None, reason="Quarto is not installed")

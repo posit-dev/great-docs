@@ -1,3 +1,10 @@
+"""
+Python reference discovery and rendering from inspected API objects
+
+Share source and metadata values with content processing; keep website assembly
+out of reference rendering.
+"""
+
 from ._render.api_page import RenderAPIPage
 from ._render.doc import RenderDoc
 from ._render.docattribute import RenderDocAttribute

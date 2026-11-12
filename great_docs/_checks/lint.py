@@ -16,12 +16,12 @@ from .._build.ownership import is_in_great_docs_build_dir
 from .._build.steps import USER_CODE_ERRORS
 from .._builtin.directives import DIRECTIVES, _seealso
 from .._content import authored
+from .._content import homepage as homepage_source
 from .._interlinks import AliasClaims, LoadedSources, build_index, load_sources
 from .._project import Project
 from .._project.layout import Layout
 from .._reference.exports import Exports
 from .._source_refs import fenced_lines
-from .._website.homepage import source as homepage_source
 from .._yaml import YamlMapping, YamlValue, split_front_matter
 from ..config import _PARSERS
 
@@ -1219,26 +1219,26 @@ def _check_page_descriptions(
     result
         Aggregated results to append to.
     """
+    from .._content import metadata
     from .._website.homepage import hero
-    from .._website.seo import description
 
     if not config.seo_enabled:
         return
 
     homepage = next(iter(homepage_source.find(layout)), None)
     manifest = Project.make(config, layout).manifest
-    has_default = description.default_description(config, manifest["description"]) is not None
+    has_default = metadata.default_description(config, manifest["description"]) is not None
     for path in _site_page_sources(config, layout):
         front_matter, body = split_front_matter(path.read_text(encoding="utf-8"))
-        if any(key in front_matter for key in description.PAGE_KEYS):
+        if any(key in front_matter for key in metadata.PAGE_KEYS):
             continue
         if path == homepage:
             # The homepage is described after badges and hero elements are removed
             found = hero.find(config, layout.source_dir, body)
             if found is not None and found.body is not None:
                 body = found.body
-        citations = description.resolves_citations(front_matter, config)
-        fallback = description.first_paragraph(body, citations=citations).fallback
+        citations = metadata.resolves_citations(front_matter, config)
+        fallback = metadata.first_paragraph(body, citations=citations).fallback
         if fallback is None:
             continue
 

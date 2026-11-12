@@ -7087,7 +7087,7 @@ def test_write_homepage_rst_source():
 
         # Mock RST conversion since pandoc may not be available
         with patch(
-            "great_docs._website.homepage.source.rst_to_markdown",
+            "great_docs._content.homepage.rst_to_markdown",
             return_value="# My Package\n\nSome RST content.\n",
         ):
             write_homepage(docs)

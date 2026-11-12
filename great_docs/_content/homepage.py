@@ -13,15 +13,15 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ..._subprocess import TEXT_MODE_KWARGS
-from ..._yaml import YamlValue, split_front_matter
-from ..seo import description
+from .._subprocess import TEXT_MODE_KWARGS
+from .._yaml import YamlValue, split_front_matter
+from . import metadata
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from ..._project.layout import Layout
+    from .._project.layout import Layout
 
 __all__ = ["INDEX_NAMES", "NAMES", "README_NAMES", "Source", "find", "read", "rst_to_markdown"]
 
@@ -103,12 +103,12 @@ def read(path: Path, *, report: Callable[[str], None]) -> Source:
     return Source(
         title=front_matter.string("title") or "",
         description={
-            key: front_matter.get(key) for key in description.PAGE_KEYS if key in front_matter
+            key: front_matter.get(key) for key in metadata.PAGE_KEYS if key in front_matter
         },
         options={
             key: value
             for key, value in front_matter.data.items()
-            if isinstance(key, str) and key != "title" and key not in description.PAGE_KEYS
+            if isinstance(key, str) and key != "title" and key not in metadata.PAGE_KEYS
         },
         body=body.lstrip("\n"),
     )

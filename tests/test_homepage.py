@@ -9,8 +9,9 @@ import pytest
 
 from great_docs import GreatDocs
 from great_docs._build import content as content_steps
+from great_docs._content import homepage as source
 from great_docs._project.layout import Layout
-from great_docs._website.homepage import landing, page, readme, source
+from great_docs._website.homepage import landing, page, readme
 from great_docs._website.homepage.readme import Badge
 from great_docs._yaml import split_front_matter
 from tests.support import homepage_hero, homepage_margin, write_config
