@@ -66,6 +66,9 @@ if TYPE_CHECKING:
 
 _log = logging.getLogger(__name__)
 
+# Directories that hold installed packages, rather than a repository's own files.
+_INSTALL_DIRS = frozenset({"site-packages", "dist-packages"})
+
 # Translate standard docstring section titles and preserve custom titles.
 _SECTION_TITLE_KEYS = {
     "Parameters": "parameters",
@@ -819,6 +822,12 @@ class __RenderDoc(RenderBase):
         3. Fall back to Griffe's package-parent-relative path when the override
            and repository root cannot resolve a path.
 
+        Objects that only a stub declares, such as the classes and functions
+        of a PyO3 or other compiled extension, take their line numbers from the
+        `.pyi` file but report the module's `.py` file. They link to the stub
+        instead. An installed stub, outside the repository, links to the
+        repository's copy, and to nothing when there is none.
+
         Returns
         -------
         :
@@ -838,6 +847,13 @@ class __RenderDoc(RenderBase):
 
         links = self.settings.source_links
 
+        if filepath is not None and Path(filepath).suffix == ".py" and _declared_in_stub(self.obj):
+            stub = Path(filepath).with_suffix(".pyi")
+            if stub.is_file():
+                filepath = stub
+        if filepath is not None and Path(filepath).suffix == ".pyi":
+            return self._stub_relative_path(Path(filepath))
+
         # 1. Explicit override for monorepos: `<source.path>/<filename>`.
         if links.path and filepath is not None:
             return f"{links.path}/{Path(filepath).name}"
@@ -855,6 +871,82 @@ class __RenderDoc(RenderBase):
             return Path(self.obj.relative_package_filepath).as_posix()
         except (ValueError, AttributeError):
             return None
+
+    def _stub_relative_path(self, stub: Path) -> str | None:
+        """
+        Resolve a stub file's path for a repository link
+
+        A stub inside the repository keeps its path. An installed stub,
+        including one in a virtual environment within the repository, is
+        looked up in the repository under its package-relative path, also
+        within `src/` and `python/`. A package's `__init__.pyi` is also looked
+        up as `<package>.pyi`, where maturin keeps the stub of a Rust-only
+        project.
+
+        Parameters
+        ----------
+        stub
+            The absolute path of the stub file.
+
+        Returns
+        -------
+        :
+            The stub's path relative to the repository root, or `None` when the
+            repository has no copy of an installed stub.
+        """
+        links = self.settings.source_links
+        if links.path:
+            return f"{links.path}/{stub.name}"
+
+        try:
+            rel = Path(self.obj.relative_package_filepath).with_suffix(".pyi")
+        except (ValueError, AttributeError):
+            rel = None
+
+        if links.package_root is None:
+            return rel.as_posix() if rel else None
+
+        root = links.package_root.resolve()
+        try:
+            inside = stub.resolve().relative_to(root)
+        except (ValueError, OSError):
+            inside = None
+        # A virtual environment within the repository holds installed copies.
+        if inside is not None and not _INSTALL_DIRS.intersection(inside.parts):
+            return inside.as_posix()
+
+        if rel is None:
+            return None
+        names = [rel]
+        if rel.name == "__init__.pyi" and rel.parent != Path():
+            names.append(rel.parent.with_suffix(".pyi"))
+        for name in names:
+            for candidate in (name, "src" / name, "python" / name):
+                if (root / candidate).is_file():
+                    return candidate.as_posix()
+        return None
+
+
+def _declared_in_stub(obj: gf.Object | gf.Alias) -> bool:
+    """
+    Whether an object comes from a stub that griffe merged into its module
+
+    Griffe marks the objects a stub adds to a module as not available at
+    runtime, so an object declared in a stub, or a member of a class that
+    is, reports the `.py` module file but has the stub's line numbers.
+    Objects inside `if TYPE_CHECKING:` are also marked, so callers check that
+    the stub file exists.
+    """
+    current: gf.Object | None
+    try:
+        current = obj.final_target if isinstance(obj, gf.Alias) else obj
+    except (gf.AliasResolutionError, gf.CyclicAliasError):
+        return False
+    while current is not None and not getattr(current, "is_module", True):
+        if getattr(current, "runtime", True) is False:
+            return True
+        current = getattr(current, "parent", None)
+    return False
 
 
 class RenderDoc(__RenderDoc):

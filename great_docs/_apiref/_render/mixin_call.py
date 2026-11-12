@@ -10,6 +10,7 @@ from great_docs.pandoc.blocks import (
 )
 from great_docs.pandoc.components import Attr
 
+from .._constructor import Constructor, class_constructor, without_receiver
 from .._docstring_sections import (
     DCDocstringSectionInitParameters,
     DCDocstringSectionParameterAttributes,
@@ -27,7 +28,7 @@ class __RenderDocCallMixin(RenderDoc):
     """
     Mixin to render Doc objects that can be called
 
-    i.e. classes (for the __init__ method) and functions/methods
+    i.e. classes (for the __init__ or __new__ method) and functions/methods
     """
 
     def __post_init__(self):
@@ -96,20 +97,28 @@ class __RenderDocCallMixin(RenderDoc):
         The parameters of the callable
         """
         obj = self.obj
+        if obj.is_class:
+            return without_receiver(self._constructor.parameters)
+
         parameters = obj.parameters
 
         if not len(parameters) > 0 or not obj.parent:
             return parameters
 
         param = obj.parameters[0].name
-        omit_first_parameter = (obj.parent.is_class and param in ("self", "cls")) or (
-            obj.parent.is_module and obj.is_class and param == "self"
-        )
+        omit_first_parameter = obj.parent.is_class and param in ("self", "cls")
 
         if omit_first_parameter:
             parameters = gf.Parameters(*list(parameters)[1:])
 
         return parameters
+
+    @cached_property
+    def _constructor(self) -> Constructor:
+        """
+        The constructor behind a class's signature
+        """
+        return class_constructor(cast("gf.Class", self.obj))
 
     def render_signature(self) -> BlockContent:
         """
@@ -168,21 +177,17 @@ class __RenderDocCallMixin(RenderDoc):
         For functions, `.overloads` is a `list[Function]`. For classes it is a
         `dict[str, list[Function]]` keyed by member name, which is non-empty
         (and thus truthy) for any class that merely defines methods, even when
-        none of them are actually overloaded. Flattening it makes the result
-        reflect real overloads, so dataclass constructor signatures are not
-        lost.
+        none of them are actually overloaded. A class takes the overloads of
+        its constructor only, so dataclass constructor signatures are not
+        lost and overloaded methods do not stand in for the constructor.
 
         Returns
         -------
         The overload variants, empty when the callable has none.
         """
-        # The renderer also handles classes, whose overloads are grouped by
-        # member name. Accept both grouped and callable overloads.
-        overloads: dict[str, list[gf.Function]] | list[gf.Function] | None = getattr(
-            self.obj, "overloads", None
-        )
-        if isinstance(overloads, dict):
-            return [ov for ovs in overloads.values() for ov in ovs]
+        if self.obj.is_class:
+            return self._constructor.overloads
+        overloads: list[gf.Function] | None = getattr(self.obj, "overloads", None)
         return list(overloads or [])
 
     def _overload_signature_lines(
@@ -201,14 +206,17 @@ class __RenderDocCallMixin(RenderDoc):
         Returns
         -------
         One pair per variant: the variant's text, including its return
-        annotation, and the parameters it was built from.
+        annotation, and the parameters it was built from. A class's
+        variants drop `self` or `cls` and the return annotation, as
+        calling the class returns an instance.
         """
+        is_class = self.obj.is_class
         lines: list[tuple[str, list[str]]] = []
         for ov in overloads:
             if not hasattr(ov, "parameters"):
                 continue
             params: list[str] = []
-            for p in ov.parameters:
+            for p in without_receiver(ov.parameters) if is_class else ov.parameters:
                 ann = repr_obj(p.annotation) if p.annotation else ""
                 default = repr_obj(p.default) if p.default else ""
                 if ann and default:
@@ -219,7 +227,7 @@ class __RenderDocCallMixin(RenderDoc):
                     params.append(f"{p.name}={default}")
                 else:
                     params.append(p.name)
-            ret = repr_obj(ov.returns) if ov.returns else ""
+            ret = repr_obj(ov.returns) if ov.returns and not is_class else ""
             text = make_call_signature_text(name, params, self.settings.callable_signatures.wrap)
             if ret:
                 text += f" -> {ret}"
