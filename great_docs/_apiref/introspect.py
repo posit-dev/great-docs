@@ -585,7 +585,10 @@ def _locate_runtime_attr(
     loader: gf.GriffeLoader | None,
 ) -> _LocatedAttr | _DeclarationOnly:
     """
-    Walk `object_path` from `module` to the runtime attribute it names
+    Resolve a runtime attribute, importing requested submodules as needed
+
+    Import a missing submodule only when its parent is a package. Other missing
+    attributes retain the static declaration fallback.
 
     Parameters
     ----------
@@ -614,7 +617,7 @@ def _locate_runtime_attr(
         When the path names neither a runtime attribute nor a declaration,
         from the static lookup that `_locate_declaration` falls back to.
     ImportError
-        When that static lookup needs a module that cannot be loaded.
+        When an existing submodule or one of its dependencies cannot be imported.
     AttributeError
         The narrower case of a missing runtime attribute: raised only when
         the static model DOES carry a value for it, so the absence is a
@@ -635,6 +638,16 @@ def _locate_runtime_attr(
         try:
             value = getattr(value, name)
         except AttributeError:
+            if isinstance(value, ModuleType) and hasattr(value, "__path__"):
+                import_path = f"{value.__name__}.{name}"
+                try:
+                    value = importlib.import_module(import_path)
+                except ModuleNotFoundError as error:
+                    # A missing dependency inside an existing submodule is an import failure.
+                    if error.name != import_path:
+                        raise
+                else:
+                    continue
             return _locate_declaration(canonical_path or path, name, path, loader)
 
     home = _canonical_path(value, "")

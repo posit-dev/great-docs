@@ -170,7 +170,8 @@ def _to_simple_dict(el: object) -> object:
 
 
 def _join_path(pkg: str | None, name: str) -> str:
-    """Build the griffe lookup path for `name` under `pkg`
+    """
+    Build a griffe lookup path from a package and a relative or qualified name
 
     A lookup path carries at most one `:` (separating the module from the
     object within it), so once either part already has one, the remaining
@@ -178,6 +179,7 @@ def _join_path(pkg: str | None, name: str) -> str:
     """
     if pkg is None:
         return name
+    name = name.removeprefix(f"{pkg}.")
     if ":" in pkg or ":" in name:
         return f"{pkg}.{name}"
     return f"{pkg}:{name}"
