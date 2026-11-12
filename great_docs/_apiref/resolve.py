@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from contextlib import contextmanager
 from contextvars import ContextVar
-from enum import Enum
 from functools import partial
 from textwrap import indent
 from typing import TYPE_CHECKING, Any, Callable, cast
@@ -19,9 +18,9 @@ from ._constructor import parse_class_docstring
 from ._exports import declared_exports
 from ._type_checks import is_enum
 from ._walkable import MISSING, MissingType, Walkable
-from .content import Doc, Link, MemberPage, Page, Section, Text
+from .content import Doc, MemberPage, Page, Section, Text
 from .introspect import resolve_alias
-from .spec import ChildrenStyle, SpecObject, SpecOptions, SpecSection, SpecText
+from .spec import SpecObject, SpecOptions, SpecSection, SpecText
 
 # Dunder members inherited from `object`/`type` (or PyO3 metaclasses) that carry docstrings but are
 # never useful API documentation. Filtered out unconditionally so they do not pollute reference
@@ -160,13 +159,18 @@ def _sections_from_package(mod: gf.Module) -> list[SpecSection]:
 
 
 def _to_simple_dict(el: object) -> object:
-    """Recursively convert a spec node tree to a plain-dict representation, suitable for YAML"""
+    """
+    Convert reference nodes to YAML-compatible mappings
+
+    Leave unspecified options out so a later build can still choose their
+    values automatically.
+    """
+    if isinstance(el, SpecOptions):
+        return {name: _to_simple_dict(value) for name, value in el.specified_options().items()}
     if isinstance(el, Walkable):
         return {k: _to_simple_dict(v) for k, v in el.iter_fields()}
     if isinstance(el, (list, tuple)):
         return [_to_simple_dict(item) for item in el]  # type: ignore[var-annotated]
-    if isinstance(el, Enum):
-        return el.value
     return el
 
 
@@ -208,6 +212,10 @@ class Resolver:
         self.options: SpecOptions | None = None
         self.dynamic: bool = (
             settings.dynamic if (settings is not None and settings.dynamic is not None) else False
+        )
+        self.members_on_same_page = settings.members_on_same_page if settings is not None else None
+        self.max_members_on_same_page = (
+            settings.max_members_on_same_page if settings is not None else 5
         )
 
     def get_object_or_raise(self, path: str, **kwargs: object) -> gf.Object | gf.Alias:
@@ -345,7 +353,6 @@ class Resolver:
             el.name,
             obj,
             children,
-            flat=el.children == ChildrenStyle.flat,
             signature_name=el.signature_name,
         )
 
@@ -357,12 +364,14 @@ class Resolver:
         path: str,
         dynamic: bool,
     ) -> list[object]:
-        """Resolve the members of `obj`, each wrapped per the entry's children style"""
-        # Member precedence: the member's own name, then `member_options`,
-        # then the parent-derived defaults.
-        member_defaults = SpecOptions(dynamic=dynamic, package=path)
+        """
+        Resolve selected members on their parent page or separate pages
+        """
+        # Global placement applies only to top-level entries. Nested members
+        # share their immediate parent's page unless `member_options` sets placement.
+        member_defaults = SpecOptions(dynamic=dynamic, package=path, members_on_same_page=True)
 
-        children: list[object] = []
+        children: list[Doc] = []
         for entry in self._fetch_members(el, obj):
             member_spec = (
                 SpecObject(name=entry)
@@ -378,18 +387,18 @@ class Resolver:
             if member_obj.kind.value == "module":
                 continue
 
-            if el.children == ChildrenStyle.separate:
-                res: object = MemberPage(path=member_obj.path, contents=[member_doc])
-            elif el.children in {ChildrenStyle.embedded, ChildrenStyle.flat}:
-                res = member_doc
-            elif el.children == ChildrenStyle.linked:
-                res = Link(name=member_obj.path, obj=member_obj)
-            else:
-                raise ValueError(f"Unsupported value of children: {el.children}")
+            children.append(member_doc)
 
-            children.append(res)
+        if "members_on_same_page" in el.specified_options():
+            same_page = el.members_on_same_page
+        elif self.members_on_same_page is not None:
+            same_page = self.members_on_same_page
+        else:
+            same_page = len(children) <= self.max_members_on_same_page
 
-        return children
+        if same_page:
+            return list(children)
+        return [MemberPage(path=child.obj.path, contents=[child]) for child in children]
 
     def _fetch_members(self, el: SpecObject, obj: gf.Object | gf.Alias) -> list[str]:
         """Fetch the member paths to document for a given `SpecObject` element and its resolved object"""

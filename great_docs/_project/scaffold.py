@@ -147,7 +147,7 @@ def write_initial_config(
         dynamic_mode = package is None or probe.detect_dynamic_mode(package, names, report=report)
     overrides["dynamic"] = f"dynamic: {'true' if dynamic_mode else 'false'}"
 
-    reference_yaml = reference_block.reference_yaml(config, categories)
+    reference_yaml = reference_block.reference_yaml(categories)
     if "  - title:" in reference_yaml:
         overrides["reference"] = reference_yaml
 

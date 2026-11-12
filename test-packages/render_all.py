@@ -1218,8 +1218,8 @@ def _create_test_coverage_page(name: str) -> str:
         )
     if "bigcl" in applicable and not coverage.get("bigcl"):
         suggestions.append(
-            "Add <code>big_class_name</code> and <code>big_class_method_count</code> "
-            "to the spec to enable big-class method page testing."
+            "Add <code>big_class_name</code> and <code>big_class_member_count</code> "
+            "to the spec to check the member pages of large classes."
         )
     if "ug" in applicable and not coverage.get("ug"):
         suggestions.append(

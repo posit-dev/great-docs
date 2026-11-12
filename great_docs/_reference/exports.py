@@ -250,9 +250,7 @@ class Exports:
                 except BuildError as error:
                     print(f"ERROR: {error}", file=sys.stderr)
                     raise
-            configured = reference_sections.from_explicit_config(
-                self.config, reference_config, categories
-            )
+            configured = reference_sections.from_explicit_config(reference_config, categories)
             if configured:
                 return configured
 

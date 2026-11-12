@@ -139,7 +139,7 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["Pipeline", "create_pipeline"],
         "num_exports": 2,
-        "section_titles": ["Classes", "Pipeline Methods", "Functions"],
+        "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
         "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],
     },

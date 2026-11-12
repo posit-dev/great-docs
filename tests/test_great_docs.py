@@ -111,7 +111,6 @@ from great_docs._apiref.content import (
     DocFunction,
     DocModule,
     DocTypeAlias,
-    Link,
     MemberPage,
     Page,
     Section,
@@ -137,7 +136,7 @@ from great_docs._apiref.resolve import (
     _sections_from_package,
     _to_simple_dict,
 )
-from great_docs._apiref.spec import ChildrenStyle, SpecObject, SpecOptions, SpecSection, SpecText
+from great_docs._apiref.spec import SpecObject, SpecOptions, SpecSection, SpecText
 from great_docs._apiref.typing_information import TypeInformation, TypeSections
 from great_docs._apiref.write import _insert_contents
 from great_docs._apiref.write import merge_frontmatter as _merge_frontmatter
@@ -2595,11 +2594,6 @@ def test_to_simple_dict_tuple():
     assert result[0]["path"] == "x"
 
 
-def test_to_simple_dict_enum():
-    result = _to_simple_dict(ChildrenStyle.embedded)
-    assert result == "embedded"
-
-
 def test_to_simple_dict_primitive():
     assert _to_simple_dict("hello") == "hello"
     assert _to_simple_dict(42) == 42
@@ -3046,7 +3040,7 @@ def test_resolve_members_skips_nodoc_member():
     resolver.get_object = lambda path, **kwargs: objects.get(path)
 
     section = SpecSection(
-        title="T", contents=[SpecObject(name="MyClass", children=ChildrenStyle.embedded)]
+        title="T", contents=[SpecObject(name="MyClass", members_on_same_page=True)]
     )
     [resolved] = resolver.resolve_sections([section])
     doc = resolved.contents[0].contents[0]
@@ -3093,7 +3087,7 @@ def test_resolve_members_skips_module_member():
     resolver.get_object = lambda path, **kwargs: objects.get(path)
 
     section = SpecSection(
-        title="T", contents=[SpecObject(name="MyClass", children=ChildrenStyle.embedded)]
+        title="T", contents=[SpecObject(name="MyClass", members_on_same_page=True)]
     )
     [resolved] = resolver.resolve_sections([section])
     doc = resolved.contents[0].contents[0]
@@ -3102,8 +3096,10 @@ def test_resolve_members_skips_module_member():
     assert "submod" not in member_names
 
 
-def test_resolve_members_children_separate():
-    """ChildrenStyle.separate produces MemberPage"""
+def test_resolve_members_on_separate_pages():
+    """
+    Place selected members on separate pages
+    """
     import griffe as gf
 
     from great_docs._apiref.api_reference import Settings
@@ -3116,61 +3112,12 @@ def test_resolve_members_children_separate():
     resolver.get_object = lambda path, **kwargs: objects.get(path)
 
     section = SpecSection(
-        title="T", contents=[SpecObject(name="MyClass", children=ChildrenStyle.separate)]
+        title="T", contents=[SpecObject(name="MyClass", members_on_same_page=False)]
     )
     [resolved] = resolver.resolve_sections([section])
     doc = resolved.contents[0].contents[0]
     assert len(doc.members) == 1
     assert isinstance(doc.members[0], MemberPage)
-
-
-def test_resolve_members_children_linked():
-    """ChildrenStyle.linked produces Link"""
-    import griffe as gf
-
-    from great_docs._apiref.api_reference import Settings
-
-    cls, method = _make_class_with_method()
-    objects = {"mymod:MyClass": cls, "mymod:MyClass.my_method": method}
-    resolver = Resolver(Settings(parser="numpy"))
-    resolver.current_package = "mymod"
-    resolver.get_object = lambda path, **kwargs: objects.get(path)
-
-    section = SpecSection(
-        title="T", contents=[SpecObject(name="MyClass", children=ChildrenStyle.linked)]
-    )
-    [resolved] = resolver.resolve_sections([section])
-    doc = resolved.contents[0].contents[0]
-    assert len(doc.members) == 1
-    assert isinstance(doc.members[0], Link)
-
-
-def test_resolve_members_children_invalid_raises():
-    """Unsupported children value raises ValueError"""
-    from unittest.mock import MagicMock
-
-    import griffe as gf
-
-    from great_docs._apiref.api_reference import Settings
-
-    cls, method = _make_class_with_method()
-    objects = {"mymod:MyClass": cls, "mymod:MyClass.my_method": method}
-    resolver = Resolver(Settings(parser="numpy"))
-    resolver.current_package = "mymod"
-    resolver.get_object = lambda path, **kwargs: objects.get(path)
-
-    el = MagicMock(spec=SpecObject)
-    el.name = "MyClass"
-    el.package = None
-    el.dynamic = None
-    el.children = "BOGUS_STYLE"
-    el.member_options = None
-    el.members = ["my_method"]
-    el.signature_name = "relative"
-    el.with_defaults.return_value = el
-
-    with pytest.raises(ValueError, match="Unsupported value of children"):
-        resolver._resolve_members(el, cls, path="mymod:MyClass", dynamic=False)
 
 
 def test_fetch_members_module_with_exports_filters_unexported():
@@ -21324,9 +21271,6 @@ def test_parse_dunder_all_dotted_name():
         assert "Beta" in exports
 
 
-# ── inline_methods integration tests ─────────────────────────────────────────
-
-
 # ── Package Info Page ──────────────────────────────────────────────────────
 
 
@@ -21416,68 +21360,60 @@ def test_announcement_position_defaults_above_in_meta_tag():
 
 
 def test_build_reference_yaml_classes_and_functions():
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        categories = {
-            "classes": ["Beta", "Alpha"],
-            "functions": ["helper"],
-            "class_methods": {"Alpha": 0, "Beta": 0},
-            "class_method_names": {},
-        }
-        result = reference_block.reference_yaml(docs._config, categories)
-        assert result.startswith("reference:")
-        assert "  - title: Classes" in result
-        assert "      - Alpha" in result  # sorted
-        assert "  - title: Functions" in result
-        assert "      - helper" in result
+    categories = {
+        "classes": ["Beta", "Alpha"],
+        "functions": ["helper"],
+        "class_methods": {"Alpha": 0, "Beta": 0},
+        "class_method_names": {},
+    }
+    result = reference_block.reference_yaml(categories)
+    assert result.startswith("reference:")
+    assert "  - title: Classes" in result
+    assert "      - Alpha" in result  # sorted
+    assert "  - title: Functions" in result
+    assert "      - helper" in result
 
 
-def test_build_reference_yaml_large_class_split():
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        categories = {
-            "classes": ["Big"],
-            "class_methods": {"Big": 42},
-            "class_method_names": {"Big": ["a", "b"]},
-        }
-        result = reference_block.reference_yaml(docs._config, categories)
-        assert "members: false" in result
-        assert "  - title: Big Methods" in result
-        assert "      - Big.a" in result
+def test_build_reference_yaml_large_class_defers_member_placement():
+    categories = {
+        "classes": ["Big"],
+        "class_methods": {"Big": 42},
+        "class_method_names": {"Big": ["a", "b"]},
+    }
+    result = reference_block.reference_yaml(categories)
+    assert "      - Big  # 42 method(s)" in result
+    assert "members: false" not in result
+    assert "Big Methods" not in result
 
 
 def test_build_reference_yaml_separates_class_like_sections_with_a_blank_line():
     """Verify that a blank line separates class and protocol YAML sections"""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        categories = {
-            "classes": ["Alpha"],
-            "protocols": ["Proto"],
-            "class_methods": {},
-            "class_method_names": {},
-        }
-        result = reference_block.reference_yaml(docs._config, categories)
-        assert "      - Alpha\n\n  - title: Protocols" in result
+    categories = {
+        "classes": ["Alpha"],
+        "protocols": ["Proto"],
+        "class_methods": {},
+        "class_method_names": {},
+    }
+    result = reference_block.reference_yaml(categories)
+    assert "      - Alpha\n\n  - title: Protocols" in result
 
 
 def test_build_reference_yaml_notes_method_count_of_small_class():
-    """Verify that small classes keep inline methods and a method count"""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        categories = {
-            "classes": ["Small"],
-            "class_methods": {"Small": 2},
-            "class_method_names": {"Small": ["a", "b"]},
-        }
-        result = reference_block.reference_yaml(docs._config, categories)
-        assert "      - Small  # 2 method(s)" in result
-        assert "members: false" not in result
+    """
+    Annotate a class entry with its discovered method count
+    """
+    categories = {
+        "classes": ["Small"],
+        "class_methods": {"Small": 2},
+        "class_method_names": {"Small": ["a", "b"]},
+    }
+    result = reference_block.reference_yaml(categories)
+    assert "      - Small  # 2 method(s)" in result
+    assert "members: false" not in result
 
 
 def test_build_reference_yaml_empty():
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        assert reference_block.reference_yaml(docs._config, {}) == "reference:"
+    assert reference_block.reference_yaml({}) == "reference:"
 
 
 class TestSaveFreezeCacheVersioned:

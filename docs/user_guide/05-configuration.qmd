@@ -532,19 +532,22 @@ sidebar_filter:
   min_items: 20   # Minimum items before showing filter (default: 20)
 ```
 
-## Method Page Splitting
+## Member Page Placement
 
-Control whether class methods get their own pages or stay inline on the class page:
+Choose whether a class or module shares its page with its selected members:
 
 ```{.yaml filename="docs/great-docs.yml"}
-inline_methods: 5      # Split above 5 methods (default)
-inline_methods: 10     # Split above 10 methods
-inline_methods: true   # Always inline (never split)
-inline_methods: false  # Always split to separate pages
+members_on_same_page: null   # Use the automatic limit (default)
+max_members_on_same_page: 5  # Keep up to five selected direct members together
 ```
 
-See [API Documentation: Smart Method Handling](06-api-documentation.qmd#smart-method-handling) for
-detailed examples.
+Set `members_on_same_page` to `true` to keep members on their parent page, or `false` to give each
+member its own page. An explicit per-entry value takes precedence over this global value.
+When the global value is `null` or omitted, `max_members_on_same_page` limits how many members
+share a page after selection and filtering. Nested descendants do not add to the parent's count.
+
+See [API Documentation: Member Page Placement](06-api-documentation.qmd#member-page-placement)
+for examples and precedence.
 
 ## Markdown Pages
 
@@ -879,8 +882,8 @@ reference:
     desc: Main classes for working with the package
     contents:
       - name: MyClass
-        members: false       # Don't document methods here
-      - SimpleClass          # Methods documented inline (default)
+        members: false       # Exclude member documentation
+      - SimpleClass          # Use the member placement policy
 
   - title: Utility Functions
     desc: Helper functions for common tasks

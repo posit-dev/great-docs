@@ -11,14 +11,12 @@ if TYPE_CHECKING:
     from .discovery import Categories
 
 
-def reference_yaml(config: Config, categories: Categories) -> str:
+def reference_yaml(categories: Categories) -> str:
     """
     Build the `reference:` YAML block from categorised exports
 
     Parameters
     ----------
-    config
-        The documentation configuration.
     categories
         The package's exports sorted into the groups of the API reference.
 
@@ -31,8 +29,6 @@ def reference_yaml(config: Config, categories: Categories) -> str:
     lines = ["reference:"]
 
     class_methods = categories.get("class_methods", {})
-    class_method_names = categories.get("class_method_names", {})
-    large_classes: list[str] = []
     has_prev_section = False
 
     _class_like_sections = [
@@ -53,25 +49,11 @@ def reference_yaml(config: Config, categories: Categories) -> str:
         lines.append("    contents:")
         for class_name in sorted(items):
             method_count = class_methods.get(class_name, 0)
-            if config.should_split_methods(method_count):
-                lines.append(f"      - name: {class_name}")
-                lines.append(f"        members: false  # {method_count} methods listed below")
-                large_classes.append(class_name)
-            elif method_count > 0:
+            if method_count > 0:
                 lines.append(f"      - {class_name}  # {method_count} method(s)")
             else:
                 lines.append(f"      - {class_name}")
         has_prev_section = True
-
-    for class_name in large_classes:
-        method_names = class_method_names.get(class_name, [])
-        if method_names:
-            lines.append("")
-            lines.append(f"  - title: {class_name} Methods")
-            lines.append(f"    desc: Methods for the {class_name} class")
-            lines.append("    contents:")
-            for method_name in method_names:
-                lines.append(f"      - {class_name}.{method_name}")
 
     _flat_sections = [
         ("enums", "Enumerations", "Enumeration types"),
@@ -141,6 +123,9 @@ def configure(
     }
     if ref_desc:
         api_ref_config["desc"] = ref_desc
+    if site_config.members_on_same_page is not None:
+        api_ref_config["members_on_same_page"] = site_config.members_on_same_page
+    api_ref_config["max_members_on_same_page"] = site_config.max_members_on_same_page
 
     dynamic = site_config.dynamic
     api_ref_config["dynamic"] = dynamic

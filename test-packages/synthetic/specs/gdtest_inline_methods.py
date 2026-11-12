@@ -1,25 +1,18 @@
 """
-gdtest_inline_methods — Tests inline_methods config option variants.
+Automatic placement with a limit of five documented members
 
-Dimensions: K54
-Focus: inline_methods config controlling whether class methods get their own
-pages or stay inline on the class page. Uses three classes of different sizes
-to demonstrate the default threshold (5), always-inline (true), and
-always-split (false) behaviors.
-
-This spec uses the default (inline_methods: 5), which matches the standard
-behavior: classes with >5 methods get split, others stay inline.
+Keep SmallWidget's three methods together and give BigProcessor's eight methods separate pages.
 """
 
 SPEC = {
     "name": "gdtest_inline_methods",
-    "description": "Tests inline_methods config (default threshold of 5)",
+    "description": "Places class members automatically with max_members_on_same_page: 5",
     "dimensions": ["K54"],
     "pyproject_toml": {
         "project": {
             "name": "gdtest-inline-methods",
             "version": "0.1.0",
-            "description": "Test package for inline_methods config option",
+            "description": "Automatic member placement with a limit of five",
         },
         "build-system": {
             "requires": ["setuptools"],
@@ -27,11 +20,11 @@ SPEC = {
         },
     },
     "config": {
-        # Default: inline_methods: 5 (split classes with >5 methods)
+        # Default: max_members_on_same_page: 5 (split classes with >5 methods)
     },
     "files": {
         "gdtest_inline_methods/__init__.py": '''\
-            """Package testing inline_methods config option."""
+            """Automatic placement by documented member count"""
 
             __version__ = "0.1.0"
             __all__ = ["SmallWidget", "BigProcessor", "helper_func"]
@@ -240,9 +233,9 @@ SPEC = {
         "README.md": """\
             # gdtest-inline-methods
 
-            Package testing the `inline_methods` config option with default
-            threshold of 5. SmallWidget (3 methods) stays inline; BigProcessor
-            (8 methods) gets split to separate pages.
+            With the default `max_members_on_same_page: 5`, `SmallWidget` keeps its
+            3 methods on the class page. `BigProcessor` has 8 methods, so each gets
+            its own page.
         """,
     },
     "expected": {
@@ -251,11 +244,11 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["SmallWidget", "BigProcessor", "helper_func"],
         "num_exports": 3,
-        "section_titles": ["Classes", "BigProcessor Methods", "Functions"],
+        "section_titles": ["Classes", "Functions"],
         "big_class_name": "BigProcessor",
-        "big_class_method_count": 8,
+        "big_class_member_count": 8,
         "inline_class_name": "SmallWidget",
-        "inline_class_method_count": 3,
+        "same_page_member_count": 3,
         "has_user_guide": False,
         "coverage_exclude": ["nodoc", "ug", "supp", "hdg"],
     },

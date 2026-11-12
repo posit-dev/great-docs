@@ -1,20 +1,18 @@
 """
-gdtest_inline_never — Tests inline_methods: false (always split methods).
+Separate member pages under a global override
 
-Dimensions: K56
-Focus: When inline_methods is set to false, every class with at least one
-method gets its methods split into separate pages, regardless of method count.
+Give every documented member its own page, including members of small classes.
 """
 
 SPEC = {
     "name": "gdtest_inline_never",
-    "description": "Tests inline_methods: false (always split to separate pages)",
+    "description": "Gives each class member a page with members_on_same_page: false",
     "dimensions": ["K56"],
     "pyproject_toml": {
         "project": {
             "name": "gdtest-inline-never",
             "version": "0.1.0",
-            "description": "Test package for inline_methods: false",
+            "description": "Separate class member pages under a global override",
         },
         "build-system": {
             "requires": ["setuptools"],
@@ -22,11 +20,11 @@ SPEC = {
         },
     },
     "config": {
-        "inline_methods": False,
+        "members_on_same_page": False,
     },
     "files": {
         "gdtest_inline_never/__init__.py": '''\
-            """Package testing inline_methods: false (always split)."""
+            """Class members placed on separate pages by a global override"""
 
             __version__ = "0.1.0"
             __all__ = ["TinyWidget", "MediumService", "standalone_func"]
@@ -34,7 +32,7 @@ SPEC = {
 
             class TinyWidget:
                 """
-                A class with only two methods—still gets split with inline_methods: false.
+                A two-method class whose members use separate pages
 
                 Parameters
                 ----------
@@ -120,9 +118,9 @@ SPEC = {
         "README.md": """\
             # gdtest-inline-never
 
-            Package testing `inline_methods: false`. Both TinyWidget (2 methods)
-            and MediumService (4 methods) get split into separate method pages,
-            even though they would normally stay inline with the default threshold.
+            Set `members_on_same_page: false` to give each method of `TinyWidget`
+            (2 methods) and `MediumService` (4 methods) its own page. The override
+            applies even though both classes are below the default limit.
         """,
     },
     "expected": {
@@ -131,13 +129,8 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["TinyWidget", "MediumService", "standalone_func"],
         "num_exports": 3,
-        # With inline_methods: false, BOTH classes get "Methods" companion sections
-        "section_titles": [
-            "Classes",
-            "TinyWidget Methods",
-            "MediumService Methods",
-            "Functions",
-        ],
+        # With members_on_same_page: false, both classes get separate member pages
+        "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
         "methods_always_split": True,
         "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],

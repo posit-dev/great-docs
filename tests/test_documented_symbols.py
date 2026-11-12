@@ -406,22 +406,48 @@ def _write_large_class_under_another_name(root: Path) -> None:
     )
 
 
-def test_a_project_imported_under_another_name_gets_the_build_sections(tmp_path: Path):
+def test_a_project_imported_under_another_name_keeps_member_page_paths(tmp_path: Path) -> None:
     """
-    Match the build's method sections when project and import names differ
-
-    A class with more than five methods gets its own section, with a separate page
-    for each method.
+    Use the import name in member-page paths when the distribution name differs
     """
     _write_large_class_under_another_name(tmp_path)
     gd = GreatDocs(project_path=str(tmp_path))
     methods = [f"Big.m{i}" for i in range(1, 7)]
 
-    assert _symbol_names(gd, "my-dist") == ["Big", "Cache", "Cache.get", *methods]
+    assert _symbol_names(gd, "my-dist") == ["Big", *methods, "Cache", "Cache.get"]
     pages = {item.name: item.uri for item in _objects(gd, "my-dist")}
     assert [pages[f"actual_module.{method}"] for method in methods] == [
-        f"reference/{method}.html#actual_module.{method}" for method in methods
+        f"reference/actual_module.{method}.html" for method in methods
     ]
+
+
+@pytest.mark.parametrize(
+    ("settings", "expected_uri"),
+    [
+        ("members_on_same_page: true", "reference/Big.html#actual_module.Big.m1"),
+        (
+            "members_on_same_page: false",
+            "reference/actual_module.Big.m1.html",
+        ),
+        ("max_members_on_same_page: 6", "reference/Big.html#actual_module.Big.m1"),
+        (
+            "max_members_on_same_page: 0",
+            "reference/actual_module.Big.m1.html",
+        ),
+    ],
+)
+def test_documented_objects_follow_the_site_member_policy(
+    tmp_path: Path, settings: str, expected_uri: str
+) -> None:
+    """
+    Report inventory locations chosen by the site's override or member limit
+    """
+    _write_large_class_under_another_name(tmp_path)
+    (tmp_path / "great-docs.yml").write_text(f"module: actual_module\n{settings}\n")
+    gd = GreatDocs(project_path=str(tmp_path))
+
+    pages = {item.name: item.uri for item in _objects(gd, "my-dist")}
+    assert pages["actual_module.Big.m1"] == expected_uri
 
 
 @pytest.mark.parametrize("setting", ["reference: false", "project_type: go"])

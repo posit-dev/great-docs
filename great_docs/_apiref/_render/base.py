@@ -35,7 +35,6 @@ class __RenderBase(Block):
         | content.DocModule
         | content.Page
         | content.Section
-        | content.Link
     )
     """The node being documented"""
 

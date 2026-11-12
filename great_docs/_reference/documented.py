@@ -201,6 +201,8 @@ def _resolved_reference(
                         "sections": sections,
                         "parser": config.parser or "numpy",
                         "dynamic": config.dynamic,
+                        "members_on_same_page": config.members_on_same_page,
+                        "max_members_on_same_page": config.max_members_on_same_page,
                     }
                 }
             )

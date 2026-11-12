@@ -163,7 +163,7 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["BigEngine", "helper_a", "helper_b"],
         "num_exports": 3,
-        "section_titles": ["Classes", "BigEngine Methods", "Functions"],
+        "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
         "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],
     },

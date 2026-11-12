@@ -447,7 +447,7 @@ SPEC = {
         ],
         "num_exports": 10,
         "big_class_name": "Pipeline",
-        "big_class_method_count": 6,
+        "big_class_member_count": 6,
         "has_user_guide": True,
         "user_guide_files": ["01-introduction.qmd", "02-quickstart.qmd", "03-advanced.qmd"],
         "has_license_page": True,

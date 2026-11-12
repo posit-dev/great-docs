@@ -171,7 +171,7 @@ SPEC = {
         "export_names": ["MyClass", "helper_func", "util_a", "util_b"],
         "num_exports": 4,
         "section_titles": ["Core", "Utilities"],
-        "init_section_titles": ["Classes", "MyClass Methods", "Functions"],
+        "init_section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
         "explicit_reference": True,
         "members_false_classes": ["MyClass"],

@@ -758,7 +758,7 @@ class __RenderDoc(RenderBase):
         anchor = self.doc.name if self.contained else self.doc.anchor
         link = Link(
             markdown_escape(self.summary_name),
-            f"{self.page_path}#{anchor}",
+            f"{self.page_path}#{anchor}" if anchor else self.page_path,
             attr=Attr(classes=[f"doc-{self.kind_slug}", "doc-label", f"doc-label-{self.label}"]),
         )
         return [(str(link), self.docstring_subject)]

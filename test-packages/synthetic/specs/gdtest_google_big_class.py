@@ -136,7 +136,7 @@ SPEC = {
         "detected_parser": "google",
         "export_names": ["DataProcessor", "load_data"],
         "num_exports": 2,
-        "section_titles": ["Classes", "DataProcessor Methods", "Functions"],
+        "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
         "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],
     },

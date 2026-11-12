@@ -14,7 +14,7 @@ from griffe import AliasResolutionError, CyclicAliasError
 
 from .._interlinks.sphinx_inventory import INVENTORY_FILENAME
 from ._settings import Settings, SourceLinks
-from .content import Doc, Link, Page
+from .content import Doc, Page
 from .inventory import create_inventory, write_inventory
 from .resolve import ObjectNotFoundError, Resolver, resolution_lang
 from .spec import SpecObject, SpecOptions, SpecSection, unique_page_paths
@@ -217,7 +217,7 @@ class APIReference:
         """
         stems: list[str] = []
 
-        def visit(node: Doc | Page | Link, stem: str) -> None:
+        def visit(node: Doc | Page, stem: str) -> None:
             stems.append(stem)
             for member in _member_children(node):
                 visit(member, f"{stem}.{_member_name(member)}")
@@ -271,16 +271,16 @@ class APIReference:
             write_sidebar(self, resolved, dir=s.dir, out_page_suffix=s.out_page_suffix)
 
 
-def _member_name(node: Doc | Page | Link) -> str:
-    """The relative name of a resolved member node (Doc, MemberPage, or Link)"""
-    if isinstance(node, Page):  # MemberPage (children: separate)
+def _member_name(node: Doc | Page) -> str:
+    """
+    Return a member's name relative to its documented parent
+    """
+    if isinstance(node, Page):
         return node.contents[0].name
-    if isinstance(node, Link):  # children: linked
-        return node.name.rsplit(".", 1)[-1]
-    return node.name  # Doc
+    return node.name
 
 
-def _member_children(node: Doc | Page | Link) -> list[Doc | Page | Link]:
+def _member_children(node: Doc | Page) -> list[Doc | Page]:
     """The nested member nodes of a resolved member node, if any"""
     doc = node.contents[0] if isinstance(node, Page) else node
     return list(getattr(doc, "members", []))

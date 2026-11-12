@@ -245,7 +245,7 @@ def run_lint(
 
 def _check_config_keys(user_config: dict[str, Any], result: LintResult) -> None:
     """
-    Report language keys that great-docs reads under another name or not at all
+    Report deprecated or ignored configuration keys
 
     `site.language` still works but is spelled `site.lang`, Quarto's key. A
     top-level `language` string is ignored. A top-level `language` mapping is
@@ -258,6 +258,22 @@ def _check_config_keys(user_config: dict[str, Any], result: LintResult) -> None:
     result
         The lint result to append issues to.
     """
+    if "inline_methods" in user_config:
+        placement = user_config["inline_methods"]
+        if isinstance(placement, bool):
+            replacement = "`members_on_same_page`"
+        elif isinstance(placement, int):
+            replacement = "`max_members_on_same_page`"
+        else:
+            replacement = "`members_on_same_page` or `max_members_on_same_page`"
+        result.issues.append(
+            LintIssue(
+                check="config-key",
+                severity="warning",
+                symbol="inline_methods",
+                message=f"Replace `inline_methods` with {replacement}.",
+            )
+        )
     site = user_config.get("site")
     if isinstance(site, dict) and "language" in site:
         result.issues.append(

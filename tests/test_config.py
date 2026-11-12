@@ -1388,77 +1388,31 @@ def test_tags_index_page_false_when_disabled(tmp_path):
     assert cfg.tags_index_page is False
 
 
-# ── inline_methods / should_split_methods ─────────────────────────────
-
-
-class TestShouldSplitMethods:
-    def test_default_splits_above_5(self, tmp_project: Path):
+class TestMemberPageConfiguration:
+    def test_defaults_use_automatic_limit(self, tmp_project: Path) -> None:
         cfg = Config(tmp_project)
-        assert cfg.should_split_methods(5) is False
-        assert cfg.should_split_methods(6) is True
+        assert cfg.members_on_same_page is None
+        assert cfg.max_members_on_same_page == 5
 
-    def test_true_never_splits(self, tmp_project: Path):
-        cfg = write_config(tmp_project, "inline_methods: true\n")
-        assert cfg.should_split_methods(0) is False
-        assert cfg.should_split_methods(100) is False
+    @pytest.mark.parametrize("value", [True, False, None])
+    def test_global_override(self, tmp_project: Path, value: bool | None) -> None:
+        cfg = write_config(tmp_project, {"members_on_same_page": value})
+        assert cfg.members_on_same_page is value
 
-    def test_false_always_splits(self, tmp_project: Path):
-        cfg = write_config(tmp_project, "inline_methods: false\n")
-        assert cfg.should_split_methods(1) is True
-        assert cfg.should_split_methods(100) is True
+    @pytest.mark.parametrize("value", [0, 1, 5, 1000])
+    def test_accepts_nonnegative_member_limit(self, tmp_project: Path, value: int) -> None:
+        cfg = write_config(tmp_project, {"max_members_on_same_page": value})
+        assert cfg.max_members_on_same_page == value
 
-    def test_false_does_not_split_zero_methods(self, tmp_project: Path):
-        cfg = write_config(tmp_project, "inline_methods: false\n")
-        assert cfg.should_split_methods(0) is False
+    @pytest.mark.parametrize("value", [0, 1, 5, "true", [], {}])
+    def test_global_override_rejects_non_booleans(self, tmp_project: Path, value: object) -> None:
+        with pytest.raises(ConfigError, match="members_on_same_page.*true, false or null"):
+            write_config(tmp_project, {"members_on_same_page": value})
 
-    def test_custom_threshold(self, tmp_project: Path):
-        cfg = write_config(tmp_project, "inline_methods: 10\n")
-        assert cfg.should_split_methods(10) is False
-        assert cfg.should_split_methods(11) is True
-
-    def test_invalid_value_falls_back_to_default(self, tmp_project: Path):
-        cfg = write_config(tmp_project, 'inline_methods: "abc"\n')
-        assert cfg.should_split_methods(5) is False
-        assert cfg.should_split_methods(6) is True
-
-    def test_null_falls_back_to_default(self, tmp_project: Path):
-        cfg = write_config(tmp_project, "inline_methods: null\n")
-        assert cfg.should_split_methods(5) is False
-        assert cfg.should_split_methods(6) is True
-
-    def test_zero_threshold_splits_any_methods(self, tmp_project: Path):
-        cfg = write_config(tmp_project, "inline_methods: 0\n")
-        assert cfg.should_split_methods(0) is False
-        assert cfg.should_split_methods(1) is True
-
-    def test_one_threshold(self, tmp_project: Path):
-        cfg = write_config(tmp_project, "inline_methods: 1\n")
-        assert cfg.should_split_methods(1) is False
-        assert cfg.should_split_methods(2) is True
-
-    def test_float_value_truncated_to_int(self, tmp_project: Path):
-        cfg = write_config(tmp_project, "inline_methods: 3.9\n")
-        # float 3.9 → int(3.9) = 3
-        assert cfg.should_split_methods(3) is False
-        assert cfg.should_split_methods(4) is True
-
-    def test_negative_threshold_always_splits(self, tmp_project: Path):
-        cfg = write_config(tmp_project, "inline_methods: -1\n")
-        # Any method_count > -1 is always true
-        assert cfg.should_split_methods(0) is False  # zero-methods guard
-        assert cfg.should_split_methods(1) is True
-
-    def test_large_threshold_never_splits_in_practice(self, tmp_project: Path):
-        cfg = write_config(tmp_project, "inline_methods: 1000\n")
-        assert cfg.should_split_methods(999) is False
-        assert cfg.should_split_methods(1000) is False
-        assert cfg.should_split_methods(1001) is True
-
-    def test_config_default_value_in_defaults(self, tmp_project: Path):
-        """The inline_methods default should be 5 in DEFAULT_CONFIG."""
-        from great_docs.config import DEFAULT_CONFIG
-
-        assert DEFAULT_CONFIG["inline_methods"] == 5
+    @pytest.mark.parametrize("value", [True, False, None, -1, 3.9, "5", [], {}])
+    def test_member_limit_rejects_invalid_values(self, tmp_project: Path, value: object) -> None:
+        with pytest.raises(ConfigError, match="max_members_on_same_page.*non-negative integer"):
+            write_config(tmp_project, {"max_members_on_same_page": value})
 
 
 def test_legacy_site_keys_lift_to_top_level(tmp_path: Path):

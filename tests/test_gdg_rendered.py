@@ -423,19 +423,21 @@ def test_nodoc_items_excluded(pkg_name: str):
 
 
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_BIG_CLASS)
-def test_big_class_has_method_pages(pkg_name: str):
-    """Big classes (>5 methods) should have separate method .html pages."""
+def test_big_class_has_member_pages(pkg_name: str) -> None:
+    """
+    Publish each selected member of a large class on a separate page
+    """
     expected = _EXPECTED_CACHE[pkg_name]
     big_class = expected["big_class_name"]
-    method_count = expected.get("big_class_method_count", 0)
-    if method_count == 0:
-        pytest.skip("No big_class_method_count in spec")
+    member_count = expected.get("big_class_member_count", 0)
+    if member_count == 0:
+        pytest.skip("No big_class_member_count in spec")
 
     ref = _ref_dir(pkg_name)
-    method_pages = [f.name for f in ref.glob(f"{big_class}.*.html")]
-    assert len(method_pages) == method_count, (
-        f"Expected {method_count} method pages for {big_class}, "
-        f"got {len(method_pages)}: {sorted(method_pages)}"
+    member_pages = [f.name for f in ref.glob(f"*{big_class}.*.html")]
+    assert len(member_pages) == member_count, (
+        f"Expected {member_count} member pages for {big_class}, "
+        f"got {len(member_pages)}: {sorted(member_pages)}"
     )
 
 
@@ -10351,7 +10353,7 @@ def test_KBD_no_shortcode_errors():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DED: inline_methods Config Option
+# DED: Member Page Policy
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _INLINE_DEFAULT_PKG = "gdtest_inline_methods"
@@ -10361,8 +10363,8 @@ _INLINE_NEVER_PKG = "gdtest_inline_never"
 
 @pytest.mark.dedicated
 @requires_bs4
-def test_DED_inline_methods_default_splits_big_class():
-    """gdtest_inline_methods: BigProcessor (8 methods) gets a companion method section."""
+def test_DED_member_limit_default_splits_big_class():
+    """Publish the large fixture class's members on separate pages"""
     pkg = _INLINE_DEFAULT_PKG
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
@@ -10371,14 +10373,14 @@ def test_DED_inline_methods_default_splits_big_class():
     # BigProcessor should have members split to separate pages
     assert (ref / "BigProcessor.html").exists(), "BigProcessor page should exist"
     # Check for method pages (split classes get individual method pages)
-    method_pages = list(ref.glob("BigProcessor.*.html"))
+    method_pages = list(ref.glob("*BigProcessor.*.html"))
     assert len(method_pages) > 0, "BigProcessor should have separate method pages"
 
 
 @pytest.mark.dedicated
 @requires_bs4
-def test_DED_inline_methods_default_keeps_small_class_inline():
-    """gdtest_inline_methods: SmallWidget (3 methods) stays inline."""
+def test_DED_member_limit_default_keeps_small_class_together():
+    """Keep the small fixture class members on their parent page"""
     pkg = _INLINE_DEFAULT_PKG
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
@@ -10386,38 +10388,38 @@ def test_DED_inline_methods_default_keeps_small_class_inline():
     ref = _ref_dir(pkg)
     assert (ref / "SmallWidget.html").exists(), "SmallWidget page should exist"
     # SmallWidget should NOT have separate method pages
-    method_pages = list(ref.glob("SmallWidget.*.html"))
+    method_pages = list(ref.glob("*SmallWidget.*.html"))
     assert len(method_pages) == 0, "SmallWidget should not have separate method pages"
 
 
 @pytest.mark.dedicated
 @requires_bs4
-def test_DED_inline_methods_default_sidebar_has_method_section():
-    """gdtest_inline_methods: sidebar should list BigProcessor Methods section."""
+def test_DED_member_limit_default_links_pages_from_parent():
+    """
+    Link separate member pages from the parent without a companion index section
+    """
     pkg = _INLINE_DEFAULT_PKG
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
-
-    index_html = _site_dir(pkg) / "reference" / "index.html"
-    if not index_html.exists():
-        pytest.skip("Reference index not found")
-
-    content = index_html.read_text(encoding="utf-8")
-    assert "BigProcessor Methods" in content, "Reference index should list BigProcessor Methods"
+    parent = _load_html(_ref_dir(pkg) / "BigProcessor.html")
+    links = [link["href"] for link in parent.select(".gd-summary-table a[href]")]
+    assert any("BigProcessor." in href and ".html" in href for href in links)
+    index = (_ref_dir(pkg) / "index.html").read_text(encoding="utf-8")
+    assert "BigProcessor Methods" not in index
 
 
 @pytest.mark.dedicated
 @requires_bs4
 def test_DED_inline_always_no_method_pages():
-    """gdtest_inline_always: inline_methods=true means no separate method pages."""
+    """Keep all members on their parent page under the global override"""
     pkg = _INLINE_ALWAYS_PKG
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
 
     ref = _ref_dir(pkg)
     assert (ref / "LargeAPI.html").exists(), "LargeAPI page should exist"
-    # With inline_methods: true, no method pages should be created
-    method_pages = list(ref.glob("LargeAPI.*.html"))
+    # Explicit same-page placement overrides the automatic member limit
+    method_pages = list(ref.glob("*LargeAPI.*.html"))
     assert len(method_pages) == 0, "LargeAPI should NOT have separate method pages"
 
 
@@ -10465,8 +10467,8 @@ def test_DED_inline_never_small_class_split():
 
     ref = _ref_dir(pkg)
     assert (ref / "TinyWidget.html").exists(), "TinyWidget page should exist"
-    # With inline_methods: false, even 2-method classes get split
-    method_pages = list(ref.glob("TinyWidget.*.html"))
+    # Explicit separate-page placement also applies to small selections
+    method_pages = list(ref.glob("*TinyWidget.*.html"))
     assert len(method_pages) > 0, "TinyWidget should have separate method pages"
 
 
@@ -10480,25 +10482,24 @@ def test_DED_inline_never_medium_class_split():
 
     ref = _ref_dir(pkg)
     assert (ref / "MediumService.html").exists(), "MediumService page should exist"
-    method_pages = list(ref.glob("MediumService.*.html"))
+    method_pages = list(ref.glob("*MediumService.*.html"))
     assert len(method_pages) > 0, "MediumService should have separate method pages"
 
 
 @pytest.mark.dedicated
 @requires_bs4
-def test_DED_inline_never_both_methods_sections_in_sidebar():
-    """gdtest_inline_never: sidebar should have Methods sections for both classes."""
+def test_DED_separate_members_keep_parent_entries_in_sidebar():
+    """
+    Preserve both class entries without adding companion member sections
+    """
     pkg = _INLINE_NEVER_PKG
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
-
-    index_html = _site_dir(pkg) / "reference" / "index.html"
-    if not index_html.exists():
-        pytest.skip("Reference index not found")
-
-    content = index_html.read_text(encoding="utf-8")
-    assert "TinyWidget Methods" in content, "Should have TinyWidget Methods section"
-    assert "MediumService Methods" in content, "Should have MediumService Methods section"
+    content = (_ref_dir(pkg) / "index.html").read_text(encoding="utf-8")
+    assert "TinyWidget" in content
+    assert "MediumService" in content
+    assert "TinyWidget Methods" not in content
+    assert "MediumService Methods" not in content
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -10783,7 +10784,7 @@ def test_DED_hr_shortcode_embedded_text():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DED: inline_threshold — Custom inline_methods threshold
+# DED: Custom selected-member limit
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _INLINE_THRESHOLD_PKG = "gdtest_inline_threshold"
@@ -10798,7 +10799,7 @@ def test_DED_inline_threshold_compact_class_inlined():
         pytest.skip(f"{pkg} not rendered")
     ref = _ref_dir(pkg)
     # CompactClient should NOT have separate method pages (inlined)
-    compact_methods = list(ref.glob("CompactClient.*.html"))
+    compact_methods = list(ref.glob("*CompactClient.*.html"))
     assert not compact_methods, (
         f"CompactClient methods should be inlined (threshold=10, has 8), "
         f"but found: {[f.name for f in compact_methods]}"
@@ -10814,7 +10815,7 @@ def test_DED_inline_threshold_full_client_split():
         pytest.skip(f"{pkg} not rendered")
     ref = _ref_dir(pkg)
     # FullClient SHOULD have separate method pages (exceeds threshold)
-    full_methods = list(ref.glob("FullClient.*.html"))
+    full_methods = list(ref.glob("*FullClient.*.html"))
     assert len(full_methods) >= 10, (
         f"FullClient should have split method pages (12 methods > threshold 10), "
         f"found {len(full_methods)}"
