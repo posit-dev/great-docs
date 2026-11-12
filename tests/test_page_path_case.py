@@ -18,7 +18,6 @@ from great_docs._apiref import introspect
 from great_docs._apiref.api_reference import APIReference
 from great_docs._apiref.content import MemberPage
 from great_docs._apiref.spec import (
-    ChildrenStyle,
     SpecObject,
     SpecSection,
     SpecText,
@@ -255,7 +254,7 @@ def test_member_pages_get_their_label_as_a_suffix(monkeypatch: pytest.MonkeyPatc
     ref = _api_ref(
         monkeypatch,
         objects,
-        [{"name": "Widget", "children": ChildrenStyle.separate, "members": ["run", "Run"]}],
+        [{"name": "Widget", "members_on_same_page": False, "members": ["run", "Run"]}],
     )
 
     with warnings.catch_warnings():

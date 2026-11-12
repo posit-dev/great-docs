@@ -14,21 +14,11 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from dataclasses import fields as dc_fields
-from enum import Enum
 from functools import partial
 from typing import Any, Final, Self, cast
 
 from ._walkable import MISSING, MissingType, Walkable
 from .introspect import validate_dynamic
-
-
-class ChildrenStyle(Enum):
-    """Rendering style for child members of a class or module"""
-
-    embedded = "embedded"
-    flat = "flat"
-    separate = "separate"
-    linked = "linked"
 
 
 def _validate_members(members: list[str] | None, owner: object) -> None:
@@ -75,7 +65,7 @@ class SpecOptions(Walkable):
     include: str | None = None
     exclude: list[str] | None = None
     dynamic: bool | None = None
-    children: ChildrenStyle = ChildrenStyle.embedded
+    members_on_same_page: bool = True
     package: str | MissingType | None = MISSING
     member_order: str = "alphabetical"
     member_options: SpecOptions | None = None
@@ -86,6 +76,20 @@ class SpecOptions(Walkable):
     _fields_specified: tuple[str, ...] = field(default=(), init=False, repr=False, compare=False)
 
     def __init__(self, **kwargs: object) -> None:
+        if "inline_methods" in kwargs:
+            raise ValueError(
+                "Use `members_on_same_page` on reference entries. "
+                "Use `inline_methods` only as a global setting."
+            )
+        if "children" in kwargs:
+            raise ValueError(
+                "`children` is no longer supported. Set `members_on_same_page: false` "
+                "to give each member a page, or use `members` to select which members to document."
+            )
+        if "members_on_same_page" in kwargs and not isinstance(
+            kwargs["members_on_same_page"], bool
+        ):
+            raise ValueError("Per-entry `members_on_same_page` must be true or false.")
         # Custom __init__ to record which fields the caller supplied explicitly.
         # Subclasses must be decorated with `@dataclass(init=False)`; a plain
         # `@dataclass` regenerates `__init__` and leaves `_fields_specified`
@@ -120,6 +124,10 @@ class SpecOptions(Walkable):
         """
         if "dynamic" in changes:
             validate_dynamic(changes["dynamic"], allow_none=True)
+        if "members_on_same_page" in changes and not isinstance(
+            changes["members_on_same_page"], bool
+        ):
+            raise ValueError("Per-entry `members_on_same_page` must be true or false.")
 
         new = self.copy()
         for name, value in changes.items():

@@ -14,7 +14,6 @@ from great_docs.pandoc.blocks import (
 from great_docs.pandoc.components import Attr
 
 from .._type_checks import (
-    griffe_to_doc,
     is_doc_attribute,
     is_doc_class,
     is_doc_function,
@@ -375,7 +374,7 @@ class __RenderDocMembersMixin(RenderDoc):
 
         render_objs = [
             Render(
-                griffe_to_doc(page.obj, deep=False),
+                Doc.from_griffe(page.obj.name, page.obj, anchor=""),
                 contained=False,
                 page_path=f"{page.path}.qmd",
                 settings=self.settings,

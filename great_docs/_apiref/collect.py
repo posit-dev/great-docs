@@ -47,7 +47,8 @@ class _ManifestBuilder(NodeVisitor):
     def _exit_doc(self, el: Doc) -> Doc:
         p_el = self.enclosing_page()
 
-        uri = reference_uri(self.base_dir, p_el.path, el.anchor)
+        anchor = None if isinstance(p_el, MemberPage) and el is p_el.contents[0] else el.anchor
+        uri = reference_uri(self.base_dir, p_el.path, anchor)
 
         obj = el.obj
         name_path = obj.path
@@ -135,7 +136,7 @@ def unique_member_page_paths(sections: list[Section]) -> list[Section]:
 
     Top-level pages already carry unique paths (see `spec.unique_page_paths()`)
     and the sidebar and `llms.txt` link to them by those paths, so they are
-    claimed first and never move. A member page (from `children: separate`)
+    claimed first and never move. A member page (from `members_on_same_page: false`)
     that would share a file with another page on a case-insensitive filesystem
     gets the member's label as a suffix instead (`Widget.Run-method`).
     """

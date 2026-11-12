@@ -14,6 +14,36 @@ if TYPE_CHECKING:
     from .discovery import Categories
 
 
+def _configured_entry(item: dict[str, Any]) -> str | dict[str, Any]:
+    """
+    Preserve member selection and page placement for a reference entry
+    """
+    if "inline_methods" in item:
+        raise ValueError(
+            "Use `members_on_same_page` on reference entries. "
+            "Use `inline_methods` only as a global setting."
+        )
+    if "children" in item:
+        raise ValueError(
+            "`children` is no longer supported. Set `members_on_same_page: false` "
+            "to give each member a page, or use `members` to select which members to document."
+        )
+    name = item["name"]
+    members = item.get("members", True)
+    entry: dict[str, Any] = {"name": name}
+    if members is False:
+        entry["members"] = []
+    elif isinstance(members, list):
+        entry["members"] = members
+    if members is not False and item.get("include_inherited") is not None:
+        entry["include_inherited"] = item["include_inherited"]
+    if "members_on_same_page" in item:
+        if not isinstance(item["members_on_same_page"], bool):
+            raise ValueError("Per-entry `members_on_same_page` must be true or false.")
+        entry["members_on_same_page"] = item["members_on_same_page"]
+    return entry if len(entry) > 1 else name
+
+
 def from_reference_config(reference_config: Sequence[object] | None) -> list[dict[str, Any]] | None:
     """
     Build API sections from explicit configuration without checking exports
@@ -59,23 +89,7 @@ def from_reference_config(reference_config: Sequence[object] | None) -> list[dic
                 if not name:
                     continue
 
-                members = item.get("members", True)
-                include_inherited = item.get("include_inherited", None)
-
-                if members is False:
-                    section_contents.append({"name": name, "members": []})
-                elif isinstance(members, list):
-                    entry: dict[str, Any] = {"name": name, "members": members}
-                    if include_inherited is not None:
-                        entry["include_inherited"] = include_inherited
-                    section_contents.append(entry)
-                else:
-                    if include_inherited is not None:
-                        section_contents.append(
-                            {"name": name, "include_inherited": include_inherited}
-                        )
-                    else:
-                        section_contents.append(name)
+                section_contents.append(_configured_entry(item))
 
         if section_contents:
             sections.append(
@@ -320,23 +334,11 @@ def from_explicit_config(
                 if not name:
                     continue
 
-                members = item.get("members", True)
-                include_inherited = item.get("include_inherited", None)
-
-                if members is False:
-                    section_contents.append({"name": name, "members": []})
-                elif isinstance(members, list):
-                    entry: dict[str, Any] = {"name": name, "members": members}
-                    if include_inherited is not None:
-                        entry["include_inherited"] = include_inherited
-                    section_contents.append(entry)
-                else:
-                    if include_inherited is not None:
-                        section_contents.append(
-                            {"name": name, "include_inherited": include_inherited}
-                        )
-                    else:
-                        section_contents.append(name)
+                if "members_on_same_page" not in item and item.get("members", True) is not False:
+                    method_count = categories.get("class_methods", {}).get(name, 0)
+                    if config.should_split_methods(method_count):
+                        item = {**item, "members_on_same_page": False}
+                section_contents.append(_configured_entry(item))
 
         if section_contents:
             sections.append(

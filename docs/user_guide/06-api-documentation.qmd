@@ -151,6 +151,32 @@ inline_methods: false
 | `false` | Methods always get their own pages (even for classes with 1–2 methods) |
 | Integer `N` | Methods stay inline for classes with ≤N methods; classes with >N get split (default: `5`) |
 
+### Member placement
+
+Set `members_on_same_page` on a reference entry to choose where its members are documented:
+
+```{.yaml filename="docs/great-docs.yml"}
+reference:
+  - title: Classes
+    contents:
+      - name: DataProcessor
+        members_on_same_page: false
+```
+
+The option accepts only `true` or `false`. Set it to `true` to document members on their
+parent page, or to `false` to generate separate member pages. The parent page links to
+separate pages in a summary table. This choice overrides the global policy for class
+methods and creates no companion "Methods" section. Use `members` to select which members
+to document.
+
+For dictionary entries in `great-docs.yml`, omitting `members_on_same_page` inherits the
+global policy for class methods, which uses the class's discovered method count. An explicit
+`members: false` still excludes members. Raw `api-reference` blocks have no global Great Docs
+policy and keep members on their parent page by default.
+
+Replace `children` in existing Quarto reference blocks with `members_on_same_page` for
+placement or `members` for selection.
+
 The examples below show what Great Docs generates in `_quarto.yml`. This file is regenerated on
 every build, so don't edit it by hand. Use `inline_methods` in `great-docs.yml` to control the
 behavior and let the build produce the right output.

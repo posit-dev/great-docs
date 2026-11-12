@@ -17,16 +17,6 @@ class TestMemberName:
 
         assert _member_name(page) == "my_func"
 
-    def test_link_returns_short_name(self):
-        """Link node returns last part of dotted name."""
-        from great_docs._apiref.api_reference import _member_name
-        from great_docs._apiref.content import Link
-
-        link = MagicMock(spec=Link)
-        link.name = "pkg.sub.Widget"
-
-        assert _member_name(link) == "Widget"
-
 
 class TestMemberChildren:
     def test_page_returns_first_content_members(self):

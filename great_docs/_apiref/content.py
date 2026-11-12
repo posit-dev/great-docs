@@ -34,7 +34,6 @@ class Doc(Walkable):
         obj: gf.Object | gf.Alias,
         members: list[Any] | None = None,
         anchor: str | None = None,
-        flat: bool = False,
         signature_name: str = "relative",
     ) -> DocFunction | DocAttribute | DocTypeAlias | DocClass | DocModule:
         if members is None:
@@ -57,9 +56,9 @@ class Doc(Walkable):
         elif kind == "type alias":
             return DocTypeAlias(**kwargs)
         elif kind == "class":
-            return DocClass(members=members, flat=flat, **kwargs)
+            return DocClass(members=members, **kwargs)
         elif kind == "module":
-            return DocModule(members=members, flat=flat, **kwargs)
+            return DocModule(members=members, **kwargs)
 
         raise TypeError(f"Cannot document object of kind: {obj.kind}")
 
@@ -79,7 +78,6 @@ class DocClass(Doc):
     members: list[DocClass | DocFunction | DocAttribute | DocTypeAlias] = field(
         default_factory=list["DocClass | DocFunction | DocAttribute | DocTypeAlias"]
     )
-    flat: bool = False
 
 
 @dataclass
@@ -104,7 +102,6 @@ class DocModule(Doc):
     members: list[DocClass | DocFunction | DocAttribute | DocTypeAlias | DocModule] = field(
         default_factory=list["DocClass | DocFunction | DocAttribute | DocTypeAlias | DocModule"]
     )
-    flat: bool = False
 
 
 @dataclass
@@ -164,12 +161,4 @@ class Text(Walkable):
     contents: str = ""
 
 
-@dataclass
-class Link(Walkable):
-    """A cross-reference link to a documented object"""
-
-    obj: gf.Object | gf.Alias
-    name: str = ""
-
-
-Content = Section | Page | Doc | DocFunction | DocClass | DocAttribute | DocModule | Link | Text
+Content = Section | Page | Doc | DocFunction | DocClass | DocAttribute | DocModule | Text
