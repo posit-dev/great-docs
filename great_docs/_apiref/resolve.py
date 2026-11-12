@@ -15,6 +15,7 @@ from great_docs._translations import DEFAULT_LANGUAGE
 from great_docs.hooks._docstring_parsed import emit_docstring_parsed
 from great_docs.hooks._object_resolved import emit_object_resolved
 
+from ._constructor import parse_class_docstring
 from ._exports import declared_exports
 from ._type_checks import is_enum
 from ._walkable import MISSING, MissingType, Walkable
@@ -335,6 +336,8 @@ class Resolver:
         if obj is None:
             return None
         if obj.docstring is not None:
+            if obj.is_class:
+                parse_class_docstring(cast("gf.Class", obj))
             _ = emit_docstring_parsed(obj)
         children = self._resolve_members(el, obj, path=path, dynamic=dynamic)
 
