@@ -116,7 +116,7 @@ listing items there. The `exclude` setting only affects what `great-docs init` d
 generating your initial config. Between the built-in exclusions and the explicit list, you can keep
 the reference focused on the symbols your users actually need.
 
-## Member Page Placement {#smart-method-handling}
+## Member Page Placement
 
 For each top-level reference entry, Great Docs counts the direct members that will be documented.
 Depending on the object, these can include methods, attributes, functions and nested classes.

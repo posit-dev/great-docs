@@ -546,7 +546,7 @@ member its own page. An explicit per-entry value takes precedence over this glob
 When the global value is `null` or omitted, `max_members_on_same_page` limits how many members
 share a page after selection and filtering. Nested descendants do not add to the parent's count.
 
-See [API Documentation: Member Page Placement](06-api-documentation.qmd#smart-method-handling)
+See [API Documentation: Member Page Placement](06-api-documentation.qmd#member-page-placement)
 for examples and precedence.
 
 ## Markdown Pages
