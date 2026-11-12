@@ -11,6 +11,9 @@
  * - localStorage persistence of selected version
  * - URL parameter override (?v=0.2)
  * - Keyboard accessible
+ *
+ * Other scripts can read the versions through `window.greatDocsVersions`, which
+ * builds its URLs with the same functions as the selector's links.
  */
 
 (function () {
@@ -173,13 +176,48 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
+  function copyVersion(version) {
+    var entry = {};
+    for (var key in version) {
+      if (Object.prototype.hasOwnProperty.call(version, key)) entry[key] = version[key];
+    }
+    return entry;
+  }
+
+  /**
+   * Build `window.greatDocsVersions`. Each call reads the current location, so
+   * its answers match the selector's links on the open page.
+   *
+   * - current(): the tag of the version this page belongs to
+   * - list(): copies of the version map's entries, in the selector's order
+   * - urlFor(tag): this page's path in that version, with the selector's
+   *   fallbacks, or null for an unknown tag
+   */
+  function createVersionsApi(versionMap) {
+    return {
+      current: function () {
+        return detectCurrentVersion(versionMap);
+      },
+      list: function () {
+        return versionMap.versions.map(copyVersion);
+      },
+      urlFor: function (tag) {
+        var basePath = getSiteBasePath(versionMap);
+        var currentRelPath = getCurrentRelPath(versionMap, basePath);
+        return buildVersionUrl(versionMap, tag, currentRelPath, basePath);
+      },
+    };
+  }
+
+  // ---------------------------------------------------------------------------
   // Widget creation
   // ---------------------------------------------------------------------------
 
-  function createVersionSelector(versionMap) {
-    var basePath = getSiteBasePath(versionMap);
-    var currentTag = detectCurrentVersion(versionMap);
-    var currentRelPath = getCurrentRelPath(versionMap, basePath);
+  function createVersionSelector(versionMap, versions) {
+    var currentTag = versions.current();
 
     // Find current version entry
     var currentVersion = null;
@@ -232,7 +270,7 @@
       var isCurrent = v.tag === currentTag;
 
       var link = document.createElement("a");
-      link.href = buildVersionUrl(versionMap, v.tag, currentRelPath, basePath) || "#";
+      link.href = versions.urlFor(v.tag) || "#";
       link.className = "gd-vs-item" + (isCurrent ? " gd-vs-item-active" : "");
       link.setAttribute("role", "menuitem");
       link.setAttribute("data-version", v.tag);
@@ -322,8 +360,8 @@
   // Warning banners
   // ---------------------------------------------------------------------------
 
-  function injectWarningBanner(versionMap) {
-    var currentTag = detectCurrentVersion(versionMap);
+  function injectWarningBanner(versionMap, versions) {
+    var currentTag = versions.current();
     var currentVersion = null;
     var latestVersion = null;
 
@@ -340,10 +378,7 @@
     var banner = document.createElement("div");
     banner.className = "gd-version-banner";
 
-    var basePath = getSiteBasePath(versionMap);
-    var currentRelPath = getCurrentRelPath(versionMap, basePath);
-    var latestUrl =
-      buildVersionUrl(versionMap, latestVersion.tag, currentRelPath, basePath) || "/";
+    var latestUrl = versions.urlFor(latestVersion.tag) || "/";
 
     if (currentVersion.eol) {
       banner.classList.add("gd-version-banner-eol");
@@ -391,11 +426,15 @@
   // Init
   // ---------------------------------------------------------------------------
 
-  function init() {
-    var versionMap = getVersionMap();
-    if (!versionMap || !versionMap.versions || !versionMap.versions.length) return;
+  var versionMap = getVersionMap();
+  if (!versionMap || !versionMap.versions || !versionMap.versions.length) return;
 
-    createVersionSelector(versionMap);
+  // The version map is in the page's head, so the API is ready before the DOM is.
+  var versions = createVersionsApi(versionMap);
+  window.greatDocsVersions = versions;
+
+  function init() {
+    createVersionSelector(versionMap, versions);
 
     // Check if warning banners are enabled (meta tag)
     var bannerMeta = document.querySelector(
@@ -403,7 +442,7 @@
     );
     var showBanner = !bannerMeta || bannerMeta.getAttribute("content") !== "false";
     if (showBanner) {
-      injectWarningBanner(versionMap);
+      injectWarningBanner(versionMap, versions);
     }
   }
 
