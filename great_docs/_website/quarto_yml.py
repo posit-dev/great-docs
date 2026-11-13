@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from yaml12 import parse_yaml, write_yaml
 
+from .._build import quarto
 from .._build.ownership import QUARTO_YML_HEADER
 from . import inline_data
 from .navigation import navbar as nav_navbar
@@ -90,9 +91,44 @@ def write(build_dir: Path, quarto_config: dict[str, Any]) -> None:
     ordered = {key: value for key, value in quarto_config.items() if key != "api-reference"}
     if "api-reference" in quarto_config:
         ordered["api-reference"] = quarto_config["api-reference"]
+    if quarto.is_q2():
+        ordered = _q2_render_globs(ordered)
     with open(path(build_dir), "w", encoding="utf-8") as f:
         _ = f.write(QUARTO_YML_HEADER)
         write_yaml(ordered, f)
+
+
+def _q2_render_globs(quarto_config: dict[str, Any]) -> dict[str, Any]:
+    """
+    Rewrite `RENDER_GLOBS` in the render list for Quarto 2
+
+    Quarto 2's `*` matches in the project directory only, so each glob becomes a recursive
+    one. Quarto 2 renders `.qmd`, `.md` and `.ipynb` files only, and warns about globs that
+    match nothing, so drop the others.
+
+    Parameters
+    ----------
+    quarto_config
+        The configuration, which is not changed.
+
+    Returns
+    -------
+    :
+        The configuration, copied where the render list changes.
+    """
+    project: Any = quarto_config.get("project")
+    if not isinstance(project, dict):
+        return quarto_config
+    project = cast("dict[str, Any]", project)
+    render = project.get("render")
+    if not isinstance(render, list):
+        return quarto_config
+    globs = [
+        f"**/{entry}" if entry in ("*.qmd", "*.md", "*.ipynb") else entry
+        for entry in cast("list[Any]", render)
+        if entry not in RENDER_GLOBS or entry in ("*.qmd", "*.md", "*.ipynb")
+    ]
+    return {**quarto_config, "project": {**project, "render": globs}}
 
 
 def write_initial(build_dir: Path) -> dict[str, Any]:
