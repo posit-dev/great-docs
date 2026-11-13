@@ -68,26 +68,53 @@ local TYPE_ICONS = {
     danger  = "ban",
 }
 
+--- Return the directory holding this script, ending in a slash.
+---
+--- Quarto 2 omits Lua's `debug` library, so read the filter's path from
+--- `PANDOC_SCRIPT_FILE` instead.
+local function script_dir()
+    if debug then
+        return debug.getinfo(1, "S").source:match("@?(.*/)") or "./"
+    end
+    return (PANDOC_SCRIPT_FILE or ""):match("(.*/)") or "./"
+end
+
+--- Run a helper command without a shell and return its standard output.
+---
+--- Use `pandoc.system.command` where Pandoc has it: under Quarto 2, `io.popen`
+--- can deadlock when filters run on parallel threads.
+---@param cmd_args string[]  The command and its arguments.
+---@return string  The output, or an empty string if the command failed.
+local function run_helper(cmd_args)
+    if pandoc.system.command then
+        local ok, status, out = pcall(
+            pandoc.system.command, cmd_args[1], { table.unpack(cmd_args, 2) }, ""
+        )
+        if not ok or status ~= false then return "" end
+        return out or ""
+    end
+    local parts = {}
+    for _, arg in ipairs(cmd_args) do
+        local escaped = arg:gsub("'", "'\\''")
+        table.insert(parts, "'" .. escaped .. "'")
+    end
+    local handle = io.popen(table.concat(parts, " ") .. " 2>/dev/null")
+    if not handle then return "" end
+    local result = handle:read("*a")
+    if handle:close() ~= true then return "" end
+    return result
+end
+
 --- Render a Lucide icon SVG by calling the icon helper script.
 --- Returns the SVG HTML string, or empty string on failure.
 local function render_icon(icon_name)
     if icon_name == "" then return "" end
 
     -- Locate the icon helper script in the sibling extension directory
-    local script_dir = debug.getinfo(1, "S").source:match("@?(.*/)") or "./"
-    local helper = script_dir .. "../icon/_icon_shortcode.py"
-
-    local cmd = "python3 '" ..
-        helper .. "' '" .. icon_name:gsub("'", "'\\''") ..
-        "' --size 16 --class gd-details-icon 2>/dev/null"
-    local handle = io.popen(cmd)
-    if not handle then return "" end
-
-    local result = handle:read("*a")
-    local success = handle:close()
-
-    if not success or result == "" then return "" end
-    return result
+    local helper = script_dir() .. "../icon/_icon_shortcode.py"
+    return run_helper({
+        "python3", helper, icon_name, "--size", "16", "--class", "gd-details-icon"
+    })
 end
 
 function Div(div)
