@@ -10,11 +10,11 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
-from great_docs._build import github_preview as pp
-from great_docs._build import gitlab_preview as gl
 from great_docs._build import preview as shared_preview
 from great_docs._build import preview_artifacts as pa
 from great_docs._build import serve
+from great_docs._build.repo_hosts import github_preview as pp
+from great_docs._build.repo_hosts import gitlab_preview as gl
 from great_docs.cli import preview
 
 

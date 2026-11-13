@@ -9,8 +9,8 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
-    from .remote import ReleaseData
-    from .repository import Repository
+    from ..remote import ReleaseData
+    from ..repository import Repository
 
 __all__ = ["token_from_env", "stats", "releases"]
 

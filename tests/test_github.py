@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from great_docs._project.github import token_from_env
+from great_docs._project.repo_hosts.github import token_from_env
 from great_docs._project.repository import Repository
 
 

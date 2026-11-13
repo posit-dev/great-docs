@@ -7,9 +7,9 @@ from __future__ import annotations
 import pytest
 from click.testing import CliRunner
 
-from great_docs._build import github_ci as _ci
 from great_docs._build import preview as shared_preview
 from great_docs._build.preview_artifacts import PreviewError
+from great_docs._build.repo_hosts import github_ci as _ci
 from great_docs.cli import cli
 
 
@@ -192,7 +192,7 @@ def test_resolve_ci_repo_falls_through_to_resolve_repo(monkeypatch):
     """No override and no GITHUB_REPOSITORY → delegates to resolve_repo."""
     monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
 
-    import great_docs._build.github_preview as _pr_preview
+    import great_docs._build.repo_hosts.github_preview as _pr_preview
 
     monkeypatch.setattr(
         _pr_preview, "resolve_repo", lambda _a, _b: ("fallback-owner", "fallback-repo")

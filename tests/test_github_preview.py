@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from great_docs._build import github_preview as pp
 from great_docs._build import preview_artifacts as pa
+from great_docs._build.repo_hosts import github_preview as pp
 
 
 def test_parse_owner_repo():

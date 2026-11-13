@@ -11,9 +11,9 @@ import pytest
 import requests
 from click.testing import CliRunner
 
-from great_docs._build import gitlab_ci as glci
 from great_docs._build import preview as shared_preview
 from great_docs._build.preview_artifacts import PreviewError
+from great_docs._build.repo_hosts import gitlab_ci as glci
 from great_docs._project.repository import Repository
 from great_docs.cli import cli
 

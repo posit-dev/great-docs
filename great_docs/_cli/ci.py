@@ -132,8 +132,8 @@ def ci_pr_comment(run_id: int, pr: int, repo: str | None) -> None:
 
     Reads the token from GITHUB_TOKEN / GH_TOKEN and needs 'pull-requests: write'.
     """
-    from .._build.github_ci import post_preview_comment
     from .._build.preview_artifacts import PreviewError
+    from .._build.repo_hosts.github_ci import post_preview_comment
 
     try:
         action, repo_slug = post_preview_comment(run_id=run_id, pr=pr, repo_override=repo)
@@ -150,7 +150,7 @@ def ci_pr_comment(run_id: int, pr: int, repo: str | None) -> None:
 @click.option("--pr", type=int, default=None, help="Pull request number (adds the --pr hint).")
 def ci_notice(run_id: int, pr: int | None) -> None:
     """Print a workflow log notice with the local-preview command."""
-    from .._build.github_ci import render_notice_lines
+    from .._build.repo_hosts.github_ci import render_notice_lines
 
     for line in render_notice_lines(run_id, pr):
         click.echo(line)
@@ -214,8 +214,8 @@ def ci_mr_comment(
     artifact: str,
 ) -> None:
     """Post or update an opt-in GitLab note using a write-capable GITLAB_TOKEN"""
-    from .._build.gitlab_ci import post_preview_comment
     from .._build.preview_artifacts import PreviewError
+    from .._build.repo_hosts.gitlab_ci import post_preview_comment
 
     try:
         action, target = post_preview_comment(
@@ -247,8 +247,8 @@ def ci_gitlab_notice(
     artifact: str,
 ) -> None:
     """Print GitLab job-log preview commands with complete repository identities"""
-    from .._build.gitlab_ci import render_notice_lines, resolve_ci_repositories
     from .._build.preview_artifacts import PreviewError
+    from .._build.repo_hosts.gitlab_ci import render_notice_lines, resolve_ci_repositories
 
     try:
         target, owner = resolve_ci_repositories(repo, artifact_repo, repo_base_url)

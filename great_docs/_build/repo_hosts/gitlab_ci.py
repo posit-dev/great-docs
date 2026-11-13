@@ -10,10 +10,10 @@ from typing import cast
 
 import requests
 
-from .._project.repository import Repository
+from ..._project.repository import Repository
+from ..preview import PREVIEW_COMMENT_MARKER, resolve_repository
+from ..preview_artifacts import PreviewError
 from .gitlab_preview import GitLabClient
-from .preview import PREVIEW_COMMENT_MARKER, resolve_repository
-from .preview_artifacts import PreviewError
 
 
 def resolve_ci_repositories(

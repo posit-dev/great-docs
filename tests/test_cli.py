@@ -3325,7 +3325,9 @@ class TestPreviewMissedBranches:
         site = tmp_path / "_site"
         site.mkdir()
         runner = CliRunner()
-        with patch("great_docs._build.github_preview.preview_pr", side_effect=SystemExit(0)):
+        with patch(
+            "great_docs._build.repo_hosts.github_preview.preview_pr", side_effect=SystemExit(0)
+        ):
             result = runner.invoke(
                 cli,
                 [

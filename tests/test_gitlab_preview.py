@@ -12,9 +12,9 @@ from typing import Any
 import pytest
 import requests
 
-from great_docs._build import gitlab_preview as gl
 from great_docs._build import preview_artifacts as pa
 from great_docs._build import serve
+from great_docs._build.repo_hosts import gitlab_preview as gl
 from great_docs._project.repository import Repository
 from tests.support import GitLabResponse
 

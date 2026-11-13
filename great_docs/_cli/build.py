@@ -390,8 +390,8 @@ def preview(
         sys.exit(1)
     try:
         if gitlab:
-            from .._build.gitlab_preview import preview_gitlab
             from .._build.preview_artifacts import PreviewError
+            from .._build.repo_hosts.gitlab_preview import preview_gitlab
 
             try:
                 preview_gitlab(
@@ -416,8 +416,8 @@ def preview(
         elif given:
             if site_dir:
                 click.echo("Warning: --site-dir is ignored with --pr/--run/--branch", err=True)
-            from .._build.github_preview import preview_pr
             from .._build.preview_artifacts import PreviewError
+            from .._build.repo_hosts.github_preview import preview_pr
 
             try:
                 preview_pr(

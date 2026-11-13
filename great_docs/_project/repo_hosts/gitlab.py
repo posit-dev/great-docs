@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, cast
 from urllib.parse import quote
 
 if TYPE_CHECKING:
-    from .remote import ReleaseData
-    from .repository import Repository
+    from ..remote import ReleaseData
+    from ..repository import Repository
 
 
 def stats(repo: Repository, *, report: Callable[[str], None]) -> dict[str, int]:

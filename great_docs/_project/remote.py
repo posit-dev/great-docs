@@ -12,7 +12,7 @@ from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from typing import Protocol, TypedDict
 
-from . import github
+from .repo_hosts import github
 from .repository import Repository
 
 __all__ = ["HttpRemote", "OfflineRemote", "ReleaseData", "Remote"]
@@ -114,7 +114,7 @@ class HttpRemote:
             fails. Missing or invalid counts have no entry.
         """
         if repo.provider == "gitlab":
-            from . import gitlab
+            from .repo_hosts import gitlab
 
             return gitlab.stats(repo, report=self.report)
         return github.stats(repo)
@@ -142,7 +142,7 @@ class HttpRemote:
         if max_releases <= 0:
             return []
         if repo.provider == "gitlab":
-            from . import gitlab
+            from .repo_hosts import gitlab
 
             return gitlab.releases(repo, max_releases, report=self.report)
         return github.releases(repo, max_releases, report=self.report)

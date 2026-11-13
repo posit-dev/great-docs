@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import os
 
-from .._project.github import token_from_env
-from .._project.repository import Repository
+from ..._project.repo_hosts.github import token_from_env
+from ..._project.repository import Repository
+from ..preview import PREVIEW_COMMENT_MARKER
+from ..preview_artifacts import PreviewError
 from .github_preview import GITHUB_API, _github_identity, _parse_owner_repo
-from .preview import PREVIEW_COMMENT_MARKER
-from .preview_artifacts import PreviewError
 
 _TIMEOUT = 15
 
