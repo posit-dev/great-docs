@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 import watchfiles
 
 from .._project.layout import Layout
+from . import quarto
 from .steps import BuildError
 
 if TYPE_CHECKING:
@@ -127,7 +128,9 @@ def serve(
     staging = stage(layout)
     published = _digests(layout.build_dir)
     stopped = threading.Event()
-    preview = subprocess.Popen(["quarto", "preview", "--no-browser"], cwd=layout.build_dir, env=env)
+    preview = subprocess.Popen(
+        [quarto.executable(), "preview", "--no-browser"], cwd=layout.build_dir, env=env
+    )
 
     def wait_for_preview() -> None:
         _ = preview.wait()
