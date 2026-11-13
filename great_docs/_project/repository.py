@@ -41,6 +41,44 @@ class Repository:
         """Form the repository's web address"""
         return f"{self.base_url}/{quote(self.path, safe='/')}"
 
+    @property
+    def label(self) -> str:
+        """Name the repository provider for readers"""
+        return "GitLab" if self.provider == "gitlab" else "GitHub"
+
+    @property
+    def issues_url(self) -> str:
+        """Form the repository's issue-list address"""
+        route = "-/issues" if self.provider == "gitlab" else "issues"
+        return f"{self.url}/{route}"
+
+    @property
+    def requests_url(self) -> str:
+        """Form the repository's merge-request or pull-request list address"""
+        route = "-/merge_requests" if self.provider == "gitlab" else "pulls"
+        return f"{self.url}/{route}"
+
+    @property
+    def releases_url(self) -> str:
+        """Form the repository's release-list address"""
+        route = "-/releases" if self.provider == "gitlab" else "releases"
+        return f"{self.url}/{route}"
+
+    @property
+    def fork_url(self) -> str:
+        """Form the address for creating a fork"""
+        route = "-/forks/new" if self.provider == "gitlab" else "fork"
+        return f"{self.url}/{route}"
+
+    def release_url(self, tag: str) -> str:
+        """Form the web address of a release tag"""
+        route = "-/releases" if self.provider == "gitlab" else "releases/tag"
+        return f"{self.url}/{route}/{quote(tag, safe='')}"
+
+    def profile_url(self, username: str) -> str:
+        """Form a profile address on the same repository instance"""
+        return f"{self.base_url}/{quote(username, safe='/')}"
+
     def file_url(
         self, path: str, ref: str, start_line: int | None = None, end_line: int | None = None
     ) -> str:

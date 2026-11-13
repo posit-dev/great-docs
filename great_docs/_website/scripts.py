@@ -140,7 +140,7 @@ class Script:
     """Whether a site uses the file"""
 
     needs_repository: bool = False
-    """Whether a site uses the file only when it has a GitHub repository"""
+    """Whether a site uses the file only when it has a repository"""
 
     defer: bool = False
     """Whether the script runs after the document is parsed"""
@@ -171,7 +171,7 @@ class Script:
         config
             The Great Docs configuration.
         has_repository
-            Whether the site has a GitHub repository.
+            Whether the site has a repository.
 
         Returns
         -------
@@ -362,9 +362,9 @@ SCRIPTS: tuple[Script, ...] = (
     Script("webmcp.js", _HEADER, lambda c: c.webmcp_enabled, defer=True),
     Script("announcement-banner.js", gate=lambda c: c.announcement is not None),
     Script(
-        "github-widget.js",
+        "repository-widget.js",
         _AFTER_BODY,
-        lambda c: c.github_style == "widget",
+        lambda c: c.repo_style == "widget",
         needs_repository=True,
     ),
     Script("copy-page.js", _AFTER_BODY, lambda c: c.markdown_pages_widget),
@@ -441,7 +441,7 @@ def copy(config: Config, build_dir: Path, *, has_repository: bool) -> None:
     build_dir
         The Quarto project directory.
     has_repository
-        Whether the site has a GitHub repository.
+        Whether the site has a repository.
 
     Returns
     -------
@@ -483,7 +483,7 @@ def add_resources(config: Config, quarto_config: dict[str, Any], *, has_reposito
     quarto_config
         The Quarto configuration, changed in place.
     has_repository
-        Whether the site has a GitHub repository.
+        Whether the site has a repository.
 
     Returns
     -------
@@ -535,7 +535,7 @@ def include(
     build_dir
         The Quarto project directory, which holds the scripts to embed.
     has_repository
-        Whether the site has a GitHub repository.
+        Whether the site has a repository.
 
     Returns
     -------

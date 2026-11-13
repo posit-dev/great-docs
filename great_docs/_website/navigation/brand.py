@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 
 from ..._content import publish
 from .. import branding, quarto_yml
-from . import github, release
+from . import release, repository
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -70,7 +70,7 @@ def register(
     repo
         The project's repository, or `None` when it has none.
     facts
-        The repository's star and fork counts for the GitHub widget.
+        The repository's star and fork counts for the repository widget.
     documentation_url
         The project's documentation address, which locates favicons when the
         configuration has no `website.site-url`.
@@ -139,25 +139,19 @@ def _add_navbar(
     website
         The `website` mapping of the Quarto configuration, updated in place.
     config
-        Project configuration, including the GitHub entry's style.
+        Project configuration, including the repository entry's style.
     repo
         The project's repository, or `None` when it has none.
     facts
-        The repository's star and fork counts for the GitHub widget.
+        The repository's star and fork counts for the repository widget.
 
     Returns
     -------
     :
     """
     navbar: dict[str, Any] = {"left": []}
-    if repo is not None and repo.provider == "gitlab":
-        navbar["right"] = [{"href": repo.url, "icon": "gitlab", "aria-label": "GitLab"}]
-    elif repo is not None:
-        navbar["right"] = [
-            github.navbar_item(
-                repo.url, repo.namespace, repo.name, config.github_style, facts.github_stats
-            )
-        ]
+    if repo is not None:
+        navbar["right"] = [repository.navbar_item(repo, config.repo_style, facts.repository_stats)]
     website["navbar"] = navbar
 
 

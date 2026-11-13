@@ -669,15 +669,16 @@ def scan(
 def changelog(
     project_path: str | None, max_releases: int | None, config_path: str | None = None
 ) -> None:
-    """Generate a Changelog page from GitHub Releases.
+    """
+    Generate a Changelog page from repository releases
 
-    Fetches published releases from the GitHub API and renders them as a
+    Fetch published releases from the repository API and render them as a
     'changelog.qmd' page in the build directory. The page is also linked in
     the navbar automatically.
 
     \b
-    Requires the project to have a GitHub repository URL in 'pyproject.toml'.
-    Set 'GITHUB_TOKEN' or 'GH_TOKEN' to avoid API rate limits.
+    Require a GitHub or GitLab repository URL in the project configuration or metadata.
+    Set 'GITHUB_TOKEN' or 'GH_TOKEN' for GitHub, or 'GITLAB_TOKEN' for GitLab.
     """
     try:
         layout = Layout.make(
@@ -687,9 +688,9 @@ def changelog(
         config = layout.load_config()
 
         repo = Project.make(config, layout).repository
-        if repo is None or repo.provider != "github":
+        if repo is None:
             click.echo(
-                "Error: No GitHub repository URL found in pyproject.toml. "
+                "Error: No supported repository URL found in the project. "
                 "Add a [project.urls] entry like:\n\n"
                 '  Repository = "https://github.com/owner/repo"',
                 err=True,
@@ -705,7 +706,7 @@ def changelog(
             report=click.echo,
         )
         if contribution is None:
-            click.echo("No published releases found on GitHub.")
+            click.echo("No published releases found.")
         else:
             # Link the page from a site that has been built
             if quarto_yml.path(layout.build_dir).exists():

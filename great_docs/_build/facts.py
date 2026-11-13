@@ -1,5 +1,5 @@
 """
-Repository data from GitHub and the local checkout, read once per documentation build
+Repository data and local checkout facts, read once per documentation build
 """
 
 from __future__ import annotations
@@ -26,14 +26,14 @@ __all__ = ["Facts", "exact_tag", "source_links", "source_ref"]
 
 @dataclass(frozen=True)
 class Facts:
-    """GitHub data shown in the site's navbar"""
+    """Repository data shown in the site's navbar"""
 
-    github_stats: Mapping[str, int] | None = None
+    repository_stats: Mapping[str, int] | None = None
     """
     Star and fork counts under the keys `stars` and `forks`
 
-    Empty when GitHub did not supply them, and `None` when the project has no GitHub
-    repository or does not show the GitHub widget.
+    Empty when the provider did not supply them, and `None` when the project has no
+    repository or does not show the repository widget.
     """
 
     latest_release: Release | None = None
@@ -47,24 +47,24 @@ class Facts:
         Parameters
         ----------
         config
-            Project configuration. Counts are fetched only when `github_style` is
+            Project configuration. Counts are fetched only when `repo_style` is
             `"widget"`.
         repo
-            The project's GitHub repository. Without one, nothing is fetched.
+            The project's repository. Without one, nothing is fetched.
         remote
-            The source of GitHub data.
+            The source of repository data.
 
         Returns
         -------
         :
             The star and fork counts and latest release, when available.
         """
-        if repo is None or repo.provider != "github":
+        if repo is None:
             return cls()
-        stats = remote.github_stats(repo) if config.github_style == "widget" else None
-        latest = remote.github_releases(repo, max_releases=1)
+        stats = remote.repository_stats(repo) if config.repo_style == "widget" else None
+        latest = remote.repository_releases(repo, max_releases=1)
         return cls(
-            github_stats=stats,
+            repository_stats=stats,
             latest_release=Release.make(latest[0]) if latest else None,
         )
 

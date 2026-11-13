@@ -78,7 +78,7 @@ def assemble(
     layout
         Project directories for locating source files and writing build resources.
     repo
-        The project's GitHub repository, if it has one.
+        The project's repository, if it has one.
     facts
         The repository's star and fork counts and its latest release.
     identity
@@ -115,7 +115,7 @@ def assemble(
     FileNotFoundError
         If a header include file does not exist.
     """
-    has_repository = repo is not None and repo.provider == "github"
+    has_repository = repo is not None
     build_dir = layout.build_dir
 
     quarto_defaults.register(quarto_config, config, layout)

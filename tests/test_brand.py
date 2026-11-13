@@ -105,17 +105,30 @@ class TestSite:
 
 
 class TestNavbar:
-    def test_gitlab_links_without_a_github_widget(self, tmp_path: Path) -> None:
+    def test_gitlab_icon_style_uses_provider_branding(self, tmp_path: Path) -> None:
         repository = Repository("gitlab", "https://code.example.org/gitlab", "team/subteam", "pkg")
 
-        quarto_config, _ = _register(tmp_path, repo=repository)
+        quarto_config, _ = _register(tmp_path, "repo_style: icon\n", repo=repository)
 
         assert quarto_config["website"]["navbar"]["right"] == [
             {"href": repository.url, "icon": "gitlab", "aria-label": "GitLab"}
         ]
 
+    def test_gitlab_widget_uses_build_time_destinations_and_zero_counts(
+        self, tmp_path: Path
+    ) -> None:
+        repository = Repository("gitlab", "https://code.example.org/gitlab", "team/subteam", "pkg")
+        facts = Facts(repository_stats={"stars": 0, "forks": 0})
+        quarto, _ = _register(tmp_path, repo=repository, facts=facts)
+        [item] = quarto["website"]["navbar"]["right"]
+        assert item["href"] == repository.url
+        assert 'data-provider="gitlab"' in item["text"]
+        assert 'data-stars="0"' in item["text"]
+        assert 'data-forks="0"' in item["text"]
+        assert "data-public-api" not in item["text"]
+
     def test_creates_the_navbar_with_the_github_widget(self, tmp_path: Path):
-        facts = Facts(github_stats={"stars": 5, "forks": 2})
+        facts = Facts(repository_stats={"stars": 5, "forks": 2})
 
         quarto_config, _ = _register(tmp_path, repo=REPO, facts=facts)
 
@@ -203,9 +216,9 @@ class TestRelease:
         assert "v1.2.0" in quarto_config["website"]["navbar"]["title"]
 
 
-def test_gitlab_identity_uses_plain_navigation(tmp_path: Path) -> None:
+def test_gitlab_identity_uses_repository_navigation(tmp_path: Path) -> None:
     repository = Repository("gitlab", "https://gitlab.com", "group/subgroup", "project")
-    quarto, _ = _register(tmp_path, repo=repository)
+    quarto, _ = _register(tmp_path, "repo_style: icon\n", repo=repository)
     assert quarto["website"]["navbar"]["right"] == [
         {"href": repository.url, "icon": "gitlab", "aria-label": "GitLab"}
     ]

@@ -123,10 +123,11 @@ repo_provider: null
 # Web instance URL, including an installation prefix when needed.
 repo_base_url: null
 
-# GitHub link style
-# : widget - (default) a widget showing the stars count
+# Repository link style
+# : widget - (default) a widget showing available star and fork counts
 # : icon - a simple icon
-github_style: widget
+# Accept github_style as a legacy fallback; explicit repo_style wins.
+repo_style: widget
 
 # Site URL
 # --------
@@ -273,9 +274,9 @@ show_author: true
 # Show security policy page (from SECURITY.md)
 show_security: true
 
-# Changelog (GitHub Releases)
+# Changelog (repository releases)
 # ---------------------------
-# Auto-generate a Changelog page from GitHub Releases.
+# Auto-generate a Changelog page from GitHub or GitLab releases.
 changelog:
   enabled: true # Enable/disable changelog (default: true)
   max_releases: 50 # Max releases to include (default: 50)

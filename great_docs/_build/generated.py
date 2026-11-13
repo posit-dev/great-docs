@@ -1,7 +1,7 @@
 """
 Build steps for generated site files and page data
 
-Write `llms.txt` files, agent skills, a changelog from GitHub Releases, a tags index and page
+Write `llms.txt` files, agent skills, a changelog from repository releases, a tags index and page
 status badges, with their navbar links and page data. Prepare pages for the WebMCP tools. Warn
 if skill installation instructions lack a site URL.
 """
@@ -46,13 +46,13 @@ def _webmcp_features(run: Run, config: Config) -> set[str]:
 
     `llms.txt` is written only for a site with an API reference, and before the skills,
     changelog and CLI reference steps run. So a configured CLI reference counts even if its
-    pages turn out empty, a changelog counts for a GitHub repository even if it has no
+    pages turn out empty, a changelog counts for a repository even if it has no
     releases, and skills count when their discovery files are turned on.
 
     Parameters
     ----------
     run
-        The current build, which supplies the project's GitHub repository.
+        The current build, which supplies the project's repository.
     config
         The project's configuration.
 
@@ -60,7 +60,7 @@ def _webmcp_features(run: Run, config: Config) -> set[str]:
     -------
     :
         `site` and `api`; `cli` when a CLI reference is configured; `versions` for a versioned
-        site; `changelog` when the changelog is enabled and the project has a GitHub
+        site; `changelog` when the changelog is enabled and the project has a supported
         repository; and `skills` when skills and their discovery files are enabled.
     """
     features = {"site", "api"}
@@ -71,7 +71,6 @@ def _webmcp_features(run: Run, config: Config) -> set[str]:
     if (
         config.changelog_enabled
         and run.project.repository is not None
-        and run.project.repository.provider == "github"
     ):
         features.add("changelog")
     if config.skill_enabled and config.skill_well_known:
@@ -196,12 +195,12 @@ def check_site_url(run: Run, config: Config, log: BuildLog) -> Outcome:
 
 def changelog(run: Run, config: Config, layout: Layout, *, remote: Remote) -> Outcome:
     """
-    Write the changelog page from GitHub Releases and record its navbar link
+    Write the changelog page from repository releases and record its navbar link
 
     Parameters
     ----------
     run
-        The current build, which supplies the project's GitHub repository and records the
+        The current build, which supplies the project's repository and records the
         navbar link.
     config
         The project's configuration.
@@ -218,14 +217,14 @@ def changelog(run: Run, config: Config, layout: Layout, *, remote: Remote) -> Ou
     if not config.changelog_enabled:
         return Skipped("disabled in config")
     repo = run.project.repository
-    if repo is None or repo.provider != "github":
-        return Skipped("no GitHub repo info")
+    if repo is None:
+        return Skipped("no repository info")
     contribution = changelog_page.write_page(config, layout, repo, remote, report=print)
     if contribution is None:
         return "No releases found; skipped"
     run.contributions.append(contribution)
     run.has_changelog = True
-    return "Changelog from GitHub Releases"
+    return f"Changelog from {repo.label} Releases"
 
 
 def tags(run: Run, config: Config, layout: Layout) -> Outcome:

@@ -327,11 +327,13 @@ class Config:
         dict
             The configuration with legacy keys rewritten.
         """
-        site = user_config.get("site")
-        if not isinstance(site, dict):
-            return user_config
-
         config = dict(user_config)
+        if "github_style" in config:
+            config.setdefault("repo_style", config.pop("github_style"))
+        site = config.get("site")
+        if not isinstance(site, dict):
+            return config
+
         site = config["site"] = dict(cast("ConfigDict", site))
         if "language" in site:
             site.setdefault("lang", site.pop("language"))
@@ -654,9 +656,9 @@ class Config:
         return self["site_url"]
 
     @property
-    def github_style(self) -> str:
-        """Get the GitHub link style."""
-        return self["github_style"]
+    def repo_style(self) -> str:
+        """Get the repository link style"""
+        return self["repo_style"]
 
     @property
     def source_enabled(self) -> bool:

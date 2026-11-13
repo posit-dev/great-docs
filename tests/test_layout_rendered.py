@@ -526,18 +526,25 @@ def test_repository_site_links_and_metadata(
     else:
         assert config["website"]["navbar"]["right"][0]["href"] == repository_url
         assert f"[Source code]({repository_url})" in skill
-    if case == "github":
-        assert any("github-widget.js" in path for path in homepage.resources)
-        assert not any("/blob/" in href for href in reference.links)
+    if repository_url is not None:
+        assert any("repository-widget.js" in path for path in homepage.resources)
+        assert (site / "repository-widget.js").is_file()
     else:
-        assert not any("github-widget" in path for path in homepage.resources)
-        assert "github-widget.js" not in config["project"]["resources"]
-        assert not (site / "github-widget.js").exists()
+        assert not any("repository-widget" in path for path in homepage.resources)
+        assert "repository-widget.js" not in config["project"]["resources"]
+        assert not (site / "repository-widget.js").exists()
         html = "\n".join(path.read_text() for path in site.rglob("*.html"))
         assert "api.github.com" not in html
         assert "github.com/team" not in html
         assert "github.com/layout-example" not in html
+    if case == "github":
+        assert not any("/blob/" in href for href in reference.links)
     if case in ("gitlab", "self-managed"):
+        assert "data-public-api" not in str(config["website"]["navbar"]["right"])
+        html = "\n".join(path.read_text() for path in site.rglob("*.html"))
+        assert "api.github.com" not in html
+        assert "github.com/team" not in html
+        assert "github.com/layout-example" not in html
         text_suffixes = {".html", ".qmd", ".md", ".json", ".yml", ".yaml", ".txt", ".xml", ".js"}
         for output in (*fixture.layout.build_dir.rglob("*"), *site.rglob("*")):
             if output.is_file() and output.suffix in text_suffixes:

@@ -10,7 +10,7 @@ individual build operations. `user_guide_step`, `sections_step`, `custom_pages_s
 `freeze_cache_step` run individual steps with the build's arguments, and
 `apply_contributions` adds what a step records to `_quarto.yml`.
 `stubbed_build` stubs Quarto and build steps while preserving the build's control flow.
-`StubRemote` supplies GitHub and PyPI data without network requests. `homepage_hero` and
+`StubRemote` supplies repository and PyPI data without network requests. `homepage_hero` and
 `homepage_margin` build the homepage hero and sidebar from the project's configuration and metadata.
 `find_user_guide_dir` and `discover_user_guide` find a project's user guide and print its warnings
 as a build does. `write_authored_pages` creates a project with each kind of authored page
@@ -49,6 +49,7 @@ from great_docs._website.project_pages import community
 if TYPE_CHECKING:
     from great_docs._content.user_guide import UserGuide
     from great_docs._project.repository import Repository
+    from great_docs._project.remote import ReleaseData
     from great_docs._project.layout import Layout
 
 # Stub calls within step actions to preserve the step table and build control flow.
@@ -804,7 +805,7 @@ def _empty(annotation: object) -> object:
 @dataclass
 class StubRemote:
     """
-    Preset GitHub and PyPI data for a `GreatDocs` instance
+    Preset repository and PyPI data for a `GreatDocs` instance
 
     Assign an instance to `docs._remote` to prevent network requests in a test.
 
@@ -821,11 +822,11 @@ class StubRemote:
     """
 
     stats: dict[str, int] = field(default_factory=dict)
-    releases: list[dict[str, Any]] = field(default_factory=list)
+    releases: list[ReleaseData] = field(default_factory=list)
     release_dates: dict[str, str] = field(default_factory=dict)
     calls: list[str] = field(default_factory=list)
 
-    def github_stats(self, repo: Repository) -> dict[str, int]:
+    def repository_stats(self, repo: Repository) -> dict[str, int]:
         """
         Return `stats` for any repository
 
@@ -839,10 +840,10 @@ class StubRemote:
         :
             `stats`.
         """
-        self.calls.append("github_stats")
+        self.calls.append("repository_stats")
         return self.stats
 
-    def github_releases(self, repo: Repository, max_releases: int) -> list[dict[str, Any]]:
+    def repository_releases(self, repo: Repository, max_releases: int) -> list[ReleaseData]:
         """
         Return the first `max_releases` entries of `releases`
 
@@ -858,7 +859,7 @@ class StubRemote:
         :
             The newest releases.
         """
-        self.calls.append("github_releases")
+        self.calls.append("repository_releases")
         return self.releases[:max_releases]
 
     def pypi_release_dates(self, package_names: Collection[str]) -> dict[str, str]:
