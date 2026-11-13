@@ -12474,7 +12474,7 @@ def test_cli_ordered_group_list_commands() -> None:
             "skill",
             "termshow",
         ],
-        ("ci",): ["pr-comment", "notice"],
+        ("ci",): ["pr-comment", "notice", "mr-comment", "gitlab-notice"],
         ("skill",): ["install", "check", "list"],
         ("termshow",): [
             "assets",

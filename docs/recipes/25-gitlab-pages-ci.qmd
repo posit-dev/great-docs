@@ -51,7 +51,16 @@ great-docs-preview:
   extends: .docs-build
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  after_script:
+    - |
+      if [ "$CI_JOB_STATUS" = success ]; then
+        uv run --no-sync great-docs ci gitlab-notice --job "$CI_JOB_ID" --mr "$CI_MERGE_REQUEST_IID"
+        if [ "${GREAT_DOCS_MR_COMMENT:-false}" = true ]; then
+          uv run --no-sync great-docs ci mr-comment --job "$CI_JOB_ID" --mr "$CI_MERGE_REQUEST_IID"
+        fi
+      fi
   artifacts:
+    name: docs-html
     paths: [docs/_site]
     expire_in: 1 week
 ```
@@ -112,3 +121,56 @@ not deploy production Pages.
 The pipeline and output layout have local coverage. Live Pages deployment
 acceptance remains pending until those checks run on an authorised GitLab
 project. The generated pipeline posts no merge-request note by default.
+
+
+## Local previews
+
+Download the documentation archive by its job ID without requiring access to job
+metadata. Select a pipeline or an MR when metadata access is available:
+
+```{.bash filename="Terminal"}
+great-docs preview --repo https://gitlab.com/group/package --job 12345
+great-docs preview --repo https://gitlab.com/group/package --pipeline 6789
+great-docs preview --repo https://gitlab.com/group/package --mr 42
+great-docs preview --provider gitlab --repo group/package --mr 42
+```
+
+Pass `--artifact` with the documentation job or archive name when several jobs
+publish archives. A missing or expired archive needs a new documentation build.
+GitHub selectors `--pr`, `--run`, `--branch` and `--use-gh` retain their meanings.
+
+Set `GITLAB_TOKEN` with `read_api` access for private artifacts and MR/pipeline
+metadata. Anonymous access works for public artifacts when the project permits it.
+A permitted `CI_JOB_TOKEN` can download job artifacts; it cannot discover pipelines
+or jobs or post notes. GitLab tokens stay on the GitLab origin during CDN redirects.
+
+For self-managed installations, specify the provider and preserve any HTTP prefix:
+
+```{.bash filename="Terminal"}
+great-docs preview --provider gitlab \
+  --repo https://code.example.org/gitlab/team/subteam/package \
+  --repo-base-url https://code.example.org/gitlab --job 12345
+```
+
+## Opt-in notes
+
+The generated jobs always print ordinary job-log instructions. Enable sticky MR
+notes only for trusted pipelines by setting `GREAT_DOCS_MR_COMMENT=true` and supplying
+`GITLAB_TOKEN` with API write permissions and access to the target MR. Keep write
+credentials out of untrusted contributor builds. A CI job token cannot post notes.
+Run the note command from a trusted job when contributor code requires isolation.
+
+```{.bash filename="Terminal"}
+great-docs ci gitlab-notice --job 12345 --mr 42 \
+  --repo https://gitlab.com/team/package
+great-docs ci mr-comment --job 12345 --mr 42 \
+  --repo https://gitlab.com/team/package \
+  --artifact-repo https://gitlab.com/contributor/package
+```
+
+Use `--repo` for the MR target and `--artifact-repo` for the project that owns the
+built job. Both share the same instance base. In GitLab CI, the commands use
+`CI_MERGE_REQUEST_PROJECT_URL` for the target and `CI_PROJECT_URL` for the job owner.
+They derive the base from `CI_API_V4_URL` unless an explicit configured base is
+preserved by the generated command. Note lookup follows pagination and updates the
+existing preview marker; reruns update that note instead of adding another.

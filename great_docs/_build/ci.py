@@ -95,6 +95,8 @@ def resolve_ci_repo(repo_override: str | None) -> tuple[str, str]:
     """
     if repo_override:
         github = Repository.parse(repo_override)
+        if github is not None and github.provider == "gitlab":
+            raise PreviewError("Use ci mr-comment or ci gitlab-notice for GitLab repositories.")
         parsed = _github_identity(github) if github else _parse_owner_repo(repo_override)
         if parsed:
             return parsed

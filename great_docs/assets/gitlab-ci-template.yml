@@ -30,12 +30,28 @@ great-docs-pages:
     publish: {site_dir}
   rules:
     - if: {deploy_rule}
+  after_script:
+    - |
+      if [ "$CI_JOB_STATUS" = success ]; then
+        {report_command} ci gitlab-notice --job "$CI_JOB_ID"{base_option}
+      fi
 
 great-docs-preview:
   extends: .great-docs-build
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  after_script:
+    - |
+      if [ "$CI_JOB_STATUS" = success ]; then
+        {report_command} ci gitlab-notice --job "$CI_JOB_ID" --mr "$CI_MERGE_REQUEST_IID"{base_option}
+        if [ "${GREAT_DOCS_MR_COMMENT:-false}" = true ]; then
+          {report_command} ci mr-comment --job "$CI_JOB_ID" --mr "$CI_MERGE_REQUEST_IID"{base_option}
+        fi
+      fi
   artifacts:
+    name: docs-html
     paths:
       - {site_dir}
     expire_in: 1 week
+
+# Set GREAT_DOCS_MR_COMMENT=true only for trusted pipelines with an API-write GITLAB_TOKEN.

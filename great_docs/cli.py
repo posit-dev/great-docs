@@ -40,6 +40,8 @@ from ._cli.checks import lint as lint
 from ._cli.checks import proofread as proofread
 from ._cli.checks import seo as seo
 from ._cli.ci import ci as ci
+from ._cli.ci import ci_gitlab_notice as ci_gitlab_notice
+from ._cli.ci import ci_mr_comment as ci_mr_comment
 from ._cli.ci import ci_notice as ci_notice
 from ._cli.ci import ci_pr_comment as ci_pr_comment
 from ._cli.ci import setup_github_pages as setup_github_pages

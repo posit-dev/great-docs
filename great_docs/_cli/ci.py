@@ -7,6 +7,7 @@ import re
 import shlex
 import sys
 from pathlib import Path
+from typing import Any
 
 import click
 
@@ -102,7 +103,8 @@ def _detect_optional_dependencies(project_root: Path) -> list[str]:
 
 @click.group(cls=OrderedGroup)
 def ci() -> None:
-    """Helpers meant to run inside CI (GitHub Actions).
+    """
+    Helpers for GitHub Actions and GitLab CI
 
     These emit the "preview this build locally" hints that let reviewers open a
     pull request's docs without a preview host: a workflow log notice and a
@@ -151,6 +153,111 @@ def ci_notice(run_id: int, pr: int | None) -> None:
     from .._build.ci import render_notice_lines
 
     for line in render_notice_lines(run_id, pr):
+        click.echo(line)
+
+
+def _gitlab_options(command: Any) -> Any:
+    """Apply the shared GitLab build and project selectors to CI commands"""
+    for option in (
+        click.option(
+            "--job",
+            type=click.IntRange(min=1),
+            default=None,
+            help="Artifact-producing GitLab job ID.",
+        ),
+        click.option(
+            "--pipeline",
+            type=click.IntRange(min=1),
+            default=None,
+            help="Artifact-producing GitLab pipeline ID.",
+        ),
+        click.option(
+            "--repo",
+            default=None,
+            help="MR target project URL or GitLab shorthand (default: CI MR project).",
+        ),
+        click.option(
+            "--artifact-repo",
+            default=None,
+            help="Artifact-owning project, when a fork runs the build.",
+        ),
+        click.option(
+            "--repo-base-url",
+            default=None,
+            help="GitLab instance base, including an HTTP installation prefix.",
+        ),
+        click.option(
+            "--artifact",
+            default="docs-html",
+            help="Documentation job or archive name for pipeline/MR selection.",
+        ),
+    ):
+        command = option(command)
+    return command
+
+
+@click.command(name="mr-comment")
+@click.option(
+    "--mr",
+    type=click.IntRange(min=1),
+    required=True,
+    help="Project-local MR IID in the target project.",
+)
+@_gitlab_options
+def ci_mr_comment(
+    mr: int,
+    job: int | None,
+    pipeline: int | None,
+    repo: str | None,
+    artifact_repo: str | None,
+    repo_base_url: str | None,
+    artifact: str,
+) -> None:
+    """Post or update an opt-in GitLab note using a write-capable GITLAB_TOKEN"""
+    from .._build.gitlab_ci import post_preview_comment
+    from .._build.preview_artifacts import PreviewError
+
+    try:
+        action, target = post_preview_comment(
+            mr=mr,
+            job=job,
+            pipeline=pipeline,
+            repo=repo,
+            artifact_repo=artifact_repo,
+            base_url=repo_base_url,
+            artifact=artifact,
+        )
+    except PreviewError as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(f"{action.capitalize()} preview note on {target}!{mr}")
+
+
+@click.command(name="gitlab-notice")
+@click.option(
+    "--mr", type=click.IntRange(min=1), default=None, help="MR IID for the latest-build hint."
+)
+@_gitlab_options
+def ci_gitlab_notice(
+    mr: int | None,
+    job: int | None,
+    pipeline: int | None,
+    repo: str | None,
+    artifact_repo: str | None,
+    repo_base_url: str | None,
+    artifact: str,
+) -> None:
+    """Print GitLab job-log preview commands with complete repository identities"""
+    from .._build.gitlab_ci import render_notice_lines, resolve_ci_repositories
+    from .._build.preview_artifacts import PreviewError
+
+    try:
+        target, owner = resolve_ci_repositories(repo, artifact_repo, repo_base_url)
+        lines = render_notice_lines(
+            target, owner, mr=mr, job=job, pipeline=pipeline, artifact=artifact
+        )
+    except PreviewError as error:
+        raise click.ClickException(str(error)) from error
+    for line in lines:
         click.echo(line)
 
 
@@ -473,6 +580,14 @@ def setup_gitlab_pages(
             install_commands = ["uv venv", f"uv pip install -e {shlex.quote(package)} great-docs"]
             build_command = "uv run --no-sync great-docs build"
 
+        report_command = build_command.removesuffix(" build")
+        selected_config = layout.load_config()
+        base_option = (
+            " --repo-base-url " + shlex.quote(selected_config.repo_base_url)
+            if selected_config.repo_base_url
+            else ""
+        )
+
         if config_path:
             build_command += " --config " + shlex.quote(
                 layout.config_path.relative_to(project_root).as_posix()
@@ -490,6 +605,8 @@ def setup_gitlab_pages(
             "build_command": json.dumps(build_command),
             "site_dir": json.dumps(layout.site_dir.relative_to(project_root).as_posix()),
             "deploy_rule": json.dumps(deploy_rule),
+            "report_command": report_command,
+            "base_option": base_option,
         }
         for key, value in replacements.items():
             template = template.replace("{" + key + "}", value)
@@ -515,3 +632,6 @@ def setup_gitlab_pages(
 
 ci.add_command(ci_pr_comment)
 ci.add_command(ci_notice)
+
+ci.add_command(ci_mr_comment)
+ci.add_command(ci_gitlab_notice)
