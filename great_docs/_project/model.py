@@ -17,12 +17,19 @@ from .manifest import Manifest, ManifestError
 from .repository import Repository
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
     from ..config import Config
     from .layout import Layout
 
-__all__ = ["Project", "locate_package_init", "package_name", "read_manifest"]
+__all__ = [
+    "Project",
+    "locate_package_init",
+    "package_name",
+    "read_manifest",
+    "select_repository_url",
+]
 
 # Recognised repository URL labels, casefolded without separators, in preference order.
 _REPOSITORY_URL_LABELS = ("repository", "source", "sourcecode", "github", "gitlab", "homepage")
@@ -149,11 +156,12 @@ class Project:
         name = package_name(root, manifest)
         module = _detect_module(config, root, manifest, name)
         importable_name = _importable_name(module, name)
+        repository_url = select_repository_url(manifest["urls"])
         return cls(
             name=name,
             manifest=manifest,
             repository=Repository.parse(
-                config.repo or _repository_url(manifest["urls"]),
+                config.repo or (repository_url[1] if repository_url else None),
                 provider=config.repo_provider,
                 base_url=config.repo_base_url,
             ),
@@ -219,7 +227,7 @@ def package_name(root: Path, manifest: Manifest) -> str | None:
     return packages[0] if len(packages) == 1 else None
 
 
-def _repository_url(urls: dict[str, str]) -> str | None:
+def select_repository_url(urls: Mapping[str, str]) -> tuple[str, str] | None:
     """
     Choose the project URL that names its source repository
 
@@ -231,11 +239,12 @@ def _repository_url(urls: dict[str, str]) -> str | None:
     Returns
     -------
     :
-        The URL with the highest-priority recognised label, or `None` when no label is
-        recognised. The first declared label wins when labels normalise to the same value.
+        The original label and URL with the highest-priority recognised label, or `None`
+        when no label is recognised. The first declared label wins when labels normalise
+        to the same value.
     """
     # Reverse insertion order so the first declared label wins after normalisation.
-    by_label = {_url_label(label): url for label, url in reversed(urls.items())}
+    by_label = {_url_label(label): (label, url) for label, url in reversed(list(urls.items()))}
     return next((by_label[label] for label in _REPOSITORY_URL_LABELS if label in by_label), None)
 
 

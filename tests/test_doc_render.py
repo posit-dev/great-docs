@@ -7,10 +7,12 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import griffe as gf
+import pytest
 
 import great_docs._apiref._render.doc as docmod
 from great_docs._apiref._render.doc import RenderDoc
 from great_docs._apiref._settings import Settings, SourceLinks
+from great_docs._project.repository import Repository
 
 
 def _get_private_cls():
@@ -124,7 +126,24 @@ class TestRenderSeeAlsoSectionSkipEmpty:
         assert "bar" in result_str
 
 
-LINKED = SourceLinks(repo_url="https://github.com/user/repo")
+LINKED = SourceLinks(repository=Repository.parse("https://github.com/user/repo"))
+
+
+@pytest.mark.parametrize(("provider", "anchor"), [("github", "#L3-L8"), ("gitlab", "#L3-8")])
+def test_source_links_use_provider_routes(provider: str, anchor: str) -> None:
+    repository = Repository.parse(f"https://{provider}.com/team/pkg")
+    assert repository is not None
+    fake = types.SimpleNamespace(
+        _source_relative_path=lambda: "src/pkg/café code.py",
+        settings=Settings(source_links=SourceLinks(repository=repository, ref="feature/docs")),
+        obj=types.SimpleNamespace(lineno=3, endlineno=8),
+    )
+
+    link = _get_private_cls().__dict__["source_link"].func(fake)
+
+    assert link is not None
+    assert repository.file_url("src/pkg/café code.py", "feature/docs", 3, 8) in str(link)
+    assert anchor in str(link)
 
 
 class TestSourceLinkCompiledExtension:

@@ -25,12 +25,15 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
+from typing import Any
 
 import pytest
+import yaml
 
 from great_docs._layout_migration import analyse, apply
 from great_docs._project.layout import Layout
@@ -202,7 +205,12 @@ class Rendered:
 
 
 def make_project(
-    root: Path, directory: str, tag: str | None, migrate: bool, execute_cell: bool = True
+    root: Path,
+    directory: str,
+    tag: str | None,
+    migrate: bool,
+    execute_cell: bool = True,
+    settings: Mapping[str, Any] | None = None,
 ) -> Rendered:
     """
     Build a package with a two-commit history and a great-docs configuration
@@ -220,6 +228,10 @@ def make_project(
     migrate
         Whether to author the source at the project root and move it with the
         layout migration before building.
+    execute_cell
+        Whether the guide executes a Jupyter cell.
+    settings
+        Configuration overrides applied before the fixture's Git history is created.
 
     Returns
     -------
@@ -293,6 +305,8 @@ bibliography: {bibliography_path}
   - tag: "{tag}"
     git_ref: "{tag}"
 '''
+    if settings is not None:
+        config_text = yaml.safe_dump({**yaml.safe_load(config_text), **settings})
     config = write_file(source, "great-docs.yml", config_text)
     run_git(root, "init", "-q")
     run_git(root, "config", "user.name", "Layout acceptance")
@@ -404,6 +418,144 @@ def semantic_baselines() -> dict[str, tuple[str, tuple[str, ...]]]:
     Store the first case's page content for cross-layout comparisons
     """
     return {}
+
+
+@pytest.mark.parametrize("case", ["gitlab", "self-managed", "github", "repository-free"])
+def test_repository_site_links_and_metadata(
+    tmp_path: Path, required_tools: None, case: str
+) -> None:
+    """Render provider links, metadata and explicit author identities in a `src/` project"""
+    repository_url = {
+        "gitlab": "https://gitlab.com/team/subteam/layout-sample",
+        "self-managed": "https://code.example.org/gitlab/team/subteam/layout-sample",
+        "github": "https://github.com/layout-example/layout-sample",
+        "repository-free": None,
+    }[case]
+    settings: dict[str, Any] = {
+        "repo": repository_url,
+        "site_url": "https://docs.example.org/layout/",
+        "github_style": "widget",
+        "skill": {"enabled": True},
+        "webmcp": True,
+        "show_dates": True,
+        "authors": [
+            {
+                "name": "Ada",
+                "github": "explicit-ada",
+                "homepage": "https://ada.example.org/",
+                "image": "https://images.example.org/ada.png",
+            },
+            {"name": "Bo"},
+        ],
+    }
+    if case == "self-managed":
+        settings.update(
+            repo_provider="gitlab",
+            repo_base_url="https://code.example.org/gitlab",
+            source={"branch": "feature/docs", "path": "packages/api source"},
+        )
+    elif case == "github":
+        settings["source"] = {"enabled": False}
+    elif case == "gitlab":
+        settings["mcp"] = {
+            "enabled": True,
+            "module": "layout_sample.mcp_server",
+            "server_var": "server",
+        }
+    fixture = make_project(
+        tmp_path,
+        "docs",
+        "v1.5.0" if case == "self-managed" else None,
+        migrate=False,
+        execute_cell=False,
+        settings=settings,
+    )
+    write_file(
+        tmp_path,
+        "README.md",
+        "---\nauthor: Ada\n---\n\n# Layout sample\n\nSee [the third-party tool](https://github.com/third-party/tool).\n",
+    )
+    write_file(tmp_path, "CITATION.cff", "cff-version: 1.2.0\ntitle: Layout sample\n")
+    stale_identity = "github.com/stale-metadata-owner/stale-metadata-repo"
+    if case in ("gitlab", "self-managed"):
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(
+            pyproject.read_text() + f'\n[project.urls]\nRepository = "https://{stale_identity}"\n'
+        )
+    if case == "gitlab":
+        write_file(
+            tmp_path,
+            "src/layout_sample/mcp_server.py",
+            'from mcp.server import MCPServer\nserver = MCPServer("Layout MCP")\n'
+            '@server.tool()\ndef greet(name: str) -> str:\n    """Return a greeting"""\n    return name\n',
+        )
+    env = os.environ.copy()
+    guide_source = tmp_path / "docs/user_guide/01-frozen.qmd"
+    guide_source.write_text(
+        guide_source.read_text().replace("title: Frozen guide", "title: Frozen guide\nauthor: Ada")
+    )
+    env["PYTHONPATH"] = os.pathsep.join(
+        (str(ROOT), str(tmp_path / "src"), env.get("PYTHONPATH", ""))
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", BUILD, str(tmp_path), str(fixture.layout.config_path)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    write_file(tmp_path, "provider-build.log", result.stdout + result.stderr)
+    assert result.returncode == 0, f"Build failed in {tmp_path}:\n{result.stdout}\n{result.stderr}"
+    site = fixture.layout.site_dir
+    config = yaml.safe_load((fixture.layout.build_dir / "_quarto.yml").read_text())
+    homepage = Page(site / "index.html")
+    reference = Page(site / "reference/shared.html")
+    assert "https://github.com/explicit-ada" in homepage.links
+    assert "https://github.com/third-party/tool" in homepage.links
+    assert "https://ada.example.org/" in homepage.links
+    assert "https://images.example.org/ada.png" in (site / "user-guide/frozen.html").read_text()
+    manifest = json.loads((site / "gd-webmcp.json").read_text())
+    assert manifest["site"].get("repo") == repository_url
+    skill = (site / "skill.md").read_text()
+    skills_page = Page(site / "skills.html")
+    assert "https://docs.example.org/layout/" in " ".join(skills_page.text)
+    if repository_url is None:
+        assert "right" not in config["website"]["navbar"]
+        assert "[Source code]" not in skill
+    else:
+        assert config["website"]["navbar"]["right"][0]["href"] == repository_url
+        assert f"[Source code]({repository_url})" in skill
+    if case == "github":
+        assert any("github-widget.js" in path for path in homepage.resources)
+        assert not any("/blob/" in href for href in reference.links)
+    else:
+        assert not any("github-widget" in path for path in homepage.resources)
+        assert "github-widget.js" not in config["project"]["resources"]
+        assert not (site / "github-widget.js").exists()
+        html = "\n".join(path.read_text() for path in site.rglob("*.html"))
+        assert "api.github.com" not in html
+        assert "github.com/team" not in html
+        assert "github.com/layout-example" not in html
+    if case in ("gitlab", "self-managed"):
+        text_suffixes = {".html", ".qmd", ".md", ".json", ".yml", ".yaml", ".txt", ".xml", ".js"}
+        for output in (*fixture.layout.build_dir.rglob("*"), *site.rglob("*")):
+            if output.is_file() and output.suffix in text_suffixes:
+                assert stale_identity not in output.read_text(), output
+        expected_ref = "feature%2Fdocs" if case == "self-managed" else "2.0.0"
+        expected_path = "packages/api%20source" if case == "self-managed" else "src/layout_sample"
+        source_url = f"{repository_url}/-/blob/{expected_ref}/{expected_path}/__init__.py#L3-17"
+        assert source_url in reference.links
+        citation_page = Page(site / "citation.html")
+        assert f"{repository_url}/-/blob/{expected_ref}/CITATION.cff" in citation_page.links
+    if case == "gitlab":
+        mcp = json.loads((site / ".well-known/mcp.json").read_text())
+        assert mcp["installation"]["repository"] == repository_url
+    if case == "self-managed":
+        historical = Page(site / "v/1.5.0/reference/shared.html")
+        assert any(f"{repository_url}/-/blob/feature%2Fdocs/" in href for href in historical.links)
+        assert (site / "v/1.5.0/gd-webmcp.json").is_file()
+    print(f"Rendered {case}: {site}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

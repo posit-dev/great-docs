@@ -8,7 +8,7 @@ import shutil
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..._project.layout import Layout
 from ..._project.manifest import Manifest
@@ -16,6 +16,9 @@ from ...config import Config
 from .skill_md import compose
 from .skills_page import SkillsPageWriter
 from .well_known import publish
+
+if TYPE_CHECKING:
+    from ..._project.repository import Repository
 
 
 @dataclass
@@ -32,6 +35,8 @@ class SkillsWriter:
     layout: Layout
     distribution_name: str | None
     metadata: Manifest
+    repository: Repository | None
+    """The selected repository for source links and installation fallbacks"""
 
     def write(self, api_block: Mapping[str, Any] | None) -> None:
         """
@@ -95,7 +100,12 @@ class SkillsWriter:
                 return
 
         skill_content = compose(
-            self.config, self.layout, self.distribution_name, self.metadata, api_block
+            self.config,
+            self.layout,
+            self.distribution_name,
+            self.metadata,
+            api_block,
+            repo_url=self.repository.url if self.repository else None,
         )
 
         skill_path = build_dir / "skill.md"

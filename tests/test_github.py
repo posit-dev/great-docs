@@ -11,6 +11,31 @@ from great_docs._project.repository import Repository
 
 
 @pytest.mark.parametrize(
+    ("provider", "base", "route", "range_anchor"),
+    [
+        ("github", "https://github.com", "blob", "#L10-L20"),
+        ("gitlab", "https://gitlab.com", "-/blob", "#L10-20"),
+        ("gitlab", "https://code.example.org/gitlab", "-/blob", "#L10-20"),
+    ],
+)
+def test_file_urls_escape_refs_and_paths(
+    provider: str, base: str, route: str, range_anchor: str
+) -> None:
+    repository = Repository.parse(
+        f"{base}/team/subteam/pkg" if provider == "gitlab" else f"{base}/team/pkg",
+        provider=provider,
+        base_url=base,
+    )
+    assert repository is not None
+    prefix = f"{repository.url}/{route}/feature%2Fdocs%20v2/src/caf%C3%A9%20%23.py"
+
+    assert repository.file_url("src/café #.py", "feature/docs v2") == prefix
+    assert repository.file_url("src/café #.py", "feature/docs v2", 10) == prefix + "#L10"
+    assert repository.file_url("src/café #.py", "feature/docs v2", 10, 10) == prefix + "#L10"
+    assert repository.file_url("src/café #.py", "feature/docs v2", 10, 20) == prefix + range_anchor
+
+
+@pytest.mark.parametrize(
     ("url", "expected"),
     [
         (

@@ -41,6 +41,37 @@ class Repository:
         """Form the repository's web address"""
         return f"{self.base_url}/{quote(self.path, safe='/')}"
 
+    def file_url(
+        self, path: str, ref: str, start_line: int | None = None, end_line: int | None = None
+    ) -> str:
+        """
+        Form a file address with an optional source-line anchor
+
+        Parameters
+        ----------
+        path
+            The repository-relative POSIX file path.
+        ref
+            The branch, tag or commit, escaped as one URL component.
+        start_line
+            The first source line, or `None` to omit the anchor.
+        end_line
+            The final source line, or `None` for a single-line anchor.
+
+        Returns
+        -------
+        :
+            The provider's file address with escaped ref and path components.
+        """
+        route = "-/blob" if self.provider == "gitlab" else "blob"
+        url = f"{self.url}/{route}/{quote(ref, safe='')}/{quote(path, safe='/')}"
+        if start_line is not None:
+            url += f"#L{start_line}"
+            if end_line is not None and end_line != start_line:
+                separator = "-" if self.provider == "gitlab" else "-L"
+                url += f"{separator}{end_line}"
+        return url
+
     @classmethod
     def parse(
         cls,

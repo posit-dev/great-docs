@@ -140,21 +140,27 @@ def test_git_that_runs_too_long_warns_before_falling_back(tmp_path: Path):
     assert "timed out after 5 seconds" in warnings[0]
 
 
-def test_source_links_link_to_the_repository(tmp_path: Path):
+@pytest.mark.parametrize(
+    "repository",
+    [REPO, Repository("gitlab", "https://gitlab.com", "team/subteam", "pkg")],
+)
+def test_source_links_link_to_the_repository(tmp_path: Path, repository: Repository) -> None:
     config = mock_config(source_enabled=True, source_branch="dev", source_path="pkg/src")
 
-    links = source_links(config, tmp_path, REPO.url, warn=_unexpected)
+    links = source_links(config, tmp_path, repository, warn=_unexpected)
 
-    assert links == SourceLinks(repo_url=REPO.url, ref="dev", package_root=tmp_path, path="pkg/src")
+    assert links == SourceLinks(
+        repository=repository, ref="dev", package_root=tmp_path, path="pkg/src"
+    )
 
 
-@pytest.mark.parametrize(("enabled", "repo_url"), [(False, REPO.url), (True, None)])
+@pytest.mark.parametrize(("enabled", "repository"), [(False, REPO), (True, None)])
 def test_source_links_without_a_repository_to_link_run_no_git(
-    tmp_path: Path, enabled: bool, repo_url: str | None
+    tmp_path: Path, enabled: bool, repository: Repository | None
 ):
     with patch("subprocess.run") as run:
         links = source_links(
-            mock_config(source_enabled=enabled), tmp_path, repo_url, warn=_unexpected
+            mock_config(source_enabled=enabled), tmp_path, repository, warn=_unexpected
         )
 
     assert links == SourceLinks()

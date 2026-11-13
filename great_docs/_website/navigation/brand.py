@@ -1,7 +1,7 @@
 """
-The site's brand: its title, logo, favicons, GitHub entry and latest release
+The site's brand: its title, logo, favicons, repository entry and latest release
 
-The navbar shows the site title or logo on the left and the GitHub entry on the
+The navbar shows the site title or logo on the left and the repository entry on the
 right. Logo images and favicons are copied or generated into the Quarto project
 directory each time the configuration is written.
 """
@@ -45,7 +45,7 @@ def register(
     Set `website.site-url` to the site address when available. Enable page
     navigation. Set the site title to the site's name when the name is
     non-empty. Create the navbar.
-    Include a GitHub entry on the right when the project has a GitHub repository.
+    Include a provider-branded entry on the right when the project has a repository.
 
     Show a configured logo, or one found at a conventional path, in place of
     the navbar title unless `logo.show_title` is set. Copy local logo images into
@@ -68,7 +68,7 @@ def register(
     package_name
         The detected package name, for finding a logo and as its alternative text.
     repo
-        The project's GitHub repository, or `None` when it has none.
+        The project's repository, or `None` when it has none.
     facts
         The repository's star and fork counts for the GitHub widget.
     documentation_url

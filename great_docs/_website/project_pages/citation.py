@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from yaml12 import read_yaml
 
+from ..._project.repository import Repository
 from .. import page_dates
 
 if TYPE_CHECKING:
@@ -29,6 +30,8 @@ def write_page(
     package_name: str | None,
     authors: list[dict[str, Any]],
     *,
+    repository: Repository | None,
+    ref: str,
     report: Callable[[str], None],
 ) -> Path | None:
     """
@@ -51,6 +54,10 @@ def write_page(
         introduction uses "this package".
     authors
         The configured authors, with local portrait paths replaced by site URLs.
+    repository
+        The documented repository, or `None` when unknown.
+    ref
+        The source ref for the documented repository. Other repositories use `main`.
     report
         A callback that receives the line announcing the written page.
 
@@ -83,9 +90,8 @@ To cite {package_name or "this package"} in publications, please use the followi
         authors_section += f"{full_name}. {role}.  \n"
 
     citation_section = "## Citation\n\n"
-    repo_url = citation.get("repository-code") or citation.get("url")
-    if repo_url:
-        citation_file_link = f"{repo_url.rstrip('/')}/blob/main/CITATION.cff"
+    citation_file_link = _source_url(citation, repository, ref)
+    if citation_file_link:
         citation_section += f"**Source:** [`CITATION.cff`]({citation_file_link})\n\n"
     else:
         citation_section += "**Source:** `CITATION.cff`\n\n"
@@ -108,6 +114,37 @@ title: "Authors and Citation"
     _ = path.write_text(page_dates.add_to_page(content, source, config, authors), encoding="utf-8")
     report(f"Created {path}")
     return path
+
+
+def _source_url(citation: Mapping[str, Any], repository: Repository | None, ref: str) -> str | None:
+    """
+    Resolve the citation's source without treating a general URL as a repository
+
+    Parameters
+    ----------
+    citation
+        The parsed citation, whose `repository-code` takes precedence over `url`.
+    repository
+        The documented repository, including any self-managed installation prefix.
+    ref
+        The source ref for the documented repository.
+
+    Returns
+    -------
+    :
+        A citation-file address for a recognised repository, the original citation URL
+        otherwise, or `None` when neither citation nor project supplies an address.
+    """
+    url: str | None = citation.get("repository-code") or citation.get("url")
+    selected = Repository.parse(url) if url else repository
+    if url and selected is None and repository is not None and repository.provider == "gitlab":
+        try:
+            selected = Repository.parse(url, provider="gitlab", base_url=repository.base_url)
+        except ValueError:
+            pass
+    if selected is None:
+        return url
+    return selected.file_url("CITATION.cff", ref if selected == repository else "main")
 
 
 def _full_name(author: Mapping[str, Any]) -> str:

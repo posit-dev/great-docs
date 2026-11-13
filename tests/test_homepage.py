@@ -13,8 +13,120 @@ from great_docs._content import homepage as source
 from great_docs._project.layout import Layout
 from great_docs._website.homepage import landing, page, readme
 from great_docs._website.homepage.readme import Badge
+from great_docs._website.page_dates import site_authors
+from great_docs._website.project_pages import citation
 from great_docs._yaml import split_front_matter
 from tests.support import homepage_hero, homepage_margin, write_config
+
+
+@pytest.mark.parametrize(
+    "repository_url", ["https://gitlab.com/team/subteam/pkg", "https://forge.example.org/team/pkg"]
+)
+def test_repository_override_preserves_explicit_author_identities(
+    tmp_path: Path, repository_url: str
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\n[[project.authors]]\nname = "Metadata Author"\n'
+        '[project.urls]\nRepository = "https://github.com/stale/pkg"\n',
+        encoding="utf-8",
+    )
+    author = {
+        "name": "Ada",
+        "github": "explicit-ada",
+        "homepage": "https://ada.example.org/",
+        "image": "https://images.example.org/ada.png",
+    }
+    config = write_config(
+        tmp_path,
+        {"repo": repository_url, "authors": [author, {"name": "Bo"}]},
+    )
+    docs = GreatDocs(project_path=tmp_path)
+    docs.layout.build_dir.mkdir()
+
+    sidebar = homepage_margin(docs)
+
+    assert "https://github.com/explicit-ada" in sidebar
+    assert author["homepage"] in sidebar
+    assert 'href="https://github.com/stale"' not in sidebar
+    assert 'href="https://github.com/team"' not in sidebar
+    assert site_authors(config, tmp_path, None) == [author, {"name": "Bo"}]
+    if repository_url.startswith("https://gitlab.com/"):
+        assert f'href="{repository_url}">Browse source code' in sidebar
+        assert "github.com/stale" not in sidebar
+
+
+def test_primary_source_link_preserves_ranked_ties_and_separate_links(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\n[project.urls]\n'
+        '"Source Code" = "https://github.com/stale/primary"\n'
+        '"source-code" = "https://github.com/separate/source"\n'
+        'GitHub = "https://github.com/third-party/tool"\n',
+        encoding="utf-8",
+    )
+    write_config(tmp_path, {"repo": "https://gitlab.com/team/subteam/pkg"})
+    docs = GreatDocs(project_path=tmp_path)
+    docs.layout.build_dir.mkdir()
+
+    sidebar = homepage_margin(docs)
+
+    assert 'href="https://gitlab.com/team/subteam/pkg">Browse source code' in sidebar
+    assert "github.com/stale/primary" not in sidebar
+    assert 'href="https://github.com/separate/source"' in sidebar
+    assert 'href="https://github.com/third-party/tool"' in sidebar
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        (
+            None,
+            "https://code.example.org/gitlab/team/subteam/pkg/-/blob/feature%2Fdocs/CITATION.cff",
+        ),
+        (
+            "https://code.example.org/gitlab/team/subteam/pkg.git",
+            "https://code.example.org/gitlab/team/subteam/pkg/-/blob/feature%2Fdocs/CITATION.cff",
+        ),
+        (
+            "https://code.example.org/gitlab/other/pkg",
+            "https://code.example.org/gitlab/other/pkg/-/blob/main/CITATION.cff",
+        ),
+        ("https://github.com/other/pkg", "https://github.com/other/pkg/blob/main/CITATION.cff"),
+        (
+            "https://gitlab.com/other/group/pkg",
+            "https://gitlab.com/other/group/pkg/-/blob/main/CITATION.cff",
+        ),
+        (
+            "https://docs.example.org/project?version=2#cite",
+            "https://docs.example.org/project?version=2#cite",
+        ),
+    ],
+)
+def test_citation_source_respects_its_repository(
+    tmp_path: Path, url: str | None, expected: str
+) -> None:
+    from great_docs._project.repository import Repository
+
+    repository = Repository("gitlab", "https://code.example.org/gitlab", "team/subteam", "pkg")
+    config = write_config(tmp_path)
+    layout = Layout.make(tmp_path)
+    layout.build_dir.mkdir()
+    from yaml12 import format_yaml
+
+    data = {"title": "Pkg", "url": "https://docs.example.org/project"}
+    if url is not None and url.startswith("https://docs.example.org/"):
+        data["url"] = url
+    elif url is not None:
+        data["repository-code"] = url
+    else:
+        data.pop("url")
+    (tmp_path / "CITATION.cff").write_text(format_yaml(data), encoding="utf-8")
+
+    page = citation.write_page(
+        config, layout, "pkg", [], repository=repository, ref="feature/docs", report=lambda _: None
+    )
+
+    assert page is not None
+    assert f"[`CITATION.cff`]({expected})" in page.read_text(encoding="utf-8")
 
 
 def _write(root: Path, *names: str) -> None:
@@ -388,6 +500,7 @@ def test_blended_homepage_keeps_front_matter_whose_title_contains_three_dashes(t
         docs.layout,
         content,
         metadata={},
+        repository=None,
         package_name="pkg",
         pages=content_steps.page_map(docs._config, docs.layout, None),
         page_authors=[],

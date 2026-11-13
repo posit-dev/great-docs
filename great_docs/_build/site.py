@@ -45,7 +45,7 @@ def identity(config: Config, layout: Layout, project: Project) -> Identity:
         The project's directories, searched for a Go or Rust program whose name supplies
         the fallback site name.
     project
-        The package name and GitHub repository used when the site's name or address is not
+        The package name and repository used when the site's name or address is not
         configured.
 
     Returns
@@ -53,16 +53,7 @@ def identity(config: Config, layout: Layout, project: Project) -> Identity:
     :
         The site's identity.
     """
-    github = project.repository
-    if github is not None and github.provider != "github":
-        github = None
-    return Identity.make(
-        config,
-        layout.package_root,
-        github.namespace if github else None,
-        github.name if github else None,
-        project.name,
-    )
+    return Identity.make(config, layout.package_root, project.repository, project.name)
 
 
 def default_description(config: Config, project: Project) -> str | None:
@@ -103,7 +94,11 @@ def structured_data(run: Run, config: Config) -> StructuredData | None:
         structured data is disabled.
     """
     return StructuredData.make(
-        config, run.project.manifest, run.identity.name, run.identity.base_url
+        config,
+        run.project.manifest,
+        run.identity.name,
+        run.identity.base_url,
+        repo_url=run.project.repository.url if run.project.repository else None,
     )
 
 

@@ -167,10 +167,7 @@ def api(
     from .._apiref.resolve import ObjectNotFoundError
 
     failures = (*USER_CODE_ERRORS, ObjectNotFoundError)
-    repo_url = run.project.repository.url if run.project.repository else None
-    if run.project.repository is not None and run.project.repository.provider != "github":
-        repo_url = None
-    links = source_links(config, layout.package_root, repo_url, warn=print_warning)
+    links = source_links(config, layout.package_root, run.project.repository, warn=print_warning)
     try:
         ref = APIReference(run.quarto_config, links)
         ref.build()

@@ -72,7 +72,7 @@ class Facts:
 def source_links(
     config: Config,
     package_root: Path,
-    repo_url: str | None,
+    repository: Repository | None,
     *,
     warn: Callable[[str], None],
 ) -> SourceLinks:
@@ -88,8 +88,8 @@ def source_links(
     package_root
         The repository root used for relative source paths and as the working
         directory for `git`.
-    repo_url
-        The project's GitHub repository URL, or `None` when it has none.
+    repository
+        The project's repository, or `None` when it has none.
     warn
         The callback for reporting warnings to the user.
 
@@ -100,10 +100,10 @@ def source_links(
         when source links are disabled or there is no repository. Otherwise,
         `git` runs only when no `source.branch` is configured.
     """
-    if not (config.source_enabled and repo_url):
+    if not (config.source_enabled and repository):
         return SourceLinks()
     return SourceLinks(
-        repo_url=repo_url,
+        repository=repository,
         ref=source_ref(config, package_root, warn=warn),
         package_root=package_root,
         path=config.source_path,

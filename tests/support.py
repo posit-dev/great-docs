@@ -933,6 +933,7 @@ def homepage_margin(docs: GreatDocs, *, api_block: dict[str, Any] | None = None)
         docs._config,
         docs.layout,
         metadata=project.manifest,
+        repository=project.repository,
         package_name=project.name,
         community_pages=community.write_pages(
             docs._config, docs.layout, make_run(docs).page_authors

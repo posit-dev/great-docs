@@ -13,6 +13,8 @@ from .._config_compat import normalise_member_placement
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from .._project.repository import Repository
+
 
 @dataclass
 class CallableSignatures:
@@ -28,13 +30,13 @@ class CallableSignatures:
 @dataclass(frozen=True)
 class SourceLinks:
     """
-    GitHub source-link destinations for documented objects
+    Repository source-link destinations for documented objects
 
     The default settings produce no source links.
     """
 
-    repo_url: str | None = None
-    """The GitHub repository's URL, or `None` when objects have no source links"""
+    repository: Repository | None = None
+    """The repository, or `None` when objects have no source links"""
 
     ref: str = "main"
     """The tag or branch targeted by source links"""

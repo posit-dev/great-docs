@@ -16903,7 +16903,7 @@ def test_renderdoc_source_link_with_github_url():
     mod.set_member("linked_fn", func_obj)
     doc_func = content.DocFunction(name="linked_fn", obj=func_obj)
 
-    links = SourceLinks(repo_url="https://github.com/test/repo")
+    links = SourceLinks(repository=Repository.parse("https://github.com/test/repo"))
     render = RenderDocFunction(doc_func, level=1, settings=Settings(source_links=links))
     link = render.source_link
     assert link is not None
@@ -18124,6 +18124,7 @@ def _skills_writer(docs: GreatDocs) -> SkillsWriter:
         docs.layout,
         make_project(docs).name,
         make_project(docs).manifest,
+        make_project(docs).repository,
     )
 
 
@@ -18133,6 +18134,7 @@ def _skills_page_writer(docs: GreatDocs) -> SkillsPageWriter:
         docs.layout,
         make_project(docs).name,
         make_project(docs).manifest,
+        make_project(docs).repository.url if make_project(docs).repository else None,
     )
 
 
@@ -18955,7 +18957,7 @@ def test_write_skills_page_github_repo_detection():
         content = (great_docs_dir / "skills.qmd").read_text()
 
         # Should have GitHub-specific install command
-        assert "npx skills add myorg/test-package" in content
+        assert "npx skills add https://github.com/myorg/test-package" in content
         # Codex / OpenCode section should reference the GitHub repo
         assert "Codex / OpenCode" in content
         assert "github.com/myorg/test-package" in content

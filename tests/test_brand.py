@@ -105,6 +105,15 @@ class TestSite:
 
 
 class TestNavbar:
+    def test_gitlab_links_without_a_github_widget(self, tmp_path: Path) -> None:
+        repository = Repository("gitlab", "https://code.example.org/gitlab", "team/subteam", "pkg")
+
+        quarto_config, _ = _register(tmp_path, repo=repository)
+
+        assert quarto_config["website"]["navbar"]["right"] == [
+            {"href": repository.url, "icon": "gitlab", "aria-label": "GitLab"}
+        ]
+
     def test_creates_the_navbar_with_the_github_widget(self, tmp_path: Path):
         facts = Facts(github_stats={"stars": 5, "forks": 2})
 

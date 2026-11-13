@@ -156,7 +156,9 @@ def skills(run: Run, config: Config, layout: Layout) -> Outcome:
     """
     if not config.skill_enabled:
         return Skipped("disabled in config")
-    SkillsWriter(config, layout, run.project.name, run.project.manifest).write(run.api_block)
+    SkillsWriter(
+        config, layout, run.project.name, run.project.manifest, run.project.repository
+    ).write(run.api_block)
     index = layout.build_dir / well_known.WELL_KNOWN_ROOT / well_known.INDEX_FILE
     run.has_skills = index.is_file()
     return "Created skill.md"

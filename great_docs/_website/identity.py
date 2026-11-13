@@ -15,6 +15,7 @@ from . import page_url
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from .._project.repository import Repository
     from ..config import Config
 
 
@@ -36,8 +37,7 @@ class Identity:
         cls,
         config: Config,
         package_root: Path,
-        github_owner: str | None,
-        github_repo: str | None,
+        repository: Repository | None,
         package_name: str | None,
     ) -> Identity:
         """
@@ -56,10 +56,8 @@ class Identity:
         package_root
             The project's root directory, searched for a Go or Rust program when
             its CLI reference is enabled.
-        github_owner
-            Owner of the project's GitHub repository, if it has one.
-        github_repo
-            Name of the project's GitHub repository, if it has one.
+        repository
+            The project's repository, if it has one. Only GitHub supplies a Pages fallback.
         package_name
             The detected package name, if any.
 
@@ -71,7 +69,7 @@ class Identity:
         return cls(
             name=config.display_name or package_name or _binary_name(config, package_root) or "",
             url=config.site_url,
-            base_url=page_url.resolve_base_url(config, github_owner, github_repo),
+            base_url=page_url.resolve_base_url(config, repository),
         )
 
 

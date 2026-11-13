@@ -21,6 +21,8 @@ def compose(
     distribution_name: str | None,
     metadata: Manifest,
     api_block: Mapping[str, Any] | None,
+    *,
+    repo_url: str | None,
 ) -> str:
     """
     Compose a `SKILL.md` file for the documented package
@@ -40,6 +42,8 @@ def compose(
     api_block
         The API reference configuration for the skill's overview, or `None` to omit
         the overview.
+    repo_url
+        The selected repository URL, or `None` when unknown.
 
     Returns
     -------
@@ -61,8 +65,6 @@ def compose(
         site_url = site_url.split("#")[0]
     if site_url and not site_url.endswith("/"):
         site_url += "/"
-
-    repo_url = urls.get("Repository", "") or urls.get("Source", "")
 
     # Use the distribution name for installation when it differs from the importable module.
     # Fall back to the module name when the project has no distribution metadata.

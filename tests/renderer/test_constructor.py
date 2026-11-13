@@ -16,6 +16,7 @@ import griffe as gf
 
 from great_docs._apiref._constructor import class_constructor, parse_class_docstring
 from great_docs._apiref._settings import Settings, SourceLinks
+from great_docs._project.repository import Repository
 from great_docs._apiref._tools import _render
 
 STUB = '''\
@@ -211,7 +212,11 @@ def test_class_docstring_keeps_warnings_for_unknown_parameters(tmp_path, caplog)
 
 
 def _linked(root: Path) -> Settings:
-    return Settings(source_links=SourceLinks(repo_url="https://github.com/o/r", package_root=root))
+    return Settings(
+        source_links=SourceLinks(
+            repository=Repository.parse("https://github.com/o/r"), package_root=root
+        )
+    )
 
 
 def test_installed_stub_links_to_repository_root_stub(tmp_path):

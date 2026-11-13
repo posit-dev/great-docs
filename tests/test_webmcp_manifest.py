@@ -8,10 +8,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 from great_docs._build import finish
 from great_docs._build.steps import Skipped
 from great_docs._interlinks.sphinx_inventory import Inventory, InventoryEntry, encode
 from great_docs._project.layout import Layout
+from great_docs._project.repository import Repository
 from great_docs._website.ai_agents import webmcp_manifest, webmcp_pages
 from great_docs._website.ai_agents.webmcp_manifest import MANIFEST_FILE, Root, SiteInfo
 from great_docs._website.ai_agents.webmcp_pages import PageFacts, SectionFacts
@@ -553,15 +556,18 @@ class TestStep:
 
         assert outcome == Skipped("WebMCP not enabled")
 
-    def test_the_step_writes_the_manifest(self, tmp_path: Path):
+    @pytest.mark.parametrize("repository_url", [None, "https://gitlab.com/team/subteam/pkg"])
+    def test_the_step_writes_the_manifest(self, tmp_path: Path, repository_url: str | None) -> None:
         write_pyproject(tmp_path, "example")
         write_config(tmp_path, {"webmcp": True})
         layout = Layout.make(tmp_path)
         _write(layout.site_dir / "index.html", _html())
         warnings: list[str] = []
+        run = _run()
+        run.project.repository = Repository.parse(repository_url)
 
         outcome = finish.webmcp_manifest(
-            _run(),  # type: ignore[arg-type]
+            run,  # type: ignore[arg-type]
             layout.load_config(),
             layout,
             SimpleNamespace(warn=warnings.append),  # type: ignore[arg-type]
@@ -571,5 +577,6 @@ class TestStep:
         manifest = json.loads((layout.site_dir / MANIFEST_FILE).read_text())
         assert manifest["site"]["title"] == "example"
         assert manifest["site"]["install"] == ["pip install example", "uv add example"]
+        assert manifest["site"].get("repo") == repository_url
         assert "license" not in manifest["site"]
         assert len(warnings) == 1
