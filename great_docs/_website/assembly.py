@@ -167,7 +167,7 @@ def assemble(
     footer.register(quarto_config, config, metadata)
     appearance.register(quarto_config, config)
     brand.register_release(quarto_config, config, facts)
-    quarto_defaults.register_extensions(quarto_config)
+    quarto_defaults.register_extensions(quarto_config, has_api_reference=has_api_reference)
 
     # Quarto renders page titles and translation metadata from this partial.
     metadata_partial.write(quarto_config, config, layout, report=report)
