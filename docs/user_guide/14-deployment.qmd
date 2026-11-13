@@ -8,6 +8,10 @@ tags: [Deployment, CI\/CD, GitHub]
 
 Great Docs makes it easy to publish your documentation to GitHub Pages with automatic builds on every push.
 
+For GitLab, run `great-docs setup-gitlab-pages`. Follow the
+[GitLab Pages recipe](../recipes/25-gitlab-pages-ci.qmd) for its GitLab 17.10
+requirement, merge-request artefacts and site-address configuration.
+
 ## Quick Setup
 
 Deploy to GitHub Pages with a single command:

@@ -43,6 +43,7 @@ from ._cli.ci import ci as ci
 from ._cli.ci import ci_notice as ci_notice
 from ._cli.ci import ci_pr_comment as ci_pr_comment
 from ._cli.ci import setup_github_pages as setup_github_pages
+from ._cli.ci import setup_gitlab_pages as setup_gitlab_pages
 from ._cli.evolution import api_diff_cmd as api_diff_cmd
 from ._cli.evolution import api_snapshot_cmd as api_snapshot_cmd
 from ._cli.evolution import versions as versions

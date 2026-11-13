@@ -1,0 +1,114 @@
+---
+title: "Set Up GitLab Pages CI"
+description: "Build documentation for merge requests and publish the default branch with GitLab Pages."
+tags: [Deployment, CI\/CD, GitLab]
+---
+
+# GitLab Pages CI
+
+Use GitLab 17.10 or newer and a Linux Docker runner to build a Great Docs site.
+The Pages job publishes the default branch. The merge-request job retains the
+rendered site as an artefact and leaves the production site unchanged.
+
+## Pipeline recipe
+
+Create `.gitlab-ci.yml` at the package root. This example uses an existing
+`docs/great-docs.yml` and installs the package with uv:
+
+```{.yaml filename=".gitlab-ci.yml"}
+.docs-build:
+  image: python:3.12-bookworm
+  stage: build
+  variables:
+    GIT_DEPTH: "0"
+    QUARTO_VERSION: "1.11.9"
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
+    - |
+      case "$(uname -m)" in
+        x86_64) quarto_arch=amd64 ;;
+        aarch64|arm64) quarto_arch=arm64 ;;
+        *) echo "Unsupported architecture" >&2; exit 1 ;;
+      esac
+      curl --fail --location --output /tmp/quarto.tar.gz "https://github.com/quarto-dev/quarto-cli/releases/download/v${QUARTO_VERSION}/quarto-${QUARTO_VERSION}-linux-${quarto_arch}.tar.gz"
+      tar -xzf /tmp/quarto.tar.gz -C /opt
+      ln -s "/opt/quarto-${QUARTO_VERSION}/bin/quarto" /usr/local/bin/quarto
+    - curl --fail --location --output /tmp/install-uv.sh https://astral.sh/uv/install.sh
+    - env UV_UNMANAGED_INSTALL=/usr/local/bin sh /tmp/install-uv.sh
+    - uv venv
+    - uv pip install -e . great-docs
+  script:
+    - uv run --no-sync great-docs build
+
+great-docs-pages:
+  extends: .docs-build
+  pages:
+    publish: docs/_site
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+great-docs-preview:
+  extends: .docs-build
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  artifacts:
+    paths: [docs/_site]
+    expire_in: 1 week
+```
+
+The checked-in `gitlab-ci-template.yml` asset supplies the same job structure to
+the setup command. [GitLab's Pages syntax](https://docs.gitlab.com/ci/yaml/#pagespublish)
+requires a publish path relative to the checkout root and a non-empty `index.html`.
+GitLab 17.10 adds that path to the job's artefacts automatically.
+
+The runner installs [Quarto's Linux tarball](https://quarto.org/docs/download/tarball.html)
+and [uv's standalone installer](https://docs.astral.sh/uv/getting-started/installation/).
+Change `QUARTO_VERSION` to select another supported Quarto release. Add system
+dependencies required by your notebooks to `before_script`.
+
+## Setup command
+
+Generate the pipeline from the selected project's Python requirement, lock file
+and output layout:
+
+```{.bash filename="Terminal"}
+great-docs setup-gitlab-pages
+great-docs setup-gitlab-pages --config website/settings.yml
+great-docs setup-gitlab-pages --main-branch develop --python-version 3.12
+great-docs setup-gitlab-pages --package-manager uv
+```
+
+The command detects uv and Poetry lock files and otherwise installs the package
+and documentation extras through uv's pip interface. It uses Python 3.11 or newer
+and retains an explicit Python-version choice. The default deployment rule reads
+`CI_DEFAULT_BRANCH`; `--main-branch` selects an explicit deployment branch.
+
+If `.gitlab-ci.yml` already exists, the command prints a snippet for merging and
+leaves the file intact. Add its jobs to your pipeline and add `build` to a custom
+`stages` list, or change the jobs' stage to one already present. Use `--force` to
+replace the existing file.
+
+## Site addresses
+
+During a GitLab CI build, Great Docs uses
+[`CI_PAGES_URL`](https://docs.gitlab.com/ci/variables/predefined_variables/)
+when `site_url` is absent. An explicit `site_url` wins. An independent
+`seo.canonical.base_url` continues to control canonical links. Local project
+discovery does not infer a GitLab Pages address.
+
+The generated pipeline publishes the selected layout's final site directory.
+For `website/settings.yml`, it publishes `website/_site`; for an unmigrated
+root configuration, it publishes `great-docs/_site`. Versioned builds publish
+the assembled root, including historical versions under `v/`.
+
+## Deployment check
+
+Commit the reviewed pipeline and run it on your GitLab instance. Open
+**Deploy > Pages** to find the deployed address. Verify the homepage, an API
+page, a nested guide, assets and canonical links, including any URL subdirectory.
+Inspect the merge-request artefact separately to confirm that its build does
+not deploy production Pages.
+
+The pipeline and output layout have local coverage. Live Pages deployment
+acceptance remains pending until those checks run on an authorised GitLab
+project. The generated pipeline posts no merge-request note by default.

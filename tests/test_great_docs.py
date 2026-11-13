@@ -12461,6 +12461,7 @@ def test_cli_ordered_group_list_commands() -> None:
             "freeze",
             "timings",
             "setup-github-pages",
+            "setup-gitlab-pages",
             "check-links",
             "check-examples",
             "changelog",

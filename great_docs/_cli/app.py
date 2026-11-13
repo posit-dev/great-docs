@@ -32,7 +32,7 @@ def register_commands() -> None:
     """Register command families in the public command order"""
     from .build import build, freeze, preview, timings
     from .checks import check_examples, check_links, lint, proofread, seo
-    from .ci import ci, setup_github_pages
+    from .ci import ci, setup_github_pages, setup_gitlab_pages
     from .evolution import api_diff_cmd, api_snapshot_cmd, versions
     from .project import changelog, config, init, migrate_layout, scan, uninstall
     from .skills import skill
@@ -49,6 +49,7 @@ def register_commands() -> None:
     cli.add_command(freeze)
     cli.add_command(timings)
     cli.add_command(setup_github_pages)
+    cli.add_command(setup_gitlab_pages)
     cli.add_command(check_links)
     cli.add_command(check_examples)
     cli.add_command(changelog)

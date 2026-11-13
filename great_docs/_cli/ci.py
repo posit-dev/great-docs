@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -373,6 +375,139 @@ def setup_github_pages(
         click.echo("   • Automatically deploy to GitHub Pages on main branch")
         click.echo("   • Comment on pull requests with a 'great-docs preview' command")
 
+    except PROJECT_ERRORS as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
+@click.command(name="setup-gitlab-pages")
+@click.option(
+    "--project-path",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Path to the project root (default: current directory)",
+)
+@click.option(
+    "--main-branch",
+    default=None,
+    help="Deployment branch (default: GitLab's CI_DEFAULT_BRANCH)",
+)
+@click.option(
+    "--python-version",
+    default=None,
+    help="Python version for CI (default: project requirement, at least 3.11)",
+)
+@click.option(
+    "--package-manager",
+    type=click.Choice(["auto", "pip", "uv", "poetry"]),
+    default="auto",
+    help="Dependency environment (default: detect uv/Poetry lock files, otherwise uv pip)",
+)
+@click.option("--force", is_flag=True, help="Replace an existing .gitlab-ci.yml")
+@_options.config_option
+def setup_gitlab_pages(
+    project_path: str | None,
+    main_branch: str | None,
+    python_version: str | None,
+    package_manager: str,
+    force: bool,
+    config_path: str | None = None,
+) -> None:
+    """
+    Create GitLab Pages and merge-request documentation jobs
+
+    Require GitLab 17.10 or newer and a Linux Docker runner. Publish Pages on
+    default-branch pushes and retain merge-request builds as ordinary artefacts.
+    Print a mergeable snippet when a pipeline already exists; use `--force` to
+    replace it. Install Quarto and dependencies with the detected environment.
+
+    Parameters
+    ----------
+    project_path
+        Project directory, or the current directory when omitted.
+    main_branch
+        Deployment branch, or GitLab's configured default branch when omitted.
+    python_version
+        Python image version, or the detected project requirement with a 3.11 floor.
+    package_manager
+        Dependency environment: `auto`, `pip`, `uv` or `poetry`.
+    force
+        Whether to replace an existing pipeline file.
+    config_path
+        Selected configuration file, resolved from the current directory.
+    """
+    from importlib.resources import files
+
+    try:
+        layout = Layout.make(
+            Path(project_path or Path.cwd()), Path(config_path) if config_path else None
+        )
+        project_root = layout.package_root
+        if python_version is None:
+            detected = _detect_python_version(project_root) or "3.12"
+            parts = max((3, 11), tuple(map(int, detected.split("."))))
+            python_version = ".".join(map(str, parts))
+        if not re.fullmatch(r"\d+\.\d+(?:\.\d+)?", python_version):
+            raise click.BadParameter(
+                "Use a Python version such as 3.12", param_hint="--python-version"
+            )
+        if tuple(map(int, python_version.split("."))) < (3, 11):
+            raise click.BadParameter(
+                "Great Docs requires Python 3.11 or newer", param_hint="--python-version"
+            )
+
+        if package_manager == "auto":
+            package_manager = _detect_package_manager(project_root)
+        if package_manager == "uv":
+            install_commands = ["uv sync", "uv pip install great-docs"]
+            build_command = "uv run --no-sync great-docs build"
+        elif package_manager == "poetry":
+            install_commands = [
+                "UV_TOOL_BIN_DIR=/usr/local/bin uv tool install poetry --force",
+                "poetry install",
+                'uv pip install --python "$(poetry env info --executable)" great-docs',
+            ]
+            build_command = "poetry run great-docs build"
+        else:
+            extras = _detect_optional_dependencies(project_root)
+            package = f".[{','.join(extras)}]" if extras else "."
+            install_commands = ["uv venv", f"uv pip install -e {shlex.quote(package)} great-docs"]
+            build_command = "uv run --no-sync great-docs build"
+
+        if config_path:
+            build_command += " --config " + shlex.quote(
+                layout.config_path.relative_to(project_root).as_posix()
+            )
+        branch = json.dumps(main_branch) if main_branch is not None else "$CI_DEFAULT_BRANCH"
+        deploy_rule = f'$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == {branch}'
+        template = (
+            files("great_docs")
+            .joinpath("assets/gitlab-ci-template.yml")
+            .read_text(encoding="utf-8")
+        )
+        replacements = {
+            "python_image": json.dumps(f"python:{python_version}-bookworm"),
+            "install_commands": "\n".join(f"      {command}" for command in install_commands),
+            "build_command": json.dumps(build_command),
+            "site_dir": json.dumps(layout.site_dir.relative_to(project_root).as_posix()),
+            "deploy_rule": json.dumps(deploy_rule),
+        }
+        for key, value in replacements.items():
+            template = template.replace("{" + key + "}", value)
+
+        pipeline_file = project_root / ".gitlab-ci.yml"
+        if pipeline_file.exists() and not force:
+            click.echo("Existing .gitlab-ci.yml preserved. Merge these jobs into your pipeline:")
+            click.echo(template)
+            click.echo("Add build to a custom stages list, or select an existing stage.")
+            click.echo("Use --force to replace .gitlab-ci.yml instead.")
+            return
+        _ = pipeline_file.write_text(template, encoding="utf-8")
+        click.echo(f"Created .gitlab-ci.yml with Python {python_version} and {package_manager}.")
+        click.echo("Require GitLab 17.10 or newer and a Linux Docker runner.")
+        click.echo(
+            "Review and commit the pipeline, then check Deploy > Pages after a default-branch push."
+        )
+        click.echo("Merge-request builds retain artefacts without deploying production Pages.")
     except PROJECT_ERRORS as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)

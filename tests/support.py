@@ -106,7 +106,8 @@ def mock_config(**values: object) -> NonCallableMagicMock:
     Create a `Config` double with empty defaults
 
     Each property reads as the empty value of its declared type, and each public method returns
-    the empty value of its declared return type. The empty value is `None` when the type admits
+    the empty value of its declared return type. A method returning `Config` returns this
+    double so configuration copies retain its settings. The empty value is `None` when the type admits
     `None`, and otherwise the type's falsy value, such as `False`, `""`, `[]` or `{}`. Reading or
     setting a name that `Config` lacks raises `AttributeError`, so a test fails at its setup when
     a setting it names is renamed.
@@ -126,7 +127,8 @@ def mock_config(**values: object) -> NonCallableMagicMock:
         if isinstance(member, property) and member.fget is not None:
             setattr(config, name, _empty(_return_type(member.fget)))
         elif callable(member) and not name.startswith("_"):
-            getattr(config, name).return_value = _empty(_return_type(member))
+            result = _return_type(member)
+            getattr(config, name).return_value = config if result is Config else _empty(result)
     for name, value in values.items():
         setattr(config, name, value)
     return config

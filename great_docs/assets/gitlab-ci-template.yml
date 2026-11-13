@@ -1,0 +1,41 @@
+# Require GitLab 17.10 or newer for nested pages.publish and artefact paths.
+# Add the build stage to an existing stages list, or choose one of its stages.
+.great-docs-build:
+  image: {python_image}
+  stage: build
+  variables:
+    GIT_DEPTH: "0"
+    QUARTO_VERSION: "1.11.9"
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
+    - |
+      case "$(uname -m)" in
+        x86_64) quarto_arch=amd64 ;;
+        aarch64|arm64) quarto_arch=arm64 ;;
+        *) echo "Unsupported Quarto architecture: $(uname -m)" >&2; exit 1 ;;
+      esac
+      curl --fail --location --output /tmp/quarto.tar.gz "https://github.com/quarto-dev/quarto-cli/releases/download/v${QUARTO_VERSION}/quarto-${QUARTO_VERSION}-linux-${quarto_arch}.tar.gz"
+      tar -xzf /tmp/quarto.tar.gz -C /opt
+      ln -s "/opt/quarto-${QUARTO_VERSION}/bin/quarto" /usr/local/bin/quarto
+    - curl --fail --location --output /tmp/install-uv.sh https://astral.sh/uv/install.sh
+    - env UV_UNMANAGED_INSTALL=/usr/local/bin sh /tmp/install-uv.sh
+    - |
+{install_commands}
+  script:
+    - {build_command}
+
+great-docs-pages:
+  extends: .great-docs-build
+  pages:
+    publish: {site_dir}
+  rules:
+    - if: {deploy_rule}
+
+great-docs-preview:
+  extends: .great-docs-build
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  artifacts:
+    paths:
+      - {site_dir}
+    expire_in: 1 week

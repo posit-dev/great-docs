@@ -8,6 +8,7 @@ configuration and write it to `_quarto.yml`.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
 from .._content import metadata
@@ -30,7 +31,30 @@ __all__ = [
     "structured_data",
     "update_quarto_config",
     "write_quarto_config",
+    "with_ci_site_url",
 ]
+
+
+def with_ci_site_url(config: Config) -> Config:
+    """
+    Default the serving address to GitLab Pages during CI builds
+
+    Parameters
+    ----------
+    config
+        Project configuration before build preparation.
+
+    Returns
+    -------
+    :
+        A configuration with `CI_PAGES_URL` as its serving-address default when
+        `GITLAB_CI` is `true`, or the original configuration otherwise. Preserve
+        explicit site and canonical addresses and the original written settings.
+    """
+    pages_url = os.environ.get("CI_PAGES_URL")
+    if os.environ.get("GITLAB_CI") == "true" and pages_url:
+        return config.with_site_url_default(pages_url)
+    return config
 
 
 def identity(config: Config, layout: Layout, project: Project) -> Identity:

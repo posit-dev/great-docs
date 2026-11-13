@@ -191,6 +191,7 @@ def run(
         If Quarto is missing or too old, or a build step reports a failure. The failure
         has already been reported.
     """
+    config = site.with_ci_site_url(config)
     outputs.validate(config, layout)
     if not layout.config_path.exists():
         raise FileNotFoundError(
@@ -300,6 +301,7 @@ def prepare_for_freeze(config: Config, layout: Layout, log: BuildLog, *, remote:
     BuildError
         If a step reports a failure. The log already contains the report.
     """
+    config = site.with_ci_site_url(config)
     current = Run.make(config, layout, watch=False)
     steps = preparation_steps(current, config, layout, log, remote=remote)
     freeze.prepare(steps, log, layout.build_dir)
@@ -661,7 +663,7 @@ def _watch(
     preview_env[shared_sidebar.PREVIEW_ENV] = "1"
 
     def rebuild(staging: watch.Staging) -> dict[str, Any]:
-        edited = layout.load_config()
+        edited = site.with_ci_site_url(layout.load_config())
         current = Run.make(edited, staging, watch=True)
         if current.project.importable_name:
             watch.forget_package(current.project.importable_name)

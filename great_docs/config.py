@@ -655,6 +655,28 @@ class Config:
         """Get the site URL for subdirectory deployments."""
         return self["site_url"]
 
+    def with_site_url_default(self, url: str) -> Config:
+        """
+        Use a default serving address when no site URL is configured
+
+        Parameters
+        ----------
+        url
+            Serving address for the current build.
+
+        Returns
+        -------
+        :
+            A configuration copy with the default address, or this configuration
+            when a site URL is already present. Preserve the written settings
+            and the independent canonical base in both cases.
+        """
+        if self.site_url:
+            return self
+        configured = copy.copy(self)
+        configured._config = {**self._config, "site_url": url}
+        return configured
+
     @property
     def repo_style(self) -> str:
         """Get the repository link style"""

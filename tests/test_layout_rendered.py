@@ -570,6 +570,107 @@ def test_repository_site_links_and_metadata(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.parametrize(
+    ("directory", "tag", "explicit_url"),
+    [
+        ("docs", None, None),
+        ("website", "v1.5.0", None),
+        ("docs", None, "https://docs.example.org/custom/"),
+    ],
+)
+def test_gitlab_pages_recipe_renders_the_published_layout(
+    tmp_path: Path, required_tools: None, directory: str, tag: str | None, explicit_url: str | None
+) -> None:
+    from click.testing import CliRunner
+
+    from great_docs.cli import cli
+
+    pages_url = "https://team.gitlab.io/group/package/"
+    canonical = "https://canonical.example.org/package/" if tag else None
+    settings: dict[str, Any] = {
+        "repo": "https://gitlab.com/team/subteam/layout-sample",
+        "site_url": explicit_url,
+        "skill": {"enabled": True},
+    }
+    if canonical:
+        settings["seo"] = {"canonical": {"base_url": canonical}}
+    fixture = make_project(
+        tmp_path, directory, tag, migrate=False, execute_cell=False, settings=settings
+    )
+    written_config = fixture.layout.config_path.read_bytes()
+    setup = CliRunner().invoke(
+        cli,
+        [
+            "setup-gitlab-pages",
+            "--project-path",
+            str(tmp_path),
+            "--config",
+            str(fixture.layout.config_path),
+        ],
+    )
+    assert setup.exit_code == 0, setup.output
+    jobs = yaml.safe_load((tmp_path / ".gitlab-ci.yml").read_text())
+    import shlex
+
+    command = shlex.split(jobs[".great-docs-build"]["script"][0])
+    cli_arguments = command[command.index("great-docs") + 1 :]
+    script = """
+import sys
+from unittest.mock import patch
+from great_docs.cli import cli
+from great_docs._project.remote import OfflineRemote
+with patch("great_docs.core.HttpRemote", return_value=OfflineRemote()):
+    cli.main(args=sys.argv[1:], standalone_mode=False)
+"""
+    env = os.environ.copy()
+    env.update(GITLAB_CI="true", CI_PAGES_URL=pages_url)
+    env["PYTHONPATH"] = os.pathsep.join(
+        (str(ROOT), str(tmp_path / "src"), env.get("PYTHONPATH", ""))
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script, *cli_arguments],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    write_file(tmp_path, "pages-build.log", result.stdout + result.stderr)
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    published = tmp_path / jobs["great-docs-pages"]["pages"]["publish"]
+    assert published == fixture.layout.site_dir
+    assert jobs["great-docs-preview"]["artifacts"]["paths"] == [
+        published.relative_to(tmp_path).as_posix()
+    ]
+    serving_url = explicit_url or pages_url
+    preferred_url = canonical or serving_url
+    config = yaml.safe_load((fixture.layout.build_dir / "_quarto.yml").read_text())
+    assert config["website"]["site-url"] == serving_url
+    assert fixture.layout.config_path.read_bytes() == written_config
+    for relative in ("index.html", "reference/shared.html", "user-guide/frozen.html"):
+        page_path = published / relative
+        assert_local_targets(page_path, published)
+        preferred_path = "" if relative == "index.html" else relative
+        assert (
+            f'<link rel="canonical" href="{preferred_url}{preferred_path}">'
+            in page_path.read_text()
+        )
+    assert serving_url in (published / "skill.md").read_text()
+    if tag:
+        historical = published / "v/1.5.0"
+        for relative in ("index.html", "reference/shared.html", "user-guide/frozen.html"):
+            assert_local_targets(historical / relative, published)
+        old_config = yaml.safe_load(
+            (fixture.layout.build_dir_for(tag, "2.0.0") / "_quarto.yml").read_text()
+        )
+        assert old_config["website"]["site-url"] == serving_url.rstrip("/") + "/v/1.5.0/"
+        assert (
+            f'<link rel="canonical" href="{preferred_url}reference/shared.html">'
+            in (historical / "reference/shared.html").read_text()
+        )
+    print(f"Rendered Pages recipe: {published}")
+
+
 def assert_local_targets(page_path: Path, site: Path) -> Page:
     """
     Parse a page and verify that every local target resolves

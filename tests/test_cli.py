@@ -9,6 +9,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 from click.testing import CliRunner
 
 from great_docs import BuildError, GreatDocs
@@ -386,6 +387,7 @@ def test_layout_notice_once_per_build_or_preview_session(
         "freeze",
         "timings",
         "setup-github-pages",
+        "setup-gitlab-pages",
         "check-links",
         "changelog",
         "proofread",
@@ -793,6 +795,167 @@ def test_workflow_uses_selected_deployment(tmp_path: Path, selected: str) -> Non
     )
     assert f"--config {selected}" in workflow
     assert f"path: {expected_site}" in workflow
+
+
+@pytest.mark.parametrize(
+    "selected", ["great-docs.yml", "docs/great-docs.yml", "website/custom settings.yml"]
+)
+@pytest.mark.parametrize("versioned", [False, True])
+def test_gitlab_pages_uses_the_final_selected_site(
+    tmp_path: Path, selected: str, versioned: bool
+) -> None:
+    config = tmp_path / selected
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text("versions: ['2.0', '1.0']\n" if versioned else "{}\n")
+    result = CliRunner().invoke(
+        cli, ["setup-gitlab-pages", "--project-path", str(tmp_path), "--config", str(config)]
+    )
+    assert result.exit_code == 0, result.output
+    jobs = yaml.safe_load((tmp_path / ".gitlab-ci.yml").read_text())
+    expected = "great-docs/_site" if "/" not in selected else selected.rsplit("/", 1)[0] + "/_site"
+    assert jobs["great-docs-pages"]["pages"] == {"publish": expected}
+    assert jobs["great-docs-preview"]["artifacts"]["paths"] == [expected]
+    import shlex
+
+    command = shlex.split(jobs[".great-docs-build"]["script"][0])
+    assert command[-2:] == ["--config", selected]
+    assert "--output-dir" not in command
+
+
+@pytest.mark.parametrize("branch", [None, "develop", "release/docs"])
+def test_gitlab_pages_limits_production_to_default_branch_pushes(
+    tmp_path: Path, branch: str | None
+) -> None:
+    arguments = ["--main-branch", branch] if branch is not None else []
+    result = CliRunner().invoke(
+        cli, ["setup-gitlab-pages", "--project-path", str(tmp_path), *arguments]
+    )
+    assert result.exit_code == 0, result.output
+    jobs = yaml.safe_load((tmp_path / ".gitlab-ci.yml").read_text())
+    selected_branch = json.dumps(branch) if branch is not None else "$CI_DEFAULT_BRANCH"
+    assert jobs["great-docs-pages"]["rules"] == [
+        {"if": f'$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == {selected_branch}'}
+    ]
+    preview = jobs["great-docs-preview"]
+    assert preview["rules"] == [{"if": '$CI_PIPELINE_SOURCE == "merge_request_event"'}]
+    assert "pages" not in preview
+    assert "pages" not in jobs[".great-docs-build"]
+    assert preview["artifacts"]["expire_in"] == "1 week"
+    assert "workflow" not in jobs
+    assert "stages" not in jobs
+
+
+@pytest.mark.parametrize(
+    ("lock", "manager", "installation", "command"),
+    [
+        ("uv.lock", "auto", "uv sync", "uv run --no-sync great-docs build"),
+        ("poetry.lock", "auto", "poetry install", "poetry run great-docs build"),
+        (None, "auto", "uv pip install -e", "uv run --no-sync great-docs build"),
+        ("uv.lock", "pip", "uv pip install -e", "uv run --no-sync great-docs build"),
+        (None, "uv", "uv sync", "uv run --no-sync great-docs build"),
+        (None, "poetry", "poetry install", "poetry run great-docs build"),
+    ],
+)
+def test_gitlab_pages_detects_or_selects_the_dependency_environment(
+    tmp_path: Path, lock: str | None, manager: str, installation: str, command: str
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\nrequires-python = ">=3.12"\n'
+        "[project.optional-dependencies]\ndocs = []\ntest = []\n"
+    )
+    if lock:
+        (tmp_path / lock).touch()
+    result = CliRunner().invoke(
+        cli, ["setup-gitlab-pages", "--project-path", str(tmp_path), "--package-manager", manager]
+    )
+    assert result.exit_code == 0, result.output
+    jobs = yaml.safe_load((tmp_path / ".gitlab-ci.yml").read_text())
+    build = jobs[".great-docs-build"]
+    assert build["image"] == "python:3.12-bookworm"
+    assert build["variables"]["GIT_DEPTH"] == "0"
+    before = "\n".join(build["before_script"])
+    assert installation in before
+    if "uv pip install -e" in installation:
+        assert ".[docs,test]" in before
+    if "poetry install" in installation:
+        assert "UV_TOOL_BIN_DIR=/usr/local/bin uv tool install poetry" in before
+    assert "curl --fail --location" in before
+    assert "quarto-${QUARTO_VERSION}-linux-${quarto_arch}.tar.gz" in before
+    assert build["script"] == [command]
+    syntax = subprocess.run(["sh", "-n"], input=before, capture_output=True, text=True)
+    assert syntax.returncode == 0, syntax.stderr
+
+
+@pytest.mark.parametrize(
+    ("requirement", "explicit", "expected"),
+    [
+        (None, None, "3.12"),
+        (">=3.9", None, "3.11"),
+        (">=3.13", None, "3.13"),
+        (">=3.11", "3.14", "3.14"),
+    ],
+)
+def test_gitlab_pages_chooses_supported_python(
+    tmp_path: Path, requirement: str | None, explicit: str | None, expected: str
+) -> None:
+    metadata = '[project]\nname = "pkg"\n'
+    if requirement:
+        metadata += f'requires-python = "{requirement}"\n'
+    (tmp_path / "pyproject.toml").write_text(metadata)
+    arguments = ["--python-version", explicit] if explicit else []
+    result = CliRunner().invoke(
+        cli, ["setup-gitlab-pages", "--project-path", str(tmp_path), *arguments]
+    )
+    assert result.exit_code == 0, result.output
+    jobs = yaml.safe_load((tmp_path / ".gitlab-ci.yml").read_text())
+    assert jobs[".great-docs-build"]["image"] == f"python:{expected}-bookworm"
+
+
+@pytest.mark.parametrize("version", ["3.10", "3.12; echo invalid", "latest"])
+def test_gitlab_pages_rejects_invalid_python(tmp_path: Path, version: str) -> None:
+    result = CliRunner().invoke(
+        cli, ["setup-gitlab-pages", "--project-path", str(tmp_path), "--python-version", version]
+    )
+    assert result.exit_code == 2
+    assert "--python-version" in result.output
+    assert not (tmp_path / ".gitlab-ci.yml").exists()
+
+
+def test_gitlab_pages_prints_a_snippet_without_replacing_a_pipeline(tmp_path: Path) -> None:
+    pipeline_file = tmp_path / ".gitlab-ci.yml"
+    pipeline_file.write_text("include: team/pipeline.yml\n")
+    result = CliRunner().invoke(cli, ["setup-gitlab-pages", "--project-path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert pipeline_file.read_text() == "include: team/pipeline.yml\n"
+    assert "great-docs-pages:" in result.output
+    assert "great-docs-preview:" in result.output
+    assert "--force" in result.output
+    assert "Aborted" not in result.output
+
+
+def test_gitlab_pages_replaces_a_pipeline_only_with_force(tmp_path: Path) -> None:
+    pipeline_file = tmp_path / ".gitlab-ci.yml"
+    pipeline_file.write_text("include: team/pipeline.yml\n")
+    result = CliRunner().invoke(
+        cli, ["setup-gitlab-pages", "--project-path", str(tmp_path), "--force"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "great-docs-pages" in yaml.safe_load(pipeline_file.read_text())
+    assert "GitLab 17.10" in result.output
+
+
+def test_gitlab_pages_reports_an_unreadable_template(tmp_path: Path) -> None:
+    with patch("importlib.resources.files", side_effect=OSError("unreadable template")):
+        result = CliRunner().invoke(cli, ["setup-gitlab-pages", "--project-path", str(tmp_path)])
+    assert result.exit_code == 1
+    assert "Error: unreadable template" in result.output
+
+
+def test_gitlab_pages_is_exported_by_the_public_cli() -> None:
+    from great_docs._cli.ci import setup_gitlab_pages
+    from great_docs.cli import setup_gitlab_pages as public_command
+
+    assert public_command is setup_gitlab_pages
 
 
 def test_detect_python_version_ge():
