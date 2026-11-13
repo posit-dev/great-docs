@@ -7,7 +7,7 @@ help: ## Show this help message
 	@echo 'Usage: make [target]'
 	@echo ''
 	@echo 'Available targets:'
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 .PHONY: test
 test: ## Run core tests (fast, no package builds)
@@ -243,3 +243,99 @@ hub-deploy: ## Trigger GDG hub deployment to GitHub Pages (requires gh CLI)
 	@gh workflow run deploy.yml --repo posit-dev/gdg \
 	  -f great_docs_ref=$$(git rev-parse --abbrev-ref HEAD) && \
 	 echo "Deployment triggered. Watch at: https://github.com/posit-dev/gdg/actions"
+
+# ── Quarto 2 (experimental) ──────────────────────────────────────────────────
+# Q2 names the q2 binary: a path, or a command on PATH. The default is the first
+# that exists of the one `make q2-upgrade` installs, a release build in a sibling
+# checkout of quarto-dev/q2 (Q2_SRC), and `q2` on PATH. The Quarto 2 Gauntlet
+# builds into its own directory, so it leaves the Quarto 1 build in
+# test-packages/_rendered.
+Q2_INSTALL_DIR ?= $(HOME)/.local/bin
+Q2_SRC ?= ../q2
+Q2 ?= $(firstword $(wildcard $(Q2_INSTALL_DIR)/q2 $(Q2_SRC)/target/release/q2) q2)
+Q2_BIN = $(if $(findstring /,$(Q2)),$(abspath $(Q2)),$(Q2))
+Q2_RENDERED := test-packages/_rendered_q2
+Q2_PORT ?= 3334
+Q2_ENV = GREAT_DOCS_QUARTO="$(Q2_BIN)" GDG_RENDERED_DIR="$(CURDIR)/$(Q2_RENDERED)" \
+	PATH="$(abspath $(dir $(PYTHON))):$$PATH"
+
+# Tests that render real projects with Quarto. Under Quarto 2 they run the
+# bundled extensions and post-render scripts against q2's output.
+Q2_RENDER_TESTS := \
+	tests/test_markdown_pages_filter.py \
+	tests/test_page_url_filter.py \
+	tests/test_description_render.py \
+	tests/test_metadata_partial_render.py \
+	tests/test_social_cards_render.py \
+	tests/test_shared_sidebar.py \
+	tests/test_term_transcript.py \
+	tests/test_term_bundle.py \
+	tests/test_parallel_render.py
+
+.PHONY: q2-check
+q2-check: ## Check that the Quarto 2 binary runs (override with Q2=path/to/q2)
+	@command -v "$(Q2_BIN)" > /dev/null 2>&1 || \
+	 (echo "Quarto 2 not found at $(Q2). Install it with 'make q2-upgrade', or pass Q2=path/to/q2." && exit 1)
+	@echo "Quarto 2: $(Q2_BIN) ($$("$(Q2_BIN)" --version))"
+
+# Run q2's installer with the given options. Downloading it first, rather than
+# piping curl into bash, makes a failed download fail the target.
+Q2_INSTALLER := https://raw.githubusercontent.com/quarto-dev/q2/main/install.sh
+q2_install = tmp=$$(mktemp) && trap 'rm -f "$$tmp"' EXIT && \
+	curl -fsSL $(Q2_INSTALLER) -o "$$tmp" && bash "$$tmp" --dest "$(Q2_INSTALL_DIR)" $(1)
+
+.PHONY: q2-upgrade
+q2-upgrade: ## Install or upgrade Quarto 2 to the latest release in ~/.local/bin (Q2_VERSION=vX.Y.Z pins one; needs minisign)
+	@$(call q2_install,$(if $(Q2_VERSION),--version $(Q2_VERSION)))
+
+.PHONY: q2-upgrade-nightly
+q2-upgrade-nightly: ## Install or upgrade Quarto 2 to the latest nightly build from main, in ~/.local/bin
+	@$(call q2_install,--nightly)
+
+.PHONY: q2-version
+q2-version: ## Show the Quarto 2 in use, and the latest release, nightly build and commit on main
+	@echo "In use:          $(Q2_BIN) ($$("$(Q2_BIN)" --version 2>/dev/null || echo not found))"
+	@if [ -d "$(Q2_SRC)/.git" ]; then \
+	  echo "Source checkout: $(Q2_SRC) at $$(git -C "$(Q2_SRC)" log -1 --format='%h (%cs)')"; \
+	fi
+	@if command -v gh > /dev/null 2>&1; then \
+	  tag=$$(gh release view -R quarto-dev/q2 --json tagName --jq .tagName) && \
+	  echo "Latest release:  $$tag ($$(gh api repos/quarto-dev/q2/commits/$$tag --jq '.sha[:9] + ", " + .commit.committer.date[:10]'))" && \
+	  echo "Latest nightly:  $$(gh release view nightly -R quarto-dev/q2 --json name --jq '.name | sub("^q2 nightly "; "")')" && \
+	  echo "Latest on main:  $$(gh api repos/quarto-dev/q2/commits/main --jq '.sha[:9] + " (" + .commit.committer.date[:10] + ") " + (.commit.message | split("\n")[0])')"; \
+	else \
+	  echo "Install the gh CLI to see the latest release, nightly build and commit on main."; \
+	fi
+
+.PHONY: q2-test
+q2-test: q2-check ## Run the Quarto 2 unit tests, then the tests that render with Quarto, using Quarto 2
+	@$(PYTHON) -m pytest tests/test_quarto_check.py tests/test_quarto_yml.py -q
+	@$(Q2_ENV) $(PYTHON) -m pytest $(Q2_RENDER_TESTS) -n auto -o faulthandler_timeout=120 $(Q2_TEST_ARGS)
+
+.PHONY: q2-test-gdg
+q2-test-gdg: ## Run the GDG rendered-output tests against the Quarto 2 build (after q2-hub-build)
+	@test -d $(Q2_RENDERED) || (echo "No Quarto 2 GDG build found. Run 'make q2-hub-build' first." && exit 1)
+	@$(Q2_ENV) $(PYTHON) -m pytest tests/test_gdg_rendered.py -n auto $(Q2_TEST_ARGS)
+
+.PHONY: q2-hub-build
+q2-hub-build: q2-check ## Full build of the Great Docs Gauntlet with Quarto 2, into test-packages/_rendered_q2
+	@$(Q2_ENV) $(PYTHON) test-packages/render_all.py --build
+
+.PHONY: q2-hub-resume
+q2-hub-resume: q2-check ## Resume an interrupted Quarto 2 GDG build (skip already-ok packages)
+	@$(Q2_ENV) $(PYTHON) test-packages/render_all.py --build --skip-ok
+
+.PHONY: q2-hub-rebuild
+q2-hub-rebuild: q2-check ## Selective Quarto 2 GDG rebuild: make q2-hub-rebuild PKG="gdtest_minimal gdtest_github_icon"
+	@test -n "$(PKG)" || (echo "Usage: make q2-hub-rebuild PKG=\"name1 name2\"" && exit 1)
+	@$(Q2_ENV) $(PYTHON) test-packages/render_all.py --build --only $(PKG)
+
+.PHONY: q2-hub-serve
+q2-hub-serve: ## Serve the Quarto 2 Great Docs Gauntlet locally (port 3334, or Q2_PORT)
+	@GDG_RENDERED_DIR="$(CURDIR)/$(Q2_RENDERED)" $(PYTHON) test-packages/render_all.py --serve --port $(Q2_PORT)
+
+.PHONY: q2-hub-open
+q2-hub-open: ## Open the Quarto 2 Great Docs Gauntlet in the default browser
+	@open $(Q2_RENDERED)/_hub/index.html 2>/dev/null || \
+	 xdg-open $(Q2_RENDERED)/_hub/index.html 2>/dev/null || \
+	 echo "GDG page: $(Q2_RENDERED)/_hub/index.html"
