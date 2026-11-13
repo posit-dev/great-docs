@@ -1313,30 +1313,6 @@ def test_dark_mode_toggle_false(tmp_path):
     assert cfg.dark_mode_toggle is False
 
 
-# ── team_author ────────────────────────────────────────────────────────
-
-
-def test_team_author_with_name(tmp_path):
-    """team_author returns dict when configured with a name."""
-    cfg = write_config(
-        tmp_path, "team_author:\n  name: Team\n  image: avatar.png\n  url: https://team.dev\n"
-    )
-    result = cfg.team_author
-    assert result == {"name": "Team", "image": "avatar.png", "url": "https://team.dev"}
-
-
-def test_team_author_missing_name(tmp_path):
-    """team_author returns None when name is not set."""
-    cfg = write_config(tmp_path, "team_author:\n  image: avatar.png\n")
-    assert cfg.team_author is None
-
-
-def test_team_author_none(tmp_path):
-    """team_author returns None when not configured."""
-    cfg = Config(tmp_path)
-    assert cfg.team_author is None
-
-
 # ── jupyter ────────────────────────────────────────────────────────────
 
 
@@ -1745,7 +1721,6 @@ class TestSingleSourceInvariant:
             "parser",
             "dynamic",
             "jupyter",
-            "date_format",
             "github_style",
             "homepage",
             "attribution",

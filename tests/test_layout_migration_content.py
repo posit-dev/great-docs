@@ -73,7 +73,6 @@ def test_config_preserves_guide_ordering_and_url_fields(tmp_path: Path) -> None:
         "hero: {logo: {dark: script.py}}",
         "social_cards: {image: script.py}",
         "authors: [{name: Ada, image: script.py}]",
-        "team_author: {image: script.py}",
         "custom_pages: [script.py, {dir: script.py, output: keep}]",
     ],
 )

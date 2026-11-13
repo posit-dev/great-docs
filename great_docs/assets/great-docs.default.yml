@@ -246,7 +246,7 @@ funding: null
 # copy-code widget), `html-table-processing` (disabled — required for GT
 # table styling), and `mermaid` (fixed to the light theme — dark mode is
 # handled via a CSS container). The great-docs page settings that used to
-# live here (show_dates, date_format, show_author, show_security) are
+# live here (show_dates, show_author, show_security) are
 # top-level keys below; setting them under `site` still works and is lifted
 # automatically.
 site:
@@ -263,23 +263,11 @@ site:
 # Show page timestamps in footer
 show_dates: false
 
-# Date format (Python strftime)
-date_format: "%B %d, %Y"
-
 # Show author attribution with dates
 show_author: true
 
 # Show security policy page (from SECURITY.md)
 show_security: true
-
-# Team Author
-# -----------
-# Optional catch-all author for auto-generated pages (reference, changelog, etc.)
-# team_author:
-#   name: "Project Team"
-#   image: assets/team-avatar.png
-#   url: https://github.com/org/project
-team_author: null
 
 # Changelog (GitHub Releases)
 # ---------------------------
