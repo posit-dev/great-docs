@@ -2593,13 +2593,13 @@ div.sourceCode:hover > .gd-code-nav .gd-code-copy,
    GitHub Widget Styles
    ========================================================================== */
 
-#github-widget {
+#repository-widget {
     position: relative;
     display: inline-flex;
     align-items: center;
 }
 
-.gh-widget-trigger {
+.repo-widget-trigger {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -2613,54 +2613,54 @@ div.sourceCode:hover > .gd-code-nav .gd-code-copy,
     font-size: 13px;
 }
 
-.gh-widget-trigger:hover {
+.repo-widget-trigger:hover {
     background: rgba(0, 0, 0, 0.10);
     border-color: rgba(0, 0, 0, 0.25);
 }
 
-.gh-widget-open .gh-widget-trigger {
+.repo-widget-open .repo-widget-trigger {
     background: rgba(0, 0, 0, 0.12);
     border-color: rgba(0, 0, 0, 0.25);
 }
 
-.gh-icon {
+.repo-icon {
     flex-shrink: 0;
 }
 
-.gh-stats {
+.repo-stats {
     display: flex;
     align-items: center;
     gap: 10px;
     margin-left: 4px;
 }
 
-.gh-stat {
+.repo-stat {
     display: flex;
     align-items: center;
     gap: 3px;
     font-weight: 500;
 }
 
-.gh-stat svg {
+.repo-stat svg {
     opacity: 0.85;
 }
 
-.gh-count {
+.repo-count {
     min-width: 16px;
     text-align: center;
 }
 
-.gh-dropdown-arrow {
+.repo-dropdown-arrow {
     margin-left: 2px;
     opacity: 0.7;
     transition: transform 0.2s ease;
 }
 
-.gh-widget-open .gh-dropdown-arrow {
+.repo-widget-open .repo-dropdown-arrow {
     transform: rotate(180deg);
 }
 
-.gh-dropdown {
+.repo-dropdown {
     position: absolute;
     top: calc(100% + 6px);
     right: 0;
@@ -2677,13 +2677,13 @@ div.sourceCode:hover > .gd-code-nav .gd-code-copy,
     overflow: hidden;
 }
 
-.gh-widget-open .gh-dropdown {
+.repo-widget-open .repo-dropdown {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
 }
 
-.gh-dropdown-item {
+.repo-dropdown-item {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -2695,23 +2695,23 @@ div.sourceCode:hover > .gd-code-nav .gd-code-copy,
     transition: background 0.15s ease;
 }
 
-.gh-dropdown-item:hover {
+.repo-dropdown-item:hover {
     background: #f6f8fa;
     text-decoration: none !important;
 }
 
-.gh-dropdown-item svg {
+.repo-dropdown-item svg {
     color: #57606a;
     flex-shrink: 0;
 }
 
-.gh-dropdown-divider {
+.repo-dropdown-divider {
     height: 1px;
     margin: 4px 0;
     background: #d8dee4;
 }
 
-.gh-badge {
+.repo-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -3080,7 +3080,7 @@ html.quarto-dark .gd-badge-deprecated,
     }
 
     /* Make GitHub widget full width when inside collapsed nav */
-    .gh-widget-trigger {
+    .repo-widget-trigger {
         width: 100%;
         justify-content: flex-start;
     }
@@ -3106,15 +3106,15 @@ html.quarto-dark .gd-badge-deprecated,
 }
 
 @media (max-width: 768px) {
-    .gh-stats {
+    .repo-stats {
         display: none;
     }
 
-    .gh-widget-trigger {
+    .repo-widget-trigger {
         padding: 6px 8px;
     }
 
-    .gh-dropdown {
+    .repo-dropdown {
         right: 0;
         min-width: 160px;
     }
@@ -3139,7 +3139,7 @@ html.quarto-dark .gd-badge-deprecated,
 
 /* Print styles - hide widget */
 @media print {
-    #github-widget {
+    #repository-widget {
         display: none;
     }
 }
@@ -4664,48 +4664,48 @@ html.quarto-dark .aa-ClearButton:hover svg.aa-ClearIcon,
    Dark Mode - GitHub Widget
    ========================================================================== */
 
-body.quarto-dark .gh-widget-trigger {
+body.quarto-dark .repo-widget-trigger {
     background: rgba(255, 255, 255, 0.08);
     border-color: rgba(255, 255, 255, 0.15);
     color: #e0e0e0;
 }
 
-body.quarto-dark .gh-widget-trigger:hover {
+body.quarto-dark .repo-widget-trigger:hover {
     background: rgba(255, 255, 255, 0.12);
     border-color: rgba(255, 255, 255, 0.25);
 }
 
 /* Suppress the nav-link hover background that wraps the GitHub widget */
-body.quarto-dark .nav-item:has(#github-widget) > a:hover,
-body.quarto-dark .nav-item:has(#github-widget) .nav-link:hover {
+body.quarto-dark .nav-item:has(#repository-widget) > a:hover,
+body.quarto-dark .nav-item:has(#repository-widget) .nav-link:hover {
     background: transparent !important;
     background-color: transparent !important;
     box-shadow: none !important;
 }
 
-body.quarto-dark .gh-dropdown {
+body.quarto-dark .repo-dropdown {
     background: var(--gd-bg-secondary);
     border-color: var(--gd-border-color);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
-body.quarto-dark .gh-dropdown-item {
+body.quarto-dark .repo-dropdown-item {
     color: var(--gd-text-primary) !important;
 }
 
-body.quarto-dark .gh-dropdown-item:hover {
+body.quarto-dark .repo-dropdown-item:hover {
     background: var(--gd-bg-tertiary);
 }
 
-body.quarto-dark .gh-dropdown-item svg {
+body.quarto-dark .repo-dropdown-item svg {
     color: var(--gd-text-muted);
 }
 
-body.quarto-dark .gh-dropdown-divider {
+body.quarto-dark .repo-dropdown-divider {
     background: var(--gd-border-color);
 }
 
-body.quarto-dark .gh-badge {
+body.quarto-dark .repo-badge {
     background: rgba(110, 168, 254, 0.2);
     color: #6ea8fe;
 }
@@ -4843,7 +4843,7 @@ code,
 .table,
 input,
 textarea,
-.gh-dropdown,
+.repo-dropdown,
 .dark-mode-toggle {
     transition: background-color 0.2s ease,
                 border-color 0.2s ease,
@@ -5929,7 +5929,7 @@ html[data-bs-theme="dark"] .navbar[class*="gd-gradient-"] .nav-link:hover {
     background-color: rgba(255, 255, 255, 0.2) !important;
     color: #ffffff !important;
 }
-html[data-bs-theme="dark"] .navbar[class*="gd-gradient-"] .nav-item:has(#github-widget) .nav-link:hover {
+html[data-bs-theme="dark"] .navbar[class*="gd-gradient-"] .nav-item:has(#repository-widget) .nav-link:hover {
     background-color: transparent !important;
 }
 html[data-bs-theme="dark"] .navbar[class*="gd-gradient-"] .nav-item.compact .nav-link,

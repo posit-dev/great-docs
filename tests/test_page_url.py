@@ -6,17 +6,22 @@ from pathlib import Path
 
 import pytest
 
+from great_docs._project.repository import Repository
 from great_docs._website import page_url
 from great_docs.config import Config
 from tests.support import write_config
 
 
 class TestResolveBaseUrl:
+    def test_gitlab_requires_an_explicit_address(self, tmp_path: Path) -> None:
+        repository = Repository("gitlab", "https://code.example.org/gitlab", "team/subteam", "pkg")
+        assert page_url.resolve_base_url(write_config(tmp_path), repository) is None
+
     def test_base_url_alone(self, tmp_path):
         config = write_config(
             tmp_path, "seo:\n  canonical:\n    base_url: https://docs.example.com/pkg\n"
         )
-        assert page_url.resolve_base_url(config, None, None) == "https://docs.example.com/pkg/"
+        assert page_url.resolve_base_url(config, None) == "https://docs.example.com/pkg/"
 
     def test_base_url_overrides_site_url(self, tmp_path):
         config = write_config(
@@ -24,20 +29,32 @@ class TestResolveBaseUrl:
             "site_url: https://docs.example.com/pkg\n"
             "seo:\n  canonical:\n    base_url: https://example.org/docs\n",
         )
-        assert page_url.resolve_base_url(config, "acme", "pkg") == "https://example.org/docs/"
+        assert (
+            page_url.resolve_base_url(
+                config, Repository("github", "https://github.com", "acme", "pkg")
+            )
+            == "https://example.org/docs/"
+        )
 
     def test_site_url_beats_github(self, tmp_path):
         config = write_config(tmp_path, "site_url: https://docs.example.com/pkg/\n")
-        assert page_url.resolve_base_url(config, "acme", "pkg") == "https://docs.example.com/pkg/"
+        assert (
+            page_url.resolve_base_url(
+                config, Repository("github", "https://github.com", "acme", "pkg")
+            )
+            == "https://docs.example.com/pkg/"
+        )
 
     def test_github_when_nothing_is_configured(self, tmp_path):
         assert (
-            page_url.resolve_base_url(write_config(tmp_path), "acme", "pkg")
+            page_url.resolve_base_url(
+                write_config(tmp_path), Repository("github", "https://github.com", "acme", "pkg")
+            )
             == "https://acme.github.io/pkg/"
         )
 
     def test_none_without_a_repository(self, tmp_path):
-        assert page_url.resolve_base_url(write_config(tmp_path), None, None) is None
+        assert page_url.resolve_base_url(write_config(tmp_path), None) is None
 
 
 @pytest.mark.parametrize(

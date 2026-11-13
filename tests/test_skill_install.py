@@ -513,6 +513,7 @@ class TestMultiSkillWellKnown:
                 docs.layout,
                 make_project(docs).name,
                 make_project(docs).manifest,
+                make_project(docs).repository,
             ).write(None)
 
             # Check primary skill.md was created

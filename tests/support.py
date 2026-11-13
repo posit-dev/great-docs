@@ -10,7 +10,7 @@ individual build operations. `user_guide_step`, `sections_step`, `custom_pages_s
 `freeze_cache_step` run individual steps with the build's arguments, and
 `apply_contributions` adds what a step records to `_quarto.yml`.
 `stubbed_build` stubs Quarto and build steps while preserving the build's control flow.
-`StubRemote` supplies GitHub and PyPI data without network requests. `homepage_hero` and
+`StubRemote` supplies repository and PyPI data without network requests. `homepage_hero` and
 `homepage_margin` build the homepage hero and sidebar from the project's configuration and metadata.
 `find_user_guide_dir` and `discover_user_guide` find a project's user guide and print its warnings
 as a build does. `write_authored_pages` creates a project with each kind of authored page
@@ -24,7 +24,7 @@ import inspect
 import io
 import types
 import typing
-from collections.abc import Callable, Collection, Generator, Iterable, Mapping
+from collections.abc import Callable, Collection, Generator, Iterable, Iterator, Mapping
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -48,7 +48,8 @@ from great_docs._website.project_pages import community
 
 if TYPE_CHECKING:
     from great_docs._content.user_guide import UserGuide
-    from great_docs._project.github import GithubRepo
+    from great_docs._project.repository import Repository
+    from great_docs._project.remote import ReleaseData
     from great_docs._project.layout import Layout
 
 # Stub calls within step actions to preserve the step table and build control flow.
@@ -105,7 +106,8 @@ def mock_config(**values: object) -> NonCallableMagicMock:
     Create a `Config` double with empty defaults
 
     Each property reads as the empty value of its declared type, and each public method returns
-    the empty value of its declared return type. The empty value is `None` when the type admits
+    the empty value of its declared return type. A method returning `Config` returns this
+    double so configuration copies retain its settings. The empty value is `None` when the type admits
     `None`, and otherwise the type's falsy value, such as `False`, `""`, `[]` or `{}`. Reading or
     setting a name that `Config` lacks raises `AttributeError`, so a test fails at its setup when
     a setting it names is renamed.
@@ -125,7 +127,8 @@ def mock_config(**values: object) -> NonCallableMagicMock:
         if isinstance(member, property) and member.fget is not None:
             setattr(config, name, _empty(_return_type(member.fget)))
         elif callable(member) and not name.startswith("_"):
-            getattr(config, name).return_value = _empty(_return_type(member))
+            result = _return_type(member)
+            getattr(config, name).return_value = config if result is Config else _empty(result)
     for name, value in values.items():
         setattr(config, name, value)
     return config
@@ -804,7 +807,7 @@ def _empty(annotation: object) -> object:
 @dataclass
 class StubRemote:
     """
-    Preset GitHub and PyPI data for a `GreatDocs` instance
+    Preset repository and PyPI data for a `GreatDocs` instance
 
     Assign an instance to `docs._remote` to prevent network requests in a test.
 
@@ -821,11 +824,11 @@ class StubRemote:
     """
 
     stats: dict[str, int] = field(default_factory=dict)
-    releases: list[dict[str, Any]] = field(default_factory=list)
+    releases: list[ReleaseData] = field(default_factory=list)
     release_dates: dict[str, str] = field(default_factory=dict)
     calls: list[str] = field(default_factory=list)
 
-    def github_stats(self, repo: GithubRepo) -> dict[str, int]:
+    def repository_stats(self, repo: Repository) -> dict[str, int]:
         """
         Return `stats` for any repository
 
@@ -839,10 +842,10 @@ class StubRemote:
         :
             `stats`.
         """
-        self.calls.append("github_stats")
+        self.calls.append("repository_stats")
         return self.stats
 
-    def github_releases(self, repo: GithubRepo, max_releases: int) -> list[dict[str, Any]]:
+    def repository_releases(self, repo: Repository, max_releases: int) -> list[ReleaseData]:
         """
         Return the first `max_releases` entries of `releases`
 
@@ -858,7 +861,7 @@ class StubRemote:
         :
             The newest releases.
         """
-        self.calls.append("github_releases")
+        self.calls.append("repository_releases")
         return self.releases[:max_releases]
 
     def pypi_release_dates(self, package_names: Collection[str]) -> dict[str, str]:
@@ -933,6 +936,7 @@ def homepage_margin(docs: GreatDocs, *, api_block: dict[str, Any] | None = None)
         docs._config,
         docs.layout,
         metadata=project.manifest,
+        repository=project.repository,
         package_name=project.name,
         community_pages=community.write_pages(
             docs._config, docs.layout, make_run(docs).page_authors
@@ -1019,3 +1023,36 @@ def write_authored_pages(root: Path) -> None:
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
+
+
+class GitLabResponse:
+    """A GitLab HTTP response with JSON or streamed content"""
+
+    def __init__(
+        self,
+        payload: object = None,
+        *,
+        status: int = 200,
+        headers: dict[str, str] | None = None,
+        chunks: list[bytes] | None = None,
+    ) -> None:
+        self.payload = payload
+        self.status_code = status
+        self.headers = headers or {}
+        self.chunks = chunks or []
+        self.closed = False
+
+    def json(self) -> object:
+        return self.payload
+
+    def close(self) -> None:
+        self.closed = True
+
+    def __enter__(self) -> GitLabResponse:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
+
+    def iter_content(self, chunk_size: int) -> Iterator[bytes]:
+        yield from self.chunks

@@ -1,7 +1,7 @@
 """
-The site's brand: its title, logo, favicons, GitHub entry and latest release
+The site's brand: its title, logo, favicons, repository entry and latest release
 
-The navbar shows the site title or logo on the left and the GitHub entry on the
+The navbar shows the site title or logo on the left and the repository entry on the
 right. Logo images and favicons are copied or generated into the Quarto project
 directory each time the configuration is written.
 """
@@ -15,14 +15,14 @@ from urllib.parse import urlsplit
 
 from ..._content import publish
 from .. import branding, quarto_yml
-from . import github, release
+from . import release, repository
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from ..._build.facts import Facts
-    from ..._project.github import GithubRepo
     from ..._project.layout import Layout
+    from ..._project.repository import Repository
     from ...config import Config
     from ..identity import Identity
 
@@ -34,7 +34,7 @@ def register(
     *,
     identity: Identity,
     package_name: str | None,
-    repo: GithubRepo | None,
+    repo: Repository | None,
     facts: Facts,
     documentation_url: str | None,
     report: Callable[[str], None],
@@ -45,7 +45,7 @@ def register(
     Set `website.site-url` to the site address when available. Enable page
     navigation. Set the site title to the site's name when the name is
     non-empty. Create the navbar.
-    Include a GitHub entry on the right when the project has a GitHub repository.
+    Include a provider-branded entry on the right when the project has a repository.
 
     Show a configured logo, or one found at a conventional path, in place of
     the navbar title unless `logo.show_title` is set. Copy local logo images into
@@ -68,9 +68,9 @@ def register(
     package_name
         The detected package name, for finding a logo and as its alternative text.
     repo
-        The project's GitHub repository, or `None` when it has none.
+        The project's repository, or `None` when it has none.
     facts
-        The repository's star and fork counts for the GitHub widget.
+        The repository's star and fork counts for the repository widget.
     documentation_url
         The project's documentation address, which locates favicons when the
         configuration has no `website.site-url`.
@@ -129,21 +129,21 @@ def register_release(quarto_config: dict[str, Any], config: Config, facts: Facts
 
 
 def _add_navbar(
-    website: dict[str, Any], config: Config, repo: GithubRepo | None, facts: Facts
+    website: dict[str, Any], config: Config, repo: Repository | None, facts: Facts
 ) -> None:
     """
-    Create the navbar with the GitHub entry on the right
+    Create the navbar with the repository entry on the right
 
     Parameters
     ----------
     website
         The `website` mapping of the Quarto configuration, updated in place.
     config
-        Project configuration, for the GitHub entry's style.
+        Project configuration, including the repository entry's style.
     repo
-        The project's GitHub repository, or `None` when it has none.
+        The project's repository, or `None` when it has none.
     facts
-        The repository's star and fork counts for the GitHub widget.
+        The repository's star and fork counts for the repository widget.
 
     Returns
     -------
@@ -151,11 +151,7 @@ def _add_navbar(
     """
     navbar: dict[str, Any] = {"left": []}
     if repo is not None:
-        navbar["right"] = [
-            github.navbar_item(
-                repo.url, repo.owner, repo.name, config.github_style, facts.github_stats
-            )
-        ]
+        navbar["right"] = [repository.navbar_item(repo, config.repo_style, facts.repository_stats)]
     website["navbar"] = navbar
 
 

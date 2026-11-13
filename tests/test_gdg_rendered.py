@@ -2866,10 +2866,19 @@ def test_navbar_renders_with_links(pkg_name: str):
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
 def test_github_widget_placeholder_is_unescaped(pkg_name: str):
-    """Every page carries the GitHub widget element as HTML, not as escaped text."""
+    """Render the configured repository widget mount as unescaped HTML"""
     navbar = _load_quarto_yml(pkg_name).get("website", {}).get("navbar", {})
-    if not any("github-widget" in str(item) for item in navbar.get("right", [])):
-        pytest.skip("No GitHub widget in the navbar")
+    # Cached sites can predate the repository widget asset migration.
+    widget_id = next(
+        (
+            name
+            for name in ("repository-widget", "github-widget")
+            if name in str(navbar.get("right", []))
+        ),
+        None,
+    )
+    if widget_id is None:
+        pytest.skip("No repository widget in the navbar")
 
     pages = sorted(_site_dir(pkg_name).rglob("*.html"))
     checked = 0
@@ -2880,9 +2889,14 @@ def test_github_widget_placeholder_is_unescaped(pkg_name: str):
             continue
         # Quarto escapes the text of a navbar item that has no link.
         assert "&lt;div id=" not in str(soup.select_one("nav.navbar")), page
-        widgets = soup.select("nav.navbar #github-widget")
-        assert len(widgets) == 1, f"{page}: expected one #github-widget"
-        assert widgets[0].get("data-owner") and widgets[0].get("data-repo"), page
+        widgets = soup.select(f"nav.navbar #{widget_id}")
+        assert len(widgets) == 1, f"{page}: expected one #{widget_id}"
+        fields = (
+            ("data-provider", "data-url")
+            if widget_id == "repository-widget"
+            else ("data-owner", "data-repo")
+        )
+        assert all(widgets[0].get(field) for field in fields), page
         checked += 1
     assert checked, f"{pkg_name}: no page with a navbar"
 

@@ -33,8 +33,8 @@ from .navigation import navbar as nav_navbar
 if TYPE_CHECKING:
     from .._build.facts import Facts
     from .._contribution import Contribution
-    from .._project.github import GithubRepo
     from .._project.layout import Layout
+    from .._project.repository import Repository
     from ..config import Config
     from .identity import Identity
 
@@ -46,7 +46,7 @@ def assemble(
     config: Config,
     layout: Layout,
     *,
-    repo: GithubRepo | None,
+    repo: Repository | None,
     facts: Facts,
     identity: Identity,
     package_name: str | None,
@@ -78,7 +78,7 @@ def assemble(
     layout
         Project directories for locating source files and writing build resources.
     repo
-        The project's GitHub repository, if it has one.
+        The project's repository, if it has one.
     facts
         The repository's star and fork counts and its latest release.
     identity

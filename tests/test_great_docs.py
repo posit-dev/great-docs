@@ -155,7 +155,7 @@ from great_docs._content import user_guide
 from great_docs._content.naming import strip_numeric_prefix
 from great_docs._contribution import NavbarLink
 from great_docs._project import manifest as _manifest
-from great_docs._project.github import GithubRepo
+from great_docs._project.repository import Repository
 from great_docs._project.layout import Layout
 from great_docs._project.model import Project, locate_package_init, read_manifest
 from great_docs._reference import block as reference_block
@@ -1095,7 +1095,7 @@ def test_config_defaults():
 
         # Check defaults
         assert config.exclude == []
-        assert config.github_style == "widget"
+        assert config.repo_style == "widget"
         assert config.source_enabled is True
         assert config.source_branch is None
         assert config.source_path is None
@@ -1131,7 +1131,7 @@ def test_config_load_yaml():
 exclude:
   - InternalClass
 
-github_style: icon
+repo_style: icon
 
 sidebar_filter:
   enabled: false
@@ -1152,7 +1152,7 @@ authors:
         config = Config(Path(tmp_dir))
 
         assert config.exclude == ["InternalClass"]
-        assert config.github_style == "icon"
+        assert config.repo_style == "icon"
         assert config.sidebar_filter_enabled is False
         assert config.sidebar_filter_min_items == 10
         assert config.cli_enabled is True
@@ -1182,7 +1182,7 @@ cli:
         assert config.cli_name is None
 
         # And other config has defaults
-        assert config.github_style == "widget"
+        assert config.repo_style == "widget"
         assert config.dark_mode_toggle is True
 
 
@@ -1205,14 +1205,14 @@ def test_config_to_dict():
     with tempfile.TemporaryDirectory() as tmp_dir:
         config_file = Path(tmp_dir) / "great-docs.yml"
         config_file.write_text("""
-github_style: icon
+repo_style: icon
 """)
 
         config = Config(Path(tmp_dir))
         config_dict = config.to_dict()
 
         assert isinstance(config_dict, dict)
-        assert config_dict["github_style"] == "icon"
+        assert config_dict["repo_style"] == "icon"
         assert "cli" in config_dict
         assert "source" in config_dict
 
@@ -2495,7 +2495,7 @@ def test_navbar_release_absent_without_github_repo():
         docs._remote = remote = StubRemote()
         update_quarto_config(docs, make_run(docs))
 
-        assert "github_releases" not in remote.calls
+        assert "repository_releases" not in remote.calls
         assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
 
 
@@ -7439,7 +7439,7 @@ def test_prepare_build_directory_copies_js_files():
             prepare_build_directory(docs, make_run(docs))
 
         # The GitHub widget needs a repository; the other core scripts do not.
-        assert not (docs.layout.build_dir / "github-widget.js").exists()
+        assert not (docs.layout.build_dir / "repository-widget.js").exists()
         assert (docs.layout.build_dir / "sidebar-filter.js").exists()
         assert (docs.layout.build_dir / "dark-mode-toggle.js").exists()
         assert (docs.layout.build_dir / "theme-init.js").exists()
@@ -8010,7 +8010,7 @@ def test_poetry_1_project_facts_reach_the_build(tmp_path: Path):
 
     assert project.name == "poetry-pkg"
     assert project.manifest["description"] == "A Poetry 1.x package"
-    assert project.github == GithubRepo("owner", "repo")
+    assert project.repository == Repository("github", "https://github.com", "owner", "repo")
 
 
 def test_empty_categories_structure():
@@ -8886,7 +8886,7 @@ def test_build_non_dynamic_failure_raises(tmp_path):
         docs.build(watch=False, refresh=True)
 
 
-# A published release as `Remote.github_releases` returns it
+# A published release as `Remote.repository_releases` returns it
 GITHUB_RELEASE = {
     "tag_name": "v1.0.0",
     "name": "",
@@ -10591,7 +10591,7 @@ def test_build_changelog_no_releases(tmp_path):
     with stubbed_build():
         docs.build(watch=False, refresh=False)
 
-    assert "github_releases" in docs._remote.calls
+    assert "repository_releases" in docs._remote.calls
     assert not (docs.layout.build_dir / "changelog.qmd").exists()
     assert _navbar_hrefs(docs) == ["reference/index.qmd"]
 
@@ -10612,7 +10612,7 @@ def test_build_changelog_no_repo(tmp_path):
     with stubbed_build():
         docs.build(watch=False, refresh=False)
 
-    assert "github_releases" not in docs._remote.calls
+    assert "repository_releases" not in docs._remote.calls
     assert not (docs.layout.build_dir / "changelog.qmd").exists()
     assert _navbar_hrefs(docs) == ["reference/index.qmd"]
 
@@ -10729,7 +10729,7 @@ def test_update_quarto_config_github_icon_fallback():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(
             tmp_dir,
-            gd_yml_content="github_style: icon\n",
+            gd_yml_content="repo_style: icon\n",
             quarto_content={
                 "project": {"type": "website"},
                 "website": {},
@@ -10737,7 +10737,10 @@ def test_update_quarto_config_github_icon_fallback():
             },
         )
 
-        on_github = replace(make_project(docs), github=GithubRepo("owner", "repo"))
+        on_github = replace(
+            make_project(docs),
+            repository=Repository("github", "https://github.com", "owner", "repo"),
+        )
         update_quarto_config(docs, make_run(docs, project=on_github))
 
         with open(quarto_yml) as f:
@@ -11061,7 +11064,10 @@ def test_update_quarto_config_favicon_absolute_urls_from_pyproject():
             },
         )
 
-        on_github = replace(make_project(docs), github=GithubRepo("owner", "repo"))
+        on_github = replace(
+            make_project(docs),
+            repository=Repository("github", "https://github.com", "owner", "repo"),
+        )
         update_quarto_config(docs, make_run(docs, project=on_github))
 
         with open(quarto_yml) as f:
@@ -12455,6 +12461,7 @@ def test_cli_ordered_group_list_commands() -> None:
             "freeze",
             "timings",
             "setup-github-pages",
+            "setup-gitlab-pages",
             "check-links",
             "check-examples",
             "changelog",
@@ -12467,7 +12474,7 @@ def test_cli_ordered_group_list_commands() -> None:
             "skill",
             "termshow",
         ],
-        ("ci",): ["pr-comment", "notice"],
+        ("ci",): ["pr-comment", "notice", "mr-comment", "gitlab-notice"],
         ("skill",): ["install", "check", "list"],
         ("termshow",): [
             "assets",
@@ -13376,7 +13383,7 @@ def test_cli_changelog_no_github_repo():
         # An empty project cannot supply a GitHub repository URL.
         result = runner.invoke(changelog, ["--project-path", tmp_dir])
         assert result.exit_code == 1
-        assert "No GitHub repository URL found" in result.output
+    assert "No supported repository URL found" in result.output
 
 
 def test_cli_changelog_max_releases_without_pyproject(tmp_path: Path):
@@ -16897,7 +16904,7 @@ def test_renderdoc_source_link_with_github_url():
     mod.set_member("linked_fn", func_obj)
     doc_func = content.DocFunction(name="linked_fn", obj=func_obj)
 
-    links = SourceLinks(repo_url="https://github.com/test/repo")
+    links = SourceLinks(repository=Repository.parse("https://github.com/test/repo"))
     render = RenderDocFunction(doc_func, level=1, settings=Settings(source_links=links))
     link = render.source_link
     assert link is not None
@@ -18118,6 +18125,7 @@ def _skills_writer(docs: GreatDocs) -> SkillsWriter:
         docs.layout,
         make_project(docs).name,
         make_project(docs).manifest,
+        make_project(docs).repository,
     )
 
 
@@ -18127,6 +18135,7 @@ def _skills_page_writer(docs: GreatDocs) -> SkillsPageWriter:
         docs.layout,
         make_project(docs).name,
         make_project(docs).manifest,
+        make_project(docs).repository.url if make_project(docs).repository else None,
     )
 
 
@@ -18949,7 +18958,7 @@ def test_write_skills_page_github_repo_detection():
         content = (great_docs_dir / "skills.qmd").read_text()
 
         # Should have GitHub-specific install command
-        assert "npx skills add myorg/test-package" in content
+        assert "npx skills add https://github.com/myorg/test-package" in content
         # Codex / OpenCode section should reference the GitHub repo
         assert "Codex / OpenCode" in content
         assert "github.com/myorg/test-package" in content
@@ -22162,6 +22171,9 @@ def test_discover_exports_cyclic_alias_skipped(tmp_path):
                 side_effect=lambda k: [] if k == "exclude" else False
             )
             mock_config.no_auto_exclude = False
+            mock_config.repo = None
+            mock_config.repo_provider = None
+            mock_config.repo_base_url = None
             # Call with the package already loaded, bypass discovery
             result = discover_exports(
                 make_exports(docs).package("fakepkg"), docs._config, report=print
@@ -22338,3 +22350,23 @@ def test_readme_homepage_without_margin_starts_with_front_matter_fence():
 
         assert content.startswith("---\n")
         assert "pragma" not in content
+
+
+def test_gitlab_navigation_uses_repository_widget_without_browser_api(tmp_path: Path) -> None:
+    docs, quarto_yml = _make_uqc_docs(
+        str(tmp_path),
+        gd_yml_content="repo: https://gitlab.com/group/subgroup/project\n",
+        quarto_content={
+            "project": {"type": "website"},
+            "website": {},
+            "format": {"html": {}},
+        },
+    )
+    update_quarto_config(docs, make_run(docs))
+    with open(quarto_yml) as stream:
+        result = read_yaml(stream)
+    [item] = result["website"]["navbar"]["right"]
+    assert item["href"] == "https://gitlab.com/group/subgroup/project"
+    assert 'data-provider="gitlab"' in item["text"]
+    assert "repository-widget.js" in result["project"]["resources"]
+    assert "data-public-api" not in item["text"]

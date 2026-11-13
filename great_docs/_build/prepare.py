@@ -154,7 +154,11 @@ def build_directory(
             warn=partial(print, file=sys.stderr),
         )
 
-    scripts.copy(config, build_dir, has_repository=run.project.github is not None)
+    scripts.copy(
+        config,
+        build_dir,
+        has_repository=run.project.repository is not None,
+    )
 
     _ = (build_dir / ".gitignore").write_text(GITIGNORE_CONTENT, encoding="utf-8")
 

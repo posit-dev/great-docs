@@ -31,6 +31,7 @@ import re
 from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
+from urllib.parse import urlsplit
 
 from yaml12 import read_yaml
 
@@ -168,9 +169,53 @@ class Config:
             )
 
         config = self._normalize_shorthands(config)
+        self._validate_repository(config)
         config["parser"] = self._validate_parser(config["parser"], self.config_path)
         config["webmcp"] = self._validate_webmcp(config["webmcp"], self.config_path)
         return config
+
+    def _validate_repository(self, config: ConfigDict) -> None:
+        """
+        Validate repository settings while allowing URLs on unknown hosts
+
+        Parameters
+        ----------
+        config
+            The merged repository URL, provider and instance settings.
+
+        Raises
+        ------
+        ConfigError
+            If a setting has the wrong type or the settings contradict one another.
+        """
+        from ._project.repository import Repository
+
+        for key in ("repo", "repo_provider", "repo_base_url"):
+            value = config[key]
+            if value is not None and (not isinstance(value, str) or not value.strip()):
+                raise ConfigError(f"{self.config_path}: {key} must be a non-empty string or null.")
+        try:
+            repository = Repository.parse(
+                config["repo"], provider=config["repo_provider"], base_url=config["repo_base_url"]
+            )
+            if config["repo"] and repository is None:
+                value = cast("str", config["repo"])
+                if "://" not in value:
+                    if ":" not in value:
+                        raise ValueError("repo must be a web or SSH repository URL.")
+                    value = "ssh://" + value.replace(":", "/", 1)
+                address = urlsplit(value)
+                address.port
+                if (
+                    config["repo_provider"] is not None
+                    or config["repo_base_url"] is not None
+                    or address.hostname in ("github.com", "gitlab.com")
+                    or address.scheme not in ("http", "https", "ssh")
+                    or not address.hostname
+                ):
+                    raise ValueError("repo must identify a repository with a namespace and name.")
+        except ValueError as error:
+            raise ConfigError(f"{self.config_path}: {error}") from error
 
     @staticmethod
     def _validate_parser(value: object, config_path: Path) -> str:
@@ -282,11 +327,13 @@ class Config:
         dict
             The configuration with legacy keys rewritten.
         """
-        site = user_config.get("site")
-        if not isinstance(site, dict):
-            return user_config
-
         config = dict(user_config)
+        if "github_style" in config:
+            config.setdefault("repo_style", config.pop("github_style"))
+        site = config.get("site")
+        if not isinstance(site, dict):
+            return config
+
         site = config["site"] = dict(cast("ConfigDict", site))
         if "language" in site:
             site.setdefault("lang", site.pop("language"))
@@ -590,18 +637,50 @@ class Config:
 
     @property
     def repo(self) -> str | None:
-        """Get the GitHub repository URL override."""
+        """Get the repository URL override"""
         return self["repo"]
+
+    @property
+    def repo_provider(self) -> str | None:
+        """Get the explicitly configured repository provider"""
+        return self["repo_provider"]
+
+    @property
+    def repo_base_url(self) -> str | None:
+        """Get the repository web instance and installation prefix"""
+        return self["repo_base_url"]
 
     @property
     def site_url(self) -> str | None:
         """Get the site URL for subdirectory deployments."""
         return self["site_url"]
 
+    def with_site_url_default(self, url: str) -> Config:
+        """
+        Use a default serving address when no site URL is configured
+
+        Parameters
+        ----------
+        url
+            Serving address for the current build.
+
+        Returns
+        -------
+        :
+            A configuration copy with the default address, or this configuration
+            when a site URL is already present. Preserve the written settings
+            and the independent canonical base in both cases.
+        """
+        if self.site_url:
+            return self
+        configured = copy.copy(self)
+        configured._config = {**self._config, "site_url": url}
+        return configured
+
     @property
-    def github_style(self) -> str:
-        """Get the GitHub link style."""
-        return self["github_style"]
+    def repo_style(self) -> str:
+        """Get the repository link style"""
+        return self["repo_style"]
 
     @property
     def source_enabled(self) -> bool:

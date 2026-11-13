@@ -225,10 +225,10 @@ exclude = [
     "tests",
     "docs",
     # Exclude modules in included packages until they pass strict checking
-    "great_docs/_build/ci.py",
+    "great_docs/_build/repo_hosts/github_ci.py",
     "great_docs/_build/log.py",
     "great_docs/_build/parallel_render.py",
-    "great_docs/_build/pr_preview.py",
+    "great_docs/_build/repo_hosts/github_preview.py",
     "great_docs/_checks/examples.py",
     "great_docs/_checks/harper.py",
     "great_docs/_checks/lint.py",

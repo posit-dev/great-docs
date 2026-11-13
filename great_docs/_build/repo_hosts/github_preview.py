@@ -1,11 +1,5 @@
-"""Preview a documentation site that CI already built for a PR or workflow run.
-
-Instead of standing up a preview host (Netlify, Cloudflare Pages, per-PR GitHub
-Pages), this fetches the HTML site artifact that CI already uploaded for a run,
-unpacks it into a local cache, and serves it with the preview server we ship.
-
-The public entry point is `preview_pr`, called by `great-docs preview`
-when one of `--pr` / `--run` / `--branch` is given. See PR_PREVIEW_PLAN.md.
+"""
+GitHub workflow artifact selection, authentication and local previews
 """
 
 from __future__ import annotations
@@ -16,7 +10,6 @@ import re
 import shutil
 import subprocess
 import sys
-import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -24,10 +17,18 @@ from urllib.parse import urlencode
 
 from dotenv import dotenv_values, find_dotenv
 
-from .._project import Project
-from .._project.github import GithubRepo, token_from_env
-from .._project.layout import Layout
-from . import serve
+from ..._project import Project
+from ..._project.layout import Layout
+from ..._project.repo_hosts.github import token_from_env
+from ..._project.repository import Repository
+from .. import serve
+from ..preview_artifacts import (
+    PreviewError,
+    cache_root,
+    cached_site,
+    safe_extract_zip,
+    stream_to_file,
+)
 
 GITHUB_API = "https://api.github.com"
 DEFAULT_WORKFLOW_NAME = "CI Docs"
@@ -38,10 +39,6 @@ _DOWNLOAD_TIMEOUT = 300
 # can be slow) and how many times to retry, resuming from bytes already on disk.
 _READ_TIMEOUT = 120
 _DOWNLOAD_RETRIES = 5
-
-
-class PreviewError(Exception):
-    """A user-facing error; the CLI prints the message and exits non-zero."""
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +52,32 @@ def _parse_owner_repo(value: str) -> tuple[str, str] | None:
     if match:
         return match.group(1), match.group(2)
     return None
+
+
+def _github_identity(repository: Repository | None) -> tuple[str, str] | None:
+    """
+    Resolve the identity accepted by GitHub preview and CI operations
+
+    Parameters
+    ----------
+    repository
+        The selected repository, if any.
+
+    Returns
+    -------
+    :
+        The GitHub account and repository name, or `None` without an identity.
+
+    Raises
+    ------
+    PreviewError
+        If a GitLab repository is passed to a GitHub-only operation.
+    """
+    if repository is None:
+        return None
+    if repository.provider != "github":
+        raise PreviewError("Use GitLab --mr, --pipeline or --job selectors for this repository.")
+    return repository.namespace, repository.name
 
 
 def _git_remote_repo(project_path: str | Path | None) -> tuple[str, str] | None:
@@ -72,8 +95,8 @@ def _git_remote_repo(project_path: str | Path | None) -> tuple[str, str] | None:
         return None
     if result.returncode != 0:
         return None
-    github = GithubRepo.parse(result.stdout.strip())
-    return (github.owner, github.name) if github else None
+    github = Repository.parse(result.stdout.strip())
+    return _github_identity(github)
 
 
 def _config_repo(project_path: str | Path | None) -> tuple[str, str] | None:
@@ -94,11 +117,11 @@ def _config_repo(project_path: str | Path | None) -> tuple[str, str] | None:
     try:
         layout = Layout.make(Path(project_path or os.getcwd()))
         config = layout.load_config()
-        github = Project.make(config, layout).github
+        github = Project.make(config, layout).repository
     except (ValueError, OSError):
         # `LayoutError` and `ConfigError` are `ValueError`s.
         return None
-    return (github.owner, github.name) if github else None
+    return _github_identity(github)
 
 
 def resolve_repo(
@@ -110,8 +133,8 @@ def resolve_repo(
     Precedence: `--repo` → `git remote origin` → great-docs.yml / pyproject.
     """
     if repo_override:
-        github = GithubRepo.parse(repo_override)
-        parsed = (github.owner, github.name) if github else _parse_owner_repo(repo_override)
+        github = Repository.parse(repo_override)
+        parsed = _github_identity(github) if github else _parse_owner_repo(repo_override)
         if parsed:
             return parsed
         raise PreviewError(
@@ -396,7 +419,7 @@ class GitHubClient:
                         total = int(resp.headers.get("Content-Length") or 0)
                     else:
                         raise PreviewError(f"Artifact download failed (HTTP {resp.status_code}).")
-                    _stream_to_file(resp, zip_path, total, mode=mode, start=start)
+                    stream_to_file(resp, zip_path, total, mode=mode, start=start)
                 break  # completed
             except requests.RequestException as exc:
                 last_exc = exc
@@ -413,42 +436,8 @@ class GitHubClient:
                 )
                 time.sleep(2 * (attempt + 1))
 
-        _safe_extract_zip(zip_path, dest)
+        safe_extract_zip(zip_path, dest)
         zip_path.unlink(missing_ok=True)
-
-
-def _stream_to_file(
-    resp: Any, zip_path: Path, total: int, mode: str = "wb", start: int = 0
-) -> None:
-    """Stream a response body to disk, showing a progress bar on an interactive terminal.
-
-    Progress is rendered to stderr only when it's a TTY and the size is known. Otherwise the
-    download runs quietly (e.g. in CI logs or when piped). ``mode`` is the file open mode
-    (``"ab"`` to resume) and ``start`` is the byte count already on disk, used to seed the bar.
-    """
-    chunk_size = 1 << 16
-    show_bar = total > 0 and sys.stderr.isatty()
-
-    if show_bar:
-        import click
-
-        with (
-            open(zip_path, mode) as handle,
-            click.progressbar(
-                length=total,
-                label="→ Downloading",
-                file=sys.stderr,
-            ) as bar,
-        ):
-            if start:
-                bar.update(start)
-            for chunk in resp.iter_content(chunk_size=chunk_size):
-                handle.write(chunk)
-                bar.update(len(chunk))
-    else:
-        with open(zip_path, mode) as handle:
-            for chunk in resp.iter_content(chunk_size=chunk_size):
-                handle.write(chunk)
 
 
 # ---------------------------------------------------------------------------
@@ -585,53 +574,9 @@ def _prompt_artifact(candidates: list[dict[str, Any]]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _cache_root() -> Path:
-    env = os.environ.get("XDG_CACHE_HOME")
-    if env:
-        base = Path(env)
-    elif sys.platform == "win32":
-        base = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local")))
-    elif sys.platform == "darwin":
-        base = Path.home() / "Library" / "Caches"
-    else:
-        base = Path.home() / ".cache"
-    return base / "great-docs" / "pr-preview"
-
-
 def cache_dir_for(owner: str, repo: str, run_id: int, artifact_name: str) -> Path:
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", artifact_name)
-    return _cache_root() / f"{owner}-{repo}" / str(run_id) / safe
-
-
-def clear_cache() -> tuple[bool, Path]:
-    """Delete the PR-preview download cache. Returns `(existed, path)`."""
-    root = _cache_root()
-    existed = root.exists()
-    if existed:
-        shutil.rmtree(root, ignore_errors=True)
-    return existed, root
-
-
-def _safe_extract_zip(zip_path: Path, dest: Path) -> None:
-    """Extract a zip, refusing any member that would escape `dest` (zip-slip)."""
-    dest = dest.resolve()
-    with zipfile.ZipFile(zip_path) as zf:
-        for member in zf.namelist():
-            target = (dest / member).resolve()
-            if target != dest and not str(target).startswith(str(dest) + os.sep):
-                raise PreviewError(f"Refusing to extract unsafe path from artifact: {member!r}")
-        zf.extractall(dest)
-
-
-def _find_site_root(base: Path) -> Path | None:
-    """Return the shallowest directory under `base` that contains `index.html`."""
-    if (base / "index.html").is_file():
-        return base
-    candidates = sorted(
-        base.rglob("index.html"),
-        key=lambda p: len(p.relative_to(base).parts),
-    )
-    return candidates[0].parent if candidates else None
+    return cache_root() / f"{owner}-{repo}" / str(run_id) / safe
 
 
 def download_and_extract(
@@ -641,29 +586,11 @@ def download_and_extract(
     artifact: dict[str, Any],
     refresh: bool = False,
 ) -> Path:
-    """Download + unpack the artifact into the cache and return the site root."""
+    """Download and unpack the artifact cache and return its site root"""
     dest = cache_dir_for(client.owner, client.repo, run_id, artifact["name"])
-    marker = dest / ".gd-complete"
-
-    if not refresh and marker.exists():
-        root = _find_site_root(dest)
-        if root is not None:
-            print("→ Using cached download")
-            return root
-
-    if dest.exists():
-        shutil.rmtree(dest, ignore_errors=True)
-    dest.mkdir(parents=True, exist_ok=True)
-
-    client.download_artifact(run_id, artifact, dest)
-
-    root = _find_site_root(dest)
-    if root is None:
-        raise PreviewError(
-            "The downloaded artifact does not contain an index.html — is this a docs site?"
-        )
-    marker.write_text("ok\n", encoding="utf-8")
-    return root
+    return cached_site(
+        dest, lambda target: client.download_artifact(run_id, artifact, target), refresh=refresh
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ configuration and write it to `_quarto.yml`.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
 from .._content import metadata
@@ -30,7 +31,30 @@ __all__ = [
     "structured_data",
     "update_quarto_config",
     "write_quarto_config",
+    "with_ci_site_url",
 ]
+
+
+def with_ci_site_url(config: Config) -> Config:
+    """
+    Default the serving address to GitLab Pages during CI builds
+
+    Parameters
+    ----------
+    config
+        Project configuration before build preparation.
+
+    Returns
+    -------
+    :
+        A configuration with `CI_PAGES_URL` as its serving-address default when
+        `GITLAB_CI` is `true`, or the original configuration otherwise. Preserve
+        explicit site and canonical addresses and the original written settings.
+    """
+    pages_url = os.environ.get("CI_PAGES_URL")
+    if os.environ.get("GITLAB_CI") == "true" and pages_url:
+        return config.with_site_url_default(pages_url)
+    return config
 
 
 def identity(config: Config, layout: Layout, project: Project) -> Identity:
@@ -45,7 +69,7 @@ def identity(config: Config, layout: Layout, project: Project) -> Identity:
         The project's directories, searched for a Go or Rust program whose name supplies
         the fallback site name.
     project
-        The package name and GitHub repository used when the site's name or address is not
+        The package name and repository used when the site's name or address is not
         configured.
 
     Returns
@@ -53,14 +77,7 @@ def identity(config: Config, layout: Layout, project: Project) -> Identity:
     :
         The site's identity.
     """
-    github = project.github
-    return Identity.make(
-        config,
-        layout.package_root,
-        github.owner if github else None,
-        github.name if github else None,
-        project.name,
-    )
+    return Identity.make(config, layout.package_root, project.repository, project.name)
 
 
 def default_description(config: Config, project: Project) -> str | None:
@@ -101,7 +118,11 @@ def structured_data(run: Run, config: Config) -> StructuredData | None:
         structured data is disabled.
     """
     return StructuredData.make(
-        config, run.project.manifest, run.identity.name, run.identity.base_url
+        config,
+        run.project.manifest,
+        run.identity.name,
+        run.identity.base_url,
+        repo_url=run.project.repository.url if run.project.repository else None,
     )
 
 
@@ -139,7 +160,7 @@ def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Re
     KeyError
         If the Quarto configuration lacks a `project` or `format.html` mapping.
     """
-    repo = run.project.github
+    repo = run.project.repository
 
     assembly.assemble(
         run.quarto_config,

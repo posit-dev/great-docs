@@ -25,12 +25,15 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
+from typing import Any
 
 import pytest
+import yaml
 
 from great_docs._layout_migration import analyse, apply
 from great_docs._project.layout import Layout
@@ -202,7 +205,12 @@ class Rendered:
 
 
 def make_project(
-    root: Path, directory: str, tag: str | None, migrate: bool, execute_cell: bool = True
+    root: Path,
+    directory: str,
+    tag: str | None,
+    migrate: bool,
+    execute_cell: bool = True,
+    settings: Mapping[str, Any] | None = None,
 ) -> Rendered:
     """
     Build a package with a two-commit history and a great-docs configuration
@@ -220,6 +228,10 @@ def make_project(
     migrate
         Whether to author the source at the project root and move it with the
         layout migration before building.
+    execute_cell
+        Whether the guide executes a Jupyter cell.
+    settings
+        Configuration overrides applied before the fixture's Git history is created.
 
     Returns
     -------
@@ -293,6 +305,8 @@ bibliography: {bibliography_path}
   - tag: "{tag}"
     git_ref: "{tag}"
 '''
+    if settings is not None:
+        config_text = yaml.safe_dump({**yaml.safe_load(config_text), **settings})
     config = write_file(source, "great-docs.yml", config_text)
     run_git(root, "init", "-q")
     run_git(root, "config", "user.name", "Layout acceptance")
@@ -406,9 +420,255 @@ def semantic_baselines() -> dict[str, tuple[str, tuple[str, ...]]]:
     return {}
 
 
+@pytest.mark.parametrize("case", ["gitlab", "self-managed", "github", "repository-free"])
+def test_repository_site_links_and_metadata(
+    tmp_path: Path, required_tools: None, case: str
+) -> None:
+    """Render provider links, metadata and explicit author identities in a `src/` project"""
+    repository_url = {
+        "gitlab": "https://gitlab.com/team/subteam/layout-sample",
+        "self-managed": "https://code.example.org/gitlab/team/subteam/layout-sample",
+        "github": "https://github.com/layout-example/layout-sample",
+        "repository-free": None,
+    }[case]
+    settings: dict[str, Any] = {
+        "repo": repository_url,
+        "site_url": "https://docs.example.org/layout/",
+        "github_style": "widget",
+        "skill": {"enabled": True},
+        "webmcp": True,
+        "show_dates": True,
+        "authors": [
+            {
+                "name": "Ada",
+                "github": "explicit-ada",
+                "homepage": "https://ada.example.org/",
+                "image": "https://images.example.org/ada.png",
+            },
+            {"name": "Bo"},
+        ],
+    }
+    if case == "self-managed":
+        settings.update(
+            repo_provider="gitlab",
+            repo_base_url="https://code.example.org/gitlab",
+            source={"branch": "feature/docs", "path": "packages/api source"},
+        )
+    elif case == "github":
+        settings["source"] = {"enabled": False}
+    elif case == "gitlab":
+        settings["mcp"] = {
+            "enabled": True,
+            "module": "layout_sample.mcp_server",
+            "server_var": "server",
+        }
+    fixture = make_project(
+        tmp_path,
+        "docs",
+        "v1.5.0" if case == "self-managed" else None,
+        migrate=False,
+        execute_cell=False,
+        settings=settings,
+    )
+    write_file(
+        tmp_path,
+        "README.md",
+        "---\nauthor: Ada\n---\n\n# Layout sample\n\nSee [the third-party tool](https://github.com/third-party/tool).\n",
+    )
+    write_file(tmp_path, "CITATION.cff", "cff-version: 1.2.0\ntitle: Layout sample\n")
+    stale_identity = "github.com/stale-metadata-owner/stale-metadata-repo"
+    if case in ("gitlab", "self-managed"):
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(
+            pyproject.read_text() + f'\n[project.urls]\nRepository = "https://{stale_identity}"\n'
+        )
+    if case == "gitlab":
+        write_file(
+            tmp_path,
+            "src/layout_sample/mcp_server.py",
+            'from mcp.server import MCPServer\nserver = MCPServer("Layout MCP")\n'
+            '@server.tool()\ndef greet(name: str) -> str:\n    """Return a greeting"""\n    return name\n',
+        )
+    env = os.environ.copy()
+    guide_source = tmp_path / "docs/user_guide/01-frozen.qmd"
+    guide_source.write_text(
+        guide_source.read_text().replace("title: Frozen guide", "title: Frozen guide\nauthor: Ada")
+    )
+    env["PYTHONPATH"] = os.pathsep.join(
+        (str(ROOT), str(tmp_path / "src"), env.get("PYTHONPATH", ""))
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", BUILD, str(tmp_path), str(fixture.layout.config_path)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    write_file(tmp_path, "provider-build.log", result.stdout + result.stderr)
+    assert result.returncode == 0, f"Build failed in {tmp_path}:\n{result.stdout}\n{result.stderr}"
+    site = fixture.layout.site_dir
+    config = yaml.safe_load((fixture.layout.build_dir / "_quarto.yml").read_text())
+    homepage = Page(site / "index.html")
+    reference = Page(site / "reference/shared.html")
+    assert "https://github.com/explicit-ada" in homepage.links
+    assert "https://github.com/third-party/tool" in homepage.links
+    assert "https://ada.example.org/" in homepage.links
+    assert "https://images.example.org/ada.png" in (site / "user-guide/frozen.html").read_text()
+    manifest = json.loads((site / "gd-webmcp.json").read_text())
+    assert manifest["site"].get("repo") == repository_url
+    skill = (site / "skill.md").read_text()
+    skills_page = Page(site / "skills.html")
+    assert "https://docs.example.org/layout/" in " ".join(skills_page.text)
+    if repository_url is None:
+        assert "right" not in config["website"]["navbar"]
+        assert "[Source code]" not in skill
+    else:
+        assert config["website"]["navbar"]["right"][0]["href"] == repository_url
+        assert f"[Source code]({repository_url})" in skill
+    if repository_url is not None:
+        assert any("repository-widget.js" in path for path in homepage.resources)
+        assert (site / "repository-widget.js").is_file()
+    else:
+        assert not any("repository-widget" in path for path in homepage.resources)
+        assert "repository-widget.js" not in config["project"]["resources"]
+        assert not (site / "repository-widget.js").exists()
+        html = "\n".join(path.read_text() for path in site.rglob("*.html"))
+        assert "api.github.com" not in html
+        assert "github.com/team" not in html
+        assert "github.com/layout-example" not in html
+    if case == "github":
+        assert not any("/blob/" in href for href in reference.links)
+    if case in ("gitlab", "self-managed"):
+        assert "data-public-api" not in str(config["website"]["navbar"]["right"])
+        html = "\n".join(path.read_text() for path in site.rglob("*.html"))
+        assert "api.github.com" not in html
+        assert "github.com/team" not in html
+        assert "github.com/layout-example" not in html
+        text_suffixes = {".html", ".qmd", ".md", ".json", ".yml", ".yaml", ".txt", ".xml", ".js"}
+        for output in (*fixture.layout.build_dir.rglob("*"), *site.rglob("*")):
+            if output.is_file() and output.suffix in text_suffixes:
+                assert stale_identity not in output.read_text(), output
+        expected_ref = "feature%2Fdocs" if case == "self-managed" else "2.0.0"
+        expected_path = "packages/api%20source" if case == "self-managed" else "src/layout_sample"
+        source_url = f"{repository_url}/-/blob/{expected_ref}/{expected_path}/__init__.py#L3-17"
+        assert source_url in reference.links
+        citation_page = Page(site / "citation.html")
+        assert f"{repository_url}/-/blob/{expected_ref}/CITATION.cff" in citation_page.links
+    if case == "gitlab":
+        mcp = json.loads((site / ".well-known/mcp.json").read_text())
+        assert mcp["installation"]["repository"] == repository_url
+    if case == "self-managed":
+        historical = Page(site / "v/1.5.0/reference/shared.html")
+        assert any(f"{repository_url}/-/blob/feature%2Fdocs/" in href for href in historical.links)
+        assert (site / "v/1.5.0/gd-webmcp.json").is_file()
+    print(f"Rendered {case}: {site}")
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests
 # ═══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.parametrize(
+    ("directory", "tag", "explicit_url"),
+    [
+        ("docs", None, None),
+        ("website", "v1.5.0", None),
+        ("docs", None, "https://docs.example.org/custom/"),
+    ],
+)
+def test_gitlab_pages_recipe_renders_the_published_layout(
+    tmp_path: Path, required_tools: None, directory: str, tag: str | None, explicit_url: str | None
+) -> None:
+    from click.testing import CliRunner
+
+    from great_docs.cli import cli
+
+    pages_url = "https://team.gitlab.io/group/package/"
+    canonical = "https://canonical.example.org/package/" if tag else None
+    settings: dict[str, Any] = {
+        "repo": "https://gitlab.com/team/subteam/layout-sample",
+        "site_url": explicit_url,
+        "skill": {"enabled": True},
+    }
+    if canonical:
+        settings["seo"] = {"canonical": {"base_url": canonical}}
+    fixture = make_project(
+        tmp_path, directory, tag, migrate=False, execute_cell=False, settings=settings
+    )
+    written_config = fixture.layout.config_path.read_bytes()
+    setup = CliRunner().invoke(
+        cli,
+        [
+            "setup-gitlab-pages",
+            "--project-path",
+            str(tmp_path),
+            "--config",
+            str(fixture.layout.config_path),
+        ],
+    )
+    assert setup.exit_code == 0, setup.output
+    jobs = yaml.safe_load((tmp_path / ".gitlab-ci.yml").read_text())
+    import shlex
+
+    command = shlex.split(jobs[".great-docs-build"]["script"][0])
+    cli_arguments = command[command.index("great-docs") + 1 :]
+    script = """
+import sys
+from unittest.mock import patch
+from great_docs.cli import cli
+from great_docs._project.remote import OfflineRemote
+with patch("great_docs.core.HttpRemote", return_value=OfflineRemote()):
+    cli.main(args=sys.argv[1:], standalone_mode=False)
+"""
+    env = os.environ.copy()
+    env.update(GITLAB_CI="true", CI_PAGES_URL=pages_url)
+    env["PYTHONPATH"] = os.pathsep.join(
+        (str(ROOT), str(tmp_path / "src"), env.get("PYTHONPATH", ""))
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script, *cli_arguments],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    write_file(tmp_path, "pages-build.log", result.stdout + result.stderr)
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    published = tmp_path / jobs["great-docs-pages"]["pages"]["publish"]
+    assert published == fixture.layout.site_dir
+    assert jobs["great-docs-preview"]["artifacts"]["paths"] == [
+        published.relative_to(tmp_path).as_posix()
+    ]
+    serving_url = explicit_url or pages_url
+    preferred_url = canonical or serving_url
+    config = yaml.safe_load((fixture.layout.build_dir / "_quarto.yml").read_text())
+    assert config["website"]["site-url"] == serving_url
+    assert fixture.layout.config_path.read_bytes() == written_config
+    for relative in ("index.html", "reference/shared.html", "user-guide/frozen.html"):
+        page_path = published / relative
+        assert_local_targets(page_path, published)
+        preferred_path = "" if relative == "index.html" else relative
+        assert (
+            f'<link rel="canonical" href="{preferred_url}{preferred_path}">'
+            in page_path.read_text()
+        )
+    assert serving_url in (published / "skill.md").read_text()
+    if tag:
+        historical = published / "v/1.5.0"
+        for relative in ("index.html", "reference/shared.html", "user-guide/frozen.html"):
+            assert_local_targets(historical / relative, published)
+        old_config = yaml.safe_load(
+            (fixture.layout.build_dir_for(tag, "2.0.0") / "_quarto.yml").read_text()
+        )
+        assert old_config["website"]["site-url"] == serving_url.rstrip("/") + "/v/1.5.0/"
+        assert (
+            f'<link rel="canonical" href="{preferred_url}reference/shared.html">'
+            in (historical / "reference/shared.html").read_text()
+        )
+    print(f"Rendered Pages recipe: {published}")
 
 
 def assert_local_targets(page_path: Path, site: Path) -> Page:

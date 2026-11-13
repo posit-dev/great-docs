@@ -1,22 +1,21 @@
-"""Tests for the `great-docs ci` helpers (log notice + sticky PR comment)."""
+"""
+GitHub CI notices and preview comments
+"""
 
 from __future__ import annotations
 
 import pytest
 from click.testing import CliRunner
 
-from great_docs._build import ci as _ci
-from great_docs._build.pr_preview import PreviewError
+from great_docs._build import preview as shared_preview
+from great_docs._build.preview_artifacts import PreviewError
+from great_docs._build.repo_hosts import github_ci as _ci
 from great_docs.cli import cli
-
-# ---------------------------------------------------------------------------
-# Message rendering
-# ---------------------------------------------------------------------------
 
 
 def test_render_preview_comment_structure():
     body = _ci.render_preview_comment(123, 302)
-    assert body.startswith(_ci.PREVIEW_COMMENT_MARKER)
+    assert body.startswith(shared_preview.PREVIEW_COMMENT_MARKER)
     assert "great-docs preview --run 123" in body
     assert "great-docs preview --pr 302" in body
     assert "<details>" in body and "</details>" in body
@@ -37,11 +36,6 @@ def test_render_notice_lines_without_pr():
     assert "--pr" not in joined
 
 
-# ---------------------------------------------------------------------------
-# Repo / token resolution
-# ---------------------------------------------------------------------------
-
-
 def test_resolve_ci_repo_override():
     assert _ci.resolve_ci_repo("posit-dev/great-docs") == ("posit-dev", "great-docs")
 
@@ -56,11 +50,6 @@ def test_github_token_missing_raises(monkeypatch):
     monkeypatch.delenv("GH_TOKEN", raising=False)
     with pytest.raises(PreviewError, match="GITHUB_TOKEN"):
         _ci._github_token()
-
-
-# ---------------------------------------------------------------------------
-# Sticky comment upsert (mocked requests)
-# ---------------------------------------------------------------------------
 
 
 class _FakeResp:
@@ -101,7 +90,7 @@ def test_upsert_creates_when_absent(monkeypatch):
 
 def test_upsert_updates_when_present(monkeypatch):
     calls = {}
-    existing = [{"id": 99, "body": f"prev {_ci.PREVIEW_COMMENT_MARKER}"}]
+    existing = [{"id": 99, "body": f"prev {shared_preview.PREVIEW_COMMENT_MARKER}"}]
 
     def fake_get(url, headers=None, timeout=None):
         return _FakeResp(200, payload=existing)
@@ -134,7 +123,7 @@ def test_upsert_follows_pagination(monkeypatch):
         payload=[{"id": 1, "body": "nope"}],
         links={"next": {"url": "https://api.github.com/next-page"}},
     )
-    page2 = _FakeResp(200, payload=[{"id": 42, "body": _ci.PREVIEW_COMMENT_MARKER}])
+    page2 = _FakeResp(200, payload=[{"id": 42, "body": shared_preview.PREVIEW_COMMENT_MARKER}])
     responses = iter([page1, page2])
     patched = {}
 
@@ -154,11 +143,6 @@ def test_upsert_follows_pagination(monkeypatch):
 
     assert action == "updated"
     assert "/issues/comments/42" in patched["url"]
-
-
-# ---------------------------------------------------------------------------
-# CLI wiring
-# ---------------------------------------------------------------------------
 
 
 def test_cli_ci_notice_outputs_commands():
@@ -198,11 +182,6 @@ def test_cli_ci_pr_comment_error_exits(monkeypatch):
     assert "no token" in result.output
 
 
-# ---------------------------------------------------------------------------
-# Coverage: resolve_ci_repo edge cases
-# ---------------------------------------------------------------------------
-
-
 def test_resolve_ci_repo_unparseable_override():
     """Raises when override is present but not parseable."""
     with pytest.raises(PreviewError, match="Could not parse --repo"):
@@ -213,7 +192,7 @@ def test_resolve_ci_repo_falls_through_to_resolve_repo(monkeypatch):
     """No override and no GITHUB_REPOSITORY → delegates to resolve_repo."""
     monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
 
-    import great_docs._build.pr_preview as _pr_preview
+    import great_docs._build.repo_hosts.github_preview as _pr_preview
 
     monkeypatch.setattr(
         _pr_preview, "resolve_repo", lambda _a, _b: ("fallback-owner", "fallback-repo")
@@ -222,21 +201,11 @@ def test_resolve_ci_repo_falls_through_to_resolve_repo(monkeypatch):
     assert _ci.resolve_ci_repo(None) == ("fallback-owner", "fallback-repo")
 
 
-# ---------------------------------------------------------------------------
-# Coverage: _github_token success
-# ---------------------------------------------------------------------------
-
-
 def test_github_token_success(monkeypatch):
     """Returns stripped token when present."""
     monkeypatch.setenv("GITHUB_TOKEN", "  ghp_abc123  ")
 
     assert _ci._github_token() == "ghp_abc123"
-
-
-# ---------------------------------------------------------------------------
-# Coverage: _find_existing_comment error
-# ---------------------------------------------------------------------------
 
 
 def test_find_existing_comment_non_200_raises(monkeypatch):
@@ -250,11 +219,6 @@ def test_find_existing_comment_non_200_raises(monkeypatch):
     headers = {"Authorization": "Bearer tok"}
     with pytest.raises(PreviewError, match="Could not list PR comments"):
         _ci._find_existing_comment("o", "r", 1, headers)
-
-
-# ---------------------------------------------------------------------------
-# Coverage: upsert_pr_comment error paths
-# ---------------------------------------------------------------------------
 
 
 def test_upsert_request_exception_raises(monkeypatch):
@@ -291,11 +255,6 @@ def test_upsert_bad_status_raises(monkeypatch):
         _ci.upsert_pr_comment("o", "r", 1, "body", "tok")
 
 
-# ---------------------------------------------------------------------------
-# Coverage: post_preview_comment integration
-# ---------------------------------------------------------------------------
-
-
 def test_post_preview_comment_full_flow(monkeypatch):
     """Exercises the full post_preview_comment orchestration."""
     monkeypatch.setenv("GITHUB_REPOSITORY", "acme/docs")
@@ -316,3 +275,8 @@ def test_post_preview_comment_full_flow(monkeypatch):
 
     assert action == "created"
     assert slug == "acme/docs"
+
+
+def test_gitlab_ci_override_reports_unsupported() -> None:
+    with pytest.raises(PreviewError, match="Use ci mr-comment"):
+        _ci.resolve_ci_repo("https://gitlab.com/group/project")

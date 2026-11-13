@@ -96,7 +96,7 @@ class TestGetRemoved:
 
 class TestGetItem:
     def test_top_level_hit(self, tmp_project: Path):
-        assert Config(tmp_project)["github_style"] == "widget"
+        assert Config(tmp_project)["repo_style"] == "widget"
 
     def test_nested_hit(self, tmp_project: Path):
         assert Config(tmp_project)["source.enabled"] is True
@@ -108,7 +108,7 @@ class TestGetItem:
     def test_traversal_into_scalar_raises(self, tmp_project: Path):
         # github_style is a string; indexing into it must fail loud
         with pytest.raises(KeyError):
-            Config(tmp_project)["github_style.nope"]
+            Config(tmp_project)["repo_style.nope"]
 
     def test_new_is_old_default_is_none(self, tmp_project: Path):
         # new_is_old is a live default now, resolved via strict subscript
@@ -131,11 +131,28 @@ class TestScalarProperties:
         assert cfg.repo == "https://github.com/owner/repo"
 
     def test_github_style_default(self, tmp_project: Path):
-        assert Config(tmp_project).github_style == "widget"
+        assert Config(tmp_project).repo_style == "widget"
 
     def test_github_style_icon(self, tmp_project: Path):
         cfg = write_config(tmp_project, "github_style: icon\n")
-        assert cfg.github_style == "icon"
+        assert cfg.repo_style == "icon"
+
+    @pytest.mark.parametrize(
+        ("settings", "expected"),
+        [
+            ("", "widget"),
+            ("repo_style: icon\n", "icon"),
+            ("github_style: icon\n", "icon"),
+            ("github_style: icon\nrepo_style: widget\n", "widget"),
+            ("github_style: widget\nrepo_style: icon\n", "icon"),
+        ],
+    )
+    def test_repository_style_normalises_explicit_input_before_defaults(
+        self, tmp_project: Path, settings: str, expected: str
+    ) -> None:
+        config = write_config(tmp_project, settings)
+        assert config.repo_style == expected
+        assert "github_style" not in config._config
 
     def test_source_enabled_default(self, tmp_project: Path):
         assert Config(tmp_project).source_enabled is True
@@ -1721,7 +1738,7 @@ class TestSingleSourceInvariant:
             "parser",
             "dynamic",
             "jupyter",
-            "github_style",
+            "repo_style",
             "homepage",
             "attribution",
             "back_to_top",
@@ -2083,3 +2100,40 @@ def test_user_settings_copy_is_independent(tmp_path: Path):
     cfg.user_settings["site"]["lang"] = "de"
     cfg.user_settings["extra"] = True
     assert cfg.user_settings == {"site": {"lang": "fr"}}
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        "repo: 42\n",
+        "repo_provider: other\n",
+        "repo_provider: false\n",
+        "repo_base_url: 42\n",
+        "repo: https://github.com/owner\n",
+        "repo: not-a-url\n",
+        "repo: https://github.com/o/r\nrepo_provider: gitlab\n",
+        "repo_provider: gitlab\nrepo_base_url: https://github.com\n",
+        "repo_base_url: https://code.example.org/gitlab\n",
+        "repo: https://code.example.org/a/b\nrepo_provider: gitlab\nrepo_base_url: https://other.example.org\n",
+    ],
+)
+def test_repository_configuration_rejects_invalid_settings(
+    tmp_project: Path, settings: str
+) -> None:
+    with pytest.raises(ConfigError):
+        write_config(tmp_project, settings)
+
+
+def test_unknown_repository_hosts_remain_usable(tmp_project: Path) -> None:
+    config = write_config(tmp_project, "repo: https://forge.example.org/group/project\n")
+    assert config.repo == "https://forge.example.org/group/project"
+    assert config.repo_provider is None
+    assert config.repo_base_url is None
+
+
+@pytest.mark.parametrize("url", ["https://forge.example.org/project", "https://forge.example.org"])
+def test_unknown_repository_layout_is_not_interpreted_as_gitlab(
+    tmp_project: Path, url: str
+) -> None:
+    config = write_config(tmp_project, f"repo: {url}\n")
+    assert config.repo == url

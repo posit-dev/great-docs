@@ -103,6 +103,8 @@ class StructuredData:
         metadata: Manifest,
         site_name: str,
         base_url: str | None,
+        *,
+        repo_url: str | None,
     ) -> StructuredData | None:
         """
         Build the package description for search engines
@@ -113,12 +115,14 @@ class StructuredData:
             Project configuration, whose `seo.structured_data.type` is the
             Schema.org type of the package object.
         metadata
-            Package metadata: `description`, `license` and `urls`, any of
+            Package metadata: `description` and `license`, either of
             which may be missing or empty.
         site_name
             The site name.
         base_url
             The canonical site URL with a trailing slash, or `None`.
+        repo_url
+            The selected repository URL, or `None` when unknown.
 
         Returns
         -------
@@ -130,11 +134,10 @@ class StructuredData:
             return None
         site_url = base_url.rstrip("/") if base_url else None
         licence = metadata.get("license")
-        urls: dict[str, Any] = metadata.get("urls") or {}
         optional_fields: dict[str, Any] = {
             "name": site_name,
             "description": metadata.get("description"),
-            "codeRepository": urls.get("Repository"),
+            "codeRepository": repo_url,
             "license": licence_url(licence) if licence else None,
             "url": site_url,
             "documentation": site_url,

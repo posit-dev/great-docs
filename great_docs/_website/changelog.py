@@ -1,11 +1,11 @@
 """
-A changelog page generated from a repository's GitHub Releases
+A changelog page generated from published repository releases
 """
 
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from yaml12 import format_yaml
 
@@ -15,11 +15,11 @@ from . import page_dates
 from .navigation import navbar
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable
 
-    from .._project.github import GithubRepo
     from .._project.layout import Layout
-    from .._project.remote import Remote
+    from .._project.remote import ReleaseData, Remote
+    from .._project.repository import Repository
     from ..config import Config
 
 __all__ = ["FILENAME", "linkify_references", "write_page"]
@@ -36,11 +36,19 @@ _CODE = re.compile(
     re.MULTILINE | re.DOTALL,
 )
 
+_LINK = re.compile(
+    r"!?\[(?:\\.|[^\]\\]|\[[^\]]*\])*\]"
+    r"(?:\((?:\\.|[^()\\]|\([^()]*\))*\)|\[[^\]]*\])"
+    r"|<https?://[^>]+>"
+    r"|^[ ]{0,3}\[[^\]]+\]:[^\n]*$",
+    re.MULTILINE,
+)
+
 
 def write_page(
     config: Config,
     layout: Layout,
-    repo: GithubRepo,
+    repo: Repository,
     remote: Remote,
     *,
     max_releases: int | None = None,
@@ -50,7 +58,7 @@ def write_page(
     Write the changelog page from the repository's published releases
 
     The page lists releases newest first, with one section per release. Each section shows
-    its date, a pre-release mark and a link to the release on GitHub. GitHub references in
+    its date, a pre-release mark and a link to the release. Repository references in
     the notes become links, and note headings move down one level to nest under the release
     heading.
 
@@ -78,7 +86,7 @@ def write_page(
     """
     if max_releases is None:
         max_releases = config.changelog_max_releases
-    releases = remote.github_releases(repo, max_releases)
+    releases = remote.repository_releases(repo, max_releases)
     if not releases:
         return None
 
@@ -104,7 +112,7 @@ def write_page(
         "---",
         "",
         "This changelog is generated automatically from ",
-        f"[GitHub Releases]({repo.url}/releases).",
+        f"[{repo.label} Releases]({repo.releases_url}).",
         "",
     ]
     for release in releases:
@@ -116,14 +124,14 @@ def write_page(
     return Contribution(navbar=(NavbarLink(text=navbar.CHANGELOG.label(config), href=FILENAME),))
 
 
-def _release_lines(release: Mapping[str, Any], repo: GithubRepo) -> list[str]:
+def _release_lines(release: ReleaseData, repo: Repository) -> list[str]:
     """
     Format the changelog section for one release
 
     Parameters
     ----------
     release
-        The release, with the keys that `Remote.github_releases` returns.
+        The published release's normalised fields.
     repo
         The repository the release belongs to.
 
@@ -140,7 +148,7 @@ def _release_lines(release: Mapping[str, Any], repo: GithubRepo) -> list[str]:
         details.append(f"*{published}*")
     if release["prerelease"]:
         details.append("*(pre-release)*")
-    details.append(f"[GitHub]({release['html_url']})")
+    details.append(f"[{repo.label}]({release['html_url']})")
 
     lines = [f"## {name}  {{.changelog-version}}", "", " · ".join(details), ""]
 
@@ -153,14 +161,15 @@ def _release_lines(release: Mapping[str, Any], repo: GithubRepo) -> list[str]:
     return lines
 
 
-def linkify_references(text: str, repo: GithubRepo) -> str:
+def linkify_references(text: str, repo: Repository) -> str:
     """
-    Turn GitHub shorthand references in release notes into Markdown links
+    Turn repository shorthand references into Markdown links
 
-    Leave inline code spans and fenced code blocks as written. In the surrounding text,
+    Leave existing Markdown links, inline code and fenced code as written. In surrounding text,
     link bare `#123`, `gh issue #123` and `gh pr #123` to issues in the repository,
-    `@username` to the user's profile, and bare compare URLs to themselves. Remove the
-    backslash escapes that GitHub adds before `@`, `#`, quotes and backslashes in that text.
+    `@username` to the same-instance profile, and bare compare URLs to themselves. For
+    GitLab, also link `!123` to merge requests. Remove provider-added backslash escapes
+    before reference markers, quotes and backslashes in that text.
 
     Parameters
     ----------
@@ -176,16 +185,17 @@ def linkify_references(text: str, repo: GithubRepo) -> str:
     """
     pieces: list[str] = []
     start = 0
-    for code in _CODE.finditer(text):
+    protected = re.compile(f"(?:{_CODE.pattern})|(?:{_LINK.pattern})", _CODE.flags)
+    for code in protected.finditer(text):
         pieces.extend([_linkify_prose(text[start : code.start()], repo), code.group()])
         start = code.end()
     pieces.append(_linkify_prose(text[start:], repo))
     return "".join(pieces)
 
 
-def _linkify_prose(text: str, repo: GithubRepo) -> str:
+def _linkify_prose(text: str, repo: Repository) -> str:
     """
-    Turn GitHub shorthand references in text outside code into Markdown links
+    Turn shorthand references outside code and Markdown links into links
 
     Parameters
     ----------
@@ -203,23 +213,33 @@ def _linkify_prose(text: str, repo: GithubRepo) -> str:
 
     # Remove escapes first. They hide `@` and `#` from the patterns below and break
     # Markdown rendering.
-    text = re.sub(r"\\([\\@#'\"])", r"\1", text)
+    text = re.sub(r"\\([\\@#!'\"])", r"\1", text)
 
     # "gh issue #NNN" / "gh pr #NNN" (case-insensitive)
-    text = re.sub(r"(?i)\bgh\s+(?:issue|pr)\s+#(\d+)", rf"[#\1]({base}/issues/\1)", text)
+    if repo.provider == "github":
+        text = re.sub(r"(?i)\bgh\s+(?:issue|pr)\s+#(\d+)", rf"[#\1]({repo.issues_url}/\1)", text)
 
     # Bare "#NNN", except as the text of a link made above or inside a URL
-    text = re.sub(r"(?<!\[)(?<!/)#(\d+)\b", rf"[#\1]({base}/issues/\1)", text)
+    text = re.sub(r"(?<![\w\[/])#(\d+)\b", rf"[#\1]({repo.issues_url}/\1)", text)
+    if repo.provider == "gitlab":
+        text = re.sub(r"(?<![\w\[/])!(\d+)\b", rf"[!\1]({repo.requests_url}/\1)", text)
 
     # "@username": 1-39 alphanumerics or inner hyphens; not preceded by a word character or
     # a dot, which excludes email addresses
+    username = (
+        r"[a-zA-Z0-9_](?:[a-zA-Z0-9_.-]*[a-zA-Z0-9_])?"
+        r"(?:/[a-zA-Z0-9_](?:[a-zA-Z0-9_.-]*[a-zA-Z0-9_])?)*"
+        if repo.provider == "gitlab"
+        else r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?"
+    )
     text = re.sub(
-        r"(?<![\w.])@([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?)",
-        r"[@\1](https://github.com/\1)",
+        rf"(?<![\w.\[])@({username})",
+        lambda match: f"[@{match[1]}]({repo.profile_url(match[1])})",
         text,
     )
 
     # Not every Markdown renderer links bare compare URLs ("Full Changelog: https://...").
     # Wrap them as links unless they are already linked.
-    compare_url = re.escape(base) + r"/compare/[^\s)]+"
+    compare_route = "/-/compare/" if repo.provider == "gitlab" else "/compare/"
+    compare_url = re.escape(base + compare_route) + r"[^\s)]+"
     return re.sub(rf"(?<!\[)(?<!\(){compare_url}", lambda m: f"[{m.group(0)}]({m.group(0)})", text)

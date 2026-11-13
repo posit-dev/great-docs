@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 from . import head
 
 if TYPE_CHECKING:
+    from .._project.repository import Repository
     from ..config import Config
 
 FILTER = "page-url"
@@ -24,24 +25,20 @@ OG_URL_KEY = "gd-og-url"
 _CANONICAL_LINK = re.compile(r"""rel=["']?canonical""")
 
 
-def resolve_base_url(
-    config: Config, github_owner: str | None, github_repo: str | None
-) -> str | None:
+def resolve_base_url(config: Config, repository: Repository | None) -> str | None:
     """
     Resolve the address that canonical links, sitemaps and robots files use
 
     Prefer `seo.canonical.base_url`, which names the preferred address when it
     differs from where the site is served. Then use `site_url`, then the GitHub
-    Pages address of the repository.
+    Pages address of a GitHub repository. Other providers require an explicit address.
 
     Parameters
     ----------
     config
         Project configuration.
-    github_owner
-        Owner of the project's GitHub repository, if it has one.
-    github_repo
-        Name of the project's GitHub repository, if it has one.
+    repository
+        The project's repository, if it has one.
 
     Returns
     -------
@@ -51,8 +48,8 @@ def resolve_base_url(
     base_url = config.canonical_base_url or config.site_url
     if base_url:
         return base_url.rstrip("/") + "/"
-    if github_owner and github_repo:
-        return f"https://{github_owner}.github.io/{github_repo}/"
+    if repository is not None and repository.provider == "github":
+        return f"https://{repository.namespace}.github.io/{repository.name}/"
     return None
 
 

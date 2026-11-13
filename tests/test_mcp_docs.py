@@ -756,14 +756,20 @@ class TestGenerateMcpManifest:
         assert "documentation" in data
         assert data["documentation"]["url"].endswith("/reference/mcp/")
 
-    def test_repo_url_added_to_installation(self, tmp_path: Path):
+    @pytest.mark.parametrize(
+        "repo_url",
+        [
+            "https://github.com/x/y",
+            "https://gitlab.com/team/subteam/pkg",
+            "https://code.example.org/gitlab/team/pkg",
+        ],
+    )
+    def test_repo_url_added_to_installation(self, tmp_path: Path, repo_url: str) -> None:
         import json
 
-        generate_mcp_manifest(
-            self._server_info(), tmp_path, package_name="p", repo_url="https://github.com/x/y"
-        )
+        generate_mcp_manifest(self._server_info(), tmp_path, package_name="p", repo_url=repo_url)
         data = json.loads((tmp_path / ".well-known" / "mcp.json").read_text())
-        assert data["installation"]["repository"] == "https://github.com/x/y"
+        assert data["installation"]["repository"] == repo_url
 
     def test_module_path_sets_run_command(self, tmp_path: Path):
         import json
