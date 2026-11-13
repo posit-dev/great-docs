@@ -4,10 +4,34 @@ Tests for GitHub repository URL parsing and environment tokens
 
 from __future__ import annotations
 
+from types import ModuleType
+from typing import NoReturn
+
 import pytest
 
+from great_docs._project.repo_hosts import github, gitlab
 from great_docs._project.repo_hosts.github import token_from_env
 from great_docs._project.repository import Repository
+
+
+@pytest.mark.parametrize(
+    "repository,expected",
+    [
+        (Repository("github", "https://github.com", "owner", "repo"), github),
+        (Repository("gitlab", "https://gitlab.com", "team/subteam", "repo"), gitlab),
+        (Repository("gitlab", "https://code.example/gitlab", "team/subteam", "repo"), gitlab),
+    ],
+)
+def test_host_selection_does_not_read_credentials_or_remote_data(
+    monkeypatch: pytest.MonkeyPatch, repository: Repository, expected: ModuleType
+) -> None:
+    def unexpected(*args: object, **kwargs: object) -> NoReturn:
+        pytest.fail("Host selection must not read credentials or remote data")
+
+    for operation in ("token_from_env", "stats", "releases"):
+        monkeypatch.setattr(expected, operation, unexpected)
+
+    assert repository.host is expected
 
 
 @pytest.mark.parametrize(

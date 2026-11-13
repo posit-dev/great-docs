@@ -1,17 +1,20 @@
 """
-Tests for GitHub and PyPI data retrieval over HTTP
+Repository host APIs and PyPI data retrieval over HTTP
 """
 
 from __future__ import annotations
 
+from inspect import signature
+from types import ModuleType
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 
-from great_docs._project.repository import Repository
 from great_docs._project.remote import HttpRemote, OfflineRemote
+from great_docs._project.repo_hosts import RepoHost, github, gitlab
+from great_docs._project.repository import Repository
 
 REPO = Repository("github", "https://github.com", "owner", "repo")
 
@@ -413,3 +416,58 @@ def test_non_positive_release_maximum_makes_no_request(provider, maximum) -> Non
             == []
         )
     get.assert_not_called()
+
+
+def test_repository_host_api_is_symmetric() -> None:
+    assert github.__all__ == gitlab.__all__
+    for name in github.__all__:
+        assert signature(getattr(github, name)) == signature(getattr(gitlab, name))
+
+
+def test_repository_data_uses_selected_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    host = MagicMock(spec=RepoHost)
+    host.stats.return_value = {"stars": 3, "forks": 2}
+    host.releases.return_value = []
+
+    def selected_host(repo: Repository) -> RepoHost:
+        return host
+
+    monkeypatch.setattr(Repository, "host", property(selected_host))
+    reports: list[str] = []
+    report = reports.append
+    remote = HttpRemote(report=report)
+
+    assert remote.repository_stats(REPO) == {"stars": 3, "forks": 2}
+    assert remote.repository_releases(REPO, 3) == []
+    host.stats.assert_called_once_with(REPO, report=report)
+    host.releases.assert_called_once_with(REPO, 3, report=report)
+
+
+@pytest.mark.parametrize("host,repository", [(github, REPO), (gitlab, GITLAB)])
+def test_repository_hosts_accept_the_same_keywords(
+    host: ModuleType, repository: Repository
+) -> None:
+    reports: list[str] = []
+    counts = {"star_count": 2, "stargazers_count": 2, "forks_count": 1}
+    with patch("requests.get", return_value=response(200, counts)):
+        assert host.stats(repo=repository, report=reports.append) == {"stars": 2, "forks": 1}
+
+    entries = releases(2) if host is github else gitlab_releases(2)
+    with patch("requests.get", return_value=response(200, entries)):
+        result = host.releases(repo=repository, maximum=1, report=reports.append)
+    assert [release["tag_name"] for release in result] == ["v2"]
+    assert reports == []
+
+
+@pytest.mark.parametrize(
+    "token,expected", [(None, None), ("", None), ("  ", None), (" api \n", "api")]
+)
+def test_gitlab_token_lookup_ignores_other_credentials(
+    monkeypatch: pytest.MonkeyPatch, token: str | None, expected: str | None
+) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "github")
+    monkeypatch.setenv("GH_TOKEN", "gh")
+    monkeypatch.setenv("CI_JOB_TOKEN", "job")
+    if token is not None:
+        monkeypatch.setenv("GITLAB_TOKEN", token)
+    assert gitlab.token_from_env() == expected

@@ -12,7 +12,6 @@ from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from typing import Protocol, TypedDict
 
-from .repo_hosts import github
 from .repository import Repository
 
 __all__ = ["HttpRemote", "OfflineRemote", "ReleaseData", "Remote"]
@@ -113,11 +112,7 @@ class HttpRemote:
             The counts under the keys `stars` and `forks`, or an empty dict when the request
             fails. Missing or invalid counts have no entry.
         """
-        if repo.provider == "gitlab":
-            from .repo_hosts import gitlab
-
-            return gitlab.stats(repo, report=self.report)
-        return github.stats(repo)
+        return repo.host.stats(repo, report=self.report)
 
     def repository_releases(self, repo: Repository, max_releases: int) -> list[ReleaseData]:
         """
@@ -141,11 +136,7 @@ class HttpRemote:
         """
         if max_releases <= 0:
             return []
-        if repo.provider == "gitlab":
-            from .repo_hosts import gitlab
-
-            return gitlab.releases(repo, max_releases, report=self.report)
-        return github.releases(repo, max_releases, report=self.report)
+        return repo.host.releases(repo, max_releases, report=self.report)
 
     def pypi_release_dates(self, package_names: Collection[str]) -> dict[str, str]:
         """

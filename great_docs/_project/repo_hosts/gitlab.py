@@ -17,6 +17,21 @@ if TYPE_CHECKING:
     from ..remote import ReleaseData
     from ..repository import Repository
 
+__all__ = ["token_from_env", "stats", "releases"]
+
+
+def token_from_env() -> str | None:
+    """
+    Read a GitLab API token from the environment
+
+    Returns
+    -------
+    :
+        `GITLAB_TOKEN` without surrounding whitespace, or `None` when it is unset or blank.
+    """
+    token = os.environ.get("GITLAB_TOKEN", "").strip()
+    return token or None
+
 
 def stats(repo: Repository, *, report: Callable[[str], None]) -> dict[str, int]:
     """
@@ -135,7 +150,7 @@ def _project_url(repo: Repository) -> str:
 def _headers(*, job_token: bool) -> dict[str, str]:
     """Select credentials permitted by the requested endpoint"""
     headers = {"Accept": "application/json"}
-    token = os.environ.get("GITLAB_TOKEN", "").strip()
+    token = token_from_env()
     if token:
         headers["PRIVATE-TOKEN"] = token
     elif job_token and (token := os.environ.get("CI_JOB_TOKEN", "").strip()):

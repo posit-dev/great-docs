@@ -29,7 +29,7 @@ def token_from_env() -> str | None:
     return token.strip() or None
 
 
-def stats(repo: Repository) -> dict[str, int]:
+def stats(repo: Repository, *, report: Callable[[str], None]) -> dict[str, int]:
     """
     Fetch the repository's known star and fork counts
 
@@ -37,6 +37,8 @@ def stats(repo: Repository) -> dict[str, int]:
     ----------
     repo
         The repository.
+    report
+        The callback for repository warnings. Statistics requests do not report failures.
 
     Returns
     -------
@@ -74,20 +76,18 @@ def stats(repo: Repository) -> dict[str, int]:
     return {}
 
 
-def releases(
-    repo: Repository, max_releases: int, *, report: Callable[[str], None]
-) -> list[ReleaseData]:
+def releases(repo: Repository, maximum: int, *, report: Callable[[str], None]) -> list[ReleaseData]:
     """
     Fetch the repository's published releases, newest first
 
-    Fetch pages of up to 100 releases until `max_releases` is reached or the provider has
+    Fetch pages of up to 100 releases until `maximum` is reached or the provider has
     no more. If a page fails, report a warning and keep the releases already read.
 
     Parameters
     ----------
     repo
         The repository.
-    max_releases
+    maximum
         The maximum number of releases to return.
     report
         The callback for incomplete or malformed release data.
@@ -98,12 +98,12 @@ def releases(
         One dict per release with the keys `tag_name`, `name`, `body`, `published_at`,
         `html_url` and `prerelease`. Draft releases are excluded.
     """
-    if max_releases <= 0:
+    if maximum <= 0:
         return []
     import requests
 
     releases: list[ReleaseData] = []
-    per_page = min(max_releases, 100)
+    per_page = min(maximum, 100)
     page = 1
 
     headers = {"Accept": "application/vnd.github+json"}
@@ -111,7 +111,7 @@ def releases(
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    while len(releases) < max_releases:
+    while len(releases) < maximum:
         url = (
             f"https://api.github.com/repos/{repo.namespace}/{repo.name}/releases"
             f"?per_page={per_page}&page={page}"
@@ -166,7 +166,7 @@ def releases(
                     "prerelease": release.get("prerelease") is True,
                 }
             )
-            if len(releases) >= max_releases:
+            if len(releases) >= maximum:
                 break
 
         # A short page is the last one

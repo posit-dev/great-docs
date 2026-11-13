@@ -6,8 +6,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from urllib.parse import quote, unquote, urlsplit
+
+if TYPE_CHECKING:
+    from .repo_hosts import RepoHost
 
 __all__ = ["Repository"]
 
@@ -30,6 +33,17 @@ class Repository:
 
     name: str
     """The project name without a `.git` suffix"""
+
+    @property
+    def host(self) -> RepoHost:
+        """
+        Select the repository host implementation
+
+        Accessing this property makes no requests and reads no credentials.
+        """
+        from .repo_hosts import github, gitlab
+
+        return github if self.provider == "github" else gitlab
 
     @property
     def path(self) -> str:
