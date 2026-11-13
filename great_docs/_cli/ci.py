@@ -132,8 +132,8 @@ def ci_pr_comment(run_id: int, pr: int, repo: str | None) -> None:
 
     Reads the token from GITHUB_TOKEN / GH_TOKEN and needs 'pull-requests: write'.
     """
-    from .._build.ci import post_preview_comment
-    from .._build.pr_preview import PreviewError
+    from .._build.github_ci import post_preview_comment
+    from .._build.preview_artifacts import PreviewError
 
     try:
         action, repo_slug = post_preview_comment(run_id=run_id, pr=pr, repo_override=repo)
@@ -150,7 +150,7 @@ def ci_pr_comment(run_id: int, pr: int, repo: str | None) -> None:
 @click.option("--pr", type=int, default=None, help="Pull request number (adds the --pr hint).")
 def ci_notice(run_id: int, pr: int | None) -> None:
     """Print a workflow log notice with the local-preview command."""
-    from .._build.ci import render_notice_lines
+    from .._build.github_ci import render_notice_lines
 
     for line in render_notice_lines(run_id, pr):
         click.echo(line)

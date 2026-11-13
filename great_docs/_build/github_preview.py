@@ -22,10 +22,13 @@ from .._project.github import token_from_env
 from .._project.layout import Layout
 from .._project.repository import Repository
 from . import serve
-from .preview_artifacts import PreviewError, cached_site
-from .preview_artifacts import cache_root as _cache_root
-from .preview_artifacts import safe_extract_zip as _safe_extract_zip
-from .preview_artifacts import stream_to_file as _stream_to_file
+from .preview_artifacts import (
+    PreviewError,
+    cache_root,
+    cached_site,
+    safe_extract_zip,
+    stream_to_file,
+)
 
 GITHUB_API = "https://api.github.com"
 DEFAULT_WORKFLOW_NAME = "CI Docs"
@@ -416,7 +419,7 @@ class GitHubClient:
                         total = int(resp.headers.get("Content-Length") or 0)
                     else:
                         raise PreviewError(f"Artifact download failed (HTTP {resp.status_code}).")
-                    _stream_to_file(resp, zip_path, total, mode=mode, start=start)
+                    stream_to_file(resp, zip_path, total, mode=mode, start=start)
                 break  # completed
             except requests.RequestException as exc:
                 last_exc = exc
@@ -433,7 +436,7 @@ class GitHubClient:
                 )
                 time.sleep(2 * (attempt + 1))
 
-        _safe_extract_zip(zip_path, dest)
+        safe_extract_zip(zip_path, dest)
         zip_path.unlink(missing_ok=True)
 
 
@@ -573,16 +576,7 @@ def _prompt_artifact(candidates: list[dict[str, Any]]) -> dict[str, Any]:
 
 def cache_dir_for(owner: str, repo: str, run_id: int, artifact_name: str) -> Path:
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", artifact_name)
-    return _cache_root() / f"{owner}-{repo}" / str(run_id) / safe
-
-
-def clear_cache() -> tuple[bool, Path]:
-    """Delete the PR-preview download cache. Returns `(existed, path)`."""
-    root = _cache_root()
-    existed = root.exists()
-    if existed:
-        shutil.rmtree(root, ignore_errors=True)
-    return existed, root
+    return cache_root() / f"{owner}-{repo}" / str(run_id) / safe
 
 
 def download_and_extract(

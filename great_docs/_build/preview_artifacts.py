@@ -60,6 +60,22 @@ def cache_root() -> Path:
     return base / "great-docs" / "pr-preview"
 
 
+def clear_cache() -> tuple[bool, Path]:
+    """
+    Clear the shared CI-preview cache
+
+    Returns
+    -------
+    :
+        Whether the cache existed and its root path.
+    """
+    root = cache_root()
+    existed = root.exists()
+    if existed:
+        shutil.rmtree(root, ignore_errors=True)
+    return existed, root
+
+
 def safe_extract_zip(zip_path: Path, dest: Path) -> None:
     """Extract regular ZIP members after rejecting unsafe paths and symbolic links"""
     dest = dest.resolve()

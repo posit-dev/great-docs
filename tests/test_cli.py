@@ -3293,7 +3293,7 @@ class TestBuildVersionFilter:
 
 
 class TestPreviewMissedBranches:
-    @patch("great_docs._build.pr_preview.clear_cache")
+    @patch("great_docs._build.preview_artifacts.clear_cache")
     def test_clear_cache_path_existed(self, mock_clear, tmp_path, monkeypatch):
         """--clear-cache with existing cache echoes success and returns."""
         monkeypatch.chdir(tmp_path)
@@ -3306,7 +3306,7 @@ class TestPreviewMissedBranches:
 
         assert "Cleared" in result.output
 
-    @patch("great_docs._build.pr_preview.clear_cache")
+    @patch("great_docs._build.preview_artifacts.clear_cache")
     def test_clear_cache_path_not_existed(self, mock_clear, tmp_path, monkeypatch):
         """--clear-cache with no existing cache echoes 'does not exist'."""
         monkeypatch.chdir(tmp_path)
@@ -3325,7 +3325,7 @@ class TestPreviewMissedBranches:
         site = tmp_path / "_site"
         site.mkdir()
         runner = CliRunner()
-        with patch("great_docs._build.pr_preview.preview_pr", side_effect=SystemExit(0)):
+        with patch("great_docs._build.github_preview.preview_pr", side_effect=SystemExit(0)):
             result = runner.invoke(
                 cli,
                 [

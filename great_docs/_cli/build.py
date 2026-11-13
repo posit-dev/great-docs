@@ -353,7 +353,7 @@ def preview(
       great-docs preview --pr 302 --path reference/mcp/gd_config.html
     """
     if clear_cache:
-        from .._build.pr_preview import clear_cache as _clear_cache
+        from .._build.preview_artifacts import clear_cache as _clear_cache
 
         existed, path = _clear_cache()
         if existed:
@@ -416,7 +416,8 @@ def preview(
         elif given:
             if site_dir:
                 click.echo("Warning: --site-dir is ignored with --pr/--run/--branch", err=True)
-            from .._build.pr_preview import PreviewError, preview_pr
+            from .._build.github_preview import preview_pr
+            from .._build.preview_artifacts import PreviewError
 
             try:
                 preview_pr(

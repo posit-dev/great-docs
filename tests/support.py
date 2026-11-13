@@ -24,7 +24,7 @@ import inspect
 import io
 import types
 import typing
-from collections.abc import Callable, Collection, Generator, Iterable, Mapping
+from collections.abc import Callable, Collection, Generator, Iterable, Iterator, Mapping
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -1023,3 +1023,36 @@ def write_authored_pages(root: Path) -> None:
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
+
+
+class GitLabResponse:
+    """A GitLab HTTP response with JSON or streamed content"""
+
+    def __init__(
+        self,
+        payload: object = None,
+        *,
+        status: int = 200,
+        headers: dict[str, str] | None = None,
+        chunks: list[bytes] | None = None,
+    ) -> None:
+        self.payload = payload
+        self.status_code = status
+        self.headers = headers or {}
+        self.chunks = chunks or []
+        self.closed = False
+
+    def json(self) -> object:
+        return self.payload
+
+    def close(self) -> None:
+        self.closed = True
+
+    def __enter__(self) -> GitLabResponse:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
+
+    def iter_content(self, chunk_size: int) -> Iterator[bytes]:
+        yield from self.chunks

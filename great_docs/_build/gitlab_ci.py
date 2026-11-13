@@ -11,8 +11,8 @@ from typing import cast
 import requests
 
 from .._project.repository import Repository
-from .ci import PREVIEW_COMMENT_MARKER
-from .gitlab_preview import GitLabClient, resolve_repository
+from .gitlab_preview import GitLabClient
+from .preview import PREVIEW_COMMENT_MARKER, resolve_repository
 from .preview_artifacts import PreviewError
 
 
