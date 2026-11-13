@@ -53,11 +53,13 @@ def identity(config: Config, layout: Layout, project: Project) -> Identity:
     :
         The site's identity.
     """
-    github = project.github
+    github = project.repository
+    if github is not None and github.provider != "github":
+        github = None
     return Identity.make(
         config,
         layout.package_root,
-        github.owner if github else None,
+        github.namespace if github else None,
         github.name if github else None,
         project.name,
     )
@@ -139,7 +141,7 @@ def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Re
     KeyError
         If the Quarto configuration lacks a `project` or `format.html` mapping.
     """
-    repo = run.project.github
+    repo = run.project.repository
 
     assembly.assemble(
         run.quarto_config,

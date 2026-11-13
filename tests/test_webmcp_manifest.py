@@ -537,7 +537,7 @@ def _run() -> SimpleNamespace:
     project = SimpleNamespace(
         name="example",
         module="example",
-        github=None,
+        repository=None,
         manifest={"license": "", "description": "An example package"},
     )
     return SimpleNamespace(project=project, identity=SimpleNamespace(name="", base_url=None))

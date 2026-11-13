@@ -33,8 +33,8 @@ from .navigation import navbar as nav_navbar
 if TYPE_CHECKING:
     from .._build.facts import Facts
     from .._contribution import Contribution
-    from .._project.github import GithubRepo
     from .._project.layout import Layout
+    from .._project.repository import Repository
     from ..config import Config
     from .identity import Identity
 
@@ -46,7 +46,7 @@ def assemble(
     config: Config,
     layout: Layout,
     *,
-    repo: GithubRepo | None,
+    repo: Repository | None,
     facts: Facts,
     identity: Identity,
     package_name: str | None,
@@ -115,7 +115,7 @@ def assemble(
     FileNotFoundError
         If a header include file does not exist.
     """
-    has_repository = repo is not None
+    has_repository = repo is not None and repo.provider == "github"
     build_dir = layout.build_dir
 
     quarto_defaults.register(quarto_config, config, layout)

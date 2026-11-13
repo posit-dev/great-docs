@@ -12,11 +12,11 @@ import pytest
 
 from great_docs._apiref._settings import SourceLinks
 from great_docs._build.facts import Facts, source_links, source_ref
-from great_docs._project.github import GithubRepo
+from great_docs._project.repository import Repository
 from great_docs._website.navigation.release import Release
 from tests.support import StubRemote, mock_config
 
-REPO = GithubRepo(owner="owner", name="repo")
+REPO = Repository("github", "https://github.com", namespace="owner", name="repo")
 RELEASE = {"tag_name": "v1.2.0", "published_at": "2025-06-15T10:00:00Z"}
 
 
@@ -159,3 +159,10 @@ def test_source_links_without_a_repository_to_link_run_no_git(
 
     assert links == SourceLinks()
     run.assert_not_called()
+
+
+def test_gitlab_identity_fetches_no_github_data() -> None:
+    remote = StubRemote(stats={"stars": 5})
+    repository = Repository("gitlab", "https://gitlab.com", "group/subgroup", "project")
+    assert Facts.make(mock_config(github_style="widget"), repository, remote) == Facts()
+    assert remote.calls == []

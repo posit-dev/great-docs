@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
-    from .._project.github import GithubRepo
+    from .._project.repository import Repository
     from .._project.remote import Remote
     from ..config import Config
 
@@ -40,7 +40,7 @@ class Facts:
     """The newest published release, or `None` when there is none or it is unknown"""
 
     @classmethod
-    def make(cls, config: Config, repo: GithubRepo | None, remote: Remote) -> Facts:
+    def make(cls, config: Config, repo: Repository | None, remote: Remote) -> Facts:
         """
         Fetch the repository's star and fork counts and its latest release
 
@@ -59,7 +59,7 @@ class Facts:
         :
             The star and fork counts and latest release, when available.
         """
-        if repo is None:
+        if repo is None or repo.provider != "github":
             return cls()
         stats = remote.github_stats(repo) if config.github_style == "widget" else None
         latest = remote.github_releases(repo, max_releases=1)

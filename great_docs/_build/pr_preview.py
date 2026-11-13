@@ -25,7 +25,8 @@ from urllib.parse import urlencode
 from dotenv import dotenv_values, find_dotenv
 
 from .._project import Project
-from .._project.github import GithubRepo, token_from_env
+from .._project.github import token_from_env
+from .._project.repository import Repository
 from .._project.layout import Layout
 from . import serve
 
@@ -57,6 +58,32 @@ def _parse_owner_repo(value: str) -> tuple[str, str] | None:
     return None
 
 
+def _github_identity(repository: Repository | None) -> tuple[str, str] | None:
+    """
+    Resolve the identity accepted by GitHub preview and CI operations
+
+    Parameters
+    ----------
+    repository
+        The selected repository, if any.
+
+    Returns
+    -------
+    :
+        The GitHub account and repository name, or `None` without an identity.
+
+    Raises
+    ------
+    PreviewError
+        If the repository uses a provider whose CI previews are unsupported.
+    """
+    if repository is None:
+        return None
+    if repository.provider != "github":
+        raise PreviewError("GitLab CI previews are not supported yet.")
+    return repository.namespace, repository.name
+
+
 def _git_remote_repo(project_path: str | Path | None) -> tuple[str, str] | None:
     """Read `git remote get-url origin` and parse it into `(owner, repo)`."""
     cwd = str(project_path) if project_path else None
@@ -72,8 +99,8 @@ def _git_remote_repo(project_path: str | Path | None) -> tuple[str, str] | None:
         return None
     if result.returncode != 0:
         return None
-    github = GithubRepo.parse(result.stdout.strip())
-    return (github.owner, github.name) if github else None
+    github = Repository.parse(result.stdout.strip())
+    return _github_identity(github)
 
 
 def _config_repo(project_path: str | Path | None) -> tuple[str, str] | None:
@@ -94,11 +121,11 @@ def _config_repo(project_path: str | Path | None) -> tuple[str, str] | None:
     try:
         layout = Layout.make(Path(project_path or os.getcwd()))
         config = layout.load_config()
-        github = Project.make(config, layout).github
+        github = Project.make(config, layout).repository
     except (ValueError, OSError):
         # `LayoutError` and `ConfigError` are `ValueError`s.
         return None
-    return (github.owner, github.name) if github else None
+    return _github_identity(github)
 
 
 def resolve_repo(
@@ -110,8 +137,8 @@ def resolve_repo(
     Precedence: `--repo` → `git remote origin` → great-docs.yml / pyproject.
     """
     if repo_override:
-        github = GithubRepo.parse(repo_override)
-        parsed = (github.owner, github.name) if github else _parse_owner_repo(repo_override)
+        github = Repository.parse(repo_override)
+        parsed = _github_identity(github) if github else _parse_owner_repo(repo_override)
         if parsed:
             return parsed
         raise PreviewError(

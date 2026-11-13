@@ -10,14 +10,14 @@ from typing import Any
 from PIL import Image
 
 from great_docs._build.facts import Facts
-from great_docs._project.github import GithubRepo
+from great_docs._project.repository import Repository
 from great_docs._project.layout import Layout
 from great_docs._website.identity import Identity
 from great_docs._website.navigation import brand
 from great_docs._website.navigation.release import Release
 from tests.support import write_config
 
-REPO = GithubRepo(owner="owner", name="repo")
+REPO = Repository("github", "https://github.com", namespace="owner", name="repo")
 IDENTITY = Identity(name="Pkg", url=None, base_url=None)
 
 
@@ -27,7 +27,7 @@ def _register(
     quarto_config: dict[str, Any] | None = None,
     *,
     identity: Identity = IDENTITY,
-    repo: GithubRepo | None = None,
+    repo: Repository | None = None,
     facts: Facts | None = None,
     documentation_url: str | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
@@ -192,3 +192,11 @@ class TestRelease:
         brand.register_release(quarto_config, write_config(tmp_path), facts)
 
         assert "v1.2.0" in quarto_config["website"]["navbar"]["title"]
+
+
+def test_gitlab_identity_uses_plain_navigation(tmp_path: Path) -> None:
+    repository = Repository("gitlab", "https://gitlab.com", "group/subgroup", "project")
+    quarto, _ = _register(tmp_path, repo=repository)
+    assert quarto["website"]["navbar"]["right"] == [
+        {"href": repository.url, "icon": "gitlab", "aria-label": "GitLab"}
+    ]

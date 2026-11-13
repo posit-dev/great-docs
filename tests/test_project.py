@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from great_docs._project.github import GithubRepo
+from great_docs._project.repository import Repository
 from great_docs._project.layout import Layout
 from great_docs._project.model import Project, locate_package_init, read_manifest
 from great_docs.config import Config
@@ -110,13 +110,13 @@ def test_unreadable_packaging_files_leave_the_manifest_empty(tmp_path: Path):
 def test_configured_repo_wins_over_the_project_urls(tmp_path: Path):
     pyproject_urls(tmp_path, ("Repository", "https://github.com/url/repo"))
     write(tmp_path, "great-docs.yml", "repo: https://github.com/config/repo\n")
-    assert make(tmp_path).github == GithubRepo("config", "repo")
+    assert make(tmp_path).repository == Repository("github", "https://github.com", "config", "repo")
 
 
-def test_configured_repo_outside_github_names_no_repository(tmp_path: Path):
+def test_configured_gitlab_repo_wins_over_project_urls(tmp_path: Path):
     pyproject_urls(tmp_path, ("Repository", "https://github.com/url/repo"))
     write(tmp_path, "great-docs.yml", "repo: https://gitlab.com/config/repo\n")
-    assert make(tmp_path).github is None
+    assert make(tmp_path).repository == Repository("gitlab", "https://gitlab.com", "config", "repo")
 
 
 @pytest.mark.parametrize(
@@ -124,7 +124,7 @@ def test_configured_repo_outside_github_names_no_repository(tmp_path: Path):
 )
 def test_url_labels_match_whatever_their_case_and_separators(tmp_path: Path, label: str):
     pyproject_urls(tmp_path, (label, "https://github.com/owner/repo"))
-    assert make(tmp_path).github == GithubRepo("owner", "repo")
+    assert make(tmp_path).repository == Repository("github", "https://github.com", "owner", "repo")
 
 
 def test_url_labels_rank_repository_source_source_code_github_homepage(tmp_path: Path):
@@ -135,7 +135,9 @@ def test_url_labels_rank_repository_source_source_code_github_homepage(tmp_path:
         ]
         # Declare the labels in reverse, so declaration order cannot explain the choice.
         pyproject_urls(tmp_path, *reversed(entries[best:]))
-        assert make(tmp_path).github == GithubRepo("owner", str(best))
+        assert make(tmp_path).repository == Repository(
+            "github", "https://github.com", "owner", str(best)
+        )
 
 
 def test_first_declared_of_two_labels_that_normalise_alike_wins(tmp_path: Path):
@@ -144,19 +146,19 @@ def test_first_declared_of_two_labels_that_normalise_alike_wins(tmp_path: Path):
         ("source-code", "https://github.com/owner/first"),
         ("Source Code", "https://github.com/owner/second"),
     )
-    assert make(tmp_path).github == GithubRepo("owner", "first")
+    assert make(tmp_path).repository == Repository("github", "https://github.com", "owner", "first")
 
 
 @pytest.mark.parametrize(
     ("label", "url"),
     [
         ("Changelog", "https://github.com/owner/repo"),
-        ("Repository", "https://gitlab.com/owner/repo"),
+        ("Repository", "https://code.example.org/owner/repo"),
     ],
 )
 def test_other_labels_and_hosts_name_no_repository(tmp_path: Path, label: str, url: str):
     pyproject_urls(tmp_path, (label, url))
-    assert make(tmp_path).github is None
+    assert make(tmp_path).repository is None
 
 
 def test_each_make_reads_the_files_afresh(tmp_path: Path):
@@ -404,3 +406,47 @@ def test_search_paths_read_the_import_path_when_called(
     project = make(tmp_path)
     monkeypatch.setattr(sys, "path", ["/added/after/make"])
     assert project.search_paths() == [tmp_path.resolve(), "/added/after/make"]
+
+
+def test_gitlab_metadata_label_follows_existing_source_labels(tmp_path: Path) -> None:
+    pyproject_urls(
+        tmp_path,
+        ("Homepage", "https://example.org"),
+        ("GitLab", "https://gitlab.com/group/subgroup/project"),
+    )
+    assert make(tmp_path).repository == Repository(
+        "gitlab", "https://gitlab.com", "group/subgroup", "project"
+    )
+    pyproject_urls(
+        tmp_path,
+        ("GitLab", "https://gitlab.com/group/project"),
+        ("GitHub", "https://github.com/owner/repo"),
+    )
+    assert make(tmp_path).repository == Repository("github", "https://github.com", "owner", "repo")
+
+
+def test_explicit_custom_gitlab_base_applies_to_metadata(tmp_path: Path) -> None:
+    pyproject_urls(tmp_path, ("Repository", "https://code.example.org/gitlab/a/b/project"))
+    write(
+        tmp_path,
+        "great-docs.yml",
+        "repo_provider: gitlab\nrepo_base_url: https://code.example.org/gitlab\n",
+    )
+    assert make(tmp_path).repository == Repository(
+        "gitlab", "https://code.example.org/gitlab", "a/b", "project"
+    )
+
+
+def test_repository_discovery_requires_no_network(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import socket
+
+    def reject_network(*args: object, **kwargs: object) -> None:
+        pytest.fail("Repository discovery must not access the network")
+
+    monkeypatch.setattr(socket, "create_connection", reject_network)
+    pyproject_urls(tmp_path, ("Repository", "https://gitlab.com/group/subgroup/project"))
+    assert make(tmp_path).repository == Repository(
+        "gitlab", "https://gitlab.com", "group/subgroup", "project"
+    )

@@ -155,7 +155,7 @@ from great_docs._content import user_guide
 from great_docs._content.naming import strip_numeric_prefix
 from great_docs._contribution import NavbarLink
 from great_docs._project import manifest as _manifest
-from great_docs._project.github import GithubRepo
+from great_docs._project.repository import Repository
 from great_docs._project.layout import Layout
 from great_docs._project.model import Project, locate_package_init, read_manifest
 from great_docs._reference import block as reference_block
@@ -8010,7 +8010,7 @@ def test_poetry_1_project_facts_reach_the_build(tmp_path: Path):
 
     assert project.name == "poetry-pkg"
     assert project.manifest["description"] == "A Poetry 1.x package"
-    assert project.github == GithubRepo("owner", "repo")
+    assert project.repository == Repository("github", "https://github.com", "owner", "repo")
 
 
 def test_empty_categories_structure():
@@ -10737,7 +10737,10 @@ def test_update_quarto_config_github_icon_fallback():
             },
         )
 
-        on_github = replace(make_project(docs), github=GithubRepo("owner", "repo"))
+        on_github = replace(
+            make_project(docs),
+            repository=Repository("github", "https://github.com", "owner", "repo"),
+        )
         update_quarto_config(docs, make_run(docs, project=on_github))
 
         with open(quarto_yml) as f:
@@ -11061,7 +11064,10 @@ def test_update_quarto_config_favicon_absolute_urls_from_pyproject():
             },
         )
 
-        on_github = replace(make_project(docs), github=GithubRepo("owner", "repo"))
+        on_github = replace(
+            make_project(docs),
+            repository=Repository("github", "https://github.com", "owner", "repo"),
+        )
         update_quarto_config(docs, make_run(docs, project=on_github))
 
         with open(quarto_yml) as f:
@@ -22162,6 +22168,9 @@ def test_discover_exports_cyclic_alias_skipped(tmp_path):
                 side_effect=lambda k: [] if k == "exclude" else False
             )
             mock_config.no_auto_exclude = False
+            mock_config.repo = None
+            mock_config.repo_provider = None
+            mock_config.repo_base_url = None
             # Call with the package already loaded, bypass discovery
             result = discover_exports(
                 make_exports(docs).package("fakepkg"), docs._config, report=print
@@ -22338,3 +22347,26 @@ def test_readme_homepage_without_margin_starts_with_front_matter_fence():
 
         assert content.startswith("---\n")
         assert "pragma" not in content
+
+
+def test_gitlab_navigation_excludes_github_widget(tmp_path: Path) -> None:
+    docs, quarto_yml = _make_uqc_docs(
+        str(tmp_path),
+        gd_yml_content="repo: https://gitlab.com/group/subgroup/project\n",
+        quarto_content={
+            "project": {"type": "website"},
+            "website": {},
+            "format": {"html": {}},
+        },
+    )
+    update_quarto_config(docs, make_run(docs))
+    with open(quarto_yml) as stream:
+        result = read_yaml(stream)
+    assert result["website"]["navbar"]["right"] == [
+        {
+            "href": "https://gitlab.com/group/subgroup/project",
+            "icon": "gitlab",
+            "aria-label": "GitLab",
+        }
+    ]
+    assert "github-widget" not in str(result)

@@ -435,7 +435,7 @@ class TestWebMCPSection:
         assert "window.greatDocs.tools.list();" in lines
 
 
-def _build_llms_txt(tmp_path: Path, settings: dict[str, Any], *, github: object = None) -> str:
+def _build_llms_txt(tmp_path: Path, settings: dict[str, Any], *, repository: object = None) -> str:
     """Run the build step that writes `llms.txt` and return the file's text"""
     tmp_path.mkdir(parents=True, exist_ok=True)
     write_pyproject(tmp_path, "json")
@@ -444,7 +444,9 @@ def _build_llms_txt(tmp_path: Path, settings: dict[str, Any], *, github: object 
     layout.build_dir.mkdir(parents=True)
     run = SimpleNamespace(
         api_block=_api_reference("json", SECTION),
-        project=SimpleNamespace(manifest={}, name="json", importable_name=None, github=github),
+        project=SimpleNamespace(
+            manifest={}, name="json", importable_name=None, repository=repository
+        ),
         user_guide=None,
     )
     with contextlib.redirect_stdout(io.StringIO()):
@@ -487,7 +489,9 @@ class TestBuildStep:
 
     def test_a_github_repository_adds_the_changelog_tool_unless_disabled(self, tmp_path: Path):
         def tools(directory: str, settings: dict[str, Any]) -> list[str]:
-            text = _build_llms_txt(tmp_path / directory, settings, github=object())
+            text = _build_llms_txt(
+                tmp_path / directory, settings, repository=SimpleNamespace(provider="github")
+            )
             lines = _webmcp_section(text)
             return [line.split("`")[1] for line in lines if line.startswith("- `")]
 

@@ -4,13 +4,13 @@ from typing import Any
 import pytest
 
 from great_docs._contribution import Contribution, NavbarLink
-from great_docs._project.github import GithubRepo
+from great_docs._project.repository import Repository
 from great_docs._project.layout import Layout
 from great_docs._website import changelog
 from great_docs._yaml import split_front_matter
 from tests.support import StubRemote, write_config
 
-REPO = GithubRepo("owner", "repo")
+REPO = Repository("github", "https://github.com", "owner", "repo")
 
 
 @pytest.fixture

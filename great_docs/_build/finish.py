@@ -76,7 +76,7 @@ def webmcp_manifest(run: Run, config: Config, layout: Layout, log: BuildLog) -> 
         title=run.identity.name or name or "",
         description=default_description(config, project),
         version=version,
-        repo=project.github.url if project.github else None,
+        repo=project.repository.url if project.repository else None,
         license=project.manifest["license"] or None,
         install=(f"pip install {name}", f"uv add {name}") if name and project.module else (),
     )

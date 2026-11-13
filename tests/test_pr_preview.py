@@ -1737,3 +1737,36 @@ def test_resolve_token_skips_nonexistent_dotenv(monkeypatch, tmp_path):
     nonexistent = tmp_path / ".env"
     token, source = pp.resolve_token(project_path=str(tmp_path), env_file=None)
     assert token is None
+
+
+@pytest.mark.parametrize(
+    "url", ["https://gitlab.com/group/project", "git@gitlab.com:group/project.git"]
+)
+def test_gitlab_preview_override_reports_unsupported(url: str) -> None:
+    with pytest.raises(pp.PreviewError, match="GitLab CI previews are not supported"):
+        pp.resolve_repo(None, url)
+
+
+def test_configured_custom_gitlab_preview_reports_unsupported(tmp_path: Path) -> None:
+    (tmp_path / "great-docs.yml").write_text(
+        "repo: https://code.example.org/gitlab/group/project\n"
+        "repo_provider: gitlab\nrepo_base_url: https://code.example.org/gitlab\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(pp.PreviewError, match="GitLab CI previews are not supported"):
+        pp._config_repo(tmp_path)
+
+
+def test_gitlab_remote_does_not_fall_back_to_github(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        pp.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(returncode=0, stdout="git@gitlab.com:g/p.git"),
+    )
+    monkeypatch.setattr(
+        pp, "_config_repo", lambda path: pytest.fail("must not select another repository")
+    )
+    with pytest.raises(pp.PreviewError, match="GitLab CI previews are not supported"):
+        pp.resolve_repo(None, None)

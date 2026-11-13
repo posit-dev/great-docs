@@ -10,10 +10,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from great_docs._project.github import GithubRepo
+from great_docs._project.repository import Repository
 from great_docs._project.remote import HttpRemote, OfflineRemote
 
-REPO = GithubRepo("owner", "repo")
+REPO = Repository("github", "https://github.com", "owner", "repo")
 
 
 @pytest.fixture(autouse=True)
@@ -242,4 +242,13 @@ def test_offline_remote_makes_no_requests():
         assert remote.github_releases(REPO, 10) == []
         assert remote.pypi_release_dates({"numpy"}) == {}
 
+    get.assert_not_called()
+
+
+def test_gitlab_identity_never_reaches_github_api() -> None:
+    repository = Repository("gitlab", "https://gitlab.com", "group/subgroup", "project")
+    with patch("requests.get") as get:
+        remote = HttpRemote(report=print)
+        assert remote.github_stats(repository) == {}
+        assert remote.github_releases(repository, 10) == []
     get.assert_not_called()

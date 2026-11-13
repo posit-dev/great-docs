@@ -686,8 +686,8 @@ def changelog(
         )
         config = layout.load_config()
 
-        repo = Project.make(config, layout).github
-        if repo is None:
+        repo = Project.make(config, layout).repository
+        if repo is None or repo.provider != "github":
             click.echo(
                 "Error: No GitHub repository URL found in pyproject.toml. "
                 "Add a [project.urls] entry like:\n\n"

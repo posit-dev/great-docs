@@ -68,7 +68,11 @@ def _webmcp_features(run: Run, config: Config) -> set[str]:
         features.add("cli")
     if config.has_versions:
         features.add("versions")
-    if config.changelog_enabled and run.project.github is not None:
+    if (
+        config.changelog_enabled
+        and run.project.repository is not None
+        and run.project.repository.provider == "github"
+    ):
         features.add("changelog")
     if config.skill_enabled and config.skill_well_known:
         features.add("skills")
@@ -211,8 +215,8 @@ def changelog(run: Run, config: Config, layout: Layout, *, remote: Remote) -> Ou
     """
     if not config.changelog_enabled:
         return Skipped("disabled in config")
-    repo = run.project.github
-    if repo is None:
+    repo = run.project.repository
+    if repo is None or repo.provider != "github":
         return Skipped("no GitHub repo info")
     contribution = changelog_page.write_page(config, layout, repo, remote, report=print)
     if contribution is None:

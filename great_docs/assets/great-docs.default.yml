@@ -114,10 +114,14 @@ no_auto_exclude: false
 # pypi: https://artifactory.example.com/pkg
 pypi: null
 
-# GitHub Integration
-# ------------------
-# GitHub repository URL override (e.g. "https://github.com/owner/repo").
+# Repository Integration
+# ----------------------
+# Repository URL override (e.g. "https://gitlab.com/group/project").
 repo: null
+# Infer github.com and gitlab.com. Set gitlab for a self-managed instance.
+repo_provider: null
+# Web instance URL, including an installation prefix when needed.
+repo_base_url: null
 
 # GitHub link style
 # : widget - (default) a widget showing the stars count

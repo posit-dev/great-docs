@@ -17,9 +17,9 @@ from .navigation import navbar
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from .._project.github import GithubRepo
     from .._project.layout import Layout
     from .._project.remote import Remote
+    from .._project.repository import Repository
     from ..config import Config
 
 __all__ = ["FILENAME", "linkify_references", "write_page"]
@@ -40,7 +40,7 @@ _CODE = re.compile(
 def write_page(
     config: Config,
     layout: Layout,
-    repo: GithubRepo,
+    repo: Repository,
     remote: Remote,
     *,
     max_releases: int | None = None,
@@ -116,7 +116,7 @@ def write_page(
     return Contribution(navbar=(NavbarLink(text=navbar.CHANGELOG.label(config), href=FILENAME),))
 
 
-def _release_lines(release: Mapping[str, Any], repo: GithubRepo) -> list[str]:
+def _release_lines(release: Mapping[str, Any], repo: Repository) -> list[str]:
     """
     Format the changelog section for one release
 
@@ -153,7 +153,7 @@ def _release_lines(release: Mapping[str, Any], repo: GithubRepo) -> list[str]:
     return lines
 
 
-def linkify_references(text: str, repo: GithubRepo) -> str:
+def linkify_references(text: str, repo: Repository) -> str:
     """
     Turn GitHub shorthand references in release notes into Markdown links
 
@@ -183,7 +183,7 @@ def linkify_references(text: str, repo: GithubRepo) -> str:
     return "".join(pieces)
 
 
-def _linkify_prose(text: str, repo: GithubRepo) -> str:
+def _linkify_prose(text: str, repo: Repository) -> str:
     """
     Turn GitHub shorthand references in text outside code into Markdown links
 

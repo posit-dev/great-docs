@@ -48,7 +48,7 @@ from great_docs._website.project_pages import community
 
 if TYPE_CHECKING:
     from great_docs._content.user_guide import UserGuide
-    from great_docs._project.github import GithubRepo
+    from great_docs._project.repository import Repository
     from great_docs._project.layout import Layout
 
 # Stub calls within step actions to preserve the step table and build control flow.
@@ -825,7 +825,7 @@ class StubRemote:
     release_dates: dict[str, str] = field(default_factory=dict)
     calls: list[str] = field(default_factory=list)
 
-    def github_stats(self, repo: GithubRepo) -> dict[str, int]:
+    def github_stats(self, repo: Repository) -> dict[str, int]:
         """
         Return `stats` for any repository
 
@@ -842,7 +842,7 @@ class StubRemote:
         self.calls.append("github_stats")
         return self.stats
 
-    def github_releases(self, repo: GithubRepo, max_releases: int) -> list[dict[str, Any]]:
+    def github_releases(self, repo: Repository, max_releases: int) -> list[dict[str, Any]]:
         """
         Return the first `max_releases` entries of `releases`
 

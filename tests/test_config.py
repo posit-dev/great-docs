@@ -2083,3 +2083,40 @@ def test_user_settings_copy_is_independent(tmp_path: Path):
     cfg.user_settings["site"]["lang"] = "de"
     cfg.user_settings["extra"] = True
     assert cfg.user_settings == {"site": {"lang": "fr"}}
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        "repo: 42\n",
+        "repo_provider: other\n",
+        "repo_provider: false\n",
+        "repo_base_url: 42\n",
+        "repo: https://github.com/owner\n",
+        "repo: not-a-url\n",
+        "repo: https://github.com/o/r\nrepo_provider: gitlab\n",
+        "repo_provider: gitlab\nrepo_base_url: https://github.com\n",
+        "repo_base_url: https://code.example.org/gitlab\n",
+        "repo: https://code.example.org/a/b\nrepo_provider: gitlab\nrepo_base_url: https://other.example.org\n",
+    ],
+)
+def test_repository_configuration_rejects_invalid_settings(
+    tmp_project: Path, settings: str
+) -> None:
+    with pytest.raises(ConfigError):
+        write_config(tmp_project, settings)
+
+
+def test_unknown_repository_hosts_remain_usable(tmp_project: Path) -> None:
+    config = write_config(tmp_project, "repo: https://forge.example.org/group/project\n")
+    assert config.repo == "https://forge.example.org/group/project"
+    assert config.repo_provider is None
+    assert config.repo_base_url is None
+
+
+@pytest.mark.parametrize("url", ["https://forge.example.org/project", "https://forge.example.org"])
+def test_unknown_repository_layout_is_not_interpreted_as_gitlab(
+    tmp_project: Path, url: str
+) -> None:
+    config = write_config(tmp_project, f"repo: {url}\n")
+    assert config.repo == url

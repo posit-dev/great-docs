@@ -1,5 +1,5 @@
 """
-Project metadata, import names, package locations and GitHub repositories for documentation
+Project metadata, import names, package locations and repositories for documentation
 builds
 """
 
@@ -12,9 +12,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from . import manifest as _manifest
-from .github import GithubRepo
 from .layout import PACKAGE_DIRS
 from .manifest import Manifest, ManifestError
+from .repository import Repository
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 __all__ = ["Project", "locate_package_init", "package_name", "read_manifest"]
 
 # Recognised repository URL labels, casefolded without separators, in preference order.
-_REPOSITORY_URL_LABELS = ("repository", "source", "sourcecode", "github", "homepage")
+_REPOSITORY_URL_LABELS = ("repository", "source", "sourcecode", "github", "gitlab", "homepage")
 
 # Exclude common non-package directories from fallback package discovery.
 _NON_PACKAGE_DIRS = (
@@ -46,7 +46,7 @@ _NON_PACKAGE_DIRS = (
 @dataclass(frozen=True)
 class Project:
     """
-    The documented project's metadata, import names, package locations and GitHub repository
+    The documented project's metadata, import names, package locations and repository
     """
 
     name: str | None
@@ -58,8 +58,8 @@ class Project:
     manifest: Manifest
     """The metadata the packaging files declare, empty when they cannot be read"""
 
-    github: GithubRepo | None
-    """The project's repository on GitHub, or `None` when no GitHub URL identifies it"""
+    repository: Repository | None
+    """The project's repository, or `None` when no supported URL identifies it"""
 
     module: str | None
     """
@@ -126,9 +126,10 @@ class Project:
            then the package root. Fall back to the package directory's own name.
 
         Use the configured `repo`, falling back to project URLs labelled `Repository`,
-        `Source`, `Source Code`, `GitHub` or `Homepage`, in that order. Ignore case,
-        whitespace, hyphens and underscores when matching labels. A selected URL outside
-        GitHub leaves the repository unset.
+        `Source`, `Source Code`, `GitHub`, `GitLab` or `Homepage`, in that order. Ignore case,
+        whitespace, hyphens and underscores when matching labels. A selected URL on an
+        unknown host leaves the repository unset unless its GitLab provider is explicitly
+        configured.
 
         Parameters
         ----------
@@ -140,7 +141,7 @@ class Project:
         Returns
         -------
         :
-            The project's metadata, import names, package locations and GitHub repository
+            The project's metadata, import names, package locations and repository
             at the time of the call.
         """
         root = layout.package_root
@@ -151,7 +152,11 @@ class Project:
         return cls(
             name=name,
             manifest=manifest,
-            github=GithubRepo.parse(config.repo or _repository_url(manifest["urls"])),
+            repository=Repository.parse(
+                config.repo or _repository_url(manifest["urls"]),
+                provider=config.repo_provider,
+                base_url=config.repo_base_url,
+            ),
             module=module,
             package_init=(
                 locate_package_init(root, manifest, importable_name) if importable_name else None

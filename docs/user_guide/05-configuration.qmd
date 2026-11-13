@@ -376,24 +376,42 @@ Several Great Docs features require knowing your GitHub repository URL:
 - **Version badge** next to the package name (from GitHub Releases)
 - **Changelog** page (from GitHub Releases)
 
-### Repository URL Detection
+### Repository detection
 
-Great Docs looks for your GitHub repository in this order:
-
-1. **`repo:` in docs/great-docs.yml**: explicit override, takes precedence
-2. **`[project.urls]` in pyproject.toml**: looks for `Repository`, `Source`, `GitHub`, or `Homepage`
-keys containing a GitHub URL
+Set `repo` in `docs/great-docs.yml` to override repository detection. Otherwise,
+Great Docs selects the first available project URL labelled `Repository`, `Source`,
+`Source Code`, `GitHub`, `GitLab` or `Homepage`, in that order. Labels ignore case,
+spaces, hyphens and underscores. The first declared label wins a tie.
 
 ```{.yaml filename="docs/great-docs.yml"}
 repo: https://github.com/your-org/your-package
 ```
 
-Or via pyproject.toml:
+Great Docs recognises `github.com` and `gitlab.com` locally, including SSH clone
+URLs. GitLab namespaces can contain multiple groups. Other hosts require
+`repo_provider: gitlab`; an unknown host without a provider leaves repository
+integration unavailable while ordinary builds remain usable.
 
-```{.toml filename="pyproject.toml"}
-[project.urls]
-Repository = "https://github.com/your-org/your-package"
+```{.yaml filename="docs/great-docs.yml"}
+repo: https://code.example.org/gitlab/team/subteam/package
+repo_provider: gitlab
+repo_base_url: https://code.example.org/gitlab
+site_url: https://docs.example.org/package/
 ```
+
+Set `repo_base_url` when GitLab runs below a URL prefix or its web address uses a
+different port from its SSH clone endpoint. The configured base supplies the web
+scheme, port and prefix; its host must match the repository. HTTP repository paths
+include the installation prefix; SSH paths start with the project namespace. A group
+whose name matches the prefix remains part of the SSH project path. Without a base, the
+repository URL's origin supplies the instance address. SSH URLs use HTTPS and omit
+port 22. Set an explicit base when a nonstandard SSH port differs from the web port.
+Provider, host and base mismatches raise a configuration error. GitHub Enterprise
+and automatic detection of other forges are unsupported.
+
+GitLab currently supplies repository identity and a plain navigation link. GitLab
+source links, releases, widgets, Pages setup and CI previews remain pending.
+`github_style` continues to control GitHub navigation only.
 
 ::: {.callout-note}
 ## Build Messages

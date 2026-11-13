@@ -12,7 +12,8 @@ from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from .github import GithubRepo, token_from_env
+from .github import token_from_env
+from .repository import Repository
 
 __all__ = ["HttpRemote", "OfflineRemote", "Remote"]
 
@@ -20,7 +21,7 @@ __all__ = ["HttpRemote", "OfflineRemote", "Remote"]
 class Remote(Protocol):
     """A source of GitHub repository data and PyPI release dates"""
 
-    def github_stats(self, repo: GithubRepo) -> dict[str, int]:
+    def github_stats(self, repo: Repository) -> dict[str, int]:
         """
         Read the repository's star and fork counts
 
@@ -37,7 +38,7 @@ class Remote(Protocol):
         """
         ...
 
-    def github_releases(self, repo: GithubRepo, max_releases: int) -> list[dict[str, Any]]:
+    def github_releases(self, repo: Repository, max_releases: int) -> list[dict[str, Any]]:
         """
         Read the repository's published releases, newest first
 
@@ -86,7 +87,7 @@ class HttpRemote:
     report: Callable[[str], None]
     """The callback for warnings when releases cannot be read in full"""
 
-    def github_stats(self, repo: GithubRepo) -> dict[str, int]:
+    def github_stats(self, repo: Repository) -> dict[str, int]:
         """
         Fetch the repository's star and fork counts from the GitHub API
 
@@ -101,6 +102,8 @@ class HttpRemote:
             The counts under the keys `stars` and `forks`, or an empty dict when the request
             fails or GitHub returns a status other than 200.
         """
+        if repo.provider != "github":
+            return {}
         import requests
 
         headers = {
@@ -111,7 +114,7 @@ class HttpRemote:
         if token:
             headers["Authorization"] = f"Bearer {token}"
 
-        url = f"https://api.github.com/repos/{repo.owner}/{repo.name}"
+        url = f"https://api.github.com/repos/{repo.namespace}/{repo.name}"
         try:
             resp = requests.get(url, headers=headers, timeout=15)
             if resp.status_code == 200:
@@ -124,7 +127,7 @@ class HttpRemote:
             pass
         return {}
 
-    def github_releases(self, repo: GithubRepo, max_releases: int) -> list[dict[str, Any]]:
+    def github_releases(self, repo: Repository, max_releases: int) -> list[dict[str, Any]]:
         """
         Fetch the repository's published releases from the GitHub API, newest first
 
@@ -144,6 +147,8 @@ class HttpRemote:
             One dict per release with the keys `tag_name`, `name`, `body`, `published_at`,
             `html_url` and `prerelease`. Draft releases are excluded.
         """
+        if repo.provider != "github":
+            return []
         import requests
 
         releases: list[dict[str, Any]] = []
@@ -157,7 +162,7 @@ class HttpRemote:
 
         while len(releases) < max_releases:
             url = (
-                f"https://api.github.com/repos/{repo.owner}/{repo.name}/releases"
+                f"https://api.github.com/repos/{repo.namespace}/{repo.name}/releases"
                 f"?per_page={per_page}&page={page}"
             )
 
@@ -171,7 +176,7 @@ class HttpRemote:
                 self.report("GitHub API rate limit reached; changelog may be incomplete")
                 break
             if resp.status_code == 404:
-                self.report(f"GitHub repository {repo.owner}/{repo.name} not found")
+                self.report(f"GitHub repository {repo.namespace}/{repo.name} not found")
                 break
             if resp.status_code != 200:
                 self.report(f"GitHub API returned status {resp.status_code}")
@@ -269,7 +274,7 @@ class HttpRemote:
 class OfflineRemote:
     """A source of empty results that makes no network requests"""
 
-    def github_stats(self, repo: GithubRepo) -> dict[str, int]:
+    def github_stats(self, repo: Repository) -> dict[str, int]:
         """
         Report the repository's star and fork counts as unknown
 
@@ -285,7 +290,7 @@ class OfflineRemote:
         """
         return {}
 
-    def github_releases(self, repo: GithubRepo, max_releases: int) -> list[dict[str, Any]]:
+    def github_releases(self, repo: Repository, max_releases: int) -> list[dict[str, Any]]:
         """
         Report that the repository has no known releases
 

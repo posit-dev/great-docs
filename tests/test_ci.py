@@ -316,3 +316,8 @@ def test_post_preview_comment_full_flow(monkeypatch):
 
     assert action == "created"
     assert slug == "acme/docs"
+
+
+def test_gitlab_ci_override_reports_unsupported() -> None:
+    with pytest.raises(PreviewError, match="GitLab CI previews are not supported"):
+        _ci.resolve_ci_repo("https://gitlab.com/group/project")

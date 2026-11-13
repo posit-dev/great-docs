@@ -167,7 +167,9 @@ def api(
     from .._apiref.resolve import ObjectNotFoundError
 
     failures = (*USER_CODE_ERRORS, ObjectNotFoundError)
-    repo_url = run.project.github.url if run.project.github else None
+    repo_url = run.project.repository.url if run.project.repository else None
+    if run.project.repository is not None and run.project.repository.provider != "github":
+        repo_url = None
     links = source_links(config, layout.package_root, repo_url, warn=print_warning)
     try:
         ref = APIReference(run.quarto_config, links)
@@ -406,7 +408,7 @@ def mcp(run: Run, config: Config, layout: Layout) -> Outcome:
     mcp_info = mcp_build.discover_server(config, run.project.importable_name)
     if not mcp_info:
         return Skipped("no MCP server found")
-    repo_url = run.project.github.url if run.project.github else None
+    repo_url = run.project.repository.url if run.project.repository else None
     mcp_files = mcp_build.build_mcp_reference(config, mcp_info, layout, run.project.name, repo_url)
     if not mcp_files:
         return "No MCP pages generated"

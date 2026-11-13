@@ -21,8 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from ..._build.facts import Facts
-    from ..._project.github import GithubRepo
     from ..._project.layout import Layout
+    from ..._project.repository import Repository
     from ...config import Config
     from ..identity import Identity
 
@@ -34,7 +34,7 @@ def register(
     *,
     identity: Identity,
     package_name: str | None,
-    repo: GithubRepo | None,
+    repo: Repository | None,
     facts: Facts,
     documentation_url: str | None,
     report: Callable[[str], None],
@@ -129,19 +129,19 @@ def register_release(quarto_config: dict[str, Any], config: Config, facts: Facts
 
 
 def _add_navbar(
-    website: dict[str, Any], config: Config, repo: GithubRepo | None, facts: Facts
+    website: dict[str, Any], config: Config, repo: Repository | None, facts: Facts
 ) -> None:
     """
-    Create the navbar with the GitHub entry on the right
+    Create the navbar with the repository entry on the right
 
     Parameters
     ----------
     website
         The `website` mapping of the Quarto configuration, updated in place.
     config
-        Project configuration, for the GitHub entry's style.
+        Project configuration, including the GitHub entry's style.
     repo
-        The project's GitHub repository, or `None` when it has none.
+        The project's repository, or `None` when it has none.
     facts
         The repository's star and fork counts for the GitHub widget.
 
@@ -150,10 +150,12 @@ def _add_navbar(
     :
     """
     navbar: dict[str, Any] = {"left": []}
-    if repo is not None:
+    if repo is not None and repo.provider == "gitlab":
+        navbar["right"] = [{"href": repo.url, "icon": "gitlab", "aria-label": "GitLab"}]
+    elif repo is not None:
         navbar["right"] = [
             github.navbar_item(
-                repo.url, repo.owner, repo.name, config.github_style, facts.github_stats
+                repo.url, repo.namespace, repo.name, config.github_style, facts.github_stats
             )
         ]
     website["navbar"] = navbar
