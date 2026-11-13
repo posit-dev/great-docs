@@ -57,7 +57,9 @@ class Placement(Enum):
     """
 
 
-_FIRST_HEADING_STYLE = """<style>
+# A raw HTML block, because Quarto 2 parses a bare `<style>` element's contents as Markdown
+_FIRST_HEADING_STYLE = """```{=html}
+<style>
 section.level1:first-of-type > h1:first-child,
 section.level2:first-of-type > h2:first-child,
 .column-body-outset-right > section.level1:first-of-type > h1,
@@ -65,6 +67,7 @@ section.level2:first-of-type > h2:first-child,
   margin-top: 4px !important;
 }
 </style>
+```
 
 """
 
