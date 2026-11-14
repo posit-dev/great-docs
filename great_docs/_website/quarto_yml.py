@@ -92,7 +92,9 @@ def write(build_dir: Path, quarto_config: dict[str, Any]) -> None:
     if "api-reference" in quarto_config:
         ordered["api-reference"] = quarto_config["api-reference"]
     if quarto.is_q2():
-        ordered = _q2_render_globs(ordered)
+        from . import quarto2
+
+        ordered = quarto2.adapt_config(_q2_render_globs(ordered))
     with open(path(build_dir), "w", encoding="utf-8") as f:
         _ = f.write(QUARTO_YML_HEADER)
         write_yaml(ordered, f)
