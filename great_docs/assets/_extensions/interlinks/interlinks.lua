@@ -7,8 +7,9 @@
 local quarto = _G.quarto --- @diagnostic disable-line:undefined-field
 local pandoc = _G.pandoc --- @diagnostic disable-line:undefined-field
 
--- Pandoc percent-encodes the backticks that carry a reference target.
-local HEX_QUOTE = "%%60"
+-- Pandoc percent-encodes the backticks that carry a reference target; Quarto 2
+-- keeps them as they are written.
+local QUOTED = { "^%%60(.*)%%60$", "^`(.*)`$" }
 
 local index = nil
 
@@ -27,7 +28,9 @@ end
 --- Read the index, keeping a compiled copy for the other pandoc processes
 --- @return table
 local function load_index()
-  local root = quarto.project.offset or "."
+  -- The offset is relative to the page's directory, which Quarto 1 runs filters
+  -- in; Quarto 2 runs them in the project directory.
+  local root = quarto.project.directory or quarto.project.offset or "."
   local binary = root .. "/_inv/index.luac"
   local source = root .. "/_inv/index.lua"
 
@@ -103,6 +106,23 @@ local function standard_role(role)
   return standard
 end
 
+--- Read the name between a target's backticks
+---
+--- Anchored so a URL that merely contains an encoded backtick pair in its query
+--- string, say, is left as an ordinary link rather than misread as a reference
+--- target.
+--- @param token string
+--- @return string|nil
+local function quoted_name(token)
+  for _, pattern in ipairs(QUOTED) do
+    local name = token:match(pattern)
+    if name then
+      return name
+    end
+  end
+  return nil
+end
+
 --- Read a link target into a reference
 ---
 --- Accepts `~pkg.Name` and the Sphinx role forms `:func:`x``,
@@ -112,28 +132,24 @@ end
 --- @return table|nil
 local function parse_target(target)
   local ref = {}
-  -- Anchored so a URL that merely contains an encoded backtick pair in its
-  -- query string, say, is left as an ordinary link rather than misread as a
-  -- reference target.
-  local quoted = "^" .. HEX_QUOTE .. "(.*)" .. HEX_QUOTE .. "$"
 
   if target:sub(1, 1) == ":" then
     local tokens = split_on(target, ":")
     if #tokens == 2 then
       ref.role = standard_role(tokens[1])
-      ref.name = tokens[2]:match(quoted)
+      ref.name = quoted_name(tokens[2])
     elseif #tokens == 3 then
       ref.domain = tokens[1]
       ref.role = standard_role(tokens[2])
-      ref.name = tokens[3]:match(quoted)
+      ref.name = quoted_name(tokens[3])
     elseif #tokens == 4 then
       ref.source = tokens[1]:match("external%+(.*)")
       ref.domain = tokens[2]
       ref.role = standard_role(tokens[3])
-      ref.name = tokens[4]:match(quoted)
+      ref.name = quoted_name(tokens[4])
     end
   else
-    ref.name = target:match(quoted)
+    ref.name = quoted_name(target)
   end
 
   if not ref.name then

@@ -86,11 +86,32 @@ def markdown_escape(s: str) -> str:
     Escape a string that may be interpreted as markdown
 
     This function is deliberately not robust to all possibilities. It
-    will improve as needed.
+    will improve as needed. Quarto 2 reports an unclosed emphasis as an
+    error, so for it every `_` and `*` is escaped (experimental).
     """
+    if _is_q2():
+        return re.sub(r"([_*])", r"\\\1", s)
     if s and s[0] in MARKDOWN_START_CHARS:
         s = rf"\{s}"
     return s
+
+
+def _is_q2() -> bool:
+    from .._build import quarto
+
+    return quarto.is_q2()
+
+
+def _escape_doubled_braces(s: str) -> str:
+    """
+    Write runs of braces as character references, for Quarto 2 (experimental)
+
+    Quarto 2 rejects `{{` and `}}` in Markdown.
+    """
+    if not _is_q2():
+        return s
+    s = re.sub(r"\{\{+", lambda m: "&#123;" * len(m.group()), s)
+    return re.sub(r"\}\}+", lambda m: "&#125;" * len(m.group()), s)
 
 
 def _highlight_func(m: re.Match[str]) -> str:
@@ -227,7 +248,7 @@ def pretty_code(s: str) -> str:
         the links, but should not be wrapped inside the <code>
         tags. Those tags should wrap the output of this function.
     """
-    return escape_quotes(escape_indents(highlight_repr_value(dedent(s))))
+    return escape_quotes(escape_indents(highlight_repr_value(_escape_doubled_braces(dedent(s)))))
 
 
 def render_formatted_expr(el: gf.Expr) -> str:

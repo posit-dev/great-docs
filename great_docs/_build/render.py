@@ -106,6 +106,10 @@ def site(
     env = quarto.environment(config)
     result: quarto.RenderResult | parallel_render.RenderResult | None = None
     render_stats: dict[str, object] | None = None
+    if jobs > 1 and quarto.is_q2():
+        # Quarto 2 renders pages in parallel itself, and has no `inspect` to plan a split
+        log.detail("Rendering in one process: Quarto 2 renders pages in parallel itself")
+        jobs = 1
     if jobs > 1:
         # Experimental: split the pages among several Quarto processes
         bar = log.progress("Rendering pages", 1)

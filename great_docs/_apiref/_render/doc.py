@@ -46,6 +46,7 @@ from .._format import (
     render_formatted_expr,
     repr_obj,
 )
+from .._signature import escape_signature_markup
 from ._section_dispatch import SECTION_METHOD
 from .base import RenderBase
 
@@ -356,7 +357,8 @@ class __RenderDoc(RenderBase):
         items: list[InlineContentItem] = []
 
         if name:
-            items.append(Span(name, Attr(classes=["doc-parameter-name"])))
+            # Escape `**kwargs` and `global_`: Quarto 2 reads them as unclosed emphasis
+            items.append(Span(escape_signature_markup(name), Attr(classes=["doc-parameter-name"])))
 
         if annotation:
             if isinstance(annotation, gf.Expr):

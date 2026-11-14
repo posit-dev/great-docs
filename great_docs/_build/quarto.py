@@ -4,6 +4,10 @@ The Quarto command-line tool as great-docs runs it
 Every command that runs Quarto first calls `ensure_installed`. A render runs in the Quarto
 project's directory with the environment from `environment`, and reports the pages Quarto
 starts, its warnings and how long each page took.
+
+Setting `GREAT_DOCS_QUARTO` to `q2`, or to the path of a `q2` binary, renders and previews
+with Quarto 2 instead (experimental). Quarto 2 reports no per-page progress, so a render
+reports its pages when it ends.
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ if TYPE_CHECKING:
     from ..config import Config
 
 __all__ = [
+    "EXECUTABLE_ENV",
     "MIN_VERSION",
     "Progress",
     "QuartoNotFoundError",
@@ -35,16 +40,25 @@ __all__ = [
     "RenderResult",
     "ensure_installed",
     "environment",
+    "executable",
     "installed_version",
+    "is_q2",
     "is_transient_error",
     "page_timings",
     "parse_progress",
     "render",
 ]
 
+EXECUTABLE_ENV = "GREAT_DOCS_QUARTO"
+"""The environment variable that names the Quarto command, `quarto` when unset"""
+
 # The bundled extensions set the stage at which their filters run, which
 # Quarto's extension schema accepts from this release
 MIN_VERSION = (1, 9, 18)
+
+# Quarto 2 has its own version numbers. No release is known to render a great-docs
+# site completely; this is the first one tried.
+Q2_MIN_VERSION = (0, 45, 0)
 
 # Quarto can fail while copying output in large projects when one process renames
 # a file as another removes it. A retry can succeed after the filesystem race ends.
@@ -52,6 +66,14 @@ _TRANSIENT_ERRORS = ("No such file or directory", "renameSync", "os error 2")
 
 _PROGRESS = re.compile(r"\[\s*(\d+)/(\d+)\]\s+(.+)")
 _ANSI = re.compile(r"\033\[[0-9;]*m")
+
+# Quarto 2 prints `q2 (quarto 2) 0.45.0`; with `-v` it logs each output once rendering
+# ends, and closes with `Rendered 3 of 4 files to ...`
+_Q2_VERSION = re.compile(r"\(quarto 2\)\s*(\d+(?:\.\d+)*)", re.IGNORECASE)
+_Q2_OUTPUT = re.compile(r"\bINFO\b.*\bOutput: (.+)$")
+_Q2_RENDERED = re.compile(r"^Rendered (\d+) of (\d+) files")
+# Warnings read `Warning [Q-11-7]: ...`, or `Warning: ...` without a code
+_Q2_WARNING = re.compile(r"^Warning:?\s*(?:\[(Q-[\d-]+)\])?:?\s*(.*)$")
 
 
 class QuartoNotFoundError(BuildError):
@@ -62,18 +84,44 @@ class QuartoVersionError(BuildError):
     """An installed Quarto CLI older than great-docs supports"""
 
 
+def executable() -> str:
+    """
+    Return the Quarto command that renders and previews sites
+
+    Returns
+    -------
+    :
+        The value of `GREAT_DOCS_QUARTO`, or `quarto` when it is unset or empty.
+    """
+    return os.environ.get(EXECUTABLE_ENV, "").strip() or "quarto"
+
+
+def is_q2() -> bool:
+    """
+    Whether great-docs renders with Quarto 2
+
+    Returns
+    -------
+    :
+        Whether the Quarto command is a `q2` binary, by its file name.
+    """
+    name = os.path.basename(executable()).lower()
+    return name == "q2" or name.startswith(("q2.", "q2-"))
+
+
 def installed_version() -> tuple[int, ...] | None:
     """
-    Read the version of the Quarto CLI on the `PATH`
+    Read the version of the Quarto CLI that great-docs runs
 
     Returns
     -------
     :
         The version components, or `None` if Quarto fails to report a recognisable version.
+        Quarto 2 reports its own version numbers, which start at 0.
     """
     try:
         proc = subprocess.run(
-            ["quarto", "--version"],
+            [executable(), "--version"],
             capture_output=True,
             timeout=30,
             check=True,
@@ -81,7 +129,7 @@ def installed_version() -> tuple[int, ...] | None:
         )
     except (OSError, subprocess.SubprocessError):
         return None
-    match = re.match(r"\s*(\d+(?:\.\d+)*)", proc.stdout)
+    match = _Q2_VERSION.search(proc.stdout) or re.match(r"\s*(\d+(?:\.\d+)*)", proc.stdout)
     return tuple(int(part) for part in match.group(1).split(".")) if match else None
 
 
@@ -96,9 +144,15 @@ def ensure_installed() -> None:
     QuartoNotFoundError
         If Quarto is not on the `PATH`.
     QuartoVersionError
-        If Quarto is older than `MIN_VERSION`.
+        If Quarto is older than `MIN_VERSION`, or Quarto 2 older than `Q2_MIN_VERSION`.
     """
-    if shutil.which("quarto") is None:
+    if shutil.which(executable()) is None:
+        if is_q2():
+            raise QuartoNotFoundError(
+                f"Quarto 2 was not found: {EXECUTABLE_ENV} is {executable()!r}, which is not "
+                "an executable on the PATH. Set it to the path of a q2 binary, or unset it "
+                "to render with Quarto 1."
+            )
         raise QuartoNotFoundError(
             "Quarto was not found on your system. Quarto is a system-level "
             "dependency of great-docs and is not bundled with the Python package.\n\n"
@@ -107,11 +161,12 @@ def ensure_installed() -> None:
             "Or fetch the binary programmatically by using your OS package (brew, yum, winget)."
         )
     version = installed_version()
-    if version is not None and version < MIN_VERSION:
+    minimum, product = (Q2_MIN_VERSION, "Quarto 2") if is_q2() else (MIN_VERSION, "Quarto")
+    if version is not None and version < minimum:
         found = ".".join(map(str, version))
-        required = ".".join(map(str, MIN_VERSION))
+        required = ".".join(map(str, minimum))
         raise QuartoVersionError(
-            f"great-docs requires Quarto {required} or later, but found Quarto {found}. "
+            f"great-docs requires {product} {required} or later, but found {product} {found}. "
             "Upgrade Quarto from https://quarto.org/docs/get-started/"
         )
 
@@ -154,6 +209,12 @@ def environment(config: Config) -> dict[str, str]:
     env["PYTHONPATH"] = os.pathsep.join([*package_dirs, existing] if existing else package_dirs)
 
     _ = env.setdefault("PYTHONUTF8", "1")
+
+    # Quarto 2 ignores `QUARTO_PYTHON` and runs whichever `jupyter` and `python3` the
+    # `PATH` finds first, so put the chosen Python's scripts directory first
+    if is_q2():
+        scripts = os.path.dirname(env["QUARTO_PYTHON"])
+        env["PATH"] = os.pathsep.join([scripts, env.get("PATH", "")])
     return env
 
 
@@ -267,6 +328,10 @@ def render(
     Report page starts and warnings through callbacks, and discard other output. Keep
     standard error in the result. Callbacks run on two threads, one per output stream.
 
+    Quarto 2 names its pages only once it has rendered them all, so `on_page` then runs for
+    every page at the end and the result has no page timings. Its warnings reach
+    `on_warning` once per warning code, with a count.
+
     Parameters
     ----------
     project
@@ -288,8 +353,15 @@ def render(
     OSError
         If Quarto cannot be started.
     """
+    q2 = is_q2()
+    command = [executable(), "render"]
+    if q2:
+        from .._website import quarto2
+
+        quarto2.prepare_pages(project)
+        command += ["-v", "--color", "never"]
     process = subprocess.Popen(
-        ["quarto", "render"],
+        command,
         cwd=project,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -299,8 +371,35 @@ def render(
     )
     stamps: list[tuple[str, float]] = []
     stderr: list[str] = []
+    q2_outputs: list[str] = []
+    q2_warnings: dict[str, list[str]] = {}
+
+    def report_q2_warnings() -> None:
+        if on_warning is not None:
+            for warnings in q2_warnings.values():
+                more = f" (and {len(warnings) - 1} more like it)" if len(warnings) > 1 else ""
+                on_warning(f"WARN {warnings[0]}{more}")
+        q2_warnings.clear()
+
+    def handle_q2(line: str) -> None:
+        plain = _ANSI.sub("", line).strip()
+        output = _Q2_OUTPUT.search(plain)
+        if output is not None:
+            q2_outputs.append(os.path.relpath(output.group(1).strip(), project))
+        elif warning := _Q2_WARNING.match(plain):
+            code, message = warning.group(1) or "", warning.group(2).strip()
+            q2_warnings.setdefault(code, []).append(f"[{code}] {message}" if code else message)
+        elif _Q2_RENDERED.match(plain):
+            # Report warnings first: a caller may stop taking them after the last page
+            report_q2_warnings()
+            for current, page in enumerate(q2_outputs, 1):
+                if on_page is not None:
+                    on_page(Progress(current, len(q2_outputs), page))
 
     def handle(line: str) -> None:
+        if q2:
+            handle_q2(line)
+            return
         progress = parse_progress(line)
         if progress is not None:
             stamps.append((progress.page, time.monotonic()))
@@ -324,4 +423,5 @@ def render(
         handle(line)
     _ = process.wait()
     reader.join(timeout=5)
+    report_q2_warnings()
     return RenderResult(process.returncode, "".join(stderr), page_timings(stamps, time.monotonic()))

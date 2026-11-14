@@ -25,6 +25,7 @@ import yaml
 
 from great_docs._build import passes
 from great_docs._build.log import BuildLog
+from great_docs._build.quarto import executable as quarto_executable
 from great_docs._website.navigation import shared_sidebar
 
 if TYPE_CHECKING:
@@ -519,13 +520,17 @@ def test_for_page_without_its_own_link_only_rebases():
 
 # ── Rendering with Quarto ────────────────────────────────────────────────────
 
-_needs_quarto = pytest.mark.skipif(shutil.which("quarto") is None, reason="Quarto not installed")
+_needs_quarto = pytest.mark.skipif(
+    shutil.which(quarto_executable()) is None, reason="Quarto not installed"
+)
 
 _SIDEBAR_NAV = re.compile(r'<nav id="quarto-sidebar".*?</nav>', re.S)
 
 
 def _render(root: Path, *args: str) -> None:
-    subprocess.run(["quarto", "render", *args], cwd=root, check=True, capture_output=True)
+    subprocess.run(
+        [quarto_executable(), "render", *args], cwd=root, check=True, capture_output=True
+    )
 
 
 def _search(site: Path) -> list[dict]:

@@ -20,11 +20,48 @@ local function kwarg_str(kwargs, key)
     return s or ""
 end
 
+--- Return the directory holding this script, ending in a slash.
+---
+--- Quarto 2 omits Lua's `debug` library, so resolve a path against the
+--- extension's directory instead.
+local function script_dir()
+    if debug then
+        return debug.getinfo(1, "S").source:match("@?(.*/)") or "./"
+    end
+    return (quarto.utils.resolve_path("x"):gsub("x$", ""))
+end
+
+--- Run a helper command without a shell.
+---
+--- Use `pandoc.system.command` where Pandoc has it: under Quarto 2, `io.popen`
+--- can deadlock when shortcodes run on parallel threads.
+---@param cmd_args string[]  The command and its arguments.
+---@return boolean  Whether the command exited successfully.
+---@return string  Its standard output followed by its standard error.
+local function run_helper(cmd_args)
+    if pandoc.system.command then
+        local ok, status, out, err = pcall(
+            pandoc.system.command, cmd_args[1], { table.unpack(cmd_args, 2) }, ""
+        )
+        if not ok then return false, tostring(status) end
+        return status == false, (out or "") .. (err or "")
+    end
+    local parts = {}
+    for _, arg in ipairs(cmd_args) do
+        local escaped = arg:gsub("'", "'\\''")
+        table.insert(parts, "'" .. escaped .. "'")
+    end
+    local handle = io.popen(table.concat(parts, " ") .. " 2>&1")
+    if not handle then return false, "" end
+    local result = handle:read("*a")
+    return handle:close() == true, result
+end
+
 return {
     ["color-swatch"] = function(args, kwargs, blocks)
         -- Locate the helper script (lives alongside this .lua file)
-        local script_dir = debug.getinfo(1, "S").source:match("@?(.*/)") or "./"
-        local helper = script_dir .. "_color_swatch_shortcode.py"
+        local here = script_dir()
+        local helper = here .. "_color_swatch_shortcode.py"
 
         -- Build CLI arguments
         local cmd_args = { "python3", helper }
@@ -62,7 +99,7 @@ return {
         -- Resolve --file relative to the Quarto project root
         local file_val = kwarg_str(kwargs, "file")
         if file_val ~= "" and file_val:sub(1, 1) ~= "/" then
-            local project_root = script_dir .. "../../"
+            local project_root = here .. "../../"
             -- Replace the already-inserted value
             for i, arg in ipairs(cmd_args) do
                 if arg == "--file" and cmd_args[i + 1] == file_val then
@@ -75,35 +112,7 @@ return {
         -- Note: Quarto shortcodes do not support paired (body) content.
         -- The third parameter is `meta` (document metadata), not `blocks`.
         -- Custom colors are supplied via the `file` parameter instead.
-        local body = ""
-
-        -- Build shell command: pipe body via echo into the helper
-        local parts = {}
-        for _, arg in ipairs(cmd_args) do
-            local escaped = arg:gsub("'", "'\\''")
-            table.insert(parts, "'" .. escaped .. "'")
-        end
-        local cmd_str = table.concat(parts, " ")
-
-        local cmd
-        if body ~= "" then
-            -- Pipe the YAML body via a here-document to avoid shell escaping issues
-            local body_escaped = body:gsub("'", "'\\''")
-            cmd = "printf '%s' '" .. body_escaped .. "' | " .. cmd_str .. " 2>&1"
-        else
-            cmd = cmd_str .. " 2>&1"
-        end
-
-        local handle = io.popen(cmd)
-        if not handle then
-            return pandoc.RawBlock(
-                "html",
-                "<!-- color-swatch error: failed to run helper script -->"
-            )
-        end
-
-        local result = handle:read("*a")
-        local success = handle:close()
+        local success, result = run_helper(cmd_args)
 
         if not success or result == "" then
             local msg = result ~= "" and result or "unknown error"
