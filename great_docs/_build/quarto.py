@@ -356,6 +356,9 @@ def render(
     q2 = is_q2()
     command = [executable(), "render"]
     if q2:
+        from .._website import quarto2
+
+        quarto2.prepare_pages(project)
         command += ["-v", "--color", "never"]
     process = subprocess.Popen(
         command,
