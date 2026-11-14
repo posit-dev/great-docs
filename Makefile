@@ -246,13 +246,14 @@ hub-deploy: ## Trigger GDG hub deployment to GitHub Pages (requires gh CLI)
 
 # ── Quarto 2 (experimental) ──────────────────────────────────────────────────
 # Q2 names the q2 binary: a path, or a command on PATH. The default is the first
-# that exists of the one `make q2-upgrade` installs, a release build in a sibling
-# checkout of quarto-dev/q2 (Q2_SRC), and `q2` on PATH. The Quarto 2 Gauntlet
+# that exists of the one `make q2-install` puts in the project's environment, the
+# one `make q2-upgrade` installs, a release build in a sibling checkout of
+# quarto-dev/q2 (Q2_SRC), and `q2` on PATH. The Quarto 2 Gauntlet
 # builds into its own directory, so it leaves the Quarto 1 build in
 # test-packages/_rendered.
 Q2_INSTALL_DIR ?= $(HOME)/.local/bin
 Q2_SRC ?= ../q2
-Q2 ?= $(firstword $(wildcard $(Q2_INSTALL_DIR)/q2 $(Q2_SRC)/target/release/q2) q2)
+Q2 ?= $(firstword $(wildcard $(dir $(PYTHON))q2 $(Q2_INSTALL_DIR)/q2 $(Q2_SRC)/target/release/q2) q2)
 Q2_BIN = $(if $(findstring /,$(Q2)),$(abspath $(Q2)),$(Q2))
 Q2_RENDERED := test-packages/_rendered_q2
 Q2_PORT ?= 3334
@@ -275,7 +276,7 @@ Q2_RENDER_TESTS := \
 .PHONY: q2-check
 q2-check: ## Check that the Quarto 2 binary runs (override with Q2=path/to/q2)
 	@command -v "$(Q2_BIN)" > /dev/null 2>&1 || \
-	 (echo "Quarto 2 not found at $(Q2). Install it with 'make q2-upgrade', or pass Q2=path/to/q2." && exit 1)
+	 (echo "Quarto 2 not found at $(Q2). Install it with 'make q2-install', or pass Q2=path/to/q2." && exit 1)
 	@echo "Quarto 2: $(Q2_BIN) ($$("$(Q2_BIN)" --version))"
 
 # Run q2's installer with the given options. Downloading it first, rather than
@@ -283,6 +284,10 @@ q2-check: ## Check that the Quarto 2 binary runs (override with Q2=path/to/q2)
 Q2_INSTALLER := https://raw.githubusercontent.com/quarto-dev/q2/main/install.sh
 q2_install = tmp=$$(mktemp) && trap 'rm -f "$$tmp"' EXIT && \
 	curl -fsSL $(Q2_INSTALLER) -o "$$tmp" && bash "$$tmp" --dest "$(Q2_INSTALL_DIR)" $(1)
+
+.PHONY: q2-install
+q2-install: ## Install or upgrade Quarto 2 from PyPI (the quarto2 package) in the project's environment
+	@uv pip install --python "$(PYTHON)" --upgrade quarto2
 
 .PHONY: q2-upgrade
 q2-upgrade: ## Install or upgrade Quarto 2 to the latest release in ~/.local/bin (Q2_VERSION=vX.Y.Z pins one; needs minisign)
