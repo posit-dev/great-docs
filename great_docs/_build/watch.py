@@ -126,6 +126,8 @@ def serve(
         If the user stops watching with Ctrl+C.
     """
     staging = stage(layout)
+    if quarto.is_q2():
+        _prepare_for_q2(layout.build_dir)
     published = _digests(layout.build_dir)
     stopped = threading.Event()
     preview = subprocess.Popen(
@@ -147,6 +149,8 @@ def serve(
             except ValueError as error:
                 print(f"Error: {error}\nThe preview keeps the last successful build.")
             else:
+                if quarto.is_q2():
+                    _prepare_for_q2(staging.build_dir)
                 published = sync(staging.build_dir, layout.build_dir, published)
                 if rebuilt.get("project") != quarto_config.get("project"):
                     print(
@@ -158,6 +162,13 @@ def serve(
     finally:
         _stop(preview)
         shutil.rmtree(staging.build_dir, ignore_errors=True)
+
+
+def _prepare_for_q2(build_dir: Path) -> None:
+    """Change a build directory's pages for Quarto 2 (experimental)"""
+    from .._website import quarto2
+
+    quarto2.prepare_pages(build_dir)
 
 
 def source_changes(
