@@ -726,6 +726,7 @@ class TestCallToolDispatch:
     def test_dispatches_gd_scan(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         mock_exports = MagicMock()
+        mock_exports.config = mock_config()
         write_pyproject(tmp_path, None)
         with patch(
             "great_docs._mcp.context.get_exports",
@@ -745,6 +746,7 @@ class TestCallToolDispatch:
     def test_dispatches_gd_api_diff(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         mock_exports = MagicMock()
+        mock_exports.config = mock_config()
         write_pyproject(tmp_path, None)
         with patch(
             "great_docs._mcp.context.get_exports",
@@ -838,6 +840,7 @@ class TestHandleScan:
     def test_no_package_name_returns_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         mock_exports = MagicMock()
+        mock_exports.config = mock_config()
         write_pyproject(tmp_path, None)
         with patch(
             "great_docs._mcp.context.get_exports",
@@ -1091,6 +1094,7 @@ class TestHandleApiDiff:
     def test_no_package_name_returns_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         mock_exports = MagicMock()
+        mock_exports.config = mock_config()
         write_pyproject(tmp_path, None)
         with patch(
             "great_docs._mcp.context.get_exports",
@@ -1265,6 +1269,7 @@ class TestReadResource:
     def test_api_surface_no_package(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         mock_exports = MagicMock()
+        mock_exports.config = mock_config()
         write_pyproject(tmp_path, None)
         with patch(
             "great_docs._mcp.context.get_exports",

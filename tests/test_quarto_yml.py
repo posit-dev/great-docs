@@ -9,6 +9,7 @@ from great_docs import GreatDocs
 from great_docs._build.ownership import QUARTO_YML_HEADER, validate_build_dir
 from great_docs._content import user_guide
 from great_docs._contribution import Contribution, InlineData, NavbarLink, Sidebar
+from great_docs._mcpref import build as mcp_build
 from great_docs._website import inline_data, quarto_yml
 from great_docs._website.navigation import navbar
 from tests.support import discover_user_guide, mock_config, user_guide_step, write_config
@@ -502,3 +503,25 @@ def test_write_makes_the_render_globs_recursive_for_quarto_2(
         "!a.md",
     ]
     assert quarto_config["project"]["render"][0] == "*.qmd"
+
+
+@pytest.mark.parametrize("lang", ["en", "fr"])
+def test_mcp_contribution_preserves_existing_reference_and_authored_links(lang: str) -> None:
+    config = mock_config(lang=lang)
+    guide = {"text": "Guide", "href": "guide.qmd"}
+    reference = {"text": "Custom reference", "href": "reference/index.qmd"}
+    left = [guide, reference]
+    quarto_config = {"website": {"navbar": {"left": left}}}
+
+    quarto_yml.apply(quarto_config, mcp_build.contribution(config, []), config)
+
+    assert left == [guide, reference]
+
+
+def test_mcp_contribution_respects_an_omitted_navbar_left_side() -> None:
+    quarto_config: dict[str, Any] = {"website": {"navbar": {"right": []}}}
+
+    quarto_yml.apply(quarto_config, mcp_build.contribution(CONFIG, []), CONFIG)
+
+    assert quarto_config["website"]["navbar"] == {"right": []}
+    assert quarto_config["website"]["sidebar"][0]["id"] == "mcp-reference"

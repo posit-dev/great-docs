@@ -500,6 +500,7 @@ class TestMcpContribution:
         contribution = mcp_build.contribution(mock_config(lang="en"), ["reference/mcp/tool.qmd"])
 
         assert contribution == Contribution(
+            navbar=(NavbarLink("Reference", "reference/mcp/index.qmd"),),
             sidebars=(
                 Sidebar(
                     id="mcp-reference",
@@ -509,11 +510,14 @@ class TestMcpContribution:
                         "reference/mcp/tool.qmd",
                     ),
                 ),
-            )
+            ),
         )
 
     def test_translated_site_labels_the_index_with_the_title(self):
-        (sidebar,) = mcp_build.contribution(mock_config(lang="fr"), []).sidebars
+        contribution = mcp_build.contribution(mock_config(lang="fr"), [])
+        (sidebar,) = contribution.sidebars
+
+        assert contribution.navbar == (NavbarLink("Référence", "reference/mcp/index.qmd"),)
 
         assert sidebar.title == "Référence MCP"
         assert sidebar.contents == ({"text": "Référence MCP", "href": "reference/mcp/index.qmd"},)

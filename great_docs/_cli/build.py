@@ -233,11 +233,39 @@ def build(
 )
 @click.option("--pr", type=int, default=None, help="Preview the CI docs build for this PR number.")
 @click.option("--run", type=int, default=None, help="Preview a specific workflow run id.")
-@click.option("--branch", default=None, help="Preview the newest CI docs build for a branch.")
+@click.option(
+    "--branch", default=None, help="Preview the newest GitHub CI docs build for a branch."
+)
+@click.option(
+    "--mr",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Preview a GitLab merge-request IID in its target project.",
+)
+@click.option(
+    "--pipeline", type=click.IntRange(min=1), default=None, help="Preview a GitLab pipeline ID."
+)
+@click.option(
+    "--job",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Download a GitLab job artifact directly.",
+)
+@click.option(
+    "--provider",
+    type=click.Choice(["github", "gitlab"]),
+    default=None,
+    help="Repository provider for shorthand or self-managed input.",
+)
+@click.option(
+    "--repo-base-url",
+    default=None,
+    help="GitLab instance base, including any HTTP installation prefix.",
+)
 @click.option(
     "--repo",
     default=None,
-    help="GitHub repo as 'owner/repo' (default: detect from git remote / config).",
+    help="Repository URL or provider-specific shorthand (default: git remote / config).",
 )
 @click.option(
     "--artifact",
@@ -267,7 +295,7 @@ def build(
     "--env-file",
     type=click.Path(exists=True, dir_okay=False),
     default=None,
-    help="Load a .env for GITHUB_TOKEN/GH_TOKEN (default: auto-detect .env).",
+    help="Load provider credentials from a .env file (default: auto-detect .env).",
 )
 @_options.config_option
 def preview(
@@ -277,6 +305,11 @@ def preview(
     pr: int | None,
     run: int | None,
     branch: str | None,
+    mr: int | None,
+    pipeline: int | None,
+    job: int | None,
+    provider: str | None,
+    repo_base_url: str | None,
     repo: str | None,
     artifact: str,
     open_path: str,
@@ -305,6 +338,11 @@ def preview(
     login' + '--use-gh'). For fork PRs you'll be viewing contributor-authored
     HTML locally.
 
+    Use '--mr', '--pipeline' or '--job' for GitLab artifacts. Pass '--provider
+    gitlab' with shorthand repositories or self-managed hosts. Preserve HTTP
+    installation prefixes with '--repo-base-url'. GitLab metadata reads use
+    GITLAB_TOKEN; direct job downloads also support permitted CI_JOB_TOKEN access.
+
     \b
     Examples:
       great-docs preview                    # Preview on port 3000
@@ -315,7 +353,7 @@ def preview(
       great-docs preview --pr 302 --path reference/mcp/gd_config.html
     """
     if clear_cache:
-        from .._build.pr_preview import clear_cache as _clear_cache
+        from .._build.preview_artifacts import clear_cache as _clear_cache
 
         existed, path = _clear_cache()
         if existed:
@@ -328,17 +366,58 @@ def preview(
         ("--pr", pr is not None),
         ("--run", run is not None),
         ("--branch", branch is not None),
+        ("--mr", mr is not None),
+        ("--pipeline", pipeline is not None),
+        ("--job", job is not None),
     ]
     given = [name for name, present in exclusive if present]
     if len(given) > 1:
         click.echo(f"Error: {', '.join(given)} are mutually exclusive; pass only one.", err=True)
         sys.exit(1)
 
+    gitlab = any(value is not None for value in (mr, pipeline, job))
+    if given and ((gitlab and provider == "github") or (not gitlab and provider == "gitlab")):
+        click.echo(
+            "Error: GitLab uses --mr, --pipeline or --job; GitHub uses --pr, --run or --branch.",
+            err=True,
+        )
+        sys.exit(1)
+    if gitlab and use_gh:
+        click.echo(
+            "Error: --use-gh supports GitHub only. Use GITLAB_TOKEN or permitted CI_JOB_TOKEN access.",
+            err=True,
+        )
+        sys.exit(1)
     try:
-        if given:
+        if gitlab:
+            from .._build.preview_artifacts import PreviewError
+            from .._build.repo_hosts.gitlab_preview import preview_gitlab
+
+            try:
+                preview_gitlab(
+                    project_path,
+                    mr=mr,
+                    pipeline=pipeline,
+                    job=job,
+                    repo=repo,
+                    provider=provider,
+                    repo_base_url=repo_base_url,
+                    config_path=config_path,
+                    artifact=artifact,
+                    path=open_path,
+                    port=port,
+                    open_browser=not no_open,
+                    refresh=refresh,
+                    env_file=env_file,
+                )
+            except PreviewError as error:
+                click.echo(f"Error: {error}", err=True)
+                sys.exit(1)
+        elif given:
             if site_dir:
                 click.echo("Warning: --site-dir is ignored with --pr/--run/--branch", err=True)
-            from .._build.pr_preview import PreviewError, preview_pr
+            from .._build.preview_artifacts import PreviewError
+            from .._build.repo_hosts.github_preview import preview_pr
 
             try:
                 preview_pr(

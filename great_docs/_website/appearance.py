@@ -314,7 +314,7 @@ def _navbar_colour_rules(background: str, prefixes: tuple[str, str]) -> str:
     background-color: {hover_bg} !important;
     color: {text_hex} !important;
 }}
-{sel(" .navbar .nav-item:has(#github-widget) .nav-link:hover")} {{
+{sel(" .navbar .nav-item:has(#repository-widget) .nav-link:hover")} {{
     background-color: transparent !important;
 }}
 {sel(" .navbar .nav-link.active")} {{

@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
     from ..._content.pages import PageMap
     from ..._project.layout import Layout
+    from ..._project.repository import Repository
     from ...config import Config
 
 __all__ = ["Placement", "write", "write_blended", "write_readme"]
@@ -126,6 +127,7 @@ def write_readme(
     layout: Layout,
     *,
     metadata: Manifest,
+    repository: Repository | None,
     package_name: str | None,
     pages: PageMap,
     page_authors: list[dict[str, Any]],
@@ -152,6 +154,8 @@ def write_readme(
         copies into.
     metadata
         The package metadata.
+    repository
+        The selected repository, used for GitHub author-profile fallbacks.
     package_name
         The package name, or `None` if it is unknown.
     pages
@@ -241,6 +245,7 @@ def write_readme(
         config,
         layout,
         metadata=metadata,
+        repository=repository,
         package_name=package_name,
         page_authors=page_authors,
         has_llms_txt=has_llms_txt,
@@ -281,6 +286,7 @@ def write_blended(
     content: str,
     *,
     metadata: Manifest,
+    repository: Repository | None,
     package_name: str | None,
     pages: PageMap,
     page_authors: list[dict[str, Any]],
@@ -304,6 +310,8 @@ def write_blended(
         The user guide page as copied into the build directory.
     metadata
         The package metadata.
+    repository
+        The selected repository, used for GitHub author-profile fallbacks.
     package_name
         The package name, or `None` if it is unknown.
     pages
@@ -325,6 +333,7 @@ def write_blended(
         config,
         layout,
         metadata=metadata,
+        repository=repository,
         package_name=package_name,
         page_authors=page_authors,
         has_llms_txt=has_llms_txt,
@@ -416,6 +425,7 @@ def _sidebar(
     layout: Layout,
     *,
     metadata: Manifest,
+    repository: Repository | None,
     package_name: str | None,
     page_authors: list[dict[str, Any]],
     has_llms_txt: bool,
@@ -432,6 +442,8 @@ def _sidebar(
         the build directory to write community pages and check for linked pages.
     metadata
         The package metadata.
+    repository
+        The selected repository, used for GitHub author-profile fallbacks.
     package_name
         The package name, or `None` if it is unknown.
     page_authors
@@ -448,6 +460,7 @@ def _sidebar(
         config,
         layout,
         metadata=metadata,
+        repository=repository,
         package_name=package_name,
         community_pages=community.write_pages(config, layout, page_authors),
         has_llms_txt=has_llms_txt,

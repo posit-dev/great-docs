@@ -12,7 +12,7 @@ from unittest.mock import DEFAULT, patch
 import pytest
 
 from great_docs import GreatDocs
-from great_docs._build import pipeline
+from great_docs._build import pipeline, site
 from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
 from great_docs._build.steps import BuildError
@@ -133,3 +133,70 @@ def test_freeze_preparation_of_a_versioned_project_writes_the_configuration(tmp_
         pipeline.prepare_for_freeze(docs._config, docs.layout, log, remote=docs._remote)
 
     assert quarto_yml.read(docs.layout.build_dir)["website"] == {"title": "Prepared"}
+
+
+@pytest.mark.parametrize("gitlab_ci", [None, "false", "true"])
+@pytest.mark.parametrize("explicit", [None, "https://docs.example.org/package/"])
+def test_gitlab_pages_url_is_a_build_default_without_changing_discovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, gitlab_ci: str | None, explicit: str | None
+) -> None:
+    settings = {
+        "site_url": explicit,
+        "seo": {"canonical": {"base_url": "https://canonical.example.org/package/"}},
+    }
+    write_config(tmp_path, settings)
+    monkeypatch.setenv("CI_PAGES_URL", "https://team.gitlab.io/group/package/")
+    if gitlab_ci is None:
+        monkeypatch.delenv("GITLAB_CI", raising=False)
+    else:
+        monkeypatch.setenv("GITLAB_CI", gitlab_ci)
+    docs = GreatDocs(str(tmp_path))
+    original = docs._config
+    configured = site.with_ci_site_url(original)
+    expected = explicit or (
+        "https://team.gitlab.io/group/package/" if gitlab_ci == "true" else None
+    )
+    assert configured.site_url == expected
+    assert configured.canonical_base_url == "https://canonical.example.org/package/"
+    assert configured.user_settings == settings
+    assert original.site_url == explicit
+    assert docs.layout.load_config().site_url == explicit
+
+
+@pytest.mark.parametrize("mode", ["build", "freeze", "watch"])
+def test_gitlab_pages_addresses_reach_build_freeze_and_watch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    from great_docs._project.remote import OfflineRemote
+
+    write_config(
+        tmp_path,
+        {"seo": {"canonical": {"base_url": "https://canonical.example.org/"}}},
+    )
+    monkeypatch.setenv("GITLAB_CI", "true")
+    monkeypatch.setenv("CI_PAGES_URL", "https://team.gitlab.io/package/")
+    docs = GreatDocs(str(tmp_path))
+    docs._remote = OfflineRemote()
+    docs.layout.build_dir.mkdir(parents=True)
+    quarto_yml.write_initial(docs.layout.build_dir)
+
+    def rebuild_once(layout: Any, env: Any, rebuild: Any, *args: Any) -> None:
+        rebuild(layout)
+
+    with stubbed_build() as stubs, patch("great_docs._build.watch.serve", side_effect=rebuild_once):
+        if mode == "freeze":
+            pipeline.prepare_for_freeze(
+                docs._config, docs.layout, BuildLog(stream=io.StringIO()), remote=docs._remote
+            )
+        else:
+            docs.build(watch=mode == "watch", refresh=False)
+        calls = stubs.steps["content.assets"].call_args_list
+
+    assert len(calls) == (2 if mode == "watch" else 1)
+    for call in calls:
+        current, configured = call.args[:2]
+        assert current.identity.url == "https://team.gitlab.io/package/"
+        assert current.identity.base_url == "https://canonical.example.org/"
+        assert configured.site_url == current.identity.url
+    assert docs._config.site_url is None
+    assert "site_url" not in docs._config.user_settings

@@ -1,5 +1,5 @@
 """
-CI notices and pull request comments for downloaded documentation previews
+GitHub job notices and pull request preview comments
 
 Render consistent `great-docs preview` instructions for workflow notices and
 sticky pull request comments.
@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import os
 
-from .._project.github import GithubRepo, token_from_env
-from .pr_preview import GITHUB_API, PreviewError, _parse_owner_repo
+from ..._project.repo_hosts.github import token_from_env
+from ..._project.repository import Repository
+from ..preview import PREVIEW_COMMENT_MARKER
+from ..preview_artifacts import PreviewError
+from .github_preview import GITHUB_API, _github_identity, _parse_owner_repo
 
 _TIMEOUT = 15
-
-# Hidden marker used to find (and update in place) our own PR comment.
-PREVIEW_COMMENT_MARKER = "<!-- great-docs:docs-preview -->"
 
 
 # ---------------------------------------------------------------------------
@@ -93,8 +93,10 @@ def resolve_ci_repo(repo_override: str | None) -> tuple[str, str]:
     config.
     """
     if repo_override:
-        github = GithubRepo.parse(repo_override)
-        parsed = (github.owner, github.name) if github else _parse_owner_repo(repo_override)
+        github = Repository.parse(repo_override)
+        if github is not None and github.provider == "gitlab":
+            raise PreviewError("Use ci mr-comment or ci gitlab-notice for GitLab repositories.")
+        parsed = _github_identity(github) if github else _parse_owner_repo(repo_override)
         if parsed:
             return parsed
         raise PreviewError(
@@ -107,7 +109,7 @@ def resolve_ci_repo(repo_override: str | None) -> tuple[str, str]:
         if owner and repo:
             return owner, repo
 
-    from .pr_preview import resolve_repo
+    from .github_preview import resolve_repo
 
     return resolve_repo(None, None)
 

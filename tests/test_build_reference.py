@@ -10,6 +10,7 @@ import shutil
 import sys
 from contextlib import AbstractContextManager
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -31,6 +32,7 @@ from tests.support import (
     StubRemote,
     make_run,
     prepare_build_directory,
+    update_quarto_config,
     write_config,
     write_pyproject,
 )
@@ -464,3 +466,57 @@ def test_cli_reports_a_command_tree_without_pages(tmp_path: Path):
 
     assert outcome == "No CLI pages generated"
     assert (docs.layout.build_dir / "_quarto.yml").read_text(encoding="utf-8") == QUARTO_YML_HEADER
+
+
+@pytest.mark.parametrize("reference_enabled", [False, True])
+def test_mcp_only_build_links_to_its_generated_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reference_enabled: bool
+) -> None:
+    package = tmp_path / "mcp_nav_package"
+    package.mkdir()
+    (package / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    write_pyproject(tmp_path, "mcp_nav_package")
+    settings: dict[str, Any] = {"mcp": {"enabled": True}}
+    if not reference_enabled:
+        settings["reference"] = False
+    write_config(tmp_path, settings)
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs._remote = StubRemote()
+    run = make_run(docs)
+    prepare_build_directory(docs, run)
+    assert not run.has_api_reference
+    server = {
+        "name": "Example",
+        "tools": [{"name": "hello", "description": "Say hello", "input_schema": {}}],
+        "resources": [],
+        "prompts": [],
+    }
+    with patch("great_docs._mcpref.build.discover_server", return_value=server):
+        reference.mcp(run, docs._config, docs.layout)
+    update_quarto_config(docs, run)
+
+    index = "reference/mcp/index.qmd"
+    assert (docs.layout.build_dir / index).is_file()
+    assert not (docs.layout.build_dir / "reference/index.qmd").exists()
+    assert quarto_yml.read(docs.layout.build_dir)["website"]["navbar"]["left"] == [
+        {"text": "Reference", "href": index}
+    ]
+
+
+@pytest.mark.parametrize("result", ["disabled", "not_found", "no_pages"])
+def test_mcp_without_generated_pages_contributes_no_navigation(tmp_path: Path, result: str) -> None:
+    write_pyproject(tmp_path, "mcp_nav_absent")
+    write_config(tmp_path, {"mcp": {"enabled": result != "disabled"}})
+    docs = GreatDocs(project_path=str(tmp_path))
+    run = make_run(docs)
+    server = None if result == "not_found" else {"name": "Example", "tools": []}
+    with (
+        patch("great_docs._mcpref.build.discover_server", return_value=server) as discover,
+        patch("great_docs._mcpref.build.build_mcp_reference", return_value=[]) as write_pages,
+    ):
+        reference.mcp(run, docs._config, docs.layout)
+
+    assert run.contributions == []
+    assert discover.call_count == (result != "disabled")
+    assert write_pages.call_count == (result == "no_pages")

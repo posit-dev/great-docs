@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from great_docs._website.navigation import reference_switcher
 from tests.support import mock_config
 
@@ -78,3 +80,29 @@ def test_orders_sections_and_opens_the_first_from_the_navbar(tmp_path: Path):
 
     assert quarto_config["format"]["html"]["include-in-header"][1] == _sections_script("cli,api")
     assert quarto_config["website"]["navbar"]["left"][0]["href"] == "reference/cli/index.qmd"
+
+
+@pytest.mark.parametrize(
+    ("sections", "preferred", "ordered"),
+    [
+        (("mcp",), None, "mcp"),
+        (("cli", "mcp"), None, "cli,mcp"),
+        (("cli", "mcp"), ["mcp", "cli"], "mcp,cli"),
+    ],
+)
+def test_switcher_without_python_lists_only_available_references(
+    tmp_path: Path, sections: tuple[str, ...], preferred: list[str] | None, ordered: str
+) -> None:
+    for section in sections:
+        _write_index(tmp_path, section)
+    quarto_config = _quarto_config()
+    quarto_config["website"]["navbar"]["left"] = [
+        {"text": "Custom reference", "href": f"reference/{sections[0]}/index.qmd"}
+    ]
+
+    _register(quarto_config, tmp_path, has_api_reference=False, ref_section_order=preferred)
+
+    assert quarto_config["format"]["html"]["include-in-header"][1] == _sections_script(ordered)
+    assert quarto_config["website"]["navbar"]["left"] == [
+        {"text": "Custom reference", "href": f"reference/{ordered.split(',')[0]}/index.qmd"}
+    ]

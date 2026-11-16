@@ -367,69 +367,97 @@ dynamic: false
 - the build fails with `AttributeError` during introspection
 - you're documenting a compiled extension (PyO3/Rust/Cython)
 
-## GitHub Integration
+## Repository integration
 
-Several Great Docs features require knowing your GitHub repository URL:
+Set a GitHub or GitLab repository URL to enable these features:
 
-- **GitHub widget/icon** in the navbar (with star count)
-- **Source links** on API reference pages
-- **Version badge** next to the package name (from GitHub Releases)
-- **Changelog** page (from GitHub Releases)
+- Show the repository widget or icon in the navbar.
+- Link API reference entries to their source.
+- Show a version badge from the latest published release.
+- Generate a changelog from published releases.
 
-### Repository URL Detection
+### Repository detection
 
-Great Docs looks for your GitHub repository in this order:
-
-1. **`repo:` in docs/great-docs.yml**: explicit override, takes precedence
-2. **`[project.urls]` in pyproject.toml**: looks for `Repository`, `Source`, `GitHub`, or `Homepage`
-keys containing a GitHub URL
+Set `repo` in `docs/great-docs.yml` to override repository detection. Otherwise,
+Great Docs selects the first available project URL labelled `Repository`, `Source`,
+`Source Code`, `GitHub`, `GitLab` or `Homepage`, in that order. Labels ignore case,
+spaces, hyphens and underscores. The first declared label wins a tie.
 
 ```{.yaml filename="docs/great-docs.yml"}
 repo: https://github.com/your-org/your-package
 ```
 
-Or via pyproject.toml:
+Great Docs recognises `github.com` and `gitlab.com` locally, including SSH clone
+URLs. GitLab namespaces can contain multiple groups. Other hosts require
+`repo_provider: gitlab`; an unknown host without a provider leaves repository
+integration unavailable while ordinary builds remain usable.
 
-```{.toml filename="pyproject.toml"}
-[project.urls]
-Repository = "https://github.com/your-org/your-package"
+```{.yaml filename="docs/great-docs.yml"}
+repo: https://code.example.org/gitlab/team/subteam/package
+repo_provider: gitlab
+repo_base_url: https://code.example.org/gitlab
+site_url: https://docs.example.org/package/
 ```
+
+Set `repo_base_url` when GitLab runs below a URL prefix or its web address uses a
+different port from its SSH clone endpoint. The configured base supplies the web
+scheme, port and prefix; its host must match the repository. HTTP repository paths
+include the installation prefix; SSH paths start with the project namespace. A group
+whose name matches the prefix remains part of the SSH project path. Without a base, the
+repository URL's origin supplies the instance address. SSH URLs use HTTPS and omit
+port 22. Set an explicit base when a nonstandard SSH port differs from the web port.
+Provider, host and base mismatches raise a configuration error. GitHub Enterprise
+and automatic detection of other forges are unsupported.
+
+GitLab supports nested namespaces, source links, release badges, generated changelogs
+and repository navigation. Pages setup and CI previews are separate features.
 
 ::: {.callout-note}
 ## Build Messages
 
-During `great-docs build`, you may see messages about GitHub integration:
+Repository data is optional. Failed remote requests leave navigation and source links
+usable; they can omit counts, release badges or the generated changelog.
 
-- **"No GitHub repository info available"**: no repository URL was found. Check that `repo:` is set
-in docs/great-docs.yml or `[project.urls]` is configured in pyproject.toml.
-- **"No GitHub releases found"**: the repository was detected, but has no published GitHub Releases.
-The version badge feature requires at least one published release.
+Set `repo` or project URL metadata when repository information is missing. Publish a
+release on the repository provider to enable the version badge and changelog.
 :::
 
-### GitHub Link Style
+### Repository style
 
-Choose how the GitHub link appears in the navbar:
+Choose how the repository link appears in the navbar:
 
 ```{.yaml filename="docs/great-docs.yml"}
-# Shows stars count (default)
-github_style: widget
+# Show available star and fork counts (default)
+repo_style: widget
 
-# Or use a simple GitHub icon
-github_style: icon
+# Show the provider's icon
+repo_style: icon
 ```
+
+Keep existing `github_style` settings as a legacy input if needed. An explicit
+`repo_style` wins when both settings appear. GitLab counts are fetched during the build;
+the browser receives only navigation destinations and available counts. Unknown counts
+stay hidden. GitHub retains its anonymous browser fallback for missing public counts.
+
+Set `GITLAB_TOKEN` for private GitLab project and release reads. GitLab release reads
+also accept `CI_JOB_TOKEN`; project-count reads do not use job tokens. GitHub uses
+`GITHUB_TOKEN` or `GH_TOKEN`. Credentials remain in the build environment.
 
 ### Version Badge
 
-When your repository has published GitHub Releases, Great Docs automatically displays a version
+When your repository has published releases, Great Docs automatically displays a version
 badge next to your package name in the navbar. The badge shows the latest release version and
 updates automatically on each build.
 
 This feature requires:
 
-1. a detected GitHub repository URL (see above)
-2. at least one published [GitHub Release](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+1. Set a GitHub or GitLab repository URL.
+2. Publish at least one release on that provider.
 
 No configuration is needed (the badge appears automatically when these conditions are met).
+
+Upcoming or future-dated GitLab releases are omitted from the badge and changelog. GitLab
+release names and tags do not imply a GitHub-style pre-release flag.
 
 ### Source Links
 
@@ -751,8 +779,8 @@ detection, help-text formatting tips, and troubleshooting.
 
 ## Changelog
 
-Great Docs auto-generates a Changelog page from your GitHub Releases. It's enabled by default so if
-your `pyproject.toml` has a GitHub repository URL, a changelog page will appear automatically.
+Great Docs generates a changelog from published GitHub or GitLab releases by default.
+Set a repository URL and publish a release to create the page automatically.
 
 To customize:
 
@@ -1136,9 +1164,9 @@ parser: numpy  # Auto-detected: numpy, google, or sphinx
 exclude:
   - _InternalClass
 
-# GitHub Integration
+# Repository integration
 repo: https://github.com/your-org/your-package  # Override auto-detect
-github_style: widget
+repo_style: widget
 
 # Site URL — canonical address of the deployed documentation site.
 # Used for skills page install commands, .well-known/ discovery, and sitemaps.
@@ -1175,7 +1203,7 @@ markdown_pages: true
 cli:
   enabled: true
 
-# Changelog (GitHub Releases)
+# Changelog (repository releases)
 changelog:
   enabled: true
   max_releases: 50

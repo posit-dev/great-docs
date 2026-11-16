@@ -288,7 +288,9 @@ def test_scale_to_fit_tag_from_directory_metadata(tmp_path: Path) -> None:
 
 def _structured_data(tmp_path: Path) -> StructuredData:
     (tmp_path / "data").mkdir(exist_ok=True)
-    data = StructuredData.make(write_config(tmp_path / "data"), {"description": "Pkg"}, "Pkg", None)
+    data = StructuredData.make(
+        write_config(tmp_path / "data"), {"description": "Pkg"}, "Pkg", None, repo_url=None
+    )
     assert data is not None
     return data
 
