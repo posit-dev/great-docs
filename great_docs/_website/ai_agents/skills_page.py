@@ -42,6 +42,8 @@ class SkillsPageWriter:
     layout: Layout
     distribution_name: str | None
     metadata: Manifest
+    repo_url: str | None
+    """The selected repository URL for installation fallbacks"""
 
     @classmethod
     def make(cls, writer: SkillsWriter) -> SkillsPageWriter:
@@ -53,6 +55,7 @@ class SkillsPageWriter:
             writer.layout,
             writer.distribution_name,
             writer.metadata,
+            writer.repository.url if writer.repository else None,
         )
 
     def write(
@@ -168,16 +171,8 @@ class SkillsPageWriter:
         lines.append("")
 
         # Install instructions
-        # Detect GitHub repo URL from metadata
         metadata = self.metadata
         urls = metadata.get("urls", {})
-        repo_url = urls.get("Repository", "") or urls.get("Source", "")
-        github_owner_repo = ""
-        if repo_url:
-            gh_match = re.match(r"https?://github\.com/([^/]+/[^/]+?)(?:\.git)?/?$", repo_url)
-            if gh_match:
-                github_owner_repo = gh_match.group(1)
-
         site_url = urls.get("Documentation", "") or self.config.site_url or ""
         if site_url and not site_url.endswith("/"):
             site_url += "/"
@@ -217,8 +212,8 @@ class SkillsPageWriter:
         lines.append("")
         if site_url:
             _npx_cmd = f"npx skills add {site_url}"
-        elif github_owner_repo:
-            _npx_cmd = f"npx skills add {github_owner_repo}"
+        elif self.repo_url:
+            _npx_cmd = f"npx skills add {self.repo_url}"
         else:
             _npx_cmd = "npx skills add <site-url>"
         lines.append("```{=html}")
@@ -286,11 +281,9 @@ class SkillsPageWriter:
             if skill_file_url:
                 _follow = _t("and_follow_instructions", "and follow the instructions.")
                 _prompt_text = f"{_fetch_verb} {skill_file_url} {_follow}"
-            elif github_owner_repo:
+            elif self.repo_url:
                 _follow = _t("and_follow_instructions", "and follow the instructions.")
-                _prompt_text = (
-                    f"{_fetch_from_verb} https://github.com/{github_owner_repo} {_follow}"
-                )
+                _prompt_text = f"{_fetch_from_verb} {self.repo_url} {_follow}"
             else:
                 _follow = _t("and_follow_instructions", "and follow the instructions.")
                 _prompt_text = f"{_fetch_verb} &lt;site-url&gt;/skill.md {_follow}"

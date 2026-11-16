@@ -229,14 +229,14 @@
     }
     if (!currentVersion) return;
 
-    // Create container (mirrors #github-widget structure)
+    // Create container (mirrors #repository-widget structure)
     var container = document.createElement("div");
     container.id = "gd-version-selector";
     container.className = "gd-version-selector";
     container.setAttribute("role", "navigation");
     container.setAttribute("aria-label", "Version selector");
 
-    // Build the trigger button (mirrors .gh-widget-trigger)
+    // Build the trigger button (mirrors .repo-widget-trigger)
     var trigger = document.createElement("div");
     trigger.className = "gd-vs-trigger";
     trigger.setAttribute("role", "button");
@@ -259,7 +259,7 @@
       '<path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/>' +
       "</svg>";
 
-    // Build the dropdown (mirrors .gh-dropdown)
+    // Build the dropdown (mirrors .repo-dropdown)
     var dropdown = document.createElement("div");
     dropdown.className = "gd-vs-dropdown";
     dropdown.setAttribute("role", "menu");

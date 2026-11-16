@@ -10,14 +10,14 @@ from typing import Any
 from PIL import Image
 
 from great_docs._build.facts import Facts
-from great_docs._project.github import GithubRepo
+from great_docs._project.repository import Repository
 from great_docs._project.layout import Layout
 from great_docs._website.identity import Identity
 from great_docs._website.navigation import brand
 from great_docs._website.navigation.release import Release
 from tests.support import write_config
 
-REPO = GithubRepo(owner="owner", name="repo")
+REPO = Repository("github", "https://github.com", namespace="owner", name="repo")
 IDENTITY = Identity(name="Pkg", url=None, base_url=None)
 
 
@@ -27,7 +27,7 @@ def _register(
     quarto_config: dict[str, Any] | None = None,
     *,
     identity: Identity = IDENTITY,
-    repo: GithubRepo | None = None,
+    repo: Repository | None = None,
     facts: Facts | None = None,
     documentation_url: str | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
@@ -105,8 +105,30 @@ class TestSite:
 
 
 class TestNavbar:
+    def test_gitlab_icon_style_uses_provider_branding(self, tmp_path: Path) -> None:
+        repository = Repository("gitlab", "https://code.example.org/gitlab", "team/subteam", "pkg")
+
+        quarto_config, _ = _register(tmp_path, "repo_style: icon\n", repo=repository)
+
+        assert quarto_config["website"]["navbar"]["right"] == [
+            {"href": repository.url, "icon": "gitlab", "aria-label": "GitLab"}
+        ]
+
+    def test_gitlab_widget_uses_build_time_destinations_and_zero_counts(
+        self, tmp_path: Path
+    ) -> None:
+        repository = Repository("gitlab", "https://code.example.org/gitlab", "team/subteam", "pkg")
+        facts = Facts(repository_stats={"stars": 0, "forks": 0})
+        quarto, _ = _register(tmp_path, repo=repository, facts=facts)
+        [item] = quarto["website"]["navbar"]["right"]
+        assert item["href"] == repository.url
+        assert 'data-provider="gitlab"' in item["text"]
+        assert 'data-stars="0"' in item["text"]
+        assert 'data-forks="0"' in item["text"]
+        assert "data-public-api" not in item["text"]
+
     def test_creates_the_navbar_with_the_github_widget(self, tmp_path: Path):
-        facts = Facts(github_stats={"stars": 5, "forks": 2})
+        facts = Facts(repository_stats={"stars": 5, "forks": 2})
 
         quarto_config, _ = _register(tmp_path, repo=REPO, facts=facts)
 
@@ -192,3 +214,11 @@ class TestRelease:
         brand.register_release(quarto_config, write_config(tmp_path), facts)
 
         assert "v1.2.0" in quarto_config["website"]["navbar"]["title"]
+
+
+def test_gitlab_identity_uses_repository_navigation(tmp_path: Path) -> None:
+    repository = Repository("gitlab", "https://gitlab.com", "group/subgroup", "project")
+    quarto, _ = _register(tmp_path, "repo_style: icon\n", repo=repository)
+    assert quarto["website"]["navbar"]["right"] == [
+        {"href": repository.url, "icon": "gitlab", "aria-label": "GitLab"}
+    ]

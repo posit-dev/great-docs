@@ -786,7 +786,7 @@ class __RenderDoc(RenderBase):
             is unknown.
         """
         links = self.settings.source_links
-        if not links.repo_url:
+        if links.repository is None:
             return None
         rel_str = self._source_relative_path()
         if rel_str is None:
@@ -799,8 +799,7 @@ class __RenderDoc(RenderBase):
         start, end = self.obj.lineno, self.obj.endlineno
         if start is None:
             return None
-        anchor = f"#L{start}-L{end}" if end is not None and start != end else f"#L{start}"
-        url = f"{links.repo_url}/blob/{links.ref}/{rel_str}{anchor}"
+        url = links.repository.file_url(rel_str, links.ref, start, end)
         return Link(
             translate("source", self.settings.lang),
             url,
@@ -813,7 +812,7 @@ class __RenderDoc(RenderBase):
 
         Griffe's `relative_package_filepath` is relative to the package's parent
         directory, a Griffe search path. For `src/` and other non-flat layouts,
-        it drops the leading directory, producing GitHub blob URLs that return
+        it drops the leading directory, producing repository URLs that return
         404. Resolve the path in this order to preserve the repository layout:
 
         1. Honour an explicit `source.path` override for monorepos.

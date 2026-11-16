@@ -28,7 +28,13 @@ _SCRIPT = re.compile(r'^<script type="application/ld\+json">(.*)</script>$')
 def _data(
     tmp_path: Path, metadata: dict[str, Any] = METADATA, base_url: str | None = BASE_URL
 ) -> StructuredData:
-    data = StructuredData.make(write_config(tmp_path), metadata, "Pkg", base_url)
+    data = StructuredData.make(
+        write_config(tmp_path),
+        metadata,
+        "Pkg",
+        base_url,
+        repo_url=metadata.get("urls", {}).get("Repository"),
+    )
     assert data is not None
     return data
 
@@ -51,12 +57,23 @@ def _parse(tag: str | None) -> dict[str, Any] | list[dict[str, Any]]:
     "yaml", ["seo:\n  structured_data:\n    enabled: false\n", "seo:\n  enabled: false\n"]
 )
 def test_make_is_none_when_disabled(tmp_path: Path, yaml: str) -> None:
-    assert StructuredData.make(write_config(tmp_path, yaml), METADATA, "Pkg", BASE_URL) is None
+    assert (
+        StructuredData.make(
+            write_config(tmp_path, yaml),
+            METADATA,
+            "Pkg",
+            BASE_URL,
+            repo_url="https://github.com/o/pkg",
+        )
+        is None
+    )
 
 
 def test_package_object(tmp_path: Path) -> None:
     config = write_config(tmp_path, "seo:\n  structured_data:\n    type: SoftwareApplication\n")
-    data = StructuredData.make(config, METADATA, "Pkg", BASE_URL)
+    data = StructuredData.make(
+        config, METADATA, "Pkg", BASE_URL, repo_url="https://github.com/o/pkg"
+    )
     assert data is not None
     assert data.package == {
         "@context": "https://schema.org",
@@ -72,13 +89,21 @@ def test_package_object(tmp_path: Path) -> None:
 
 
 def test_package_object_omits_empty_values(tmp_path: Path) -> None:
-    data = StructuredData.make(write_config(tmp_path), {}, "", None)
+    data = StructuredData.make(write_config(tmp_path), {}, "", None, repo_url=None)
     assert data is not None
     assert data.package == {
         "@context": "https://schema.org",
         "@type": "SoftwareSourceCode",
         "programmingLanguage": {"@type": "ComputerLanguage", "name": "Python"},
     }
+
+
+@pytest.mark.parametrize("repo_url", ["https://gitlab.com/team/subteam/pkg", None])
+def test_selected_repository_replaces_raw_metadata(tmp_path: Path, repo_url: str | None) -> None:
+    data = StructuredData.make(write_config(tmp_path), METADATA, "Pkg", BASE_URL, repo_url=repo_url)
+
+    assert data is not None
+    assert data.package.get("codeRepository") == repo_url
 
 
 def test_licence_url() -> None:

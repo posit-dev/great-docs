@@ -29,7 +29,9 @@ FROZEN_DEFAULT_CONFIG: dict[str, Any] = {
     # from whether the key appears in the user's file. Behaviour is unchanged.
     "pypi": None,
     "repo": None,
-    "github_style": "widget",
+    "repo_style": "widget",
+    "repo_provider": None,
+    "repo_base_url": None,
     "site_url": None,
     "source": {"enabled": True, "branch": None, "path": None},
     "sidebar_filter": {"enabled": True, "min_items": 20},

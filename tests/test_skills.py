@@ -15,6 +15,41 @@ from great_docs.core import GreatDocs
 from tests.support import make_project
 
 
+@pytest.mark.parametrize("site_url", [None, "https://docs.example.org/pkg/"])
+def test_selected_gitlab_repository_reaches_skill_metadata(
+    tmp_path: Path, site_url: str | None
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\n[project.urls]\nRepository = "https://github.com/stale/pkg"\n',
+        encoding="utf-8",
+    )
+    repository_url = "https://code.example.org/gitlab/team/subteam/pkg"
+    from tests.support import write_config
+
+    settings = {
+        "repo": repository_url,
+        "repo_provider": "gitlab",
+        "repo_base_url": "https://code.example.org/gitlab",
+    }
+    if site_url:
+        settings["site_url"] = site_url
+    write_config(tmp_path, settings)
+    docs = GreatDocs(project_path=tmp_path)
+    docs.layout.build_dir.mkdir()
+    project = make_project(docs)
+    run = SimpleNamespace(project=project, api_block=None, has_skills=False)
+
+    generated.skills(run, docs._config, docs.layout)  # type: ignore[arg-type]
+
+    skill = (docs.layout.build_dir / "skill.md").read_text(encoding="utf-8")
+    page = (docs.layout.build_dir / "skills.qmd").read_text(encoding="utf-8")
+    assert f"[Source code]({repository_url})" in skill
+    assert f"npx skills add {site_url or repository_url}" in page
+    assert "github.com/stale/pkg" not in skill + page
+    if site_url:
+        assert f"{site_url}skill.md" in page
+
+
 def test_skill_md_comes_from_first_published_skill_when_first_entry_is_skipped(tmp_path: Path):
     _ = (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
     reviewing = tmp_path / "skills" / "reviewing" / "SKILL.md"
@@ -36,6 +71,7 @@ def test_skill_md_comes_from_first_published_skill_when_first_entry_is_skipped(t
         docs.layout,
         make_project(docs).name,
         make_project(docs).manifest,
+        make_project(docs).repository,
     ).write(None)
 
     page = (docs.layout.build_dir / "skills.qmd").read_text(encoding="utf-8")

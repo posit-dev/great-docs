@@ -26,6 +26,7 @@ from .._content import homepage as homepage_source
 from .._website.navigation import navbar as nav_navbar
 from .._website.project_pages import citation, licence, package_info
 from . import site
+from .facts import source_ref
 from .steps import Outcome, Skipped, print_warning
 
 if TYPE_CHECKING:
@@ -106,7 +107,20 @@ def homepage(
     metadata = run.project.manifest
 
     _ = licence.write_page(config, layout, metadata["license"], page_authors, report=print)
-    _ = citation.write_page(config, layout, run.project.name, page_authors, report=print)
+    citation_ref = (
+        source_ref(config, layout.package_root, warn=print_warning)
+        if run.project.repository is not None and (layout.package_root / "CITATION.cff").is_file()
+        else "main"
+    )
+    _ = citation.write_page(
+        config,
+        layout,
+        run.project.name,
+        page_authors,
+        repository=run.project.repository,
+        ref=citation_ref,
+        report=print,
+    )
     _ = package_info.write_page(config, layout, metadata, remote, report=print)
 
     if config.homepage == "user_guide" and not fallback:
@@ -117,6 +131,7 @@ def homepage(
         config,
         layout,
         metadata=metadata,
+        repository=run.project.repository,
         package_name=run.project.name,
         pages=page_map(config, layout, guide),
         page_authors=page_authors,
@@ -311,6 +326,7 @@ def _promote_first_page(
         layout,
         first_ug_path.read_text(encoding="utf-8"),
         metadata=project.manifest,
+        repository=project.repository,
         package_name=project.name,
         pages=page_map(config, layout, guide),
         page_authors=page_authors,

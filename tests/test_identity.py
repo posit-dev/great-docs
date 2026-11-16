@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from great_docs._project.repository import Repository
 from great_docs._website.identity import Identity
 from tests.support import write_config
 
@@ -24,7 +25,7 @@ class TestName:
     def test_uses_the_display_name(self, tmp_path: Path):
         config = write_config(tmp_path, "display_name: Display\n")
 
-        identity = Identity.make(config, tmp_path, None, None, "pkg")
+        identity = Identity.make(config, tmp_path, None, "pkg")
 
         assert identity.name == "Display"
 
@@ -32,7 +33,7 @@ class TestName:
         _write_go_program(tmp_path)
         config = write_config(tmp_path, GO_SETTINGS)
 
-        identity = Identity.make(config, tmp_path, None, None, "pkg")
+        identity = Identity.make(config, tmp_path, None, "pkg")
 
         assert identity.name == "pkg"
 
@@ -41,7 +42,7 @@ class TestName:
         _write_rust_program(tmp_path)
         config = write_config(tmp_path, GO_SETTINGS + RUST_SETTINGS)
 
-        identity = Identity.make(config, tmp_path, None, None, None)
+        identity = Identity.make(config, tmp_path, None, None)
 
         assert identity.name == "gotool"
 
@@ -49,7 +50,7 @@ class TestName:
         _write_rust_program(tmp_path)
         config = write_config(tmp_path, GO_SETTINGS + RUST_SETTINGS)
 
-        identity = Identity.make(config, tmp_path, None, None, None)
+        identity = Identity.make(config, tmp_path, None, None)
 
         assert identity.name == "rusttool"
 
@@ -58,12 +59,20 @@ class TestName:
         _write_rust_program(tmp_path)
         config = write_config(tmp_path)
 
-        identity = Identity.make(config, tmp_path, None, None, None)
+        identity = Identity.make(config, tmp_path, None, None)
 
         assert identity.name == ""
 
 
 class TestAddresses:
+    def test_gitlab_without_an_explicit_address_has_no_pages_fallback(self, tmp_path: Path) -> None:
+        repository = Repository("gitlab", "https://gitlab.com", "team/subteam", "pkg")
+
+        identity = Identity.make(write_config(tmp_path), tmp_path, repository, "pkg")
+
+        assert identity.url is None
+        assert identity.base_url is None
+
     def test_canonical_base_url_wins_over_site_url(self, tmp_path: Path):
         config = write_config(
             tmp_path,
@@ -71,7 +80,9 @@ class TestAddresses:
             "seo:\n  canonical:\n    base_url: https://preferred.example.com/pkg\n",
         )
 
-        identity = Identity.make(config, tmp_path, "acme", "pkg", None)
+        identity = Identity.make(
+            config, tmp_path, Repository("github", "https://github.com", "acme", "pkg"), None
+        )
 
         assert identity.url == "https://served.example.com/pkg"
         assert identity.base_url == "https://preferred.example.com/pkg/"
@@ -79,7 +90,9 @@ class TestAddresses:
     def test_base_url_falls_back_to_github_pages(self, tmp_path: Path):
         config = write_config(tmp_path)
 
-        identity = Identity.make(config, tmp_path, "acme", "pkg", None)
+        identity = Identity.make(
+            config, tmp_path, Repository("github", "https://github.com", "acme", "pkg"), None
+        )
 
         assert identity.url is None
         assert identity.base_url == "https://acme.github.io/pkg/"

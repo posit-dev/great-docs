@@ -11,6 +11,7 @@ import html
 from typing import TYPE_CHECKING, Any, cast
 
 from ..._project.manifest import Manifest
+from ..._project.model import select_repository_url
 from ..._translations import translate
 from ..spdx import get_license_info
 
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from ..._project.layout import Layout
+    from ..._project.repository import Repository
     from ...config import Config
     from ..project_pages.community import CommunityPage
 
@@ -58,6 +60,7 @@ def render(
     layout: Layout,
     *,
     metadata: Manifest,
+    repository: Repository | None,
     package_name: str | None,
     community_pages: Sequence[CommunityPage],
     has_llms_txt: bool,
@@ -77,6 +80,8 @@ def render(
         check for pages the sidebar can link to.
     metadata
         The package metadata: URLs, authors, licence, Python requirement and extras.
+    repository
+        The selected repository, used for GitHub author-profile fallbacks.
     package_name
         The package name, for the PyPI link, the curated skill and the citation link.
     community_pages
@@ -92,16 +97,22 @@ def render(
     lang = config.lang
     build_dir = layout.build_dir
     sections = [
-        *_links(config, metadata, package_name, lang),
+        *_links(config, metadata, repository, package_name, lang),
         *_ai_agents(config, layout.package_root, package_name, lang, has_llms_txt=has_llms_txt),
-        *_developers(config, metadata, lang),
+        *_developers(config, metadata, repository, lang),
         *_community(build_dir, metadata, package_name, community_pages, lang),
         *_meta(config, build_dir, metadata, lang),
     ]
     return "\n".join(sections)
 
 
-def _links(config: Config, metadata: Manifest, package_name: str | None, lang: str) -> list[str]:
+def _links(
+    config: Config,
+    metadata: Manifest,
+    repository: Repository | None,
+    package_name: str | None,
+    lang: str,
+) -> list[str]:
     """
     Render the Links section: PyPI and the project URLs
 
@@ -111,6 +122,8 @@ def _links(config: Config, metadata: Manifest, package_name: str | None, lang: s
         The Great Docs configuration.
     metadata
         The package metadata.
+    repository
+        The selected repository, used for the primary source link when `repo` is explicit.
     package_name
         The package name, for the default PyPI link.
     lang
@@ -139,8 +152,13 @@ def _links(config: Config, metadata: Manifest, package_name: str | None, lang: s
         "documentation": None,
     }
     urls: Mapping[str, str] = metadata.get("urls") or {}
+    primary = select_repository_url(urls)
     for name, url in urls.items():
         label = labels.get(name.lower().replace(" ", "_"), name.replace("_", " ").title())
+        if config.repo and repository is not None and primary is not None and name == primary[0]:
+            if label is not None:
+                url = repository.url
+                label = translate("browse_source_code", lang)
         if label:
             items.append(
                 f'<a href="{html.escape(url)}">'
@@ -211,7 +229,9 @@ def _ai_agents(
     return [f"\n#### {translate('ai_agents', lang)}\n", *items]
 
 
-def _developers(config: Config, metadata: Manifest, lang: str) -> list[str]:
+def _developers(
+    config: Config, metadata: Manifest, repository: Repository | None, lang: str
+) -> list[str]:
     """
     Render the Developers section: a card per author, then the funder
 
@@ -224,6 +244,8 @@ def _developers(config: Config, metadata: Manifest, lang: str) -> list[str]:
         The Great Docs configuration, with the authors and the funder.
     metadata
         The package metadata, with `authors` and `urls`.
+    repository
+        The selected repository, used for GitHub author-profile fallbacks.
     lang
         The site language.
 
@@ -239,12 +261,9 @@ def _developers(config: Config, metadata: Manifest, lang: str) -> list[str]:
     if not (authors or funding):
         return []
 
-    repository_owner = None
-    if urls := metadata.get("urls"):
-        repo_url: str = urls.get("repository", "") or urls.get("Repository", "")
-        _, found, path = repo_url.rstrip("/").partition("github.com/")
-        if found:
-            repository_owner = path.split("/")[0] or None
+    repository_owner = (
+        repository.namespace if repository is not None and repository.provider == "github" else None
+    )
 
     cards = [
         _author_card(cast("dict[str, Any]", author), repository_owner)

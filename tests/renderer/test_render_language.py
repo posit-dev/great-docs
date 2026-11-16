@@ -7,6 +7,7 @@ import textwrap
 import pytest
 
 from great_docs._apiref._settings import Settings, SourceLinks
+from great_docs._project.repository import Repository
 from great_docs._apiref._tools import render_code_variable
 
 FUNCTION = '''
@@ -132,7 +133,7 @@ def test_usage_label_is_translated():
 
 
 def test_source_link_is_translated():
-    links = SourceLinks(repo_url="https://github.com/org/repo")
+    links = SourceLinks(repository=Repository.parse("https://github.com/org/repo"))
     qmd = render_code_variable(
         textwrap.dedent(FUNCTION), "f", Settings(lang="ja", source_links=links)
     )

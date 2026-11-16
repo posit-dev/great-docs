@@ -104,14 +104,14 @@ def test_include_loads_scripts_in_table_order(tmp_path: Path):
     ]
 
 
-def test_include_leaves_out_the_github_widget_without_a_repository(tmp_path: Path):
+def test_include_leaves_out_the_repository_widget_without_a_repository(tmp_path: Path):
     config = write_config(tmp_path)
     quarto_config: dict[str, Any] = {}
 
     scripts.include(config, quarto_config, tmp_path, has_repository=False)
 
     assert not any(
-        "github-widget" in entry for entry in _includes(quarto_config, "include-after-body")
+        "repository-widget" in entry for entry in _includes(quarto_config, "include-after-body")
     )
 
 
@@ -156,7 +156,7 @@ def test_include_embeds_the_status_script_staged_in_the_build_directory(
         ({}, True),
         ({}, False),
         ({"sidebar_filter": {"enabled": False}, "dark_mode_toggle": False}, True),
-        ({"github_style": "icon", "marimo": {"enabled": True}, "cli": {"enabled": True}}, True),
+        ({"repo_style": "icon", "marimo": {"enabled": True}, "cli": {"enabled": True}}, True),
         ({"webmcp": True}, True),
     ],
     ids=["defaults", "no-repository", "opt-outs", "icon-marimo-cli", "webmcp"],

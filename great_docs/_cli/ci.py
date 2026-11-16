@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import re
+import shlex
 import sys
 from pathlib import Path
+from typing import Any
 
 import click
 
@@ -100,7 +103,8 @@ def _detect_optional_dependencies(project_root: Path) -> list[str]:
 
 @click.group(cls=OrderedGroup)
 def ci() -> None:
-    """Helpers meant to run inside CI (GitHub Actions).
+    """
+    Helpers for GitHub Actions and GitLab CI
 
     These emit the "preview this build locally" hints that let reviewers open a
     pull request's docs without a preview host: a workflow log notice and a
@@ -128,8 +132,8 @@ def ci_pr_comment(run_id: int, pr: int, repo: str | None) -> None:
 
     Reads the token from GITHUB_TOKEN / GH_TOKEN and needs 'pull-requests: write'.
     """
-    from .._build.ci import post_preview_comment
-    from .._build.pr_preview import PreviewError
+    from .._build.preview_artifacts import PreviewError
+    from .._build.repo_hosts.github_ci import post_preview_comment
 
     try:
         action, repo_slug = post_preview_comment(run_id=run_id, pr=pr, repo_override=repo)
@@ -146,9 +150,114 @@ def ci_pr_comment(run_id: int, pr: int, repo: str | None) -> None:
 @click.option("--pr", type=int, default=None, help="Pull request number (adds the --pr hint).")
 def ci_notice(run_id: int, pr: int | None) -> None:
     """Print a workflow log notice with the local-preview command."""
-    from .._build.ci import render_notice_lines
+    from .._build.repo_hosts.github_ci import render_notice_lines
 
     for line in render_notice_lines(run_id, pr):
+        click.echo(line)
+
+
+def _gitlab_options(command: Any) -> Any:
+    """Apply the shared GitLab build and project selectors to CI commands"""
+    for option in (
+        click.option(
+            "--job",
+            type=click.IntRange(min=1),
+            default=None,
+            help="Artifact-producing GitLab job ID.",
+        ),
+        click.option(
+            "--pipeline",
+            type=click.IntRange(min=1),
+            default=None,
+            help="Artifact-producing GitLab pipeline ID.",
+        ),
+        click.option(
+            "--repo",
+            default=None,
+            help="MR target project URL or GitLab shorthand (default: CI MR project).",
+        ),
+        click.option(
+            "--artifact-repo",
+            default=None,
+            help="Artifact-owning project, when a fork runs the build.",
+        ),
+        click.option(
+            "--repo-base-url",
+            default=None,
+            help="GitLab instance base, including an HTTP installation prefix.",
+        ),
+        click.option(
+            "--artifact",
+            default="docs-html",
+            help="Documentation job or archive name for pipeline/MR selection.",
+        ),
+    ):
+        command = option(command)
+    return command
+
+
+@click.command(name="mr-comment")
+@click.option(
+    "--mr",
+    type=click.IntRange(min=1),
+    required=True,
+    help="Project-local MR IID in the target project.",
+)
+@_gitlab_options
+def ci_mr_comment(
+    mr: int,
+    job: int | None,
+    pipeline: int | None,
+    repo: str | None,
+    artifact_repo: str | None,
+    repo_base_url: str | None,
+    artifact: str,
+) -> None:
+    """Post or update an opt-in GitLab note using a write-capable GITLAB_TOKEN"""
+    from .._build.preview_artifacts import PreviewError
+    from .._build.repo_hosts.gitlab_ci import post_preview_comment
+
+    try:
+        action, target = post_preview_comment(
+            mr=mr,
+            job=job,
+            pipeline=pipeline,
+            repo=repo,
+            artifact_repo=artifact_repo,
+            base_url=repo_base_url,
+            artifact=artifact,
+        )
+    except PreviewError as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(f"{action.capitalize()} preview note on {target}!{mr}")
+
+
+@click.command(name="gitlab-notice")
+@click.option(
+    "--mr", type=click.IntRange(min=1), default=None, help="MR IID for the latest-build hint."
+)
+@_gitlab_options
+def ci_gitlab_notice(
+    mr: int | None,
+    job: int | None,
+    pipeline: int | None,
+    repo: str | None,
+    artifact_repo: str | None,
+    repo_base_url: str | None,
+    artifact: str,
+) -> None:
+    """Print GitLab job-log preview commands with complete repository identities"""
+    from .._build.preview_artifacts import PreviewError
+    from .._build.repo_hosts.gitlab_ci import render_notice_lines, resolve_ci_repositories
+
+    try:
+        target, owner = resolve_ci_repositories(repo, artifact_repo, repo_base_url)
+        lines = render_notice_lines(
+            target, owner, mr=mr, job=job, pipeline=pipeline, artifact=artifact
+        )
+    except PreviewError as error:
+        raise click.ClickException(str(error)) from error
+    for line in lines:
         click.echo(line)
 
 
@@ -378,5 +487,151 @@ def setup_github_pages(
         sys.exit(1)
 
 
+@click.command(name="setup-gitlab-pages")
+@click.option(
+    "--project-path",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Path to the project root (default: current directory)",
+)
+@click.option(
+    "--main-branch",
+    default=None,
+    help="Deployment branch (default: GitLab's CI_DEFAULT_BRANCH)",
+)
+@click.option(
+    "--python-version",
+    default=None,
+    help="Python version for CI (default: project requirement, at least 3.11)",
+)
+@click.option(
+    "--package-manager",
+    type=click.Choice(["auto", "pip", "uv", "poetry"]),
+    default="auto",
+    help="Dependency environment (default: detect uv/Poetry lock files, otherwise uv pip)",
+)
+@click.option("--force", is_flag=True, help="Replace an existing .gitlab-ci.yml")
+@_options.config_option
+def setup_gitlab_pages(
+    project_path: str | None,
+    main_branch: str | None,
+    python_version: str | None,
+    package_manager: str,
+    force: bool,
+    config_path: str | None = None,
+) -> None:
+    """
+    Create GitLab Pages and merge-request documentation jobs
+
+    Require GitLab 17.10 or newer and a Linux Docker runner. Publish Pages on
+    default-branch pushes and retain merge-request builds as ordinary artefacts.
+    Print a mergeable snippet when a pipeline already exists; use `--force` to
+    replace it. Install Quarto and dependencies with the detected environment.
+
+    Parameters
+    ----------
+    project_path
+        Project directory, or the current directory when omitted.
+    main_branch
+        Deployment branch, or GitLab's configured default branch when omitted.
+    python_version
+        Python image version, or the detected project requirement with a 3.11 floor.
+    package_manager
+        Dependency environment: `auto`, `pip`, `uv` or `poetry`.
+    force
+        Whether to replace an existing pipeline file.
+    config_path
+        Selected configuration file, resolved from the current directory.
+    """
+    from importlib.resources import files
+
+    try:
+        layout = Layout.make(
+            Path(project_path or Path.cwd()), Path(config_path) if config_path else None
+        )
+        project_root = layout.package_root
+        if python_version is None:
+            detected = _detect_python_version(project_root) or "3.12"
+            parts = max((3, 11), tuple(map(int, detected.split("."))))
+            python_version = ".".join(map(str, parts))
+        if not re.fullmatch(r"\d+\.\d+(?:\.\d+)?", python_version):
+            raise click.BadParameter(
+                "Use a Python version such as 3.12", param_hint="--python-version"
+            )
+        if tuple(map(int, python_version.split("."))) < (3, 11):
+            raise click.BadParameter(
+                "Great Docs requires Python 3.11 or newer", param_hint="--python-version"
+            )
+
+        if package_manager == "auto":
+            package_manager = _detect_package_manager(project_root)
+        if package_manager == "uv":
+            install_commands = ["uv sync", "uv pip install great-docs"]
+            build_command = "uv run --no-sync great-docs build"
+        elif package_manager == "poetry":
+            install_commands = [
+                "UV_TOOL_BIN_DIR=/usr/local/bin uv tool install poetry --force",
+                "poetry install",
+                'uv pip install --python "$(poetry env info --executable)" great-docs',
+            ]
+            build_command = "poetry run great-docs build"
+        else:
+            extras = _detect_optional_dependencies(project_root)
+            package = f".[{','.join(extras)}]" if extras else "."
+            install_commands = ["uv venv", f"uv pip install -e {shlex.quote(package)} great-docs"]
+            build_command = "uv run --no-sync great-docs build"
+
+        report_command = build_command.removesuffix(" build")
+        selected_config = layout.load_config()
+        base_option = (
+            " --repo-base-url " + shlex.quote(selected_config.repo_base_url)
+            if selected_config.repo_base_url
+            else ""
+        )
+
+        if config_path:
+            build_command += " --config " + shlex.quote(
+                layout.config_path.relative_to(project_root).as_posix()
+            )
+        branch = json.dumps(main_branch) if main_branch is not None else "$CI_DEFAULT_BRANCH"
+        deploy_rule = f'$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == {branch}'
+        template = (
+            files("great_docs")
+            .joinpath("assets/gitlab-ci-template.yml")
+            .read_text(encoding="utf-8")
+        )
+        replacements = {
+            "python_image": json.dumps(f"python:{python_version}-bookworm"),
+            "install_commands": "\n".join(f"      {command}" for command in install_commands),
+            "build_command": json.dumps(build_command),
+            "site_dir": json.dumps(layout.site_dir.relative_to(project_root).as_posix()),
+            "deploy_rule": json.dumps(deploy_rule),
+            "report_command": report_command,
+            "base_option": base_option,
+        }
+        for key, value in replacements.items():
+            template = template.replace("{" + key + "}", value)
+
+        pipeline_file = project_root / ".gitlab-ci.yml"
+        if pipeline_file.exists() and not force:
+            click.echo("Existing .gitlab-ci.yml preserved. Merge these jobs into your pipeline:")
+            click.echo(template)
+            click.echo("Add build to a custom stages list, or select an existing stage.")
+            click.echo("Use --force to replace .gitlab-ci.yml instead.")
+            return
+        _ = pipeline_file.write_text(template, encoding="utf-8")
+        click.echo(f"Created .gitlab-ci.yml with Python {python_version} and {package_manager}.")
+        click.echo("Require GitLab 17.10 or newer and a Linux Docker runner.")
+        click.echo(
+            "Review and commit the pipeline, then check Deploy > Pages after a default-branch push."
+        )
+        click.echo("Merge-request builds retain artefacts without deploying production Pages.")
+    except PROJECT_ERRORS as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
 ci.add_command(ci_pr_comment)
 ci.add_command(ci_notice)
+
+ci.add_command(ci_mr_comment)
+ci.add_command(ci_gitlab_notice)

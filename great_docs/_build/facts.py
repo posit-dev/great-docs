@@ -1,5 +1,5 @@
 """
-Repository data from GitHub and the local checkout, read once per documentation build
+Repository data and local checkout facts, read once per documentation build
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
-    from .._project.github import GithubRepo
+    from .._project.repository import Repository
     from .._project.remote import Remote
     from ..config import Config
 
@@ -26,33 +26,33 @@ __all__ = ["Facts", "exact_tag", "source_links", "source_ref"]
 
 @dataclass(frozen=True)
 class Facts:
-    """GitHub data shown in the site's navbar"""
+    """Repository data shown in the site's navbar"""
 
-    github_stats: Mapping[str, int] | None = None
+    repository_stats: Mapping[str, int] | None = None
     """
     Star and fork counts under the keys `stars` and `forks`
 
-    Empty when GitHub did not supply them, and `None` when the project has no GitHub
-    repository or does not show the GitHub widget.
+    Empty when the provider did not supply them, and `None` when the project has no
+    repository or does not show the repository widget.
     """
 
     latest_release: Release | None = None
     """The newest published release, or `None` when there is none or it is unknown"""
 
     @classmethod
-    def make(cls, config: Config, repo: GithubRepo | None, remote: Remote) -> Facts:
+    def make(cls, config: Config, repo: Repository | None, remote: Remote) -> Facts:
         """
         Fetch the repository's star and fork counts and its latest release
 
         Parameters
         ----------
         config
-            Project configuration. Counts are fetched only when `github_style` is
+            Project configuration. Counts are fetched only when `repo_style` is
             `"widget"`.
         repo
-            The project's GitHub repository. Without one, nothing is fetched.
+            The project's repository. Without one, nothing is fetched.
         remote
-            The source of GitHub data.
+            The source of repository data.
 
         Returns
         -------
@@ -61,10 +61,10 @@ class Facts:
         """
         if repo is None:
             return cls()
-        stats = remote.github_stats(repo) if config.github_style == "widget" else None
-        latest = remote.github_releases(repo, max_releases=1)
+        stats = remote.repository_stats(repo) if config.repo_style == "widget" else None
+        latest = remote.repository_releases(repo, max_releases=1)
         return cls(
-            github_stats=stats,
+            repository_stats=stats,
             latest_release=Release.make(latest[0]) if latest else None,
         )
 
@@ -72,7 +72,7 @@ class Facts:
 def source_links(
     config: Config,
     package_root: Path,
-    repo_url: str | None,
+    repository: Repository | None,
     *,
     warn: Callable[[str], None],
 ) -> SourceLinks:
@@ -88,8 +88,8 @@ def source_links(
     package_root
         The repository root used for relative source paths and as the working
         directory for `git`.
-    repo_url
-        The project's GitHub repository URL, or `None` when it has none.
+    repository
+        The project's repository, or `None` when it has none.
     warn
         The callback for reporting warnings to the user.
 
@@ -100,10 +100,10 @@ def source_links(
         when source links are disabled or there is no repository. Otherwise,
         `git` runs only when no `source.branch` is configured.
     """
-    if not (config.source_enabled and repo_url):
+    if not (config.source_enabled and repository):
         return SourceLinks()
     return SourceLinks(
-        repo_url=repo_url,
+        repository=repository,
         ref=source_ref(config, package_root, warn=warn),
         package_root=package_root,
         path=config.source_path,

@@ -4,13 +4,13 @@ from typing import Any
 import pytest
 
 from great_docs._contribution import Contribution, NavbarLink
-from great_docs._project.github import GithubRepo
+from great_docs._project.repository import Repository
 from great_docs._project.layout import Layout
 from great_docs._website import changelog
 from great_docs._yaml import split_front_matter
 from tests.support import StubRemote, write_config
 
-REPO = GithubRepo("owner", "repo")
+REPO = Repository("github", "https://github.com", "owner", "repo")
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def _release(
     tag: str, body: str = "", *, prerelease: bool = False, name: str = ""
 ) -> dict[str, Any]:
     """
-    Create a release in the format returned by `Remote.github_releases`
+    Create a release in the format returned by `Remote.repository_releases`
 
     Parameters
     ----------
@@ -219,6 +219,55 @@ def test_write_page_nests_note_headings_under_the_release(tmp_path: Path, layout
 )
 def test_linkify_references(text: str, expected: str):
     assert changelog.linkify_references(text, REPO) == expected
+
+
+@pytest.mark.parametrize("provider", ["github", "gitlab"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "[#12 by @ada](https://example.org/path(#34))",
+        "[text `@ada` #12](https://example.org/#23)",
+        "![#12 @ada](image.png)",
+        "[#12 @ada][reference]",
+        "[reference]: https://example.org/#12",
+        "<https://example.org/#12>",
+    ],
+)
+def test_existing_markdown_links_are_preserved(provider: str, text: str) -> None:
+    repo = Repository.parse(f"https://{provider}.com/owner/repo")
+    assert repo is not None
+    assert changelog.linkify_references(text, repo) == text
+
+
+def test_gitlab_references_use_project_routes_and_same_instance_profiles() -> None:
+    repo = Repository("gitlab", "https://code.example.org/gitlab", "team/subgroup", "pkg")
+    text = "Fix #12 and !34 with @ada.user and `#55 !66 @code`. [#77](https://example.org)"
+    assert changelog.linkify_references(text, repo) == (
+        f"Fix [#12]({repo.issues_url}/12) and [!34]({repo.requests_url}/34) "
+        "with [@ada.user](https://code.example.org/gitlab/ada.user) and `#55 !66 @code`. "
+        "[#77](https://example.org)"
+    )
+    assert changelog.linkify_references("Ask @team/docs and user@example.org", repo) == (
+        "Ask [@team/docs](https://code.example.org/gitlab/team/docs) and user@example.org"
+    )
+
+
+def test_gitlab_changelog_uses_provider_labels_and_release_destinations(
+    tmp_path: Path, layout: Layout
+) -> None:
+    repo = Repository("gitlab", "https://gitlab.com", "team/subgroup", "pkg")
+    release = _release("v2.0", "Fix #12 and !34")
+    release["html_url"] = repo.release_url("v2.0")
+    assert (
+        changelog.write_page(
+            write_config(tmp_path), layout, repo, StubRemote(releases=[release]), report=print
+        )
+        is not None
+    )
+    page = _page(layout)
+    assert f"[GitLab Releases]({repo.releases_url})" in page
+    assert f"[GitLab]({repo.release_url('v2.0')})" in page
+    assert f"[!34]({repo.requests_url}/34)" in page
 
 
 @pytest.mark.parametrize(

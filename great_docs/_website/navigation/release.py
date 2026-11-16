@@ -1,5 +1,5 @@
 """
-The latest GitHub release beside the site title in the navbar
+The latest repository release beside the site title in the navbar
 
 A navbar with a text title shows a version badge with the release date
 in its hover text. A navbar with only a logo shows the version and date
@@ -11,6 +11,7 @@ onto the link.
 from __future__ import annotations
 
 import html
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -32,9 +33,9 @@ class Release:
     """The publication date as `YYYY-MM-DD`, if known"""
 
     @classmethod
-    def make(cls, release: dict[str, Any]) -> Release | None:
+    def make(cls, release: Mapping[str, object]) -> Release | None:
         """
-        Read a release from a GitHub API release entry
+        Read the version and date of a normalised repository release
 
         Parameters
         ----------
