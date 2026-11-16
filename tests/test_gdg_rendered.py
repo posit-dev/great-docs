@@ -2674,6 +2674,25 @@ def test_cli_sidebar_no_raw_qmd_paths_in_nested():
 
 @pytest.mark.dedicated
 @requires_bs4
+def test_mcp_only_homepage_links_to_the_reference_index() -> None:
+    site = _site_dir("gdtest_mcp")
+    if not _has_rendered_site("gdtest_mcp"):
+        pytest.skip("gdtest_mcp not rendered")
+
+    assert not (site / "reference/index.html").exists()
+    homepage = _load_html(site / "index.html")
+    links = homepage.select("#quarto-header .navbar a.nav-link")
+    reference = [link for link in links if "Reference" in link.get_text()]
+    assert len(reference) == 1
+    href = reference[0]["href"]
+    assert href.removeprefix("./") == "reference/mcp/index.html"
+    index = site / href
+    assert index.is_file()
+    assert _load_html(index).select_one("#quarto-sidebar") is not None
+
+
+@pytest.mark.dedicated
+@requires_bs4
 def test_mcp_page_heading_levels():
     """
     Verify the MCP object-page heading hierarchy

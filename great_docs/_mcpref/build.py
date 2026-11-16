@@ -8,8 +8,9 @@ import importlib
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
-from .._contribution import Contribution, Sidebar, SidebarItem
+from .._contribution import Contribution, NavbarLink, Sidebar, SidebarItem
 from .._translations import translate
+from .._website.navigation import navbar
 from ..config import Config
 from . import reference
 
@@ -116,7 +117,8 @@ def contribution(config: Config, items: Sequence[SidebarItem]) -> Contribution:
     Returns
     -------
     :
-        The `mcp-reference` sidebar, titled "MCP Reference" in the site's language.
+        A Reference navbar link to the MCP index and the `mcp-reference` sidebar,
+        titled "MCP Reference" in the site's language.
         Its first entry links to the index page. The link is labelled "MCP Index" on
         an English site and uses the sidebar's title otherwise.
     """
@@ -124,5 +126,6 @@ def contribution(config: Config, items: Sequence[SidebarItem]) -> Contribution:
     index_label = "MCP Index" if config.lang == "en" else title
     index: SidebarItem = {"text": index_label, "href": "reference/mcp/index.qmd"}
     return Contribution(
-        sidebars=(Sidebar(id="mcp-reference", title=title, contents=(index, *items)),)
+        navbar=(NavbarLink(text=navbar.REFERENCE.label(config), href="reference/mcp/index.qmd"),),
+        sidebars=(Sidebar(id="mcp-reference", title=title, contents=(index, *items)),),
     )
