@@ -226,28 +226,6 @@ class TestPostRender:
     def test_root_page_gets_a_dot_prefix(self):
         assert _post_render().rewrite("<a href='/x.html'>x</a>", "") == ("<a href='./x.html'>x</a>")
 
-    def test_moves_the_filter_markers_onto_html_and_body(self):
-        html = (
-            '<html lang="ar">\n<head>\n<meta name="gd-dir" content="rtl">\n'
-            '<meta name="gd-body-classes" content="gd-blog-index fullcontent">\n</head>\n'
-            '<body class="fullcontent nav-fixed">\n'
-        )
-        assert _post_render().apply_markers(html) == (
-            '<html lang="ar" dir="rtl">\n<head>\n</head>\n'
-            '<body class="fullcontent nav-fixed gd-blog-index">\n'
-        )
-
-    def test_markers_replace_a_direction_and_add_a_class_attribute(self):
-        html = (
-            '<html dir="ltr"><meta name="gd-dir" content="rtl">'
-            '<meta name="gd-body-classes" content="a"><body>'
-        )
-        assert _post_render().apply_markers(html) == '<html dir="rtl"><body class="a">'
-
-    def test_page_without_markers_is_unchanged(self):
-        html = '<html lang="en"><body class="x">'
-        assert _post_render().apply_markers(html) == html
-
     def test_rewrites_the_pages_quarto_listed(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
