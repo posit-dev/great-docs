@@ -1,5 +1,5 @@
 # pyright: reportPrivateUsage=false
-"""Tests for _renderer/_render/mixin_call.py — covering docstring section merging,
+"""Tests for _apiref/_rendering/callables.py — covering docstring section merging,
 RST directive handling, overload signatures, parameter exclusion, and **kwargs rendering."""
 
 from __future__ import annotations
@@ -564,7 +564,7 @@ def test_parameter_default_only():
 
 def test_annotation_in_signature():
     """When show_signature_annotation=True, annotations appear in the signature."""
-    from great_docs._apiref import RenderDocFunction, content
+    from great_docs._apiref import FunctionRenderer, content
 
     code = '''
     def func(x: int, y: str = "hello"):
@@ -586,7 +586,7 @@ def test_annotation_in_signature():
         obj = m["func"]
 
     doc = content.Doc.from_griffe(obj.name, obj)
-    rd = RenderDocFunction(doc, show_signature_annotation=True, settings=Settings())
+    rd = FunctionRenderer(doc, show_signature_annotation=True, settings=Settings())
     qmd = str(rd)
 
     # Annotations should appear in the signature with ': type' format

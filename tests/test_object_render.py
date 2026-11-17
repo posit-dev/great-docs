@@ -1,4 +1,4 @@
-"""Tests for great_docs._apiref._render.doc."""
+"""Tests for great_docs._apiref._rendering.objects."""
 
 from __future__ import annotations
 
@@ -9,15 +9,22 @@ from unittest.mock import MagicMock, patch
 import griffe as gf
 import pytest
 
-import great_docs._apiref._render.doc as docmod
-from great_docs._apiref._render.doc import RenderDoc
+import great_docs._apiref._rendering.objects as objects
+from great_docs._apiref._rendering.objects import ObjectRenderer
 from great_docs._apiref._settings import Settings, SourceLinks
 from great_docs._project.repository import Repository
 
 
 def _get_private_cls():
-    """Access the name-mangled __RenderDoc class."""
-    return vars(docmod)["__RenderDoc"]
+    """
+    Look up the object renderer class in its defining module
+
+    Returns
+    -------
+    :
+        The `ObjectRenderer` class of `great_docs._apiref._rendering.objects`.
+    """
+    return vars(objects)["ObjectRenderer"]
 
 
 class TestRenderAnnotationTildePrefix:
@@ -56,7 +63,7 @@ class TestRenderExampleFragment:
         cls = _get_private_cls()
         fake_self = types.SimpleNamespace()
 
-        with patch("great_docs._apiref._render.doc.transform", return_value="unexpected"):
+        with patch("great_docs._apiref._rendering.objects.transform", return_value="unexpected"):
             result = cls._render_example_fragment(fake_self, MagicMock())
 
         assert result == ""
@@ -115,7 +122,7 @@ class TestRenderSeeAlsoSectionSkipEmpty:
         el = MagicMock()
         el.value = [("func_a", "Description A")]
         with patch(
-            "great_docs._apiref._render.doc.format_see_also",
+            "great_docs._apiref._rendering.objects.format_see_also",
             return_value="foo:description\n\nbar:other description",
         ):
             result = cls.render_see_also_section(fake_self, el)

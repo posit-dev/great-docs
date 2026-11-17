@@ -1,10 +1,12 @@
+"""An API page containing one or more documented objects"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
-from great_docs._apiref._render.mixin_page import RenderPageMixin
+from great_docs._apiref._rendering.pages import PageRendererMixin
 from great_docs._content.metadata import metadata_value
 from great_docs.pandoc.blocks import (
     BlockContent,
@@ -15,13 +17,13 @@ from great_docs.pandoc.blocks import (
 from great_docs.pandoc.inlines import Link
 
 from .._format import markdown_escape
-from .base import RenderBase
+from .base import BaseRenderer
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from ..content import Page
-    from .doc import RenderDoc
+    from .objects import ObjectRenderer
 
 
 # Member headings render at `h3`, so the table of contents must reach depth 3
@@ -33,9 +35,9 @@ _DEFAULT_SITE_TOC_DEPTH = 2
 
 
 @dataclass
-class __RenderAPIPage(RenderPageMixin, RenderBase):
+class APIPageRenderer(PageRendererMixin, BaseRenderer):
     """
-    Render an API page object (`content.Page`)
+    An API page containing one or more documented objects
     """
 
     toc_depth: int = _DEFAULT_SITE_TOC_DEPTH
@@ -57,11 +59,9 @@ class __RenderAPIPage(RenderPageMixin, RenderBase):
         """
         Render objects on the API page
         """
-        from . import get_render_type
-
         level = self.level if self._has_one_object else self.level + 1
-        render_objs: list[RenderDoc] = [
-            get_render_type(c)(
+        render_objs: list[ObjectRenderer] = [
+            self.renderers.make(
                 c,
                 level,
                 page_path=self.path,
@@ -121,9 +121,3 @@ class __RenderAPIPage(RenderPageMixin, RenderBase):
         else:
             items = [row for d in self.render_objs for row in d.render_summary()]
         return items
-
-
-class RenderAPIPage(__RenderAPIPage):
-    """
-    Extension point for the rendering of an API page
-    """

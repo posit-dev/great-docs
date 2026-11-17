@@ -1,3 +1,5 @@
+"""PEP 695 alias documentation with source-form declarations"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,7 +13,7 @@ from great_docs.pandoc.inlines import Code, Inlines0, Span
 
 from .._format import HAS_RUFF, format_value, render_formatted_expr
 from ._type_parameters import render_type_parameters
-from .doc import RenderDoc
+from .objects import ObjectRenderer
 
 if TYPE_CHECKING:
     from great_docs.pandoc.blocks import BlockContent
@@ -21,9 +23,9 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class __RenderDocTypeAlias(RenderDoc):
+class TypeAliasRenderer(ObjectRenderer):
     """
-    Render documentation for a PEP 695 type alias (`content.DocTypeAlias`)
+    PEP 695 alias documentation with source-form declarations
     """
 
     def __post_init__(self):
@@ -96,9 +98,3 @@ class __RenderDocTypeAlias(RenderDoc):
         own renderer rather than inheriting one from the call mixin.
         """
         return self.render_definition_items(el)
-
-
-class RenderDocTypeAlias(__RenderDocTypeAlias):
-    """
-    Extension point for the rendering of a `content.DocTypeAlias` object
-    """

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import partial
 
-from ._render._label import get_label
+from ._rendering._label import get_label
 from ._visitor import NodeTransformer, NodeVisitor, ctx_node
 from .content import Doc, MemberPage, Page, Section
 from .inventory import InventoryItem, reference_uri

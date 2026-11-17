@@ -1,3 +1,5 @@
+"""Grouped member summaries and bodies for classes and modules"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -21,7 +23,7 @@ from .._type_checks import (
 )
 from ..content import Doc, DocClass, MemberPage
 from ._tables import summary_table
-from .doc import RenderDoc
+from .objects import ObjectRenderer
 
 if TYPE_CHECKING:
     from typing import Literal
@@ -51,9 +53,9 @@ class RenderedMemberPagesGroup(Block):
 
 
 @dataclass
-class __RenderDocMembersMixin(RenderDoc):
+class MembersRendererMixin(ObjectRenderer):
     """
-    Mixin to render Doc objects that have members
+    Grouped member summaries and bodies for classes and modules
 
     i.e. modules and classes
     """
@@ -284,24 +286,22 @@ class __RenderDocMembersMixin(RenderDoc):
         member_group
             An identifier for the type of the members.
         """
-        from . import RenderDocAttribute, RenderDocClass, RenderDocFunction, RenderDocTypeAlias
-
         slug = group
 
         if group == "type-aliases":
-            docables, Render = self.type_aliases, RenderDocTypeAlias
+            docables = self.type_aliases
             show_summary = self.show_type_aliases_summary
             show_body = self.show_type_aliases_body
         elif group == "classes":
-            docables, Render = self.classes, RenderDocClass
+            docables = self.classes
             show_summary = self.show_classes_summary
             show_body = self.show_classes_body
         elif group == "attributes":
-            docables, Render = self.attributes, RenderDocAttribute
+            docables = self.attributes
             show_summary = self.show_attributes_summary
             show_body = self.show_attributes_body
         else:
-            docables, Render = self.functions, RenderDocFunction
+            docables = self.functions
             show_summary = self.show_functions_summary
             show_body = self.show_functions_body
             if isinstance(self.doc, DocClass):
@@ -317,7 +317,8 @@ class __RenderDocMembersMixin(RenderDoc):
         )
 
         render_objs = [
-            Render(obj, self.level + 2, contained=True, settings=self.settings) for obj in docables
+            self.renderers.make(obj, self.level + 2, contained=True, settings=self.settings)
+            for obj in docables
         ]
 
         if self.show_members_summary and show_summary:
@@ -344,21 +345,19 @@ class __RenderDocMembersMixin(RenderDoc):
         member_group
             An identifier for the type of the members.
         """
-        from . import RenderDocAttribute, RenderDocClass, RenderDocFunction, RenderDocTypeAlias
-
         slug = group
 
         if group == "type-aliases":
-            pages, Render = self.type_alias_member_pages, RenderDocTypeAlias
+            pages = self.type_alias_member_pages
             show_summary = self.show_type_aliases_summary
         elif group == "classes":
-            pages, Render = self.class_member_pages, RenderDocClass
+            pages = self.class_member_pages
             show_summary = self.show_classes_summary
         elif group == "attributes":
-            pages, Render = self.attribute_member_pages, RenderDocAttribute
+            pages = self.attribute_member_pages
             show_summary = self.show_attributes_summary
         else:
-            pages, Render = self.function_member_pages, RenderDocFunction
+            pages = self.function_member_pages
             show_summary = self.show_functions_summary
             if isinstance(self.doc, DocClass):
                 slug = "functions"
@@ -373,7 +372,7 @@ class __RenderDocMembersMixin(RenderDoc):
         )
 
         render_objs = [
-            Render(
+            self.renderers.make(
                 Doc.from_griffe(page.obj.name, page.obj, anchor=""),
                 contained=False,
                 page_path=f"{page.path}.qmd",
@@ -398,9 +397,3 @@ class __RenderDocMembersMixin(RenderDoc):
         attributes to describe.
         """
         return self.render_definition_items(el)
-
-
-class RenderDocMembersMixin(__RenderDocMembersMixin, RenderDoc):
-    """
-    Extension point for the rendering of objects that have members
-    """

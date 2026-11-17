@@ -1,3 +1,5 @@
+"""Class documentation with constructor and member presentation"""
+
 from __future__ import annotations
 
 from functools import cached_property
@@ -9,17 +11,17 @@ from .._docstring_sections import (
     DCDocstringSectionInitParameters,
     DCDocstringSectionParameterAttributes,
 )
-from .doc import RenderDoc
-from .mixin_call import RenderDocCallMixin
-from .mixin_members import RenderDocMembersMixin
+from .callables import CallableRendererMixin
+from .members import MembersRendererMixin
+from .objects import ObjectRenderer
 
 if TYPE_CHECKING:
     from .. import content
 
 
-class __RenderDocClass(RenderDocMembersMixin, RenderDocCallMixin, RenderDoc):
+class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer):
     """
-    Render documentation for a class (`content.DocClass`)
+    Class documentation with constructor and member presentation
     """
 
     def __post_init__(self):
@@ -132,9 +134,3 @@ class __RenderDocClass(RenderDocMembersMixin, RenderDocCallMixin, RenderDoc):
 
         lst = [p for p in self.parameters if p.name not in self.obj.attributes]
         return gf.Parameters(*lst)
-
-
-class RenderDocClass(__RenderDocClass):
-    """
-    Extension point for the rendering of a `content.DocClass` object
-    """

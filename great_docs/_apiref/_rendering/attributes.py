@@ -1,3 +1,5 @@
+"""Attribute and property documentation with values and annotations"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,7 +10,7 @@ from great_docs.pandoc.blocks import Blocks, Div
 from great_docs.pandoc.components import Attr
 from great_docs.pandoc.inlines import Code
 
-from .doc import RenderDoc
+from .objects import ObjectRenderer
 
 if TYPE_CHECKING:
     import griffe as gf
@@ -20,9 +22,9 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class __RenderDocAttribute(RenderDoc):
+class AttributeRenderer(ObjectRenderer):
     """
-    Render documentation for an attribute (`content.DocAttribute`)
+    Attribute and property documentation with values and annotations
     """
 
     show_signature_annotation: bool = True
@@ -99,9 +101,3 @@ class __RenderDocAttribute(RenderDoc):
     def render_receives_section(self, el: gf.DocstringSectionReceives) -> BlockContent:
         """Render a `Receives` section on a property"""
         return self._render_property_only_section(el)
-
-
-class RenderDocAttribute(__RenderDocAttribute):
-    """
-    Extension point for the rendering of a `content.DocAttribute` object
-    """

@@ -1,8 +1,10 @@
+"""The reference index with explicitly resolved sections"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from great_docs._apiref._render.mixin_page import RenderPageMixin
+from great_docs._apiref._rendering.pages import PageRendererMixin
 from great_docs._content.metadata import metadata_value
 from great_docs.pandoc.blocks import (
     Blocks,
@@ -11,18 +13,19 @@ from great_docs.pandoc.blocks import (
 )
 from great_docs.pandoc.components import Attr
 
-from .base import RenderBase
+from .base import BaseRenderer
 
 if TYPE_CHECKING:
     from great_docs.pandoc.blocks import BlockContent
 
     from ..api_reference import APIReference
     from ..content import Section
+    from ._renderers import Renderers
 
 
-class __RenderReferencePage(RenderPageMixin, RenderBase):
+class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
     """
-    Render the API Reference page
+    The reference index page, listing resolved sections
     """
 
     def __init__(
@@ -30,7 +33,10 @@ class __RenderReferencePage(RenderPageMixin, RenderBase):
         api_ref: APIReference,
         sections: list[Section],
         level: int = 1,
+        *,
+        renderers: Renderers | None = None,
     ) -> None:
+        """Initialise common renderer state from a reference and resolved sections"""
         self.api_ref = api_ref
         """The API reference being documented"""
 
@@ -42,14 +48,9 @@ class __RenderReferencePage(RenderPageMixin, RenderBase):
 
         self.options = api_ref.options
 
-        self.settings = api_ref.settings
-
-        self.level = level
-        self.show_title = True
-        self.show_description = True
-        self.show_body = True
-
-        self.__post_init__()
+        super().__init__(
+            api_ref, level, settings=api_ref.settings, renderers=renderers or api_ref.renderers
+        )
 
     def render_description(self) -> BlockContent:
         """
@@ -95,15 +96,7 @@ class __RenderReferencePage(RenderPageMixin, RenderBase):
         |:-------------------|:-------------------|
         | `<section>`{.html} | `.doc-index`{.css} |
         """
-        from . import get_render_type
-
         render_objs = [
-            get_render_type(s)(s, self.level, settings=self.settings) for s in self.sections
+            self.renderers.make(s, self.level, settings=self.settings) for s in self.sections
         ]
         return Blocks(render_objs)
-
-
-class RenderReferencePage(__RenderReferencePage):
-    """
-    Extension point for the rendering of the API Reference page
-    """

@@ -1,9 +1,11 @@
+"""Function documentation with callable signatures and sections"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .doc import RenderDoc
-from .mixin_call import RenderDocCallMixin
+from .callables import CallableRendererMixin
+from .objects import ObjectRenderer
 
 if TYPE_CHECKING:
     import griffe as gf
@@ -11,9 +13,9 @@ if TYPE_CHECKING:
     from .. import content
 
 
-class __RenderDocFunction(RenderDocCallMixin, RenderDoc):
+class FunctionRenderer(CallableRendererMixin, ObjectRenderer):
     """
-    Render documentation for a function (`content.DocFunction`)
+    Function documentation with callable signatures and sections
     """
 
     def __post_init__(self):
@@ -25,9 +27,3 @@ class __RenderDocFunction(RenderDocCallMixin, RenderDoc):
 
         if self.subject_above_signature is None:
             self.subject_above_signature = True
-
-
-class RenderDocFunction(__RenderDocFunction):
-    """
-    Extension point for the rendering of a `content.DocFunction` object
-    """

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import griffe as gf
 
-from ._render import get_render_type
+from ._rendering._renderers import Renderers
 from ._settings import Settings
 from ._type_checks import griffe_to_doc
 from .introspect import get_object
@@ -52,7 +52,7 @@ def _render(obj: gf.Object | gf.Alias, settings: Settings | None = None) -> str:
         The object's documentation as Quarto Markdown.
     """
     node = griffe_to_doc(obj, inherited=False, skip_aliases=True)
-    return str(get_render_type(node)(node, settings=settings or Settings()))
+    return str(Renderers().make(node, settings=settings or Settings()))
 
 
 def render_code_variable(

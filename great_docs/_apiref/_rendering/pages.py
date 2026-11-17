@@ -1,14 +1,18 @@
+"""Page front matter, which carries the page title"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from great_docs._apiref._render.base import RenderBase
+from great_docs._apiref._rendering.base import BaseRenderer
 
 if TYPE_CHECKING:
     from great_docs.pandoc.blocks import BlockContent
 
 
-class __RenderPageMixin(RenderBase):
+class PageRendererMixin(BaseRenderer):
+    """Page metadata and front-matter title presentation"""
+
     def render_metadata(self) -> BlockContent:
         """
         Render the metadata (front-matter) of the page
@@ -18,9 +22,3 @@ class __RenderPageMixin(RenderBase):
 
     def render_title(self):
         return self.render_metadata()
-
-
-class RenderPageMixin(__RenderPageMixin):
-    """
-    Extension point for the rendering of pages
-    """

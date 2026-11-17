@@ -1,3 +1,5 @@
+"""Module documentation with grouped member presentation"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -6,8 +8,8 @@ from great_docs.pandoc.blocks import Div
 from great_docs.pandoc.components import Attr
 from great_docs.pandoc.inlines import Code
 
-from .doc import RenderDoc
-from .mixin_members import RenderDocMembersMixin
+from .members import MembersRendererMixin
+from .objects import ObjectRenderer
 
 if TYPE_CHECKING:
     import griffe as gf
@@ -17,9 +19,9 @@ if TYPE_CHECKING:
     from .. import content
 
 
-class __RenderDocModule(RenderDocMembersMixin, RenderDoc):
+class ModuleRenderer(MembersRendererMixin, ObjectRenderer):
     """
-    Render documentation for a module (`content.DocModule`)
+    Module documentation with grouped member presentation
     """
 
     def __post_init__(self):
@@ -38,9 +40,3 @@ class __RenderDocModule(RenderDocMembersMixin, RenderDoc):
             Code(self.signature_name),
             Attr(classes=["doc-signature", f"doc-{self.kind_slug}"]),
         )
-
-
-class RenderDocModule(__RenderDocModule):
-    """
-    Extension point for the rendering of a `content.DocModule` object
-    """

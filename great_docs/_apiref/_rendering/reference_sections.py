@@ -1,3 +1,5 @@
+"""A reference index section with object and page summaries"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -13,7 +15,7 @@ from great_docs.pandoc.blocks import (
 from great_docs.pandoc.components import Attr
 
 from ._tables import summary_table
-from .base import RenderBase
+from .base import BaseRenderer
 
 if TYPE_CHECKING:
     from typing import Literal
@@ -31,9 +33,9 @@ _GROUP_TITLE_KEYS = {
 
 
 @dataclass
-class __RenderReferenceSection(RenderBase):
+class ReferenceSectionRenderer(BaseRenderer):
     """
-    Render a section object (`content.Section`)
+    A reference index section with object and page summaries
 
     This is a section of the index/reference page
     """
@@ -88,7 +90,7 @@ class __RenderReferenceSection(RenderBase):
 
         Markup and Styling
         ------------------
-        The output structure depends on the [](`~RenderReferenceSection.display_format`):
+        The output structure depends on the [](`~ReferenceSectionRenderer.display_format`):
 
         | Display Format| HTML Elements    | CSS Selector                          |
         |:-------------|:-----------------|:--------------------------------------|
@@ -111,16 +113,14 @@ class __RenderReferenceSection(RenderBase):
 
         See Also
         --------
-        great_docs.renderer.RenderDoc.render_summary : This is where the items in the
+        great_docs.renderer.ObjectRenderer.render_summary : This is where the items in the
         list or table are rendered.
         """
         if not self.section.contents:
             return
 
-        from . import get_render_type
-
         render_objs: list[RenderObjType] = [
-            get_render_type(c)(c, settings=self.settings) for c in self.section.contents
+            self.renderers.make(c, settings=self.settings) for c in self.section.contents
         ]
         rows = [row for r in render_objs for row in r.render_summary()]
         items = (
@@ -129,9 +129,3 @@ class __RenderReferenceSection(RenderBase):
             else summary_table(rows, self.settings.lang)
         )
         return items
-
-
-class RenderReferenceSection(__RenderReferenceSection):
-    """
-    Extension point for the rendering of a section on the api-reference page
-    """

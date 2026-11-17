@@ -266,7 +266,7 @@ def test_empty_parameter_section_disappears_but_deprecation_prose_remains() -> N
 
 
 def test_dataclass_fields_do_not_reappear_as_attributes() -> None:
-    from great_docs._apiref._render.docclass import RenderDocClass
+    from great_docs._apiref._rendering.classes import ClassRenderer
     from great_docs._apiref.content import Doc
 
     source = '''
@@ -293,7 +293,7 @@ def test_dataclass_fields_do_not_reappear_as_attributes() -> None:
         qmd = _rendered(obj)
         members = [Doc.from_griffe(name, attribute) for name, attribute in obj.attributes.items()]
         node = Doc.from_griffe("C", obj, members)
-        renderer = RenderDocClass(node, settings=Settings())
+        renderer = ClassRenderer(node, settings=Settings())
         assert not renderer.attributes
         assert "Retained field description" in qmd
         assert "Excluded field description" not in qmd

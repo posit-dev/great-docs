@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from yaml12 import format_yaml
 
-from ..._apiref._render._tables import html_table
+from ..._apiref._rendering._tables import html_table
 from ..._translations import translate
 from ..icons import get_icon_svg
 

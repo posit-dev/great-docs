@@ -16,7 +16,7 @@ from great_docs.pandoc.blocks import (
 )
 
 from . import inventory
-from ._render import get_render_type
+from ._rendering._renderers import Renderers
 from ._type_checks import griffe_to_doc, is_protocol, is_typealias, is_typevar
 from .introspect import get_object
 
@@ -37,12 +37,13 @@ class _TypeCategory:
     render_flags: dict[str, bool]
     settings: Settings
     renders: list[RenderObjType] = field(init=False)
+    renderers: Renderers = field(default_factory=Renderers, kw_only=True)
 
     def __post_init__(self) -> None:
         self.renders = []
         for item in self.items:
             docable = griffe_to_doc(item.obj)
-            render = get_render_type(docable)(docable, 3, settings=self.settings)
+            render = self.renderers.make(docable, 3, settings=self.settings)
             for flag, value in self.render_flags.items():
                 assert hasattr(render, flag), f"Unknown render flag: {flag}"
                 setattr(render, flag, value)
@@ -55,17 +56,31 @@ class TypeSections(Block):
     typevars_items: list[inventory.InventoryItem]
     typealiases_items: list[inventory.InventoryItem]
     settings: Settings
+    renderers: Renderers = field(default_factory=Renderers, kw_only=True)
 
     def __post_init__(self) -> None:
         s = self.settings
         self.categories = [
-            _TypeCategory("Protocols", self.protocols_items, {"show_members_summary": False}, s),
-            _TypeCategory("Type Variables", self.typevars_items, {"show_signature_name": False}, s),
+            _TypeCategory(
+                "Protocols",
+                self.protocols_items,
+                {"show_members_summary": False},
+                s,
+                renderers=self.renderers,
+            ),
+            _TypeCategory(
+                "Type Variables",
+                self.typevars_items,
+                {"show_signature_name": False},
+                s,
+                renderers=self.renderers,
+            ),
             _TypeCategory(
                 "Type Aliases",
                 self.typealiases_items,
                 {"show_signature_annotation": False},
                 s,
+                renderers=self.renderers,
             ),
         ]
 
@@ -165,6 +180,7 @@ class TypeInformation(Block):
             typevars_items=[make_item(m) for m in members if is_typevar(m)],
             typealiases_items=[make_item(m) for m in members if is_typealias(m)],
             settings=self.api_ref.settings,
+            renderers=self.api_ref.renderers,
         )
 
     @cached_property

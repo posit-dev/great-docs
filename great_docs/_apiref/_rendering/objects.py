@@ -1,3 +1,5 @@
+"""Presentation of a Python object and its parsed documentation"""
+
 from __future__ import annotations
 
 import logging
@@ -10,7 +12,7 @@ from typing import TYPE_CHECKING, cast
 
 import griffe as gf
 
-from great_docs._apiref._render._label import get_label
+from great_docs._apiref._rendering._label import get_label
 from great_docs._translations import translate, translate_versioned
 from great_docs.pandoc.blocks import (
     Block,
@@ -47,7 +49,7 @@ from .._format import (
     repr_obj,
 )
 from ._section_dispatch import SECTION_METHOD
-from .base import RenderBase
+from .base import BaseRenderer
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -85,9 +87,9 @@ _SECTION_TITLE_KEYS = {
 
 
 @dataclass
-class __RenderDoc(RenderBase):
+class ObjectRenderer(BaseRenderer):
     """
-    Render a `content.Doc` object
+    Presentation of a Python object and its parsed documentation
     """
 
     show_title: bool = True
@@ -141,29 +143,11 @@ class __RenderDoc(RenderBase):
     below.
     """
 
-    # page_path: str = field(init=False, repr=False, default="")
     page_path: str = ""
     """
-    Name of the page where this object's rendered content
-    will be written. It should be the name of the object
-    as listed in the great_docs._apiref yaml section. e.g
+    Output-relative path of the page containing this object's documentation
 
-    Given
-
-    ```yaml
-    sections:
-      - title: RenderClasses
-        - name: base.RenderBase
-          package: great_docs.renderer._render
-        - RenderDoc
-    ```
-
-    `RenderBase` will be written to `*/base.RenderBase.qmd` and
-    `RenderDoc` will be written to `*/RenderDoc.qmd`. By default,
-    they will also be summarised as `base.RenderBase` and `RenderDoc`.
-
-    If the object isn't listed, e.g the class methods of `RenderDoc`
-    this the page_path will be an empty string.
+    An empty string links summaries to an anchor on their current page.
     """
 
     show_source_link: bool = True
@@ -748,7 +732,7 @@ class __RenderDoc(RenderBase):
 
         See Also
         --------
-        great_docs.renderer.RenderReferenceSection.render_body : For more context about
+        great_docs.renderer.ReferenceSectionRenderer.render_body : For more context about
         where the rendered link and text are placed.
         """
         # The page where this object will be written
@@ -946,11 +930,3 @@ def _declared_in_stub(obj: gf.Object | gf.Alias) -> bool:
             return True
         current = getattr(current, "parent", None)
     return False
-
-
-class RenderDoc(__RenderDoc):
-    """
-    Extension point for the rendering of all objects that have docstrings
-
-    These are modules, classes, functions and attributes.
-    """

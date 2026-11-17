@@ -44,13 +44,13 @@ def _load_type_parameters(code: str, name: str):
     ],
 )
 def test_render_type_parameters(source: str, name: str, expected: str):
-    from great_docs._apiref._render._type_parameters import render_type_parameters
+    from great_docs._apiref._rendering._type_parameters import render_type_parameters
 
     assert render_type_parameters(_load_type_parameters(source, name)) == expected
 
 
 def test_render_type_parameters_none():
-    from great_docs._apiref._render._type_parameters import render_type_parameters
+    from great_docs._apiref._rendering._type_parameters import render_type_parameters
 
     assert render_type_parameters(None) == ""
 
@@ -64,14 +64,14 @@ def _load_member(code: str, name: str):
 
 
 def test_label_pep695_spelling():
-    from great_docs._apiref._render._label import get_label
+    from great_docs._apiref._rendering._label import get_label
 
     obj = _load_member("type Contract = int | str", "Contract")
     assert get_label(obj) == "typealias"
 
 
 def test_label_legacy_spelling():
-    from great_docs._apiref._render._label import get_label
+    from great_docs._apiref._rendering._label import get_label
 
     code = "from typing import TypeAlias\nContract: TypeAlias = int | str\n"
     obj = _load_member(code, "Contract")
@@ -89,20 +89,20 @@ def test_label_legacy_spelling():
 )
 def test_label_type_variable_without_annotation(code: str, name: str):
     """Label a type variable by its declared value when it has no annotation"""
-    from great_docs._apiref._render._label import get_label
+    from great_docs._apiref._rendering._label import get_label
 
     assert get_label(_load_member(code, name)) == "typevar"
 
 
 def test_label_plain_constant_still_works():
-    from great_docs._apiref._render._label import get_label
+    from great_docs._apiref._rendering._label import get_label
 
     assert get_label(_load_member("MAX: int = 3\n", "MAX")) == "constant"
 
 
 @pytest.mark.parametrize("annotation", ["TypeAliasRegistry", "MyTypeAlias"])
 def test_label_similarly_named_annotation_is_constant(annotation: str):
-    from great_docs._apiref._render._label import get_label
+    from great_docs._apiref._rendering._label import get_label
 
     source = f"class {annotation}: pass\nvalue: {annotation}\n"
     assert get_label(_load_member(source, "value")) == "constant"
@@ -202,6 +202,9 @@ def test_type_information_preserves_alias_name():
     from great_docs._apiref.typing_information import TypeInformation
 
     api_ref = MagicMock()
+    from great_docs.rendering import Renderers
+
+    api_ref.renderers = Renderers()
     api_ref.package = "package"
     api_ref.settings.dir = "reference"
 
@@ -225,6 +228,9 @@ def test_type_information_lists_reexported_names():
     from great_docs._apiref.typing_information import TypeInformation
 
     api_ref = MagicMock()
+    from great_docs.rendering import Renderers
+
+    api_ref.renderers = Renderers()
     api_ref.package = "package"
     api_ref.settings.dir = "reference"
 
@@ -267,6 +273,9 @@ def test_type_information_omits_names_imported_from_outside():
     from great_docs._apiref.typing_information import TypeInformation
 
     api_ref = MagicMock()
+    from great_docs.rendering import Renderers
+
+    api_ref.renderers = Renderers()
     api_ref.package = "package"
     api_ref.settings.dir = "reference"
 
@@ -327,14 +336,14 @@ def test_valueless_alias_omits_default_clause():
     """
     import griffe as gf
 
-    from great_docs._apiref._render import get_render_type
+    from great_docs._apiref._rendering import Renderers
     from great_docs._apiref.content import Doc
 
     obj = gf.TypeAlias(name="Empty", lineno=1)
     assert obj.value is None
 
     doc = Doc.from_griffe("Empty", obj)
-    qmd = str(get_render_type(doc)(doc, 1, settings=Settings()))
+    qmd = str(Renderers().make(doc, 1, settings=Settings()))
 
     assert "None" not in qmd
     assert "doc-parameter-default-sep" not in qmd
@@ -517,6 +526,9 @@ def test_type_information_page_is_a_reference_page():
     from great_docs._apiref.typing_information import TypeInformation
 
     api_ref = MagicMock()
+    from great_docs.rendering import Renderers
+
+    api_ref.renderers = Renderers()
     api_ref.package = "package"
     api_ref.settings.dir = "reference"
 

@@ -18,6 +18,7 @@ from .._yaml import locate_front_matter
 from .content import Page, Section
 
 if TYPE_CHECKING:
+    from ._rendering._renderers import Renderers
     from ._settings import Settings
     from .api_reference import APIReference
 
@@ -227,10 +228,8 @@ def write_index(
     header_level :
         Heading depth used for section titles in the rendered output.
     """
-    from ._render.reference_page import RenderReferencePage
-
     _log.info("Summarizing docs for index page.")
-    content = str(RenderReferencePage(api_ref, sections, header_level))
+    content = str(api_ref.renderers.make(api_ref, header_level, sections=sections))
     _log.info(f"Writing index to directory: {dir}")
 
     p_index = Path(dir) / out_index
@@ -300,7 +299,13 @@ def write_typing_information(
 # ---------------------------------------------------------------------------
 
 
-def write_pages(pages: list[Page], settings: Settings, *, site_toc_depth: int) -> None:
+def write_pages(
+    pages: list[Page],
+    settings: Settings,
+    *,
+    site_toc_depth: int,
+    renderers: Renderers | None = None,
+) -> None:
     """
     Write API reference pages to the configured output directory
 
@@ -321,13 +326,17 @@ def write_pages(pages: list[Page], settings: Settings, *, site_toc_depth: int) -
     site_toc_depth
         Merged site table-of-contents depth. A page overrides it only when
         member headings require a greater depth.
+    renderers
+        Renderer choices shared by pages and nested objects. `None` uses defaults.
     """
-    from ._render.api_page import RenderAPIPage
+    from ._rendering._renderers import Renderers
+
+    choices = renderers or Renderers()
 
     for page in pages:
         _log.info(f"Rendering {page.path}")
         rendered = str(
-            RenderAPIPage(page, settings.header_level, toc_depth=site_toc_depth, settings=settings)
+            choices.make(page, settings.header_level, toc_depth=site_toc_depth, settings=settings)
         )
 
         rendered = merge_frontmatter(

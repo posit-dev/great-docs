@@ -1,3 +1,5 @@
+"""Callable signatures, parameters and callable docstring sections"""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -20,15 +22,15 @@ from .._format import repr_obj
 from .._parameter_docs import CallableDocumentation
 from .._signature import make_call_signature_text, render_signature_block
 from .._type_checks import is_enum, is_typeddict
-from .doc import RenderDoc
+from .objects import ObjectRenderer
 
 if TYPE_CHECKING:
     from ..content import DocClass, DocFunction
 
 
-class __RenderDocCallMixin(RenderDoc):
+class CallableRendererMixin(ObjectRenderer):
     """
-    Mixin to render Doc objects that can be called
+    Callable signatures, parameters and callable docstring sections
 
     i.e. classes (for the __init__ or __new__ method) and functions/methods
     """
@@ -307,9 +309,3 @@ class __RenderDocCallMixin(RenderDoc):
 
         default = (default and f"{equals}{default}") or ""
         return f"{name}{annotation}{default}"
-
-
-class RenderDocCallMixin(__RenderDocCallMixin):
-    """
-    Extension point for the rendering of objects that can be called
-    """

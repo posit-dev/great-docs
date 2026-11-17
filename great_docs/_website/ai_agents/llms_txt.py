@@ -412,7 +412,6 @@ def _api_details(module: ModuleType, item_name: str, *, parser: str = "numpy") -
         if any("%nodoc_param" in text for text in docstrings):
             from ..._apiref import APIReference
             from ..._apiref._parameter_docs import CallableDocumentation
-            from ..._apiref._render import get_render_type
             from ..._apiref.content import Page
 
             reference = APIReference(
@@ -432,7 +431,7 @@ def _api_details(module: ModuleType, item_name: str, *, parser: str = "numpy") -
             ]
             if any(CallableDocumentation.make(doc.obj).excluded_names for doc in docs):
                 return "\n\n".join(
-                    str(get_render_type(doc)(doc, settings=reference.settings)) for doc in docs
+                    str(reference.renderers.make(doc, settings=reference.settings)) for doc in docs
                 )
 
         obj_name = getattr(obj, "__name__", item_name)

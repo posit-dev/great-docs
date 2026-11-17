@@ -1,3 +1,5 @@
+"""Common state and cached presentation for object, page and section renderers"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -10,8 +12,6 @@ from great_docs.pandoc.blocks import (
     Blocks,
 )
 
-from .extending import extend_base_class
-
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -19,16 +19,25 @@ if TYPE_CHECKING:
 
     from .. import content
     from .._settings import Settings
+    from ..api_reference import APIReference
+    from ._renderers import Renderers
+
+
+def _default_renderers() -> Renderers:
+    from ._renderers import Renderers
+
+    return Renderers()
 
 
 @dataclass
-class __RenderBase(Block):
+class BaseRenderer(Block):
     """
-    Render an object
+    Common presentation state for documentation objects, pages and sections
     """
 
     node: (
-        content.DocClass
+        APIReference
+        | content.DocClass
         | content.DocFunction
         | content.DocAttribute
         | content.DocTypeAlias
@@ -52,11 +61,14 @@ class __RenderBase(Block):
     show_body: bool = True
     """Whether to show the documentation body of the object"""
 
+    renderers: Renderers = field(default_factory=_default_renderers, kw_only=True)
+    """Renderer choices shared with nested objects, pages and summaries"""
+
     settings: Settings = field(kw_only=True)
     """
     The settings of the API reference being rendered
 
-    A `Render*` subclass reads the language, signature style and source
+    A renderer reads the language, signature style and source
     links of its reference here.
     """
 
@@ -144,34 +156,3 @@ class __RenderBase(Block):
         Return a line item, or items, that summarises the object
         """
         return []
-
-
-class RenderBase(__RenderBase):
-    """
-    Extension point for the base render class
-
-    This class is meant for internal use. Users should not have
-    to extend it.
-    """
-
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-
-        # We want users to extend the rendering by subclassing a Render*
-        # class and overriding methods and/or attributes as necessary.
-        #
-        # This hook customises how user-defined Render subclasses behave.
-        #
-        # The package defines a set of empty base classes—extension points,
-        # which contain no methods or attributes by default. Users are
-        # encouraged to subclass a provided Render class and override these
-        # extension points with their own methods and attributes.
-        #
-        # Internally, we also subclass these empty base classes. This ensures
-        # that any user-defined overrides "fill in" the base and are used
-        # throughout the package.
-        #
-        # The "filling in" should only happen when extending the Render*
-        # classes outside the package.
-        if not cls.__module__.startswith("great_docs."):
-            extend_base_class(cls)

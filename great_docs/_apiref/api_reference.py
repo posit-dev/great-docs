@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 from griffe import AliasResolutionError, CyclicAliasError
 
 from .._interlinks.sphinx_inventory import INVENTORY_FILENAME
+from ._rendering._renderers import Renderers
 from ._settings import Settings, SourceLinks
 from .content import Doc, Page
 from .inventory import create_inventory, write_inventory
@@ -67,6 +68,7 @@ class APIReference:
         source_links
             The source-link destinations, or `None` to disable source links.
         """
+        self._renderers = Renderers()
         self.site_toc_depth = self._read_site_toc_depth(config)
         block = self._select_block(config)
         block = {k: v for k, v in block.items() if k not in _REMOVED_KEYS}
@@ -91,6 +93,11 @@ class APIReference:
             [s if isinstance(s, SpecSection) else SpecSection(**s) for s in raw_sections],
             self._entry_label,
         )
+
+    @property
+    def renderers(self) -> Renderers:
+        """Renderer choices used throughout this reference"""
+        return self._renderers
 
     @staticmethod
     def _read_lang(cfg: dict[str, Any]) -> str:
@@ -182,7 +189,7 @@ class APIReference:
         Returns `None` when the object cannot be found, so the page falls back
         to a numbered suffix.
         """
-        from ._render._label import get_label
+        from ._rendering._label import get_label
 
         s = self.settings
         if s.source_dir and (source_dir := str(Path(s.source_dir).absolute())) not in sys.path:
@@ -259,7 +266,7 @@ class APIReference:
         )
 
         _log.info("Writing docs pages")
-        write_pages(pages, s, site_toc_depth=self.site_toc_depth)
+        write_pages(pages, s, site_toc_depth=self.site_toc_depth, renderers=self.renderers)
         write_typing_information(s.typing_module_paths, self)
 
         _log.info("Creating inventory file")

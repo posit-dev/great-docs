@@ -3,7 +3,7 @@ from contextvars import copy_context
 import griffe as gf
 import pytest
 
-from great_docs._apiref import RenderDocFunction, content
+from great_docs._apiref import FunctionRenderer, content
 from great_docs._apiref._settings import Settings
 from great_docs._apiref.resolve import resolution_lang
 from great_docs._builtin.directives import _callouts
@@ -232,7 +232,7 @@ def test_first_line_callout_is_rendered_in_the_docstring_body():
     )
     add_callouts(function)
 
-    renderer = RenderDocFunction(
+    renderer = FunctionRenderer(
         content.Doc.from_griffe(function.name, function), settings=Settings()
     )
 
@@ -248,7 +248,7 @@ def test_normal_first_line_remains_the_docstring_subject():
         parser="numpy",
     )
 
-    renderer = RenderDocFunction(
+    renderer = FunctionRenderer(
         content.Doc.from_griffe(function.name, function), settings=Settings()
     )
 

@@ -4,7 +4,7 @@ import textwrap
 import griffe as gf
 import pytest
 
-from great_docs._apiref import RenderDocFunction, content
+from great_docs._apiref import FunctionRenderer, content
 from great_docs._apiref._docstring_sections import DocstringSectionSeeAlso, transform
 from great_docs._apiref.api_reference import Settings
 from great_docs._apiref.resolve import Resolver
@@ -339,7 +339,7 @@ def test_empty_docstring_value_has_no_subject():
     obj = _obj("")
     assert obj.docstring is not None
     obj.docstring.__dict__["parsed"] = [gf.DocstringSectionText("")]
-    renderer = RenderDocFunction(content.Doc.from_griffe(obj.name, obj), settings=Settings())
+    renderer = FunctionRenderer(content.Doc.from_griffe(obj.name, obj), settings=Settings())
 
     assert renderer.docstring_subject is None
 
@@ -347,7 +347,7 @@ def test_empty_docstring_value_has_no_subject():
 def test_directive_only_seealso_renders_every_reference_without_a_subject():
     obj = _obj("%seealso first : First reference, second : Second reference")
     add_seealso(obj)
-    renderer = RenderDocFunction(content.Doc.from_griffe(obj.name, obj), settings=Settings())
+    renderer = FunctionRenderer(content.Doc.from_griffe(obj.name, obj), settings=Settings())
 
     body = str(renderer.render_body())
 
