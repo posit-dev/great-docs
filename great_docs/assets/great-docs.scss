@@ -4982,6 +4982,15 @@ html:not(.theme-loaded) *::after {
     overflow-x: clip;
 }
 
+/* Below the hero, the first heading of a README homepage would otherwise sit
+   below a gap */
+.gd-homepage section.level1:first-of-type > h1:first-child,
+.gd-homepage section.level2:first-of-type > h2:first-child,
+.gd-homepage .column-body-outset-right > section.level1:first-of-type > h1,
+.gd-homepage #quarto-document-content > section:first-of-type > h1 {
+    margin-top: 4px !important;
+}
+
 .gd-hero {
     text-align: center;
     padding: 2.5rem 1rem 2rem;
