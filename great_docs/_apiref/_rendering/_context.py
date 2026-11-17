@@ -1,9 +1,5 @@
 """
-The context that body callbacks receive, and the internal rendering purposes
-
-A `RenderContext` describes one appearance of an object. The record is frozen, but
-the object and settings it refers to are not, so body callbacks treat them as
-read-only.
+An object's placement and rendering purpose
 """
 
 from __future__ import annotations

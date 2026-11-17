@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any, cast
 from griffe import AliasResolutionError, CyclicAliasError
 
 from .._interlinks.sphinx_inventory import INVENTORY_FILENAME
+from ._customisation import Extension
+from ._extension_loading import _ExtensionSource
 from ._rendering._renderers import Renderers
 from ._settings import Settings, SourceLinks
 from .content import Doc, Page
@@ -57,6 +59,9 @@ class APIReference:
         self,
         config: dict[str, Any],
         source_links: SourceLinks | None = None,
+        *,
+        extension_source: _ExtensionSource | None = None,
+        output_root: Path | None = None,
     ) -> None:
         """
         Configure an API reference from Quarto settings and source-link destinations
@@ -67,8 +72,18 @@ class APIReference:
             The Quarto configuration mapping or its `api-reference` block.
         source_links
             The source-link destinations, or `None` to disable source links.
+        extension_source
+            The extension file and the project directories, or `None` to use only the
+            handlers registered through `great_docs.hooks`. Reading the configuration
+            and sections never loads the file.
+        output_root
+            The generated documentation root, or `None` when the reference writes no
+            files.
         """
-        self._renderers = Renderers()
+        self._extension_source = extension_source
+        self.output_root = output_root
+        self._extension: Extension | None = None
+        self._closed = False
         self.site_toc_depth = self._read_site_toc_depth(config)
         block = self._select_block(config)
         block = {k: v for k, v in block.items() if k not in _REMOVED_KEYS}
@@ -95,9 +110,32 @@ class APIReference:
         )
 
     @property
+    def extension(self) -> Extension:
+        """
+        The operation owner, loading configured Python on first access
+
+        Execute the entry file and its `setup(extension)` once for this reference.
+        Reading authored sections and closing an unused reference do not access it.
+        """
+        if self._closed:
+            raise RuntimeError("The API reference is closed.")
+        if self._extension is None:
+            self._extension = Extension(self.settings, self._extension_source)
+        self._extension.load()
+        return self._extension
+
+    @property
     def renderers(self) -> Renderers:
-        """Renderer choices used throughout this reference"""
-        return self._renderers
+        """Renderer choices selected by this operation's setup"""
+        return self.extension.renderers
+
+    def close(self) -> None:
+        """Release an active extension without loading an unused reference"""
+        if self._closed:
+            return
+        self._closed = True
+        if self._extension is not None:
+            self._extension.close()
 
     @staticmethod
     def _read_lang(cfg: dict[str, Any]) -> str:
@@ -204,6 +242,7 @@ class APIReference:
         """The resolved section tree, computed once per instance"""
         from .collect import unique_member_page_paths
 
+        _ = self.extension
         token = resolution_lang.set(self.settings.lang)
         try:
             secs = self.sections or unique_page_paths(
@@ -266,7 +305,13 @@ class APIReference:
         )
 
         _log.info("Writing docs pages")
-        write_pages(pages, s, site_toc_depth=self.site_toc_depth, renderers=self.renderers)
+        write_pages(
+            pages,
+            s,
+            site_toc_depth=self.site_toc_depth,
+            renderers=self.renderers,
+            extension=self.extension,
+        )
         write_typing_information(s.typing_module_paths, self)
 
         _log.info("Creating inventory file")

@@ -448,19 +448,14 @@ class ObjectRenderer(BaseRenderer):
             sections.append(content)
         return sections
 
-    @cached_property
-    def docstring_body(self) -> BlockContent:
-        """The object's own rendered docstring, cached separately from automatic members"""
-        return self.render_docstring_body()
-
     def render_body(self) -> BlockContent:
         """
-        Render the object's docstring body after body callbacks
+        Render the object's docstring body
 
         Replacing this method without `super()` replaces the full composition.
         Override `render_docstring_body` to change only authored documentation.
         """
-        return self.docstring_body
+        return self.render_docstring_body()
 
     def render_docstring_body(self) -> BlockContent:
         """

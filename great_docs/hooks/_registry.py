@@ -71,6 +71,48 @@ class HookRegistry(Generic[H]):
     def __len__(self) -> int:
         return len(self._entries)
 
+    def snapshot(self) -> tuple[tuple[int, int, H], ...]:
+        """
+        Capture the current registrations without copying their handlers
+
+        Returns
+        -------
+        :
+            The `(priority, sequence, handler)` entries in registration order.
+        """
+        return tuple(self._entries)
+
+    def restore(self, entries: tuple[tuple[int, int, H], ...]) -> None:
+        """
+        Replace the registrations with an earlier snapshot
+
+        Handlers registered afterwards follow the snapshot's handlers in tie order.
+
+        Parameters
+        ----------
+        entries
+            The registrations that `snapshot` returned.
+        """
+        self._entries = list(entries)
+        self._sequence = max((sequence for _, sequence, _ in entries), default=-1) + 1
+        self._ordered = None
+
+    def copy(self) -> HookRegistry[H]:
+        """
+        Copy the registrations into a new registry
+
+        Both registries hold the same handler objects, but a later registration on
+        one does not appear in the other.
+
+        Returns
+        -------
+        :
+            A registry with the same handlers in the same run order.
+        """
+        registry = HookRegistry[H]()
+        registry.restore(self.snapshot())
+        return registry
+
     def clear(self) -> None:
         """Drop all registered handlers"""
         self._entries.clear()

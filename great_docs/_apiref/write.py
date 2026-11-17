@@ -9,6 +9,7 @@ the typing pages — written to disk by `write_index`, `write_pages`,
 from __future__ import annotations
 
 import logging
+from contextlib import nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -18,6 +19,7 @@ from .._yaml import locate_front_matter
 from .content import Page, Section
 
 if TYPE_CHECKING:
+    from ._customisation import Extension
     from ._rendering._renderers import Renderers
     from ._settings import Settings
     from .api_reference import APIReference
@@ -229,7 +231,9 @@ def write_index(
         Heading depth used for section titles in the rendered output.
     """
     _log.info("Summarizing docs for index page.")
-    content = str(api_ref.renderers.make(api_ref, header_level, sections=sections))
+    extension = api_ref.extension
+    with extension.error_context("render", str(Path(dir) / out_index)):
+        content = str(api_ref.renderers.make(api_ref, header_level, sections=sections))
     _log.info(f"Writing index to directory: {dir}")
 
     p_index = Path(dir) / out_index
@@ -305,6 +309,7 @@ def write_pages(
     *,
     site_toc_depth: int,
     renderers: Renderers | None = None,
+    extension: Extension | None = None,
 ) -> None:
     """
     Write API reference pages to the configured output directory
@@ -328,6 +333,9 @@ def write_pages(
         member headings require a greater depth.
     renderers
         Renderer choices shared by pages and nested objects. `None` uses defaults.
+    extension
+        Active operation owner for contextual renderer failures. `None` preserves
+        standalone rendering without configured extension error handling.
     """
     from ._rendering._renderers import Renderers
 
@@ -335,9 +343,14 @@ def write_pages(
 
     for page in pages:
         _log.info(f"Rendering {page.path}")
-        rendered = str(
-            choices.make(page, settings.header_level, toc_depth=site_toc_depth, settings=settings)
-        )
+        page_path = str(Path(settings.dir) / (page.path + settings.out_page_suffix))
+        context = extension.error_context("render", page_path) if extension else nullcontext()
+        with context:
+            rendered = str(
+                choices.make(
+                    page, settings.header_level, toc_depth=site_toc_depth, settings=settings
+                )
+            )
 
         rendered = merge_frontmatter(
             rendered, {"page-navigation": False, "html-table-processing": "none"}

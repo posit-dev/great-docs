@@ -387,6 +387,9 @@ csl: null
 #       - another_func
 reference: []
 
+# A Python file that defines setup(extension), relative to this config file.
+api_reference_extension: null
+
 # Member Page Placement
 # ---------------------
 # Place the selected direct members of top-level reference entries.

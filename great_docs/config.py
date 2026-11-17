@@ -170,6 +170,15 @@ class Config:
 
         config = self._normalize_shorthands(config)
         self._validate_repository(config)
+        extension = config["api_reference_extension"]
+        if extension is not None and (
+            not isinstance(extension, str)
+            or not extension.strip()
+            or Path(extension).suffix != ".py"
+        ):
+            raise ConfigError(
+                f"{self.config_path}: api_reference_extension must be a non-empty .py path or null."
+            )
         config["parser"] = self._validate_parser(config["parser"], self.config_path)
         config["webmcp"] = self._validate_webmcp(config["webmcp"], self.config_path)
         return config
@@ -681,6 +690,20 @@ class Config:
     def repo_style(self) -> str:
         """Get the repository link style"""
         return self["repo_style"]
+
+    @property
+    def api_reference_extension(self) -> Path | None:
+        """
+        The API reference extension file, resolved against the configuration file's directory
+
+        Reading this path does not import or execute the entry file. A null
+        value disables project-local setup.
+        """
+        value = cast("str | None", self["api_reference_extension"])
+        if value is None:
+            return None
+        path = Path(value)
+        return (path if path.is_absolute() else self.config_path.parent / path).resolve()
 
     @property
     def source_enabled(self) -> bool:

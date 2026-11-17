@@ -4,6 +4,8 @@ Documentation build order and shared state
 Builds produce a single-version or versioned site. Watch mode serves a prepared project
 with `quarto preview` and repeats preparation after source edits. Rendering and freezing
 use the same preparation steps, except that freezing skips remote content publication.
+Each build owns its active API reference through the last consumer and releases
+its extension state on completion or failure.
 """
 
 from __future__ import annotations
@@ -92,6 +94,9 @@ class Run:
     api_block
         The `api-reference` block of `quarto_config`, or `None` for a site without an API
         reference.
+    api_reference
+        The active API reference, assigned before generation so failed attempts
+        can release their owned extension imports.
     api_discovery_reused
         Whether this build reused cached API reference sections.
     user_guide
@@ -113,9 +118,15 @@ class Run:
     has_skills: bool = False
     quarto_config: dict[str, Any] = field(default_factory=lambda: dict[str, Any]())
     api_block: dict[str, Any] | None = None
+    api_reference: APIReference | None = None
     api_discovery_reused: bool = False
     user_guide: UserGuide | None = None
     contributions: list[Contribution] = field(default_factory=lambda: list[Contribution]())
+
+    def close(self) -> None:
+        """Close the build's API reference, if it has one, without loading its extension"""
+        if self.api_reference is not None:
+            self.api_reference.close()
 
     @classmethod
     def make(cls, config: Config, layout: Layout, *, watch: bool) -> Run:
@@ -268,14 +279,17 @@ def run(
     log.total_steps = count_listed(steps)
     log.header()
 
-    if watch:
-        _watch(current, config, layout, log, steps, remote=remote, refresh=refresh)
-        return
+    try:
+        if watch:
+            _watch(current, config, layout, log, steps, remote=remote, refresh=refresh)
+            return
 
-    run_steps(steps, log, layout.build_dir)
-    site_path = layout.site_dir / "index.html"
-    log.footer(site_path=str(site_path if site_path.exists() else layout.site_dir))
-    finish.print_layout_notice(layout)
+        run_steps(steps, log, layout.build_dir)
+        site_path = layout.site_dir / "index.html"
+        log.footer(site_path=str(site_path if site_path.exists() else layout.site_dir))
+        finish.print_layout_notice(layout)
+    finally:
+        current.close()
 
 
 def prepare_for_freeze(config: Config, layout: Layout, log: BuildLog, *, remote: Remote) -> None:
@@ -304,7 +318,10 @@ def prepare_for_freeze(config: Config, layout: Layout, log: BuildLog, *, remote:
     config = site.with_ci_site_url(config)
     current = Run.make(config, layout, watch=False)
     steps = preparation_steps(current, config, layout, log, remote=remote)
-    freeze.prepare(steps, log, layout.build_dir)
+    try:
+        freeze.prepare(steps, log, layout.build_dir)
+    finally:
+        current.close()
 
 
 def preparation_steps(
@@ -347,13 +364,10 @@ def preparation_steps(
     :
         The steps in the order they run.
     """
-    # Results shared between preparation steps
-    ref: APIReference | None = None
     frozen_pages: list[str] = []
 
     def generate_api_reference() -> Outcome:
-        nonlocal ref
-        outcome, ref = reference.api(run, config, layout, log)
+        outcome, _ = reference.api(run, config, layout, log)
         return outcome
 
     def prepare_freeze_cache() -> Outcome:
@@ -488,7 +502,7 @@ def preparation_steps(
         Step("Generate API reference", generate_api_reference, user_code=True),
         Step(
             "Build interlinks index",
-            lambda: reference.interlinks(run, config, layout, log, api_reference=ref),
+            lambda: reference.interlinks(run, config, layout, log, api_reference=run.api_reference),
             quiet=False,
         ),
         Step("Prepare freeze cache", prepare_freeze_cache, quiet=False),
@@ -656,7 +670,10 @@ def _watch(
     BuildError
         If an initial preparation step fails. The log already contains the report.
     """
-    run_steps(steps, log, layout.build_dir)
+    try:
+        run_steps(steps, log, layout.build_dir)
+    finally:
+        run.close()
     log.footer(watch_mode=True)
     finish.print_layout_notice(layout)
     preview_env = quarto.environment(config)
@@ -672,8 +689,11 @@ def _watch(
             current, edited, staging, rebuild_log, remote=remote, refresh=refresh
         )
         rebuild_log.total_steps = count_listed(preparation)
-        run_steps(preparation, rebuild_log, staging.build_dir)
-        return current.quarto_config
+        try:
+            run_steps(preparation, rebuild_log, staging.build_dir)
+            return current.quarto_config
+        finally:
+            current.close()
 
     package_init = run.project.package_init if config.is_python_project else None
     package = package_init.parent if package_init is not None else None

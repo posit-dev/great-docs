@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
@@ -23,6 +24,7 @@ from ._type_checks import is_protocol, is_typealias, is_typevar
 from .introspect import get_object
 
 if TYPE_CHECKING:
+    from ._customisation import Extension
     from ._settings import Settings
     from .api_reference import APIReference
     from .typing import RenderObjType
@@ -44,12 +46,19 @@ class _TypeCategory:
         settings: Settings,
         choices: Renderers,
         purpose: _RenderingPurpose,
+        *,
+        extension: Extension | None = None,
+        page_path: str | None = None,
     ) -> _TypeCategory:
         """Construct category renderers using the typing workflow's presentation"""
-        renderers: list[RenderObjType] = [
-            choices.make(griffe_to_doc(item.obj), 3, settings=settings, _purpose=purpose)
-            for item in items
-        ]
+        renderers: list[RenderObjType] = []
+        for item in items:
+            doc = griffe_to_doc(item.obj)
+            occurrence = f"{item.name} on {page_path}" if page_path else item.name
+            context = extension.error_context("render", occurrence) if extension else nullcontext()
+            with context:
+                renderer = choices.make(doc, 3, settings=settings, _purpose=purpose)
+            renderers.append(renderer)
         return cls(title, items, renderers)
 
 
@@ -60,6 +69,10 @@ class TypeSections(Block):
     typealiases_items: list[inventory.InventoryItem]
     settings: Settings
     renderers: Renderers = field(default_factory=Renderers, kw_only=True)
+    extension: Extension | None = field(default=None, kw_only=True)
+    """Active owner for renderer failures, or `None` for standalone sections"""
+    page_path: str | None = field(default=None, kw_only=True)
+    """The typing page's path, which a rendering failure names"""
 
     def __post_init__(self) -> None:
         self.categories = [
@@ -69,6 +82,8 @@ class TypeSections(Block):
                 self.settings,
                 self.renderers,
                 _RenderingPurpose.PROTOCOL,
+                extension=self.extension,
+                page_path=self.page_path,
             ),
             _TypeCategory.make(
                 "Type Variables",
@@ -76,6 +91,8 @@ class TypeSections(Block):
                 self.settings,
                 self.renderers,
                 _RenderingPurpose.TYPE_VARIABLE,
+                extension=self.extension,
+                page_path=self.page_path,
             ),
             _TypeCategory.make(
                 "Type Aliases",
@@ -83,6 +100,8 @@ class TypeSections(Block):
                 self.settings,
                 self.renderers,
                 _RenderingPurpose.TYPE_ALIAS,
+                extension=self.extension,
+                page_path=self.page_path,
             ),
         ]
 
@@ -121,7 +140,9 @@ class TypeInformation(Block):
         self.dir = self.api_ref.settings.dir
 
     def __str__(self) -> str:
-        return str(self.content)
+        content = self.content
+        with self.api_ref.extension.error_context("render", f"{self.base_uri}.qmd"):
+            return str(content)
 
     @cached_property
     def base_uri(self) -> str:
@@ -183,6 +204,8 @@ class TypeInformation(Block):
             typealiases_items=[make_item(m) for m in members if is_typealias(m)],
             settings=self.api_ref.settings,
             renderers=self.api_ref.renderers,
+            extension=self.api_ref.extension,
+            page_path=f"{self.base_uri}.qmd",
         )
 
     @cached_property

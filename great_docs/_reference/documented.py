@@ -137,7 +137,9 @@ def _resolved_reference(
 
     The query restores `sys.path` and the package's entries in `sys.modules`.
     It suppresses the section builder's output so callers control diagnostic
-    reporting. In `dynamic` mode, reading the reference imports the package.
+    reporting. Resolving the reference lazily runs configured extension setup;
+    closing the query releases its owned imports without writing site files.
+    In `dynamic` mode, reading the reference also imports the package.
 
     Parameters
     ----------
@@ -166,6 +168,7 @@ def _resolved_reference(
     added_paths: list[str] = []
     cached_modules: dict[str, ModuleType] = {}
     modules_evicted = False
+    reference: APIReference | None = None
 
     def package_modules() -> list[str]:
         return [
@@ -194,8 +197,11 @@ def _resolved_reference(
             if not sections:
                 yield None
                 return
-            yield APIReference(
+            from .._apiref._extension_loading import _ExtensionSource
+
+            reference = APIReference(
                 {
+                    "format": {"html": {"lang": config.lang}},
                     "api-reference": {
                         "package": importable_name,
                         "sections": sections,
@@ -203,14 +209,20 @@ def _resolved_reference(
                         "dynamic": config.dynamic,
                         "members_on_same_page": config.members_on_same_page,
                         "max_members_on_same_page": config.max_members_on_same_page,
-                    }
-                }
+                    },
+                },
+                extension_source=_ExtensionSource.make(config, config.config_path.parent),
             )
+            yield reference
     finally:
-        if modules_evicted:
-            for key in package_modules():
-                del sys.modules[key]
-            sys.modules.update(cached_modules)
-        for p in added_paths:
-            if p in sys.path:
-                sys.path.remove(p)
+        try:
+            if reference is not None:
+                reference.close()
+        finally:
+            if modules_evicted:
+                for key in package_modules():
+                    del sys.modules[key]
+                sys.modules.update(cached_modules)
+            for p in added_paths:
+                if p in sys.path:
+                    sys.path.remove(p)

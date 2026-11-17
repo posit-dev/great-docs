@@ -2,7 +2,8 @@
 Build steps for reference pages and cross-reference links
 
 Write API, Click, Go CLI, Rust CLI and MCP reference pages with their sidebars and navbar
-links. Index documented names to resolve cross-reference links.
+links. Retain the active Python reference on build state for later consumers and
+release failed attempts before retrying. Index documented names for cross-reference links.
 """
 
 from __future__ import annotations
@@ -132,14 +133,16 @@ def api(
     """
     Write the API reference pages and the inventory of documented objects
 
-    When dynamic introspection fails, set `dynamic: false` in the in-memory API reference
-    configuration and retry once with static analysis.
+    Assign the active reference before generation and release failed attempts.
+    When dynamic acquisition fails, set `dynamic: false` in the in-memory API
+    reference configuration and retry once with static analysis. Configured
+    extension failures propagate without retrying.
 
     Parameters
     ----------
     run
-        The build's API reference availability, Quarto configuration and repository details
-        for source links.
+        The build's API reference availability, Quarto configuration and repository
+        details for source links. Receives the reference for later steps and cleanup.
     config
         The project's configuration.
     layout
@@ -156,10 +159,14 @@ def api(
     ------
     StepError
         If the API reference cannot be generated.
+    ExtensionError
+        If configured loading, setup or presentation fails.
     """
     if not run.has_api_reference:
         return Skipped("API reference disabled"), None
 
+    from .._apiref._customisation import ExtensionError
+    from .._apiref._extension_loading import _ExtensionSource
     from .._apiref.api_reference import APIReference
 
     _prepare_imports(config)
@@ -168,10 +175,29 @@ def api(
 
     failures = (*USER_CODE_ERRORS, ObjectNotFoundError)
     links = source_links(config, layout.package_root, run.project.repository, warn=print_warning)
+
+    def build_reference() -> APIReference:
+        ref = APIReference(
+            run.quarto_config,
+            links,
+            extension_source=_ExtensionSource.make(config, layout.source_dir),
+            output_root=layout.build_dir,
+        )
+        run.api_reference = ref
+        succeeded = False
+        try:
+            ref.build()
+            succeeded = True
+            return ref
+        finally:
+            if not succeeded:
+                ref.close()
+
     try:
-        ref = APIReference(run.quarto_config, links)
-        ref.build()
+        ref = build_reference()
         return "API reference generated", ref
+    except ExtensionError:
+        raise
     except failures as e:
         if not config.dynamic:
             message = f"API reference build failed: {e}"
@@ -185,8 +211,9 @@ def api(
         if run.api_block is not None:
             run.api_block["dynamic"] = False
     try:
-        ref = APIReference(run.quarto_config, links)
-        ref.build()
+        ref = build_reference()
+    except ExtensionError:
+        raise
     except failures as e:
         raise StepError(f"API reference build failed: {e}") from e
     return "API reference generated (static analysis)", ref
