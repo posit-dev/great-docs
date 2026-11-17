@@ -231,7 +231,23 @@ class Resolver:
         )
 
     def prepare(self, obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias | None:
-        """Prepare acquired documentation with this resolver's shared operation state"""
+        """
+        Prepare a loaded object's documentation, once per underlying object
+
+        Aliases of an object share its prepared result or exclusion, so the object and
+        docstring hooks run only once.
+
+        Parameters
+        ----------
+        obj
+            The loaded object or alias.
+
+        Returns
+        -------
+        :
+            The prepared object, under the alias's name when `obj` is an alias, or `None`
+            when an object hook excludes it.
+        """
         if self.extension is None:
             self.extension = Extension(self.settings)
         return self.extension.prepare(obj, get_object=self.get_object)

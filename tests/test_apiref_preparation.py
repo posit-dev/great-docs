@@ -232,7 +232,11 @@ def test_shared_replacement_retains_prepared_sections_and_later_hook_state(tmp_p
         "def setup(extension):\n"
         "    shared = gf.Function('shared', docstring=gf.Docstring('Shared text'))\n"
         "    extension.cache['parsed'] = []\n"
-        "    extension.on_object_resolved(lambda obj: shared)\n"
+        "    extension.cache['replaced'] = []\n"
+        "    @extension.on_object_resolved\n"
+        "    def replace(obj):\n"
+        "        extension.cache['replaced'].append(obj.name)\n"
+        "        return shared\n"
         "    @extension.on_object_resolved(priority=1)\n"
         "    def mutate(obj):\n"
         "        obj.docstring.value += '!'\n"
@@ -245,7 +249,10 @@ def test_shared_replacement_retains_prepared_sections_and_later_hook_state(tmp_p
     try:
         first = extension.prepare(gf.Function(name="first"))
         prepared_sections = first.docstring.parsed
-        second = extension.prepare(gf.Function(name="second"))
+        second_original = gf.Function(name="second")
+        second = extension.prepare(second_original)
+        assert extension.prepare(second_original) is second
+        assert extension.cache["replaced"] == ["first", "second"]
         assert first is second
         assert second.docstring.value == "Shared text!"
         assert second.docstring.parsed is prepared_sections
@@ -262,7 +269,11 @@ def test_shared_replacement_retains_cached_exclusion(tmp_path: Path) -> None:
         "def setup(extension):\n"
         "    shared = gf.Function('shared')\n"
         "    extension.cache['later'] = []\n"
-        "    extension.on_object_resolved(lambda obj: shared)\n"
+        "    extension.cache['replaced'] = []\n"
+        "    @extension.on_object_resolved\n"
+        "    def replace(obj):\n"
+        "        extension.cache['replaced'].append(obj.name)\n"
+        "        return shared\n"
         "    @extension.on_object_resolved(priority=1)\n"
         "    def exclude(obj):\n"
         "        extension.cache['later'].append(obj.path)\n"
@@ -270,7 +281,10 @@ def test_shared_replacement_retains_cached_exclusion(tmp_path: Path) -> None:
     )
     try:
         assert extension.prepare(gf.Function(name="first")) is None
-        assert extension.prepare(gf.Function(name="second")) is None
+        second_original = gf.Function(name="second")
+        assert extension.prepare(second_original) is None
+        assert extension.prepare(second_original) is None
+        assert extension.cache["replaced"] == ["first", "second"]
         assert extension.cache["later"] == ["shared"]
     finally:
         extension.close()

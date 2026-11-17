@@ -444,55 +444,74 @@ class Extension:
         if cached is not None:
             return self._appearance(obj, original, cached.result)
 
-        result: gf.Object | None = original
         canonical_objects = [original]
         token = resolution_lang.set(self.settings.lang)
         try:
-            prepared_replacement: _PreparedObject | None = None
-            with self.error_context("object_resolved", original.path):
-                for callback in self._object_hooks:
-                    transformed = cast("object", callback(result))
-                    if transformed is None:
-                        result = None
-                        break
-                    if not isinstance(transformed, (gf.Object, gf.Alias)):
-                        raise TypeError("An object handler must return an object or None.")
-                    result = resolve_alias(transformed, get_object)
-                    if not any(candidate is result for candidate in canonical_objects):
-                        canonical_objects.append(result)
-                    prepared_replacement = self._prepared_objects.get(id(result))
-                    if prepared_replacement is not None:
-                        result = prepared_replacement.result
-                        break
-                if prepared_replacement is None and result is not None:
-                    prepare_parameter_docs(result)
-                    if result.docstring is not None:
-                        result.docstring.parent = result
-                        result.docstring.parser = gf.Parser(self.settings.parser)
-                        result.docstring.parser_options = cast(
+            object_phase = self.error_context("object_resolved", original.path)
+            with object_phase:
+                outcome = self._apply_object_resolved_hooks(original, canonical_objects, get_object)
+            if isinstance(outcome, gf.Object):
+                with object_phase:
+                    prepare_parameter_docs(outcome)
+                    if outcome.docstring is not None:
+                        outcome.docstring.parent = outcome
+                        outcome.docstring.parser = gf.Parser(self.settings.parser)
+                        outcome.docstring.parser_options = cast(
                             "DocstringOptions", get_parser_defaults(self.settings.parser)
                         )
-                        result.docstring.__dict__.pop("parsed", None)
-            if prepared_replacement is None and result is not None and result.docstring is not None:
-                with self.error_context("docstring_parsed", original.path):
-                    if result.is_class:
-                        parse_class_docstring(cast("gf.Class", result))
-                    sections = result.docstring.parsed
-                    for callback in self._parsed_hooks:
-                        transformed_sections = cast(
-                            "list[gf.DocstringSection] | None", callback(result, sections)
+                        outcome.docstring.__dict__.pop("parsed", None)
+                if outcome.docstring is not None:
+                    with self.error_context("docstring_parsed", original.path):
+                        if outcome.is_class:
+                            parse_class_docstring(cast("gf.Class", outcome))
+                        sections = outcome.docstring.parsed
+                        outcome.docstring.__dict__["parsed"] = self._apply_docstring_parsed_hooks(
+                            outcome, sections
                         )
-                        if transformed_sections is None:
-                            raise TypeError(
-                                "A parsed-section handler must return sections, not None."
-                            )
-                        sections = transformed_sections
-                    result.docstring.__dict__["parsed"] = sections
         finally:
             resolution_lang.reset(token)
+        result = outcome.result if isinstance(outcome, _PreparedObject) else outcome
         for canonical in canonical_objects:
             self._prepared_objects[id(canonical)] = _PreparedObject(canonical, result)
         return self._appearance(obj, original, result)
+
+    def _apply_object_resolved_hooks(
+        self,
+        obj: gf.Object,
+        canonical_objects: list[gf.Object],
+        get_object: Callable[..., gf.Object | gf.Alias] | None,
+    ) -> gf.Object | _PreparedObject | None:
+        """
+        Apply object handlers until the chain finishes, excludes or reaches a cached target
+
+        Retain each replacement in `canonical_objects` so every target shares the final result.
+        """
+        from .introspect import resolve_alias
+
+        for callback in self._object_hooks:
+            transformed = cast("object", callback(obj))
+            if transformed is None:
+                return None
+            if not isinstance(transformed, (gf.Object, gf.Alias)):
+                raise TypeError("An object handler must return an object or None.")
+            obj = resolve_alias(transformed, get_object)
+            if not any(candidate is obj for candidate in canonical_objects):
+                canonical_objects.append(obj)
+            cached = self._prepared_objects.get(id(obj))
+            if cached is not None:
+                return cached
+        return obj
+
+    def _apply_docstring_parsed_hooks(
+        self, obj: gf.Object, sections: list[gf.DocstringSection]
+    ) -> list[gf.DocstringSection]:
+        """Pass each docstring hook's sections to the next and return the last result"""
+        for callback in self._parsed_hooks:
+            transformed = cast("list[gf.DocstringSection] | None", callback(obj, sections))
+            if transformed is None:
+                raise TypeError("A parsed-section handler must return sections, not None.")
+            sections = transformed
+        return sections
 
     @staticmethod
     def _appearance(
