@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from great_docs._apiref._format import markdown_escape, pretty_code
+from great_docs._apiref._format import fence_indented_code, markdown_escape, pretty_code
 from great_docs._website import metadata_partial, quarto2, quarto_yml
 
 ASSETS = Path(__file__).parents[1] / "great_docs" / "assets"
@@ -282,3 +282,43 @@ class TestEscapes:
         assert markdown_escape("a*b") == r"a\*b"
         assert pretty_code('"{{"') == "[&quot;&#123;&#123;&quot;]{.st}"
         assert pretty_code("{'a': 'b'}") == "{[&apos;a&apos;]{.st}: [&apos;b&apos;]{.st}}"
+
+
+class TestFenceIndentedCode:
+    @pytest.fixture(autouse=True)
+    def _quarto_2(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("GREAT_DOCS_QUARTO", "q2")
+
+    def test_fences_an_indented_block(self):
+        markdown = ".. math::\n\n    \\sqrt{x_1 * x_2}\n\n      y\n\nAfter\n"
+        assert fence_indented_code(markdown) == (
+            ".. math::\n\n```\n\\sqrt{x_1 * x_2}\n\n  y\n```\n\nAfter\n"
+        )
+
+    def test_fences_a_block_at_the_start_and_end(self):
+        assert fence_indented_code("\tcode\n    more\n") == "```\ncode\nmore\n```\n"
+
+    def test_fence_is_longer_than_backticks_in_the_code(self):
+        assert fence_indented_code("Text\n\n    a = ```b```") == "Text\n\n````\na = ```b```\n````"
+
+    @pytest.mark.parametrize(
+        "markdown",
+        [
+            "Text\n    continued, without a blank line\n",
+            "- item\n\n    continued item\n\nText\n",
+            "1. item\n\n    continued item\n",
+            "term\n:   definition\n\n    continued definition\n",
+            "```python\n\n    indented in a fence\n```\n",
+            "~~~~\n```\n\n    in a fence\n~~~~\n",
+        ],
+    )
+    def test_leaves_other_markdown_alone(self, markdown: str):
+        assert fence_indented_code(markdown) == markdown
+
+    def test_fences_after_a_list_ends(self):
+        markdown = "- item\n\nText\n\n    code\n"
+        assert fence_indented_code(markdown) == "- item\n\nText\n\n```\ncode\n```\n"
+
+    def test_quarto_1_leaves_the_text_unchanged(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("GREAT_DOCS_QUARTO")
+        assert fence_indented_code("Text\n\n    code\n") == "Text\n\n    code\n"
