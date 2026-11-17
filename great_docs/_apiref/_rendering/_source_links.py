@@ -26,14 +26,22 @@ _INSTALL_DIRS = frozenset({"site-packages", "dist-packages"})
 
 def source_link(obj: gf.Object | gf.Alias, links: SourceLinks, lang: str) -> Link | None:
     """
-    Build a link to the object's source code
+    Build a repository source link for a Python object or authored alias
+
+    Parameters
+    ----------
+    obj
+        The prepared object whose source location to use.
+    links
+        The repository, Git ref and source-path settings.
+    lang
+        The language of the visible link label.
 
     Returns
     -------
     :
-        The source link, or `None` when no repository URL or source path is
-        available, the file is a compiled extension, or the starting line
-        is unknown.
+        The source link, or `None` when there is no repository, usable source path or
+        starting line. Compiled extension files never get a link.
     """
     if links.repository is None:
         return None
@@ -58,29 +66,24 @@ def source_link(obj: gf.Object | gf.Alias, links: SourceLinks, lang: str) -> Lin
 
 def source_relative_path(obj: gf.Object | gf.Alias, links: SourceLinks) -> str | None:
     """
-    Resolve the object's source path for a repository link
+    Resolve an object's source path relative to the repository root
 
-    Griffe's `relative_package_filepath` is relative to the package's parent
-    directory, a Griffe search path. For `src/` and other non-flat layouts,
-    it drops the leading directory, producing repository URLs that return
-    404. Resolve the path in this order to preserve the repository layout:
+    Griffe's package-relative path drops leading directories such as `src/`, so try
+    an explicit `source.path` override for monorepos first, then the path relative to
+    the repository root, and only then Griffe's path. Objects that only a merged stub
+    declares link to the stub, and an installed stub links to the repository's copy.
 
-    1. Honour an explicit `source.path` override for monorepos.
-    2. Compute the path relative to the repository root from the object's
-       absolute file path, preserving directories such as `src/`.
-    3. Fall back to Griffe's package-parent-relative path when the override
-       and repository root cannot resolve a path.
-
-    Objects that only a stub declares, such as the classes and functions
-    of a PyO3 or other compiled extension, take their line numbers from the
-    `.pyi` file but report the module's `.py` file. They link to the stub
-    instead. An installed stub, outside the repository, links to the
-    repository's copy, and to nothing when there is none.
+    Parameters
+    ----------
+    obj
+        The prepared object or authored alias.
+    links
+        The repository and source-directory settings.
 
     Returns
     -------
     :
-        The source path, or `None` when no path can be determined.
+        The repository path, or `None` when no suitable source location is available.
     """
     # Griffe raises `ValueError` for objects without a parent module, such
     # as synthetic objects. A `getattr` default only handles missing attributes.
@@ -122,25 +125,27 @@ def source_relative_path(obj: gf.Object | gf.Alias, links: SourceLinks) -> str |
 
 def stub_relative_path(obj: gf.Object | gf.Alias, stub: Path, links: SourceLinks) -> str | None:
     """
-    Resolve a stub file's path for a repository link
+    Resolve a stub file's path relative to the repository root
 
-    A stub inside the repository keeps its path. An installed stub,
-    including one in a virtual environment within the repository, is
-    looked up in the repository under its package-relative path, also
-    within `src/` and `python/`. A package's `__init__.pyi` is also looked
-    up as `<package>.pyi`, where maturin keeps the stub of a Rust-only
-    project.
+    A stub inside the repository keeps its path. An installed stub, including one in
+    a virtual environment inside the repository, is looked up under its
+    package-relative path, also within `src/` and `python/`. A package's
+    `__init__.pyi` is also looked up as `<package>.pyi`, where maturin keeps the stub
+    of a Rust-only project.
 
     Parameters
     ----------
+    obj
+        The prepared object whose package-relative location to use.
     stub
         The absolute path of the stub file.
+    links
+        The repository and source-directory settings.
 
     Returns
     -------
     :
-        The stub's path relative to the repository root, or `None` when the
-        repository has no copy of an installed stub.
+        The matching repository path, or `None` when no repository copy is found.
     """
     if links.path:
         return f"{links.path}/{stub.name}"
@@ -176,13 +181,11 @@ def stub_relative_path(obj: gf.Object | gf.Alias, stub: Path, links: SourceLinks
 
 def _declared_in_stub(obj: gf.Object | gf.Alias) -> bool:
     """
-    Whether an object comes from a stub that griffe merged into its module
+    Check whether a definition or its containing class is absent at runtime
 
-    Griffe marks the objects a stub adds to a module as not available at
-    runtime, so an object declared in a stub, or a member of a class that
-    is, reports the `.py` module file but has the stub's line numbers.
-    Objects inside `if TYPE_CHECKING:` are also marked, so callers check that
-    the stub file exists.
+    Definitions that a merged stub adds keep the stub's line numbers but may report
+    the module's `.py` path. Definitions under `TYPE_CHECKING` are also absent at
+    runtime, so a source lookup also requires the stub file to exist.
     """
     current: gf.Object | None
     try:

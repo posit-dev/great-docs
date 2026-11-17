@@ -1,9 +1,10 @@
 """
 The `llms.txt` and `llms-full.txt` files that describe the API reference to language models
 
-`llms.txt` links to each documented object with a one-line summary and, when the site has
-WebMCP tools, lists them. `llms-full.txt` contains each object's signature and docstring,
-followed by command-line help and the user guide.
+`llms.txt` links to documented pages with semantic summaries and optional WebMCP
+tools. `llms-full.txt` assembles prepared API text, command-line help and user
+guide sources. Builds supply one prepared reference; standalone full exports
+own their configuration, missing-entry policy and reference cleanup.
 """
 
 from __future__ import annotations
@@ -39,11 +40,11 @@ _WEBMCP_EXAMPLES = (
 
 def _describes_api(api_block: Mapping[str, Any] | None) -> TypeGuard[Mapping[str, Any]]:
     """
-    Check whether the API reference names a package and contains sections
+    Check whether standalone configuration names a package and contains sections
 
-    Both writers and the availability check use this test, so a page advertises the files
-    only when the build can write them. The availability check also requires the package
-    to import.
+    This guard applies to authored configuration before a reference is prepared.
+    Writers supplied with a prepared reference use its resolved documentation
+    directly. Planning homepage links also requires the package to import.
 
     Parameters
     ----------
@@ -60,10 +61,12 @@ def _describes_api(api_block: Mapping[str, Any] | None) -> TypeGuard[Mapping[str
 
 def is_planned(api_block: Mapping[str, Any] | None) -> bool:
     """
-    Check whether the build will write `llms.txt` and `llms-full.txt`
+    Check whether the homepage should link to `llms.txt` and `llms-full.txt`
 
-    The homepage checks availability before either file exists. Both files require an API
-    reference configuration with an importable `package` and at least one section.
+    The homepage checks availability before either file exists or configured
+    extension setup runs. Require a package that imports and at least one
+    authored section. Writers with a supplied prepared reference do not repeat
+    this import check.
 
     Parameters
     ----------
@@ -73,7 +76,7 @@ def is_planned(api_block: Mapping[str, Any] | None) -> bool:
     Returns
     -------
     :
-        Whether the build should write both files.
+        Whether the configuration supports linking to both files.
     """
     if not _describes_api(api_block):
         return False
@@ -129,8 +132,13 @@ def write_index(
     Returns
     -------
     :
-        The path written, or `None` when the project has no usable API reference
-        configuration.
+        The path written, or `None` without a supplied reference or usable
+        authored API configuration.
+
+    Raises
+    ------
+    ExtensionError
+        If resolving a supplied reference fails in configured setup or semantic hooks.
     """
     from ..._apiref import APIReference, SpecObject
     from ..._apiref._export import summary
@@ -304,8 +312,10 @@ def write_full(
     """
     Write `llms-full.txt` with API documentation, command-line help and user guide pages
 
-    The file groups each documented object's signature and docstring by reference section,
-    followed by help text for visible commands and then user guide pages.
+    Group each documented object's prepared signatures and docstring sections by
+    reference section, followed by help text for visible commands and then user guide
+    pages. The export formats the prepared docstrings with the built-in renderers and
+    keeps their markup as text.
 
     Parameters
     ----------
@@ -324,14 +334,21 @@ def write_full(
     reference
         The build's prepared reference, reused without repeating setup or early
         hooks. `None` owns a fresh operation from the selected layout and skips
-        missing entries. Configured failures propagate in either mode. Selected
-        renderers apply only to the reference pages.
+        missing entries. Explicit API-block parser/dynamic settings override the
+        selected configuration. Configured failures propagate in either mode.
 
     Returns
     -------
     :
         The path written, or `None` when the project has no usable API reference
-        configuration or importing the package raises `ImportError`.
+        configuration and no supplied reference, or when a standalone package
+        import raises `ImportError`.
+
+    Raises
+    ------
+    ExtensionError
+        If configured loading, setup or semantic hooks fail. A supplied reference
+        retains its caller-owned lifetime; an owned standalone reference closes.
     """
     if reference is None and not _describes_api(api_block):
         return None
@@ -391,8 +408,9 @@ def _full_api_text(
     Export a supplied prepared reference or own a tolerant standalone operation
 
     Preserve the standalone import diagnostic and missing-entry tolerance. Read
-    configured setup from the selected layout's original roots, then close the
-    owned reference on success or failure. A supplied reference stays strict and
+    configured setup and semantic defaults from the selected layout's original
+    configuration, then apply explicit API-block settings. Close the owned
+    reference on success or failure. A supplied reference stays strict and
     retains its caller-owned lifetime.
     """
     from ..._apiref._export import reference_text, tolerant_sections

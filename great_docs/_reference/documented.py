@@ -1,5 +1,9 @@
 """
 List the symbols a project's API reference documents without building the site
+
+Resolve the same objects as API generation, without writing site files or running body
+callbacks. Each query closes its reference and restores the package's imports and the
+search paths it added, even when it fails.
 """
 
 from __future__ import annotations
@@ -30,12 +34,13 @@ def symbol_names(
     create_sections: CreateSections,
 ) -> list[str]:
     """
-    List the dotted page stems of the documented API
+    List the Python names that the API reference documents
 
-    Each stem names one published reference page: a top-level class or
-    function, a submodule-qualified class (`scores.CosineScore`), or a method
-    (`scores.CosineScore.fit`). The stems match the rendered reference, so
-    versioned snapshots and the live build describe the same API surface.
+    The names cover top-level objects and their selected members, whether on the parent's
+    page or their own: a top-level class or function, a submodule-qualified class
+    (`scores.CosineScore`) or a method (`scores.CosineScore.fit`). Names do not depend on
+    page filenames or their collision suffixes. The edits and exclusions of object and
+    docstring hooks apply.
 
     Parameters
     ----------
@@ -52,14 +57,16 @@ def symbol_names(
     Returns
     -------
     :
-        Dotted stems, deduplicated and in first-occurrence order. Empty when the
+        Dotted names, deduplicated and in first-occurrence order. Empty when the
         site has no API reference, the package documents nothing, or the package
         cannot be resolved.
 
     Raises
     ------
     BuildError
-        If the configured reference names an object the installed package lacks.
+        If building the configured reference sections fails.
+    ExtensionError
+        If the extension's `setup` or an object or docstring hook fails.
     """
     with _resolved_reference(
         config,
@@ -85,7 +92,9 @@ def objects(
     """
     List the objects the reference publishes, each with its page, claims and docstring
 
-    These inventory items describe exactly the objects the site build indexes.
+    Take the inventory entries from the resolved reference before generating pages.
+    Each entry's object, page and alias claims reflect the prepared documentation and
+    the exclusions of object hooks.
 
     Parameters
     ----------
@@ -108,7 +117,9 @@ def objects(
     Raises
     ------
     BuildError
-        If the configured reference names an object the installed package lacks.
+        If building the configured reference sections fails.
+    ExtensionError
+        If the extension's `setup` or an object or docstring hook fails.
     """
     with _resolved_reference(
         config,
@@ -137,9 +148,11 @@ def _resolved_reference(
 
     The query restores `sys.path` and the package's entries in `sys.modules`.
     It suppresses the section builder's output so callers control diagnostic
-    reporting. Resolving the reference lazily runs configured extension setup;
-    closing the query releases its owned imports without writing site files.
-    In `dynamic` mode, reading the reference also imports the package.
+    reporting. Resolving the reference runs the extension's `setup` on first use, and
+    closing the query removes the modules the extension imported. In `dynamic` mode,
+    reading the reference also imports the package. The reference uses the
+    configuration's parser and language. Restoring the package's `sys.modules` entries
+    leaves other packages' imports cached.
 
     Parameters
     ----------

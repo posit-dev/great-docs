@@ -110,9 +110,11 @@ selectively.
 
 ## How It Works
 
-Both files are generated after the API reference pages are prepared. The build
-reuses the same resolved objects, semantic hooks and exclusions, without running
-setup or those hooks again. The text export uses the built-in renderers.
+Great Docs generates both files after it prepares the API reference pages. It reuses
+the same objects, including any docstring edits and exclusions from object and
+docstring hooks, without running setup or those hooks again. The text export uses
+the built-in renderers. See [API reference customisation](api-reference-customisation.qmd)
+for examples of changes that carry through to the export.
 
 API generation uses the selected static/dynamic and parser settings. Keep the
 package available in the build environment; dynamic acquisition imports it.

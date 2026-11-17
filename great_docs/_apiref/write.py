@@ -38,7 +38,7 @@ class RenderedPage:
     """
 
     page_path: Path
-    """The target source path, relative to the writer's directory unless absolute"""
+    """The path to write to, relative to the working directory unless absolute"""
     content: str
     """The page's Quarto Markdown, without the input fingerprint"""
 
@@ -70,16 +70,17 @@ class RenderedPage:
 
 
 def merge_frontmatter(content: str, extra: dict[str, Any]) -> str:
-    """Merge `extra` keys into a content string's YAML frontmatter.
+    """
+    Merge extra keys into a source's YAML front matter
 
-    If `content` already has a frontmatter block (``---`` header), the
+    If `content` already has a frontmatter block (`---` header), the
     extra keys are inserted into that block. Otherwise a new block is
     prepended.
 
     Parameters
     ----------
     content :
-        Full document text, optionally starting with a ``---`` frontmatter block.
+        Full document text, optionally starting with a `---` frontmatter block.
     extra :
         YAML key-value pairs to add or overwrite in the frontmatter.
     """
@@ -104,7 +105,8 @@ def _insert_contents(
     contents: list[Any],
     sentinel: str = "{{ contents }}",
 ) -> bool:
-    """Whether `contents` was spliced into `x` at the ``{{ contents }}`` sentinel.
+    """
+    Insert contents at a sidebar sentinel and report whether it was found
 
     Recursively searches the structure for the sentinel string and replaces it
     with the items in `contents`. Returns `True` if the sentinel was found and
@@ -142,7 +144,7 @@ def _insert_contents(
 
 
 def _page_sidebar_text(page: Page) -> str:
-    """Label text for a sidebar entry pointing to `page`."""
+    """Choose a page's sidebar label: its summary name, its only object's name, or its filename"""
     if page.summary is not None:
         return page.summary.name
     if len(page.contents) == 1:
@@ -161,22 +163,23 @@ def _generate_sidebar(
     out_page_suffix: str,
     sidebar: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Generate the Quarto sidebar YAML structure for the given resolved sections.
+    """
+    Generate the Quarto sidebar YAML structure for the given resolved sections
 
-    Produces a ``{"website": {"sidebar": [...]}}`` dict suitable for writing
-    directly to a ``.yml`` file.
+    Produces a `{"website": {"sidebar": [...]}}` dict suitable for writing
+    directly to a `.yml` file.
 
     Parameters
     ----------
     sections :
         Resolved sections to derive the sidebar structure from.
     dir :
-        Output directory name (e.g. ``"reference"``).
+        Output directory name (e.g. `"reference"`).
     out_page_suffix :
-        File suffix for rendered pages (e.g. ``".qmd"``).
+        File suffix for rendered pages (e.g. `".qmd"`).
     sidebar :
-        Raw sidebar configuration from the settings (may include ``"file"``,
-        ``"id"``, ``"contents"``, and other Quarto keys).
+        Raw sidebar configuration from the settings (may include `"file"`,
+        `"id"`, `"contents"`, and other Quarto keys).
     """
     contents: list[Any] = [f"{dir}/index{out_page_suffix}"]
     in_subsection = False
@@ -295,6 +298,24 @@ def write_index(
 
     Complete reference builds collect all pages before fingerprinting inputs.
     This direct writer renders and publishes only the supplied index.
+
+    Parameters
+    ----------
+    api_ref
+        The active reference supplying metadata, settings and renderer choices.
+    sections
+        Resolved sections included in the index.
+    dir
+        Output directory, relative to the working directory unless absolute.
+    out_index
+        Index filename within the output directory.
+    header_level
+        Heading depth used for index sections.
+
+    Returns
+    -------
+    :
+        The written source path.
     """
     rendered = collect_index(
         api_ref, sections, dir=dir, out_index=out_index, header_level=header_level
@@ -310,22 +331,23 @@ def write_sidebar(
     dir: str,
     out_page_suffix: str,
 ) -> None:
-    """Write the sidebar YAML file to the configured ``sidebar["file"]``.
+    """
+    Write the sidebar YAML file to the configured `sidebar["file"]`
 
     Generates a Quarto sidebar configuration from the resolved `sections` and
-    writes it to the path in ``api_ref.settings.sidebar["file"]``.
+    writes it to the path in `api_ref.settings.sidebar["file"]`.
 
     Parameters
     ----------
     api_ref :
-        The API reference whose ``settings.sidebar`` supplies the output path
+        The API reference whose `settings.sidebar` supplies the output path
         and any Quarto sidebar overrides.
     sections :
         Resolved sections to derive the sidebar structure from.
     dir :
-        Output directory name (e.g. ``"reference"``).
+        Output directory name (e.g. `"reference"`).
     out_page_suffix :
-        File suffix for rendered pages (e.g. ``".qmd"``).
+        File suffix for rendered pages (e.g. `".qmd"`).
     """
     sidebar = api_ref.settings.sidebar
     assert sidebar is not None
@@ -343,6 +365,20 @@ def collect_typing_information(
 
     Rendering every page first lets the reference fingerprint helpers imported while
     rendering.
+
+    Parameters
+    ----------
+    typing_module_paths
+        Import paths of modules, each documented on one page with the typing objects it
+        defines.
+    api_ref
+        The reference that loads, prepares and renders the objects. Objects that hooks
+        do not exclude are added to its inventory.
+
+    Returns
+    -------
+    :
+        The rendered pages, in module order.
     """
     from .typing_information import TypeInformation
 
@@ -355,7 +391,15 @@ def write_typing_information(typing_module_paths: list[str], api_ref: APIReferen
 
     Complete reference builds collect all sources before fingerprinting inputs.
     This direct writer publishes only the requested typing pages and registers
-    their inventory entries.
+    their inventory entries. Page paths use the reference's output directory and
+    page suffix, with each module path as its stem.
+
+    Parameters
+    ----------
+    typing_module_paths
+        Modules whose owned typing objects form one page each.
+    api_ref
+        The active reference supplying shared semantics, presentation and inventory.
     """
     for rendered in collect_typing_information(typing_module_paths, api_ref):
         rendered.write()
@@ -389,17 +433,16 @@ def collect_pages(
     pages
         Resolved page nodes to render.
     settings
-        The settings of the API reference. The pages render with them, and
-        their `dir`, `out_page_suffix`, `rewrite_all_pages` and `header_level`
-        place and head each page.
+        The reference's semantic and presentation settings. Output paths use
+        `dir` and `out_page_suffix`; object headings use `header_level`.
     site_toc_depth
         Merged site table-of-contents depth. A page overrides it only when
         member headings require a greater depth.
     renderers
         Renderer choices shared by pages and nested objects. `None` uses defaults.
     extension
-        Active operation owner for contextual renderer failures. `None` preserves
-        standalone rendering without configured extension error handling.
+        The extension for project context and rendering failures, or `None` for
+        standalone rendering.
     output_root
         The documentation output root, or `None`
         outside a known build.
@@ -455,6 +498,23 @@ def write_pages(
     Complete reference builds collect index, object and typing sources before
     applying a final input fingerprint. This direct writer publishes only these
     pages and adds no operation-wide marker.
+
+    Parameters
+    ----------
+    pages
+        Resolved pages to render and publish in the supplied order.
+    settings
+        Reference settings for headings, paths and unchanged-file policy.
+        `rewrite_all_pages=True` rewrites sources even when their content matches.
+    site_toc_depth
+        Site table-of-contents depth, increased when member headings require it.
+    renderers
+        Shared renderer choices, or `None` for defaults.
+    extension
+        The extension for project context and rendering failures,
+        or `None` for standalone presentation.
+    output_root
+        Known documentation output root for appearance contexts, or `None`.
     """
     collected = collect_pages(
         pages,

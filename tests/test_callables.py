@@ -1,4 +1,4 @@
-"""Tests for great_docs._apiref._rendering.callables."""
+"""Verify `Receives` sections and overloads without parameters on callable renderers"""
 
 from __future__ import annotations
 

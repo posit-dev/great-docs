@@ -1,5 +1,10 @@
 """
 The `APIReference` façade, built from a Quarto config block
+
+Resolve selected objects through one loader and lazily configured extension.
+Reuse the prepared tree for manifests, symbol queries and semantic exports.
+Collect page presentation before final input fingerprinting and publication;
+close the operation after its final consumer.
 """
 
 from __future__ import annotations
@@ -46,7 +51,14 @@ _DEFAULT_SITE_TOC_DEPTH = 2
 
 
 class APIReference:
-    """A package's API reference: the sections to document plus the settings that govern how they are generated"""
+    """
+    A package's API reference: its sections, their settings and its extension
+
+    Reading the sections never loads the extension file. The first preparation or
+    rendering runs the extension's `setup`, and every page then shares the prepared
+    objects, exclusions and renderer choices. The resolved tree and manifest are cached.
+    Call `close()` after the last use, including after a failure.
+    """
 
     package: str
     title: str
@@ -95,7 +107,7 @@ class APIReference:
         self.package = block["package"]
         self.title = block.get("title", "Function reference")
         self.desc = block.get("desc")
-        # Parity: stored as-is (no coercion), matching the previous behavior.
+        # Parity: stored as-is (no coercion), matching the previous behaviour.
         self.options = block.get("options")
         # Raw config dicts become `SpecSection` objects; their `contents` are
         # upgraded to `SpecObject` inside `SpecSection.__post_init__`.
@@ -132,7 +144,11 @@ class APIReference:
 
     @property
     def renderers(self) -> Renderers:
-        """Renderer choices selected by this operation's setup"""
+        """
+        Renderer choices selected by this operation's setup
+
+        Access activates configured Python through the lazy operation owner.
+        """
         return self.extension.renderers
 
     @property
@@ -268,11 +284,23 @@ class APIReference:
 
     def _entry_label(self, section: SpecSection, entry: SpecObject) -> str | None:
         """
-        The label shown on the page of the object an entry documents
+        Read the kind label of an entry whose page path collides with another's
 
-        Used to name the page of an entry whose path collides with another's.
-        Returns `None` when the object cannot be found, so the page falls back
-        to a numbered suffix.
+        Load the object without running the extension's `setup` or the object and
+        docstring hooks.
+
+        Parameters
+        ----------
+        section
+            The section that contains the entry.
+        entry
+            The entry whose page path collides.
+
+        Returns
+        -------
+        :
+            The label, or `None` when the object cannot be loaded, so the page falls back
+            to a numbered suffix.
         """
         from ._rendering._label import get_label
 
@@ -286,7 +314,12 @@ class APIReference:
 
     @cached_property
     def resolved(self) -> list[Section]:
-        """The resolved section tree, computed once per instance"""
+        """
+        The resolved section tree, computed once per reference
+
+        Reading it runs the extension's `setup` and the object and docstring hooks,
+        including during member selection. It leaves file generation to the build.
+        """
         _ = self.extension
         token = resolution_lang.set(self.settings.lang)
         try:
@@ -318,11 +351,11 @@ class APIReference:
     @cached_property
     def documented_symbols(self) -> list[str]:
         """
-        Return the authored Python names of documented objects, `%nodoc` excluded
+        The authored names of documented objects and their selected members
 
-        Preserve first-occurrence order and include each documented member
-        recursively. Convert module separators to dots and keep names independent
-        of the filenames assigned to reference pages.
+        Names keep their first-seen order, use dots as module separators and leave out
+        objects that object hooks exclude. Reading them prepares the reference without
+        generating pages.
         """
         stems: list[str] = []
 
@@ -399,15 +432,13 @@ class APIReference:
 
 
 def _member_name(node: Doc | Page) -> str:
-    """
-    Return a member's name relative to its documented parent
-    """
+    """Return a member's name relative to its documented parent"""
     if isinstance(node, Page):
         return node.contents[0].name
     return node.name
 
 
 def _member_children(node: Doc | Page) -> list[Doc | Page]:
-    """The nested member nodes of a resolved member node, if any"""
+    """Return the nested member nodes of a resolved object or member page"""
     doc = node.contents[0] if isinstance(node, Page) else node
     return list(getattr(doc, "members", []))

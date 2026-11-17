@@ -1,4 +1,9 @@
-"""An API page containing one or more documented objects"""
+"""
+API pages, with their front matter, objects and summary rows
+
+A page with one object renders it at the page's heading level; a page with several
+renders each one level deeper.
+"""
 
 from __future__ import annotations
 
@@ -39,13 +44,19 @@ _DEFAULT_SITE_TOC_DEPTH = 2
 @dataclass
 class APIPageRenderer(PageRendererMixin, BaseRenderer):
     """
-    An API page containing one or more documented objects
+    An API page that documents one or more prepared Python objects
+
+    The page title in the front matter comes from the first object. A page with one
+    object omits that object's heading, which would repeat the title; a page with
+    several keeps each object's heading, one level deeper. The page's summary rows
+    come from its authored summary or from its objects' own rows.
     """
 
     toc_depth: int = _DEFAULT_SITE_TOC_DEPTH
     """Merged site `toc-depth` used to select a page override"""
 
     def __post_init__(self) -> None:
+        """Set the page's summary-link path and the output-relative path its objects report"""
         self.page = cast("Page", self.node)
         """Page in the documentation"""
 
@@ -58,6 +69,7 @@ class APIPageRenderer(PageRendererMixin, BaseRenderer):
 
     @property
     def _has_one_object(self) -> bool:
+        """Whether the page contains exactly one documented object"""
         return len(self.page.contents) == 1
 
     @cached_property
@@ -82,6 +94,13 @@ class APIPageRenderer(PageRendererMixin, BaseRenderer):
 
     def render_metadata(self) -> BlockContent:
         # Derive the title of the page from the first (top-level) object
+        """
+        Render the page front matter from the first object's title and the page summary
+
+        The description comes from the authored summary, or else the first object's
+        subject. The page raises `toc-depth` only when the site setting would hide
+        members.
+        """
         obj = self.object_renderers[0]
         title = obj.title_content
         metadata: dict[str, object] = {
@@ -101,12 +120,16 @@ class APIPageRenderer(PageRendererMixin, BaseRenderer):
         return Meta(metadata)
 
     def render_body(self) -> BlockContent:
-        """
-        Render the body of the documentation page
-        """
+        """Render the page's objects in their authored order"""
         return Blocks(self.object_renderers)
 
     def render_summary(self) -> Sequence[DefinitionItem]:
+        """
+        Render the page's authored summary row, or else its objects' own summary rows
+
+        Raise `ValueError` for a page with several objects that has neither a summary
+        nor `flatten` set. Summaries do not render object bodies.
+        """
         page = self.page
         if page.summary is not None:
             link = Link(markdown_escape(page.summary.name), self.path)

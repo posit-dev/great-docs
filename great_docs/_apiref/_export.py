@@ -39,6 +39,10 @@ def tolerant_sections(reference: APIReference) -> list[Section]:
     Missing objects and ordinary package failures omit that entry; configured
     extension failures remain fatal. A build's validated reference uses its
     complete resolved tree instead.
+
+    Return resolved sections without writing files or closing the reference.
+    The standalone caller owns cleanup. An empty result remains empty rather
+    than falling back to automatic package discovery.
     """
     _ = reference.extension
     sections: list[Section] = []
@@ -146,7 +150,25 @@ def object_text(doc: Doc, settings: Settings) -> str:
 
 
 def signature_text(obj: gf.Object | gf.Alias) -> str:
-    """Format signatures from prepared callable, constructor and overload facts"""
+    """
+    Format an object's signatures or declaration as text
+
+    Keep parameter kinds, annotations, defaults and every overload. A class's signature is
+    its selected constructor's, without the receiver or return annotation. An enum or a
+    `TypedDict` shows only its name. Type parameter lists keep their bounds, constraints
+    and defaults, and a PEP 695 alias shows its `type` declaration and value.
+
+    Parameters
+    ----------
+    obj
+        A prepared object.
+
+    Returns
+    -------
+    :
+        One signature per line for a function or class, the declaration of an attribute
+        or type alias, the qualified name of a module, or the name of any other object.
+    """
     name = obj.path if obj.is_module else obj.name
     if obj.is_type_alias:
         alias = cast("gf.TypeAlias", obj)
@@ -182,8 +204,10 @@ class _SignatureExpression:
     """A source expression whose representation retains its spelling"""
 
     text: str
+    """The source spelling of an annotation or default value"""
 
     def __repr__(self) -> str:
+        """Return the expression without adding string-literal quotes"""
         return self.text
 
 

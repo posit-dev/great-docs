@@ -4,6 +4,7 @@ Build steps for generated site files and page data
 Write `llms.txt` files, agent skills, a changelog from repository releases, a tags index and page
 status badges, with their navbar links and page data. Prepare pages for the WebMCP tools. Warn
 if skill installation instructions lack a site URL.
+The text export reuses the API documentation that the build has already prepared.
 """
 
 from __future__ import annotations

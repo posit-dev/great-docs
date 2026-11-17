@@ -11,14 +11,16 @@ if TYPE_CHECKING:
 
 
 class PageRendererMixin(BaseRenderer):
-    """Page metadata and front-matter title presentation"""
+    """
+    A page renderer whose title is the page's front matter
+
+    Override `render_metadata` to change the front matter. The page body does not
+    depend on it.
+    """
 
     def render_metadata(self) -> BlockContent:
-        """
-        Render the metadata (front-matter) of the page
-
-        The title is rendered in the front-matter.
-        """
+        """Render page front matter, or return `None` to omit it"""
 
     def render_title(self):
+        """Render the page title as the page's front matter"""
         return self.render_metadata()

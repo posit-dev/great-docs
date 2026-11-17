@@ -45,8 +45,11 @@ class _TypeCategory:
     """One category of typing objects, rendered under its own heading"""
 
     title: str
+    """The category heading"""
     items: list[inventory.InventoryItem]
+    """The inventory entries of the category's prepared objects that hooks did not exclude"""
     renderers: list[RenderObjType]
+    """One renderer for each entry in `items`"""
 
     @classmethod
     def make(
@@ -62,7 +65,13 @@ class _TypeCategory:
         output_root: Path | None = None,
         prepare: Callable[[gf.Object | gf.Alias], gf.Object | gf.Alias | None] | None = None,
     ) -> _TypeCategory:
-        """Construct category renderers using the typing workflow's presentation"""
+        """
+        Prepare a category's objects and create a renderer for each
+
+        Filter semantic exclusions from both renderer and inventory lists. Preserve
+        one heading depth and typing presentation purpose for this category; use the
+        active operation for appearance context and configured render failures.
+        """
         renderers: list[RenderObjType] = []
         retained_items: list[inventory.InventoryItem] = []
         for item in items:
@@ -88,11 +97,25 @@ class _TypeCategory:
 
 @dataclass
 class TypeSections(Block):
+    """
+    The typing categories of one page, with their renderers and inventory entries
+
+    Create protocol, variable and alias categories explicitly. Supplied operation
+    preparation shares canonical facts; standalone sections own temporary default
+    preparation. Keep the extension open until rendering finishes.
+    Empty categories produce no heading and excluded objects produce no inventory item.
+    """
+
     protocols_items: list[inventory.InventoryItem]
+    """Candidate protocol inventory entries"""
     typevars_items: list[inventory.InventoryItem]
+    """Candidate type-variable inventory entries"""
     typealiases_items: list[inventory.InventoryItem]
+    """Candidate type-alias inventory entries"""
     settings: Settings
+    """The operation settings used for preparation and presentation"""
     renderers: Renderers = field(default_factory=Renderers, kw_only=True)
+    """The renderers selected for every category"""
     extension: Extension | None = field(default=None, kw_only=True)
     """Active owner for renderer failures, or `None` for standalone sections"""
     page_path: str | None = field(default=None, kw_only=True)
@@ -106,6 +129,7 @@ class TypeSections(Block):
     """Operation preparation, or `None` to prepare with the supplied or default owner"""
 
     def __post_init__(self) -> None:
+        """Prepare all category records before their presentation is requested"""
         from ._customisation import Extension
 
         extension = self.extension or Extension(self.settings)
@@ -155,16 +179,23 @@ class TypeSections(Block):
         ]
 
     def __str__(self) -> str:
+        """Render the prepared typing categories as Quarto Markdown"""
         return str(self.render_body())
 
     @cached_property
     def items(self) -> list[inventory.InventoryItem]:
-        """
-        All type-information items — protocols, type variables, and type aliases
-        """
+        """The inventory entries of every category, without excluded objects"""
         return [item for category in self.categories for item in category.items]
 
     def render_body(self) -> BlockContent:
+        """
+        Render each non-empty category under its heading
+
+        Returns
+        -------
+        :
+            The category headings, each followed by its rendered objects.
+        """
         content: list[Block | str] = []
 
         for category in self.categories:
@@ -181,14 +212,27 @@ class TypeSections(Block):
 
 @dataclass
 class TypeInformation(Block):
+    """
+    The typing-information page of one module in the documented package
+
+    Acquire and prepare through the active reference before classifying protocols,
+    variables and aliases. Re-exported objects from the documented package share
+    canonical facts. Collection registers inventory entries and returns source;
+    direct writing publishes that one page.
+    """
+
     module_path: str
+    """The import path of the typing module to document"""
     api_ref: APIReference
+    """The reference that loads, prepares and renders the objects"""
 
     def __post_init__(self) -> None:
+        """Record the reference's package and output directory"""
         self.package = self.api_ref.package
         self.dir = self.api_ref.settings.dir
 
     def __str__(self) -> str:
+        """Render the typing page with the selected renderers"""
         content = self.content
         with self.api_ref.extension.error_context("render", f"{self.base_uri}.qmd"):
             return str(content)
@@ -196,13 +240,11 @@ class TypeInformation(Block):
     @cached_property
     def base_uri(self) -> str:
         """
-        The module's output path, relative to the build directory
+        The typing page's path without a filename suffix
 
-        It does not have an extension.
-
-        With the right extensions, this is where:
-            - the module's aliases should be written (.qmd)
-            - the interlinks should point (.html#anchor)
+        The path is the module path, relative to the documented package when the module
+        is inside it, under the reference directory. It is relative to the working
+        directory unless the reference directory is absolute.
         """
         path = self.module_path
         if path.startswith(self.package):
@@ -211,7 +253,7 @@ class TypeInformation(Block):
 
     def _is_own(self, obj: gf.Object | gf.Alias) -> bool:
         """
-        Whether `obj` belongs to the documented package
+        Check whether an object belongs to the documented package
 
         The page documents the package's own protocols, type variables, and
         type aliases, including the ones the module re-exports from
@@ -235,10 +277,16 @@ class TypeInformation(Block):
 
     @cached_property
     def sections(self) -> TypeSections:
+        """
+        The module's typing categories, prepared once
+
+        Load members with the reference's parser and dynamic setting before sorting them.
+        Leave out imports from other packages and objects that object hooks exclude, but
+        keep aliases to the package's own objects.
+        """
+
         def make_item(obj: gf.Object | gf.Alias) -> inventory.InventoryItem:
-            """
-            Build an `InventoryItem` for a typing object
-            """
+            """Build an `InventoryItem` for a typing object"""
             return inventory.InventoryItem(
                 name=obj.canonical_path,
                 obj=obj,
@@ -273,6 +321,7 @@ class TypeInformation(Block):
 
     @cached_property
     def content(self) -> BlockContent:
+        """The typing page: its metadata followed by its categories"""
         meta = Meta({"title": "Typing Information", "body-classes": "doc-api-page doc-py-api-page"})
         return Blocks([meta, self.sections])
 

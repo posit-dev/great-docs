@@ -1,8 +1,9 @@
 """
-Rendering of PEP 695 type parameter lists
+PEP 695 type parameter lists, with bounds, constraints and defaults
 
-A leaf module: it imports nothing from `_apiref` at runtime, so it is safe to
-use from any render module and from a future generic-class/function renderer.
+Render the bracketed list of a generic class, function or alias. Variadic
+parameters keep their `*` or `**` prefix, and an object without type parameters
+gets no list.
 """
 
 from __future__ import annotations

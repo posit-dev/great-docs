@@ -1,4 +1,4 @@
-"""Function documentation with callable signatures and sections"""
+"""Presentation of functions and methods"""
 
 from __future__ import annotations
 
@@ -15,12 +15,15 @@ if TYPE_CHECKING:
 
 class FunctionRenderer(CallableRendererMixin, ObjectRenderer):
     """
-    Function documentation with callable signatures and sections
+    The presentation of a function or method, with its signature and docstring sections
+
+    The description shows the subject, then the Usage and source row and the
+    signature; the docstring body follows. Override the signature or section methods
+    to change how they render; the prepared documentation stays unchanged.
     """
 
     def __post_init__(self) -> None:
+        """Narrow `doc` and `obj` to function documentation"""
         super().__post_init__()
-        # We narrow the type with a TypeAlias since we do not expect
-        # any subclasses to have narrower types
         self.doc: content.DocFunction = self.doc
         self.obj: gf.Function = self.obj

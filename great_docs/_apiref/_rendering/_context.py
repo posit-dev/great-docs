@@ -21,10 +21,11 @@ __all__ = ("RenderContext", "_RenderingPurpose")
 @dataclass(frozen=True)
 class RenderContext:
     """
-    One object's appearance within generated documentation
+    Where a prepared object appears in the generated documentation
 
-    Freezing this record does not freeze its referenced object or settings.
-    Treat semantic documentation as read-only during presentation.
+    The aliases of an object share its prepared documentation, and each has its own
+    authored name and page. Treat the object and settings referenced by this frozen
+    record as read-only.
     """
 
     obj: gf.Object | gf.Alias
@@ -34,7 +35,12 @@ class RenderContext:
     canonical_identity: str
     """The canonical object's qualified path, shared by aliases"""
     page_path: str | None
-    """The output-relative page path, or `None` outside a known page"""
+    """
+    The path of the containing QMD page, relative to the output directory
+
+    `None` when no containing page is known, or when the page's path is absolute and
+    not inside a known output directory.
+    """
     level: int
     """The heading depth of this appearance"""
     contained: bool
@@ -61,8 +67,19 @@ def output_page_path(destination: str | Path | None, output_root: Path | None) -
     """
     Express a page destination relative to the output directory
 
-    Preserve relative logical destinations. Return `None` for an absolute path
-    when the supplied output root cannot place it in that coordinate system.
+    Parameters
+    ----------
+    destination
+        The page's destination, or `None` when no page is known.
+    output_root
+        The documentation output directory, or `None` outside a build.
+
+    Returns
+    -------
+    :
+        A relative destination unchanged, an absolute destination relative to
+        `output_root`, or `None` when an absolute destination is not inside a known
+        output directory. The working directory is never used as a fallback.
     """
     if destination is None:
         return None

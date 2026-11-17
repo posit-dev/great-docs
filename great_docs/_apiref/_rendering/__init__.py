@@ -1,4 +1,10 @@
-"""Built-in API reference renderers and scoped renderer choices"""
+"""
+The private implementations of object, page and section renderers
+
+Object renderers render prepared documentation and member groups. Page renderers
+render front matter and summaries. Extensions import the supported classes from
+`great_docs.rendering`.
+"""
 
 from ._renderers import Renderers
 from .api_pages import APIPageRenderer

@@ -696,8 +696,10 @@ class Config:
         """
         The API reference extension file, resolved against the configuration file's directory
 
-        Reading this path does not import or execute the entry file. A null
-        value disables project-local setup.
+        Loading the configuration checks only that the value is a `.py` path, without
+        importing or running the file. The file and its `setup` are checked when the
+        API reference first loads the extension. `None` when the value is null, which
+        means no extension.
         """
         value = cast("str | None", self["api_reference_extension"])
         if value is None:

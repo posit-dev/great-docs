@@ -15,6 +15,10 @@ docstring page yourself, and as your code evolves the documentation stays up to 
 
 This page explains how discovery works, what gets documented, and how to customize the result.
 
+To edit docstrings during generation, add content to individual objects or change
+how objects and pages render, see
+[API reference customisation](api-reference-customisation.qmd).
+
 ## How Discovery Works
 
 When you run `great-docs init` or `great-docs build`, Great Docs:

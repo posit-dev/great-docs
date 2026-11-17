@@ -4,6 +4,8 @@ Build steps for reference pages and cross-reference links
 Write API, Click, Go CLI, Rust CLI and MCP reference pages with their sidebars and navbar
 links. Retain the active Python reference on build state for later consumers and
 release failed attempts before retrying. Index documented names for cross-reference links.
+Configured extension errors remain fatal; only ordinary dynamic acquisition
+failures enter the existing static retry.
 """
 
 from __future__ import annotations
@@ -133,10 +135,11 @@ def api(
     """
     Write the API reference pages and the inventory of documented objects
 
-    Assign the active reference before generation and release failed attempts.
-    When dynamic acquisition fails, set `dynamic: false` in the in-memory API
-    reference configuration and retry once with static analysis. Configured
-    extension failures propagate without retrying.
+    Store each attempt's reference on `run` before generating it, and close an attempt
+    that fails. When dynamic introspection fails, set `dynamic: false` in the in-memory
+    API reference configuration and retry once with static analysis. An API reference
+    extension failure propagates without a retry. Leave a successful reference open for
+    the text export and interlinks; the build closes it.
 
     Parameters
     ----------
@@ -160,7 +163,8 @@ def api(
     StepError
         If the API reference cannot be generated.
     ExtensionError
-        If configured loading, setup or presentation fails.
+        If the API reference extension fails during loading, setup, preparation,
+        rendering or input fingerprinting.
     """
     if not run.has_api_reference:
         return Skipped("API reference disabled"), None
@@ -241,7 +245,9 @@ def interlinks(
     log
         The build log.
     api_reference
-        The project's API reference, if it has one.
+        The build's prepared API reference, or `None` without one. Its inventory
+        supplies the names that objects claim, without loading another extension or
+        rendering docstring bodies.
 
     Returns
     -------

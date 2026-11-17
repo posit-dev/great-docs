@@ -1,10 +1,11 @@
 """
-Griffe object access
+Static and runtime acquisition of Griffe objects and authored alias views
 
-The located `Object` / `Alias` nodes that model a package's public API — the
-source of truth for every documented object's signature and docstring, loaded
-and normalized from griffe's static analysis (with an optional dynamic-import
-mode).
+Reuse a caller's loader for source models, parser defaults and alias targets.
+Dynamic acquisition imports the package and hydrates runtime documentation;
+an operation-supplied predicate preserves documentation already prepared by
+semantic hooks. Keep source-authored alias documentation and declaration-only
+attributes distinct from missing runtime values.
 """
 
 from __future__ import annotations
@@ -53,7 +54,7 @@ def get_parser_defaults(name: str) -> dict[str, object]:
 
 def make_loader(parser: str = "numpy") -> gf.GriffeLoader:
     """
-    Configure a griffe loader with the defaults for a docstring parser
+    Configure a Griffe loader with the defaults for a docstring parser
 
     Parameters
     ----------
@@ -88,7 +89,7 @@ def get_object(
     preserve: _PreserveDocumentation | None = None,
 ) -> gf.Object | gf.Alias:
     """
-    Get the griffe object at the given import path
+    Get the Griffe object at the given import path
 
     Parameters
     ----------
@@ -195,7 +196,7 @@ def _static_object(
     loader: gf.GriffeLoader,
 ) -> gf.Object | gf.Alias:
     """
-    The griffe object at a path, as griffe's static analysis models it
+    Look up the object or alias that static analysis models at a path
 
     An alias imported from elsewhere brings its target's module along, so the
     target can be resolved.
@@ -243,7 +244,8 @@ def resolve_alias(
     obj: gf.Alias | gf.Object,
     get_object: Callable[..., gf.Object | gf.Alias] | None = None,
 ) -> gf.Object:
-    """Resolve the alias chain to the concrete `Object` at its end
+    """
+    Resolve the alias chain to the concrete `Object` at its end
 
     Follows `Alias.target` links until a non-alias node is reached. An
     unresolved link is re-loaded through `get_object` when one is provided;
@@ -290,7 +292,7 @@ def replace_docstring(
     preserve: _PreserveDocumentation | None = None,
 ) -> None:
     """
-    Replace the griffe object's docstring in place with the imported runtime docstring
+    Replace the Griffe object's docstring in place with the imported runtime docstring
 
     An attribute holding a function (the `method = some_function` pattern) is
     also promoted to one, so it renders with a signature. What stays an
@@ -479,10 +481,10 @@ def _clone_docstring(
 
 def _owns_its_docstring(value: object) -> bool:
     """
-    Whether `value` carries a `__doc__` of its own rather than one inherited from its type
+    Check whether a value has a `__doc__` of its own rather than one inherited from its type
 
-    A class and a module both keep `__doc__` in their own `__dict__`, but it
-    documents them — not the name they were assigned to — so both are excluded.
+    A class and a module both keep `__doc__` in their own `__dict__`, but it documents the
+    class or module rather than the name it was assigned to, so both are excluded.
 
     Parameters
     ----------
@@ -547,7 +549,7 @@ class _Documented:
 
 def _same_path(one: str, other: str) -> bool:
     """
-    Whether two paths name the same object, ignoring the `:` / `.` separator
+    Check whether two paths name the same object, ignoring the `:` or `.` separator
 
     Parameters
     ----------
@@ -564,7 +566,7 @@ def _same_path(one: str, other: str) -> bool:
 
 def _member_now_at(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
     """
-    The node the parent currently holds under `obj`'s name
+    Read the node that the parent now holds under an object's name
 
     `replace_docstring` promotes a callable attribute by registering a
     `gf.Function` in its place, which leaves the attribute it was handed stale.
@@ -592,7 +594,7 @@ def dynamic_alias(
     preserve: _PreserveDocumentation | None = None,
 ) -> gf.Object | gf.Alias:
     """
-    Resolve a griffe object for `path` via a dynamic import
+    Resolve a Griffe object for `path` via a dynamic import
 
     Parameters
     ----------
@@ -607,7 +609,7 @@ def dynamic_alias(
     Returns
     -------
     :
-        The node griffe models at `path`, carrying the runtime docstring. It
+        The node Griffe models at `path`, carrying the runtime docstring. It
         comes back as an alias member of the thing it was accessed through only
         when it lives somewhere else.
     """
@@ -720,7 +722,7 @@ def _locate_declaration(
     loader: gf.GriffeLoader | None,
 ) -> _DeclarationOnly:
     """
-    Fall back to griffe's static model for an attribute with no runtime value
+    Fall back to Griffe's static model for an attribute with no runtime value
 
     Parameters
     ----------
@@ -759,15 +761,14 @@ def _load_documenting_object(
     preserve: _PreserveDocumentation | None = None,
 ) -> _Documented:
     """
-    Load the griffe object that documents `located`
+    Load the Griffe object that documents `located`
 
     A class or a function is documented by the value's own node, wherever it is
-    defined, so `Widget = _W` keeps the class's members. A docstring written
-    under the assignment earns the name a node of its own instead — a class
-    sharing the original's members, a function rebuilt from the runtime
-    signature — which is what keeps what an author wrote about one name off the
-    other's page. Every other value, an instance or a module or a typing
-    construct, is documented as the attribute it was found at.
+    defined, so `Widget = _W` keeps the class's members. A docstring written under the
+    assignment gives that name a node of its own: a class that shares the original's
+    members, or a function rebuilt from the runtime signature. Each name's page then shows
+    only what the author wrote about that name. Every other value, an instance or a module
+    or a typing construct, is documented as the attribute it was found at.
 
     Parameters
     ----------
@@ -816,9 +817,10 @@ def _reexpose_class(
     """
     Register a class node under the name it was accessed by, or reuse a prepared one
 
-    Reuse an already-prepared node for this name. Otherwise the two nodes share their members, so the re-exported name documents the
-    same methods; each carries its own docstring, so what an author wrote about
-    one name never shows up on the other's page.
+    Reuse the node already held under the name when it has been prepared. Otherwise
+    register a second node for the class that shares its members but carries the name's
+    own docstring, so what an author wrote about one name never shows up on the other's
+    page.
 
     Parameters
     ----------
@@ -836,8 +838,8 @@ def _reexpose_class(
     Returns
     -------
     :
-        The new node, already a member of the module or class the name was
-        reached through.
+        The node under the accessed name in the module or class it was reached through:
+        the prepared existing node, or the new one.
     """
     parent = _access_parent(located, loader, preserve=preserve)
     if preserve is not None and isinstance(parent, (gf.Module, gf.Class)):
@@ -859,7 +861,7 @@ def _canonical_home(
     loader: gf.GriffeLoader | None,
 ) -> _Documented | None:
     """
-    Load the griffe object at the path `located` reports it was defined at
+    Load the Griffe object at the path `located` reports it was defined at
 
     `None` when that path is unreadable, which covers both a value that cannot
     report a home and one whose `__module__` names a module that cannot be
@@ -1014,7 +1016,7 @@ def _access_parent(
 
 def _canonical_path(current_part: object, qualname: str) -> str | None:
     """
-    The path at which `current_part` reports it lives, extended by `qualname`
+    Find the path at which a runtime object reports it lives, extended by `qualname`
 
     `None` when the object reports no home. A module knows its own `__name__`
     but not where its members were defined, so it reports a home only for
@@ -1052,10 +1054,10 @@ def _canonical_path(current_part: object, qualname: str) -> str | None:
 
 def _has_no_value(obj: gf.Object | gf.Alias) -> bool:
     """
-    Whether `obj` is an attribute that carries no runtime value
+    Check whether an attribute, or the attribute an alias points to, has no runtime value
 
     True for class/module attributes with no assigned value, and for
-    all instance attributes (which are declaration-only in griffe's static
+    all instance attributes (which are declaration-only in Griffe's static
     model).
 
     Parameters
@@ -1079,6 +1081,25 @@ def _has_no_value(obj: gf.Object | gf.Alias) -> bool:
 
 
 def validate_dynamic(value: object, *, allow_none: bool = False) -> None:
+    """
+    Check that a `dynamic` value chooses between static and dynamic loading
+
+    Accept `True` or `False`, and accept `None` only when `allow_none` is set, for settings
+    that leave the choice to the default. Reject any other value, including an import path:
+    `dynamic` selects how an object is inspected, not which object.
+
+    Parameters
+    ----------
+    value :
+        The `dynamic` value to check.
+    allow_none :
+        Whether `None` is accepted.
+
+    Raises
+    ------
+    ValueError
+        If the value is not accepted.
+    """
     if isinstance(value, bool) or (allow_none and value is None):
         return
     raise ValueError(

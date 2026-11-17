@@ -1,4 +1,4 @@
-"""Module documentation with grouped member presentation"""
+"""Presentation of modules, with a name declaration and member groups"""
 
 from __future__ import annotations
 
@@ -21,19 +21,21 @@ if TYPE_CHECKING:
 
 class ModuleRenderer(MembersRendererMixin, ObjectRenderer):
     """
-    Module documentation with grouped member presentation
+    The presentation of a module, with a name declaration and member groups
+
+    The description shows the name declaration, then the Usage and source row and
+    the subject. The body shows the docstring sections followed by member groups.
+    A module's signature is its name, without parameters.
     """
 
     def __post_init__(self) -> None:
+        """Narrow `doc` and `obj` to module documentation"""
         super().__post_init__()
-        # We narrow the type with a TypeAlias since we do not expect
-        # any subclasses to have narrower types
         self.doc: content.DocModule = self.doc
         self.obj: gf.Module = self.obj
 
-    # TODO: Verify that this is really required.
-    # Why isn't the header/title enough?
     def render_signature(self) -> BlockContent:
+        """Render the module name declaration, or return `None` for an empty name"""
         if not self.signature_name:
             return None
         return Div(

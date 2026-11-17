@@ -13,7 +13,11 @@ from great_docs._translations import translate
 if TYPE_CHECKING:
 
     class Stringable(Protocol):
-        def __str__(self) -> str: ...
+        """A value with a textual table-cell representation"""
+
+        def __str__(self) -> str:
+            """Represent the cell value as text"""
+            ...
 
 
 # A backtick code span: a run of backticks, its content, and a run of the same length

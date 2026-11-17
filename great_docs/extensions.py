@@ -1,8 +1,16 @@
 """
-Project-local API-reference extension registration and callback types
+The extension that a project's `setup(extension)` receives, and its hook types
 
-Define `setup(extension)` in the configured Python entry file. Register through
-that supplied owner; registrations and its project cache belong to one operation.
+The file named by `api_reference_extension` defines `setup(extension)`. Setup uses the
+`Extension` it receives to register object and docstring hooks, select `Renderers`
+from `great_docs.rendering` and declare the inputs it reads.
+Registration closes when setup returns. The extension and its `cache` last for one
+generation of the API reference.
+
+Semantic results and exclusions are shared across aliases. Limit semantic edits
+to the current object's documentation and metadata. Use a custom renderer for
+appearance-specific content. Configured failures raise
+`ExtensionError` with their original cause and release owned imports.
 """
 
 from ._apiref._customisation import Extension, ExtensionError

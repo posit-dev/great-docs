@@ -1,4 +1,4 @@
-"""Tests for great_docs._apiref._rendering.objects."""
+"""Verify the object renderer's docstring sections and repository source links"""
 
 from __future__ import annotations
 

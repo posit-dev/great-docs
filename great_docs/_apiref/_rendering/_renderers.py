@@ -34,12 +34,41 @@ _Renderer = TypeVar("_Renderer", bound=BaseRenderer)
 
 class Renderers:
     """
-    Validated renderer classes for object, page and reference presentation
+    The renderer classes to use for each kind of object and page
 
-    Each omitted slot uses its built-in renderer. `doc_mixin` precedes default
-    object renderers in their method resolution order. Explicit replacements
-    include that mixin themselves when needed. Declaring or selecting a subclass
-    never changes another renderer class.
+    Each omitted slot uses its built-in class. `doc_mixin` precedes default object
+    renderers in their method resolution order; explicit replacements control their
+    own inheritance. Declaring or selecting a subclass never changes shared classes.
+    Nested pages, members and summaries retain the same choices.
+
+    Parameters
+    ----------
+    classes
+        The renderer for classes.
+    functions
+        The renderer for functions and methods.
+    attributes
+        The renderer for attributes, properties and PEP 613 type aliases.
+    type_aliases
+        The renderer for PEP 695 type aliases.
+    modules
+        The renderer for modules.
+    api_pages
+        The renderer for pages that document one or more objects.
+    reference_index
+        The renderer for the whole reference index.
+    reference_sections
+        The renderer for each section of the reference index.
+    doc_mixin
+        A class whose methods apply to every default object renderer. A replacement
+        renderer gets them only by inheriting from the mixin. Page and section
+        renderers never get them.
+
+    Raises
+    ------
+    TypeError
+        If a replacement does not subclass the matching built-in renderer, or the
+        mixin is not a class.
     """
 
     def __init__(
@@ -55,6 +84,7 @@ class Renderers:
         reference_sections: type[ReferenceSectionRenderer] | None = None,
         doc_mixin: type | None = None,
     ) -> None:
+        """Validate the replacements and use the default renderer for each kind left out"""
         if doc_mixin is not None and not isinstance(cast("object", doc_mixin), type):
             raise TypeError("`doc_mixin` must be a class.")
         self.classes = self._select("classes", classes, ClassRenderer, doc_mixin)
@@ -77,6 +107,7 @@ class Renderers:
         default: type[_Renderer],
         mixin: type | None = None,
     ) -> type[_Renderer]:
+        """Validate an explicit replacement or apply a mixin to the default renderer"""
         if replacement is not None:
             if not isinstance(cast("object", replacement), type) or not issubclass(
                 replacement, default
@@ -141,14 +172,44 @@ class Renderers:
         **kwargs: Any,
     ) -> BaseRenderer:
         """
-        Construct the selected renderer and propagate these choices to children
+        Construct the selected renderer for a node and pass these choices on
 
-        Supply resolved `sections` for a reference index. An index uses its
-        reference's settings and rejects conflicting explicit settings. Other
-        nodes use the supplied settings, the active extension settings or standalone
-        defaults. Conflicting operation settings raise. Pass `extension` to retain
-        project roots; page context remains absent when
-        no containing output is known.
+        Parameters
+        ----------
+        node
+            The prepared object, resolved page or section, or reference index to render.
+        level
+            The heading depth of this appearance.
+        settings
+            Explicit operation settings. Omit these to use the supplied extension's
+            settings, the index reference's settings or standalone defaults.
+        sections
+            The resolved sections, which a reference index requires and every other
+            kind of node rejects.
+        extension
+            The extension that supplies the project context. A reference index uses its
+            reference's extension.
+        output_root
+            The documentation output root, or `None` outside a known build.
+        context_page_path
+            The output-relative containing page destination when known. Absolute paths
+            require an enclosing explicit output root before appearing in the renderer context.
+        **kwargs
+            Additional constructor arguments for the selected kind, such as an object's
+            summary-link `page_path` or `contained` state.
+
+        Returns
+        -------
+        :
+            A renderer whose nested appearances use the same choices.
+
+        Raises
+        ------
+        TypeError
+            If index sections are absent, sections are supplied to another kind, or
+            constructor arguments are invalid.
+        ValueError
+            If the node kind is unsupported or explicit settings conflict with its operation.
         """
         from ..api_reference import APIReference
 

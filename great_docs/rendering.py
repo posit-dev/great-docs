@@ -1,4 +1,15 @@
-"""Supported API reference renderers and ordinary-subclass selection"""
+"""
+API reference renderers and their context
+
+To change presentation, subclass a renderer, collect the subclasses in `Renderers`
+and pass them to `Extension.set_renderers` during setup. The subclasses apply to that
+run only and never change the built-in classes. Override the `render_*` methods
+rather than cached properties such as `title` and `body`. Return `None` to omit a
+block, or an empty sequence to omit summary rows.
+
+An object renderer's `context` describes the appearance it is rendering, including
+the object's authored name and its containing page.
+"""
 
 from ._apiref._rendering import (
     APIPageRenderer,

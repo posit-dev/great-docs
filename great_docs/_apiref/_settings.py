@@ -1,5 +1,9 @@
 """
-The settings of an API reference, read from its Quarto config block
+Settings for loading, rendering and linking the objects of an API reference
+
+Read generation options from the Quarto `api-reference` block and combine them with the
+site language and the project's source links. Settings hold values only: building them
+never loads the extension, which keeps its own registrations and imports.
 """
 
 from __future__ import annotations
@@ -18,7 +22,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class CallableSignatures:
-    """How the signature of a function, method or class is written"""
+    """How the signature of a function, method or class is written and wrapped"""
 
     style: str = "highlighted"
     """`highlighted` for a highlighted code block, `plain` for inline markup"""
@@ -58,37 +62,47 @@ class Settings:
     """
     Settings for generating an API reference
 
-    Generation options come from the `api-reference:` block, the language from
-    the site configuration and the source links from the project. Block options
-    exclude `version`.
+    Generation options come from the `api-reference:` block, the language from the site
+    configuration and the source links from the project. `make()` ignores the block's
+    `version` key, but code that builds settings directly may supply an inventory version.
     """
 
     parser: str = "numpy"
+    """The docstring parser for every object in the reference"""
     callable_signatures: CallableSignatures = field(default_factory=CallableSignatures)
+    """How callable signatures are written and wrapped"""
     dynamic: bool | None = None
+    """Whether to load objects by importing the package, or `None` for the default"""
     members_on_same_page: bool | None = None
     """Same-page override for top-level entries, or `None` to use the member limit"""
     max_members_on_same_page: int = 5
     """Automatic limit on documented direct members sharing their parent page"""
     source_dir: str | None = None
+    """An extra directory to search for imports, or `None`"""
     dir: str = "reference"
+    """The output directory for reference pages"""
     out_index: str = "index.qmd"
+    """The index page's filename within the reference directory"""
     out_page_suffix: str = ".qmd"
+    """The filename suffix of object pages"""
     sidebar: dict[str, Any] | None = None
+    """Sidebar options, or `None` to write no sidebar"""
     css: str | None = None
     header_level: int = 1
+    """The heading level at which reference pages start"""
     rewrite_all_pages: bool = False
+    """Whether to rewrite object pages whose content has not changed"""
     typing_module_paths: list[str] = field(default_factory=list[str])
+    """Import paths of modules whose own typing objects get dedicated pages"""
     version: str | None = None
+    """The inventory version, which only code can set, or `None` for the default"""
     lang: str = "en"
     """The reference language as a BCP 47 tag"""
     source_links: SourceLinks = field(default_factory=SourceLinks)
     """The source-link destinations for documented objects"""
 
     def __post_init__(self) -> None:
-        """
-        Validate global member placement settings
-        """
+        """Validate global member placement settings"""
         same_page = cast("object", self.members_on_same_page)
         if same_page is not None and not isinstance(same_page, bool):
             raise ValueError("Global `members_on_same_page` must be true, false or null.")
@@ -139,10 +153,6 @@ class Settings:
         return cls(**kwargs, lang=lang, source_links=source_links or SourceLinks())
 
 
-# Parity quirk preserved deliberately (do NOT "fix" here): `version` is not
-# read from the config block. The old Builder accepted a `version` param but
-# its __init__ forced `self.version = None`, so the inventory was always built
-# with "0.0.9999". (`interlinks.fast` / `_fast_inventory` was confirmed dead
-# and dropped, per spec.)
-# The site configuration supplies the language; the project supplies source links.
+# Keys read from the reference block. Only code can set the inventory version, and the
+# language and source links come from the site and the project.
 _SETTINGS_KEYS = {f.name for f in dc_fields(Settings)} - {"version", "lang", "source_links"}

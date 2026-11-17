@@ -1,4 +1,9 @@
-"""Attribute and property documentation with values and annotations"""
+"""
+Presentation of attributes, properties and PEP 613 type aliases
+
+The declaration and value follow the subject. A `Returns` section is omitted, and
+only properties show `Raises`, `Warns`, `Yields` and `Receives` sections.
+"""
 
 from __future__ import annotations
 
@@ -25,17 +30,27 @@ if TYPE_CHECKING:
 @dataclass
 class AttributeRenderer(ObjectRenderer):
     """
-    Attribute and property documentation with values and annotations
+    The presentation of an attribute or property, with its annotation and value
+
+    The description shows the subject, then the declaration, without a Usage row.
+    On a typing-variable page the declaration leaves out the name, which the page
+    already shows, and a PEP 613 type alias leaves out its `TypeAlias` annotation.
+    Only properties show `Raises`, `Warns`, `Yields` and `Receives` sections.
     """
 
     def __post_init__(self) -> None:
+        """Narrow `doc` and `obj` to attribute documentation"""
         super().__post_init__()
-        # We narrow the type with a TypeAlias since we do not expect
-        # any subclasses to have narrower types
         self.doc: content.DocAttribute = self.doc
         self.obj: gf.Attribute = self.obj
 
     def render_signature(self) -> BlockContent:
+        """
+        Render the declaration with the omissions that typing pages need
+
+        A typing-variable page leaves out the name, and a type alias leaves out its
+        `TypeAlias` annotation.
+        """
         name = "" if self._purpose is _RenderingPurpose.TYPE_VARIABLE else self.signature_name
         annotation = None if self._purpose is _RenderingPurpose.TYPE_ALIAS else self.obj.annotation
         default = getattr(self.obj, "value", None)
@@ -47,9 +62,7 @@ class AttributeRenderer(ObjectRenderer):
         )
 
     def render_description(self) -> BlockContent:
-        """
-        Render description for attributes: subject above signature, no Usage label
-        """
+        """Render the subject followed by the declaration, without a Usage row"""
         return Blocks(
             [
                 self.render_docstring_subject(),
@@ -60,24 +73,21 @@ class AttributeRenderer(ObjectRenderer):
     @cached_property
     def docstring_sections_content(self):
         """
-        The docstring sections, excluding Returns for properties since the type
-        is already shown in the signature
+        The docstring sections without `Returns`
+
+        The declaration already shows the property's or attribute's annotation.
         """
         items = super().docstring_sections_content
         return [(title, section) for title, section in items if title != "Returns"]
 
     def _render_property_only_section(self, el: DocstringSectionWithDefinitions) -> BlockContent:
         """
-        Render a section that only makes sense for a property
+        Render a `Raises`, `Warns`, `Yields` or `Receives` section only for a property
 
-        A property runs code on access, so it can legitimately document
-        `Raises`, `Warns`, or a `Yields`/`Receives` pair. A plain data
-        attribute cannot, so it falls through to the unhandled-section path
-        instead of rendering. Gate on the griffe fact (`"property" in
-        obj.labels`) rather than `self.label`: `get_label` runs annotation
-        heuristics (`TypeVar`, `TypeAlias`, ...) before it checks for the
-        `property` label, so a property with such a return annotation would
-        otherwise be misidentified as not a property.
+        A property runs code on access, so it can raise or yield. A plain attribute
+        cannot, so its section is omitted with a warning. The check uses Griffe's
+        `property` label rather than the kind label, which can classify a property by
+        a return annotation such as `TypeVar` instead.
         """
         if "property" not in self.obj.labels:
             return self._unhandled_section(el)

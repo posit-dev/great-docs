@@ -4,8 +4,9 @@ Documentation build order and shared state
 Builds produce a single-version or versioned site. Watch mode serves a prepared project
 with `quarto preview` and repeats preparation after source edits. Rendering and freezing
 use the same preparation steps, except that freezing skips remote content publication.
-Each build owns its active API reference through the last consumer and releases
-its extension state on completion or failure.
+Each build generates the API reference before the text export and interlinks, which
+reuse it, and closes the reference when the build finishes or fails. Each preview rebuild
+creates a new reference, while one file watcher stays open for the whole session.
 """
 
 from __future__ import annotations
@@ -95,8 +96,9 @@ class Run:
         The `api-reference` block of `quarto_config`, or `None` for a site without an API
         reference.
     api_reference
-        The active API reference, assigned before generation so failed attempts
-        can release their owned extension imports.
+        The API reference this build generated, or `None` when the build has none. The
+        reference pages, the text export and interlinks share its prepared
+        documentation, and its extension's input paths stay readable after it closes.
     api_discovery_reused
         Whether this build reused cached API reference sections.
     user_guide
@@ -145,7 +147,7 @@ class Run:
         Returns
         -------
         :
-            The initial build state with the project's name, metadata, GitHub repository,
+            The initial build state with the project's name, metadata, repository,
             site identity and page authors.
         """
         project = Project.make(config, layout)
@@ -173,6 +175,10 @@ def run(
     """
     Build the documentation site or serve it with `quarto preview`
 
+    Keep the API reference open for the text export and interlinks, and close it when the
+    build finishes or fails, which removes the project modules its extension imported. In
+    watch mode, close each rebuild's reference before serving the result.
+
     Parameters
     ----------
     config
@@ -180,7 +186,7 @@ def run(
     layout
         The project's directories.
     remote
-        The source of GitHub and PyPI data.
+        The source of repository and PyPI data.
     watch
         Whether to serve the prepared project with `quarto preview` and repeat preparation
         after source edits. Watch mode skips the full render and the steps that follow it.
@@ -297,7 +303,10 @@ def prepare_for_freeze(config: Config, layout: Layout, log: BuildLog, *, remote:
     Prepare the Quarto project for freezing, excluding remote content
 
     Quarto requires matching page sources to reuse frozen results. Use the build's
-    preparation steps so freezing and rendering use matching sources.
+    preparation steps so freezing and rendering use matching sources, including customised
+    reference pages and their input fingerprints. Close the API reference after
+    preparation, because executing the pages does not need the modules its extension
+    imported.
 
     Parameters
     ----------
@@ -308,7 +317,7 @@ def prepare_for_freeze(config: Config, layout: Layout, log: BuildLog, *, remote:
     log
         The build log that the steps write to.
     remote
-        The source of GitHub and PyPI data.
+        The source of repository and PyPI data.
 
     Raises
     ------
@@ -339,6 +348,9 @@ def preparation_steps(
 
     These steps write the Quarto project before rendering. Step functions are resolved
     when each step runs, so replacements made after this list is created take effect.
+    Generate the API reference before the text export and interlink indexing, which both
+    reuse it. A failing API reference extension stops preparation: it neither triggers
+    the static-analysis retry nor becomes a warning.
 
     Parameters
     ----------
@@ -351,7 +363,7 @@ def preparation_steps(
     log
         The build log that the steps write to.
     remote
-        The source of GitHub and PyPI data.
+        The source of repository and PyPI data.
     refresh
         Whether to discover API reference sections even when the cached sections are valid.
     write_quarto_config
@@ -652,11 +664,13 @@ def _watch(
     """
     Prepare the Quarto project and preview it with rebuilds after source edits
 
-    Edits to documentation, package sources and initial extension inputs trigger
-    rebuilds. Each rebuild reloads configuration and prepares in staging while
-    one watcher remains open. Report new uncovered inputs without changing the
-    subscription, including when a rebuild fails. Close each generation's
-    reference after its final consumer; retain the last successful published files.
+    Edits to documentation sources, the documented package and the extension inputs
+    known after the first build trigger rebuilds. Each rebuild reloads configuration
+    and prepares the project in a staging directory, while one file watcher stays open
+    for the session. When a rebuild's extension uses an input that the watcher does not
+    cover, report it once per session, even if the rebuild fails; watching it requires
+    restarting the preview. Close each rebuild's API reference when its steps finish,
+    and keep the last successful output published.
 
     Parameters
     ----------
@@ -671,7 +685,7 @@ def _watch(
     steps
         The steps that prepare the project, ending with the render step.
     remote
-        The source of GitHub and PyPI data.
+        The source of repository and PyPI data.
     refresh
         Whether each rebuild rediscovers the package's exports for the API reference.
 

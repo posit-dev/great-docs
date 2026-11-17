@@ -246,7 +246,7 @@ def test_docstring_section_patched_duplicate_registration_raises():
 
 
 def test_render_value_non_expr_uses_format_value():
-    """TypeAliasRenderer._render_value uses format_value when value is not a gf.Expr."""
+    """Format a type alias's plain string value through `format_value`"""
     from unittest.mock import MagicMock, patch
 
     from great_docs._apiref._rendering.type_aliases import TypeAliasRenderer
@@ -276,7 +276,7 @@ def test_render_value_non_expr_uses_format_value():
 
 
 def test_render_value_long_expr_with_ruff():
-    """TypeAliasRenderer._render_value calls render_formatted_expr when HAS_RUFF and expr is long."""
+    """Use Ruff formatting for long alias expressions when available"""
     from unittest.mock import MagicMock, patch
 
     from great_docs._apiref._rendering import type_aliases as dta

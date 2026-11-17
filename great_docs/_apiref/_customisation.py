@@ -1,8 +1,10 @@
 """
-Scoped extension registration and lifetime for one API-reference operation
+The extension that customises one API reference
 
-Snapshot global hook templates without copying callback state. Configured setup
-registers through the supplied owner and finishes before registration freezes.
+An `Extension` holds one operation's registrations, renderer choices, `cache` and
+declared inputs. It prepares each object's documentation once. Registration closes
+when the extension file's `setup` returns, and closing the extension releases the
+project modules it imported.
 """
 
 from __future__ import annotations
@@ -59,6 +61,7 @@ class _ExtensionErrorContext:
         self.subject = subject
 
     def __enter__(self) -> None:
+        """Enter the diagnostic boundary without running configured code"""
         return None
 
     def __exit__(
@@ -67,6 +70,7 @@ class _ExtensionErrorContext:
         error: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        """Release owned imports and preserve the original configured failure as its cause"""
         if error is None:
             return
         self.close()
@@ -84,26 +88,47 @@ class _ExtensionErrorContext:
 
 class Extension:
     """
-    Registrations, renderer choices and project cache for one API reference
+    The API reference extension that `setup(extension)` receives
 
-    Setup may inspect `settings`, `source_root` and `config_root` and keep its
-    own values in `cache`. Treat the settings and roots as read-only. Register
-    handlers and dependencies only during setup. Each operation owns fresh state;
-    callback objects inherited from global templates retain their own state.
+    Setup may inspect `settings`, `source_root` and `config_root` and keep its own
+    values in `cache`. Treat settings and roots as read-only. Register callbacks,
+    renderer choices and dependencies only during setup. Each operation starts
+    with fresh cache and canonical preparation state. Callbacks inherited from
+    global templates retain their own state.
+
+    During setup, register hooks, select renderers with `set_renderers` and declare
+    inputs with `watch`. Registration closes when setup returns. Setup may read
+    `settings`, `source_root`, `config_root` and `output_root` but must not change them.
+
+    Object and docstring hooks change the documentation that every alias of an object
+    shares, including whether the object is excluded. Keep their edits to the object's
+    own docstring and metadata. Use a renderer to customise how an object appears
+    on a page.
 
     Attributes
     ----------
     settings
-        The operation's semantic and presentation settings, read-only by contract.
+        The parser, introspection and rendering settings. Read-only.
     source_root
-        The original documentation source directory, or `None` without project context.
+        The project's documentation source directory, or `None` outside a project.
     config_root
-        The selected configuration file's directory, or `None` without project context.
+        The directory of the selected configuration file, or `None` outside a project.
     cache
         The extension's own values, shared by setup and its callbacks for one run.
     """
 
     def __init__(self, settings: Settings, source: _ExtensionSource | None = None) -> None:
+        """
+        Copy the global hooks and start empty, without loading the extension file
+
+        Parameters
+        ----------
+        settings
+            The parser, introspection and rendering settings for this operation.
+        source
+            The extension file and the project's directories, or `None` when there is
+            no extension file and only the global hooks apply.
+        """
         self.settings = settings
         self.source_root = source.source_root if source else None
         self.config_root = source.config_root if source else None
@@ -176,6 +201,7 @@ class Extension:
     def _register(
         self, registry: HookRegistry[_Hook], callback: _Hook | None, priority: int
     ) -> _Hook | Callable[[_Hook], _Hook]:
+        """Register a callable while setup remains open, directly or through a decorator"""
         self._check_registration()
 
         def add(handler: _Hook) -> _Hook:
@@ -206,11 +232,33 @@ class Extension:
         self, callback: ObjectResolvedHook | None = None, priority: int = 0
     ) -> ObjectResolvedHook | Callable[[ObjectResolvedHook], ObjectResolvedHook]:
         """
-        Register a current-object transform before constructor-aware parsing
+        Register an object hook, which runs on each object before its docstring is parsed
 
-        Return the object to retain, a replacement, or `None` to exclude it.
-        Lower priorities run first; ties preserve registration order. Use this
-        method directly or as a decorator during setup.
+        A hook may edit the object's docstring or documentation metadata, or exclude
+        the object. It must leave the object's members, bases and descendants as they
+        are. Every alias of the object shares the result, including an exclusion. To
+        change how the object looks in one place, use a renderer method or a body
+        callback.
+
+        Parameters
+        ----------
+        callback
+            A callable that receives the Griffe object, never an alias. Return that
+            object, a replacement, or `None` to exclude it. Omit `callback` to use this
+            method as a decorator.
+        priority
+            The run order. Lower values run first, and equal values run in
+            registration order, with global hooks before the ones registered here.
+
+        Returns
+        -------
+        :
+            `callback`, or a decorator that registers one when `callback` is omitted.
+
+        Raises
+        ------
+        RuntimeError
+            If setup has finished or the extension is closed.
         """
         return self._register(self._object_hooks, callback, priority)
 
@@ -228,11 +276,33 @@ class Extension:
         self, callback: DocstringParsedHook | None = None, priority: int = 0
     ) -> DocstringParsedHook | Callable[[DocstringParsedHook], DocstringParsedHook]:
         """
-        Register a parsed-section transform for objects with docstrings
+        Register a docstring hook, which runs on each object's parsed docstring sections
 
-        Return the sections to retain or replace. Returning `None` is invalid.
-        Lower priorities run first; ties preserve registration order. Use this
-        method directly or as a decorator during setup.
+        Docstring hooks run only for objects that have a docstring. Every alias,
+        reference page, the text export and symbol queries use the sections they
+        return. A hook may change the object's own sections but must leave its members
+        and descendants as they are.
+
+        Parameters
+        ----------
+        callback
+            A callable that receives the prepared object and its list of parsed
+            sections, and returns the sections to keep, which may include
+            replacements. It must not return `None`. Omit `callback` to use this
+            method as a decorator.
+        priority
+            The run order. Lower values run first, and equal values run in
+            registration order, with global hooks before the ones registered here.
+
+        Returns
+        -------
+        :
+            `callback`, or a decorator that registers one when `callback` is omitted.
+
+        Raises
+        ------
+        RuntimeError
+            If setup has finished or the extension is closed.
         """
         return self._register(self._parsed_hooks, callback, priority)
 
@@ -283,7 +353,14 @@ class Extension:
         self._declared_inputs.append(declared.resolve())
 
     def load(self) -> None:
-        """Load configured setup once and freeze registration when it finishes"""
+        """
+        Run configured entry and setup once, then freeze registration
+
+        Load relative helpers from current source bytes and preserve installed-package
+        caching. Restore global hook templates if configured code changes them and
+        reject that registration path. Report load and setup failures in their actual
+        phase, preserve their causes and release owned imports.
+        """
         if self._closed:
             raise RuntimeError("The API reference extension is closed.")
         if self._loaded:
@@ -442,7 +519,12 @@ class Extension:
         return _ExtensionErrorContext(entry_path, self.close, phase, subject)
 
     def close(self) -> None:
-        """Release owned imports without loading an unused extension"""
+        """
+        Release the project modules the extension imported, without loading an unused extension
+
+        Calling `close` again does nothing. The imported paths stay available through
+        `imported_paths` and `watch_paths`.
+        """
         if self._closed:
             return
         self._closed = True

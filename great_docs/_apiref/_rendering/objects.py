@@ -1,4 +1,10 @@
-"""Presentation of a Python object and its parsed documentation"""
+"""
+Presentation of prepared Python objects and their docstring sections
+
+Render an object's heading, subject, signature, docstring sections and summary
+row. Rendering leaves the prepared documentation unchanged because every appearance
+of the object shares it.
+"""
 
 from __future__ import annotations
 
@@ -87,23 +93,31 @@ _SECTION_TITLE_KEYS = {
 @dataclass
 class ObjectRenderer(BaseRenderer):
     """
-    Presentation of a Python object and its parsed documentation
+    The presentation of one prepared Python object or authored alias
+
+    The heading, lead content and body each have their own render method. Each
+    object kind sets the order of its signature and subject, and kinds with members
+    add member groups after the object's own docstring. Use `context` to customise
+    a particular appearance.
     """
 
     _purpose: _RenderingPurpose = field(default=_RenderingPurpose.OBJECT, kw_only=True)
 
     contained: bool = False
     """
-    Whether to this object's documentation will be contained within
-    that of another. e.g. a method's documentation is commonly contained
-    within that of a class.
+    Whether this object is documented inside another object's documentation
+
+    A contained member's summary row links to its heading on the same page, and its
+    `context` reports the containing page.
     """
 
     page_path: str | None = None
     """
-    Output-relative path of the page containing this object's documentation
+    The page that this object's summary row links to
 
-    An empty string links summaries to an anchor on their current page.
+    API pages supply a path relative to the reference directory. `None` links within
+    the current page, and contained members always link to a local anchor.
+    For the containing page relative to the output directory, use `context.page_path`.
     """
 
     display_name_format: DisplayNameFormat = "doc"
@@ -113,17 +127,12 @@ class ObjectRenderer(BaseRenderer):
     """Format for the signature name"""
 
     def __post_init__(self) -> None:
-        # The node field is too general. It is typed to include all
-        # classes of documentable objects. And for nodes.Doc objects,
-        # the core object is a griffe object contained within.
-        # For convenience, we create attributes with narrower types
-        # using cast instead of TypeAlias so that subclasses can
-        # create narrower types.
+        """Expose the documentation node as `doc` and its prepared Python object as `obj`"""
         self.doc = cast("content.Doc", self.node)
-        """Doc Object"""
+        """The prepared documentation node for this appearance"""
 
         self.obj = self.doc.obj
-        """Griffe object (or alias)"""
+        """The prepared Python object, or the authored alias that names it"""
 
     @cached_property
     def context(self) -> RenderContext:
@@ -166,20 +175,23 @@ class ObjectRenderer(BaseRenderer):
 
     @cached_property
     def label(self) -> str:
-        """
-        A label for the object
-        """
+        """The lower-case kind label used in the CSS classes of headings and summary rows"""
         return get_label(self.obj).lower()
 
     @cached_property
     def display_name(self) -> str:
+        """
+        The Markdown-escaped name shown in the heading
+
+        Below the top heading level, the `relative` format shows only the name. Function
+        and method names end in parentheses.
+        """
         format = self.display_name_format
         if format == "relative" and self.level > 1:
             format = "name"
         name = format_name(self.doc, format)
 
-        # Append () to callable objects (functions, methods) to match classic
-        # renderer behavior and user expectations
+        # Parentheses distinguish callable labels from plain value names.
         if self.kind == "function":
             name += "()"
 
@@ -187,15 +199,16 @@ class ObjectRenderer(BaseRenderer):
 
     @cached_property
     def signature_name(self) -> str:
+        """The name shown in the signature, formatted by `signature_name_format`"""
         return format_name(self.doc, self.signature_name_format)
 
     def render_description(self) -> BlockContent:
         """
-        Render the description of the object
+        Render the signature, the Usage and source row, and the subject, in that order
 
-        The default order is signature, Usage/source row and subject. Callable
-        and value renderers define their own orders. Return `None` from a
-        composition method to omit that part.
+        Callable and value renderers use their own order. Return `None` from
+        `render_signature`, `render_usage_source` or `render_docstring_subject` to omit
+        that part.
         """
         return Blocks([self.signature, self.render_usage_source(), self.render_docstring_subject()])
 
@@ -205,9 +218,7 @@ class ObjectRenderer(BaseRenderer):
         return self.render_signature()
 
     def render_signature(self) -> BlockContent:
-        """
-        Render the signature of the object being documented
-        """
+        """Render the object declaration, or return `None` to omit it"""
 
     @cached_property
     def title_content(self) -> InlineContent:
@@ -230,28 +241,12 @@ class ObjectRenderer(BaseRenderer):
 
     def render_title(self) -> BlockContent:
         """
-        Render the header of a docstring, including any anchors
+        Render the object heading around `title_content`
 
-        The title includes markup for labels You can style it with CSS or override
-        this method to output something different.
-
-
-        Markup and Styling
-        ------------------
-        Create markup that includes the name of the object and labels that apply to it.
-        e.g.
-
-        ```html
-        <h2>
-            <span class="doc-object-name doc-attribute doc-label doc-label-property">
-                SomeClass.value
-            </span>
-        </h2>
-        ```
-
-        You can target these classes in main content (with `.content`) or the sidebar
-        with (`.sidebar`). The markup for the labels is not rendered if there are no
-        labels. If there is more than one label, each label has its own class code.
+        Return `None` for the object of a single-object API page, whose front matter
+        already shows the title. Contained objects and the objects of a multi-object
+        page keep their headings. Override `render_title_content` to change the label
+        and keep the heading.
         """
         if self._purpose is _RenderingPurpose.API_PAGE and self.level == 1:
             return None
@@ -259,13 +254,22 @@ class ObjectRenderer(BaseRenderer):
 
     def render_annotation(self, annotation: Annotation | None = None) -> str:
         """
-        Render an annotation
+        Render an annotation as highlighted inline content
 
-        This can be used to renderer the annotation of:
+        Parameters
+        ----------
+        annotation
+            The annotation to render. `None` uses the current attribute's annotation.
 
-            1. self - if it is an Attribute & annotation is None
-            2. annotation - annotation of a parameter in the signature
-               of self
+        Returns
+        -------
+        :
+            The highlighted annotation text with supported expression markup.
+
+        Raises
+        ------
+        TypeError
+            If no annotation is supplied and the current object is not an attribute.
         """
         if annotation is None:
             if not (
@@ -278,6 +282,7 @@ class ObjectRenderer(BaseRenderer):
             annotation = self.obj.annotation
 
         def _render(ann: Annotation | None) -> str:
+            """Render one annotation fragment without resolving cross references"""
             # Recursively render annotation as plain text (no links)
             if ann is None:
                 return ""
@@ -304,18 +309,21 @@ class ObjectRenderer(BaseRenderer):
         default: str | gf.Expr | None,
     ) -> Inline:
         """
-        Create a code snippet that declares a variable
-
-        This applies to function parameters and module/class attributes
+        Render a variable or parameter declaration as inline markup
 
         Parameters
         ----------
-        name :
-            Name of the variable
-        annotation :
-            Type Annotation of the variable or parameter
-        default :
-            Default value of the variable/parameter.
+        name
+            The declaration name, or an empty value to omit it and its separators.
+        annotation
+            The annotation to display, or `None` to omit it.
+        default
+            The default or assigned value, or `None` to omit it.
+
+        Returns
+        -------
+        :
+            Inline name, annotation and value markup with their corresponding CSS classes.
         """
         items: list[InlineContentItem] = []
 
@@ -324,11 +332,8 @@ class ObjectRenderer(BaseRenderer):
 
         if annotation:
             if isinstance(annotation, gf.Expr):
-                # NOTE: We have two ways of rendering the annotation.
-                # - self.render_annotation: Is more intuitive but when we use it we
-                #   cannot format code that may be too wide.
-                # - render_formatted_expr: Has more moving parts it needs ruff but it
-                #   seems to work well so far.
+                # Long expressions need line wrapping; short expressions retain
+                # the ordinary annotation markup.
                 annotation = (
                     render_formatted_expr(annotation)
                     if HAS_RUFF and len(str(annotation)) > 79
@@ -361,7 +366,10 @@ class ObjectRenderer(BaseRenderer):
     @cached_property
     def _docstring_sections(self) -> list[gf.DocstringSection]:
         """
-        Transform the parsed sections used to render the docstring
+        The prepared docstring sections, normalised for rendering
+
+        Normalisation gives See Also, Notes, Warnings and example fragments their own
+        section types. An object without a docstring has no sections.
         """
         if not self.obj.docstring:
             return []
@@ -370,7 +378,11 @@ class ObjectRenderer(BaseRenderer):
     @cached_property
     def docstring_subject(self) -> str | None:
         """
-        Select the leading prose line used as the docstring subject
+        The first line of the docstring, shown as the subject
+
+        There is no subject when the docstring does not start with a text section, or
+        when its first line opens display maths (`$$`) or a fenced div (`:::`). Body
+        callbacks do not receive the subject.
         """
         sections = self._docstring_sections
         if not sections or not isinstance(sections[0], gf.DocstringSectionText):
@@ -393,15 +405,11 @@ class ObjectRenderer(BaseRenderer):
     @cached_property
     def docstring_sections_content(self) -> list[tuple[str, AnyDocstringSection]]:
         """
-        The sections of the docstring before they are marked up
+        The title and prepared section of each docstring section after the subject
 
-        Subclasses can override this method to easily peek at the available
-        sections, remove, modify, or even add some more.
-
-        Returns
-        -------
-        :
-            List of (title, DocstringSection)
+        The section objects belong to the shared prepared documentation, so treat them
+        as read-only. Override a section-rendering method to change that section's
+        markup.
         """
         items: list[tuple[str, AnyDocstringSection]] = []
 
@@ -412,8 +420,7 @@ class ObjectRenderer(BaseRenderer):
 
         # Remove the docstring subject from the top of the docstring
         if self.docstring_subject:
-            # The sections are cached value that we have to be careful not modify.
-            # We modify a copy of first section and we create a new list
+            # Copy the first section, because every appearance of the object shares it.
             first_section = copy(sections[0])
             first_section.value = "\n".join(first_section.value.splitlines()[1:])
             sections = [first_section, *sections[1:]]
@@ -439,10 +446,11 @@ class ObjectRenderer(BaseRenderer):
     @cached_property
     def docstring_sections(self) -> list[Block]:
         """
-        Rendered sections of the docstring.
+        The rendered docstring sections, omitting empty ones
 
-        Each section is produced by parsing the docstring into titled sections
-        and wrapping the section content in markup-generating blocks.
+        Text and deprecation sections render as divs. Other sections get a heading one
+        level below the object. Standard titles are translated into the reference's
+        language; custom titles keep their own text.
         """
         sections: list[Block] = []
         for title, section in self.docstring_sections_content:
@@ -489,24 +497,24 @@ class ObjectRenderer(BaseRenderer):
 
     def render_docstring_section(self, el: AnyDocstringSection) -> BlockContent:
         """
-        Render a section of a docstring
+        Render one docstring section with the method for its kind
 
         Parameters
         ----------
-        el :
-            The section to render
+        el
+            The prepared section to render.
 
         Returns
         -------
         :
-            The rendered section, or `None` when this renderer has no method
-            for it.
+            The section content, or `None` to omit it. A section kind without a method
+            is omitted with a warning.
 
         Notes
         -----
-        To render a given type of section differently, override the method
-        that `SECTION_METHOD` names for it. Defining that method on a subclass
-        confines the change to that subclass.
+        Override the method for one section kind to change only that kind. Dispatch
+        matches the section's exact class, so a subclass of a supported section type
+        has no method.
         """
         name = SECTION_METHOD.get(type(el))
         method = getattr(self, name, None) if name else None
@@ -525,50 +533,43 @@ class ObjectRenderer(BaseRenderer):
         return None
 
     def _suppress_section(self, el: AnyDocstringSection) -> None:
-        """
-        Drop a hand-written summary of members that great-docs generates itself
-        """
+        """Omit a hand-written member summary that automatic groups would duplicate"""
         return None
 
     def render_functions_section(self, el: gf.DocstringSectionFunctions) -> None:
         """
-        Drop a hand-written `Functions` section
+        Omit hand-written `Functions` and `Methods` summaries
 
-        numpydoc's `Methods` section is also parsed by griffe into a
-        `DocstringSectionFunctions`, so this method covers both `Methods` and
-        `Functions`. great-docs lists the real functions or methods from the
-        object's members, so a hand-written list would duplicate that and
-        risk going stale.
+        Griffe parses both headings as the same section kind. The member groups list
+        the functions and methods instead. Override this method to keep the
+        hand-written list; the other member-summary sections stay omitted.
         """
         return self._suppress_section(el)
 
     def render_classes_section(self, el: gf.DocstringSectionClasses) -> None:
         """
-        Drop a hand-written `Classes` section
+        Omit a hand-written `Classes` summary
 
-        great-docs generates the list of nested classes from the object's
-        real members, so a hand-written summary would duplicate it and risk
-        contradicting it.
+        The member groups list the nested classes instead. Override this method to keep
+        the hand-written list; the other member-summary sections stay omitted.
         """
         return self._suppress_section(el)
 
     def render_modules_section(self, el: gf.DocstringSectionModules) -> None:
         """
-        Drop a hand-written `Modules` section
+        Omit a hand-written `Modules` summary
 
-        great-docs generates the list of submodules from the package's real
-        members, so a hand-written summary would duplicate it and risk
-        contradicting it.
+        Override this method to keep the hand-written list; the other member-summary
+        sections stay omitted.
         """
         return self._suppress_section(el)
 
     def render_type_aliases_section(self, el: gf.DocstringSectionTypeAliases) -> None:
         """
-        Drop a hand-written `Type Aliases` section
+        Omit a hand-written `Type Aliases` summary
 
-        great-docs generates the list of type aliases from the module's real
-        members, so a hand-written summary would duplicate it and risk
-        contradicting it.
+        The member groups list the type aliases instead. Override this method to keep
+        the hand-written list; the other member-summary sections stay omitted.
         """
         return self._suppress_section(el)
 
@@ -611,7 +612,7 @@ class ObjectRenderer(BaseRenderer):
         return str(content)
 
     def render_admonition_section(self, el: gf.DocstringSectionAdmonition) -> BlockContent:
-        """Render an unofficial numpydoc section"""
+        """Render the descriptive content of an additional numpydoc section"""
         return el.value.description
 
     def render_warnings_section(self, el: DocstringSectionWarnings) -> BlockContent:
@@ -635,11 +636,12 @@ class ObjectRenderer(BaseRenderer):
 
     def render_definition_items(self, el: DocstringSectionWithDefinitions) -> BlockContent:
         """
-        Render a section whose value is a list of definitions
+        Render a section's definitions with their names, annotations, defaults and descriptions
 
-        The definitions differ in what they describe — a parameter, an
-        attribute, a type parameter — but each renders as a term built from
-        name, annotation and default, followed by a description.
+        Parameters, attributes and type parameters share the same declaration markup.
+        Consecutive unnamed return, yield or receive items with the same annotation
+        merge into one definition. The merge works on copies, so rendering again leaves
+        the prepared items unchanged. Return `None` when the section has no items.
         """
 
         def render_section_item(el: DocstringDefinitionType) -> DefinitionItem:
@@ -703,32 +705,24 @@ class ObjectRenderer(BaseRenderer):
     @property
     def summary_name(self) -> str:
         """
-        The name of object as it will appear in the summary table
+        The authored name shown in this object's summary row
+
+        Function and method names end in parentheses. Override this property to change
+        the summary label without changing headings, link targets or inventory entries.
         """
         name = self.doc.name
-        # Append () to callable objects in summary tables
         if self.kind == "function":
             name += "()"
         return name
 
     def render_summary(self) -> Sequence[DefinitionItem]:
         """
-        Return a line item that summarises the object
+        Render one summary row that links `summary_name` and shows the subject
 
-        Markup and Styling
-        ------------------
-
-        | HTML Elements   | CSS Selector                                              |
-        |:----------------|:----------------------------------------------------------|
-        | `<a>`{.html}    | `.doc-index .doc-group > dl dt > a.doc-{kind}-name`{.css} |
-        | `<p>`{.html}    | `.doc-index .doc-group > dl dd > p`{.css}                 |
-
-        See Also
-        --------
-        great_docs.renderer.ReferenceSectionRenderer.render_body : For more context about
-        where the rendered link and text are placed.
+        Contained members link to their heading on the same page. Other objects link to
+        `page_path` and the object's anchor. Return an empty sequence to omit the row; the
+        object stays in the reference.
         """
-        # The page where this object will be written
         # For contained members (e.g. methods within a class page), use the
         # short name as anchor since Quarto generates section IDs from heading
         # text (e.g. "get" not "package.ClassName.get").
@@ -743,7 +737,10 @@ class ObjectRenderer(BaseRenderer):
 
     def render_usage_source(self) -> BlockContent:
         """
-        Render a row with usage and source
+        Render the Usage label and the source link, or `None` when neither applies
+
+        The Usage label appears only with a signature. The source link appears whenever
+        one is available, even without a signature.
         """
         source = self.source_link
         usage = translate("usage", self.settings.lang) if self.signature is not None else None

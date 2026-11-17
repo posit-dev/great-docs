@@ -1,4 +1,9 @@
-"""The reference index with explicitly resolved sections"""
+"""
+The reference index page, with its front matter and sections
+
+The index shows the supplied sections in their authored order, with summary rows
+rather than object bodies.
+"""
 
 from __future__ import annotations
 
@@ -29,6 +34,9 @@ if TYPE_CHECKING:
 class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
     """
     The reference index page, listing resolved sections
+
+    The page title is in the front matter. Each section contributes a heading, a
+    description and summary rows.
     """
 
     def __init__(
@@ -42,12 +50,31 @@ class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
         output_root: Path | None = None,
         context_page_path: str | None = None,
     ) -> None:
-        """Initialise common renderer state from a reference and resolved sections"""
+        """
+        Set up the index for a reference and its resolved sections
+
+        Parameters
+        ----------
+        api_ref
+            The reference supplying the title, description, settings and default choices.
+        sections
+            Resolved top-level sections in the order to display.
+        level
+            Base heading depth for section titles and subtitles.
+        renderers
+            The renderer choices to use, or `None` for the reference's own.
+        extension
+            Active operation owner, or `None` to use the reference's owner.
+        output_root
+            The documentation output root, or `None` to use the reference's root.
+        context_page_path
+            Output-relative containing page context when explicitly known.
+        """
         self.api_ref = api_ref
         """The API reference being documented"""
 
         self.sections = sections
-        """Resolved top-level sections of the quarto config"""
+        """Resolved top-level sections in authored reference order"""
 
         self.package = api_ref.package
         """The package being documented"""
@@ -73,6 +100,7 @@ class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
         )
 
     def render_metadata(self) -> BlockContent:
+        """Render the reference title, description metadata and index navigation settings"""
         metadata: dict[str, object] = {
             "title": self.api_ref.title,
             "body-classes": "doc-reference doc-py-reference",
@@ -92,21 +120,9 @@ class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
 
     def render_body(self) -> BlockContent:
         """
-        Render the body of the reference page
+        Render the sections in their authored order
 
-        The body is a consists of sections/groups as they are listed in the configuation
-        file.
-
-        See Also
-        --------
-        great_docs.renderer.RenderSection - Rendering of the sections
-
-        Markup and Styling
-        ------------------
-
-        | HTML Elements      | CSS Selector       |
-        |:-------------------|:-------------------|
-        | `<section>`{.html} | `.doc-index`{.css} |
+        Each section renders its heading, description and summary rows.
         """
         object_renderers = [
             self.renderers.make(

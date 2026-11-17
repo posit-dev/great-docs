@@ -1,3 +1,9 @@
+"""
+Type aliases for documentation nodes, docstring sections and renderers
+
+The renderer aliases name the instances that renderer selection can return.
+"""
+
 from __future__ import annotations
 
 from typing import Literal, TypeAlias

@@ -1,4 +1,10 @@
-"""Class documentation with constructor and member presentation"""
+"""
+Presentation of classes and dataclasses
+
+A class shows its constructor signature, docstring sections and member groups. A
+dataclass documents each field once, as a constructor parameter, rather than again
+as an attribute.
+"""
 
 from __future__ import annotations
 
@@ -21,13 +27,18 @@ if TYPE_CHECKING:
 
 class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer):
     """
-    Class documentation with constructor and member presentation
+    The presentation of a class, with its constructor signature and member groups
+
+    The description shows the subject, then the Usage and source row and the
+    constructor signature. The body shows the docstring sections followed by member
+    groups. For a dataclass without an authored `Parameters` or `Attributes`
+    section, the renderer generates `Parameter Attributes` and
+    `Init Parameters` sections from the constructor parameters.
     """
 
     def __post_init__(self) -> None:
+        """Narrow `doc` and `obj` to class documentation"""
         super().__post_init__()
-        # We narrow the type with a TypeAlias since we do not expect
-        # any subclasses to have narrower types
         self.doc: content.DocClass = self.doc
         self.obj: gf.Class = self.obj
 
@@ -41,10 +52,10 @@ class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer)
     @cached_property
     def attributes(self) -> list[content.DocAttribute]:
         """
-        Attributes of a class
+        The attribute members, without the fields a dataclass documents as parameters
 
-        If class a dataclass, the parameters are excluded from the returned
-        attributes.
+        An ordinary class keeps all its attributes. A dataclass leaves out attributes
+        named after its constructor parameters, which already document those fields.
         """
         attributes = super().attributes
         if self.is_dataclass:
@@ -55,10 +66,10 @@ class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer)
     @cached_property
     def attribute_member_pages(self) -> list[content.MemberPage]:
         """
-        Member pages of attributes
+        The attribute member pages, without the fields a dataclass documents as parameters
 
-        If class a dataclass, the parameters are excluded from the returned
-        pages of the attributes.
+        The same fields are left out as from `attributes`. An ordinary class keeps all
+        its attribute pages.
         """
         pages = super().attribute_member_pages
         if self.is_dataclass:
@@ -68,12 +79,16 @@ class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer)
 
     @cached_property
     def docstring_sections_content(self):
+        """
+        The docstring sections, with generated sections for a dataclass's fields
+
+        Nothing is added when an authored `Parameters` or `Attributes` section already
+        documents the fields. Otherwise the `Parameter Attributes` and `Init Parameters`
+        sections go after the leading text and before the other sections.
+        """
         items = super().docstring_sections_content
         titles = set(item[0] for item in items)
-        # When the author documents the fields themselves (via either a
-        # `Parameters` or an `Attributes` docstring section), don't also
-        # synthesize a "Parameter Attributes" section — that would duplicate the
-        # same fields. Which of the two sections to use is left to the docs writer.
+        # Authored field sections already cover the same dataclass parameters.
         if (
             not self.is_dataclass
             or "Parameters" in titles
@@ -116,6 +131,11 @@ class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer)
 
     @cached_property
     def parameter_attributes(self) -> gf.Parameters:
+        """
+        The dataclass's signature parameters that are also annotated attributes
+
+        An ordinary class has none.
+        """
         if not self.is_dataclass:
             return gf.Parameters()
 
@@ -126,6 +146,11 @@ class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer)
 
     @cached_property
     def init_parameters(self) -> gf.Parameters:
+        """
+        The dataclass's signature parameters that are not attributes
+
+        An ordinary class has none.
+        """
         if not self.is_dataclass:
             return gf.Parameters()
 

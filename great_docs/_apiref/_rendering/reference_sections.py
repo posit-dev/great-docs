@@ -1,4 +1,9 @@
-"""A reference index section with object and page summaries"""
+"""
+Sections of the reference index, with their headings and summary rows
+
+A section lists its objects or API pages as a definition list or a summary table.
+Standard group titles are translated; custom titles keep their text.
+"""
 
 from __future__ import annotations
 
@@ -35,28 +40,27 @@ _GROUP_TITLE_KEYS = {
 @dataclass
 class ReferenceSectionRenderer(BaseRenderer):
     """
-    A reference index section with object and page summaries
+    A section of the reference index, with a heading, description and summary rows
 
-    This is a section of the index/reference page
+    The rows form a definition list unless `display_format` selects a table. An
+    object whose summary row is hidden stays in the section.
     """
 
     display_format: Literal["list", "table"] = "list"
+    """Whether the summary rows form a definition list or a table"""
 
     def __post_init__(self) -> None:
+        """Expose the resolved section as `section`"""
         self.section = cast("Section", self.node)
         """Section of the reference page"""
 
     def render_title(self) -> BlockContent:
         """
-        Render the title or subtitle of section
+        Render the section's title or subtitle as a heading
 
-        Markup and Styling
-        ------------------
-
-        | Type     | HTML Elements | CSS Selector                       |
-        |:---------|:--------------|:-----------------------------------|
-        | title    | `<h2>`{.html} | `.doc-index .doc-group > h2`{.css} |
-        | subtitle | `<h3>`{.html} | `.doc-index .doc-group > h3`{.css} |
+        A title is one level below the base heading level and a subtitle two levels
+        below. Return `None` when the section has neither. Standard group titles are
+        translated; custom titles keep their text.
         """
         if self.section.title:
             level, title = self.level + 1, self.section.title
@@ -74,47 +78,15 @@ class ReferenceSectionRenderer(BaseRenderer):
     def render_description(self) -> BlockContent:
         """
         Render the description of the section
-
-        Markup and Styling
-        ------------------
-
-        | HTML Elements     | CSS Selector                            |
-        |:------------------|:----------------------------------------|
-        | `<div><p>`{.html} | `.doc-index .doc-description > p`{.css} |
         """
         return Div(self.section.desc, Attr(classes=["doc-description"]))
 
     def render_body(self) -> BlockContent:
         """
-        Render the body of the section
+        Render the section's summary rows as a definition list or table
 
-        Markup and Styling
-        ------------------
-        The output structure depends on the [](`~ReferenceSectionRenderer.display_format`):
-
-        | Display Format| HTML Elements    | CSS Selector                          |
-        |:-------------|:-----------------|:--------------------------------------|
-        | List         | `<dl>`{.html}    | `.doc-index .doc-group > dl`{.css}    |
-        | Table        | `<table>`{.html} | `.doc-index .doc-group > table`{.css} |
-
-
-        The list or table contains object names with brief descriptions.
-        Each name links to the object's API reference page.
-
-        A useful styling customization is to add parentheses to function
-        and method names.
-
-        ```css
-        .doc-index .doc-group > dl dt > a.doc-function-name::after,
-        .doc-index .doc-group > dl dt > a.doc-method-name::after {
-          content: "()";
-        }
-        ```
-
-        See Also
-        --------
-        great_docs.renderer.ObjectRenderer.render_summary : This is where the items in the
-        list or table are rendered.
+        Each entry renders only its summary rows, not its body. Return `None` for an
+        empty section.
         """
         if not self.section.contents:
             return

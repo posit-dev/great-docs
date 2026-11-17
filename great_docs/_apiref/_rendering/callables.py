@@ -1,4 +1,10 @@
-"""Callable signatures, parameters and callable docstring sections"""
+"""
+Signatures and definition sections of functions, methods and classes
+
+A class takes its signature from its constructor, and a method's signature drops
+`self` or `cls`. Both signature styles show parameter defaults, and each
+`@overload` variant keeps its annotations.
+"""
 
 from __future__ import annotations
 
@@ -31,20 +37,22 @@ if TYPE_CHECKING:
 
 class CallableRendererMixin(ObjectRenderer):
     """
-    Callable signatures, parameters and callable docstring sections
+    The signature and definition sections shared by functions, methods and classes
 
-    i.e. classes (for the __init__ or __new__ method) and functions/methods
+    A class takes its signature from its constructor. The signature leaves out
+    `self` or `cls` and any excluded parameters. Ordinary signatures omit
+    annotations, while `@overload` variants keep the annotations that tell them
+    apart.
     """
 
     def __post_init__(self) -> None:
+        """Narrow `doc` and `obj` to a callable and record each parameter's kind"""
         super().__post_init__()
 
         self.doc = cast("DocFunction | DocClass", self.doc)  # pyright: ignore[reportUnnecessaryCast]
         self.obj = cast("gf.Function", self.obj)  # pyright: ignore[reportUnnecessaryCast]
 
-        # Lookup for the parameter kind by name
-        # gf.DocstringParameter does not have the parameter kind but the
-        # rendering needs it.
+        # Docstring parameter entries lack the parameter kind that rendering needs.
         self._parameter_kinds = {p.name: p.kind for p in self.parameters}
 
     def render_parameters_section(self, el: gf.DocstringSectionParameters) -> BlockContent:
@@ -99,7 +107,11 @@ class CallableRendererMixin(ObjectRenderer):
     @cached_property
     def parameters(self) -> gf.Parameters:
         """
-        The parameters of the callable
+        The parameters that the signature shows
+
+        The view leaves out excluded parameters and the `self` or `cls` of a method or
+        constructor. The callable's original parameters stay available for matching
+        docstring sections and selecting dataclass fields.
         """
         obj = self.obj
         if obj.is_class:
@@ -124,9 +136,7 @@ class CallableRendererMixin(ObjectRenderer):
 
     @cached_property
     def _callable(self) -> CallableDocumentation:
-        """
-        Build the callable's documented parameter view
-        """
+        """The callable's documented parameters, with its original parameters and exclusions"""
         return CallableDocumentation.make(self.obj)
 
     def render_description(self) -> BlockContent:
@@ -215,6 +225,7 @@ class CallableRendererMixin(ObjectRenderer):
                 continue
 
             def render_parameter(p: gf.Parameter) -> str:
+                """Format one overload parameter with its annotation and default"""
                 ann = repr_obj(p.annotation) if p.annotation else ""
                 default = repr_obj(p.default) if p.default else ""
                 name = p.name
@@ -255,9 +266,10 @@ class CallableRendererMixin(ObjectRenderer):
 
     def render_signature_parameters(self) -> list[str]:
         """
-        Render parameters in a function / method signature
+        Render the signature's parameters with their `/` and `*` separators
 
-        i.e. The stuff in the brackets of func(a, b, c=3, d=4, **kwargs)
+        Override `render_signature_parameter` to change how each parameter renders; the
+        separators stay in place.
         """
         return self._signature_parameters(self.parameters, self.render_signature_parameter)
 
@@ -291,11 +303,11 @@ class CallableRendererMixin(ObjectRenderer):
 
     def render_signature_parameter(self, el: gf.Parameter) -> str:
         """
-        Render a parameter for the function/method signature
+        Render one parameter of an ordinary signature, with its prefix and default
 
-        This is a single item in the brackets of
-
-            func(a, b, c=3, d=4, **kwargs)
+        Variadic parameters keep their `*` or `**` prefix, and string defaults use
+        normalised quotes. Annotations are omitted; `@overload` variants render their
+        own annotated parameters. Override this method to change each parameter's text.
         """
         default = None
         if el.kind == gf.ParameterKind.var_keyword:

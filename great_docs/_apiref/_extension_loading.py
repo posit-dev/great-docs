@@ -1,8 +1,12 @@
 """
-Project-local extension sources and their owned Python imports
+Imports of an API reference extension file and its helper modules
 
-Load each operation in a separate package namespace. Relative imports read current
-source bytes; installed packages retain Python's ordinary import caching.
+Each operation imports the extension file as a package under a fresh namespace. The
+extension file and the helper modules it imports relatively are compiled from their
+current source, so an edit counts even when it keeps the file's size and modification
+time. Keep the namespace importable while callbacks run and renderer classes are
+inspected. Closing removes only these modules from `sys.modules` and keeps their paths.
+Installed packages that the extension imports keep Python's usual import caching.
 """
 
 from __future__ import annotations
@@ -38,7 +42,24 @@ class _ExtensionSource:
 
     @classmethod
     def make(cls, config: Config, source_root: Path) -> _ExtensionSource | None:
-        """Resolve a configured entry while retaining the original project roots"""
+        """
+        Read the configured extension file with the project's original directories
+
+        Record the directories before preview staging changes where output goes. The
+        extension file is not loaded.
+
+        Parameters
+        ----------
+        config
+            The project's configuration.
+        source_root
+            The documentation source directory.
+
+        Returns
+        -------
+        :
+            The extension source, or `None` when `api_reference_extension` is `null`.
+        """
         entry = config.api_reference_extension
         if entry is None:
             return None
@@ -49,6 +70,18 @@ class _SourceLoader(importlib.machinery.SourceFileLoader):
     """A source loader that compiles the current file instead of reusing cached bytecode"""
 
     def __init__(self, name: str, path: Path, paths: set[Path]) -> None:
+        """
+        Create a loader for one module that records its path when compiling it
+
+        Parameters
+        ----------
+        name
+            The module's full name.
+        path
+            The module's source file.
+        paths
+            The import owner's input paths. Receives `path` when the module is compiled.
+        """
         super().__init__(name, str(path))
         self._paths = paths
 
@@ -75,6 +108,14 @@ class _ImportOwner(importlib.abc.MetaPathFinder):
     """An import finder for one extension file and its helper modules, under a private namespace"""
 
     def __init__(self, source: _ExtensionSource) -> None:
+        """
+        Choose a new namespace without importing the extension file
+
+        Parameters
+        ----------
+        source
+            The extension file and its project directories.
+        """
         self.source = source
         self.namespace = f"_great_docs_extension_{uuid.uuid4().hex}"
         self._paths: set[Path] = set()
@@ -173,7 +214,7 @@ class _ImportOwner(importlib.abc.MetaPathFinder):
         return module
 
     def close(self) -> None:
-        """Release owned modules and observation without clearing imported packages"""
+        """Remove the extension's modules and this finder from the import system, keeping `paths`"""
         if self._closed:
             return
         self._closed = True

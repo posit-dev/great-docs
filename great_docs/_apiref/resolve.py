@@ -1,3 +1,12 @@
+"""
+Resolution of the configured API sections into documentation nodes
+
+One loader and one extension serve every section and member, so each object is prepared
+once. Member selection filters candidates by name and origin before loading them, and by
+their documentation after preparing them. The resulting tree keeps the configured names
+and page placement, and rendering, inventories and the text export all read it.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -65,11 +74,11 @@ _GetObject = Callable[..., gf.Object | gf.Alias]
 
 
 class ObjectNotFoundError(Exception):
-    """Raised when an object path cannot be resolved to a griffe object"""
+    """A configured object path that the loaded package does not contain"""
 
 
 def _is_external_alias(obj: gf.Alias | gf.Object, mod: gf.Module) -> bool:
-    """Whether an object is an alias whose target lives outside the given module's package"""
+    """Check whether an object is an alias to something outside the module's package"""
     package_name = mod.path.split(".")[0]
 
     if not isinstance(obj, gf.Alias):
@@ -98,7 +107,7 @@ def _is_external_alias(obj: gf.Alias | gf.Object, mod: gf.Module) -> bool:
 
 def _is_documented_dunder(name: str, obj: gf.Object | gf.Alias) -> bool:
     """
-    Whether `name` is a dunder member that is part of the documented API
+    Check whether a member is a dunder that belongs to the documented API
 
     Dunders with docstrings (e.g. `__enter__`, `__getitem__`) are documented
     even when private members are excluded.
@@ -172,7 +181,7 @@ def _to_simple_dict(el: object) -> object:
 
 def _join_path(pkg: str | None, name: str) -> str:
     """
-    Build a griffe lookup path from a package and a relative or qualified name
+    Build a Griffe lookup path from a package and a relative or qualified name
 
     A lookup path carries at most one `:` (separating the module from the
     object within it), so once either part already has one, the remaining
@@ -188,15 +197,16 @@ def _join_path(pkg: str | None, name: str) -> str:
 
 class Resolver:
     """
-    A translator from the `spec` tree to the resolved `content` tree
+    A translator from the configured sections to the resolved documentation tree
 
-    Each `SpecObject` is located in griffe and rebuilt as a concrete
-    `Doc`; sections and their entries become their `content` counterparts.
-    Package, options, and dynamic-mode settings are inherited from a section
-    by the objects nested under it.
+    Translate authored object selections into shallow documentation nodes with
+    selected children. Inherit package and options through nested sections and
+    members. A reference supplies its active extension; standalone resolution
+    creates default preparation state lazily.
     """
 
     def __init__(self, settings: Settings | None = None) -> None:
+        """Configure shared acquisition without activating extension setup"""
         from .introspect import get_object as _get_object
         from .introspect import make_loader
 
@@ -227,7 +237,7 @@ class Resolver:
         return self.extension.prepare(obj, get_object=self.get_object)
 
     def get_object_or_raise(self, path: str, **kwargs: object) -> gf.Object | gf.Alias:
-        """Get the griffe object at `path`, raising `ObjectNotFoundError` if absent"""
+        """Get the Griffe object at `path`, raising `ObjectNotFoundError` if absent"""
         try:
             return self.get_object(path, **kwargs)
         except KeyError as e:
@@ -243,7 +253,7 @@ class Resolver:
 
         A section whose entries all resolve away (e.g. every entry is `%nodoc`)
         carries no documentation and is omitted, matching the pre-existing
-        config-level behavior.
+        config-level behaviour.
         """
         resolved = [self._resolve_section(s) for s in sections]
         return [section for section in resolved if section.contents]
@@ -255,7 +265,8 @@ class Resolver:
         package: str | MissingType | None = MISSING,
         options: SpecOptions | None = None,
     ) -> Generator[None]:
-        """Scope entries to resolve under the given package and options
+        """
+        Scope entries to resolve under the given package and options
 
         Entries inherit `current_package` and `options` from the enclosing
         context unless the section or object carries its own.
@@ -320,10 +331,11 @@ class Resolver:
 
     def entry_object(self, section: SpecSection, el: SpecObject) -> gf.Object | gf.Alias:
         """
-        Locate the griffe object an entry of a section documents, without resolving it
+        Load the object that a section entry documents, without preparing it
 
-        Looks the object up exactly as resolving the section would, but skips
-        the resolution hooks, docstring parsing and members.
+        Look the object up exactly as resolving the section would, but skip the hooks,
+        docstring parsing and members, so reading the configured sections never runs the
+        extension file.
         """
         with self._scoped(package=section.package, options=section.options):
             with self._scoped(package=el.package):
@@ -331,7 +343,7 @@ class Resolver:
                 return self.get_object_or_raise(path, dynamic=dynamic)
 
     def _locate(self, el: SpecObject) -> tuple[str, SpecObject, bool]:
-        """The lookup path, the entry with inherited options merged in, and its dynamic mode"""
+        """Determine an entry's lookup path, inherited options and dynamic setting"""
         path = _join_path(self.current_package, el.name)
 
         # Merge inherited section-level options under the entry's own settings.
@@ -367,9 +379,7 @@ class Resolver:
         path: str,
         dynamic: bool,
     ) -> list[object]:
-        """
-        Resolve selected members on their parent page or separate pages
-        """
+        """Resolve selected members on their parent page or separate pages"""
         # Global placement applies only to top-level entries. Nested members
         # share their immediate parent's page unless `member_options` sets placement.
         member_defaults = SpecOptions(dynamic=dynamic, package=path, members_on_same_page=True)
@@ -468,9 +478,8 @@ class Resolver:
                 if not k.startswith("_") or _is_documented_dunder(k, v)
             }
 
-        # Content filters use the prepared canonical documentation.
-        # Enum members are always shown — their names and values are
-        # inherently meaningful even without a per-member docstring.
+        # The remaining filters read the prepared documentation. Enum members are always
+        # shown: their names and values document them even without a docstring.
         if not el.include_empty and not is_enum(obj):
             candidates = {k: v for k, v in candidates.items() if v.docstring is not None}
 

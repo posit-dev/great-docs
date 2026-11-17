@@ -1,0 +1,293 @@
+---
+title: "API reference customisation"
+guide-section: "Site Content"
+bread-crumbs: false
+tags: [API, Content]
+---
+
+# API reference customisation
+
+Add project-specific notes, change docstring sections or select renderer subclasses
+while Great Docs generates an API reference. An extension can customise each
+object, including methods embedded in a class page and objects sharing one page.
+
+Use semantic hooks for documentation that should also appear in `llms-full.txt`.
+Use renderer methods for changes to the generated pages.
+
+## A note on each object
+
+Configure a Python entry file relative to the selected `great-docs.yml`:
+
+```{.yaml filename="docs/great-docs.yml"}
+api_reference_extension: _api_reference_extension.py
+```
+
+Create that file with a callable `setup(extension)`:
+
+```{.python filename="docs/_api_reference_extension.py"}
+from great_docs.extensions import Extension
+from great_docs.pandoc.blocks import BlockContent, Blocks, Para
+from great_docs.rendering import Renderers
+
+
+class AppendNoteMixin:
+    def render_docstring_body(self) -> BlockContent:
+        body = super().render_docstring_body()
+        return Blocks([body, Para("Prepared for this project's documentation.")])
+
+
+def setup(extension: Extension) -> None:
+    extension.set_renderers(Renderers(doc_mixin=AppendNoteMixin))
+```
+
+Run `great-docs build`. The note appears after the object's docstring sections
+and before its member groups. Each embedded method gets its own note.
+
+Keep `api_reference_extension: null`, the default, to use the built-in output.
+The configured path may also be absolute and must name a `.py` file. Reading
+configuration or authored reference sections does not execute that file.
+
+## Semantic hooks
+
+Register handlers through the supplied `Extension`, directly or as decorators.
+Lower priorities run first; registration order breaks ties. Existing global
+hook templates precede local handlers at equal priority. Registration closes
+when setup finishes, including for decorators saved for later use.
+
+| Method | Timing | Result |
+|---|---|---|
+| `on_object_resolved` | Before constructor-aware parsing and documentation-based member selection | Retain or replace the current object; return `None` to exclude it |
+| `on_docstring_parsed` | After parsing, for objects with docstrings | Retain or replace the section list; returning `None` is invalid |
+
+For example, select `_semantic_extension.py` as the entry file to add text that
+also appears in semantic export:
+
+```{.python filename="docs/_semantic_extension.py"}
+import griffe as gf
+
+from great_docs.extensions import Extension
+
+
+def setup(extension: Extension) -> None:
+    @extension.on_object_resolved
+    def add_note(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
+        if obj.docstring is not None:
+            obj.docstring.value += "\n\nThis description includes a project note."
+        return obj
+```
+
+Each underlying object is prepared once per operation. Aliases share semantic
+edits, parsed sections and exclusion decisions while keeping their authored
+names and destinations. Edit the current object's docstring, sections or
+documentation metadata. Arbitrary changes to descendants, bases, member
+structure and module collections are outside this interface.
+
+Parsing uses the operation's language and `parser` setting, including when a
+helper or typing page prepares the object first. A handler that introduces a
+directive may select an earlier priority when it needs to precede another
+handler. The existing `great_docs.hooks` decorators remain available for
+programmatic templates; configured setup must use the supplied instance.
+
+## Appearance context
+
+Use the renderer's `self.context` for the object's name and page. Treat the
+object and settings referenced by the frozen `RenderContext` as read-only.
+
+| Field | Meaning |
+|---|---|
+| `obj` | The prepared object or authored alias view |
+| `authored_name` | The name selected for this occurrence |
+| `canonical_identity` | The underlying object's qualified identity, shared by aliases |
+| `page_path` | The output-relative QMD destination, or `None` when unknown |
+| `level` | The occurrence's heading depth |
+| `contained` | Whether another object's documentation contains this occurrence |
+| `source_root` | The original documentation source directory, or `None` when unavailable |
+| `output_root` | The explicit generated-project root, or `None` outside a known build |
+| `settings` | The operation's semantic and rendering settings |
+
+Use `context.obj`, `authored_name` or `page_path` to select an appearance. Aliases
+can have different names and page paths while sharing `canonical_identity`.
+Contained members retain their real containing page. Programmatic helpers
+without a known page receive `page_path=None`.
+
+## Authored Usage markup
+
+Select `_usage_extension.py` to replace an authored example within the object's
+rendered body:
+
+```{.python filename="docs/_usage_extension.py"}
+from great_docs.extensions import Extension
+from great_docs.pandoc.blocks import BlockContent
+from great_docs.rendering import Renderers
+
+
+class ReplaceUsageMixin:
+    def render_docstring_body(self) -> BlockContent:
+        body = super().render_docstring_body()
+        if body is None:
+            return None
+        return str(body).replace("old_usage()", "new_usage()")
+
+
+def setup(extension: Extension) -> None:
+    extension.set_renderers(Renderers(doc_mixin=ReplaceUsageMixin))
+```
+
+This changes authored Usage content such as a fenced `old_usage()` example. The
+leading subject is in the description. Use the corresponding renderer methods
+to change the description, title, signature or automatic Usage row.
+
+## Renderer selection
+
+Select ordinary subclasses through `Renderers`. For example, select
+`_signature_extension.py` to omit class signatures:
+
+```{.python filename="docs/_signature_extension.py"}
+from great_docs.extensions import Extension
+from great_docs.pandoc.blocks import BlockContent
+from great_docs.rendering import ClassRenderer, Renderers
+
+
+class QuietClass(ClassRenderer):
+    def render_signature(self) -> BlockContent:
+        return None
+
+
+def setup(extension: Extension) -> None:
+    extension.set_renderers(Renderers(classes=QuietClass))
+```
+
+A source link can remain when a signature is omitted. The Usage/source row is
+omitted when both the signature and source link are absent.
+
+Select `_summary_extension.py` to change function labels in summaries:
+
+```{.python filename="docs/_summary_extension.py"}
+from great_docs.extensions import Extension
+from great_docs.rendering import FunctionRenderer, Renderers
+
+
+class LabelledFunction(FunctionRenderer):
+    @property
+    def summary_name(self) -> str:
+        return f"Run {super().summary_name}"
+
+
+def setup(extension: Extension) -> None:
+    extension.set_renderers(Renderers(functions=LabelledFunction))
+```
+
+The replacement slots are `classes`, `functions`, `attributes`, `type_aliases`,
+`modules`, `api_pages`, `reference_index` and `reference_sections`. Each accepts
+a subclass of its corresponding supported renderer. Omitted slots use defaults.
+Declaring a subclass changes no shared renderer class.
+
+Pass `doc_mixin=YourMixin` to place a cooperative mixin before each default
+object renderer. Explicit replacements control their own inheritance and must
+include that mixin themselves when needed. Pages and reference sections do not
+receive the object mixin.
+
+| Method or projection | Scope |
+|---|---|
+| `render_title`, `render_title_content`, `title_content` | Visible headings and the object content used for page titles |
+| `render_description`, `render_signature` | Subjects, signatures and their surrounding presentation |
+| `render_docstring_body` | Own docstring sections, including section headings |
+| `render_members_summary(kind, renderers)` | Summaries for embedded or separately documented members |
+| `render_members_body(kind, renderers)` | Embedded member bodies |
+| `render_body` | Full body composition, including automatic member groups |
+| `render_summary`, `summary_name` | Summary entries and labels |
+
+Return `None` from a block-rendering method to hide that content. Return an
+empty sequence from `render_summary()` to omit its entries. Hiding member
+presentation preserves resolved membership and inventories.
+Cached projections such as `signature`, `title`, `description` and `body` call
+their corresponding rendering methods. Override the methods to change their
+output. Override `render_docstring_body()` to change an object's docstring sections.
+Use `render_body()` to control the whole body, including member groups.
+
+## Shared code and lifetime
+
+Import a shared installed package from setup to reuse registrations across
+projects. Its ordinary Python import cache is preserved. Import project-local
+helpers relatively, for example `from ._shared import register`, to reload
+current helper source for each operation. Relative imports remain available
+during callbacks and are released when the operation closes.
+
+Use `extension.cache` for project-owned state within one operation. Read
+`extension.settings`, `source_root` and `config_root` as operation values. The
+configuration root is the selected configuration file's parent; the source root
+is the original documentation source directory, including during staged rebuilds.
+Neither root is inferred from the current working directory.
+
+Each build, semantic query or preview generation owns fresh extension state.
+Setup runs once before that operation first prepares or renders documentation.
+Successful completion and failures release owned imports. Closing an unused
+reference does not run setup. Global templates share callback objects rather
+than copying their internal state. General concurrent/interleaved operations
+are outside this contract.
+
+The `render_type_object` and `render_code_variable` helpers accept
+`customisation=reference` to share an active `APIReference`. Omitted helper
+settings use that reference's settings; conflicting settings raise an error.
+Standalone helpers use default settings unless supplied, apply parser defaults
+and own their preparation lifetime. Separate source snippets keep separate
+identities even when their temporary module names match.
+
+## Export and failures
+
+The build reuses its prepared reference for the LLM index and full semantic
+export after API generation. Semantic edits, exclusions, constructor facts,
+overloads, annotations and defaults are retained. Selected renderers affect pages only.
+An explicitly omitted constructor body, such as
+with `members: []`, stays omitted while its class signature retains constructor
+facts.
+
+Standalone full export constructs and closes its own reference, preserving
+missing/import diagnostics and valid sibling entries. It uses the selected
+configuration's parser and dynamic defaults, with explicit reference settings
+taking precedence.
+
+Configured failures report the entry file, actual phase and relevant object or
+occurrence, preserving their original cause. They stop the operation instead
+of causing static retry or warning-only export. Preview retains the last
+successful published project after a failed rebuild.
+
+## Preview inputs and freeze
+
+Declare data inputs during setup:
+
+```python
+extension.watch("data.txt")
+extension.watch("data/*.txt")
+extension.watch("examples")
+```
+
+Resolve these paths relative to the entry file, or pass absolute paths. Missing
+inputs, creation/deletion, directory contents and glob membership are tracked.
+Watching an input does not copy it into the generated project. Extension source,
+relative helpers and declared inputs contribute to one final fingerprint on
+every generated reference QMD, including typing pages and the index.
+
+Preview selects its directories and filter once. It observes edits within that
+initial coverage while rebuilding, including new relative helpers and glob
+matches. Hidden files and generated output keep the ordinary exclusions. A new
+input outside the initial coverage produces a restart message; stop and rerun
+`great-docs build --watch` to observe it.
+
+| Execution policy | Input-only changes |
+|---|---|
+| `freeze: auto` | Refresh affected execution when the fingerprint changes |
+| `freeze: true` | Keep locked results until explicit refresh |
+| Explicit freeze refresh | Execute current customised sources and save updated results |
+| `freeze: false` | Use ordinary uncached execution |
+
+After building once, explicitly refresh a generated page with its current path:
+
+```bash
+great-docs freeze docs/_quarto/default/reference/Document.qmd
+```
+
+Use the generated page path for your layout and reference entry.
+
+See [Freeze](freeze.qmd) for refresh commands and [API documentation](api-documentation.qmd)
+for reference membership and page placement.

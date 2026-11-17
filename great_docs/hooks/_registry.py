@@ -1,10 +1,10 @@
 """
-A priority-ordered registry of event handlers, shared by the pipeline events
+A priority-ordered registry of hook handlers
 
-Holds handlers paired with a numeric priority and yields them in run order:
-lower priority first, ties in registration order. Registration doubles as a
-decorator, used bare or with a priority. The event modules each own one
-instance and supply their own emit semantics.
+Handlers with lower priorities run first, and handlers with equal priorities run in
+registration order. Snapshots and copies duplicate the list of registrations but share
+the handlers themselves. They let an API reference extension register its own handlers
+and undo any change its code makes to the global registries.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ H = TypeVar("H", bound=Callable[..., object])
 
 class HookRegistry(Generic[H]):
     """
-    A priority-ordered collection of event handlers
+    A priority-ordered collection of hook handlers
 
     Iterating the registry yields handlers in run order: lower priority first,
     ties in registration order. The run order is cached and rebuilt only when a
@@ -60,7 +60,7 @@ class HookRegistry(Generic[H]):
         return add(hook) if hook is not None else add
 
     def __iter__(self):
-        """Iterate the handlers in run order, sorted by `(priority, sequence)`"""
+        """Iterate handlers by priority, preserving registration order for ties"""
         if self._ordered is None:
             self._ordered = [h for _, _, h in sorted(self._entries, key=lambda e: e[:2])]
         return iter(self._ordered)

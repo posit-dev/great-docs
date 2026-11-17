@@ -1,4 +1,9 @@
-"""PEP 695 alias documentation with source-form declarations"""
+"""
+Presentation of PEP 695 type aliases
+
+An alias shows its declaration in source form, with its type parameters and value,
+and keeps its docstring sections. PEP 613 aliases render as attributes instead.
+"""
 
 from __future__ import annotations
 
@@ -25,22 +30,25 @@ if TYPE_CHECKING:
 @dataclass
 class TypeAliasRenderer(ObjectRenderer):
     """
-    PEP 695 alias documentation with source-form declarations
+    The presentation of a PEP 695 type alias, with its type parameters and value
+
+    The description shows the subject, then the declaration in source form, without
+    a Usage row. A generic alias renders its `Type Parameters` section even though it
+    is not callable.
     """
 
     def __post_init__(self) -> None:
+        """Narrow `doc` and `obj` to type alias documentation"""
         super().__post_init__()
-        # We narrow the type with a TypeAlias since we do not expect
-        # any subclasses to have narrower types
         self.doc: content.DocTypeAlias = self.doc
         self.obj: gf.TypeAlias = self.obj
 
     def _render_value(self, value: str | gf.Expr) -> str:
         """
-        Format an alias value the way `render_variable_definition` formats an
-        annotation: ruff-format only when it is worth invoking ruff for (long
-        expressions), otherwise the plain recursive render, which also
-        normalizes string-literal quotes and highlights them
+        Format an alias value with normalised string quotes and syntax highlighting
+
+        When ruff is available, it wraps long expressions; other values use the
+        ordinary inline markup.
         """
         if not isinstance(value, gf.Expr):
             return format_value(value)
@@ -78,9 +86,7 @@ class TypeAliasRenderer(ObjectRenderer):
         )
 
     def render_description(self) -> BlockContent:
-        """
-        Render description for type aliases: subject above signature, no Usage label
-        """
+        """Render the subject followed by the alias declaration, without a Usage row"""
         return Blocks(
             [
                 self.render_docstring_subject(),
@@ -89,10 +95,5 @@ class TypeAliasRenderer(ObjectRenderer):
         )
 
     def render_type_parameters_section(self, el: gf.DocstringSectionTypeParameters) -> BlockContent:
-        """
-        Render a `Type Parameters` section
-
-        A type alias can be generic without being callable, so it needs its
-        own renderer rather than inheriting one from the call mixin.
-        """
+        """Render a `Type Parameters` section for a generic alias"""
         return self.render_definition_items(el)

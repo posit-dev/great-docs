@@ -195,6 +195,21 @@ parser: google  # Options: numpy (default), google, sphinx
 
 Any other value stops the build with an error.
 
+### API reference extensions
+
+To customise the API reference with Python, point `api_reference_extension` at a
+file that defines `setup(extension)`:
+
+```{.yaml filename="docs/great-docs.yml"}
+api_reference_extension: _api_reference_extension.py  # null disables setup
+```
+
+A relative path resolves against the directory of the configuration file, and an
+absolute path to a `.py` file also works. Great Docs checks the path when it reads
+the configuration, but runs the file only when it generates the API reference. See
+[API reference customisation](api-reference-customisation.qmd) for hooks, body
+callbacks, custom renderers and the files preview watches.
+
 ### When to Change the Parser
 
 You might need to manually set the parser if:
@@ -1159,6 +1174,9 @@ display_name: My Package  # Custom display name for navbar/title
 
 # Docstring Parser
 parser: numpy  # Auto-detected: numpy, google, or sphinx
+
+# API reference customisation
+api_reference_extension: null  # Optional .py path, relative to this file
 
 # API Discovery
 exclude:

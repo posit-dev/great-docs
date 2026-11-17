@@ -14019,7 +14019,7 @@ def _build_class_with_member_pages():
 
 
 def test_mixin_rendered_members_group_str():
-    """RenderedMemberGroup.__str__ renders title, summary, and body."""
+    """Compose a member-group heading and summary"""
 
     rmg = RenderedMemberGroup(
         title=Header(2, "Methods", Attr()),
@@ -14032,7 +14032,7 @@ def test_mixin_rendered_members_group_str():
 
 
 def test_mixin_rendered_members_group_str_all_none():
-    """RenderedMemberGroup.__str__ handles all None fields."""
+    """Render a member group that has no content"""
 
     rmg = RenderedMemberGroup()
     result = str(rmg)
@@ -14040,7 +14040,7 @@ def test_mixin_rendered_members_group_str_all_none():
 
 
 def test_mixin_rendered_member_pages_group_str():
-    """RenderedMemberGroup.__str__ renders title and summary."""
+    """Compose a heading and summary for members on separate pages"""
 
     rmpg = RenderedMemberGroup(
         title=Header(2, "Attributes", Attr()),
@@ -14266,7 +14266,7 @@ def test_mixin_type_alias_member_pages_property():
 
 
 def test_mixin_render_type_alias_member_pages():
-    """render_type_alias_member_pages returns RenderedMemberGroup."""
+    """Render a linked type-alias member group"""
 
     _, doc_cls = _build_class_with_member_pages_and_type_alias()
     render = ClassRenderer(doc_cls, level=1, settings=Settings())
@@ -14373,7 +14373,7 @@ def test_mixin_function_member_pages_property():
 
 
 def test_mixin_render_classes():
-    """render_classes returns a RenderedMemberGroup with 'Classes' title."""
+    """Render embedded class members under their group heading"""
 
     _, doc_cls = _build_class_with_members()
     render = ClassRenderer(doc_cls, level=1, settings=Settings())
@@ -14384,7 +14384,7 @@ def test_mixin_render_classes():
 
 
 def test_mixin_render_functions():
-    """render_functions returns a RenderedMemberGroup with 'Methods' title for classes."""
+    """Render class functions under the Methods heading"""
 
     _, doc_cls = _build_class_with_members()
     render = ClassRenderer(doc_cls, level=1, settings=Settings())
@@ -14395,7 +14395,7 @@ def test_mixin_render_functions():
 
 
 def test_mixin_render_attributes():
-    """render_attributes returns a RenderedMemberGroup with 'Attributes' title."""
+    """Render embedded attributes under their group heading"""
 
     _, doc_cls = _build_class_with_members()
     render = ClassRenderer(doc_cls, level=1, settings=Settings())
@@ -14451,7 +14451,7 @@ def test_mixin_render_attributes_override_omits_group() -> None:
 
 
 def test_mixin_render_class_member_pages():
-    """render_class_member_pages returns RenderedMemberGroup."""
+    """Render a linked class-member group"""
 
     _, doc_cls = _build_class_with_member_pages()
     render = ClassRenderer(doc_cls, level=1, settings=Settings())
@@ -14461,7 +14461,7 @@ def test_mixin_render_class_member_pages():
 
 
 def test_mixin_render_function_member_pages():
-    """render_function_member_pages returns RenderedMemberGroup."""
+    """Render a linked function-member group"""
 
     _, doc_cls = _build_class_with_member_pages()
     render = ClassRenderer(doc_cls, level=1, settings=Settings())
@@ -14471,7 +14471,7 @@ def test_mixin_render_function_member_pages():
 
 
 def test_mixin_render_attribute_member_pages():
-    """render_attribute_member_pages returns RenderedMemberGroup."""
+    """Render a linked attribute-member group"""
 
     _, doc_cls = _build_class_with_member_pages()
     render = ClassRenderer(doc_cls, level=1, settings=Settings())
@@ -15396,7 +15396,7 @@ def test_renderers_reject_unmapped_type() -> None:
 
 
 def test_renderbase_title_property():
-    """BaseRenderer.title calls render_title()."""
+    """Render a module heading through the cached `title` property"""
 
     mod_obj = gf.Module(name="tmod")
     doc_mod = content.DocModule(name="tmod", obj=mod_obj)
@@ -15411,7 +15411,7 @@ def test_renderbase_title_property():
 
 
 def test_renderbase_summary_name_property():
-    """BaseRenderer.summary_name returns empty string."""
+    """Give the base renderer an empty summary label"""
 
     # Create a mock that won't trigger __post_init__ logic
     rb = object.__new__(BaseRenderer)
@@ -15442,7 +15442,7 @@ def test_attribute_renderer_render_signature_type_kind():
 
 
 def test_page_renderer_mixin_render_title():
-    """PageRendererMixin.render_title() returns render_metadata()."""
+    """Render a page's title as its front-matter metadata"""
 
     # Create instance bypassing __init__
     obj = object.__new__(PageRendererMixin)
@@ -15465,7 +15465,7 @@ def test_renderers_select_class_renderer() -> None:
 
 
 def test_renderbase_summary_property():
-    """BaseRenderer.summary calls render_summary()."""
+    """Give the base renderer no summary rows"""
 
     rb = object.__new__(BaseRenderer)
     rb.node = MagicMock()
@@ -16328,7 +16328,7 @@ def test_renderer_subclass_keeps_cached_property() -> None:
 
 
 def test_render_reference_section_title():
-    """ReferenceSectionRenderer.render_title() returns a Header."""
+    """Render a reference-section title as a heading"""
 
     section = content.Section(title="Functions", contents=[spec.SpecObject(name="x")])
 
@@ -16340,7 +16340,7 @@ def test_render_reference_section_title():
 
 
 def test_render_reference_section_subtitle():
-    """ReferenceSectionRenderer.render_title() handles subtitles."""
+    """Render a reference-section subtitle as a heading"""
 
     section = content.Section(subtitle="Helper Functions", contents=[spec.SpecObject(name="x")])
 
@@ -16352,7 +16352,7 @@ def test_render_reference_section_subtitle():
 
 
 def test_render_reference_section_no_title():
-    """ReferenceSectionRenderer.render_title() returns None when no title/subtitle."""
+    """Omit the heading when a section has no title or subtitle"""
 
     section = content.Section(contents=[spec.SpecObject(name="x")])
 
@@ -16363,7 +16363,7 @@ def test_render_reference_section_no_title():
 
 
 def test_render_reference_section_description():
-    """ReferenceSectionRenderer.render_description() returns a Div."""
+    """Render the authored section description"""
 
     section = content.Section(
         title="Test", desc="A description", contents=[spec.SpecObject(name="x")]
@@ -16376,7 +16376,7 @@ def test_render_reference_section_description():
 
 
 def test_render_reference_section_body_empty():
-    """ReferenceSectionRenderer.render_body() returns None for empty section."""
+    """Omit summary content for an empty reference section"""
 
     section = content.Section(title="Empty", contents=[])
 
@@ -16387,7 +16387,7 @@ def test_render_reference_section_body_empty():
 
 
 def _make_render_ref(*, title="API Reference", desc=None, package="mypkg", options=None):
-    """An APIReference content stand-in for ReferenceIndexRenderer tests."""
+    """Create a reference with explicit index metadata for renderer tests"""
     ref = APIReference({"api-reference": {"package": package}})
     ref.title = title
     ref.desc = desc
@@ -16396,7 +16396,7 @@ def _make_render_ref(*, title="API Reference", desc=None, package="mypkg", optio
 
 
 def test_render_reference_page_post_init():
-    """ReferenceIndexRenderer.__init__ sets api_ref, sections, package, options."""
+    """Keep the supplied reference and sections on the index renderer"""
 
     ref = _make_render_ref(title="API Ref", desc="My API", package="mypkg")
     sections = [content.Section(title="Funcs", contents=[spec.SpecObject(name="x")])]
@@ -16410,7 +16410,7 @@ def test_render_reference_page_post_init():
 
 
 def test_render_reference_page_description():
-    """ReferenceIndexRenderer.render_description() returns a Div when description exists."""
+    """Render an authored reference-index description"""
 
     ref = _make_render_ref(title="API Ref", desc="My description")
     sections = [content.Section(title="S", contents=[spec.SpecObject(name="x")])]
@@ -16423,7 +16423,7 @@ def test_render_reference_page_description():
 
 
 def test_render_reference_page_no_description():
-    """ReferenceIndexRenderer.render_description() returns None when no description."""
+    """Omit an absent reference-index description"""
 
     ref = _make_render_ref(title="API Ref")
     sections = [content.Section(title="S", contents=[spec.SpecObject(name="x")])]
@@ -16435,7 +16435,7 @@ def test_render_reference_page_no_description():
 
 
 def test_render_reference_page_metadata():
-    """ReferenceIndexRenderer.render_metadata() returns Meta with title."""
+    """Include the reference title in index front matter"""
 
     ref = _make_render_ref(title="API Reference")
     sections = [content.Section(title="S", contents=[spec.SpecObject(name="x")])]
@@ -16447,7 +16447,7 @@ def test_render_reference_page_metadata():
 
 
 def test_render_api_page_post_init():
-    """APIPageRenderer.__post_init__ sets page and path attributes."""
+    """Associate an API page with its source node and QMD destination"""
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
@@ -16460,7 +16460,7 @@ def test_render_api_page_post_init():
 
 
 def test_render_api_page_has_one_object():
-    """APIPageRenderer._has_one_object is True for single-content pages."""
+    """Recognise a single-object API page"""
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
@@ -16472,7 +16472,7 @@ def test_render_api_page_has_one_object():
 
 
 def test_render_api_page_metadata():
-    """APIPageRenderer.render_metadata() returns Meta with title."""
+    """Include an object title in API page front matter"""
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
@@ -16546,7 +16546,7 @@ def test_render_reference_page_metadata_description(desc, expected):
 
 
 def test_render_api_page_render_body():
-    """APIPageRenderer.render_body() returns Blocks with render_objs."""
+    """Retain object content in the API page body"""
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
@@ -16559,7 +16559,7 @@ def test_render_api_page_render_body():
 
 
 def test_render_api_page_summary_with_summary_details():
-    """APIPageRenderer.render_summary() uses page.summary when set."""
+    """Use an explicitly authored API page summary"""
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
@@ -16578,7 +16578,7 @@ def test_render_api_page_summary_with_summary_details():
 
 
 def test_render_api_page_summary_multi_no_flatten_raises():
-    """APIPageRenderer.render_summary() raises ValueError for multi-content without flatten."""
+    """Reject a multi-object summary without details or flattening"""
 
     f1 = griffe_to_doc(gf.Function(name="func1", lineno=1))
     f2 = griffe_to_doc(gf.Function(name="func2", lineno=2))
@@ -16675,7 +16675,7 @@ def test_renderer_subclass_keeps_static_method() -> None:
 
 
 def test_render_reference_page_render_body():
-    """ReferenceIndexRenderer.render_body() renders sections."""
+    """Compose resolved reference sections in the index body"""
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_func = content.DocFunction(name="my_func", obj=func_obj, anchor="my_func")
@@ -16694,7 +16694,7 @@ def test_render_reference_page_render_body():
 
 
 def test_render_reference_section_body_with_contents():
-    """ReferenceSectionRenderer.render_body() renders Doc objects."""
+    """Compose linked object summaries in a reference section"""
 
     func_obj = gf.Function(name="some_func", lineno=1)
     doc_func = content.DocFunction(name="some_func", obj=func_obj, anchor="some_func")
@@ -16712,7 +16712,7 @@ def test_render_reference_section_body_with_contents():
 
 
 def test_render_reference_section_post_init():
-    """ReferenceSectionRenderer.__post_init__() sets section."""
+    """Associate section rendering with its resolved source node"""
 
     section = content.Section(title="Test", contents=[spec.SpecObject(name="x")])
 
@@ -16722,7 +16722,7 @@ def test_render_reference_section_post_init():
 
 
 def test_render_reference_section_title_and_subtitle():
-    """ReferenceSectionRenderer.render_title() for title vs subtitle."""
+    """Render title and subtitle text at their respective heading depths"""
 
     # Title case
     sec_t = content.Section(title="Methods", contents=[spec.SpecObject(name="x")])
@@ -16738,7 +16738,7 @@ def test_render_reference_section_title_and_subtitle():
 
 
 def test_render_api_page_full_lifecycle():
-    """APIPageRenderer full lifecycle with real Doc objects."""
+    """Compose API page objects, metadata, body and linked summary"""
 
     func_obj = gf.Function(name="my_func", lineno=1)
     func_obj.endlineno = 10
@@ -16773,7 +16773,7 @@ def test_render_api_page_full_lifecycle():
 
 
 def test_render_api_page_with_summary_details():
-    """APIPageRenderer.render_summary() with explicit summary."""
+    """Retain an authored page summary label and description"""
 
     func_obj = gf.Function(name="fn", lineno=1)
     doc_func = content.DocFunction(name="fn", obj=func_obj, anchor="fn")
@@ -16792,7 +16792,7 @@ def test_render_api_page_with_summary_details():
 
 
 def _make_function_page(name="my_func"):
-    """Build a single-function Page for APIPageRenderer duplication tests."""
+    """Create a single-function API page for title-ownership tests"""
     obj = gf.Function(name=name, lineno=1)
     obj.endlineno = 10
     doc = content.DocFunction(name=name, obj=obj, anchor=name)
@@ -16902,7 +16902,7 @@ def test_render_api_page_multi_object_renders_all_inner_headers():
 
 
 def test_renderdoc_display_name_relative_level_gt1():
-    """ObjectRenderer.display_name uses 'name' format when level > 1."""
+    """Produce a nested display name with relative naming"""
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_func = content.DocFunction(name="my_func", obj=func_obj)
@@ -16916,7 +16916,7 @@ def test_renderdoc_display_name_relative_level_gt1():
 
 
 def test_renderdoc_render_annotation_non_attribute_raises():
-    """ObjectRenderer.render_annotation() raises TypeError for non-attribute."""
+    """Require an explicit annotation for a non-attribute object"""
 
     func_obj = gf.Function(name="fn", lineno=1)
     doc_func = content.DocFunction(name="fn", obj=func_obj)
@@ -16927,7 +16927,7 @@ def test_renderdoc_render_annotation_non_attribute_raises():
 
 
 def test_renderdoc_render_annotation_attribute():
-    """ObjectRenderer.render_annotation() for attribute."""
+    """Render an attribute's own annotation"""
 
     attr_obj = gf.Attribute(name="x", lineno=1)
     attr_obj.annotation = gf.ExprName("int")
@@ -16940,7 +16940,7 @@ def test_renderdoc_render_annotation_attribute():
 
 
 def test_renderdoc_render_annotation_none():
-    """ObjectRenderer.render_annotation() with None annotation."""
+    """Render an absent attribute annotation as empty content"""
 
     attr_obj = gf.Attribute(name="y", lineno=1)
     attr_obj.annotation = None
@@ -16952,7 +16952,7 @@ def test_renderdoc_render_annotation_none():
 
 
 def test_renderdoc_docstring_section_deprecated():
-    """ObjectRenderer handles DocstringSectionDeprecated."""
+    """Render a deprecation note in the object body"""
 
     func_obj = gf.Function(name="old_fn", lineno=1)
     func_obj.docstring = gf.Docstring(
@@ -16969,7 +16969,7 @@ def test_renderdoc_docstring_section_deprecated():
 
 
 def test_renderdoc_docstring_section_examples():
-    """ObjectRenderer handles DocstringSectionExamples."""
+    """Render examples within the object body"""
 
     func_obj = gf.Function(name="ex_fn", lineno=1)
     func_obj.docstring = gf.Docstring(
@@ -16986,7 +16986,7 @@ def test_renderdoc_docstring_section_examples():
 
 
 def test_renderdoc_docstring_section_text_in_div():
-    """ObjectRenderer wraps 'Text' sections in a Div."""
+    """Retain body content after extracting the docstring subject"""
 
     func_obj = gf.Function(name="txt_fn", lineno=1)
     func_obj.docstring = gf.Docstring(
@@ -17020,7 +17020,7 @@ def test_renderdoc_source_link_with_github_url():
 
 
 def test_renderdoc_see_also_section():
-    """ObjectRenderer handles See Also section."""
+    """Render cross-reference sections without failing"""
 
     func_obj = gf.Function(name="sa_fn", lineno=1)
     func_obj.docstring = gf.Docstring(
