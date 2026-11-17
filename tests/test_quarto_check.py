@@ -129,11 +129,11 @@ def test_installed_version_reads_quarto_and_quarto_2(
 def test_ensure_installed_applies_the_quarto_2_minimum(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv(quarto.EXECUTABLE_ENV, "q2")
     monkeypatch.setattr("great_docs._build.quarto.shutil.which", lambda name: "/bin/q2")
-    monkeypatch.setattr("great_docs._build.quarto.installed_version", lambda: (0, 45, 0))
+    monkeypatch.setattr("great_docs._build.quarto.installed_version", lambda: (0, 46, 0))
     assert quarto.ensure_installed() is None
 
-    monkeypatch.setattr("great_docs._build.quarto.installed_version", lambda: (0, 44, 2))
-    with pytest.raises(QuartoVersionError, match=r"Quarto 2 0\.45\.0 or later"):
+    monkeypatch.setattr("great_docs._build.quarto.installed_version", lambda: (0, 45, 0))
+    with pytest.raises(QuartoVersionError, match=r"Quarto 2 0\.46\.0 or later"):
         quarto.ensure_installed()
 
 
