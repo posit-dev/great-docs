@@ -21,9 +21,10 @@ from ._conversion import griffe_to_doc
 from ._rendering._context import _RenderingPurpose
 from ._rendering._renderers import Renderers
 from ._type_checks import is_protocol, is_typealias, is_typevar
-from .introspect import get_object
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from ._customisation import Extension
     from ._settings import Settings
     from .api_reference import APIReference
@@ -49,17 +50,22 @@ class _TypeCategory:
         *,
         extension: Extension | None = None,
         page_path: str | None = None,
+        prepare: Callable[[gf.Object | gf.Alias], gf.Object | gf.Alias | None] | None = None,
     ) -> _TypeCategory:
         """Construct category renderers using the typing workflow's presentation"""
         renderers: list[RenderObjType] = []
+        retained_items: list[inventory.InventoryItem] = []
         for item in items:
-            doc = griffe_to_doc(item.obj)
+            doc = griffe_to_doc(item.obj, prepare=prepare)
+            if doc is None:
+                continue
             occurrence = f"{item.name} on {page_path}" if page_path else item.name
             context = extension.error_context("render", occurrence) if extension else nullcontext()
             with context:
                 renderer = choices.make(doc, 3, settings=settings, _purpose=purpose)
             renderers.append(renderer)
-        return cls(title, items, renderers)
+            retained_items.append(item)
+        return cls(title, retained_items, renderers)
 
 
 @dataclass
@@ -74,16 +80,34 @@ class TypeSections(Block):
     page_path: str | None = field(default=None, kw_only=True)
     """The typing page's path, which a rendering failure names"""
 
+    prepare: Callable[[gf.Object | gf.Alias], gf.Object | gf.Alias | None] | None = field(
+        default=None, kw_only=True
+    )
+    """Operation preparation, or `None` to prepare with the supplied or default owner"""
+
     def __post_init__(self) -> None:
-        self.categories = [
+        from ._customisation import Extension
+
+        extension = self.extension or Extension(self.settings)
+        try:
+            extension.load()
+            self.categories = self._make_categories(extension)
+        finally:
+            if self.extension is None:
+                extension.close()
+
+    def _make_categories(self, extension: Extension) -> list[_TypeCategory]:
+        """Prepare all categories through one shared operation owner"""
+        return [
             _TypeCategory.make(
                 "Protocols",
                 self.protocols_items,
                 self.settings,
                 self.renderers,
                 _RenderingPurpose.PROTOCOL,
-                extension=self.extension,
+                extension=extension,
                 page_path=self.page_path,
+                prepare=self.prepare or extension.prepare,
             ),
             _TypeCategory.make(
                 "Type Variables",
@@ -91,8 +115,9 @@ class TypeSections(Block):
                 self.settings,
                 self.renderers,
                 _RenderingPurpose.TYPE_VARIABLE,
-                extension=self.extension,
+                extension=extension,
                 page_path=self.page_path,
+                prepare=self.prepare or extension.prepare,
             ),
             _TypeCategory.make(
                 "Type Aliases",
@@ -100,8 +125,9 @@ class TypeSections(Block):
                 self.settings,
                 self.renderers,
                 _RenderingPurpose.TYPE_ALIAS,
-                extension=self.extension,
+                extension=extension,
                 page_path=self.page_path,
+                prepare=self.prepare or extension.prepare,
             ),
         ]
 
@@ -197,7 +223,19 @@ class TypeInformation(Block):
                 dispname=obj.canonical_path,
             )
 
-        members = [m for m in get_object(self.module_path).members.values() if self._is_own(m)]
+        module = self.api_ref.prepare(self.api_ref.get_object(self.module_path))
+        members: list[gf.Object | gf.Alias] = []
+        for member in list(module.members.values()) if module is not None else ():
+            if not self._is_own(member):
+                continue
+            candidate = (
+                self.api_ref.get_object(f"{self.module_path}:{member.name}")
+                if self.api_ref.settings.dynamic
+                else member
+            )
+            prepared = self.api_ref.prepare(candidate)
+            if prepared is not None:
+                members.append(prepared)
         return TypeSections(
             protocols_items=[make_item(m) for m in members if is_protocol(m)],
             typevars_items=[make_item(m) for m in members if is_typevar(m)],
@@ -206,6 +244,7 @@ class TypeInformation(Block):
             renderers=self.api_ref.renderers,
             extension=self.api_ref.extension,
             page_path=f"{self.base_uri}.qmd",
+            prepare=self.api_ref.prepare,
         )
 
     @cached_property

@@ -7,6 +7,7 @@ the default renderers unchanged.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import griffe as gf
@@ -273,18 +274,32 @@ def test_choices_reach_embedded_bodies_and_separate_member_summaries(separate: b
     assert "function summary marker" not in str(Renderers().make(doc))
 
 
-def test_choices_reach_helper_rendering(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_choices_reach_helper_rendering(tmp_path: Path) -> None:
     from great_docs._apiref import _tools
-    from great_docs.pandoc.blocks import BlockContent, Para
+    from great_docs._apiref._extension_loading import _ExtensionSource
 
-    class CustomClass(ClassRenderer):
-        def render_body(self) -> BlockContent:
-            return Para("helper body marker")
-
-    choices = Renderers(classes=CustomClass)
-    monkeypatch.setattr(_tools, "Renderers", lambda: choices)
-    output = _tools.render_code_variable('class Example:\n    """An example"""\n', "Example")
-    assert "helper body marker" in output
+    entry = tmp_path / "extension.py"
+    entry.write_text(
+        "from great_docs.rendering import ClassRenderer, Renderers\n"
+        "from great_docs.pandoc.blocks import Para\n"
+        "class CustomClass(ClassRenderer):\n"
+        "    def render_body(self):\n"
+        "        return Para('helper body marker')\n"
+        "def setup(extension):\n"
+        "    extension.set_renderers(Renderers(classes=CustomClass))\n",
+        encoding="utf-8",
+    )
+    reference = APIReference(
+        {"package": "example", "sections": []},
+        extension_source=_ExtensionSource(entry, tmp_path, tmp_path),
+    )
+    try:
+        output = _tools.render_code_variable(
+            'class Example:\n    """An example"""\n', "Example", customisation=reference
+        )
+        assert "helper body marker" in output
+    finally:
+        reference.close()
 
 
 def test_choices_reach_typing_categories() -> None:

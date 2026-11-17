@@ -27,6 +27,8 @@ if TYPE_CHECKING:
 
 DEFAULT_OPTIONS: dict[str, dict[str, object]] = {}
 
+_PreserveDocumentation = Callable[[gf.Object | gf.Alias], bool]
+
 _AUTHORED_DOCSTRINGS: WeakKeyDictionary[gf.GriffeLoader, dict[str, gf.Docstring]] = (
     WeakKeyDictionary()
 )
@@ -82,6 +84,8 @@ def get_object(
     parser: str | None = None,
     dynamic: bool = False,
     loader: gf.GriffeLoader | None = None,
+    *,
+    preserve: _PreserveDocumentation | None = None,
 ) -> gf.Object | gf.Alias:
     """
     Get the griffe object at the given import path
@@ -89,8 +93,9 @@ def get_object(
     Parameters
     ----------
     path :
-        An import path to the object. This should have the form `path.to.module:object`.
-        For example, `my_package:get_object` or `my_package:MyClass.render`.
+        A `module:object` or dotted object path, such as
+        `my_package:MyClass.render` or `my_package.MyClass.render`. In dynamic mode, a
+        dotted path splits at the longest module that the loader has already loaded.
     parser :
         A docstring parser to configure a new loader with. Ignored, with a warning,
         when `loader` is given, since the loader already carries a parser.
@@ -99,12 +104,15 @@ def get_object(
         hard-coded, but was set on the object by running python code.
     loader :
         An existing griffe loader to reuse. A fresh loader is created when omitted.
+    preserve
+        Predicate identifying documentation already prepared in this operation.
+        Retain those docstrings while hydrating other runtime documentation.
 
     Returns
     -------
     :
-        The node griffe models at `path` — an object, or an alias when the path
-        reaches it through a re-export.
+        The object modelled at `path`, or its authored alias when reached
+        through a re-export.
     """
     validate_dynamic(dynamic)
 
@@ -125,9 +133,41 @@ def get_object(
         _ = loader.load(module_path)
 
     if dynamic:
-        return dynamic_alias(path, loader=loader)
+        return dynamic_alias(_dynamic_path(path, loader), loader=loader, preserve=preserve)
 
     return _static_object(module_path, object_path, loader)
+
+
+def _dynamic_path(path: str, loader: gf.GriffeLoader) -> str:
+    """
+    Split a dotted path at the longest module that the loader has loaded
+
+    Parameters
+    ----------
+    path :
+        A dotted path, or a `module:object` path, which is returned unchanged.
+    loader :
+        The loader whose modules mark where the module part ends.
+
+    Returns
+    -------
+    :
+        The path in `module:object` form, the module path alone when the whole path
+        names a module, or the path unchanged when no loaded module begins it.
+    """
+    if ":" in path:
+        return path
+    parts = path.split(".")
+    for length in range(len(parts), 0, -1):
+        module_path = ".".join(parts[:length])
+        try:
+            candidate = loader.modules_collection[module_path]
+        except KeyError:
+            continue
+        if isinstance(candidate, gf.Module):
+            object_path = ".".join(parts[length:])
+            return f"{module_path}:{object_path}" if object_path else module_path
+    return path
 
 
 def _split_path(path: str) -> tuple[str, str | None]:
@@ -243,7 +283,12 @@ def resolve_alias(
     return obj
 
 
-def replace_docstring(obj: gf.Object | gf.Alias, runtime_obj: object = None) -> None:
+def replace_docstring(
+    obj: gf.Object | gf.Alias,
+    runtime_obj: object = None,
+    *,
+    preserve: _PreserveDocumentation | None = None,
+) -> None:
     """
     Replace the griffe object's docstring in place with the imported runtime docstring
 
@@ -259,13 +304,19 @@ def replace_docstring(obj: gf.Object | gf.Alias, runtime_obj: object = None) -> 
     runtime_obj :
         The python object whose docstring to use in the replacement. If not
         specified, then attempt to import obj and use its docstring.
+    preserve
+        Predicate identifying documentation already prepared in this operation.
+        Retain those docstrings while hydrating other runtime documentation.
     """
     if isinstance(obj, gf.Alias):
         obj = resolve_alias(obj)
 
     if isinstance(obj, gf.Class):
         for child_obj in obj.members.values():
-            replace_docstring(child_obj)
+            replace_docstring(child_obj, preserve=preserve)
+
+    if preserve is not None and preserve(obj):
+        return
 
     if runtime_obj is None:
         runtime_obj = _locate_runtime_object(obj)
@@ -537,6 +588,8 @@ def _member_now_at(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
 def dynamic_alias(
     path: str,
     loader: gf.GriffeLoader | None = None,
+    *,
+    preserve: _PreserveDocumentation | None = None,
 ) -> gf.Object | gf.Alias:
     """
     Resolve a griffe object for `path` via a dynamic import
@@ -544,9 +597,12 @@ def dynamic_alias(
     Parameters
     ----------
     path :
-        Full path to the object. E.g. `my_package.get_object`.
+        Full path to the object, such as `my_package:get_object`.
     loader :
         An existing griffe loader to reuse. A fresh loader is created when omitted.
+    preserve
+        Predicate identifying documentation already prepared in this operation.
+        Retain those docstrings while hydrating other runtime documentation.
 
     Returns
     -------
@@ -562,10 +618,10 @@ def dynamic_alias(
     if isinstance(located, _DeclarationOnly):
         return located.obj
 
-    documented = _load_documenting_object(located, loader)
-    replace_docstring(documented.obj, located.value)
+    documented = _load_documenting_object(located, loader, preserve=preserve)
+    replace_docstring(documented.obj, located.value, preserve=preserve)
     obj = _member_now_at(documented.obj)
-    if documented.override is not None:
+    if documented.override is not None and (preserve is None or not preserve(obj)):
         obj.docstring = _clone_docstring(
             documented.override,
             documented.override.value,
@@ -574,7 +630,7 @@ def dynamic_alias(
 
     if _same_path(documented.path, located.access_path):
         return obj
-    return _alias_into_parent(located, obj, loader)
+    return _alias_into_parent(located, obj, loader, preserve=preserve)
 
 
 def _locate_runtime_attr(
@@ -699,6 +755,8 @@ def _locate_declaration(
 def _load_documenting_object(
     located: _LocatedAttr,
     loader: gf.GriffeLoader | None,
+    *,
+    preserve: _PreserveDocumentation | None = None,
 ) -> _Documented:
     """
     Load the griffe object that documents `located`
@@ -718,6 +776,10 @@ def _load_documenting_object(
     loader :
         Loader to read the static model through.
 
+    preserve
+        Predicate identifying documentation already prepared in this operation.
+        Retain those docstrings while hydrating other runtime documentation.
+
     Returns
     -------
     :
@@ -736,7 +798,7 @@ def _load_documenting_object(
         if home is not None:
             if authored is None:
                 return home
-            own = _reexpose_class(home.obj, located, loader)
+            own = _reexpose_class(home.obj, located, loader, preserve=preserve)
             return _Documented(own, located.access_path, authored)
 
     obj = get_object(located.access_path, loader=loader)
@@ -748,11 +810,13 @@ def _reexpose_class(
     obj: gf.Object | gf.Alias,
     located: _LocatedAttr,
     loader: gf.GriffeLoader | None,
+    *,
+    preserve: _PreserveDocumentation | None = None,
 ) -> gf.Object:
     """
-    Register a second node for `obj`'s class under the name it was accessed by
+    Register a class node under the name it was accessed by, or reuse a prepared one
 
-    The two nodes share their members, so the re-exported name documents the
+    Reuse an already-prepared node for this name. Otherwise the two nodes share their members, so the re-exported name documents the
     same methods; each carries its own docstring, so what an author wrote about
     one name never shows up on the other's page.
 
@@ -765,18 +829,26 @@ def _reexpose_class(
     loader :
         Loader to read the accessing module or class through.
 
+    preserve
+        Predicate identifying documentation already prepared in this operation.
+        Retain those docstrings while hydrating other runtime documentation.
+
     Returns
     -------
     :
         The new node, already a member of the module or class the name was
         reached through.
     """
+    parent = _access_parent(located, loader, preserve=preserve)
+    if preserve is not None and isinstance(parent, (gf.Module, gf.Class)):
+        existing = parent.members.get(located.name)
+        if existing is not None and preserve(existing):
+            return resolve_alias(existing)
     own = copy(resolve_alias(obj))
     own.name = located.name
     # Only the definition's own re-exports point at the definition.
     own.aliases = {}
 
-    parent = _access_parent(located, loader)
     if isinstance(parent, (gf.Module, gf.Class)):
         parent.set_member(located.name, own)
     return own
@@ -866,6 +938,8 @@ def _alias_into_parent(
     located: _LocatedAttr,
     obj: gf.Object | gf.Alias,
     loader: gf.GriffeLoader | None,
+    *,
+    preserve: _PreserveDocumentation | None = None,
 ) -> gf.Alias:
     """
     Re-expose `obj` as an alias member of the object it was accessed through
@@ -883,6 +957,10 @@ def _alias_into_parent(
     loader :
         Loader to read the parent through.
 
+    preserve
+        Predicate identifying documentation already prepared in this operation.
+        Retain those docstrings while hydrating other runtime documentation.
+
     Returns
     -------
     :
@@ -890,7 +968,7 @@ def _alias_into_parent(
         class it was reached through. It is left unparented when the access path
         names something that cannot hold members.
     """
-    parent = _access_parent(located, loader)
+    parent = _access_parent(located, loader, preserve=preserve)
     if isinstance(parent, (gf.Module, gf.Class, gf.Alias)):
         return gf.Alias(located.name, obj, parent=parent)
     return gf.Alias(located.name, obj)
@@ -899,6 +977,8 @@ def _alias_into_parent(
 def _access_parent(
     located: _LocatedAttr,
     loader: gf.GriffeLoader | None,
+    *,
+    preserve: _PreserveDocumentation | None = None,
 ) -> gf.Object | gf.Alias:
     """
     Load the module or class that `located` was reached through
@@ -909,6 +989,10 @@ def _access_parent(
         The attribute as it was reached, whose access path names the parent.
     loader :
         Loader to read the parent through.
+
+    preserve
+        Predicate identifying documentation already prepared in this operation.
+        Retain those docstrings while hydrating other runtime documentation.
 
     Returns
     -------
@@ -925,7 +1009,7 @@ def _access_parent(
     else:
         parent_path = module_path
 
-    return get_object(parent_path, loader=loader, dynamic=True)
+    return get_object(parent_path, loader=loader, dynamic=True, preserve=preserve)
 
 
 def _canonical_path(current_part: object, qualname: str) -> str | None:
@@ -984,6 +1068,7 @@ def _has_no_value(obj: gf.Object | gf.Alias) -> bool:
     :
         True when the attribute carries no value of its own.
     """
+    obj = resolve_alias(obj)
     if isinstance(obj, gf.Attribute):
         if obj.labels & {"class-attribute", "module-attribute"} and obj.value is None:
             return True

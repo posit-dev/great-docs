@@ -17345,18 +17345,28 @@ def test_type_information_sections_calls_get_object():
     # Create mock members with canonical_path
     mock_proto = MagicMock()
     mock_proto.canonical_path = "mypkg.types.MyProto"
+    mock_proto.name = "MyProto"
     mock_tv = MagicMock()
     mock_tv.canonical_path = "mypkg.types.T"
+    mock_tv.name = "T"
     mock_alias = MagicMock()
     mock_alias.canonical_path = "mypkg.types.MyAlias"
+    mock_alias.name = "MyAlias"
 
     mock_module = MagicMock()
     mock_module.members = {"MyProto": mock_proto, "T": mock_tv, "MyAlias": mock_alias}
+    mock_builder.prepare.side_effect = lambda obj: obj
 
     mock_render_obj = MagicMock()
 
     with (
-        patch("great_docs._apiref.typing_information.get_object", return_value=mock_module),
+        patch.object(
+            mock_builder,
+            "get_object",
+            side_effect=lambda path: (
+                mock_module.members[path.split(":", 1)[1]] if ":" in path else mock_module
+            ),
+        ),
         patch(
             "great_docs._apiref.typing_information.is_protocol",
             side_effect=lambda m: m is mock_proto,
@@ -17393,14 +17403,22 @@ def test_type_information_sections_item_uris():
 
     mock_attr = MagicMock()
     mock_attr.canonical_path = "mypkg.sub.MyAlias"
+    mock_attr.name = "MyAlias"
 
     mock_module = MagicMock()
     mock_module.members = {"MyAlias": mock_attr}
+    mock_builder.prepare.side_effect = lambda obj: obj
 
     mock_render_obj = MagicMock()
 
     with (
-        patch("great_docs._apiref.typing_information.get_object", return_value=mock_module),
+        patch.object(
+            mock_builder,
+            "get_object",
+            side_effect=lambda path: (
+                mock_module.members[path.split(":", 1)[1]] if ":" in path else mock_module
+            ),
+        ),
         patch("great_docs._apiref.typing_information.is_protocol", return_value=False),
         patch("great_docs._apiref.typing_information.is_typevar", return_value=False),
         patch("great_docs._apiref.typing_information.is_typealias", return_value=True),
@@ -17424,8 +17442,15 @@ def test_type_information_content_has_meta_and_sections():
 
     mock_module = MagicMock()
     mock_module.members = {}
+    mock_builder.prepare.side_effect = lambda obj: obj
 
-    with patch("great_docs._apiref.typing_information.get_object", return_value=mock_module):
+    with patch.object(
+        mock_builder,
+        "get_object",
+        side_effect=lambda path: (
+            mock_module.members[path.split(":", 1)[1]] if ":" in path else mock_module
+        ),
+    ):
         ti = TypeInformation(module_path="mypkg.types", api_ref=mock_builder)
         content = ti.content
 
@@ -17442,8 +17467,15 @@ def test_type_information_str_delegates_to_content():
 
     mock_module = MagicMock()
     mock_module.members = {}
+    mock_builder.prepare.side_effect = lambda obj: obj
 
-    with patch("great_docs._apiref.typing_information.get_object", return_value=mock_module):
+    with patch.object(
+        mock_builder,
+        "get_object",
+        side_effect=lambda path: (
+            mock_module.members[path.split(":", 1)[1]] if ":" in path else mock_module
+        ),
+    ):
         ti = TypeInformation(module_path="mypkg.types", api_ref=mock_builder)
         result = str(ti)
 
@@ -17461,8 +17493,15 @@ def test_type_information_write_creates_file():
 
         mock_module = MagicMock()
         mock_module.members = {}
+        mock_builder.prepare.side_effect = lambda obj: obj
 
-        with patch("great_docs._apiref.typing_information.get_object", return_value=mock_module):
+        with patch.object(
+            mock_builder,
+            "get_object",
+            side_effect=lambda path: (
+                mock_module.members[path.split(":", 1)[1]] if ":" in path else mock_module
+            ),
+        ):
             ti = TypeInformation(module_path="mypkg.types", api_ref=mock_builder)
 
             # Ensure the output directory exists
@@ -17489,14 +17528,22 @@ def test_type_information_write_extends_builder_items():
 
         mock_member = MagicMock()
         mock_member.canonical_path = "mypkg.types.T"
+        mock_member.name = "T"
 
         mock_module = MagicMock()
         mock_module.members = {"T": mock_member}
+        mock_builder.prepare.side_effect = lambda obj: obj
 
         mock_render_obj = MagicMock()
 
         with (
-            patch("great_docs._apiref.typing_information.get_object", return_value=mock_module),
+            patch.object(
+                mock_builder,
+                "get_object",
+                side_effect=lambda path: (
+                    mock_module.members[path.split(":", 1)[1]] if ":" in path else mock_module
+                ),
+            ),
             patch("great_docs._apiref.typing_information.is_protocol", return_value=False),
             patch("great_docs._apiref.typing_information.is_typevar", return_value=True),
             patch("great_docs._apiref.typing_information.is_typealias", return_value=False),

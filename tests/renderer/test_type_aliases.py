@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from great_docs._apiref._settings import Settings
 import sys
 import textwrap
 
 import pytest
+
+from great_docs._apiref._settings import Settings
 
 pytestmark = pytest.mark.skipif(
     sys.version_info < (3, 12),
@@ -199,22 +200,19 @@ def test_type_information_preserves_alias_name():
 
     import griffe as gf
 
+    from great_docs._apiref.api_reference import APIReference
     from great_docs._apiref.typing_information import TypeInformation
 
-    api_ref = MagicMock()
-    from great_docs.rendering import Renderers
-
-    api_ref.renderers = Renderers()
-    api_ref.package = "package"
-    api_ref.settings.dir = "reference"
+    api_ref = APIReference({"package": "package", "sections": []})
 
     with (
         gf.temporary_visited_package(
             "package", {"__init__.py": "type Contract[T] = list[T]\n"}
         ) as module,
-        patch("great_docs._apiref.typing_information.get_object", return_value=module),
+        patch.object(api_ref, "get_object", return_value=module),
     ):
         rendered = str(TypeInformation("package", api_ref))
+    api_ref.close()
 
     assert "[Contract[T]]{.doc-parameter-name}" in rendered
 
@@ -225,14 +223,10 @@ def test_type_information_lists_reexported_names():
 
     import griffe as gf
 
+    from great_docs._apiref.api_reference import APIReference
     from great_docs._apiref.typing_information import TypeInformation
 
-    api_ref = MagicMock()
-    from great_docs.rendering import Renderers
-
-    api_ref.renderers = Renderers()
-    api_ref.package = "package"
-    api_ref.settings.dir = "reference"
+    api_ref = APIReference({"package": "package", "sections": []})
 
     defs = '''
     from typing import Protocol, TypeVar
@@ -250,11 +244,13 @@ def test_type_information_lists_reexported_names():
     }
 
     with gf.temporary_visited_package("package", modules) as package:
-        with patch(
-            "great_docs._apiref.typing_information.get_object",
+        with patch.object(
+            api_ref,
+            "get_object",
             return_value=package["types"],
         ):
             rendered = str(TypeInformation("package.types", api_ref))
+    api_ref.close()
 
     assert "Protocols" in rendered
     assert "Reader" in rendered
@@ -270,14 +266,10 @@ def test_type_information_omits_names_imported_from_outside():
 
     import griffe as gf
 
+    from great_docs._apiref.api_reference import APIReference
     from great_docs._apiref.typing_information import TypeInformation
 
-    api_ref = MagicMock()
-    from great_docs.rendering import Renderers
-
-    api_ref.renderers = Renderers()
-    api_ref.package = "package"
-    api_ref.settings.dir = "reference"
+    api_ref = APIReference({"package": "package", "sections": []})
 
     modules = {
         "__init__.py": "",
@@ -289,11 +281,13 @@ def test_type_information_omits_names_imported_from_outside():
         # the page; without loading `typing` the alias would go unresolved
         # and the assertion would hold for the wrong reason.
         gf.GriffeLoader(modules_collection=package.modules_collection).load("typing")
-        with patch(
-            "great_docs._apiref.typing_information.get_object",
+        with patch.object(
+            api_ref,
+            "get_object",
             return_value=package["types"],
         ):
             rendered = str(TypeInformation("package.types", api_ref))
+    api_ref.close()
 
     assert "AnyStr" not in rendered
 
@@ -523,19 +517,16 @@ def test_type_information_page_is_a_reference_page():
 
     import griffe as gf
 
+    from great_docs._apiref.api_reference import APIReference
     from great_docs._apiref.typing_information import TypeInformation
 
-    api_ref = MagicMock()
-    from great_docs.rendering import Renderers
-
-    api_ref.renderers = Renderers()
-    api_ref.package = "package"
-    api_ref.settings.dir = "reference"
+    api_ref = APIReference({"package": "package", "sections": []})
 
     with (
         gf.temporary_visited_package("package", {"__init__.py": "type Contract = int\n"}) as module,
-        patch("great_docs._apiref.typing_information.get_object", return_value=module),
+        patch.object(api_ref, "get_object", return_value=module),
     ):
         rendered = str(TypeInformation("package", api_ref))
+    api_ref.close()
 
     assert "body-classes: doc-api-page doc-py-api-page" in rendered

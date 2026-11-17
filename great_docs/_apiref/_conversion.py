@@ -7,7 +7,7 @@ members to include and converts them recursively.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 import griffe as gf
 
@@ -23,7 +23,8 @@ def griffe_to_doc(
     deep: bool = True,
     inherited: bool = True,
     skip_aliases: bool = False,
-) -> DocType:
+    prepare: Callable[[gf.Object | gf.Alias], gf.Object | gf.Alias | None] | None = None,
+) -> DocType | None:
     """
     Convert a Python object and selected members into documentation nodes
 
@@ -37,12 +38,21 @@ def griffe_to_doc(
         Whether to include inherited members.
     skip_aliases
         Whether recursive conversion excludes imported and re-exported members.
+    prepare
+        A function that prepares each object before conversion, or `None` to convert
+        objects as they are. An object it excludes is left out with its members.
 
     Returns
     -------
     :
-        The object's documentation node, with selected children when requested.
+        The object's documentation node, with selected children when requested,
+        or `None` when preparation excludes it.
     """
+    if prepare is not None:
+        prepared = prepare(obj)
+        if prepared is None:
+            return None
+        obj = prepared
     members: list[DocType] | None = None
     if deep:
         members = []
@@ -50,5 +60,9 @@ def griffe_to_doc(
         for member in member_map.values():
             if skip_aliases and isinstance(member, gf.Alias):
                 continue
-            members.append(griffe_to_doc(member, inherited=inherited, skip_aliases=skip_aliases))
+            child = griffe_to_doc(
+                member, inherited=inherited, skip_aliases=skip_aliases, prepare=prepare
+            )
+            if child is not None:
+                members.append(child)
     return Doc.from_griffe(obj.name, obj, members=members)

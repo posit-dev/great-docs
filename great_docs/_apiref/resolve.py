@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from contextlib import contextmanager
 from contextvars import ContextVar
-from functools import partial
 from textwrap import indent
 from typing import TYPE_CHECKING, Any, Callable, cast
 
@@ -11,15 +10,13 @@ import griffe as gf
 from yaml12 import format_yaml
 
 from great_docs._translations import DEFAULT_LANGUAGE
-from great_docs.hooks._docstring_parsed import emit_docstring_parsed
-from great_docs.hooks._object_resolved import emit_object_resolved
 
-from ._constructor import parse_class_docstring
+from ._customisation import Extension
 from ._exports import declared_exports
+from ._settings import Settings
 from ._type_checks import is_enum
 from ._walkable import MISSING, MissingType, Walkable
 from .content import Doc, MemberPage, Page, Section, Text
-from .introspect import resolve_alias
 from .spec import SpecObject, SpecOptions, SpecSection, SpecText
 
 # Dunder members inherited from `object`/`type` (or PyO3 metaclasses) that carry docstrings but are
@@ -53,7 +50,6 @@ _BUILTIN_NOISE_DUNDERS = frozenset(
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from ._settings import Settings
     from .spec import SpecEntry
 
 _log = logging.getLogger(__name__)
@@ -204,9 +200,15 @@ class Resolver:
         from .introspect import get_object as _get_object
         from .introspect import make_loader
 
-        parser = settings.parser if settings is not None else "numpy"
-        loader = make_loader(parser)
-        self.get_object: _GetObject = cast("_GetObject", partial(_get_object, loader=loader))
+        self.settings = settings if settings is not None else Settings()
+        loader = make_loader(self.settings.parser)
+        self.extension: Extension | None = None
+
+        def acquire(path: str, **kwargs: Any) -> gf.Object | gf.Alias:
+            preserve = self.extension.is_prepared if self.extension is not None else None
+            return _get_object(path, loader=loader, preserve=preserve, **kwargs)
+
+        self.get_object: _GetObject = acquire
 
         self.current_package: str | None = None
         self.options: SpecOptions | None = None
@@ -217,6 +219,12 @@ class Resolver:
         self.max_members_on_same_page = (
             settings.max_members_on_same_page if settings is not None else 5
         )
+
+    def prepare(self, obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias | None:
+        """Prepare acquired documentation with this resolver's shared operation state"""
+        if self.extension is None:
+            self.extension = Extension(self.settings)
+        return self.extension.prepare(obj, get_object=self.get_object)
 
     def get_object_or_raise(self, path: str, **kwargs: object) -> gf.Object | gf.Alias:
         """Get the griffe object at `path`, raising `ObjectNotFoundError` if absent"""
@@ -339,14 +347,9 @@ class Resolver:
         _log.info(f"Getting object for {path}")
 
         # The subject object being documented (the class/module/function itself).
-        obj = self.get_object_or_raise(path, dynamic=dynamic)
-        obj = emit_object_resolved(obj)
+        obj = self.prepare(self.get_object_or_raise(path, dynamic=dynamic))
         if obj is None:
             return None
-        if obj.docstring is not None:
-            if obj.is_class:
-                parse_class_docstring(cast("gf.Class", obj))
-            _ = emit_docstring_parsed(obj)
         children = self._resolve_members(el, obj, path=path, dynamic=dynamic)
 
         return Doc.from_griffe(
@@ -372,7 +375,7 @@ class Resolver:
         member_defaults = SpecOptions(dynamic=dynamic, package=path, members_on_same_page=True)
 
         children: list[Doc] = []
-        for entry in self._fetch_members(el, obj):
+        for entry in self._fetch_members(el, obj, path=path, dynamic=dynamic):
             member_spec = (
                 SpecObject(name=entry)
                 .with_defaults(el.member_options)
@@ -400,16 +403,30 @@ class Resolver:
             return list(children)
         return [MemberPage(path=child.obj.path, contents=[child]) for child in children]
 
-    def _fetch_members(self, el: SpecObject, obj: gf.Object | gf.Alias) -> list[str]:
-        """Fetch the member paths to document for a given `SpecObject` element and its resolved object"""
+    def _fetch_members(
+        self,
+        el: SpecObject,
+        obj: gf.Object | gf.Alias,
+        *,
+        path: str | None = None,
+        dynamic: bool | None = None,
+    ) -> list[str]:
+        """
+        Select the names of the members to document
+
+        Apply structural filters before acquisition. Hydrate dynamic candidates
+        before semantic hooks, then apply documentation-based eligibility rules.
+        An explicit member list retains the authored selection.
+        """
         if el.members is not None:
             return el.members
+        dynamic = self.dynamic if dynamic is None else dynamic
 
         candidates: dict[str, gf.Object | gf.Alias] = (
             dict(obj.all_members) if el.include_inherited else dict(obj.members)
         )
 
-        # Phase 1 — name/provenance filters: safe on unresolved alias nodes.
+        # Exclude built-in noise before preparing candidates.
         # Always filter built-in noise dunders inherited from `object`/`type`
         # (e.g. `__doc__`, `__module__`). These show up on every PyO3 /
         # C-extension class because their docstrings are inherited from str.
@@ -422,7 +439,7 @@ class Resolver:
             candidates = {
                 k: v
                 for k, v in candidates.items()
-                if not k.startswith("_") or _is_documented_dunder(k, v)
+                if not k.startswith("_") or (k.startswith("__") and k.endswith("__"))
             }
 
         if not el.include_imports and obj.is_module:
@@ -433,13 +450,25 @@ class Resolver:
                 k: v for k, v in candidates.items() if (v.parent is obj or not v.is_alias)
             }
 
-        # Load every remaining alias target now: the phase-2 filters read
-        # `.docstring` / `.is_attribute` / `.is_class` / `.is_function`,
-        # which are only trustworthy once the target's module is loaded.
-        for member in candidates.values():
-            _ = resolve_alias(member, self.get_object)
+        # Filtering by name and origin first keeps the dropped imports and private names
+        # from being loaded or passed to hooks.
+        prepared_candidates: dict[str, gf.Object | gf.Alias] = {}
+        for name, member in candidates.items():
+            if dynamic:
+                member = self.get_object_or_raise(_join_path(path or obj.path, name), dynamic=True)
+            prepared = self.prepare(member)
+            if prepared is not None:
+                prepared_candidates[name] = prepared
+        candidates = prepared_candidates
 
-        # Phase 2 — content filters: require resolved targets.
+        if not el.include_private:
+            candidates = {
+                k: v
+                for k, v in candidates.items()
+                if not k.startswith("_") or _is_documented_dunder(k, v)
+            }
+
+        # Content filters use the prepared canonical documentation.
         # Enum members are always shown — their names and values are
         # inherently meaningful even without a per-member docstring.
         if not el.include_empty and not is_enum(obj):

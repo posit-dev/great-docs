@@ -38,7 +38,11 @@ def _rendered(obj: gf.Object | gf.Alias, style: str = "highlighted") -> str:
         if obj.is_class:
             parse_class_docstring(obj)
         emit_docstring_parsed(obj)
-    return _render(obj, Settings(callable_signatures=CallableSignatures(style=style)))
+    parser = obj.docstring.parser if obj.docstring is not None else "numpy"
+    parser = parser.value if isinstance(parser, gf.Parser) else parser or "numpy"
+    return _render(
+        obj, Settings(parser=parser, callable_signatures=CallableSignatures(style=style))
+    )
 
 
 def _signature(qmd: str) -> str:

@@ -7,9 +7,12 @@ registers through the supplied owner and finishes before registration freezes.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
-from typing import TYPE_CHECKING, Callable, TypeVar, overload
+from typing import TYPE_CHECKING, Callable, TypeVar, cast, overload
+
+import griffe as gf
 
 from ..hooks._docstring_parsed import REGISTRY as PARSED_HOOKS
 from ..hooks._docstring_parsed import DocstringParsedHook
@@ -20,9 +23,19 @@ from ._extension_loading import _ExtensionSource, _ImportOwner
 from ._rendering._renderers import Renderers
 
 if TYPE_CHECKING:
+    from griffe import DocstringOptions
+
     from ._settings import Settings
 
 _Hook = TypeVar("_Hook", bound=Callable[..., object])
+
+
+@dataclass(frozen=True)
+class _PreparedObject:
+    """A retained canonical identity and its prepared result or exclusion"""
+
+    original: gf.Object
+    result: gf.Object | None
 
 
 class ExtensionError(RuntimeError):
@@ -100,6 +113,7 @@ class Extension:
         self._parsed_hooks = PARSED_HOOKS.copy()
         self._renderers = Renderers()
         self._declared_inputs: list[Path] = []
+        self._prepared_objects: dict[int, _PreparedObject] = {}
         self._loaded = False
         self._closed = False
         self._registration_open = True
@@ -254,6 +268,123 @@ class Extension:
                 PARSED_HOOKS.restore(parsed_snapshot)
         self._registration_open = False
         self._loaded = True
+
+    def is_prepared(self, obj: gf.Object | gf.Alias) -> bool:
+        """Check whether a canonical object's documentation has been prepared"""
+        try:
+            target = obj.final_target if isinstance(obj, gf.Alias) else obj
+        except (gf.AliasResolutionError, gf.CyclicAliasError):
+            return False
+        return id(target) in self._prepared_objects
+
+    def prepare(
+        self,
+        obj: gf.Object | gf.Alias,
+        *,
+        get_object: Callable[..., gf.Object | gf.Alias] | None = None,
+    ) -> gf.Object | gf.Alias | None:
+        """
+        Prepare an object's documentation once for this operation
+
+        Run the object hooks, parse the docstring against the class constructor where
+        one applies, and run the docstring hooks, all before documentation nodes are
+        built. Every authored alias of the object shares the result, including an
+        exclusion. The extension keeps a strong reference to each original object, so a
+        temporary snippet that reuses a name is prepared on its own.
+
+        Parameters
+        ----------
+        obj
+            The loaded object, or an authored alias.
+        get_object
+            The loader for alias targets that are not loaded yet, or `None` to require
+            targets that are already in the model.
+
+        Returns
+        -------
+        :
+            The prepared object, the authored alias wrapping it, or `None` when an
+            object hook excludes the alias's target.
+        """
+        from ._constructor import parse_class_docstring
+        from ._parameter_docs import prepare_parameter_docs
+        from .introspect import get_parser_defaults, resolve_alias
+        from .resolve import resolution_lang
+
+        self.load()
+        original = resolve_alias(obj, get_object)
+        cached = self._prepared_objects.get(id(original))
+        if cached is not None:
+            return self._appearance(obj, original, cached.result)
+
+        result: gf.Object | None = original
+        canonical_objects = [original]
+        token = resolution_lang.set(self.settings.lang)
+        try:
+            prepared_replacement: _PreparedObject | None = None
+            with self.error_context("object_resolved", original.path):
+                for callback in self._object_hooks:
+                    transformed = cast("object", callback(result))
+                    if transformed is None:
+                        result = None
+                        break
+                    if not isinstance(transformed, (gf.Object, gf.Alias)):
+                        raise TypeError("An object handler must return an object or None.")
+                    result = resolve_alias(transformed, get_object)
+                    if not any(candidate is result for candidate in canonical_objects):
+                        canonical_objects.append(result)
+                    prepared_replacement = self._prepared_objects.get(id(result))
+                    if prepared_replacement is not None:
+                        result = prepared_replacement.result
+                        break
+                if prepared_replacement is None and result is not None:
+                    prepare_parameter_docs(result)
+                    if result.docstring is not None:
+                        result.docstring.parent = result
+                        result.docstring.parser = gf.Parser(self.settings.parser)
+                        result.docstring.parser_options = cast(
+                            "DocstringOptions", get_parser_defaults(self.settings.parser)
+                        )
+                        result.docstring.__dict__.pop("parsed", None)
+            if prepared_replacement is None and result is not None and result.docstring is not None:
+                with self.error_context("docstring_parsed", original.path):
+                    if result.is_class:
+                        parse_class_docstring(cast("gf.Class", result))
+                    sections = result.docstring.parsed
+                    for callback in self._parsed_hooks:
+                        transformed_sections = cast(
+                            "list[gf.DocstringSection] | None", callback(result, sections)
+                        )
+                        if transformed_sections is None:
+                            raise TypeError(
+                                "A parsed-section handler must return sections, not None."
+                            )
+                        sections = transformed_sections
+                    result.docstring.__dict__["parsed"] = sections
+        finally:
+            resolution_lang.reset(token)
+        for canonical in canonical_objects:
+            self._prepared_objects[id(canonical)] = _PreparedObject(canonical, result)
+        return self._appearance(obj, original, result)
+
+    @staticmethod
+    def _appearance(
+        obj: gf.Object | gf.Alias, original: gf.Object, result: gf.Object | None
+    ) -> gf.Object | gf.Alias | None:
+        """Give the prepared result an authored alias's name without copying its documentation"""
+        if result is None or not isinstance(obj, gf.Alias):
+            return result
+        if result is original:
+            return obj
+        return gf.Alias(
+            obj.name,
+            result,
+            parent=obj.parent,
+            lineno=obj.lineno,
+            endlineno=obj.endlineno,
+            runtime=obj.runtime,
+            inherited=obj.inherited,
+        )
 
     def error_context(self, phase: str, subject: str | None = None) -> _ExtensionErrorContext:
         """Describe failures in one configured phase and release owned imports"""

@@ -10,6 +10,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+import griffe as gf
 from griffe import AliasResolutionError, CyclicAliasError
 
 from .._interlinks.sphinx_inventory import INVENTORY_FILENAME
@@ -121,13 +122,49 @@ class APIReference:
             raise RuntimeError("The API reference is closed.")
         if self._extension is None:
             self._extension = Extension(self.settings, self._extension_source)
+        if self.settings.source_dir:
+            source_dir = str(Path(self.settings.source_dir).absolute())
+            if source_dir not in sys.path:
+                sys.path.append(source_dir)
         self._extension.load()
+        self._resolver.extension = self._extension
         return self._extension
 
     @property
     def renderers(self) -> Renderers:
         """Renderer choices selected by this operation's setup"""
         return self.extension.renderers
+
+    def get_object(self, path: str) -> gf.Object | gf.Alias:
+        """
+        Load a Python object through the reference's shared loader
+
+        Initialise configured setup and use the operation's parser, source path
+        and dynamic setting. Keep acquisition separate from semantic preparation.
+        """
+        _ = self.extension
+        return self._resolver.get_object_or_raise(path, dynamic=self._resolver.dynamic)
+
+    def prepare(self, obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias | None:
+        """
+        Prepare a loaded object's documentation with the reference's extension
+
+        Each underlying object is prepared once, and pages, helpers and typing pages
+        share its result or exclusion. An alias keeps its own name without a second copy
+        of the documentation.
+
+        Parameters
+        ----------
+        obj
+            The loaded object or alias.
+
+        Returns
+        -------
+        :
+            The prepared object, or `None` when an object hook excludes it.
+        """
+        _ = self.extension
+        return self._resolver.prepare(obj)
 
     def close(self) -> None:
         """Release an active extension without loading an unused reference"""
@@ -290,8 +327,6 @@ class APIReference:
     def build(self) -> None:
         """Write reference pages, index, inventory, and (optionally) sidebar to disk"""
         s = self.settings
-        if s.source_dir:
-            sys.path.append(str(Path(s.source_dir).absolute()))
 
         _log.info("Resolving sections.")
         resolved = self.resolved
