@@ -493,7 +493,12 @@ def preparation_steps(
             lambda: content.assets(run, config, layout, remote=remote),
             fails_on=(ValueError, FileNotFoundError),
         ),
-        Step("Generate API reference", generate_api_reference, user_code=True),
+        Step(
+            "Generate API reference",
+            generate_api_reference,
+            fails_on=(ExtensionError,),
+            user_code=True,
+        ),
         Step(
             "Generate llms.txt / llms-full.txt",
             lambda: generated.llms_txt(run, config, layout),
@@ -647,9 +652,11 @@ def _watch(
     """
     Prepare the Quarto project and preview it with rebuilds after source edits
 
-    Edits to documentation sources and the documented package trigger rebuilds.
-    Each rebuild reloads `great-docs.yml`, imports the package again and prepares
-    the project while the preview keeps running.
+    Edits to documentation, package sources and initial extension inputs trigger
+    rebuilds. Each rebuild reloads configuration and prepares in staging while
+    one watcher remains open. Report new uncovered inputs without changing the
+    subscription, including when a rebuild fails. Close each generation's
+    reference after its final consumer; retain the last successful published files.
 
     Parameters
     ----------
@@ -681,6 +688,11 @@ def _watch(
     finish.print_layout_notice(layout)
     preview_env = quarto.environment(config)
     preview_env[shared_sidebar.PREVIEW_ENV] = "1"
+    package_init = run.project.package_init if config.is_python_project else None
+    package = package_init.parent if package_init is not None else None
+    initial_paths = run.api_reference.extension_watch_paths if run.api_reference is not None else ()
+    inputs = watch.WatchInputs.make(layout, package, initial_paths)
+    reported_inputs: set[Path] = set()
 
     def rebuild(staging: watch.Staging) -> dict[str, Any]:
         edited = site.with_ci_site_url(layout.load_config())
@@ -696,11 +708,24 @@ def _watch(
             run_steps(preparation, rebuild_log, staging.build_dir)
             return current.quarto_config
         finally:
-            current.close()
+            try:
+                requested = (
+                    current.api_reference.extension_watch_paths
+                    if current.api_reference is not None
+                    else ()
+                )
+                uncovered = set(inputs.uncovered(requested)) - reported_inputs
+                if uncovered:
+                    reported_inputs.update(uncovered)
+                    paths = ", ".join(str(path) for path in sorted(uncovered))
+                    print(
+                        f"Extension inputs need additional preview coverage: {paths}. "
+                        "Stop and rerun `great-docs build --watch` to observe them."
+                    )
+            finally:
+                current.close()
 
-    package_init = run.project.package_init if config.is_python_project else None
-    package = package_init.parent if package_init is not None else None
-    watch.serve(layout, preview_env, rebuild, run.quarto_config, package)
+    watch.serve(layout, preview_env, rebuild, run.quarto_config, package, inputs=inputs)
 
 
 def _make_log(run: Run, config: Config, layout: Layout) -> BuildLog:

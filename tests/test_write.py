@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -141,14 +142,18 @@ class TestGenerateSidebar:
 
 
 class TestWriteTypingInformation:
-    def test_iterates_module_paths(self):
-        """Calls TypeInformation.write() for each module path."""
-        from great_docs._apiref.write import write_typing_information
+    def test_iterates_module_paths(self, tmp_path: Path) -> None:
+        """Publish the collected typing source for each requested module"""
+        from great_docs._apiref.write import RenderedPage, write_typing_information
 
         mock_api_ref = MagicMock()
 
         with patch("great_docs._apiref.typing_information.TypeInformation") as MockTI:
             mock_instance = MagicMock()
+            mock_instance.collect.side_effect = [
+                RenderedPage(tmp_path / "pkg.types.qmd", "Type variables"),
+                RenderedPage(tmp_path / "pkg.protocols.qmd", "Protocols"),
+            ]
             MockTI.return_value = mock_instance
 
             write_typing_information(["pkg.types", "pkg.protocols"], mock_api_ref)
@@ -156,4 +161,5 @@ class TestWriteTypingInformation:
         assert MockTI.call_count == 2
         MockTI.assert_any_call("pkg.types", mock_api_ref)
         MockTI.assert_any_call("pkg.protocols", mock_api_ref)
-        assert mock_instance.write.call_count == 2
+        assert (tmp_path / "pkg.types.qmd").read_text() == "Type variables"
+        assert (tmp_path / "pkg.protocols.qmd").read_text() == "Protocols"

@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from ._settings import Settings
     from .api_reference import APIReference
     from .typing import RenderObjType
+    from .write import RenderedPage
 
 
 @dataclass
@@ -275,10 +276,24 @@ class TypeInformation(Block):
         meta = Meta({"title": "Typing Information", "body-classes": "doc-api-page doc-py-api-page"})
         return Blocks([meta, self.sections])
 
-    def write(self) -> None:
+    def collect(self) -> RenderedPage:
         """
-        Write the typing-information page to its `.qmd` file
+        Render the typing page without writing it, adding its entries to the inventory
+
+        Render before computing the reference fingerprint so it includes any helpers
+        the renderers import.
+
+        Returns
+        -------
+        :
+            The rendered page and the path to write it to.
         """
+        from .write import RenderedPage
+
+        content = str(self)
         self.api_ref.items.extend(self.sections.items)
-        filepath = Path(f"{self.base_uri}.qmd")
-        _ = filepath.write_text(str(self))
+        return RenderedPage(Path(f"{self.base_uri}.qmd"), content)
+
+    def write(self) -> None:
+        """Write the typing-information page directly without a final input marker"""
+        self.collect().write()

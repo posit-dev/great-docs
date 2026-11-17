@@ -335,7 +335,9 @@ def test_layout_notice_once_per_build_or_preview_session(
         return [(str(build_dir), 0, "", "", []) for build_dir in build_dirs]
 
     monkeypatch.setattr(subprocess, "Popen", start_quarto)
-    monkeypatch.setattr("great_docs._build.watch.source_changes", lambda *_: iter(()))
+    monkeypatch.setattr(
+        "great_docs._build.watch.source_changes", lambda *_, **__: (paths for paths in ())
+    )
     monkeypatch.setattr("great_docs._versions.build.render_versions_parallel", render_versions)
     monkeypatch.setattr("http.server.ThreadingHTTPServer", MagicMock())
     monkeypatch.setattr("threading.Timer", MagicMock())

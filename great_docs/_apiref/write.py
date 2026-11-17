@@ -1,15 +1,16 @@
 """
-The API-reference files produced from a resolved content tree
+Collected API-reference sources and direct publication from a resolved tree
 
-The reference index, one page per documented object, the sidebar YAML, and
-the typing pages — written to disk by `write_index`, `write_pages`,
-`write_sidebar`, and `write_typing_information`.
+Collect index, object and typing pages before computing a final extension input
+fingerprint. Direct writers publish individual groups without that final marker.
+Sidebar output remains derived from resolved membership.
 """
 
 from __future__ import annotations
 
 import logging
 from contextlib import nullcontext
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -25,6 +26,42 @@ if TYPE_CHECKING:
     from .api_reference import APIReference
 
 _log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class RenderedPage:
+    """
+    A rendered Quarto page and the path to write it to
+
+    Rendering a page does not write it, so a reference can render every page, importing
+    the helpers they need, before it computes one fingerprint of its inputs.
+    """
+
+    page_path: Path
+    """The target source path, relative to the writer's directory unless absolute"""
+    content: str
+    """The page's Quarto Markdown, without the input fingerprint"""
+
+    def write(self, *, fingerprint: str | None = None, rewrite_unchanged: bool = True) -> None:
+        """
+        Write the page, appending the input fingerprint when one is given
+
+        Preserve unchanged files when requested. Direct writers omit the
+        fingerprint; the complete reference adds it only after all pages and
+        typing output have revealed their relative imports.
+        """
+        content = self.content
+        if fingerprint is not None:
+            content += f"\n\n<!-- great-docs-api-reference-inputs: {fingerprint} -->\n"
+        self.page_path.parent.mkdir(exist_ok=True, parents=True)
+        if (
+            rewrite_unchanged
+            or not self.page_path.exists()
+            or self.page_path.read_text(encoding="utf-8") != content
+        ):
+            _ = self.page_path.write_text(content, encoding="utf-8")
+        else:
+            _log.info("Skipping write (content unchanged)")
 
 
 # ---------------------------------------------------------------------------
@@ -203,18 +240,19 @@ def _generate_sidebar(
 # ---------------------------------------------------------------------------
 
 
-def write_index(
+def collect_index(
     api_ref: APIReference,
     sections: list[Section],
     *,
     dir: str,
     out_index: str,
     header_level: int,
-) -> str:
-    """Write the API index page, returning its path.
+) -> RenderedPage:
+    """
+    Render the API index page without writing it
 
-    Renders the reference summary page from `api_ref` plus its resolved
-    `sections` and writes it to ``<dir>/<out_index>``.
+    Render the reference summary from the resolved sections, for writing to
+    `<dir>/<out_index>`.
 
     Parameters
     ----------
@@ -223,24 +261,46 @@ def write_index(
         the index page.
     sections :
         Resolved sections to render in the page body.
-    dir :
-        Output directory (created if absent).
-    out_index :
-        Filename for the index file (e.g. ``"index.qmd"``).
-    header_level :
+    dir
+        Output directory that the page's path starts with.
+    out_index
+        Filename for the index file, such as `index.qmd`.
+    header_level
         Heading depth used for section titles in the rendered output.
+
+    Returns
+    -------
+    :
+        The rendered index and the path to write it to.
     """
-    _log.info("Summarizing docs for index page.")
+    _log.info("Summarising docs for index page.")
     extension = api_ref.extension
     with extension.error_context("render", str(Path(dir) / out_index)):
         content = str(api_ref.renderers.make(api_ref, header_level, sections=sections))
-    _log.info(f"Writing index to directory: {dir}")
+    _log.info(f"Collected index for directory: {dir}")
 
-    p_index = Path(dir) / out_index
-    p_index.parent.mkdir(exist_ok=True, parents=True)
-    _ = p_index.write_text(content)
+    return RenderedPage(Path(dir) / out_index, content)
 
-    return str(p_index)
+
+def write_index(
+    api_ref: APIReference,
+    sections: list[Section],
+    *,
+    dir: str,
+    out_index: str,
+    header_level: int,
+) -> str:
+    """
+    Write the API index page directly and return its source path
+
+    Complete reference builds collect all pages before fingerprinting inputs.
+    This direct writer renders and publishes only the supplied index.
+    """
+    rendered = collect_index(
+        api_ref, sections, dir=dir, out_index=out_index, header_level=header_level
+    )
+    rendered.write()
+    return str(rendered.page_path)
 
 
 def write_sidebar(
@@ -275,27 +335,30 @@ def write_sidebar(
     write_yaml(d_sidebar, sidebar["file"])
 
 
-def write_typing_information(
-    typing_module_paths: list[str],
-    api_ref: APIReference,
-) -> None:
-    """Write the API reference pages for protocols, type variables, and type aliases.
+def collect_typing_information(
+    typing_module_paths: list[str], api_ref: APIReference
+) -> list[RenderedPage]:
+    """
+    Render the typing pages without writing them, adding their objects to the inventory
 
-    One ``.qmd`` page per entry in `typing_module_paths`, written alongside
-    the rest of the reference output and registered in the reference's inventory.
-
-    Parameters
-    ----------
-    typing_module_paths :
-        Fully-qualified module paths whose typing objects should be documented.
-    api_ref :
-        Active API reference; provides package name, output directory, and the
-        items list that receives the generated inventory entries.
+    Rendering every page first lets the reference fingerprint helpers imported while
+    rendering.
     """
     from .typing_information import TypeInformation
 
-    for module_path in typing_module_paths:
-        TypeInformation(module_path, api_ref).write()
+    return [TypeInformation(module_path, api_ref).collect() for module_path in typing_module_paths]
+
+
+def write_typing_information(typing_module_paths: list[str], api_ref: APIReference) -> None:
+    """
+    Write protocol, typing-variable and alias pages directly
+
+    Complete reference builds collect all sources before fingerprinting inputs.
+    This direct writer publishes only the requested typing pages and registers
+    their inventory entries.
+    """
+    for rendered in collect_typing_information(typing_module_paths, api_ref):
+        rendered.write()
 
 
 # ---------------------------------------------------------------------------
@@ -303,7 +366,7 @@ def write_typing_information(
 # ---------------------------------------------------------------------------
 
 
-def write_pages(
+def collect_pages(
     pages: list[Page],
     settings: Settings,
     *,
@@ -311,20 +374,20 @@ def write_pages(
     renderers: Renderers | None = None,
     extension: Extension | None = None,
     output_root: Path | None = None,
-) -> None:
+) -> list[RenderedPage]:
     """
-    Write API reference pages to the configured output directory
+    Render API reference pages without writing them
 
     Each page lands at its path under `settings.dir`, with
     `settings.out_page_suffix` appended. Each page is Quarto Markdown with
-    navigation and table-processing directives in its front matter. A file
-    whose content is unchanged is left untouched, unless
+    navigation and table-processing directives in its front matter. Collection
+    writes no files. The direct writer preserves an unchanged file unless
     `settings.rewrite_all_pages` is `True`.
 
     Parameters
     ----------
     pages
-        Resolved page nodes to render and write.
+        Resolved page nodes to render.
     settings
         The settings of the API reference. The pages render with them, and
         their `dir`, `out_page_suffix`, `rewrite_all_pages` and `header_level`
@@ -340,11 +403,17 @@ def write_pages(
     output_root
         The documentation output root, or `None`
         outside a known build.
+
+    Returns
+    -------
+    :
+        The rendered pages, in the order given.
     """
     from ._rendering._context import output_page_path
     from ._rendering._renderers import Renderers
 
     choices = renderers or Renderers()
+    collected: list[RenderedPage] = []
 
     for page in pages:
         _log.info(f"Rendering {page.path}")
@@ -367,15 +436,33 @@ def write_pages(
             rendered, {"page-navigation": False, "html-table-processing": "none"}
         )
 
-        html_path = Path(settings.dir) / (page.path + settings.out_page_suffix)
-        html_path.parent.mkdir(exist_ok=True, parents=True)
+        collected.append(RenderedPage(Path(page_path), rendered))
+    return collected
 
-        if (
-            settings.rewrite_all_pages
-            or (not html_path.exists())
-            or (html_path.read_text() != rendered)
-        ):
-            _log.info(f"Writing: {page.path}")
-            _ = html_path.write_text(rendered)
-        else:
-            _log.info("Skipping write (content unchanged)")
+
+def write_pages(
+    pages: list[Page],
+    settings: Settings,
+    *,
+    site_toc_depth: int,
+    renderers: Renderers | None = None,
+    extension: Extension | None = None,
+    output_root: Path | None = None,
+) -> None:
+    """
+    Render and write API pages directly, preserving unchanged sources
+
+    Complete reference builds collect index, object and typing sources before
+    applying a final input fingerprint. This direct writer publishes only these
+    pages and adds no operation-wide marker.
+    """
+    collected = collect_pages(
+        pages,
+        settings,
+        site_toc_depth=site_toc_depth,
+        renderers=renderers,
+        extension=extension,
+        output_root=output_root,
+    )
+    for rendered in collected:
+        rendered.write(rewrite_unchanged=settings.rewrite_all_pages)

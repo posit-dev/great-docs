@@ -9006,7 +9006,10 @@ def test_build_watch_mode(tmp_path):
     """Check that watch mode starts `quarto preview`"""
     docs = _buildable_docs(tmp_path)
 
-    with stubbed_build(), patch("great_docs._build.watch.source_changes", return_value=iter(())):
+    with (
+        stubbed_build(),
+        patch("great_docs._build.watch.source_changes", return_value=(paths for paths in ())),
+    ):
         popen = subprocess.Popen
         docs.build(watch=True, refresh=False)
 
@@ -9025,7 +9028,10 @@ def test_build_watch_mode_counts_only_the_steps_it_runs(
     """
     docs = _buildable_docs(tmp_path)
 
-    with stubbed_build(), patch("great_docs._build.watch.source_changes", return_value=iter(())):
+    with (
+        stubbed_build(),
+        patch("great_docs._build.watch.source_changes", return_value=(paths for paths in ())),
+    ):
         docs.build(watch=True, refresh=False)
 
     out = capsys.readouterr().out

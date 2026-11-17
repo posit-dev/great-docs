@@ -19,6 +19,7 @@ from ..hooks._docstring_parsed import DocstringParsedHook
 from ..hooks._object_resolved import REGISTRY as OBJECT_HOOKS
 from ..hooks._object_resolved import ObjectResolvedHook
 from ..hooks._registry import HookRegistry
+from . import _extension_inputs
 from ._extension_loading import _ExtensionSource, _ImportOwner
 from ._rendering._renderers import Renderers
 
@@ -113,6 +114,7 @@ class Extension:
         self._parsed_hooks = PARSED_HOOKS.copy()
         self._renderers = Renderers()
         self._declared_inputs: list[Path] = []
+        self._input_hashes: dict[Path, str] = {}
         self._prepared_objects: dict[int, _PreparedObject] = {}
         self._loaded = False
         self._closed = False
@@ -132,6 +134,44 @@ class Extension:
     def declared_inputs(self) -> tuple[Path, ...]:
         """The absolute files, directories and globs passed to `watch`, in call order"""
         return tuple(self._declared_inputs)
+
+    @property
+    def watch_paths(self) -> tuple[Path, ...]:
+        """
+        The paths a preview watches, with globs unexpanded and the extension's directory
+
+        Reading them never runs setup and still works after `close`. A preview chooses
+        what to watch once, from the paths of its first build.
+        """
+        if self._source is None:
+            return ()
+        return _extension_inputs.watch_paths(
+            self._source.entry_path, self.imported_paths, self.declared_inputs
+        )
+
+    def fingerprint(self) -> str | None:
+        """
+        Hash the extension file and every input it uses, once pages are collected
+
+        The hash covers helpers imported during rendering, the inputs declared with
+        `watch` and the files each declared glob currently matches. File digests are
+        cached for this operation only.
+
+        Returns
+        -------
+        :
+            The hash, or `None` without an extension file, so that reference pages
+            carry no fingerprint comment.
+        """
+        if self._source is None:
+            return None
+        with self.error_context("inputs"):
+            return _extension_inputs.fingerprint(
+                self._source.entry_path,
+                self.imported_paths,
+                self.declared_inputs,
+                self._input_hashes,
+            )
 
     def _register(
         self, registry: HookRegistry[_Hook], callback: _Hook | None, priority: int
@@ -223,6 +263,16 @@ class Extension:
 
         Resolve relative declarations against the configured entry file's
         directory. Absolute declarations also work without a configured source.
+        Include these inputs in reference fingerprints and preview observation;
+        declaring a dependency does not copy it into the generated project.
+
+        Parameters
+        ----------
+        path
+            A file, directory or glob, which need not exist yet. The final fingerprint
+            covers a directory's entries and the files a glob matches. A running
+            preview keeps watching the paths it started with, so restart it after
+            declaring an input outside them.
         """
         self._check_registration()
         declared = Path(path)

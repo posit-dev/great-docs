@@ -12,7 +12,7 @@ from unittest.mock import DEFAULT, patch
 import pytest
 
 from great_docs import GreatDocs
-from great_docs._build import pipeline, site
+from great_docs._build import pipeline, site, watch
 from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
 from great_docs._build.steps import BuildError
@@ -180,7 +180,13 @@ def test_gitlab_pages_addresses_reach_build_freeze_and_watch(
     docs.layout.build_dir.mkdir(parents=True)
     quarto_yml.write_initial(docs.layout.build_dir)
 
-    def rebuild_once(layout: Any, env: Any, rebuild: Any, *args: Any) -> None:
+    def rebuild_once(
+        layout: Any,
+        env: Any,
+        rebuild: Any,
+        *args: Any,
+        inputs: watch.WatchInputs | None = None,
+    ) -> None:
         rebuild(layout)
 
     with stubbed_build() as stubs, patch("great_docs._build.watch.serve", side_effect=rebuild_once):

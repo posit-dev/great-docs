@@ -23,10 +23,10 @@ from .inventory import create_inventory, write_inventory
 from .resolve import ObjectNotFoundError, Resolver, resolution_lang
 from .spec import SpecObject, SpecOptions, SpecSection, unique_page_paths
 from .write import (
-    write_index,
-    write_pages,
+    collect_index,
+    collect_pages,
+    collect_typing_information,
     write_sidebar,
-    write_typing_information,
 )
 
 if TYPE_CHECKING:
@@ -134,6 +134,16 @@ class APIReference:
     def renderers(self) -> Renderers:
         """Renderer choices selected by this operation's setup"""
         return self.extension.renderers
+
+    @property
+    def extension_watch_paths(self) -> tuple[Path, ...]:
+        """
+        Inputs reported by an already-created extension, including after close
+
+        Keep raw glob declarations for preview coverage. Reading unused
+        reference inputs never loads configured Python.
+        """
+        return self._extension.watch_paths if self._extension is not None else ()
 
     def get_object(self, path: str) -> gf.Object | gf.Alias:
         """
@@ -341,7 +351,14 @@ class APIReference:
         return self.manifest.items
 
     def build(self) -> None:
-        """Write reference pages, index, inventory, and (optionally) sidebar to disk"""
+        """
+        Write the reference pages, index, inventory and, optionally, sidebar
+
+        Render the index, object pages and typing pages before writing any of them. When
+        an extension file is configured, every page then carries one fingerprint of its
+        inputs, including helpers first imported while rendering. Leave unchanged object
+        pages alone unless `rewrite_all_pages` is set.
+        """
         s = self.settings
 
         _log.info("Resolving sections.")
@@ -350,13 +367,13 @@ class APIReference:
         _log.info("Collecting pages and inventory items.")
         pages = self.manifest.pages
 
-        _log.info("Writing index")
-        _ = write_index(
+        _log.info("Collecting index")
+        index = collect_index(
             self, resolved, dir=s.dir, out_index=s.out_index, header_level=s.header_level
         )
 
-        _log.info("Writing docs pages")
-        write_pages(
+        _log.info("Collecting docs pages")
+        object_pages = collect_pages(
             pages,
             s,
             site_toc_depth=self.site_toc_depth,
@@ -364,7 +381,13 @@ class APIReference:
             extension=self.extension,
             output_root=self.output_root,
         )
-        write_typing_information(s.typing_module_paths, self)
+        typing_pages = collect_typing_information(s.typing_module_paths, self)
+        fingerprint = self.extension.fingerprint()
+        index.write(fingerprint=fingerprint)
+        for page in object_pages:
+            page.write(fingerprint=fingerprint, rewrite_unchanged=s.rewrite_all_pages)
+        for page in typing_pages:
+            page.write(fingerprint=fingerprint)
 
         _log.info("Creating inventory file")
         version = "0.0.9999" if s.version is None else s.version
