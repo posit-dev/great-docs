@@ -3,10 +3,7 @@
 --- Great Docs registers this filter only for a Quarto 2 render, and it reads its settings
 --- from `gd-quarto2` in `_quarto.yml`. Quarto 2 ignores `shift-heading-level-by` for HTML
 --- and the `metadata.html` partial, and writes no Open Graph or Twitter card tags, so the
---- filter shifts the headings and adds the partial's page tags and the card tags. It also
---- sets no text direction, and writes a page's `body-classes` in place of the classes it
---- computes for the layout, so the filter records both in `<meta>` tags for Great Docs'
---- Quarto 2 post-render script to move onto `<html>` and `<body>`.
+--- filter shifts the headings and adds the partial's page tags and the card tags.
 
 local pandoc = _G.pandoc --- @diagnostic disable-line:undefined-field
 local quarto = _G.quarto --- @diagnostic disable-line:undefined-field
@@ -196,25 +193,6 @@ function Pandoc(doc)
     for _, tag in ipairs(card_tags(meta, settings["social-cards"], site_title)) do
       tags[#tags + 1] = tag
     end
-  end
-
-  -- The post-render script moves these markers onto `<html>` and `<body>`
-  local dir = text(meta.dir)
-  if dir == "rtl" or dir == "ltr" then
-    tags[#tags + 1] = '<meta name="gd-dir" content="' .. dir .. '">'
-  end
-  local value = meta["body-classes"]
-  local values = pandoc.utils.type(value) == "List" and value or { value }
-  local classes = {}
-  for _, item in ipairs(values) do
-    for name in (text(item) or ""):gmatch("[%w_-]+") do
-      classes[#classes + 1] = name
-    end
-  end
-  if #classes > 0 then
-    -- Leave Quarto 2 to compute the layout classes
-    doc.meta["body-classes"] = nil
-    tags[#tags + 1] = '<meta name="gd-body-classes" content="' .. table.concat(classes, " ") .. '">'
   end
 
   for _, tag in ipairs(tags) do
