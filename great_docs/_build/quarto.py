@@ -57,8 +57,9 @@ EXECUTABLE_ENV = "GREAT_DOCS_QUARTO"
 MIN_VERSION = (1, 9, 18)
 
 # Quarto 2 has its own version numbers. No release is known to render a great-docs
-# site completely; this is the first one tried.
-Q2_MIN_VERSION = (0, 45, 0)
+# site completely; 0.46.0 is the first to write a page's `dir` and keep its layout classes
+# beside `body-classes`.
+Q2_MIN_VERSION = (0, 46, 0)
 
 # Quarto can fail while copying output in large projects when one process renames
 # a file as another removes it. A retry can succeed after the filesystem race ends.
