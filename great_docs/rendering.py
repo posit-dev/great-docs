@@ -13,6 +13,7 @@ from ._apiref._rendering import (
     Renderers,
     TypeAliasRenderer,
 )
+from ._apiref._rendering._context import RenderContext
 
 __all__ = (
     "APIPageRenderer",
@@ -24,6 +25,7 @@ __all__ = (
     "ObjectRenderer",
     "ReferenceIndexRenderer",
     "ReferenceSectionRenderer",
+    "RenderContext",
     "Renderers",
     "TypeAliasRenderer",
 )

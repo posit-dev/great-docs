@@ -50,17 +50,6 @@ class BaseRenderer(Block):
     level: int = 1
     """The depth of the object in the documentation"""
 
-    show_title: bool = True
-    """Whether to show the title of the object"""
-
-    show_description: bool = True
-    """
-    Whether to show the description of the object
-    """
-
-    show_body: bool = True
-    """Whether to show the documentation body of the object"""
-
     renderers: Renderers = field(default_factory=_default_renderers, kw_only=True)
     """Renderer choices shared with nested objects, pages and summaries"""
 
@@ -72,21 +61,21 @@ class BaseRenderer(Block):
     links of its reference here.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """
         Makes it possible for sub-classes to extend the method
         """
 
-    def __str__(self):
+    def __str__(self) -> str:
         """
         Return the documentation as quarto markdown
         """
         return str(
             Blocks(
                 [
-                    self.title if self.show_title else None,
-                    self.description if self.show_description else None,
-                    self.body if self.show_body else None,
+                    self.title,
+                    self.description,
+                    self.body,
                 ]
             )
         )

@@ -10,6 +10,7 @@ from great_docs.pandoc.blocks import Blocks, Div
 from great_docs.pandoc.components import Attr
 from great_docs.pandoc.inlines import Code
 
+from ._context import _RenderingPurpose
 from .objects import ObjectRenderer
 
 if TYPE_CHECKING:
@@ -27,20 +28,16 @@ class AttributeRenderer(ObjectRenderer):
     Attribute and property documentation with values and annotations
     """
 
-    show_signature_annotation: bool = True
-
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         # We narrow the type with a TypeAlias since we do not expect
         # any subclasses to have narrower types
         self.doc: content.DocAttribute = self.doc
         self.obj: gf.Attribute = self.obj
 
-        self.subject_above_signature = self.subject_above_signature is None and not self.contained
-
     def render_signature(self) -> BlockContent:
-        name = self.signature_name if self.show_signature_name else ""
-        annotation = self.obj.annotation if self.show_signature_annotation else None
+        name = "" if self._purpose is _RenderingPurpose.TYPE_VARIABLE else self.signature_name
+        annotation = None if self._purpose is _RenderingPurpose.TYPE_ALIAS else self.obj.annotation
         default = getattr(self.obj, "value", None)
 
         term = self.render_variable_definition(name, annotation, default)
@@ -56,7 +53,7 @@ class AttributeRenderer(ObjectRenderer):
         return Blocks(
             [
                 self.render_docstring_subject(),
-                self.render_signature() if self.show_signature else None,
+                self.signature,
             ]
         )
 

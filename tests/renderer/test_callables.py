@@ -563,7 +563,7 @@ def test_parameter_default_only():
 
 
 def test_annotation_in_signature():
-    """When show_signature_annotation=True, annotations appear in the signature."""
+    """Add annotations to the signature through a `render_signature_parameter` override"""
     from great_docs._apiref import FunctionRenderer, content
 
     code = '''
@@ -586,7 +586,17 @@ def test_annotation_in_signature():
         obj = m["func"]
 
     doc = content.Doc.from_griffe(obj.name, obj)
-    rd = FunctionRenderer(doc, show_signature_annotation=True, settings=Settings())
+
+    class AnnotatedFunction(FunctionRenderer):
+        def render_signature_parameter(self, el: gf.Parameter) -> str:
+            from great_docs._apiref._format import repr_obj
+
+            name = el.name
+            annotation = f": {repr_obj(el.annotation)}" if el.annotation is not None else ""
+            default = f" = {repr_obj(el.default)}" if el.default is not None else ""
+            return f"{name}{annotation}{default}"
+
+    rd = AnnotatedFunction(doc, settings=Settings())
     qmd = str(rd)
 
     # Annotations should appear in the signature with ': type' format

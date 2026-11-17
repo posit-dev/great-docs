@@ -580,7 +580,7 @@ def test_property_only_section_methods_are_independently_overridable():
 
     import griffe as gf
 
-    from great_docs._apiref._type_checks import griffe_to_doc
+    from great_docs._apiref._conversion import griffe_to_doc
     from great_docs._apiref.api_reference import Settings
     from great_docs.rendering import Renderers
 

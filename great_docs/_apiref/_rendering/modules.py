@@ -24,7 +24,7 @@ class ModuleRenderer(MembersRendererMixin, ObjectRenderer):
     Module documentation with grouped member presentation
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         # We narrow the type with a TypeAlias since we do not expect
         # any subclasses to have narrower types

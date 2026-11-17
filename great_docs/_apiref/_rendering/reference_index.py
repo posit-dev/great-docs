@@ -96,7 +96,7 @@ class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
         |:-------------------|:-------------------|
         | `<section>`{.html} | `.doc-index`{.css} |
         """
-        render_objs = [
+        object_renderers = [
             self.renderers.make(s, self.level, settings=self.settings) for s in self.sections
         ]
-        return Blocks(render_objs)
+        return Blocks(object_renderers)

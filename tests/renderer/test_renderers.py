@@ -320,3 +320,25 @@ def test_choices_reach_typing_categories() -> None:
     assert "protocol body marker" in output
     assert "typing attribute body marker" in output
     assert "typing alias body marker" in output
+
+
+def test_omitted_member_presentation_keeps_inventory() -> None:
+    from great_docs._apiref.collect import build_manifest
+
+    class CustomClass(ClassRenderer):
+        def render_members(self) -> list:
+            return []
+
+    module = gf.Module(name="example")
+    klass = gf.Class(name="Example")
+    function = gf.Function(name="run", docstring=gf.Docstring("Run the example"))
+    module.set_member("Example", klass)
+    klass.set_member("run", function)
+    doc = DocClass(name="Example", obj=klass, members=[DocFunction(name="run", obj=function)])
+    page = Page(path="Example", contents=[doc])
+    manifest = build_manifest([Section(title="Classes", contents=[page])], dir="reference")
+    before = [(item.name, item.uri) for item in manifest.items]
+    assert any(name.endswith(".run") for name, _ in before)
+    output = str(Renderers(classes=CustomClass).make(page))
+    assert "Methods" not in output
+    assert [(item.name, item.uri) for item in manifest.items] == before

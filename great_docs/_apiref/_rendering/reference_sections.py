@@ -42,7 +42,7 @@ class ReferenceSectionRenderer(BaseRenderer):
 
     display_format: Literal["list", "table"] = "list"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.section = cast("Section", self.node)
         """Section of the reference page"""
 
@@ -119,10 +119,10 @@ class ReferenceSectionRenderer(BaseRenderer):
         if not self.section.contents:
             return
 
-        render_objs: list[RenderObjType] = [
+        object_renderers: list[RenderObjType] = [
             self.renderers.make(c, settings=self.settings) for c in self.section.contents
         ]
-        rows = [row for r in render_objs for row in r.render_summary()]
+        rows = [row for r in object_renderers for row in r.render_summary()]
         items = (
             DefinitionList(rows)
             if self.display_format == "list"

@@ -133,7 +133,7 @@ def test_references_render_with_their_own_settings_when_interleaved(tmp_path, mo
     assert after == before
 
 
-def _signature(source: str, name: str, **options: bool) -> str:
+def _signature(source: str, name: str, renderer_type: type | None = None) -> str:
     """Return the rendered signature of the named callable in `source`"""
     from great_docs._apiref import content
     from great_docs._apiref._rendering import Renderers
@@ -143,7 +143,7 @@ def _signature(source: str, name: str, **options: bool) -> str:
     ) as package:
         obj = package[name]
     doc = content.Doc.from_griffe(obj.name, obj)
-    qmd = str(Renderers().make(doc, **options, settings=Settings()))
+    qmd = str(Renderers(functions=renderer_type).make(doc, settings=Settings()))
     signature = qmd.split(".doc-signature", 1)[1]
     return re.search(r"```\w+\n(.*?)```", signature, re.S).group(1)
 
@@ -156,7 +156,14 @@ def test_an_annotation_shows_double_quoted_strings():
     def pick(mode: Literal['fast', 'slow']): ...
     """
 
-    sig = _signature(source, "pick", show_signature_annotation=True)
+    from great_docs._apiref._format import repr_obj
+    from great_docs.rendering import FunctionRenderer
+
+    class AnnotatedFunction(FunctionRenderer):
+        def render_signature_parameter(self, el: gf.Parameter) -> str:
+            return f"{el.name}: {repr_obj(el.annotation)}"
+
+    sig = _signature(source, "pick", AnnotatedFunction)
 
     assert 'Literal["fast", "slow"]' in sig
 

@@ -5,9 +5,8 @@ from __future__ import annotations
 import logging
 import re
 from copy import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
-from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import griffe as gf
@@ -48,7 +47,9 @@ from .._format import (
     render_formatted_expr,
     repr_obj,
 )
+from ._context import _RenderingPurpose
 from ._section_dispatch import SECTION_METHOD
+from ._source_links import source_link
 from .base import BaseRenderer
 
 if TYPE_CHECKING:
@@ -67,9 +68,6 @@ if TYPE_CHECKING:
     )
 
 _log = logging.getLogger(__name__)
-
-# Directories that hold installed packages, rather than a repository's own files.
-_INSTALL_DIRS = frozenset({"site-packages", "dist-packages"})
 
 # Translate standard docstring section titles and preserve custom titles.
 _SECTION_TITLE_KEYS = {
@@ -92,39 +90,7 @@ class ObjectRenderer(BaseRenderer):
     Presentation of a Python object and its parsed documentation
     """
 
-    show_title: bool = True
-    """
-    Whether to show the title of the object
-
-    The title includes:
-
-        1. symbol for the object
-        2. name of the object
-        3. labels the object
-
-    Each of this can be independently turned off.
-    """
-
-    show_signature: bool = True
-    """Whether to show the signature"""
-
-    show_signature_name: bool = True
-    """Whether to show the name of the object in the signature"""
-
-    show_signature_annotation: bool = False
-    """
-    Where to show type annotations in the signature
-
-    The default is False because they are better displayed in the
-    parameter definitions.
-    """
-
-    show_object_name: bool = True
-    """
-    Whether to show the name of the object
-
-    This is part of the title
-    """
+    _purpose: _RenderingPurpose = field(default=_RenderingPurpose.OBJECT, kw_only=True)
 
     contained: bool = False
     """
@@ -133,25 +99,12 @@ class ObjectRenderer(BaseRenderer):
     within that of a class.
     """
 
-    subject_above_signature: bool | None = None
-    """
-    Place the subject above the signature
-
-    If `bool`, the setting will always be respected.
-    If `None` the placement will depend on the context; the preffered
-    location will be above the signature but in some cases it will be
-    below.
-    """
-
-    page_path: str = ""
+    page_path: str | None = None
     """
     Output-relative path of the page containing this object's documentation
 
     An empty string links summaries to an anchor on their current page.
     """
-
-    show_source_link: bool = True
-    """Whether to show a link to the source code"""
 
     display_name_format: DisplayNameFormat = "doc"
     """Format for the display name"""
@@ -159,7 +112,7 @@ class ObjectRenderer(BaseRenderer):
     signature_name_format: DisplayNameFormat = "doc"
     """Format for the signature name"""
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # The node field is too general. It is typed to include all
         # classes of documentable objects. And for nodes.Doc objects,
         # the core object is a griffe object contained within.
@@ -220,16 +173,16 @@ class ObjectRenderer(BaseRenderer):
         """
         Render the description of the object
 
-        The descriptions consists of the docstring subject and the
-        signature.
+        The default order is signature, Usage/source row and subject. Callable
+        and value renderers define their own orders. Return `None` from a
+        composition method to omit that part.
         """
-        direction = 1 if self.subject_above_signature else -1
-        subject_and_signature = [
-            self.render_docstring_subject(),
-            self.render_usage_source(),
-            self.render_signature() if self.show_signature else None,
-        ][::direction]
-        return Blocks(subject_and_signature)
+        return Blocks([self.signature, self.render_usage_source(), self.render_docstring_subject()])
+
+    @cached_property
+    def signature(self) -> BlockContent:
+        """The signature from `render_signature`, cached once per renderer instance"""
+        return self.render_signature()
 
     def render_signature(self) -> BlockContent:
         """
@@ -237,7 +190,12 @@ class ObjectRenderer(BaseRenderer):
         """
 
     @cached_property
-    def _title(self) -> InlineContent:
+    def title_content(self) -> InlineContent:
+        """The title label from `render_title_content`, shared by page front matter and headings"""
+        return self.render_title_content()
+
+    def render_title_content(self) -> InlineContent:
+        """Render the object's display name and labels without a heading wrapper"""
         return Span(
             self.display_name,
             Attr(
@@ -275,7 +233,9 @@ class ObjectRenderer(BaseRenderer):
         with (`.sidebar`). The markup for the labels is not rendered if there are no
         labels. If there is more than one label, each label has its own class code.
         """
-        return Header(level=self.level, content=self._title)
+        if self._purpose is _RenderingPurpose.API_PAGE and self.level == 1:
+            return None
+        return Header(level=self.level, content=self.title_content)
 
     def render_annotation(self, annotation: Annotation | None = None) -> str:
         """
@@ -488,9 +448,26 @@ class ObjectRenderer(BaseRenderer):
             sections.append(content)
         return sections
 
+    @cached_property
+    def docstring_body(self) -> BlockContent:
+        """The object's own rendered docstring, cached separately from automatic members"""
+        return self.render_docstring_body()
+
     def render_body(self) -> BlockContent:
         """
-        Render the docstring of the Doc object
+        Render the object's docstring body after body callbacks
+
+        Replacing this method without `super()` replaces the full composition.
+        Override `render_docstring_body` to change only authored documentation.
+        """
+        return self.docstring_body
+
+    def render_docstring_body(self) -> BlockContent:
+        """
+        Render the docstring sections that follow the subject
+
+        Return `None` when no section has content. Member groups are not part of this
+        result.
         """
         return None if not self.docstring_sections else Blocks(self.docstring_sections)
 
@@ -682,7 +659,6 @@ class ObjectRenderer(BaseRenderer):
                 items_to_render,
             )
             merged: list[gf.DocstringReturn | gf.DocstringYield | gf.DocstringReceive] = []
-            merged = []
             for item in items_to_render:
                 name = getattr(item, "name", None) or ""
                 ann = getattr(item, "annotation", None)
@@ -740,9 +716,10 @@ class ObjectRenderer(BaseRenderer):
         # short name as anchor since Quarto generates section IDs from heading
         # text (e.g. "get" not "package.ClassName.get").
         anchor = self.doc.name if self.contained else self.doc.anchor
+        page_path = "" if self.contained else self.page_path or ""
         link = Link(
             markdown_escape(self.summary_name),
-            f"{self.page_path}#{anchor}" if anchor else self.page_path,
+            f"{page_path}#{anchor}" if anchor else page_path,
             attr=Attr(classes=[f"doc-{self.kind_slug}", "doc-label", f"doc-label-{self.label}"]),
         )
         return [(str(link), self.docstring_subject)]
@@ -751,182 +728,22 @@ class ObjectRenderer(BaseRenderer):
         """
         Render a row with usage and source
         """
-        source = self.source_link if self.show_source_link else None
+        source = self.source_link
+        usage = translate("usage", self.settings.lang) if self.signature is not None else None
+        if usage is None and source is None:
+            return None
         return Div(
-            [translate("usage", self.settings.lang), source],
+            [usage, source],
             attr=Attr(classes=["doc-usage-source"]),
         )
 
     @cached_property
     def source_link(self) -> Link | None:
         """
-        Build a link to the object's source code
+        The link to the object's source, or `None` without one
 
-        Returns
-        -------
-        :
-            The source link, or `None` when no repository URL or source path is
-            available, the file is a compiled extension, or the starting line
-            is unknown.
+        A link needs a repository, a usable source path and a starting line. An
+        object from an installed stub links only when the repository has a copy of
+        the stub.
         """
-        links = self.settings.source_links
-        if links.repository is None:
-            return None
-        rel_str = self._source_relative_path()
-        if rel_str is None:
-            return None
-        # Suppress source links for compiled extensions (PyO3, Cython,
-        # pybind11, C extensions). The file path points at a binary
-        # artifact and `lineno` is None, producing broken `#LNone` anchors.
-        if rel_str.endswith((".so", ".pyd", ".dylib", ".abi3.so")):
-            return None
-        start, end = self.obj.lineno, self.obj.endlineno
-        if start is None:
-            return None
-        url = links.repository.file_url(rel_str, links.ref, start, end)
-        return Link(
-            translate("source", self.settings.lang),
-            url,
-            attr=Attr(attributes={"target": "_blank", "rel": "noopener"}),
-        )
-
-    def _source_relative_path(self) -> str | None:
-        """
-        Resolve the object's source path for a repository link
-
-        Griffe's `relative_package_filepath` is relative to the package's parent
-        directory, a Griffe search path. For `src/` and other non-flat layouts,
-        it drops the leading directory, producing repository URLs that return
-        404. Resolve the path in this order to preserve the repository layout:
-
-        1. Honour an explicit `source.path` override for monorepos.
-        2. Compute the path relative to the repository root from the object's
-           absolute file path, preserving directories such as `src/`.
-        3. Fall back to Griffe's package-parent-relative path when the override
-           and repository root cannot resolve a path.
-
-        Objects that only a stub declares, such as the classes and functions
-        of a PyO3 or other compiled extension, take their line numbers from the
-        `.pyi` file but report the module's `.py` file. They link to the stub
-        instead. An installed stub, outside the repository, links to the
-        repository's copy, and to nothing when there is none.
-
-        Returns
-        -------
-        :
-            The source path, or `None` when no path can be determined.
-        """
-        # Griffe raises `ValueError` for objects without a parent module, such
-        # as synthetic objects. A `getattr` default only handles missing attributes.
-        try:
-            filepath = self.obj.filepath
-        except (ValueError, AttributeError):
-            filepath = None
-
-        # A namespace package can span several directories and has no single
-        # source file. Use Griffe's package-relative path in step 3.
-        if isinstance(filepath, list):
-            filepath = None
-
-        links = self.settings.source_links
-
-        if filepath is not None and Path(filepath).suffix == ".py" and _declared_in_stub(self.obj):
-            stub = Path(filepath).with_suffix(".pyi")
-            if stub.is_file():
-                filepath = stub
-        if filepath is not None and Path(filepath).suffix == ".pyi":
-            return self._stub_relative_path(Path(filepath))
-
-        # 1. Explicit override for monorepos: `<source.path>/<filename>`.
-        if links.path and filepath is not None:
-            return f"{links.path}/{Path(filepath).name}"
-
-        # 2. Path relative to the repository root, preserving the real layout.
-        if links.package_root and filepath is not None:
-            try:
-                rel = Path(filepath).resolve().relative_to(links.package_root.resolve())
-                return rel.as_posix()
-            except (ValueError, OSError):
-                pass
-
-        # 3. Legacy fallback: griffe's package-parent-relative path.
-        try:
-            return Path(self.obj.relative_package_filepath).as_posix()
-        except (ValueError, AttributeError):
-            return None
-
-    def _stub_relative_path(self, stub: Path) -> str | None:
-        """
-        Resolve a stub file's path for a repository link
-
-        A stub inside the repository keeps its path. An installed stub,
-        including one in a virtual environment within the repository, is
-        looked up in the repository under its package-relative path, also
-        within `src/` and `python/`. A package's `__init__.pyi` is also looked
-        up as `<package>.pyi`, where maturin keeps the stub of a Rust-only
-        project.
-
-        Parameters
-        ----------
-        stub
-            The absolute path of the stub file.
-
-        Returns
-        -------
-        :
-            The stub's path relative to the repository root, or `None` when the
-            repository has no copy of an installed stub.
-        """
-        links = self.settings.source_links
-        if links.path:
-            return f"{links.path}/{stub.name}"
-
-        try:
-            rel = Path(self.obj.relative_package_filepath).with_suffix(".pyi")
-        except (ValueError, AttributeError):
-            rel = None
-
-        if links.package_root is None:
-            return rel.as_posix() if rel else None
-
-        root = links.package_root.resolve()
-        try:
-            inside = stub.resolve().relative_to(root)
-        except (ValueError, OSError):
-            inside = None
-        # A virtual environment within the repository holds installed copies.
-        if inside is not None and not _INSTALL_DIRS.intersection(inside.parts):
-            return inside.as_posix()
-
-        if rel is None:
-            return None
-        names = [rel]
-        if rel.name == "__init__.pyi" and rel.parent != Path():
-            names.append(rel.parent.with_suffix(".pyi"))
-        for name in names:
-            for candidate in (name, "src" / name, "python" / name):
-                if (root / candidate).is_file():
-                    return candidate.as_posix()
-        return None
-
-
-def _declared_in_stub(obj: gf.Object | gf.Alias) -> bool:
-    """
-    Whether an object comes from a stub that griffe merged into its module
-
-    Griffe marks the objects a stub adds to a module as not available at
-    runtime, so an object declared in a stub, or a member of a class that
-    is, reports the `.py` module file but has the stub's line numbers.
-    Objects inside `if TYPE_CHECKING:` are also marked, so callers check that
-    the stub file exists.
-    """
-    current: gf.Object | None
-    try:
-        current = obj.final_target if isinstance(obj, gf.Alias) else obj
-    except (gf.AliasResolutionError, gf.CyclicAliasError):
-        return False
-    while current is not None and not getattr(current, "is_module", True):
-        if getattr(current, "runtime", True) is False:
-            return True
-        current = getattr(current, "parent", None)
-    return False
+        return source_link(self.obj, self.settings.source_links, self.settings.lang)

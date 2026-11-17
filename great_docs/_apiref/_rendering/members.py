@@ -22,6 +22,7 @@ from .._type_checks import (
     is_doc_type_alias,
 )
 from ..content import Doc, DocClass, MemberPage
+from ._context import _RenderingPurpose
 from ._tables import summary_table
 from .objects import ObjectRenderer
 
@@ -34,22 +35,18 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class RenderedMembersGroup(Block):
+class RenderedMemberGroup(Block):
+    """A member heading with independently optional summary and body"""
+
     title: Header | None = None
-    summary: str | None = None
-    members_body: Block | None = None
+    """The group heading"""
+    summary: BlockContent = None
+    """The members' summary table, or `None` to omit it"""
+    body: BlockContent = None
+    """The documentation of members on the same page, or `None` for a summary-only group"""
 
-    def __str__(self):
-        return str(Blocks([self.title, self.summary, self.members_body]))
-
-
-@dataclass
-class RenderedMemberPagesGroup(Block):
-    title: Header | None = None
-    summary: str | None = None
-
-    def __str__(self):
-        return str(Blocks([self.title, self.summary]))
+    def __str__(self) -> str:
+        return str(Blocks([self.title, self.summary, self.body]))
 
 
 @dataclass
@@ -60,28 +57,7 @@ class MembersRendererMixin(ObjectRenderer):
     i.e. modules and classes
     """
 
-    show_members: bool = True
-    """All members (type aliases, attributes, classes and functions) """
-    show_attributes: bool = True
-    show_classes: bool = True
-    show_functions: bool = True
-    show_type_aliases: bool = True
-
-    show_members_summary: bool = True
-    """All member (type alias, attribute, class and function) summaries"""
-    show_attributes_summary: bool = True
-    show_classes_summary: bool = True
-    show_functions_summary: bool = True
-    show_type_aliases_summary: bool = True
-
-    show_members_body: bool = True
-    """All member (type alias, attribute, class and function) bodies"""
-    show_attributes_body: bool = True
-    show_classes_body: bool = True
-    show_functions_body: bool = True
-    show_type_aliases_body: bool = True
-
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         self.doc = cast("DocClass | DocModule", self.doc)  # pyright: ignore[reportUnnecessaryCast]
         self.obj = cast("gf.Class | gf.Module", self.obj)  # pyright: ignore[reportUnnecessaryCast]
@@ -107,15 +83,13 @@ class MembersRendererMixin(ObjectRenderer):
 
         return Blocks([docstring, *members])
 
-    def render_members(self) -> list[RenderedMembersGroup | None]:
+    def render_members(self) -> list[RenderedMemberGroup | None]:
         """
         Render the docs of member objects
 
         The member objects are type aliases, attributes, classes and
         functions/methods
         """
-        if not self.show_members:
-            return []
         return [
             self.render_type_aliases(),
             self.render_attributes(),
@@ -123,15 +97,13 @@ class MembersRendererMixin(ObjectRenderer):
             self.render_functions(),
         ]
 
-    def render_member_pages(self) -> list[RenderedMemberPagesGroup | None]:
+    def render_member_pages(self) -> list[RenderedMemberGroup | None]:
         """
         Render the docs of member objects
 
         The member objects are type aliases, attributes, classes and
         functions/methods
         """
-        if not self.show_members:
-            return []
         return [
             self.render_type_alias_member_pages(),
             self.render_attribute_member_pages(),
@@ -223,155 +195,90 @@ class MembersRendererMixin(ObjectRenderer):
         pages = cast("list[MemberPage]", self.doc.members)
         return [p for p in pages if p.obj.is_type_alias]
 
-    def render_classes(self) -> RenderedMembersGroup | None:
+    def render_classes(self) -> RenderedMemberGroup | None:
         """
         Render the class members of the Doc
         """
-        return self._render_members_group("classes") if self.show_classes else None
+        return self._render_members_group("classes")
 
-    def render_functions(self) -> RenderedMembersGroup | None:
+    def render_functions(self) -> RenderedMemberGroup | None:
         """
         Render the function members of the Doc
         """
-        return self._render_members_group("functions") if self.show_functions else None
+        return self._render_members_group("functions")
 
-    def render_attributes(self) -> RenderedMembersGroup | None:
+    def render_attributes(self) -> RenderedMemberGroup | None:
         """
         Render the attribute members of the Doc
         """
-        return self._render_members_group("attributes") if self.show_attributes else None
+        return self._render_members_group("attributes")
 
-    def render_type_aliases(self) -> RenderedMembersGroup | None:
+    def render_type_aliases(self) -> RenderedMemberGroup | None:
         """
         Render the type alias members of the Doc
         """
-        return self._render_members_group("type-aliases") if self.show_type_aliases else None
+        return self._render_members_group("type-aliases")
 
-    def render_class_member_pages(self) -> RenderedMemberPagesGroup | None:
+    def render_class_member_pages(self) -> RenderedMemberGroup | None:
         """
         Render the member pages of classes
         """
-        return self._render_member_pages_group("classes") if self.show_classes else None
+        return self._render_member_pages_group("classes")
 
-    def render_function_member_pages(self) -> RenderedMemberPagesGroup | None:
+    def render_function_member_pages(self) -> RenderedMemberGroup | None:
         """
         Render the member pages of functions
         """
-        return self._render_member_pages_group("functions") if self.show_functions else None
+        return self._render_member_pages_group("functions")
 
-    def render_attribute_member_pages(self) -> RenderedMemberPagesGroup | None:
+    def render_attribute_member_pages(self) -> RenderedMemberGroup | None:
         """
         Render the member pages of attributes
         """
-        return self._render_member_pages_group("attributes") if self.show_attributes else None
+        return self._render_member_pages_group("attributes")
 
-    def render_type_alias_member_pages(self) -> RenderedMemberPagesGroup | None:
+    def render_type_alias_member_pages(self) -> RenderedMemberGroup | None:
         """
         Render the member pages of type aliases
         """
-        return self._render_member_pages_group("type-aliases") if self.show_type_aliases else None
+        return self._render_member_pages_group("type-aliases")
 
     def _render_members_group(
         self,
         group: Literal["type-aliases", "classes", "functions", "attributes"],
-    ) -> RenderedMembersGroup | None:
-        """
-        Render all of type alias, class, function or attribute members
-
-        Parameters
-        ----------
-        docables
-            List of `content.Doc` subclasses. One for each member.
-
-        member_group
-            An identifier for the type of the members.
-        """
-        slug = group
-
-        if group == "type-aliases":
-            docables = self.type_aliases
-            show_summary = self.show_type_aliases_summary
-            show_body = self.show_type_aliases_body
-        elif group == "classes":
-            docables = self.classes
-            show_summary = self.show_classes_summary
-            show_body = self.show_classes_body
-        elif group == "attributes":
-            docables = self.attributes
-            show_summary = self.show_attributes_summary
-            show_body = self.show_attributes_body
-        else:
-            docables = self.functions
-            show_summary = self.show_functions_summary
-            show_body = self.show_functions_body
-            if isinstance(self.doc, DocClass):
-                slug = "methods"
-
-        if not docables:
-            return None
-
-        title = Header(
-            self.level + 1,
-            translate(slug.replace("-", "_"), self.settings.lang),
-            Attr(classes=[f"doc-{slug}"]),
-        )
-
-        render_objs = [
-            self.renderers.make(obj, self.level + 2, contained=True, settings=self.settings)
-            for obj in docables
+    ) -> RenderedMemberGroup | None:
+        """Build the group of members of one kind documented on this page"""
+        members = {
+            "type-aliases": self.type_aliases,
+            "classes": self.classes,
+            "attributes": self.attributes,
+            "functions": self.functions,
+        }[group]
+        member_renderers: list[ObjectRenderer] = [
+            self.renderers.make(
+                obj,
+                self.level + 2,
+                contained=True,
+                page_path=self.page_path,
+                settings=self.settings,
+                _purpose=_RenderingPurpose.OBJECT,
+            )
+            for obj in members
         ]
-
-        if self.show_members_summary and show_summary:
-            rows = [row for r in render_objs for row in r.render_summary()]
-            summary = summary_table(rows, self.settings.lang)
-        else:
-            summary = None
-
-        body = Blocks(render_objs) if show_body else None
-        return RenderedMembersGroup(title, summary, body)
+        return self._render_group(group, member_renderers, separate=False)
 
     def _render_member_pages_group(
         self,
         group: Literal["type-aliases", "classes", "functions", "attributes"],
-    ) -> RenderedMemberPagesGroup | None:
-        """
-        Render all of the type alias, class, function or attribute member pages
-
-        Parameters
-        ----------
-        docables
-            List of `content.Doc` subclasses. One for each member.
-
-        member_group
-            An identifier for the type of the members.
-        """
-        slug = group
-
-        if group == "type-aliases":
-            pages = self.type_alias_member_pages
-            show_summary = self.show_type_aliases_summary
-        elif group == "classes":
-            pages = self.class_member_pages
-            show_summary = self.show_classes_summary
-        elif group == "attributes":
-            pages = self.attribute_member_pages
-            show_summary = self.show_attributes_summary
-        else:
-            pages = self.function_member_pages
-            show_summary = self.show_functions_summary
-            if isinstance(self.doc, DocClass):
-                slug = "functions"
-
-        if not pages:
-            return None
-
-        title = Header(
-            self.level + 1,
-            translate(slug.replace("-", "_"), self.settings.lang),
-            Attr(classes=[f"doc-{slug}", "doc-pages"]),
-        )
-
-        render_objs = [
+    ) -> RenderedMemberGroup | None:
+        """Build the group of links to members of one kind on their own pages"""
+        pages = {
+            "type-aliases": self.type_alias_member_pages,
+            "classes": self.class_member_pages,
+            "attributes": self.attribute_member_pages,
+            "functions": self.function_member_pages,
+        }[group]
+        member_renderers: list[ObjectRenderer] = [
             self.renderers.make(
                 Doc.from_griffe(page.obj.name, page.obj, anchor=""),
                 contained=False,
@@ -380,14 +287,63 @@ class MembersRendererMixin(ObjectRenderer):
             )
             for page in pages
         ]
+        return self._render_group(group, member_renderers, separate=True)
 
-        if self.show_members_summary and show_summary:
-            rows = [row for r in render_objs for row in r.render_summary()]
-            summary = summary_table(rows, self.settings.lang)
-        else:
-            summary = None
+    def _render_group(
+        self,
+        kind: Literal["type-aliases", "classes", "functions", "attributes"],
+        member_renderers: list[ObjectRenderer],
+        *,
+        separate: bool,
+    ) -> RenderedMemberGroup | None:
+        """Build a member group with its heading, or return `None` when it has no content"""
+        if not member_renderers:
+            return None
+        summary = self.render_members_summary(kind, member_renderers)
+        body = None if separate else self.render_members_body(kind, member_renderers)
+        if summary is None and body is None:
+            return None
+        slug = (
+            "methods"
+            if kind == "functions" and isinstance(self.doc, DocClass) and not separate
+            else kind
+        )
+        classes = [f"doc-{slug}", "doc-pages"] if separate else [f"doc-{slug}"]
+        title = Header(
+            self.level + 1,
+            translate(slug.replace("-", "_"), self.settings.lang),
+            Attr(classes=classes),
+        )
+        return RenderedMemberGroup(title, summary, body)
 
-        return RenderedMemberPagesGroup(title, summary)
+    def render_members_summary(
+        self,
+        kind: Literal["type-aliases", "classes", "functions", "attributes"],
+        renderers: list[ObjectRenderer],
+    ) -> BlockContent:
+        """
+        Render links and descriptions for embedded or separately documented members
+
+        Return `None` to omit the summary without changing semantic membership.
+        Typing protocol pages omit their member summary by default.
+        """
+        if self._purpose is _RenderingPurpose.PROTOCOL:
+            return None
+        rows = [row for renderer in renderers for row in renderer.render_summary()]
+        return summary_table(rows, self.settings.lang) if rows else None
+
+    def render_members_body(
+        self,
+        kind: Literal["type-aliases", "classes", "functions", "attributes"],
+        renderers: list[ObjectRenderer],
+    ) -> BlockContent:
+        """
+        Render the documentation of a group's members on this page
+
+        Return `None` to omit the body without changing semantic membership.
+        Separate-page groups never call this method.
+        """
+        return Blocks(renderers) if renderers else None
 
     def render_attributes_section(self, el: gf.DocstringSectionAttributes) -> BlockContent:
         """

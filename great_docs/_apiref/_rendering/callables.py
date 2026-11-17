@@ -10,6 +10,7 @@ import griffe as gf
 
 from great_docs.pandoc.blocks import (
     BlockContent,
+    Blocks,
 )
 from great_docs.pandoc.components import Attr
 
@@ -35,7 +36,7 @@ class CallableRendererMixin(ObjectRenderer):
     i.e. classes (for the __init__ or __new__ method) and functions/methods
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
 
         self.doc = cast("DocFunction | DocClass", self.doc)  # pyright: ignore[reportUnnecessaryCast]
@@ -128,6 +129,10 @@ class CallableRendererMixin(ObjectRenderer):
         """
         return CallableDocumentation.make(self.obj)
 
+    def render_description(self) -> BlockContent:
+        """Render the subject, the Usage and source row, and the signature, in that order"""
+        return Blocks([self.render_docstring_subject(), self.render_usage_source(), self.signature])
+
     def render_signature(self) -> BlockContent:
         """
         Render the signature of this callable
@@ -139,7 +144,7 @@ class CallableRendererMixin(ObjectRenderer):
         in `plain`; parameters use `va` and `doc-parameter-name`, respectively.
         Literal colours apply only within the code block's `sourceCode` wrapper.
         """
-        name = self.signature_name if self.show_signature_name else ""
+        name = self.signature_name
         attr = Attr(classes=["doc-signature", f"doc-{self.kind_slug}"])
         style = self.settings.callable_signatures.style
         return render_signature_block(self._signature_lines(name), attr, style)
@@ -302,10 +307,7 @@ class CallableRendererMixin(ObjectRenderer):
             if el.default is not None:
                 default = repr_obj(el.default)
 
-        if self.show_signature_annotation and el.annotation is not None:
-            annotation, equals = f": {repr_obj(el.annotation)}", " = "
-        else:
-            annotation, equals = "", "="
+        annotation, equals = "", "="
 
         default = (default and f"{equals}{default}") or ""
         return f"{name}{annotation}{default}"

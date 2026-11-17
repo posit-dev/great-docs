@@ -16,8 +16,10 @@ from great_docs.pandoc.blocks import (
 )
 
 from . import inventory
+from ._conversion import griffe_to_doc
+from ._rendering._context import _RenderingPurpose
 from ._rendering._renderers import Renderers
-from ._type_checks import griffe_to_doc, is_protocol, is_typealias, is_typevar
+from ._type_checks import is_protocol, is_typealias, is_typevar
 from .introspect import get_object
 
 if TYPE_CHECKING:
@@ -28,26 +30,27 @@ if TYPE_CHECKING:
 
 @dataclass
 class _TypeCategory:
-    """One category of typing objects, rendered under its own header"""
+    """One category of typing objects, rendered under its own heading"""
 
     title: str
     items: list[inventory.InventoryItem]
-    # Render flags that a typing object of this category does not need,
-    # e.g. {"show_members_summary": False}
-    render_flags: dict[str, bool]
-    settings: Settings
-    renders: list[RenderObjType] = field(init=False)
-    renderers: Renderers = field(default_factory=Renderers, kw_only=True)
+    renderers: list[RenderObjType]
 
-    def __post_init__(self) -> None:
-        self.renders = []
-        for item in self.items:
-            docable = griffe_to_doc(item.obj)
-            render = self.renderers.make(docable, 3, settings=self.settings)
-            for flag, value in self.render_flags.items():
-                assert hasattr(render, flag), f"Unknown render flag: {flag}"
-                setattr(render, flag, value)
-            self.renders.append(render)
+    @classmethod
+    def make(
+        cls,
+        title: str,
+        items: list[inventory.InventoryItem],
+        settings: Settings,
+        choices: Renderers,
+        purpose: _RenderingPurpose,
+    ) -> _TypeCategory:
+        """Construct category renderers using the typing workflow's presentation"""
+        renderers: list[RenderObjType] = [
+            choices.make(griffe_to_doc(item.obj), 3, settings=settings, _purpose=purpose)
+            for item in items
+        ]
+        return cls(title, items, renderers)
 
 
 @dataclass
@@ -59,28 +62,27 @@ class TypeSections(Block):
     renderers: Renderers = field(default_factory=Renderers, kw_only=True)
 
     def __post_init__(self) -> None:
-        s = self.settings
         self.categories = [
-            _TypeCategory(
+            _TypeCategory.make(
                 "Protocols",
                 self.protocols_items,
-                {"show_members_summary": False},
-                s,
-                renderers=self.renderers,
+                self.settings,
+                self.renderers,
+                _RenderingPurpose.PROTOCOL,
             ),
-            _TypeCategory(
+            _TypeCategory.make(
                 "Type Variables",
                 self.typevars_items,
-                {"show_signature_name": False},
-                s,
-                renderers=self.renderers,
+                self.settings,
+                self.renderers,
+                _RenderingPurpose.TYPE_VARIABLE,
             ),
-            _TypeCategory(
+            _TypeCategory.make(
                 "Type Aliases",
                 self.typealiases_items,
-                {"show_signature_annotation": False},
-                s,
-                renderers=self.renderers,
+                self.settings,
+                self.renderers,
+                _RenderingPurpose.TYPE_ALIAS,
             ),
         ]
 
@@ -98,11 +100,11 @@ class TypeSections(Block):
         content: list[Block | str] = []
 
         for category in self.categories:
-            if category.renders:
+            if category.renderers:
                 content.extend(
                     [
                         Header(2, category.title),
-                        *[str(r) for r in category.renders],
+                        *[str(r) for r in category.renderers],
                     ]
                 )
 

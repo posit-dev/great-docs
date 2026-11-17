@@ -18,12 +18,9 @@ class FunctionRenderer(CallableRendererMixin, ObjectRenderer):
     Function documentation with callable signatures and sections
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         # We narrow the type with a TypeAlias since we do not expect
         # any subclasses to have narrower types
         self.doc: content.DocFunction = self.doc
         self.obj: gf.Function = self.obj
-
-        if self.subject_above_signature is None:
-            self.subject_above_signature = True

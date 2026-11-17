@@ -34,6 +34,7 @@ from yaml12 import parse_yaml as _parse_yaml
 
 from great_docs import BuildError, Config, GreatDocs, create_default_config, load_config
 from great_docs._apiref import content, spec, write
+from great_docs._apiref._conversion import griffe_to_doc
 from great_docs._apiref._docstring_sections import (
     DCDocstringSection,
     DocstringSectionNotes,
@@ -69,8 +70,7 @@ from great_docs._apiref._rendering._label import (
 from great_docs._apiref._rendering.api_pages import APIPageRenderer
 from great_docs._apiref._rendering.base import BaseRenderer
 from great_docs._apiref._rendering.members import (
-    RenderedMemberPagesGroup,
-    RenderedMembersGroup,
+    RenderedMemberGroup,
 )
 from great_docs._apiref._rendering.pages import PageRendererMixin
 from great_docs._apiref._rendering.reference_index import ReferenceIndexRenderer
@@ -82,7 +82,6 @@ from great_docs._apiref._type_checks import (
     attribute_kind,
     class_kind,
     function_kind,
-    griffe_to_doc,
     is_doc_attribute,
     is_doc_class,
     is_doc_function,
@@ -6004,11 +6003,9 @@ def _render_doc_source_relative_path(obj, links: SourceLinks):
     :
         The source path, or `None` when no path can be determined.
     """
-    import great_docs._apiref._rendering.objects as docmod
+    from great_docs._apiref._rendering._source_links import source_relative_path
 
-    cls = docmod.ObjectRenderer
-    fake_self = types.SimpleNamespace(obj=obj, settings=Settings(source_links=links))
-    return cls.__dict__["_source_relative_path"](fake_self)
+    return source_relative_path(obj, links)
 
 
 def test_render_source_relative_path_preserves_src_layout():
@@ -14016,12 +14013,12 @@ def _build_class_with_member_pages():
 
 
 def test_mixin_rendered_members_group_str():
-    """RenderedMembersGroup.__str__ renders title, summary, and body."""
+    """RenderedMemberGroup.__str__ renders title, summary, and body."""
 
-    rmg = RenderedMembersGroup(
+    rmg = RenderedMemberGroup(
         title=Header(2, "Methods", Attr()),
         summary="A summary table",
-        members_body=None,
+        body=None,
     )
     result = str(rmg)
     assert "Methods" in result
@@ -14029,17 +14026,17 @@ def test_mixin_rendered_members_group_str():
 
 
 def test_mixin_rendered_members_group_str_all_none():
-    """RenderedMembersGroup.__str__ handles all None fields."""
+    """RenderedMemberGroup.__str__ handles all None fields."""
 
-    rmg = RenderedMembersGroup()
+    rmg = RenderedMemberGroup()
     result = str(rmg)
     assert isinstance(result, str)
 
 
 def test_mixin_rendered_member_pages_group_str():
-    """RenderedMemberPagesGroup.__str__ renders title and summary."""
+    """RenderedMemberGroup.__str__ renders title and summary."""
 
-    rmpg = RenderedMemberPagesGroup(
+    rmpg = RenderedMemberGroup(
         title=Header(2, "Attributes", Attr()),
         summary="summary",
     )
@@ -14192,17 +14189,22 @@ def test_mixin_render_members_returns_groups():
     # No type alias members in this fixture, so that slot is None.
     assert members[0] is None
     for m in members[1:]:
-        assert isinstance(m, RenderedMembersGroup)
+        assert isinstance(m, RenderedMemberGroup)
 
 
-def test_mixin_render_members_show_members_false():
-    """render_members returns empty list when show_members=False."""
+def test_mixin_render_members_override_omits_groups() -> None:
+    """Omit embedded member groups without changing resolved membership"""
 
-    _, doc_cls = _build_class_with_members()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_members = False
+    class CustomClass(ClassRenderer):
+        def render_members(self) -> list:
+            return []
 
+    _, doc = _build_class_with_members()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     assert render.render_members() == []
+    assert "Methods" not in str(render.body)
+    assert doc.members == original_members
 
 
 def test_mixin_render_member_pages_returns_groups():
@@ -14216,17 +14218,22 @@ def test_mixin_render_member_pages_returns_groups():
     # No type alias members in this fixture, so that slot is None.
     assert pages[0] is None
     for p in pages[1:]:
-        assert isinstance(p, RenderedMemberPagesGroup)
+        assert isinstance(p, RenderedMemberGroup)
 
 
-def test_mixin_render_member_pages_show_members_false():
-    """render_member_pages returns empty list when show_members=False."""
+def test_mixin_render_member_pages_override_omits_groups() -> None:
+    """Omit linked member groups without changing resolved membership"""
 
-    _, doc_cls = _build_class_with_member_pages()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_members = False
+    class CustomClass(ClassRenderer):
+        def render_member_pages(self) -> list:
+            return []
 
+    _, doc = _build_class_with_member_pages()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     assert render.render_member_pages() == []
+    assert "Methods" not in str(render.body)
+    assert doc.members == original_members
 
 
 def _build_class_with_member_pages_and_type_alias():
@@ -14253,24 +14260,32 @@ def test_mixin_type_alias_member_pages_property():
 
 
 def test_mixin_render_type_alias_member_pages():
-    """render_type_alias_member_pages returns RenderedMemberPagesGroup."""
+    """render_type_alias_member_pages returns RenderedMemberGroup."""
 
     _, doc_cls = _build_class_with_member_pages_and_type_alias()
     render = ClassRenderer(doc_cls, level=1, settings=Settings())
 
     result = render.render_type_alias_member_pages()
-    assert isinstance(result, RenderedMemberPagesGroup)
+    assert isinstance(result, RenderedMemberGroup)
     assert "Type Aliases" in str(result.title)
 
 
-def test_mixin_render_type_alias_member_pages_show_false():
-    """render_type_alias_member_pages returns None when show_type_aliases=False."""
+def test_mixin_render_type_alias_member_pages_override_omits_group() -> None:
+    """Omit one member kind without changing resolved membership"""
 
-    _, doc_cls = _build_class_with_member_pages_and_type_alias()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_type_aliases = False
+    class CustomClass(ClassRenderer):
+        def render_type_alias_member_pages(self) -> None:
+            return None
 
+    _, doc = _build_class_with_member_pages_and_type_alias()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     assert render.render_type_alias_member_pages() is None
+    assert doc.members == original_members
+    assert (
+        getattr(ClassRenderer(doc, settings=Settings()), "render_type_alias_member_pages")()
+        is not None
+    )
 
 
 def test_mixin_render_member_pages_includes_type_alias_group():
@@ -14281,7 +14296,7 @@ def test_mixin_render_member_pages_includes_type_alias_group():
 
     pages = render.render_member_pages()
     assert len(pages) == 4
-    assert isinstance(pages[0], RenderedMemberPagesGroup)
+    assert isinstance(pages[0], RenderedMemberGroup)
     assert "Type Aliases" in str(pages[0].title)
 
 
@@ -14352,162 +14367,219 @@ def test_mixin_function_member_pages_property():
 
 
 def test_mixin_render_classes():
-    """render_classes returns a RenderedMembersGroup with 'Classes' title."""
+    """render_classes returns a RenderedMemberGroup with 'Classes' title."""
 
     _, doc_cls = _build_class_with_members()
     render = ClassRenderer(doc_cls, level=1, settings=Settings())
 
     result = render.render_classes()
-    assert isinstance(result, RenderedMembersGroup)
+    assert isinstance(result, RenderedMemberGroup)
     assert "Classes" in str(result.title)
 
 
 def test_mixin_render_functions():
-    """render_functions returns a RenderedMembersGroup with 'Methods' title for classes."""
+    """render_functions returns a RenderedMemberGroup with 'Methods' title for classes."""
 
     _, doc_cls = _build_class_with_members()
     render = ClassRenderer(doc_cls, level=1, settings=Settings())
 
     result = render.render_functions()
-    assert isinstance(result, RenderedMembersGroup)
+    assert isinstance(result, RenderedMemberGroup)
     assert "Methods" in str(result.title)
 
 
 def test_mixin_render_attributes():
-    """render_attributes returns a RenderedMembersGroup with 'Attributes' title."""
+    """render_attributes returns a RenderedMemberGroup with 'Attributes' title."""
 
     _, doc_cls = _build_class_with_members()
     render = ClassRenderer(doc_cls, level=1, settings=Settings())
 
     result = render.render_attributes()
-    assert isinstance(result, RenderedMembersGroup)
+    assert isinstance(result, RenderedMemberGroup)
     assert "Attributes" in str(result.title)
 
 
-def test_mixin_render_classes_show_false():
-    """render_classes returns None when show_classes=False."""
+def test_mixin_render_classes_override_omits_group() -> None:
+    """Omit one member kind without changing resolved membership"""
 
-    _, doc_cls = _build_class_with_members()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_classes = False
+    class CustomClass(ClassRenderer):
+        def render_classes(self) -> None:
+            return None
 
+    _, doc = _build_class_with_members()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     assert render.render_classes() is None
+    assert doc.members == original_members
+    assert getattr(ClassRenderer(doc, settings=Settings()), "render_classes")() is not None
 
 
-def test_mixin_render_functions_show_false():
-    """render_functions returns None when show_functions=False."""
+def test_mixin_render_functions_override_omits_group() -> None:
+    """Omit one member kind without changing resolved membership"""
 
-    _, doc_cls = _build_class_with_members()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_functions = False
+    class CustomClass(ClassRenderer):
+        def render_functions(self) -> None:
+            return None
 
+    _, doc = _build_class_with_members()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     assert render.render_functions() is None
+    assert doc.members == original_members
+    assert getattr(ClassRenderer(doc, settings=Settings()), "render_functions")() is not None
 
 
-def test_mixin_render_attributes_show_false():
-    """render_attributes returns None when show_attributes=False."""
+def test_mixin_render_attributes_override_omits_group() -> None:
+    """Omit one member kind without changing resolved membership"""
 
-    _, doc_cls = _build_class_with_members()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_attributes = False
+    class CustomClass(ClassRenderer):
+        def render_attributes(self) -> None:
+            return None
 
+    _, doc = _build_class_with_members()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     assert render.render_attributes() is None
+    assert doc.members == original_members
+    assert getattr(ClassRenderer(doc, settings=Settings()), "render_attributes")() is not None
 
 
 def test_mixin_render_class_member_pages():
-    """render_class_member_pages returns RenderedMemberPagesGroup."""
+    """render_class_member_pages returns RenderedMemberGroup."""
 
     _, doc_cls = _build_class_with_member_pages()
     render = ClassRenderer(doc_cls, level=1, settings=Settings())
 
     result = render.render_class_member_pages()
-    assert isinstance(result, RenderedMemberPagesGroup)
+    assert isinstance(result, RenderedMemberGroup)
 
 
 def test_mixin_render_function_member_pages():
-    """render_function_member_pages returns RenderedMemberPagesGroup."""
+    """render_function_member_pages returns RenderedMemberGroup."""
 
     _, doc_cls = _build_class_with_member_pages()
     render = ClassRenderer(doc_cls, level=1, settings=Settings())
 
     result = render.render_function_member_pages()
-    assert isinstance(result, RenderedMemberPagesGroup)
+    assert isinstance(result, RenderedMemberGroup)
 
 
 def test_mixin_render_attribute_member_pages():
-    """render_attribute_member_pages returns RenderedMemberPagesGroup."""
+    """render_attribute_member_pages returns RenderedMemberGroup."""
 
     _, doc_cls = _build_class_with_member_pages()
     render = ClassRenderer(doc_cls, level=1, settings=Settings())
 
     result = render.render_attribute_member_pages()
-    assert isinstance(result, RenderedMemberPagesGroup)
+    assert isinstance(result, RenderedMemberGroup)
 
 
-def test_mixin_render_class_member_pages_show_false():
-    """render_class_member_pages returns None when show_classes=False."""
+def test_mixin_render_class_member_pages_override_omits_group() -> None:
+    """Omit one member kind without changing resolved membership"""
 
-    _, doc_cls = _build_class_with_member_pages()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_classes = False
+    class CustomClass(ClassRenderer):
+        def render_class_member_pages(self) -> None:
+            return None
 
+    _, doc = _build_class_with_member_pages()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     assert render.render_class_member_pages() is None
+    assert doc.members == original_members
+    assert (
+        getattr(ClassRenderer(doc, settings=Settings()), "render_class_member_pages")() is not None
+    )
 
 
-def test_mixin_render_function_member_pages_show_false():
-    """render_function_member_pages returns None when show_functions=False."""
+def test_mixin_render_function_member_pages_override_omits_group() -> None:
+    """Omit one member kind without changing resolved membership"""
 
-    _, doc_cls = _build_class_with_member_pages()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_functions = False
+    class CustomClass(ClassRenderer):
+        def render_function_member_pages(self) -> None:
+            return None
 
+    _, doc = _build_class_with_member_pages()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     assert render.render_function_member_pages() is None
+    assert doc.members == original_members
+    assert (
+        getattr(ClassRenderer(doc, settings=Settings()), "render_function_member_pages")()
+        is not None
+    )
 
 
-def test_mixin_render_attribute_member_pages_show_false():
-    """render_attribute_member_pages returns None when show_attributes=False."""
+def test_mixin_render_attribute_member_pages_override_omits_group() -> None:
+    """Omit one member kind without changing resolved membership"""
 
-    _, doc_cls = _build_class_with_member_pages()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_attributes = False
+    class CustomClass(ClassRenderer):
+        def render_attribute_member_pages(self) -> None:
+            return None
 
+    _, doc = _build_class_with_member_pages()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     assert render.render_attribute_member_pages() is None
+    assert doc.members == original_members
+    assert (
+        getattr(ClassRenderer(doc, settings=Settings()), "render_attribute_member_pages")()
+        is not None
+    )
 
 
-def test_mixin_render_members_group_no_summary():
-    """_render_members_group skips summary when show_*_summary=False."""
+def test_mixin_render_members_group_no_summary() -> None:
+    """Keep a group's member bodies when its summary is omitted"""
 
-    _, doc_cls = _build_class_with_members()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_functions_summary = False
+    class CustomClass(ClassRenderer):
+        def render_members_summary(self, kind: str, member_renderers: list) -> object:
+            if kind == "functions":
+                return None
+            return super().render_members_summary(kind, member_renderers)
 
+    _, doc = _build_class_with_members()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     result = render.render_functions()
     assert result is not None
     assert result.summary is None
+    assert result.body is not None
+    assert doc.members == original_members
 
 
-def test_mixin_render_members_group_no_body():
-    """_render_members_group skips body when show_*_body=False."""
+def test_mixin_render_members_group_no_body() -> None:
+    """Keep a group's summary when its member bodies are omitted"""
 
-    _, doc_cls = _build_class_with_members()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_functions_body = False
+    class CustomClass(ClassRenderer):
+        def render_members_body(self, kind: str, member_renderers: list) -> object:
+            if kind == "functions":
+                return None
+            return super().render_members_body(kind, member_renderers)
 
+    _, doc = _build_class_with_members()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     result = render.render_functions()
     assert result is not None
-    assert result.members_body is None
+    assert result.summary is not None
+    assert result.body is None
+    assert doc.members == original_members
 
 
-def test_mixin_render_members_group_no_summary_global():
-    """_render_members_group skips summary when show_members_summary=False."""
+def test_mixin_render_members_group_no_summary_global() -> None:
+    """Keep member bodies when every summary is omitted"""
 
-    _, doc_cls = _build_class_with_members()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_members_summary = False
+    class CustomClass(ClassRenderer):
+        def render_members_summary(self, kind: str, member_renderers: list) -> object:
+            return None
 
+    _, doc = _build_class_with_members()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     result = render.render_functions()
     assert result is not None
     assert result.summary is None
+    assert result.body is not None
+    assert doc.members == original_members
 
 
 def test_mixin_render_members_group_empty_returns_none():
@@ -14526,44 +14598,65 @@ def test_mixin_render_members_group_empty_returns_none():
     assert render.render_functions() is not None
 
 
-def test_mixin_render_members_group_attributes_summary_and_body():
-    """_render_members_group for attributes respects show_attributes_summary/body."""
+def test_mixin_render_members_group_attributes_summary_and_body() -> None:
+    """Drop the attributes group when it has neither a summary nor a body"""
 
-    _, doc_cls = _build_class_with_members()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_attributes_summary = False
-    render.show_attributes_body = False
+    class CustomClass(ClassRenderer):
+        def render_members_summary(self, kind: str, member_renderers: list) -> object:
+            if kind == "attributes":
+                return None
+            return super().render_members_summary(kind, member_renderers)
 
+        def render_members_body(self, kind: str, member_renderers: list) -> object:
+            if kind == "attributes":
+                return None
+            return super().render_members_body(kind, member_renderers)
+
+    _, doc = _build_class_with_members()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     result = render.render_attributes()
-    assert result is not None
-    assert result.summary is None
-    assert result.members_body is None
+    assert result is None
+    assert doc.members == original_members
 
 
-def test_mixin_render_members_group_classes_summary_and_body():
-    """_render_members_group for classes respects show_classes_summary/body."""
+def test_mixin_render_members_group_classes_summary_and_body() -> None:
+    """Drop the classes group when it has neither a summary nor a body"""
 
-    _, doc_cls = _build_class_with_members()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_classes_summary = False
-    render.show_classes_body = False
+    class CustomClass(ClassRenderer):
+        def render_members_summary(self, kind: str, member_renderers: list) -> object:
+            if kind == "classes":
+                return None
+            return super().render_members_summary(kind, member_renderers)
 
+        def render_members_body(self, kind: str, member_renderers: list) -> object:
+            if kind == "classes":
+                return None
+            return super().render_members_body(kind, member_renderers)
+
+    _, doc = _build_class_with_members()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     result = render.render_classes()
-    assert result is not None
-    assert result.summary is None
-    assert result.members_body is None
+    assert result is None
+    assert doc.members == original_members
 
 
-def test_mixin_render_member_pages_group_no_summary():
-    """_render_member_pages_group skips summary when show_*_summary=False."""
+def test_mixin_render_member_pages_group_no_summary() -> None:
+    """Drop a linked function group without a summary"""
 
-    _, doc_cls = _build_class_with_member_pages()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_functions_summary = False
+    class CustomClass(ClassRenderer):
+        def render_members_summary(self, kind: str, member_renderers: list) -> object:
+            if kind == "functions":
+                return None
+            return super().render_members_summary(kind, member_renderers)
 
+    _, doc = _build_class_with_member_pages()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     result = render.render_function_member_pages()
-    assert result is not None
-    assert result.summary is None
+    assert result is None
+    assert doc.members == original_members
 
 
 def test_mixin_render_member_pages_group_empty_returns_none():
@@ -14596,40 +14689,53 @@ def test_mixin_render_member_pages_group_functions_slug_for_class():
     assert "Functions" in title_str
 
 
-def test_mixin_render_member_pages_group_attributes_no_summary():
-    """_render_member_pages_group for attributes skips summary when disabled."""
+def test_mixin_render_member_pages_group_attributes_no_summary() -> None:
+    """Drop a linked attribute group without a summary"""
 
-    _, doc_cls = _build_class_with_member_pages()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_attributes_summary = False
+    class CustomClass(ClassRenderer):
+        def render_members_summary(self, kind: str, member_renderers: list) -> object:
+            if kind == "attributes":
+                return None
+            return super().render_members_summary(kind, member_renderers)
 
+    _, doc = _build_class_with_member_pages()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     result = render.render_attribute_member_pages()
-    assert result is not None
-    assert result.summary is None
+    assert result is None
+    assert doc.members == original_members
 
 
-def test_mixin_render_member_pages_group_classes_no_summary():
-    """_render_member_pages_group for classes skips summary when disabled."""
+def test_mixin_render_member_pages_group_classes_no_summary() -> None:
+    """Drop a linked class group without a summary"""
 
-    _, doc_cls = _build_class_with_member_pages()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_classes_summary = False
+    class CustomClass(ClassRenderer):
+        def render_members_summary(self, kind: str, member_renderers: list) -> object:
+            if kind == "classes":
+                return None
+            return super().render_members_summary(kind, member_renderers)
 
+    _, doc = _build_class_with_member_pages()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     result = render.render_class_member_pages()
-    assert result is not None
-    assert result.summary is None
+    assert result is None
+    assert doc.members == original_members
 
 
-def test_mixin_render_member_pages_group_global_summary_off():
-    """_render_member_pages_group skips summary when show_members_summary=False."""
+def test_mixin_render_member_pages_group_global_summary_off() -> None:
+    """Drop a linked group when every summary is omitted"""
 
-    _, doc_cls = _build_class_with_member_pages()
-    render = ClassRenderer(doc_cls, level=1, settings=Settings())
-    render.show_members_summary = False
+    class CustomClass(ClassRenderer):
+        def render_members_summary(self, kind: str, member_renderers: list) -> object:
+            return None
 
+    _, doc = _build_class_with_member_pages()
+    original_members = list(doc.members)
+    render = CustomClass(doc, settings=Settings())
     result = render.render_function_member_pages()
-    assert result is not None
-    assert result.summary is None
+    assert result is None
+    assert doc.members == original_members
 
 
 def test_mixin_render_members_group_has_summary_table():
@@ -16477,7 +16583,7 @@ def test_render_api_page_summary_multi_no_flatten_raises():
     )
 
     ap = APIPageRenderer(node=page, level=1, settings=Settings())
-    with pytest.raises(ValueError, match="Cannot summarize page"):
+    with pytest.raises(ValueError, match="Cannot summarise page"):
         ap.render_summary()
 
 
@@ -16644,7 +16750,7 @@ def test_render_api_page_full_lifecycle():
     assert ap._has_one_object is True
 
     # Test render_objs
-    objs = ap.render_objs
+    objs = ap.object_renderers
     assert len(objs) == 1
 
     # Test render_metadata
@@ -16713,15 +16819,17 @@ def _make_class_page_with_members(name="MyClass"):
     return content.Page(path=f"reference/{name}", contents=[doc_cls])
 
 
-def test_render_api_page_suppresses_inner_title_at_level_1():
-    """At level=1, APIPageRenderer flips the inner object's show_title off."""
+def test_render_api_page_suppresses_inner_title_at_level_1() -> None:
+    """Keep the object title in front matter without a duplicate visible heading"""
     page = _make_function_page()
-
-    ap = APIPageRenderer(node=page, level=1, settings=Settings())
-    inner = ap.render_objs[0]
-
-    assert inner.show_title is False
-    assert ap.show_title is True
+    renderer = APIPageRenderer(page, settings=Settings())
+    inner = renderer.object_renderers[0]
+    output = str(renderer)
+    assert str(inner.title_content) in output
+    assert inner.title is None
+    assert renderer.title is not None
+    assert "title:" in output
+    assert not re.search(r"^# ", output, re.MULTILINE)
 
 
 def test_render_api_page_single_object_renders_title_once():
@@ -17023,7 +17131,7 @@ def test_type_sections_empty_lists():
         protocols_items=[], typevars_items=[], typealiases_items=[], settings=Settings()
     )
 
-    assert [category.renders for category in ts.categories] == [[], [], []]
+    assert [category.renderers for category in ts.categories] == [[], [], []]
     assert ts.items == []
     body = ts.render_body()
     assert str(body) == ""
@@ -17052,62 +17160,51 @@ def test_type_sections_items_combines_all():
         )
 
     assert ts.items == [p_item, tv_item, ta_item]
-    assert [len(category.renders) for category in ts.categories] == [1, 1, 1]
+    assert [len(category.renderers) for category in ts.categories] == [1, 1, 1]
 
 
-def test_type_sections_post_init_protocols_no_summary():
-    """TypeSections.__post_init__ sets show_members_summary=False on protocols."""
-
-    p_item = InventoryItem(name="Proto", obj=MagicMock())
-
-    mock_render = MagicMock()
-
-    with (
-        patch("great_docs._apiref.typing_information.griffe_to_doc"),
-        patch("great_docs._apiref.typing_information.Renderers.make", return_value=mock_render),
-    ):
-        ts = TypeSections(
-            protocols_items=[p_item], typevars_items=[], typealiases_items=[], settings=Settings()
-        )
-
-    assert mock_render.show_members_summary is False
+def test_type_sections_protocols_keep_member_bodies_without_summary() -> None:
+    """Keep protocol member documentation while omitting member summaries"""
+    protocol = gf.Class(name="Protocol")
+    method = gf.Function(name="run", docstring=gf.Docstring("Protocol method body marker"))
+    protocol.set_member("run", method)
+    item = InventoryItem(name="Protocol", obj=protocol)
+    sections = TypeSections(
+        protocols_items=[item], typevars_items=[], typealiases_items=[], settings=Settings()
+    )
+    output = str(sections)
+    assert "Protocol method body marker" in output
+    assert "| Name" not in output
+    assert sections.items == [item]
 
 
-def test_type_sections_post_init_typevars_no_sig_name():
-    """TypeSections.__post_init__ sets show_signature_name=False on typevars."""
-
-    tv_item = InventoryItem(name="T", obj=MagicMock())
-
-    mock_render = MagicMock()
-
-    with (
-        patch("great_docs._apiref.typing_information.griffe_to_doc"),
-        patch("great_docs._apiref.typing_information.Renderers.make", return_value=mock_render),
-    ):
-        ts = TypeSections(
-            protocols_items=[], typevars_items=[tv_item], typealiases_items=[], settings=Settings()
-        )
-
-    assert mock_render.show_signature_name is False
+def test_type_sections_type_variables_keep_heading_without_repeated_name() -> None:
+    """Keep a type variable's heading while omitting its name from the signature"""
+    variable = gf.Attribute(name="GenericValue", value="TypeVar('T')")
+    item = InventoryItem(name="GenericValue", obj=variable)
+    sections = TypeSections(
+        protocols_items=[], typevars_items=[item], typealiases_items=[], settings=Settings()
+    )
+    renderer = sections.categories[1].renderers[0]
+    assert "GenericValue" in str(renderer.title)
+    assert "GenericValue" not in str(renderer.signature)
+    assert "TypeVar" in str(renderer.signature)
+    assert sections.items == [item]
 
 
-def test_type_sections_post_init_typealiases_settings():
-    """TypeSections keeps alias names and hides redundant annotations."""
-
-    ta_item = InventoryItem(name="MyAlias", obj=MagicMock())
-
-    mock_render = MagicMock()
-
-    with (
-        patch("great_docs._apiref.typing_information.griffe_to_doc"),
-        patch("great_docs._apiref.typing_information.Renderers.make", return_value=mock_render),
-    ):
-        ts = TypeSections(
-            protocols_items=[], typevars_items=[], typealiases_items=[ta_item], settings=Settings()
-        )
-
-    assert mock_render.show_signature_annotation is False
-    assert "show_signature_name" not in ts.categories[2].render_flags
+def test_type_sections_pep613_aliases_keep_heading_without_marker() -> None:
+    """Keep alias names and values while omitting the redundant `TypeAlias` annotation"""
+    alias = gf.Attribute(name="MyAlias", value="int", annotation=gf.ExprName("TypeAlias"))
+    item = InventoryItem(name="MyAlias", obj=alias)
+    sections = TypeSections(
+        protocols_items=[], typevars_items=[], typealiases_items=[item], settings=Settings()
+    )
+    renderer = sections.categories[2].renderers[0]
+    output = str(renderer)
+    assert "MyAlias" in output
+    assert "int" in output
+    assert "TypeAlias" not in output
+    assert sections.items == [item]
 
 
 def test_type_sections_render_body_protocols_section():

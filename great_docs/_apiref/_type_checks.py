@@ -10,7 +10,7 @@ from . import content
 if TYPE_CHECKING:
     from typing import TypeGuard
 
-    from .typing import DocMemberType, DocType  # noqa: TCH001
+    from .typing import DocMemberType  # noqa: TCH001
 
 
 def _resolved(obj: gf.Object | gf.Alias) -> gf.Object | None:
@@ -331,32 +331,6 @@ def is_doc_attribute(el: DocMemberType) -> TypeGuard[content.DocAttribute]:
 def is_doc_type_alias(el: DocMemberType) -> TypeGuard[content.DocTypeAlias]:
     """Whether the member documents a type alias"""
     return el.obj.is_type_alias
-
-
-def griffe_to_doc(
-    obj: gf.Object | gf.Alias,
-    *,
-    deep: bool = True,
-    inherited: bool = True,
-    skip_aliases: bool = False,
-) -> DocType:
-    """
-    Convert a griffe object to a documentable type
-
-    By default all members, including inherited ones, are included
-    recursively. `inherited=False` limits members to those defined on the
-    object itself; `skip_aliases=True` leaves out members that are aliases
-    (e.g. imported names).
-    """
-    members = None
-    if deep:
-        member_map = obj.all_members if inherited else obj.members
-        members = [
-            griffe_to_doc(m, inherited=inherited, skip_aliases=skip_aliases)
-            for m in member_map.values()
-            if not (skip_aliases and isinstance(m, gf.Alias))
-        ]
-    return content.Doc.from_griffe(obj.name, obj, members=members)
 
 
 def is_field_init_false(el: gf.Parameter) -> bool:

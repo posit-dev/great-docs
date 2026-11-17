@@ -28,14 +28,12 @@ class TypeAliasRenderer(ObjectRenderer):
     PEP 695 alias documentation with source-form declarations
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         # We narrow the type with a TypeAlias since we do not expect
         # any subclasses to have narrower types
         self.doc: content.DocTypeAlias = self.doc
         self.obj: gf.TypeAlias = self.obj
-
-        self.subject_above_signature = self.subject_above_signature is None and not self.contained
 
     def _render_value(self, value: str | gf.Expr) -> str:
         """
@@ -54,7 +52,7 @@ class TypeAliasRenderer(ObjectRenderer):
         """
         Render the alias in its source form, e.g. `type Pair[T] = tuple[T, T]`
         """
-        name = self.signature_name if self.show_signature_name else ""
+        name = self.signature_name
         declared = f"{name}{render_type_parameters(self.obj.type_parameters)}"
 
         items: list[InlineContentItem] = [
@@ -86,7 +84,7 @@ class TypeAliasRenderer(ObjectRenderer):
         return Blocks(
             [
                 self.render_docstring_subject(),
-                self.render_signature() if self.show_signature else None,
+                self.signature,
             ]
         )
 

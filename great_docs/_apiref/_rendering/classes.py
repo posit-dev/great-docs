@@ -24,15 +24,12 @@ class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer)
     Class documentation with constructor and member presentation
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         # We narrow the type with a TypeAlias since we do not expect
         # any subclasses to have narrower types
         self.doc: content.DocClass = self.doc
         self.obj: gf.Class = self.obj
-
-        if self.subject_above_signature is None:
-            self.subject_above_signature = True
 
     @cached_property
     def is_dataclass(self):

@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING
 
 import griffe as gf
 
+from ._conversion import griffe_to_doc
 from ._rendering._renderers import Renderers
 from ._settings import Settings
-from ._type_checks import griffe_to_doc
 from .introspect import get_object
 
 if TYPE_CHECKING:

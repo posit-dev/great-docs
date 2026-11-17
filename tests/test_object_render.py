@@ -10,6 +10,7 @@ import griffe as gf
 import pytest
 
 import great_docs._apiref._rendering.objects as objects
+from great_docs._apiref._rendering._source_links import source_relative_path
 from great_docs._apiref._rendering.objects import ObjectRenderer
 from great_docs._apiref._settings import Settings, SourceLinks
 from great_docs._project.repository import Repository
@@ -141,9 +142,13 @@ def test_source_links_use_provider_routes(provider: str, anchor: str) -> None:
     repository = Repository.parse(f"https://{provider}.com/team/pkg")
     assert repository is not None
     fake = types.SimpleNamespace(
-        _source_relative_path=lambda: "src/pkg/café code.py",
         settings=Settings(source_links=SourceLinks(repository=repository, ref="feature/docs")),
-        obj=types.SimpleNamespace(lineno=3, endlineno=8),
+        obj=types.SimpleNamespace(
+            filepath="src/pkg/café code.py",
+            relative_package_filepath="src/pkg/café code.py",
+            lineno=3,
+            endlineno=8,
+        ),
     )
 
     link = _get_private_cls().__dict__["source_link"].func(fake)
@@ -160,7 +165,10 @@ class TestSourceLinkCompiledExtension:
         cls = _get_private_cls()
 
         fake_self = types.SimpleNamespace(
-            _source_relative_path=lambda: "mymod.cpython-313-x86_64-linux-gnu.so",
+            obj=types.SimpleNamespace(
+                filepath="mymod.cpython-313-x86_64-linux-gnu.so",
+                relative_package_filepath="mymod.cpython-313-x86_64-linux-gnu.so",
+            ),
             settings=Settings(source_links=LINKED),
         )
 
@@ -174,7 +182,8 @@ class TestSourceLinkCompiledExtension:
         cls = _get_private_cls()
 
         fake_self = types.SimpleNamespace(
-            _source_relative_path=lambda: "mymod.pyd", settings=Settings(source_links=LINKED)
+            obj=types.SimpleNamespace(filepath="mymod.pyd", relative_package_filepath="mymod.pyd"),
+            settings=Settings(source_links=LINKED),
         )
 
         result = cls.__dict__["source_link"].func(fake_self)
@@ -186,16 +195,12 @@ class TestSourceRelativePathValueError:
     def test_relative_to_raises_value_error(self):
         """A file outside the repository root uses its package-relative path"""
 
-        cls = _get_private_cls()
-
         obj = types.SimpleNamespace(
             filepath="/unrelated/path/to/mod.py",
             relative_package_filepath="mod.py",
         )
         links = SourceLinks(package_root=Path("/completely/different/root"))
-        fake_self = types.SimpleNamespace(obj=obj, settings=Settings(source_links=links))
-
-        result = cls.__dict__["_source_relative_path"](fake_self)
+        result = source_relative_path(obj, links)
 
         assert result == "mod.py"
 
@@ -204,15 +209,11 @@ class TestSourceRelativePathNamespacePackage:
     def test_list_filepath_falls_back_to_package_relative_path(self):
         """Verify that a namespace package uses its package-relative source path"""
 
-        cls = _get_private_cls()
-
         obj = types.SimpleNamespace(
             filepath=[Path("/repo/a/ns"), Path("/repo/b/ns")],
             relative_package_filepath="ns",
         )
         links = SourceLinks(package_root=Path("/repo"))
-        fake_self = types.SimpleNamespace(obj=obj, settings=Settings(source_links=links))
-
-        result = cls.__dict__["_source_relative_path"](fake_self)
+        result = source_relative_path(obj, links)
 
         assert result == "ns"

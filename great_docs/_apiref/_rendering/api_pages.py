@@ -17,6 +17,7 @@ from great_docs.pandoc.blocks import (
 from great_docs.pandoc.inlines import Link
 
 from .._format import markdown_escape
+from ._context import _RenderingPurpose
 from .base import BaseRenderer
 
 if TYPE_CHECKING:
@@ -43,7 +44,7 @@ class APIPageRenderer(PageRendererMixin, BaseRenderer):
     toc_depth: int = _DEFAULT_SITE_TOC_DEPTH
     """Merged site `toc-depth` used to select a page override"""
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.page = cast("Page", self.node)
         """Page in the documentation"""
 
@@ -55,35 +56,28 @@ class APIPageRenderer(PageRendererMixin, BaseRenderer):
         return len(self.page.contents) == 1
 
     @cached_property
-    def render_objs(self):
+    def object_renderers(self):
         """
         Render objects on the API page
         """
         level = self.level if self._has_one_object else self.level + 1
-        render_objs: list[ObjectRenderer] = [
+        object_renderers: list[ObjectRenderer] = [
             self.renderers.make(
                 c,
                 level,
                 page_path=self.path,
+                _purpose=_RenderingPurpose.API_PAGE,
                 settings=self.settings,
             )
             for c in self.page.contents
         ]
 
-        # For a top level object, the title will be created by
-        # this api-page as front-matter, rather than a regular header.
-        # Suppress the inner object's title to avoid a duplicate heading
-        # alongside the Quarto-rendered front-matter title.
-        for obj in render_objs:
-            if obj.level == 1:
-                obj.show_title = False
-
-        return render_objs
+        return object_renderers
 
     def render_metadata(self) -> BlockContent:
         # Derive the title of the page from the first (top-level) object
-        obj = self.render_objs[0]
-        title = obj._title  # pyright: ignore[reportPrivateUsage]
+        obj = self.object_renderers[0]
+        title = obj.title_content
         metadata: dict[str, object] = {
             "title": f"{title}",
             "body-classes": "doc-api-page doc-py-api-page",
@@ -104,7 +98,7 @@ class APIPageRenderer(PageRendererMixin, BaseRenderer):
         """
         Render the body of the documentation page
         """
-        return Blocks(self.render_objs)
+        return Blocks(self.object_renderers)
 
     def render_summary(self) -> Sequence[DefinitionItem]:
         page = self.page
@@ -113,11 +107,11 @@ class APIPageRenderer(PageRendererMixin, BaseRenderer):
             items = [(str(link), page.summary.desc)]
         elif len(page.contents) > 1 and not page.flatten:
             msg = (
-                f"Cannot summarize page {page.path}. "
+                f"Cannot summarise page {page.path}. "
                 "Either set its `summary` attribute with name and"
                 "description details, or set `flatten` to True."
             )
             raise ValueError(msg)
         else:
-            items = [row for d in self.render_objs for row in d.render_summary()]
+            items = [row for d in self.object_renderers for row in d.render_summary()]
         return items
