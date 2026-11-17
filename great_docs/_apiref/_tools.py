@@ -84,7 +84,14 @@ def _render(
         if node is None:
             return ""
         with extension.error_context("render", obj.path):
-            return str(extension.renderers.make(node, settings=selected_settings))
+            return str(
+                extension.renderers.make(
+                    node,
+                    settings=selected_settings,
+                    extension=extension,
+                    output_root=reference.output_root if reference is not None else None,
+                )
+            )
     finally:
         if reference is None:
             extension.close()

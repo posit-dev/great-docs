@@ -346,6 +346,7 @@ class APIReference:
             site_toc_depth=self.site_toc_depth,
             renderers=self.renderers,
             extension=self.extension,
+            output_root=self.output_root,
         )
         write_typing_information(s.typing_module_paths, self)
 

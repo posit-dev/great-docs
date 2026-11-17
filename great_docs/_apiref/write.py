@@ -310,6 +310,7 @@ def write_pages(
     site_toc_depth: int,
     renderers: Renderers | None = None,
     extension: Extension | None = None,
+    output_root: Path | None = None,
 ) -> None:
     """
     Write API reference pages to the configured output directory
@@ -336,7 +337,11 @@ def write_pages(
     extension
         Active operation owner for contextual renderer failures. `None` preserves
         standalone rendering without configured extension error handling.
+    output_root
+        The documentation output root, or `None`
+        outside a known build.
     """
+    from ._rendering._context import output_page_path
     from ._rendering._renderers import Renderers
 
     choices = renderers or Renderers()
@@ -348,7 +353,13 @@ def write_pages(
         with context:
             rendered = str(
                 choices.make(
-                    page, settings.header_level, toc_depth=site_toc_depth, settings=settings
+                    page,
+                    settings.header_level,
+                    toc_depth=site_toc_depth,
+                    settings=settings,
+                    extension=extension,
+                    output_root=output_root,
+                    context_page_path=output_page_path(page_path, output_root),
                 )
             )
 

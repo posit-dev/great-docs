@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from great_docs._apiref._rendering.pages import PageRendererMixin
@@ -17,7 +18,7 @@ from great_docs.pandoc.blocks import (
 from great_docs.pandoc.inlines import Link
 
 from .._format import markdown_escape
-from ._context import _RenderingPurpose
+from ._context import _RenderingPurpose, output_page_path
 from .base import BaseRenderer
 
 if TYPE_CHECKING:
@@ -48,18 +49,20 @@ class APIPageRenderer(PageRendererMixin, BaseRenderer):
         self.page = cast("Page", self.node)
         """Page in the documentation"""
 
-        self.path = f"{self.page.path}.qmd"
-        """All objects on this page are rendered at this path"""
+        self.path = f"{self.page.path}{self.settings.out_page_suffix}"
+        """The page's path relative to the reference directory, used in summary links"""
+
+        self.context_page_path = output_page_path(
+            self.context_page_path or Path(self.settings.dir) / self.path, self.output_root
+        )
 
     @property
-    def _has_one_object(self):
+    def _has_one_object(self) -> bool:
         return len(self.page.contents) == 1
 
     @cached_property
-    def object_renderers(self):
-        """
-        Render objects on the API page
-        """
+    def object_renderers(self) -> list[ObjectRenderer]:
+        """The renderers of the page's objects, which share the page's context"""
         level = self.level if self._has_one_object else self.level + 1
         object_renderers: list[ObjectRenderer] = [
             self.renderers.make(
@@ -68,6 +71,9 @@ class APIPageRenderer(PageRendererMixin, BaseRenderer):
                 page_path=self.path,
                 _purpose=_RenderingPurpose.API_PAGE,
                 settings=self.settings,
+                extension=self.extension,
+                output_root=self.output_root,
+                context_page_path=self.context_page_path,
             )
             for c in self.page.contents
         ]

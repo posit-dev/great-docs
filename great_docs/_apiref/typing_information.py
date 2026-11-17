@@ -1,3 +1,11 @@
+"""
+Typing-information pages and their inventory entries
+
+Load and prepare a module's own protocols, type variables and type aliases through the
+reference, and render them with the same renderers and project context as
+the other API pages.
+"""
+
 from __future__ import annotations
 
 from contextlib import nullcontext
@@ -18,7 +26,7 @@ from great_docs.pandoc.blocks import (
 
 from . import inventory
 from ._conversion import griffe_to_doc
-from ._rendering._context import _RenderingPurpose
+from ._rendering._context import _RenderingPurpose, output_page_path
 from ._rendering._renderers import Renderers
 from ._type_checks import is_protocol, is_typealias, is_typevar
 
@@ -50,6 +58,7 @@ class _TypeCategory:
         *,
         extension: Extension | None = None,
         page_path: str | None = None,
+        output_root: Path | None = None,
         prepare: Callable[[gf.Object | gf.Alias], gf.Object | gf.Alias | None] | None = None,
     ) -> _TypeCategory:
         """Construct category renderers using the typing workflow's presentation"""
@@ -62,7 +71,15 @@ class _TypeCategory:
             occurrence = f"{item.name} on {page_path}" if page_path else item.name
             context = extension.error_context("render", occurrence) if extension else nullcontext()
             with context:
-                renderer = choices.make(doc, 3, settings=settings, _purpose=purpose)
+                renderer = choices.make(
+                    doc,
+                    3,
+                    settings=settings,
+                    _purpose=purpose,
+                    extension=extension,
+                    output_root=output_root,
+                    context_page_path=output_page_path(page_path, output_root),
+                )
             renderers.append(renderer)
             retained_items.append(item)
         return cls(title, retained_items, renderers)
@@ -79,6 +96,8 @@ class TypeSections(Block):
     """Active owner for renderer failures, or `None` for standalone sections"""
     page_path: str | None = field(default=None, kw_only=True)
     """The typing page's path, which a rendering failure names"""
+    output_root: Path | None = field(default=None, kw_only=True)
+    """The documentation output root"""
 
     prepare: Callable[[gf.Object | gf.Alias], gf.Object | gf.Alias | None] | None = field(
         default=None, kw_only=True
@@ -105,8 +124,9 @@ class TypeSections(Block):
                 self.settings,
                 self.renderers,
                 _RenderingPurpose.PROTOCOL,
-                extension=extension,
+                extension=self.extension,
                 page_path=self.page_path,
+                output_root=self.output_root,
                 prepare=self.prepare or extension.prepare,
             ),
             _TypeCategory.make(
@@ -115,8 +135,9 @@ class TypeSections(Block):
                 self.settings,
                 self.renderers,
                 _RenderingPurpose.TYPE_VARIABLE,
-                extension=extension,
+                extension=self.extension,
                 page_path=self.page_path,
+                output_root=self.output_root,
                 prepare=self.prepare or extension.prepare,
             ),
             _TypeCategory.make(
@@ -125,8 +146,9 @@ class TypeSections(Block):
                 self.settings,
                 self.renderers,
                 _RenderingPurpose.TYPE_ALIAS,
-                extension=extension,
+                extension=self.extension,
                 page_path=self.page_path,
+                output_root=self.output_root,
                 prepare=self.prepare or extension.prepare,
             ),
         ]
@@ -245,6 +267,7 @@ class TypeInformation(Block):
             extension=self.api_ref.extension,
             page_path=f"{self.base_uri}.qmd",
             prepare=self.api_ref.prepare,
+            output_root=self.api_ref.output_root,
         )
 
     @cached_property

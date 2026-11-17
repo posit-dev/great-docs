@@ -16,8 +16,11 @@ from great_docs.pandoc.components import Attr
 from .base import BaseRenderer
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from great_docs.pandoc.blocks import BlockContent
 
+    from .._customisation import Extension
     from ..api_reference import APIReference
     from ..content import Section
     from ._renderers import Renderers
@@ -35,6 +38,9 @@ class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
         level: int = 1,
         *,
         renderers: Renderers | None = None,
+        extension: Extension | None = None,
+        output_root: Path | None = None,
+        context_page_path: str | None = None,
     ) -> None:
         """Initialise common renderer state from a reference and resolved sections"""
         self.api_ref = api_ref
@@ -49,7 +55,13 @@ class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
         self.options = api_ref.options
 
         super().__init__(
-            api_ref, level, settings=api_ref.settings, renderers=renderers or api_ref.renderers
+            api_ref,
+            level,
+            settings=api_ref.settings,
+            renderers=renderers or api_ref.renderers,
+            extension=extension or api_ref.extension,
+            output_root=output_root if output_root is not None else api_ref.output_root,
+            context_page_path=context_page_path,
         )
 
     def render_description(self) -> BlockContent:
@@ -97,6 +109,14 @@ class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
         | `<section>`{.html} | `.doc-index`{.css} |
         """
         object_renderers = [
-            self.renderers.make(s, self.level, settings=self.settings) for s in self.sections
+            self.renderers.make(
+                s,
+                self.level,
+                settings=self.settings,
+                extension=self.extension,
+                output_root=self.output_root,
+                context_page_path=self.context_page_path,
+            )
+            for s in self.sections
         ]
         return Blocks(object_renderers)

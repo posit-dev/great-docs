@@ -14,10 +14,12 @@ from great_docs.pandoc.blocks import (
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
     from great_docs.pandoc.blocks import DefinitionItem
 
     from .. import content
+    from .._customisation import Extension
     from .._settings import Settings
     from ..api_reference import APIReference
     from ._renderers import Renderers
@@ -52,6 +54,15 @@ class BaseRenderer(Block):
 
     renderers: Renderers = field(default_factory=_default_renderers, kw_only=True)
     """Renderer choices shared with nested objects, pages and summaries"""
+
+    extension: Extension | None = field(default=None, kw_only=True)
+    """The active customisation owner, or `None` for standalone presentation"""
+
+    output_root: Path | None = field(default=None, kw_only=True)
+    """The documentation output root, or `None` outside a known build"""
+
+    context_page_path: str | None = field(default=None, kw_only=True)
+    """The containing page's path relative to the output directory, apart from summary links"""
 
     settings: Settings = field(kw_only=True)
     """

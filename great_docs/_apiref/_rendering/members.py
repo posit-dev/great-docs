@@ -261,6 +261,9 @@ class MembersRendererMixin(ObjectRenderer):
                 contained=True,
                 page_path=self.page_path,
                 settings=self.settings,
+                extension=self.extension,
+                output_root=self.output_root,
+                context_page_path=self.context_page_path,
                 _purpose=_RenderingPurpose.OBJECT,
             )
             for obj in members
@@ -284,6 +287,9 @@ class MembersRendererMixin(ObjectRenderer):
                 contained=False,
                 page_path=f"{page.path}.qmd",
                 settings=self.settings,
+                extension=self.extension,
+                output_root=self.output_root,
+                context_page_path=self.context_page_path,
             )
             for page in pages
         ]

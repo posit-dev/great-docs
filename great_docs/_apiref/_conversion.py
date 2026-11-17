@@ -37,7 +37,8 @@ def griffe_to_doc(
     inherited
         Whether to include inherited members.
     skip_aliases
-        Whether recursive conversion excludes imported and re-exported members.
+        Whether to leave out imported and re-exported members. The members of an alias
+        are kept when the object it points to defines them.
     prepare
         A function that prepares each object before conversion, or `None` to convert
         objects as they are. An object it excludes is left out with its members.
@@ -57,9 +58,13 @@ def griffe_to_doc(
     if deep:
         members = []
         member_map = obj.all_members if inherited else obj.members
-        for member in member_map.values():
+        canonical = obj.final_target if isinstance(obj, gf.Alias) else obj
+        canonical_members = canonical.all_members if inherited else canonical.members
+        for name, member in member_map.items():
             if skip_aliases and isinstance(member, gf.Alias):
-                continue
+                source_member = canonical_members.get(name)
+                if isinstance(source_member, gf.Alias) or source_member is None:
+                    continue
             child = griffe_to_doc(
                 member, inherited=inherited, skip_aliases=skip_aliases, prepare=prepare
             )

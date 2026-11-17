@@ -120,7 +120,14 @@ class ReferenceSectionRenderer(BaseRenderer):
             return
 
         object_renderers: list[RenderObjType] = [
-            self.renderers.make(c, settings=self.settings) for c in self.section.contents
+            self.renderers.make(
+                c,
+                settings=self.settings,
+                extension=self.extension,
+                output_root=self.output_root,
+                context_page_path=self.context_page_path,
+            )
+            for c in self.section.contents
         ]
         rows = [row for r in object_renderers for row in r.render_summary()]
         items = (

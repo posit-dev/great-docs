@@ -47,7 +47,7 @@ from .._format import (
     render_formatted_expr,
     repr_obj,
 )
-from ._context import _RenderingPurpose
+from ._context import RenderContext, _RenderingPurpose, output_page_path
 from ._section_dispatch import SECTION_METHOD
 from ._source_links import source_link
 from .base import BaseRenderer
@@ -124,6 +124,26 @@ class ObjectRenderer(BaseRenderer):
 
         self.obj = self.doc.obj
         """Griffe object (or alias)"""
+
+    @cached_property
+    def context(self) -> RenderContext:
+        """
+        The frozen record of this object's appearance
+
+        The record refers to the prepared documentation rather than copying it. Its
+        page path and project roots are `None` when unknown.
+        """
+        return RenderContext(
+            obj=self.obj,
+            authored_name=self.doc.name,
+            canonical_identity=self.obj.canonical_path,
+            page_path=output_page_path(self.context_page_path, self.output_root),
+            level=self.level,
+            contained=self.contained,
+            source_root=self.extension.source_root if self.extension is not None else None,
+            output_root=self.output_root,
+            settings=self.settings,
+        )
 
     @cached_property
     def kind(self) -> DocObjectKind:
@@ -452,8 +472,9 @@ class ObjectRenderer(BaseRenderer):
         """
         Render the object's docstring body
 
-        Replacing this method without `super()` replaces the full composition.
-        Override `render_docstring_body` to change only authored documentation.
+        Renderers for objects with members add member groups after it. Override
+        `render_docstring_body` to change the docstring sections while keeping
+        those groups.
         """
         return self.render_docstring_body()
 
@@ -649,6 +670,7 @@ class ObjectRenderer(BaseRenderer):
         if isinstance(
             el, (gf.DocstringSectionReturns, gf.DocstringSectionYields, gf.DocstringSectionReceives)
         ):
+            items_to_render = [copy(item) for item in items_to_render]
             items_to_render = cast(
                 "list[gf.DocstringReturn | gf.DocstringYield | gf.DocstringReceive]",
                 items_to_render,

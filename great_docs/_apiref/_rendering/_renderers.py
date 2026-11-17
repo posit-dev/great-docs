@@ -23,6 +23,9 @@ from .reference_sections import ReferenceSectionRenderer
 from .type_aliases import TypeAliasRenderer
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
+    from .._customisation import Extension
     from ..api_reference import APIReference
 
 
@@ -132,6 +135,9 @@ class Renderers:
         *,
         settings: Settings | None = None,
         sections: list[Section] | None = None,
+        extension: Extension | None = None,
+        output_root: Path | None = None,
+        context_page_path: str | None = None,
         **kwargs: Any,
     ) -> BaseRenderer:
         """
@@ -139,7 +145,10 @@ class Renderers:
 
         Supply resolved `sections` for a reference index. An index uses its
         reference's settings and rejects conflicting explicit settings. Other
-        nodes use the supplied settings or default settings when omitted.
+        nodes use the supplied settings, the active extension settings or standalone
+        defaults. Conflicting operation settings raise. Pass `extension` to retain
+        project roots; page context remains absent when
+        no containing output is known.
         """
         from ..api_reference import APIReference
 
@@ -148,10 +157,35 @@ class Renderers:
                 raise TypeError("A reference index requires resolved `sections`.")
             if settings is not None and settings != node.settings:
                 raise ValueError("Renderer settings conflict with the API reference settings.")
-            return self.reference_index(node, sections, level, renderers=self, **kwargs)
+            extension = extension or node.extension
+            if extension.settings != node.settings:
+                raise ValueError(
+                    "Renderer extension settings conflict with the API reference settings."
+                )
+            return self.reference_index(
+                node,
+                sections,
+                level,
+                renderers=self,
+                extension=extension,
+                output_root=output_root if output_root is not None else node.output_root,
+                context_page_path=context_page_path,
+                **kwargs,
+            )
         if sections is not None:
             raise TypeError("Only a reference index accepts `sections`.")
-        options: dict[str, Any] = {"settings": settings or Settings(), "renderers": self, **kwargs}
+        if extension is not None:
+            if settings is not None and settings != extension.settings:
+                raise ValueError("Renderer settings conflict with the active extension settings.")
+            settings = extension.settings
+        options: dict[str, Any] = {
+            "settings": settings or Settings(),
+            "renderers": self,
+            "extension": extension,
+            "output_root": output_root,
+            "context_page_path": context_page_path,
+            **kwargs,
+        }
         if isinstance(node, DocClass):
             return self.classes(node, level, **options)
         if isinstance(node, DocFunction):

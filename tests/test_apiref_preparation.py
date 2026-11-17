@@ -306,3 +306,22 @@ def test_dynamic_inherited_instance_declarations_remain_available(
     finally:
         reference.close()
         sys.modules.pop("inherited_instance_declarations", None)
+
+
+@pytest.mark.parametrize("kind", ["class", "module"])
+def test_alias_conversion_keeps_authored_children_and_skips_source_imports(kind: str) -> None:
+    root = gf.Module(name="example")
+    source = gf.Class(name="Original") if kind == "class" else gf.Module(name="Original")
+    root.set_member("Original", source)
+    method = gf.Function(name="run", docstring=gf.Docstring("Concrete member marker"))
+    source.set_member("run", method)
+    external = gf.Module(name="external")
+    imported = gf.Function(name="imported", docstring=gf.Docstring("Imported member marker"))
+    external.set_member("imported", imported)
+    source.set_member("imported", gf.Alias("imported", imported, parent=source))
+    appearance = gf.Alias("Authored", source, parent=root)
+    converted = griffe_to_doc(appearance, inherited=False, skip_aliases=True)
+    assert converted.name == "Authored"
+    assert [member.name for member in converted.members] == ["run"]
+    assert converted.members[0].obj.path == "example.Authored.run"
+    assert converted.members[0].obj.docstring.value == "Concrete member marker"
