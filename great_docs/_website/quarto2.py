@@ -55,9 +55,8 @@ def adapt_config(quarto_config: dict[str, Any]) -> dict[str, Any]:
       read it.
     - Quarto 2 ignores `shift-heading-level-by` for HTML, and writes no Open Graph or
       Twitter card tags, so their settings move to the gd-quarto2 filter, which runs first.
-    - Quarto 2 leaves root-relative addresses unchanged, sets no text direction, and drops
-      its layout classes for a page's `body-classes`, so a post-render script, run last,
-      finishes each page.
+    - Quarto 2 leaves root-relative addresses unchanged, so a post-render script, run last,
+      rewrites them in each page.
 
     Applying it again to its result changes nothing.
 
