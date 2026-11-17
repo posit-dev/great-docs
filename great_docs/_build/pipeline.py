@@ -364,6 +364,8 @@ def preparation_steps(
     :
         The steps in the order they run.
     """
+    from .._apiref._customisation import ExtensionError
+
     frozen_pages: list[str] = []
 
     def generate_api_reference() -> Outcome:
@@ -406,14 +408,6 @@ def preparation_steps(
         Step(
             "Configure API reference",
             lambda: reference.api_config(run),
-            user_code=True,
-        ),
-        Step(
-            "Generate llms.txt / llms-full.txt",
-            lambda: generated.llms_txt(run, config, layout),
-            warn=Warn(
-                USER_CODE_ERRORS, "Error generating llms.txt", "llms.txt generation had issues"
-            ),
             user_code=True,
         ),
         Step(
@@ -500,6 +494,15 @@ def preparation_steps(
             fails_on=(ValueError, FileNotFoundError),
         ),
         Step("Generate API reference", generate_api_reference, user_code=True),
+        Step(
+            "Generate llms.txt / llms-full.txt",
+            lambda: generated.llms_txt(run, config, layout),
+            fails_on=(ExtensionError,),
+            warn=Warn(
+                USER_CODE_ERRORS, "Error generating llms.txt", "llms.txt generation had issues"
+            ),
+            user_code=True,
+        ),
         Step(
             "Build interlinks index",
             lambda: reference.interlinks(run, config, layout, log, api_reference=run.api_reference),

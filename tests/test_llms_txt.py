@@ -444,6 +444,7 @@ def _build_llms_txt(tmp_path: Path, settings: dict[str, Any], *, repository: obj
     layout.build_dir.mkdir(parents=True)
     run = SimpleNamespace(
         api_block=_api_reference("json", SECTION),
+        api_reference=None,
         project=SimpleNamespace(
             manifest={}, name="json", importable_name=None, repository=repository
         ),
@@ -528,5 +529,5 @@ def test_full_file_honours_parameter_exclusions(
     assert "old" not in text
     assert "Hidden description." not in text
     assert "Retained description." in text
-    assert "f(value)" in text
-    assert "C(value)" in text
+    assert "f(value: int)" in text
+    assert "C(value: int)" in text

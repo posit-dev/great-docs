@@ -277,15 +277,31 @@ class APIReference:
     @cached_property
     def resolved(self) -> list[Section]:
         """The resolved section tree, computed once per instance"""
-        from .collect import unique_member_page_paths
-
         _ = self.extension
         token = resolution_lang.set(self.settings.lang)
         try:
             secs = self.sections or unique_page_paths(
                 self._resolver.autogenerate_sections(self.package), self._entry_label
             )
-            return unique_member_page_paths(self._resolver.resolve_sections(secs))
+            return self.resolve_sections(secs)
+        finally:
+            resolution_lang.reset(token)
+
+    def resolve_sections(self, sections: list[SpecSection]) -> list[Section]:
+        """
+        Resolve selected sections through this operation's prepared object graph
+
+        Share acquisition, language, semantic hooks and member destinations with
+        the complete reference. Standalone exports may resolve entries separately
+        to retain valid siblings when another entry cannot be acquired. Errors
+        propagate so the caller can apply its own acquisition policy.
+        """
+        from .collect import unique_member_page_paths
+
+        _ = self.extension
+        token = resolution_lang.set(self.settings.lang)
+        try:
+            return unique_member_page_paths(self._resolver.resolve_sections(sections))
         finally:
             resolution_lang.reset(token)
 

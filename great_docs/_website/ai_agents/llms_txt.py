@@ -9,7 +9,6 @@ followed by command-line help and the user guide.
 from __future__ import annotations
 
 import importlib
-import inspect
 from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 from ..._build.steps import USER_CODE_ERRORS
@@ -20,8 +19,8 @@ from .webmcp_manifest import MANIFEST_FILE
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
-    from types import ModuleType
 
+    from ..._apiref.api_reference import APIReference
     from ..._project.layout import Layout
     from .webmcp_tools import WebMCPTool
 
@@ -95,6 +94,7 @@ def write_index(
     report: Callable[[str], None],
     webmcp_tools: Sequence[WebMCPTool] = (),
     webmcp_js_api: bool = False,
+    reference: APIReference | None = None,
 ) -> Path | None:
     """
     Write `llms.txt` with a link and one-line summary for each API reference page
@@ -121,6 +121,10 @@ def write_index(
         The WebMCP tools the site registers, in registration order, or none.
     webmcp_js_api
         Whether pages expose the tools to scripts through `window.greatDocs.tools`.
+    reference
+        The build's prepared reference, or `None` to retain standalone planned
+        links and runtime summaries. A supplied reference shares exclusions,
+        semantic summaries and authored destinations.
 
     Returns
     -------
@@ -129,12 +133,22 @@ def write_index(
         configuration.
     """
     from ..._apiref import APIReference, SpecObject
+    from ..._apiref._export import summary
+    from ..._apiref.content import Page
 
-    if not _describes_api(api_block):
+    if reference is None and not _describes_api(api_block):
         return None
 
-    sections = api_block["sections"]
-    package_name = api_block["package"]
+    sections = (
+        reference.resolved
+        if reference is not None
+        else APIReference({"api-reference": api_block}).sections
+    )
+    package_name = (
+        reference.package
+        if reference is not None
+        else str(cast("Mapping[str, Any]", api_block)["package"])
+    )
     description = metadata.get("description", "")
 
     # The `Documentation` URL from `pyproject.toml` takes precedence over the site URL.
@@ -152,7 +166,7 @@ def write_index(
         lines += [f"> {description}", ""]
     lines += ["## Docs", "", "### API Reference", ""]
 
-    for section in APIReference({"api-reference": api_block}).sections:
+    for section in sections:
         section_title = section.title or section.subtitle or ""
         section_desc = section.desc or ""
 
@@ -163,15 +177,24 @@ def write_index(
             lines.append("")
 
         for entry in section.contents:
-            if not isinstance(entry, SpecObject):
-                continue
-            item_name = entry.name
-            item_desc = docstring_summary(package_name, item_name)
-            url = f"{site_url}reference/{entry.page_path}.html"
-            if item_desc:
-                lines.append(f"- [{item_name}]({url}): {item_desc}")
+            if isinstance(entry, Page) and reference is not None:
+                rows = (
+                    [(entry.summary.name, entry.summary.desc)]
+                    if entry.summary is not None
+                    else [(doc.name, summary(doc.obj)) for doc in entry.contents]
+                )
+                page_path = f"{reference.settings.dir}/{entry.path}"
+            elif isinstance(entry, SpecObject):
+                rows = [(entry.name, docstring_summary(package_name, entry.name))]
+                page_path = f"reference/{entry.page_path}"
             else:
-                lines.append(f"- [{item_name}]({url})")
+                continue
+            url = f"{site_url}{page_path}.html"
+            for item_name, item_desc in rows:
+                if item_desc:
+                    lines.append(f"- [{item_name}]({url}): {item_desc}")
+                else:
+                    lines.append(f"- [{item_name}]({url})")
 
         lines.append("")
 
@@ -276,6 +299,7 @@ def write_full(
     cli: Mapping[str, Any] | None,
     user_guide: Mapping[str, Any] | None,
     report: Callable[[str], None],
+    reference: APIReference | None = None,
 ) -> Path | None:
     """
     Write `llms-full.txt` with API documentation, command-line help and user guide pages
@@ -297,6 +321,11 @@ def write_full(
     report
         A callback that receives the line announcing the written file, or the reason the
         package could not be imported.
+    reference
+        The build's prepared reference, reused without repeating setup or early
+        hooks. `None` owns a fresh operation from the selected layout and skips
+        missing entries. Configured failures propagate in either mode. Selected
+        renderers apply only to the reference pages.
 
     Returns
     -------
@@ -304,45 +333,25 @@ def write_full(
         The path written, or `None` when the project has no usable API reference
         configuration or importing the package raises `ImportError`.
     """
-    if not _describes_api(api_block):
+    if reference is None and not _describes_api(api_block):
         return None
 
-    sections = api_block["sections"]
-    package_name = api_block["package"]
-
-    try:
-        module = importlib.import_module(package_name.replace("-", "_"))
-    except ImportError as e:
-        report(f"Could not import {package_name}: {e}")
+    package_name = (
+        reference.package
+        if reference is not None
+        else str(cast("Mapping[str, Any]", api_block)["package"])
+    )
+    api_text = _full_api_text(layout, api_block, reference, report)
+    if api_text is None:
         return None
-
     lines = [
         _SEPARATOR,
         f"This is the API documentation for the {package_name} library.",
         _SEPARATOR,
         "",
+        api_text,
+        "",
     ]
-
-    for section in sections:
-        section_title = section.get("title") or section.get("subtitle") or ""
-        section_desc = section.get("desc", "")
-        if section_title:
-            lines.append(f"\n## {section_title}\n")
-            if section_desc:
-                lines.append(f"{section_desc}\n")
-            lines.append("")
-
-        for item in section.get("contents", []):
-            if isinstance(item, str):
-                item_name = item
-            elif isinstance(item, dict):
-                entry = cast("dict[str, Any]", item)
-                item_name = entry.get("name", str(entry))
-            else:
-                continue
-            api_text = _api_details(module, item_name, parser=str(api_block.get("parser", "numpy")))
-            if api_text:
-                lines += [api_text, ""]
 
     cli_text = _cli_text(cli) if cli else ""
     if cli_text:
@@ -372,81 +381,50 @@ def write_full(
     return path
 
 
-def _api_details(module: ModuleType, item_name: str, *, parser: str = "numpy") -> str:
+def _full_api_text(
+    layout: Layout,
+    api_block: Mapping[str, Any] | None,
+    reference: APIReference | None,
+    report: Callable[[str], None],
+) -> str | None:
     """
-    Return the signature and docstring of an object in a module
+    Export a supplied prepared reference or own a tolerant standalone operation
 
-    Looking up the object can run the package's code. Import, syntax, attribute, runtime,
-    OS and griffe errors produce an empty result; other errors propagate unless handled
-    while reading the signature.
-
-    Parameters
-    ----------
-    module
-        The imported package.
-    item_name
-        The object's name in the module, dotted for a nested attribute such as
-        `Class.method`.
-    parser
-        The docstring style used when exclusions require structured parameter filtering.
-
-    Returns
-    -------
-    :
-        The signature followed by a blank line and the dedented docstring, if present. The
-        name alone replaces a signature that raises `ValueError` or `TypeError`.
-        Objects with parameter exclusions use the rendered reference documentation. The result
-        is `""` if the object is missing or a handled package error occurs.
+    Preserve the standalone import diagnostic and missing-entry tolerance. Read
+    configured setup from the selected layout's original roots, then close the
+    owned reference on success or failure. A supplied reference stays strict and
+    retains its caller-owned lifetime.
     """
+    from ..._apiref._export import reference_text, tolerant_sections
+    from ..._apiref._extension_loading import _ExtensionSource
+    from ..._apiref.api_reference import APIReference
+
+    if reference is not None:
+        return reference_text(reference)
+    assert api_block is not None
+    package_name = str(api_block["package"])
+    import_name = package_name.replace("-", "_")
     try:
-        obj: Any = module
-        for part in item_name.split("."):
-            obj = getattr(obj, part)
-
-        docstrings = [getattr(obj, "__doc__", None) or ""]
-        if inspect.isclass(obj):
-            docstrings += [
-                getattr(getattr(obj, name, None), "__doc__", None) or ""
-                for name in ("__init__", "__new__")
-            ]
-        if any("%nodoc_param" in text for text in docstrings):
-            from ..._apiref import APIReference
-            from ..._apiref._parameter_docs import CallableDocumentation
-            from ..._apiref.content import Page
-
-            reference = APIReference(
-                {
-                    "package": module.__name__,
-                    "parser": parser,
-                    "dynamic": True,
-                    "sections": [{"contents": [item_name]}],
-                }
-            )
-            docs = [
-                doc
-                for section in reference.resolved
-                for page in section.contents
-                if isinstance(page, Page)
-                for doc in page.contents
-            ]
-            if any(CallableDocumentation.make(doc.obj).excluded_names for doc in docs):
-                return "\n\n".join(
-                    str(reference.renderers.make(doc, settings=reference.settings)) for doc in docs
-                )
-
-        obj_name = getattr(obj, "__name__", item_name)
-        try:
-            sig_str = f"{obj_name}{inspect.signature(obj)}"
-        except (ValueError, TypeError):
-            # Some objects, including some built-ins, have no inspectable signature.
-            sig_str = obj_name
-
-        doc = getattr(obj, "__doc__", None) or ""
-        if doc:
-            doc = inspect.cleandoc(doc)
-        return f"{sig_str}\n\n{doc}" if doc else sig_str
-    except USER_CODE_ERRORS:
-        return ""
+        _ = importlib.import_module(import_name)
+    except ImportError as error:
+        report(f"Could not import {package_name}: {error}")
+        return None
+    config = layout.load_config()
+    block = {
+        "dynamic": config.dynamic,
+        "parser": config.parser or "numpy",
+        **api_block,
+        "package": import_name,
+    }
+    owned = APIReference(
+        {"api-reference": block, "format": {"html": {"lang": config.lang}}},
+        extension_source=_ExtensionSource.make(config, layout.source_dir),
+        output_root=layout.build_dir,
+    )
+    try:
+        return reference_text(owned, tolerant_sections(owned))
+    finally:
+        owned.close()
 
 
 def _cli_text(cli: Mapping[str, Any]) -> str:

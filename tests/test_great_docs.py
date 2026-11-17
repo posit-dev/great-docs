@@ -9139,7 +9139,6 @@ def test_build_log_numbers_every_step(tmp_path, capsys):
     assert [title for *_, title in headings] == [
         "Prepare build directory",
         "Configure API reference",
-        "Generate llms.txt / llms-full.txt",
         "Generate SKILL.md",
         "Generate changelog",
         "Generate CLI reference",
@@ -9154,6 +9153,7 @@ def test_build_log_numbers_every_step(tmp_path, capsys):
         "Prepare WebMCP pages",
         "Copy assets",
         "Generate API reference",
+        "Generate llms.txt / llms-full.txt",
         "Build interlinks index",
         "Prepare freeze cache",
         "Build site with Quarto",
