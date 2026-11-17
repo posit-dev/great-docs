@@ -3,12 +3,12 @@ import textwrap
 import griffe as gf
 import pytest
 
+from great_docs._apiref._settings import Settings
 from great_docs._apiref._tools import _render
 from great_docs._builtin.normalization._doctest import (
     _fence_doctest_blocks,
     normalize_doctests,
 )
-from great_docs.hooks._object_resolved import emit_object_resolved
 
 
 def _function(text: str, parser: str) -> gf.Function:
@@ -143,11 +143,7 @@ def _render_with_hooks(source: str, name: str, parser: str = "numpy") -> str:
     with gf.temporary_visited_package(
         "package", {"__init__.py": textwrap.dedent(source)}, docstring_parser=parser
     ) as package:
-        obj = emit_object_resolved(package[name])
-        assert obj is not None
-        for member in obj.members.values():
-            _ = emit_object_resolved(member)
-        return _render(obj)
+        return _render(package[name], Settings(parser=parser))
 
 
 def _unfenced_prompts(qmd: str) -> list[str]:

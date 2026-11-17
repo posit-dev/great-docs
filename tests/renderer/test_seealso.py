@@ -10,6 +10,7 @@ from great_docs._apiref.api_reference import Settings
 from great_docs._apiref.resolve import Resolver
 from great_docs._apiref.spec import SpecSection
 from great_docs._builtin.directives._seealso import add_seealso
+from great_docs.extensions import Extension
 
 
 def _obj(doc: str, parser: str = "numpy") -> gf.Function:
@@ -191,8 +192,6 @@ def test_seealso_handler_does_not_touch_cached_sections():
 
 
 def test_nodoc_and_seealso_object_is_dropped():
-    from great_docs.hooks._object_resolved import emit_object_resolved
-
     obj = _obj(
         """
         Internal.
@@ -202,7 +201,7 @@ def test_nodoc_and_seealso_object_is_dropped():
         """
     )
 
-    assert emit_object_resolved(obj) is None
+    assert Extension(Settings()).prepare(obj) is None
 
 
 @pytest.mark.parametrize(
@@ -286,14 +285,10 @@ def test_generated_seealso_is_recognized_for_every_parser(parser: str):
 
 
 def test_resolving_the_same_object_twice_keeps_seealso():
-    from great_docs.hooks._docstring_parsed import emit_docstring_parsed
-    from great_docs.hooks._object_resolved import emit_object_resolved
-
     obj = _obj("Summary.\n\n%seealso target : Related.")
 
     for _ in range(2):
-        assert emit_object_resolved(obj) is obj
-        emit_docstring_parsed(obj)
+        assert Extension(Settings()).prepare(obj) is obj
         sections = _see_also(obj)
         assert len(sections) == 1
         assert sections[0].value == "target : Related."

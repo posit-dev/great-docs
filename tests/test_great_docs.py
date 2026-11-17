@@ -188,6 +188,7 @@ from great_docs.cli import (
     setup_github_pages,
     uninstall,
 )
+from great_docs.extensions import Extension
 from great_docs.pandoc.blocks import (
     Block,
     Blocks,
@@ -14090,8 +14091,6 @@ def test_mixin_render_body_no_members():
 
 def test_render_section_text_converts_sphinx_fields():
     """Sphinx fields render from Griffe's structured docstring sections."""
-    from great_docs.hooks._docstring_parsed import emit_docstring_parsed
-    from great_docs.hooks._object_resolved import emit_object_resolved
 
     func = gf.Function(
         name="f",
@@ -14104,8 +14103,7 @@ def test_render_section_text_converts_sphinx_fields():
         parent=func,
         parser="sphinx",
     )
-    assert emit_object_resolved(func) is func
-    emit_docstring_parsed(func)
+    assert Extension(Settings(parser="sphinx")).prepare(func) is func
 
     doc_fn = content.DocFunction(name="f", obj=func)
     out = str(FunctionRenderer(doc_fn, level=1, settings=Settings()).render_body())
@@ -14115,8 +14113,6 @@ def test_render_section_text_converts_sphinx_fields():
 
 def test_render_section_text_converts_google_sections():
     """Google sections render from Griffe's structured docstring sections."""
-    from great_docs.hooks._docstring_parsed import emit_docstring_parsed
-    from great_docs.hooks._object_resolved import emit_object_resolved
 
     func = gf.Function(
         name="f",
@@ -14129,8 +14125,7 @@ def test_render_section_text_converts_google_sections():
         parent=func,
         parser="google",
     )
-    assert emit_object_resolved(func) is func
-    emit_docstring_parsed(func)
+    assert Extension(Settings(parser="google")).prepare(func) is func
 
     doc_fn = content.DocFunction(name="f", obj=func)
     out = str(FunctionRenderer(doc_fn, level=1, settings=Settings()).render_body())
@@ -14140,8 +14135,6 @@ def test_render_section_text_converts_google_sections():
 
 def test_render_section_text_fences_doctests():
     """Unfenced >>> doctest lines in free text render inside a fenced code block."""
-    from great_docs.hooks._docstring_parsed import emit_docstring_parsed
-    from great_docs.hooks._object_resolved import emit_object_resolved
 
     func = gf.Function(name="f", lineno=1)
     func.docstring = gf.Docstring(
@@ -14149,8 +14142,7 @@ def test_render_section_text_fences_doctests():
         parent=func,
         parser="numpy",
     )
-    assert emit_object_resolved(func) is func
-    emit_docstring_parsed(func)
+    assert Extension(Settings(parser="numpy")).prepare(func) is func
 
     doc_fn = content.DocFunction(name="f", obj=func)
     out = str(FunctionRenderer(doc_fn, level=1, settings=Settings()).render_body())
@@ -14160,11 +14152,10 @@ def test_render_section_text_fences_doctests():
 def test_render_example_text_fences_doctests():
     """An ExampleText block renders its doctest lines inside a fenced code block."""
     from great_docs._apiref._docstring_sections import ExampleText
-    from great_docs.hooks._object_resolved import emit_object_resolved
 
     func = gf.Function(name="f", lineno=1)
     func.docstring = gf.Docstring(">>> f()\n1", parent=func, parser="numpy")
-    assert emit_object_resolved(func) is func
+    assert Extension(Settings()).prepare(func) is func
 
     doc_fn = content.DocFunction(name="f", obj=func)
     render = FunctionRenderer(doc_fn, level=1, settings=Settings())

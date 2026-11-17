@@ -135,17 +135,20 @@ def test_builtin_effects_survive_repeated_imports(tmp_path: Path) -> None:
         import json
         import great_docs
         import griffe as gf
-        from great_docs.hooks._object_resolved import emit_object_resolved
+
+        from great_docs._apiref._settings import Settings
+        from great_docs.extensions import Extension
 
         def apply_hooks() -> list[str | bool]:
+            extension = Extension(Settings(parser="sphinx"))
             visible = gf.Function("visible")
             visible.docstring = gf.Docstring(
                 "%note Use :func:`value`.\n\n>>> 1 + 1\n2", parent=visible, parser="sphinx",
             )
-            assert emit_object_resolved(visible) is visible
+            assert extension.prepare(visible) is visible
             hidden = gf.Function("hidden")
             hidden.docstring = gf.Docstring("%nodoc", parent=hidden)
-            return [visible.docstring.value, emit_object_resolved(hidden) is None]
+            return [visible.docstring.value, extension.prepare(hidden) is None]
 
         before = apply_hooks()
         for _ in range(3):

@@ -9,7 +9,6 @@ from textwrap import dedent
 import griffe as gf
 import pytest
 
-from great_docs._apiref._constructor import parse_class_docstring
 from great_docs._apiref._parameter_docs import (
     CallableDocumentation,
     ParameterDirectiveError,
@@ -17,8 +16,7 @@ from great_docs._apiref._parameter_docs import (
 )
 from great_docs._apiref._settings import CallableSignatures, Settings
 from great_docs._apiref._tools import _render
-from great_docs.hooks._docstring_parsed import emit_docstring_parsed
-from great_docs.hooks._object_resolved import emit_object_resolved
+from great_docs.extensions import Extension
 
 
 def _function(doc: str = "%nodoc_param old") -> gf.Function:
@@ -33,11 +31,6 @@ def _function(doc: str = "%nodoc_param old") -> gf.Function:
 
 def _rendered(obj: gf.Object | gf.Alias, style: str = "highlighted") -> str:
     """Render a callable through the documentation hooks"""
-    assert emit_object_resolved(obj) is obj
-    if obj.docstring is not None:
-        if obj.is_class:
-            parse_class_docstring(obj)
-        emit_docstring_parsed(obj)
     parser = obj.docstring.parser if obj.docstring is not None else "numpy"
     parser = parser.value if isinstance(parser, gf.Parser) else parser or "numpy"
     return _render(
@@ -56,7 +49,7 @@ def test_directive_is_stripped_without_changing_signature() -> None:
     obj = _function("Configure values\n\n%nodoc_param old\n%nodoc_param old")
     original = obj.parameters
     for _ in range(2):
-        assert emit_object_resolved(obj) is obj
+        assert Extension(Settings()).prepare(obj) is obj
         assert obj.docstring is not None
         assert obj.docstring.value == "Configure values"
         assert CallableDocumentation.make(obj).excluded_names == {"old"}
@@ -68,20 +61,20 @@ def test_directive_is_stripped_without_changing_signature() -> None:
 def test_invalid_declarations_fail(name: str) -> None:
     obj = _function(f"%nodoc_param {name}")
     with pytest.raises(ParameterDirectiveError, match="configure: %nodoc_param"):
-        emit_object_resolved(obj)
+        Extension(Settings()).prepare(obj)
 
 
 @pytest.mark.parametrize("declaration", ["%nodoc_param(old)", "%nodoc_param=old"])
 def test_attached_directive_arguments_are_invalid(declaration: str) -> None:
     with pytest.raises(ParameterDirectiveError, match="one bare Python parameter name"):
-        emit_object_resolved(_function(declaration))
+        Extension(Settings()).prepare(_function(declaration))
 
 
 @pytest.mark.parametrize("fence", ["```", "~~~"])
 def test_fenced_directive_stays_literal(fence: str) -> None:
     doc = f"Example\n\n{fence}text\n%nodoc_param missing\n{fence}"
     obj = _function(doc)
-    assert emit_object_resolved(obj) is obj
+    assert Extension(Settings()).prepare(obj) is obj
     assert obj.docstring is not None
     assert obj.docstring.value == doc
     assert not CallableDocumentation.make(obj).excluded_names
@@ -94,14 +87,15 @@ def test_alias_and_target_keep_the_same_exclusions(alias_first: bool) -> None:
     module.set_member("configure", target)
     alias = gf.Alias("alias", target, parent=module)
     objects = [alias, target] if alias_first else [target, alias]
+    extension = Extension(Settings())
     for obj in objects * 2:
-        assert emit_object_resolved(obj) is obj
+        assert extension.prepare(obj) is obj
         assert CallableDocumentation.make(obj).excluded_names == {"old"}
 
 
 def test_nodoc_discards_object_before_parameter_validation() -> None:
     obj = _function("%nodoc\n%nodoc_param missing")
-    assert emit_object_resolved(obj) is None
+    assert Extension(Settings()).prepare(obj) is None
 
 
 @pytest.mark.parametrize("style", ["highlighted", "plain"])
@@ -130,7 +124,6 @@ def test_parameter_kind_separators(signature: str, excluded: str, expected: str)
     settings = Settings(callable_signatures=CallableSignatures(wrap="width"))
     with gf.temporary_visited_package("package", {"__init__.py": source}) as module:
         obj = module["f"]
-        assert emit_object_resolved(obj) is obj
         assert _signature(_render(obj, settings)) == expected
 
 
@@ -373,7 +366,7 @@ def test_implicit_receivers_cannot_be_excluded(receiver: str) -> None:
     obj = gf.Function("f", parent=cls, parameters=gf.Parameters(gf.Parameter(receiver)))
     obj.docstring = gf.Docstring(f"%nodoc_param {receiver}", parent=obj)
     with pytest.raises(ParameterDirectiveError, match=receiver):
-        emit_object_resolved(obj)
+        Extension(Settings()).prepare(obj)
 
 
 def test_explicit_attributes_section_remains_visible() -> None:
