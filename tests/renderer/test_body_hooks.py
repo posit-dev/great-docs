@@ -40,7 +40,7 @@ def test_docstring_body_mixin_runs_for_parent_and_each_member() -> None:
             seen[name] = str(body)
             return Blocks([body, Para(f"Note for {name}")])
 
-    extension.set_renderers(Renderers(doc_mixin=AppendNoteMixin))
+    extension.set_renderers(Renderers(object_renderer_mixin=AppendNoteMixin))
 
     code = '''
 class Example:
@@ -180,7 +180,7 @@ def test_absolute_output_directories_use_explicit_context_coordinates(
             contexts.append(self.context)
             return super().render_docstring_body()
 
-    extension.set_renderers(Renderers(doc_mixin=RecordContextMixin))
+    extension.set_renderers(Renderers(object_renderer_mixin=RecordContextMixin))
 
     try:
         doc = make_doc(extension, "def run(): pass\n", "run")

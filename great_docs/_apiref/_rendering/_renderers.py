@@ -36,10 +36,11 @@ class Renderers:
     """
     The renderer classes to use for each kind of object and page
 
-    Each omitted slot uses its built-in class. `doc_mixin` precedes default object
-    renderers in their method resolution order; explicit replacements control their
-    own inheritance. Declaring or selecting a subclass never changes shared classes.
-    Nested pages, members and summaries retain the same choices.
+    A kind left out uses the built-in renderer. `object_renderer_mixin` comes before
+    each default object renderer in its method resolution order, while a replacement
+    renderer chooses its own base classes. Defining or selecting a subclass never
+    changes the built-in classes. Nested pages, members and summaries use the same
+    choices.
 
     Parameters
     ----------
@@ -59,7 +60,7 @@ class Renderers:
         The renderer for the whole reference index.
     reference_sections
         The renderer for each section of the reference index.
-    doc_mixin
+    object_renderer_mixin
         A class whose methods apply to every default object renderer. A replacement
         renderer gets them only by inheriting from the mixin. Page and section
         renderers never get them.
@@ -82,16 +83,24 @@ class Renderers:
         api_pages: type[APIPageRenderer] | None = None,
         reference_index: type[ReferenceIndexRenderer] | None = None,
         reference_sections: type[ReferenceSectionRenderer] | None = None,
-        doc_mixin: type | None = None,
+        object_renderer_mixin: type | None = None,
     ) -> None:
         """Validate the replacements and use the default renderer for each kind left out"""
-        if doc_mixin is not None and not isinstance(cast("object", doc_mixin), type):
-            raise TypeError("`doc_mixin` must be a class.")
-        self.classes = self._select("classes", classes, ClassRenderer, doc_mixin)
-        self.functions = self._select("functions", functions, FunctionRenderer, doc_mixin)
-        self.attributes = self._select("attributes", attributes, AttributeRenderer, doc_mixin)
-        self.type_aliases = self._select("type_aliases", type_aliases, TypeAliasRenderer, doc_mixin)
-        self.modules = self._select("modules", modules, ModuleRenderer, doc_mixin)
+        if object_renderer_mixin is not None and not isinstance(
+            cast("object", object_renderer_mixin), type
+        ):
+            raise TypeError("`object_renderer_mixin` must be a class.")
+        self.classes = self._select("classes", classes, ClassRenderer, object_renderer_mixin)
+        self.functions = self._select(
+            "functions", functions, FunctionRenderer, object_renderer_mixin
+        )
+        self.attributes = self._select(
+            "attributes", attributes, AttributeRenderer, object_renderer_mixin
+        )
+        self.type_aliases = self._select(
+            "type_aliases", type_aliases, TypeAliasRenderer, object_renderer_mixin
+        )
+        self.modules = self._select("modules", modules, ModuleRenderer, object_renderer_mixin)
         self.api_pages = self._select("api_pages", api_pages, APIPageRenderer)
         self.reference_index = self._select(
             "reference_index", reference_index, ReferenceIndexRenderer

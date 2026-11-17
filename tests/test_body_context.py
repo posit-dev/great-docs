@@ -70,7 +70,7 @@ def recorded_reference(
         "        def render_docstring_body(self) -> BlockContent:\n"
         "            contexts.append(self.context)\n"
         "            return super().render_docstring_body()\n"
-        "    extension.set_renderers(Renderers(doc_mixin=RecordContextMixin))\n"
+        "    extension.set_renderers(Renderers(object_renderer_mixin=RecordContextMixin))\n"
     )
     output = root / "output"
     config = Config(root, config_path=source / "great-docs.yml")

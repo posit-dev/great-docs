@@ -118,9 +118,9 @@ def test_reject_renderer_for_another_kind() -> None:
         Renderers(classes=FunctionRenderer)
 
 
-def test_reject_nonclass_doc_mixin() -> None:
-    with pytest.raises(TypeError, match="doc_mixin"):
-        Renderers(doc_mixin=object())
+def test_reject_nonclass_object_renderer_mixin() -> None:
+    with pytest.raises(TypeError, match="object_renderer_mixin"):
+        Renderers(object_renderer_mixin=object())
 
 
 def test_subclass_declaration_does_not_mutate_defaults() -> None:
@@ -139,13 +139,13 @@ def test_subclass_declaration_does_not_mutate_defaults() -> None:
     assert not default_choices.make(node).summary_name.startswith("custom ")
 
 
-def test_doc_mixin_precedes_each_default_object_renderer() -> None:
+def test_object_renderer_mixin_precedes_each_default_object_renderer() -> None:
     class SharedMixin:
         @property
         def summary_name(self) -> str:
             return "shared " + super().summary_name
 
-    choices = Renderers(doc_mixin=SharedMixin)
+    choices = Renderers(object_renderer_mixin=SharedMixin)
     for slot, expected in SLOTS[:5]:
         renderer = choices.make(make_node(slot))
         assert isinstance(renderer, SharedMixin)
@@ -168,15 +168,17 @@ def test_explicit_renderer_owns_mixin_inheritance() -> None:
     class MixedFunction(SharedMixin, FunctionRenderer):
         pass
 
-    choices = Renderers(doc_mixin=SharedMixin, classes=CustomClass, functions=MixedFunction)
+    choices = Renderers(
+        object_renderer_mixin=SharedMixin, classes=CustomClass, functions=MixedFunction
+    )
     assert type(choices.make(make_node("classes"))) is CustomClass
     assert not isinstance(choices.make(make_node("classes")), SharedMixin)
     assert type(choices.make(make_node("functions"))) is MixedFunction
     assert choices.make(make_node("functions")).summary_name == "shared"
 
 
-def test_existing_doc_mixin_is_not_inserted_twice() -> None:
-    choices = Renderers(doc_mixin=ObjectRenderer)
+def test_existing_object_renderer_mixin_is_not_inserted_twice() -> None:
+    choices = Renderers(object_renderer_mixin=ObjectRenderer)
     for slot, expected in SLOTS[:5]:
         assert getattr(choices, slot) is expected
         assert isinstance(choices.make(make_node(slot)), ObjectRenderer)

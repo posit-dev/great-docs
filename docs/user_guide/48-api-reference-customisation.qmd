@@ -130,10 +130,10 @@ Return `None` from a method that renders a block to exclude that part of the pag
 To exclude summary entries, return an empty sequence from `render_summary()`.
 Hidden members still belong to the reference and appear in its inventories.
 
-### Shared formatting with `doc_mixin`
+### Shared formatting with `object_renderer_mixin`
 
 To add a note to every object's documentation, write a mixin that overrides
-`render_docstring_body` and pass it to `Renderers` as `doc_mixin`.
+`render_docstring_body` and pass it to `Renderers` as `object_renderer_mixin`.
 Call `super().render_docstring_body()` to keep the usual docstring sections
 and append the note after them.
 
@@ -150,7 +150,7 @@ class AppendNoteMixin:
 
 
 def setup(extension: Extension) -> None:
-    extension.set_renderers(Renderers(doc_mixin=AppendNoteMixin))
+    extension.set_renderers(Renderers(object_renderer_mixin=AppendNoteMixin))
 ```
 
 On a class page, the note appears before the member groups. Each method
@@ -198,7 +198,7 @@ class ReplaceUsageMixin:
 
 
 def setup(extension: Extension) -> None:
-    extension.set_renderers(Renderers(doc_mixin=ReplaceUsageMixin))
+    extension.set_renderers(Renderers(object_renderer_mixin=ReplaceUsageMixin))
 ```
 
 The opening line of the docstring appears in the object's description. Use
