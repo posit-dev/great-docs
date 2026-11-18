@@ -39,6 +39,7 @@ class Doc(Walkable):
         members: list[Any] | None = None,
         anchor: str | None = None,
         signature_name: str = "relative",
+        fields: list[DocAttribute] | None = None,
     ) -> DocFunction | DocAttribute | DocTypeAlias | DocClass | DocModule:
         """
         Build a documentation node for a loaded object
@@ -60,6 +61,9 @@ class Doc(Walkable):
             The anchor, or `None` to use the object's qualified path.
         signature_name
             How a callable's name is written in its signature.
+        fields
+            The attributes a dataclass node documents as constructor parameters, or
+            `None` for none.
 
         Returns
         -------
@@ -91,7 +95,7 @@ class Doc(Walkable):
         elif kind == "type alias":
             return DocTypeAlias(**kwargs)
         elif kind == "class":
-            return DocClass(members=members, **kwargs)
+            return DocClass(members=members, fields=fields or [], **kwargs)
         elif kind == "module":
             return DocModule(members=members, **kwargs)
 
@@ -114,6 +118,13 @@ class DocClass(Doc):
         default_factory=list["DocClass | DocFunction | DocAttribute | DocTypeAlias"]
     )
     """The selected members, documented on this page or on member pages of their own"""
+    fields: list[DocAttribute] = field(default_factory=list["DocAttribute"])
+    """
+    The selected attributes that the class documents as constructor parameters
+
+    A dataclass documents each of these fields with its parameter, so they stay on the
+    class's page whatever the member placement and are never members.
+    """
 
 
 @dataclass

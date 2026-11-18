@@ -421,7 +421,7 @@ def _member_name(node: Doc | Page) -> str:
 
 def _member_children(node: Doc | Page) -> list[Doc | Page]:
     """
-    Return the nested member nodes of a resolved object or member page
+    Return the nested members and dataclass fields of a resolved object or member page
 
     Parameters
     ----------
@@ -431,7 +431,8 @@ def _member_children(node: Doc | Page) -> list[Doc | Page]:
     Returns
     -------
     :
-        The members, or an empty list for an object that has none.
+        The members, then any dataclass fields, or an empty list for an object that has
+        neither.
     """
     doc = node.contents[0] if isinstance(node, Page) else node
-    return list(getattr(doc, "members", []))
+    return [*getattr(doc, "members", []), *getattr(doc, "fields", [])]

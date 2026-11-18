@@ -34,10 +34,6 @@ class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer)
     groups. For a dataclass without an authored `Parameters` or `Attributes`
     section, the renderer generates `Parameter Attributes` and
     `Init Parameters` sections from the constructor parameters.
-
-    A dataclass field whose constructor parameter is excluded with `%nodoc_param`
-    appears nowhere on the page, neither in the generated sections nor among the
-    attributes. An authored `Attributes` section can still document it.
     """
 
     def __post_init__(self) -> None:
@@ -52,41 +48,6 @@ class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer)
         Whether the class object is a dataclass
         """
         return "dataclass" in self.obj.labels
-
-    @cached_property
-    def attributes(self) -> list[content.DocAttribute]:
-        """
-        The attribute members, without the fields a dataclass documents as parameters
-
-        An ordinary class keeps all its attributes. A dataclass leaves out attributes
-        named after its constructor parameters: a documented parameter already
-        documents its field, and an excluded parameter hides it.
-        """
-        fields = self._dataclass_field_names
-        return [a for a in super().attributes if a.name not in fields]
-
-    @cached_property
-    def attribute_member_pages(self) -> list[content.MemberPage]:
-        """
-        The attribute member pages, without the fields a dataclass documents as parameters
-
-        The same fields are left out as from `attributes`. An ordinary class keeps all
-        its attribute pages.
-        """
-        fields = self._dataclass_field_names
-        return [p for p in super().attribute_member_pages if p.obj.name not in fields]
-
-    @cached_property
-    def _dataclass_field_names(self) -> frozenset[str]:
-        """
-        Attribute names that a dataclass documents as constructor parameters or hides
-
-        The names include excluded parameters, so that excluding a parameter also
-        hides its field. Empty for an ordinary class, which keeps every attribute.
-        """
-        if not self.is_dataclass:
-            return frozenset()
-        return frozenset(p.name for p in self._callable.original_parameters)
 
     @cached_property
     def docstring_sections_content(self):

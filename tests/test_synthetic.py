@@ -1276,15 +1276,21 @@ def test_L3_parameter_exclusion_pages(tmp_path: Path, monkeypatch: pytest.Monkey
     reference = APIReference(
         {
             "package": "gdtest_nodoc_param",
-            "sections": [{"title": "API", "contents": ["configure", "Widget"]}],
+            "members_on_same_page": False,
+            "sections": [{"title": "API", "contents": ["configure", "Widget", "Settings"]}],
         }
     )
     reference.build()
-    for name in ("configure", "Widget"):
+    for name in ("configure", "Widget", "Settings"):
         qmd = (pkg_dir / "reference" / f"{name}.qmd").read_text()
         assert "old_option" not in qmd
+        assert "old_dpi" not in qmd
         assert "excluded" not in qmd.lower()
         assert "retained" in qmd
+    # Dataclass fields are documented with their parameters on the class page, so only
+    # the method gets a page of its own.
+    pages = sorted(path.stem for path in (pkg_dir / "reference").glob("*.Settings.*.qmd"))
+    assert pages == ["gdtest_nodoc_param.Settings.scale"]
     function = (pkg_dir / "reference" / "configure.qmd").read_text()
     assert "configure(value)" in function
     assert "The previous option is deprecated." in function

@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import keyword
 import re
+from collections.abc import Sequence
 from copy import copy
 from dataclasses import dataclass
-from typing import cast
+from typing import TypeVar, cast
 
 import griffe as gf
 
 from great_docs._source_refs import fenced_lines
 
 from ._constructor import class_constructor, without_receiver
+from .content import Doc, DocAttribute
+
+_D = TypeVar("_D", bound=Doc)
 
 _DIRECTIVE = re.compile(r"^[ \t]*%nodoc_param\b(.*)$")
 _METADATA_KEY = "nodoc_params"
@@ -246,3 +250,71 @@ def filter_parameter_sections(
             filtered.value = entries
             result.append(filtered)
     return result
+
+
+@dataclass(frozen=True)
+class DataclassFields:
+    """
+    The names of a dataclass's fields that its constructor parameters cover
+
+    A field named after a documented parameter is documented once, by the class, with
+    the parameter. A field named after a parameter excluded with `%nodoc_param` is
+    documented nowhere. An ordinary class has no such fields.
+    """
+
+    documented: frozenset[str] = frozenset()
+    """Fields named after the parameters the class documents"""
+
+    excluded: frozenset[str] = frozenset()
+    """Fields named after excluded parameters"""
+
+    @classmethod
+    def make(cls, obj: gf.Object | gf.Alias) -> DataclassFields:
+        """
+        Find the fields of a prepared class
+
+        Parameters
+        ----------
+        obj
+            The class, or the alias it is documented under, after preparation has read
+            its parameter exclusions.
+
+        Returns
+        -------
+        :
+            The class's documented and excluded fields, both empty unless it is a
+            dataclass.
+        """
+        if not obj.is_class or "dataclass" not in obj.labels:
+            return cls()
+        documentation = CallableDocumentation.make(obj)
+        names = frozenset(p.name for p in documentation.original_parameters)
+        excluded = names & documentation.excluded_names
+        return cls(documented=names - excluded, excluded=excluded)
+
+    def separate(self, members: Sequence[_D]) -> tuple[list[_D], list[DocAttribute]]:
+        """
+        Separate a class's member nodes from the fields its parameters cover
+
+        Parameters
+        ----------
+        members
+            The documentation nodes of the class's selected members.
+
+        Returns
+        -------
+        :
+            The members that keep their own documentation, then the attributes the
+            class documents as parameters. Attributes named after excluded parameters
+            are in neither list.
+        """
+        kept: list[_D] = []
+        fields: list[DocAttribute] = []
+        for member in members:
+            if not isinstance(member, DocAttribute):
+                kept.append(member)
+            elif member.obj.name in self.documented:
+                fields.append(member)
+            elif member.obj.name not in self.excluded:
+                kept.append(member)
+        return kept, fields

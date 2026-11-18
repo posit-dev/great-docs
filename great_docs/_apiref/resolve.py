@@ -24,10 +24,11 @@ from great_docs._translations import DEFAULT_LANGUAGE
 
 from ._customisation import Extension
 from ._exports import declared_exports
+from ._parameter_docs import DataclassFields
 from ._settings import Settings
 from ._type_checks import is_enum
 from ._walkable import MISSING, MissingType, Walkable
-from .content import Doc, MemberPage, Page, Section, Text
+from .content import Doc, DocAttribute, MemberPage, Page, Section, Text
 from .spec import SpecObject, SpecOptions, SpecSection, SpecText
 
 # Dunder members inherited from `object`/`type` (or PyO3 metaclasses) that carry docstrings but are
@@ -620,13 +621,14 @@ class Resolver:
         obj = self.prepare(self.get_object_or_raise(path, dynamic=dynamic))
         if obj is None:
             return None
-        children = self._resolve_members(el, obj, path=path, dynamic=dynamic)
+        children, fields = self._resolve_members(el, obj, path=path, dynamic=dynamic)
 
         return Doc.from_griffe(
             el.name,
             obj,
             children,
             signature_name=el.signature_name,
+            fields=fields,
         )
 
     def _resolve_members(
@@ -636,7 +638,7 @@ class Resolver:
         *,
         path: str,
         dynamic: bool,
-    ) -> list[object]:
+    ) -> tuple[list[object], list[DocAttribute]]:
         """
         Resolve selected members on their parent page or separate pages
 
@@ -655,7 +657,10 @@ class Resolver:
         -------
         :
             The members' documentation nodes, or one member page per member when they go on
-            separate pages. Excluded members and modules are left out.
+            separate pages, then the fields a dataclass documents as constructor
+            parameters, which stay on the parent's page and do not count towards the
+            placement limit. Excluded members, modules and the fields of excluded
+            parameters are left out.
         """
         # Global placement applies only to top-level entries. Nested members
         # share their immediate parent's page unless `member_options` sets placement.
@@ -679,6 +684,8 @@ class Resolver:
 
             children.append(member_doc)
 
+        children, fields = DataclassFields.make(obj).separate(children)
+
         if "members_on_same_page" in el.specified_options():
             same_page = el.members_on_same_page
         elif self.members_on_same_page is not None:
@@ -687,8 +694,8 @@ class Resolver:
             same_page = len(children) <= self.max_members_on_same_page
 
         if same_page:
-            return list(children)
-        return [MemberPage(path=child.obj.path, contents=[child]) for child in children]
+            return list(children), fields
+        return [MemberPage(path=child.obj.path, contents=[child]) for child in children], fields
 
     def _fetch_members(
         self,

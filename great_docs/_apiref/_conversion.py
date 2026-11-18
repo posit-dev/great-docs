@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING, Callable
 
 import griffe as gf
 
-from .content import Doc
+from ._parameter_docs import DataclassFields
+from .content import Doc, DocAttribute
 
 if TYPE_CHECKING:
     from .typing import DocType
@@ -47,7 +48,8 @@ def griffe_to_doc(
     -------
     :
         The object's documentation node, with selected children when requested,
-        or `None` when preparation excludes it.
+        or `None` when preparation excludes it. A dataclass node holds the fields its
+        constructor parameters cover apart from its members.
     """
     if prepare is not None:
         prepared = prepare(obj)
@@ -55,6 +57,7 @@ def griffe_to_doc(
             return None
         obj = prepared
     members: list[DocType] | None = None
+    fields: list[DocAttribute] = []
     if deep:
         members = []
         member_map = obj.all_members if inherited else obj.members
@@ -70,4 +73,5 @@ def griffe_to_doc(
             )
             if child is not None:
                 members.append(child)
-    return Doc.from_griffe(obj.name, obj, members=members)
+        members, fields = DataclassFields.make(obj).separate(members)
+    return Doc.from_griffe(obj.name, obj, members=members, fields=fields)

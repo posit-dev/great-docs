@@ -263,9 +263,6 @@ def test_empty_parameter_section_disappears_but_deprecation_prose_remains() -> N
 
 
 def test_dataclass_fields_do_not_reappear_as_attributes() -> None:
-    from great_docs._apiref._rendering.classes import ClassRenderer
-    from great_docs._apiref.content import Doc
-
     source = '''
     from dataclasses import InitVar, dataclass
     @dataclass
@@ -288,11 +285,9 @@ def test_dataclass_fields_do_not_reappear_as_attributes() -> None:
     ) as module:
         obj = module["C"]
         qmd = _rendered(obj)
-        members = [Doc.from_griffe(name, attribute) for name, attribute in obj.attributes.items()]
-        node = Doc.from_griffe("C", obj, members)
-        renderer = ClassRenderer(node)
-        assert not renderer.attributes
-        assert "Retained field description" in qmd
+        # The retained field is documented once, as a parameter, not again as an attribute.
+        assert qmd.count("Retained field description") == 1
+        assert "## Attributes" not in qmd
         assert "Excluded field description" not in qmd
         assert "Excluded init description" not in qmd
         assert "old" not in _signature(qmd)
@@ -300,39 +295,68 @@ def test_dataclass_fields_do_not_reappear_as_attributes() -> None:
         assert {p.name for p in obj.parameters} == {"self", "value", "old", "init_old"}
 
 
-def test_dataclass_field_of_excluded_parameter_is_not_linked_from_member_pages():
-    from great_docs._apiref._rendering.classes import ClassRenderer
-    from great_docs._apiref.content import Doc, MemberPage
+@pytest.mark.parametrize(
+    ("placement", "same_page"),
+    [
+        ({"members_on_same_page": True}, True),
+        ({"members_on_same_page": False}, False),
+        # Fields do not count towards the limit: only `registry` is a member.
+        ({"max_members_on_same_page": 1}, True),
+    ],
+)
+def test_dataclass_fields_are_documented_on_the_class_page_only(
+    placement: dict[str, object],
+    same_page: bool,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from great_docs._apiref import APIReference
+    from great_docs._apiref._export import reference_text
 
     source = '''
     from dataclasses import dataclass
     from typing import ClassVar
-    @dataclass
-    class C:
-        """
-        Configure values
 
-        %nodoc_param old
+    @dataclass
+    class Settings:
         """
-        value: int = 1
-        old: int = 2
+        Plot settings
+
+        %nodoc_param old_dpi
+        """
+        dpi: int = 100
+        "Resolution in dots per inch"
+        old_dpi: int = 0
+        "Deprecated resolution"
         registry: ClassVar[int] = 3
+        "A class-level registry"
     '''
-    with gf.temporary_visited_package(
-        "package", {"__init__.py": dedent(source)}, docstring_parser="numpy"
-    ) as module:
-        obj = module["C"]
-        _ = Extension(Settings()).prepare(obj)
-        pages = [
-            MemberPage(path=attribute.path, contents=[Doc.from_griffe(name, attribute)])
-            for name, attribute in obj.attributes.items()
-        ]
-        renderer = ClassRenderer(Doc.from_griffe("C", obj, pages))
-        # Excluding a parameter hides its field: it gets no generated entry and no
-        # attribute link, while an attribute that is not a field keeps its link.
-        assert [p.obj.name for p in renderer.attribute_member_pages] == ["registry"]
-        assert [p.name for p in renderer.parameter_attributes] == ["value"]
-        assert not renderer.init_parameters
+    (tmp_path / "dcpkg").mkdir()
+    (tmp_path / "dcpkg" / "__init__.py").write_text(dedent(source))
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    reference = APIReference(
+        {
+            "package": "dcpkg",
+            **placement,
+            "sections": [{"title": "API", "contents": ["Settings"]}],
+        }
+    )
+    reference.build()
+
+    # Only the attribute that is not a field may get a page of its own.
+    pages = sorted(p.name for p in (tmp_path / "reference").glob("*.qmd"))
+    member_pages = [] if same_page else ["dcpkg.Settings.registry.qmd"]
+    assert pages == sorted(["Settings.qmd", "index.qmd", *member_pages])
+
+    # A documented field's references lead to the class page, which documents it as a
+    # parameter. An excluded field is published nowhere.
+    uris = {item.name: item.uri for item in reference.items}
+    assert uris["dcpkg.Settings.dpi"] == "reference/Settings.html#dcpkg.Settings.dpi"
+    assert "dcpkg.Settings.old_dpi" not in uris
+    assert "Settings.old_dpi" not in reference.documented_symbols
+    assert "Deprecated resolution" not in reference_text(reference)
+    assert "old_dpi" not in (tmp_path / "reference" / "Settings.qmd").read_text()
 
 
 def test_class_and_constructor_exclusions_are_combined() -> None:

@@ -15239,45 +15239,6 @@ def test_blocks_str_items_single_block():
     assert "```" in result
 
 
-def test_class_renderer_attributes_excludes_dataclass_params():
-    """DocClass.attributes filters out dataclass params when is_dataclass=True."""
-
-    cls_obj = gf.Class(name="DC", lineno=1)
-    cls_obj.labels.add("dataclass")
-
-    # Create attributes on the class
-    attr_x = gf.Attribute(name="x", lineno=2)
-    attr_x.annotation = gf.ExprName("int")
-    attr_y = gf.Attribute(name="y", lineno=3)
-    attr_y.annotation = gf.ExprName("str")
-    cls_obj.set_member("x", attr_x)
-    cls_obj.set_member("y", attr_y)
-
-    # Create init function with parameter "x"
-    init_fn = gf.Function(name="__init__", lineno=4)
-    init_fn.parameters = gf.Parameters(
-        gf.Parameter("self", kind=gf.ParameterKind.positional_or_keyword),
-        gf.Parameter(
-            "x", annotation=gf.ExprName("int"), kind=gf.ParameterKind.positional_or_keyword
-        ),
-    )
-    cls_obj.set_member("__init__", init_fn)
-
-    doc_attr_x = content.DocAttribute(name="x", obj=attr_x)
-    doc_attr_y = content.DocAttribute(name="y", obj=attr_y)
-    doc_cls = content.DocClass(name="DC", obj=cls_obj, members=[doc_attr_x, doc_attr_y])
-
-    render = ClassRenderer(doc_cls, level=1)
-
-    # is_dataclass should be True
-    assert render.is_dataclass is True
-
-    # attributes should exclude "x" (which is a parameter)
-    attr_names = [a.name for a in render.attributes]
-    assert "x" not in attr_names
-    assert "y" in attr_names
-
-
 def test_class_renderer_parameter_attributes_with_dataclass():
     """DocClass.parameter_attributes returns params found in class attributes."""
 
@@ -15467,41 +15428,6 @@ def test_renderbase_summary_property():
     # Access summary cached_property which calls render_summary()
     result = rb.summary
     assert result == []
-
-
-def test_class_renderer_attribute_member_pages_dataclass():
-    """DocClass.attribute_member_pages filters dataclass params."""
-
-    cls_obj = gf.Class(name="DC4", lineno=1)
-    cls_obj.labels.add("dataclass")
-
-    attr_x = gf.Attribute(name="x", lineno=2)
-    attr_x.annotation = gf.ExprName("int")
-    attr_y = gf.Attribute(name="y", lineno=3)
-    attr_y.annotation = gf.ExprName("str")
-    cls_obj.set_member("x", attr_x)
-    cls_obj.set_member("y", attr_y)
-
-    init_fn = gf.Function(name="__init__", lineno=4)
-    init_fn.parameters = gf.Parameters(
-        gf.Parameter("self", kind=gf.ParameterKind.positional_or_keyword),
-        gf.Parameter(
-            "x", annotation=gf.ExprName("int"), kind=gf.ParameterKind.positional_or_keyword
-        ),
-    )
-    cls_obj.set_member("__init__", init_fn)
-
-    doc_attr_x = content.DocAttribute(name="x", obj=attr_x)
-    doc_attr_y = content.DocAttribute(name="y", obj=attr_y)
-    page_x = content.MemberPage(path="x", contents=[doc_attr_x])
-    page_y = content.MemberPage(path="y", contents=[doc_attr_y])
-    doc_cls = content.DocClass(name="DC4", obj=cls_obj, members=[page_x, page_y])
-
-    render = ClassRenderer(doc_cls, level=1)
-    pages = render.attribute_member_pages
-    page_names = [p.obj.name for p in pages]
-    assert "x" not in page_names
-    assert "y" in page_names
 
 
 def test_class_renderer_parameter_attributes_non_dataclass():
