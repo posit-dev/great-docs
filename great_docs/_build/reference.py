@@ -2,10 +2,10 @@
 Build steps for reference pages and cross-reference links
 
 Write API, Click, Go CLI, Rust CLI and MCP reference pages with their sidebars and navbar
-links. Retain the active Python reference on build state for later consumers and
-release failed attempts before retrying. Index documented names for cross-reference links.
-Configured extension errors remain fatal; only ordinary dynamic acquisition
-failures enter the existing static retry.
+links. Keep the Python API reference on the build state for the text export and
+interlinks, and close a failed attempt before retrying. Index documented names to resolve
+cross-reference links. An API reference extension error stops the build; only other
+failures of dynamic introspection lead to the static-analysis retry.
 """
 
 from __future__ import annotations
@@ -169,7 +169,6 @@ def api(
     if not run.has_api_reference:
         return Skipped("API reference disabled"), None
 
-    from .._apiref._customisation import ExtensionError
     from .._apiref._extension_loading import _ExtensionSource
     from .._apiref.api_reference import APIReference
 
@@ -177,6 +176,8 @@ def api(
 
     from .._apiref.resolve import ObjectNotFoundError
 
+    # `ExtensionError` derives from none of these types, so a failing extension escapes
+    # both attempts and is never retried with static analysis.
     failures = (*USER_CODE_ERRORS, ObjectNotFoundError)
     links = source_links(config, layout.package_root, run.project.repository, warn=print_warning)
 
@@ -188,20 +189,16 @@ def api(
             output_root=layout.build_dir,
         )
         run.api_reference = ref
-        succeeded = False
         try:
             ref.build()
-            succeeded = True
-            return ref
-        finally:
-            if not succeeded:
-                ref.close()
+        except BaseException:
+            ref.close()
+            raise
+        return ref
 
     try:
         ref = build_reference()
         return "API reference generated", ref
-    except ExtensionError:
-        raise
     except failures as e:
         if not config.dynamic:
             message = f"API reference build failed: {e}"
@@ -216,8 +213,6 @@ def api(
             run.api_block["dynamic"] = False
     try:
         ref = build_reference()
-    except ExtensionError:
-        raise
     except failures as e:
         raise StepError(f"API reference build failed: {e}") from e
     return "API reference generated (static analysis)", ref

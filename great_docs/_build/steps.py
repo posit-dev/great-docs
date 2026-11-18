@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, TextIO, cast
 
 import griffe
 
+from great_docs._apiref._customisation import ExtensionError
 from great_docs._project.layout import LayoutError
 from great_docs.config import ConfigError
 
@@ -45,11 +46,13 @@ USER_CODE_ERRORS: tuple[type[Exception], ...] = (
 )
 
 # The CLI and MCP server report these project and environment failures: invalid
-# configuration or layout, file access failures, missing tools and non-UTF-8 files.
-# Each front end also handles errors specific to its operations.
+# configuration or layout, a failing API reference extension, file access failures,
+# missing tools and non-UTF-8 files. Each front end also handles errors specific to its
+# operations.
 PROJECT_ERRORS: tuple[type[Exception], ...] = (
     ConfigError,
     LayoutError,
+    ExtensionError,
     OSError,
     UnicodeDecodeError,
 )

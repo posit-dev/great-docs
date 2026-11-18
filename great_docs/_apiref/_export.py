@@ -17,7 +17,6 @@ import griffe as gf
 
 from .._build.steps import USER_CODE_ERRORS
 from ._constructor import without_receiver
-from ._customisation import ExtensionError
 from ._parameter_docs import CallableDocumentation
 from ._rendering._renderers import Renderers
 from ._rendering._type_parameters import render_type_parameters
@@ -51,8 +50,6 @@ def tolerant_sections(reference: APIReference) -> list[Section]:
         for entry in section.contents:
             try:
                 resolved = reference.resolve_sections([section.replace(contents=[entry])])
-            except ExtensionError:
-                raise
             except (*USER_CODE_ERRORS, ObjectNotFoundError):
                 continue
             for selected in resolved:

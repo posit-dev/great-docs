@@ -41,7 +41,7 @@ class _PreparedObject:
     result: gf.Object | None
 
 
-class ExtensionError(RuntimeError):
+class ExtensionError(Exception):
     """An error in the API reference extension, naming its file and phase"""
 
 
