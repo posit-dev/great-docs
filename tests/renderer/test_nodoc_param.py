@@ -300,6 +300,41 @@ def test_dataclass_fields_do_not_reappear_as_attributes() -> None:
         assert {p.name for p in obj.parameters} == {"self", "value", "old", "init_old"}
 
 
+def test_dataclass_field_of_excluded_parameter_is_not_linked_from_member_pages():
+    from great_docs._apiref._rendering.classes import ClassRenderer
+    from great_docs._apiref.content import Doc, MemberPage
+
+    source = '''
+    from dataclasses import dataclass
+    from typing import ClassVar
+    @dataclass
+    class C:
+        """
+        Configure values
+
+        %nodoc_param old
+        """
+        value: int = 1
+        old: int = 2
+        registry: ClassVar[int] = 3
+    '''
+    with gf.temporary_visited_package(
+        "package", {"__init__.py": dedent(source)}, docstring_parser="numpy"
+    ) as module:
+        obj = module["C"]
+        _ = Extension(Settings()).prepare(obj)
+        pages = [
+            MemberPage(path=attribute.path, contents=[Doc.from_griffe(name, attribute)])
+            for name, attribute in obj.attributes.items()
+        ]
+        renderer = ClassRenderer(Doc.from_griffe("C", obj, pages))
+        # Excluding a parameter hides its field: it gets no generated entry and no
+        # attribute link, while an attribute that is not a field keeps its link.
+        assert [p.obj.name for p in renderer.attribute_member_pages] == ["registry"]
+        assert [p.name for p in renderer.parameter_attributes] == ["value"]
+        assert not renderer.init_parameters
+
+
 def test_class_and_constructor_exclusions_are_combined() -> None:
     source = '''
     class C:
