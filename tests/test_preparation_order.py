@@ -11,8 +11,8 @@ from textwrap import dedent
 
 import pytest
 
+from great_docs._apiref._export import reference_text
 from great_docs._apiref._extension_loading import _ExtensionSource
-from great_docs._apiref._tools import render_type_object
 from great_docs._apiref.api_reference import APIReference
 from great_docs._apiref.typing_information import TypeInformation
 from tests.support import write_config
@@ -60,7 +60,7 @@ def reference_from_source(
         sys.modules.update(before)
 
 
-@pytest.mark.parametrize("order", list(permutations(["helper", "page", "typing"])))
+@pytest.mark.parametrize("order", list(permutations(["export", "page", "typing"])))
 @pytest.mark.parametrize("dynamic", [False, True])
 def test_consumers_share_preparation_regardless_of_order(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, order: tuple[str, ...], dynamic: bool
@@ -103,8 +103,8 @@ def test_consumers_share_preparation_regardless_of_order(
     ) as ref:
         outputs: dict[str, str] = {}
         for consumer in order:
-            if consumer == "helper":
-                outputs[consumer] = render_type_object(f"{ref.package}:Alias", customisation=ref)
+            if consumer == "export":
+                outputs[consumer] = reference_text(ref)
             elif consumer == "page":
                 outputs[consumer] = str(
                     ref.renderers.make(ref.resolved[0].contents[0], settings=ref.settings)
@@ -149,7 +149,7 @@ def test_object_hooks_run_before_documented_dunder_selection(
         assert "Container.__iter__" in ref.documented_symbols
 
 
-def test_hook_added_parameter_directive_affects_helpers_and_pages(
+def test_hook_added_parameter_directive_affects_pages_and_export(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     files = {
@@ -178,9 +178,8 @@ def test_hook_added_parameter_directive_affects_helpers_and_pages(
                 return obj
     """
     with reference_from_source(tmp_path, monkeypatch, files, extension, ["call"]) as ref:
-        helper = render_type_object(f"{ref.package}:call", customisation=ref)
         page = str(ref.renderers.make(ref.resolved[0].contents[0], settings=ref.settings))
-        for output in (helper, page):
+        for output in (page, reference_text(ref)):
             assert "visible" in output
             assert "hidden" not in output
             assert "%nodoc_param" not in output

@@ -15,51 +15,16 @@ from typing import TYPE_CHECKING, cast
 
 import griffe as gf
 
-from .._build.steps import USER_CODE_ERRORS
 from ._constructor import without_receiver
 from ._parameter_docs import CallableDocumentation
 from ._rendering._renderers import Renderers
 from ._rendering._type_parameters import render_type_parameters
 from ._type_checks import is_enum, is_typeddict
 from .content import Doc, DocClass, DocModule, Page
-from .resolve import ObjectNotFoundError
 
 if TYPE_CHECKING:
     from ._settings import Settings
     from .api_reference import APIReference
-    from .content import Section
-
-
-def tolerant_sections(reference: APIReference) -> list[Section]:
-    """
-    Resolve standalone export entries while retaining usable siblings
-
-    Use the reference's acquisition and preparation state for every entry.
-    Missing objects and ordinary package failures omit that entry; configured
-    extension failures remain fatal. A build's validated reference uses its
-    complete resolved tree instead.
-
-    Return resolved sections without writing files or closing the reference.
-    The standalone caller owns cleanup. An empty result remains empty rather
-    than falling back to automatic package discovery.
-    """
-    _ = reference.extension
-    sections: list[Section] = []
-    for section in reference.sections:
-        merged: Section | None = None
-        for entry in section.contents:
-            try:
-                resolved = reference.resolve_sections([section.replace(contents=[entry])])
-            except (*USER_CODE_ERRORS, ObjectNotFoundError):
-                continue
-            for selected in resolved:
-                if merged is None:
-                    merged = selected
-                else:
-                    merged.contents.extend(selected.contents)
-        if merged is not None:
-            sections.append(merged)
-    return sections
 
 
 def summary(obj: gf.Object | gf.Alias) -> str:
@@ -86,17 +51,27 @@ def summary(obj: gf.Object | gf.Alias) -> str:
     return lines[0].strip().rstrip(".") if lines else ""
 
 
-def reference_text(reference: APIReference, sections: list[Section] | None = None) -> str:
+def reference_text(reference: APIReference) -> str:
     """
     Format a reference's prepared objects as text
 
-    Use built-in presentation for each object's own sections. Include selected
-    members independently, preserving their documentation even when a page's
-    presentation hides them. Supplied sections are the tolerant standalone
-    selection; omitted sections use the build's validated resolved reference.
+    Format each object's own sections with the built-in renderers. List each selected
+    member separately, so the export keeps its documentation even when a renderer hides
+    it on the page.
+
+    Parameters
+    ----------
+    reference
+        The reference whose resolved sections to format.
+
+    Returns
+    -------
+    :
+        Each reference section's heading and description, followed by the text of
+        its objects.
     """
     lines: list[str] = []
-    for section in reference.resolved if sections is None else sections:
+    for section in reference.resolved:
         title = section.title or section.subtitle
         if title:
             lines.extend([f"\n## {title}\n", f"{section.desc}\n" if section.desc else "", ""])

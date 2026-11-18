@@ -1,8 +1,8 @@
 """
 Rendering of Python objects and source snippets as Quarto Markdown
 
-Helpers may share an active reference's acquisition, prepared documentation and
-renderer choices. Standalone calls own and close fresh preparation state.
+Each call prepares and renders its object with a new extension that holds only the
+handlers registered through `great_docs.hooks`, and closes it before returning.
 """
 
 from __future__ import annotations
@@ -21,8 +21,6 @@ if TYPE_CHECKING:
 
     from griffe import DocstringOptions
 
-    from .api_reference import APIReference
-
 
 __all__ = (
     "render_code_variable",
@@ -40,21 +38,7 @@ def _canonical_path(klass: type | MethodType) -> str:
     return f"{module}.{klass.__qualname__}"
 
 
-def _render_settings(settings: Settings | None, reference: APIReference | None) -> Settings:
-    """Select operation settings and reject conflicting helper settings"""
-    if reference is None:
-        return settings or Settings()
-    if settings is not None and settings != reference.settings:
-        raise ValueError("Helper settings conflict with the active API reference settings.")
-    return reference.settings
-
-
-def _render(
-    obj: gf.Object | gf.Alias,
-    settings: Settings | None = None,
-    *,
-    customisation: APIReference | None = None,
-) -> str:
+def _render(obj: gf.Object | gf.Alias, settings: Settings | None = None) -> str:
     """
     Prepare and render one object's documentation as Quarto Markdown
 
@@ -63,46 +47,30 @@ def _render(
     obj
         The object or alias to document.
     settings
-        Settings for a standalone call. With `customisation`, omit these or
-        supply settings equal to the active reference's settings.
-    customisation
-        An active reference whose semantic preparation and renderer choices to
-        reuse. The caller retains ownership of its lifetime.
+        Parsing and rendering settings, or `None` for defaults.
 
     Returns
     -------
     :
         The object's documentation, or an empty string when an object hook excludes it.
     """
-    reference = customisation
-    selected_settings = _render_settings(settings, reference)
-    extension = reference.extension if reference is not None else Extension(selected_settings)
+    settings = settings or Settings()
+    extension = Extension(settings)
     try:
         extension.load()
-        prepare = reference.prepare if reference is not None else extension.prepare
-        node = griffe_to_doc(obj, inherited=False, skip_aliases=True, prepare=prepare)
+        node = griffe_to_doc(obj, inherited=False, skip_aliases=True, prepare=extension.prepare)
         if node is None:
             return ""
         with extension.error_context("render", obj.path):
-            return str(
-                extension.renderers.make(
-                    node,
-                    settings=selected_settings,
-                    extension=extension,
-                    output_root=reference.output_root if reference is not None else None,
-                )
-            )
+            return str(extension.renderers.make(node, settings=settings, extension=extension))
     finally:
-        if reference is None:
-            extension.close()
+        extension.close()
 
 
 def render_code_variable(
     code: str,
     name: str | None = None,
     settings: Settings | None = None,
-    *,
-    customisation: APIReference | None = None,
 ) -> str:
     """
     Render a variable or module from source as Quarto Markdown
@@ -115,38 +83,28 @@ def render_code_variable(
     name
         The variable name, or `None` to render the module.
     settings
-        Standalone semantic and rendering settings. The parser and its registered
-        defaults apply to the snippet. `None` uses default settings.
-    customisation
-        An active API reference to reuse for preparation and renderer choices.
-        Omit `settings` to use the reference's settings; conflicting values raise.
-        This helper leaves the reference open.
+        Parsing and rendering settings, or `None` for defaults. The snippet is parsed
+        with their parser and its default options.
 
     Returns
     -------
     :
         The documentation, or an empty string when an object hook excludes the object.
     """
-    reference = customisation
-    selected_settings = _render_settings(settings, reference)
-    defaults = get_parser_defaults(selected_settings.parser)
+    settings = settings or Settings()
+    defaults = get_parser_defaults(settings.parser)
     options = cast("DocstringOptions", defaults) if defaults else None
     with gf.temporary_visited_package(
         "package",
         {"__init__.py": code},
-        docstring_parser=gf.Parser(selected_settings.parser),
+        docstring_parser=gf.Parser(settings.parser),
         docstring_options=options,
     ) as module:
         obj = module[name] if name else module
-    return _render(obj, selected_settings, customisation=reference)
+    return _render(obj, settings)
 
 
-def render_type_object(
-    path: str | type | MethodType,
-    settings: Settings | None = None,
-    *,
-    customisation: APIReference | None = None,
-) -> str:
+def render_type_object(path: str | type | MethodType, settings: Settings | None = None) -> str:
     """
     Render a Python object's documentation as Quarto Markdown
 
@@ -155,26 +113,15 @@ def render_type_object(
     path
         The object or its qualified import path.
     settings
-        Standalone semantic and rendering settings, or `None` for defaults.
-    customisation
-        An active reference whose loader, parser, prepared facts and renderer
-        choices to reuse. Omit `settings` to use the reference's settings;
-        conflicting values raise. This helper leaves the reference open.
+        Parsing, loading and rendering settings, or `None` for defaults.
 
     Returns
     -------
     :
         The documentation, or an empty string when an object hook excludes the object.
     """
-    reference = customisation
-    selected_settings = _render_settings(settings, reference)
+    settings = settings or Settings()
     if not isinstance(path, str):
         path = _canonical_path(path)
-    obj = (
-        reference.get_object(path)
-        if reference is not None
-        else get_object(
-            path, parser=selected_settings.parser, dynamic=selected_settings.dynamic or False
-        )
-    )
-    return _render(obj, selected_settings, customisation=reference)
+    obj = get_object(path, parser=settings.parser, dynamic=settings.dynamic or False)
+    return _render(obj, settings)

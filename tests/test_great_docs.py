@@ -12,6 +12,7 @@ import textwrap
 import time
 import types
 import warnings
+from contextlib import ExitStack
 from dataclasses import dataclass, replace
 from datetime import datetime
 from functools import cached_property
@@ -138,7 +139,8 @@ from great_docs._apiref.write import merge_frontmatter as _merge_frontmatter
 from great_docs._build import freeze, pipeline, quarto, reference, site
 from great_docs._build.log import BuildLog
 from great_docs._build.ownership import QUARTO_YML_HEADER, validate_build_dir
-from great_docs._build.steps import Skipped, Step, count_listed
+from great_docs._build.pipeline import Run
+from great_docs._build.steps import Outcome, Skipped, Step, count_listed
 from great_docs._cli.ci import (
     _detect_optional_dependencies,
     _detect_package_manager,
@@ -230,6 +232,7 @@ from tests.support import (
     make_run,
     mock_config,
     prepare_build_directory,
+    prepared_reference,
     sections_step,
     stubbed_build,
     update_quarto_config,
@@ -3133,7 +3136,7 @@ def test_fetch_members_module_with_exports_filters_unexported():
 
     resolver = Resolver(Settings(parser="numpy"))
     el = SpecObject(name="mymod").with_defaults(SpecOptions())
-    result = resolver._fetch_members(el, mod)
+    result = resolver._fetch_members(el, mod, path="mymod", dynamic=False)
     assert result == ["pub_func"]
     assert "priv_func" not in result
 
@@ -3153,7 +3156,7 @@ def test_fetch_members_module_exclude_imports():
 
     resolver = Resolver(Settings(parser="numpy"))
     el = SpecObject(name="mymod", include_imports=False).with_defaults(SpecOptions())
-    result = resolver._fetch_members(el, mod)
+    result = resolver._fetch_members(el, mod, path="mymod", dynamic=False)
     assert "my_func" in result
     assert "imported_name" not in result
 
@@ -3174,7 +3177,7 @@ def test_fetch_members_exclude_attributes():
 
     resolver = Resolver(Settings(parser="numpy"))
     el = SpecObject(name="mymod", include_attributes=False).with_defaults(SpecOptions())
-    result = resolver._fetch_members(el, mod)
+    result = resolver._fetch_members(el, mod, path="mymod", dynamic=False)
     assert "my_func" in result
     assert "my_attr" not in result
 
@@ -3195,7 +3198,7 @@ def test_fetch_members_exclude_classes():
 
     resolver = Resolver(Settings(parser="numpy"))
     el = SpecObject(name="mymod", include_classes=False).with_defaults(SpecOptions())
-    result = resolver._fetch_members(el, mod)
+    result = resolver._fetch_members(el, mod, path="mymod", dynamic=False)
     assert "my_func" in result
     assert "MyClass" not in result
 
@@ -3216,7 +3219,7 @@ def test_fetch_members_exclude_functions():
 
     resolver = Resolver(Settings(parser="numpy"))
     el = SpecObject(name="mymod", include_functions=False).with_defaults(SpecOptions())
-    result = resolver._fetch_members(el, mod)
+    result = resolver._fetch_members(el, mod, path="mymod", dynamic=False)
     assert "my_attr" in result
     assert "my_func" not in result
 
@@ -3237,7 +3240,7 @@ def test_fetch_members_exclude_list():
 
     resolver = Resolver(Settings(parser="numpy"))
     el = SpecObject(name="mymod", exclude=["exclude_me"]).with_defaults(SpecOptions())
-    result = resolver._fetch_members(el, mod)
+    result = resolver._fetch_members(el, mod, path="mymod", dynamic=False)
     assert "keep_me" in result
     assert "exclude_me" not in result
 
@@ -3256,7 +3259,7 @@ def test_fetch_members_source_order():
 
     resolver = Resolver(Settings(parser="numpy"))
     el = SpecObject(name="mymod", member_order="source").with_defaults(SpecOptions())
-    result = resolver._fetch_members(el, mod)
+    result = resolver._fetch_members(el, mod, path="mymod", dynamic=False)
     assert result == ["b_func", "a_func", "c_func"]
 
 
@@ -3276,7 +3279,7 @@ def test_fetch_members_invalid_order_raises():
     el = el.replace(member_order="bad_order")
 
     with pytest.raises(ValueError, match="Unsupported value of member_order"):
-        resolver._fetch_members(el, mod)
+        resolver._fetch_members(el, mod, path="mymod", dynamic=False)
 
 
 def test_fetch_members_include_private_skips_private_filter():
@@ -3292,7 +3295,7 @@ def test_fetch_members_include_private_skips_private_filter():
 
     resolver = Resolver(Settings(parser="numpy"))
     el = SpecObject(name="mymod", include_private=True).with_defaults(SpecOptions())
-    result = resolver._fetch_members(el, mod)
+    result = resolver._fetch_members(el, mod, path="mymod", dynamic=False)
     assert "_private_func" in result
 
 
@@ -3311,7 +3314,7 @@ def test_fetch_members_include_empty_skips_docstring_filter():
 
     resolver = Resolver(Settings(parser="numpy"))
     el = SpecObject(name="mymod", include_empty=True).with_defaults(SpecOptions())
-    result = resolver._fetch_members(el, mod)
+    result = resolver._fetch_members(el, mod, path="mymod", dynamic=False)
     assert "documented" in result
     assert "undocumented" in result
 
@@ -3332,8 +3335,8 @@ def test_fetch_members_keeps_undocumented_members_of_an_enum():
     with gf.temporary_visited_package("pkg", {"__init__.py": source}) as pkg:
         resolver = Resolver(Settings(parser="numpy"))
         el = SpecObject(name="Color").with_defaults(SpecOptions())
-        assert resolver._fetch_members(el, pkg["Color"]) == ["RED"]
-        assert resolver._fetch_members(el, pkg["Point"]) == []
+        assert resolver._fetch_members(el, pkg["Color"], path="pkg:Color", dynamic=False) == ["RED"]
+        assert resolver._fetch_members(el, pkg["Point"], path="pkg:Point", dynamic=False) == []
 
 
 def test_autogenerate_sections_returns_sections(capsys):
@@ -5279,8 +5282,8 @@ def _write_llms_txt_quarto_yml(build_dir: Path, label: str) -> None:
             "      contents: [totally_nonexistent_pkg_xyz.f]\n"
         ),
         "importable package with sections": (
-            "api-reference:\n  package: os\n  sections:\n"
-            "    - title: Core\n      contents: [os.getcwd]\n"
+            "api-reference:\n  package: json\n  sections:\n"
+            "    - title: Core\n      contents: [dumps]\n"
         ),
     }
     if label in configs:
@@ -5298,14 +5301,23 @@ def test_freeze_writes_the_llms_files_build_would(label: str, tmp_path: Path):
     _write_llms_txt_quarto_yml(docs.layout.build_dir, label)
     log = BuildLog(stream=io.StringIO())
     api_block = _written_api_block(docs)
+    available = llms_txt.is_planned(api_block)
 
-    with (
-        stubbed_build(api_reference=api_block is not None),
-        patch.object(reference, "api", return_value=(Skipped("stubbed"), None)),
-    ):
+    with ExitStack() as stack:
+
+        def install(
+            run: Run, *args: object, **kwargs: object
+        ) -> tuple[Outcome, APIReference | None]:
+            # The real API step gives a reference to every block that plans the text
+            # export, or stops the build.
+            if run.api_block is not None and llms_txt.is_planned(run.api_block):
+                run.api_reference = stack.enter_context(prepared_reference(run.api_block))
+            return Skipped("stubbed"), run.api_reference
+
+        stack.enter_context(stubbed_build(api_reference=api_block is not None))
+        stack.enter_context(patch.object(reference, "api", autospec=True, side_effect=install))
         pipeline.prepare_for_freeze(docs._config, docs.layout, log, remote=docs._remote)
 
-    available = llms_txt.is_planned(api_block)
     assert (docs.layout.build_dir / "llms.txt").exists() == available, label
     assert (docs.layout.build_dir / "llms-full.txt").exists() == available, label
 
@@ -9098,15 +9110,21 @@ def test_build_llms_txt_error_handled(tmp_path, capsys):
     """
     docs = _buildable_docs(tmp_path)
 
-    with (
-        stubbed_build() as stubs,
-        patch("great_docs._website.ai_agents.llms_txt.is_planned", return_value=True),
-        patch(
-            "great_docs._website.ai_agents.llms_txt.write_index",
-            side_effect=RuntimeError("no summary"),
-        ),
-    ):
-        docs.build(watch=False, refresh=False)
+    with prepared_reference({"package": "json", "sections": [{"contents": ["dumps"]}]}) as active:
+
+        def install(run: Run, *args: object, **kwargs: object) -> tuple[Outcome, APIReference]:
+            run.api_reference = active
+            return "API reference generated", active
+
+        with (
+            stubbed_build() as stubs,
+            patch.object(reference, "api", autospec=True, side_effect=install),
+            patch(
+                "great_docs._website.ai_agents.llms_txt.write_index",
+                side_effect=RuntimeError("no summary"),
+            ),
+        ):
+            docs.build(watch=False, refresh=False)
 
     assert "Error generating llms.txt: no summary" in capsys.readouterr().out
     stubs.steps["passes.terminal_recordings"].assert_called_once()
@@ -17125,7 +17143,11 @@ def test_type_sections_empty_lists():
     """TypeSections with no items produces empty Blocks output."""
 
     ts = TypeSections(
-        protocols_items=[], typevars_items=[], typealiases_items=[], settings=Settings()
+        protocols_items=[],
+        typevars_items=[],
+        typealiases_items=[],
+        settings=Settings(),
+        extension=Extension(Settings()),
     )
 
     assert [category.renderers for category in ts.categories] == [[], [], []]
@@ -17154,6 +17176,7 @@ def test_type_sections_items_combines_all():
             typevars_items=[tv_item],
             typealiases_items=[ta_item],
             settings=Settings(),
+            extension=Extension(Settings()),
         )
 
     assert ts.items == [p_item, tv_item, ta_item]
@@ -17167,7 +17190,11 @@ def test_type_sections_protocols_keep_member_bodies_without_summary() -> None:
     protocol.set_member("run", method)
     item = InventoryItem(name="Protocol", obj=protocol)
     sections = TypeSections(
-        protocols_items=[item], typevars_items=[], typealiases_items=[], settings=Settings()
+        protocols_items=[item],
+        typevars_items=[],
+        typealiases_items=[],
+        settings=Settings(),
+        extension=Extension(Settings()),
     )
     output = str(sections)
     assert "Protocol method body marker" in output
@@ -17180,7 +17207,11 @@ def test_type_sections_type_variables_keep_heading_without_repeated_name() -> No
     variable = gf.Attribute(name="GenericValue", value="TypeVar('T')")
     item = InventoryItem(name="GenericValue", obj=variable)
     sections = TypeSections(
-        protocols_items=[], typevars_items=[item], typealiases_items=[], settings=Settings()
+        protocols_items=[],
+        typevars_items=[item],
+        typealiases_items=[],
+        settings=Settings(),
+        extension=Extension(Settings()),
     )
     renderer = sections.categories[1].renderers[0]
     assert "GenericValue" in str(renderer.title)
@@ -17194,7 +17225,11 @@ def test_type_sections_pep613_aliases_keep_heading_without_marker() -> None:
     alias = gf.Attribute(name="MyAlias", value="int", annotation=gf.ExprName("TypeAlias"))
     item = InventoryItem(name="MyAlias", obj=alias)
     sections = TypeSections(
-        protocols_items=[], typevars_items=[], typealiases_items=[item], settings=Settings()
+        protocols_items=[],
+        typevars_items=[],
+        typealiases_items=[item],
+        settings=Settings(),
+        extension=Extension(Settings()),
     )
     renderer = sections.categories[2].renderers[0]
     output = str(renderer)
@@ -17217,7 +17252,11 @@ def test_type_sections_render_body_protocols_section():
         patch("great_docs._apiref.typing_information.Renderers.make", return_value=mock_render),
     ):
         ts = TypeSections(
-            protocols_items=[p_item], typevars_items=[], typealiases_items=[], settings=Settings()
+            protocols_items=[p_item],
+            typevars_items=[],
+            typealiases_items=[],
+            settings=Settings(),
+            extension=Extension(Settings()),
         )
 
     body_str = str(ts.render_body())
@@ -17240,7 +17279,11 @@ def test_type_sections_render_body_typevars_section():
         patch("great_docs._apiref.typing_information.Renderers.make", return_value=mock_render),
     ):
         ts = TypeSections(
-            protocols_items=[], typevars_items=[tv_item], typealiases_items=[], settings=Settings()
+            protocols_items=[],
+            typevars_items=[tv_item],
+            typealiases_items=[],
+            settings=Settings(),
+            extension=Extension(Settings()),
         )
 
     body_str = str(ts.render_body())
@@ -17261,7 +17304,11 @@ def test_type_sections_render_body_typealiases_section():
         patch("great_docs._apiref.typing_information.Renderers.make", return_value=mock_render),
     ):
         ts = TypeSections(
-            protocols_items=[], typevars_items=[], typealiases_items=[ta_item], settings=Settings()
+            protocols_items=[],
+            typevars_items=[],
+            typealiases_items=[ta_item],
+            settings=Settings(),
+            extension=Extension(Settings()),
         )
 
     body_str = str(ts.render_body())
@@ -17288,6 +17335,7 @@ def test_type_sections_render_body_all_sections():
             typevars_items=[tv_item],
             typealiases_items=[ta_item],
             settings=Settings(),
+            extension=Extension(Settings()),
         )
 
     body_str = str(ts.render_body())
@@ -17479,84 +17527,73 @@ def test_type_information_str_delegates_to_content():
     assert "Typing Information" in result
 
 
-def test_type_information_write_creates_file():
-    """TypeInformation.write() extends builder items and writes the qmd file."""
+def test_type_information_collected_page_writes_qmd_file(tmp_path):
+    """A collected typing page writes its source to the page's `.qmd` path"""
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        mock_builder = MagicMock()
-        mock_builder.package = "mypkg"
-        mock_builder.settings.dir = str(Path(tmp_dir) / "reference")
-        mock_builder.items = []
+    mock_builder = MagicMock()
+    mock_builder.package = "mypkg"
+    mock_builder.settings.dir = str(tmp_path / "reference")
+    mock_builder.items = []
 
-        mock_module = MagicMock()
-        mock_module.members = {}
-        mock_builder.prepare.side_effect = lambda obj: obj
+    mock_module = MagicMock()
+    mock_module.members = {}
+    mock_builder.prepare.side_effect = lambda obj: obj
 
-        with patch.object(
+    with patch.object(
+        mock_builder,
+        "get_object",
+        side_effect=lambda path: (
+            mock_module.members[path.split(":", 1)[1]] if ":" in path else mock_module
+        ),
+    ):
+        ti = TypeInformation(module_path="mypkg.types", api_ref=mock_builder)
+        ti.collect().write()
+
+    content = Path(f"{ti.base_uri}.qmd").read_text()
+    assert "Typing Information" in content
+
+
+def test_type_information_collect_extends_builder_items():
+    """`TypeInformation.collect()` adds all section items to `builder.items`"""
+
+    mock_builder = MagicMock()
+    mock_builder.package = "mypkg"
+    mock_builder.settings.dir = "reference"
+    mock_builder.renderers = Renderers()
+    mock_builder.items = []
+
+    mock_member = MagicMock()
+    mock_member.canonical_path = "mypkg.types.T"
+    mock_member.name = "T"
+
+    mock_module = MagicMock()
+    mock_module.members = {"T": mock_member}
+    mock_builder.prepare.side_effect = lambda obj: obj
+
+    mock_render_obj = MagicMock()
+
+    with (
+        patch.object(
             mock_builder,
             "get_object",
             side_effect=lambda path: (
                 mock_module.members[path.split(":", 1)[1]] if ":" in path else mock_module
             ),
-        ):
-            ti = TypeInformation(module_path="mypkg.types", api_ref=mock_builder)
+        ),
+        patch("great_docs._apiref.typing_information.is_protocol", return_value=False),
+        patch("great_docs._apiref.typing_information.is_typevar", return_value=True),
+        patch("great_docs._apiref.typing_information.is_typealias", return_value=False),
+        patch("great_docs._apiref.typing_information.griffe_to_doc"),
+        patch(
+            "great_docs._apiref.typing_information.Renderers.make",
+            return_value=mock_render_obj,
+        ),
+    ):
+        ti = TypeInformation(module_path="mypkg.types", api_ref=mock_builder)
+        _ = ti.collect()
 
-            # Ensure the output directory exists
-            Path(ti.base_uri).parent.mkdir(parents=True, exist_ok=True)
-            ti.write()
-
-        filepath = Path(f"{ti.base_uri}.qmd")
-        assert filepath.exists()
-        content = filepath.read_text()
-        assert "Typing Information" in content
-
-
-def test_type_information_write_extends_builder_items():
-    """TypeInformation.write() adds all section items to builder.items."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        ref_dir = str(Path(tmp_dir) / "reference")
-
-        mock_builder = MagicMock()
-        mock_builder.package = "mypkg"
-        mock_builder.settings.dir = ref_dir
-        mock_builder.renderers = Renderers()
-        mock_builder.items = []
-
-        mock_member = MagicMock()
-        mock_member.canonical_path = "mypkg.types.T"
-        mock_member.name = "T"
-
-        mock_module = MagicMock()
-        mock_module.members = {"T": mock_member}
-        mock_builder.prepare.side_effect = lambda obj: obj
-
-        mock_render_obj = MagicMock()
-
-        with (
-            patch.object(
-                mock_builder,
-                "get_object",
-                side_effect=lambda path: (
-                    mock_module.members[path.split(":", 1)[1]] if ":" in path else mock_module
-                ),
-            ),
-            patch("great_docs._apiref.typing_information.is_protocol", return_value=False),
-            patch("great_docs._apiref.typing_information.is_typevar", return_value=True),
-            patch("great_docs._apiref.typing_information.is_typealias", return_value=False),
-            patch("great_docs._apiref.typing_information.griffe_to_doc"),
-            patch(
-                "great_docs._apiref.typing_information.Renderers.make",
-                return_value=mock_render_obj,
-            ),
-        ):
-            ti = TypeInformation(module_path="mypkg.types", api_ref=mock_builder)
-
-            Path(ref_dir).mkdir(parents=True, exist_ok=True)
-            ti.write()
-
-        assert len(mock_builder.items) == 1
-        assert mock_builder.items[0].name == "mypkg.types.T"
+    assert len(mock_builder.items) == 1
+    assert mock_builder.items[0].name == "mypkg.types.T"
 
 
 class TestFromReferenceConfig:

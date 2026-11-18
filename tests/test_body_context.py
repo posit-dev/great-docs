@@ -12,7 +12,6 @@ import griffe as gf
 import pytest
 
 from great_docs._apiref._extension_loading import _ExtensionSource
-from great_docs._apiref._tools import render_type_object
 from great_docs._apiref.api_reference import APIReference
 from great_docs.config import Config
 from great_docs.rendering import RenderContext
@@ -143,6 +142,8 @@ def test_summaries_skip_docstring_bodies_and_renderers_cache_their_output(
         index = ref.renderers.make(
             ref, sections=ref.resolved, extension=ref.extension, output_root=output
         )
+        returns = cast("list[gf.DocstringReturn]", ref.extension.cache["returns"])
+        before = [item.description for item in returns]
         assert "Document" in str(index)
         assert contexts(ref) == []
         prepared = list(cast("list[str]", ref.extension.cache["prepared"]))
@@ -163,37 +164,7 @@ def test_summaries_skip_docstring_bodies_and_renderers_cache_their_output(
         assert str(ref.renderers.make(doc, settings=ref.settings, **arguments)) == first
         assert len(contexts(ref)) == 2
         assert ref.extension.cache["prepared"] == prepared
-
-
-def test_rendering_keeps_prepared_continuation_definitions_unchanged(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    with recorded_reference(tmp_path, monkeypatch) as (ref, _, output):
-        _ = ref.resolved
-        returns = cast("list[gf.DocstringReturn]", ref.extension.cache["returns"])
-        before = [item.description for item in returns]
-        for _ in range(2):
-            rendered = render_type_object("body_context_example:Document.render", customisation=ref)
-            assert "First paragraph" in rendered
-            assert "Second paragraph" in rendered
+        # Each rendering reads the prepared continuation definitions without changing them.
+        assert "First paragraph" in first
+        assert "Second paragraph" in first
         assert [item.description for item in returns] == before
-        assert contexts(ref)
-        assert all(context.page_path is None for context in contexts(ref))
-        assert all(context.output_root == output for context in contexts(ref))
-
-
-def test_helper_alias_reports_genuine_embedded_member_contexts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    with recorded_reference(tmp_path, monkeypatch) as (ref, source, output):
-        rendered = render_type_object("body_context_example:Alias", customisation=ref)
-        assert "First paragraph" in rendered
-        appearances = contexts(ref)
-        assert {context.canonical_identity for context in appearances} == {
-            "body_context_example.impl.Document",
-            "body_context_example.impl.Document.render",
-        }
-        assert any(context.contained for context in appearances)
-        assert all(context.page_path is None for context in appearances)
-        assert all(context.source_root == source for context in appearances)
-        assert all(context.output_root == output for context in appearances)

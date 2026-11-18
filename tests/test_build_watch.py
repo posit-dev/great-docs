@@ -353,10 +353,10 @@ def test_watched_dirs_cover_each_directory_once(
         ("watch_demo/.notes.py", False),
     ],
 )
-def test_source_filter_accepts_package_sources(tmp_path: Path, path: str, accepted: bool):
+def test_watch_filter_accepts_package_sources(tmp_path: Path, path: str, accepted: bool):
     docs = _project(tmp_path)
 
-    accept = watch.source_filter(docs.layout, tmp_path.resolve() / PACKAGE)
+    accept = watch.WatchInputs.make(docs.layout, tmp_path.resolve() / PACKAGE).accept
 
     assert accept(watchfiles.Change.modified, str(tmp_path.resolve() / path)) is accepted
 
@@ -375,10 +375,10 @@ def test_source_filter_accepts_package_sources(tmp_path: Path, path: str, accept
         ("docs/user_guide/__pycache__/hook.cpython-313.pyc", False),
     ],
 )
-def test_source_filter_skips_generated_and_hidden_files(tmp_path: Path, path: str, accepted: bool):
+def test_watch_filter_skips_generated_and_hidden_files(tmp_path: Path, path: str, accepted: bool):
     docs = _project(tmp_path)
 
-    accept = watch.source_filter(docs.layout, None)
+    accept = watch.WatchInputs.make(docs.layout, None).accept
 
     assert accept(watchfiles.Change.modified, str(tmp_path.resolve() / path)) is accepted
 

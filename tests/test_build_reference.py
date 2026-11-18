@@ -69,15 +69,6 @@ def test_case_collision_links_match_pages_from_an_uninstalled_source_package(
             run = make_run(docs)
             prepare_build_directory(docs, run)
             sidebar = run.contributions[0].sidebars[0]
-            index_path = llms_txt.write_index(
-                docs.layout,
-                run.api_block,
-                {},
-                site_url=None,
-                report=lambda _: None,
-            )
-            assert index_path is not None
-            llms_index = index_path.read_text(encoding="utf-8")
             monkeypatch.chdir(docs.layout.build_dir)
             outcome, ref = reference.api(
                 run, docs._config, docs.layout, BuildLog(stream=io.StringIO())
@@ -85,6 +76,10 @@ def test_case_collision_links_match_pages_from_an_uninstalled_source_package(
 
             assert outcome == "API reference generated"
             assert ref is not None
+            index_path = llms_txt.write_index(
+                docs.layout, ref, {}, site_url=None, report=lambda _: None
+            )
+            llms_index = index_path.read_text(encoding="utf-8")
             assert [page.path for page in ref.manifest.pages] == ["Foo", "foo-function"]
             assert [link["href"] for link in sidebar.contents[1]["contents"]] == [
                 "reference/Foo.qmd",

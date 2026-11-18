@@ -4,7 +4,8 @@ Shared configuration and build setup for `GreatDocs` tests
 `write_config` writes and loads `great-docs.yml`. `mock_config` provides a `Config` double
 with empty defaults. `write_pyproject` declares a project's name. `make_project` reads a
 project's facts as a build does, `make_exports` prepares to find its exports, and `make_run`
-creates build state for testing build methods directly. `prepare_build_directory`,
+creates build state for testing build methods directly. `prepared_reference` prepares the API
+reference that the `llms.txt` writers read and closes it afterwards. `prepare_build_directory`,
 `update_quarto_config`, `add_api_block` and `write_homepage` provide the project inputs for
 individual build operations. `user_guide_step`, `sections_step`, `custom_pages_step` and
 `freeze_cache_step` run individual steps with the build's arguments, and
@@ -34,6 +35,8 @@ from unittest.mock import DEFAULT, MagicMock, NonCallableMagicMock, patch
 from yaml12 import format_yaml
 
 from great_docs import Config, GreatDocs
+from great_docs._apiref._extension_loading import _ExtensionSource
+from great_docs._apiref.api_reference import APIReference
 from great_docs._build import content, pipeline, prepare, reference, site
 from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
@@ -209,6 +212,40 @@ def make_run(docs: GreatDocs, **values: Any) -> Run:
         The build state with the supplied values.
     """
     return replace(Run.make(docs._config, docs.layout, watch=False), **values)
+
+
+@contextmanager
+def prepared_reference(
+    api_block: Mapping[str, object], layout: Layout | None = None
+) -> Iterator[APIReference]:
+    """
+    Prepare an API reference as the build's API step leaves it, and close it afterwards
+
+    Parameters
+    ----------
+    api_block
+        The `api-reference` configuration.
+    layout
+        The project whose `great-docs.yml` names the extension to load and whose build
+        directory is the output root, or `None` for neither.
+
+    Yields
+    ------
+    :
+        The reference, with its sections resolved.
+    """
+    ref = APIReference(
+        {"api-reference": dict(api_block)},
+        extension_source=(
+            _ExtensionSource.make(layout.load_config(), layout.source_dir) if layout else None
+        ),
+        output_root=layout.build_dir if layout else None,
+    )
+    try:
+        _ = ref.resolved
+        yield ref
+    finally:
+        ref.close()
 
 
 def prepare_build_directory(docs: GreatDocs, run: Run) -> Outcome:

@@ -116,11 +116,9 @@ docstring hooks, without running setup or those hooks again. The text export use
 the built-in renderers. See [API reference customisation](api-reference-customisation.qmd)
 for examples of changes that carry through to the export.
 
-API generation uses the selected static/dynamic and parser settings. Keep the
-package available in the build environment; dynamic acquisition imports it.
-A site without an API reference skips both files. The standalone full-export
-writer owns a fresh reference and retains missing/import diagnostics while
-closing configured extension state on success or failure.
+The files follow the same `parser` and `dynamic` settings as the API reference.
+Keep the package available in the build environment, because dynamic
+introspection imports it. Without an API reference, Great Docs skips both files.
 
 The build log shows the generation as a single step:
 

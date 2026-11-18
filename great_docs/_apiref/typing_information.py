@@ -9,7 +9,7 @@ the other API pages.
 from __future__ import annotations
 
 from contextlib import nullcontext
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -100,10 +100,10 @@ class TypeSections(Block):
     """
     The typing categories of one page, with their renderers and inventory entries
 
-    Create protocol, variable and alias categories explicitly. Supplied operation
-    preparation shares canonical facts; standalone sections own temporary default
-    preparation. Keep the extension open until rendering finishes.
-    Empty categories produce no heading and excluded objects produce no inventory item.
+    The protocols, type variables and type aliases are prepared when the sections are
+    created. Keep the extension open until rendering finishes so custom renderers can
+    import project helpers. An empty category gets no heading, and an excluded object
+    gets no inventory entry.
     """
 
     protocols_items: list[inventory.InventoryItem]
@@ -116,32 +116,47 @@ class TypeSections(Block):
     """The operation settings used for preparation and presentation"""
     renderers: Renderers = field(default_factory=Renderers, kw_only=True)
     """The renderers selected for every category"""
-    extension: Extension | None = field(default=None, kw_only=True)
-    """Active owner for renderer failures, or `None` for standalone sections"""
+    extension: Extension = field(kw_only=True)
+    """The extension that supplies settings and prepares objects by default"""
     page_path: str | None = field(default=None, kw_only=True)
     """The typing page's path, which a rendering failure names"""
     output_root: Path | None = field(default=None, kw_only=True)
     """The documentation output root"""
 
-    prepare: Callable[[gf.Object | gf.Alias], gf.Object | gf.Alias | None] | None = field(
+    prepare: InitVar[Callable[[gf.Object | gf.Alias], gf.Object | gf.Alias | None] | None] = field(
         default=None, kw_only=True
     )
-    """Operation preparation, or `None` to prepare with the supplied or default owner"""
+    """The reference's preparation function, or `None` to use the extension's"""
 
-    def __post_init__(self) -> None:
-        """Prepare all category records before their presentation is requested"""
-        from ._customisation import Extension
+    def __post_init__(
+        self, prepare: Callable[[gf.Object | gf.Alias], gf.Object | gf.Alias | None] | None
+    ) -> None:
+        """
+        Prepare every category's objects before any of them is rendered
 
-        extension = self.extension or Extension(self.settings)
-        try:
-            extension.load()
-            self.categories = self._make_categories(extension)
-        finally:
-            if self.extension is None:
-                extension.close()
+        Parameters
+        ----------
+        prepare :
+            The reference's preparation function, or `None` to use the extension's.
+        """
+        self.categories = self._make_categories(prepare or self.extension.prepare)
 
-    def _make_categories(self, extension: Extension) -> list[_TypeCategory]:
-        """Prepare all categories through one shared operation owner"""
+    def _make_categories(
+        self, prepare: Callable[[gf.Object | gf.Alias], gf.Object | gf.Alias | None]
+    ) -> list[_TypeCategory]:
+        """
+        Prepare all categories through one shared operation owner
+
+        Parameters
+        ----------
+        prepare :
+            The preparation applied to every candidate object.
+
+        Returns
+        -------
+        :
+            The protocol, typing-variable and type-alias categories, in that order.
+        """
         return [
             _TypeCategory.make(
                 "Protocols",
@@ -152,7 +167,7 @@ class TypeSections(Block):
                 extension=self.extension,
                 page_path=self.page_path,
                 output_root=self.output_root,
-                prepare=self.prepare or extension.prepare,
+                prepare=prepare,
             ),
             _TypeCategory.make(
                 "Type Variables",
@@ -163,7 +178,7 @@ class TypeSections(Block):
                 extension=self.extension,
                 page_path=self.page_path,
                 output_root=self.output_root,
-                prepare=self.prepare or extension.prepare,
+                prepare=prepare,
             ),
             _TypeCategory.make(
                 "Type Aliases",
@@ -174,7 +189,7 @@ class TypeSections(Block):
                 extension=self.extension,
                 page_path=self.page_path,
                 output_root=self.output_root,
-                prepare=self.prepare or extension.prepare,
+                prepare=prepare,
             ),
         ]
 
@@ -215,10 +230,10 @@ class TypeInformation(Block):
     """
     The typing-information page of one module in the documented package
 
-    Acquire and prepare through the active reference before classifying protocols,
-    variables and aliases. Re-exported objects from the documented package share
-    canonical facts. Collection registers inventory entries and returns source;
-    direct writing publishes that one page.
+    Load and prepare the module's members through the reference before sorting them into
+    protocols, type variables and type aliases. An object that the module re-exports from
+    elsewhere in the package shares its prepared documentation with its other names.
+    `collect` adds the page's inventory entries and returns the page without writing it.
     """
 
     module_path: str
@@ -342,7 +357,3 @@ class TypeInformation(Block):
         content = str(self)
         self.api_ref.items.extend(self.sections.items)
         return RenderedPage(Path(f"{self.base_uri}.qmd"), content)
-
-    def write(self) -> None:
-        """Write the typing-information page directly without a final input marker"""
-        self.collect().write()

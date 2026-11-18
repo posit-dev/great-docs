@@ -167,7 +167,7 @@ def test_absolute_output_directories_use_explicit_context_coordinates(
     tmp_path: Path, known_root: bool, inside: bool, expected: str | None
 ) -> None:
     from great_docs._apiref.content import Page
-    from great_docs._apiref.write import write_pages
+    from great_docs._apiref.write import collect_pages
 
     output = tmp_path / "output"
     destination = output / "reference" if inside else tmp_path / "elsewhere"
@@ -185,14 +185,14 @@ def test_absolute_output_directories_use_explicit_context_coordinates(
     try:
         doc = make_doc(extension, "def run(): pass\n", "run")
         page = Page(path="run", contents=[doc])
-        write_pages(
+        for rendered in collect_pages(
             [page],
             settings,
             site_toc_depth=2,
-            renderers=extension.renderers,
             extension=extension,
             output_root=output if known_root else None,
-        )
+        ):
+            rendered.write()
         assert (destination / "run.qmd").is_file()
         assert len(contexts) == 1
         assert contexts[0].page_path == expected

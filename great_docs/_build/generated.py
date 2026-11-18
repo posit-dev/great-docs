@@ -86,8 +86,8 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
     Parameters
     ----------
     run
-        Build state containing the package's names and metadata, the API reference
-        configuration, active prepared reference and discovered user guide.
+        Build state containing the package's names and metadata, the prepared API
+        reference and the discovered user guide.
     config
         The project's configuration.
     layout
@@ -96,20 +96,19 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
     Returns
     -------
     :
-        The result line or skip reason.
+        The result line, or a skip reason when the build has no API reference.
     """
-    api_block = run.api_block
-    if run.api_reference is None and not llms_files.is_planned(api_block):
+    reference = run.api_reference
+    if reference is None:
         return Skipped("no API reference")
     _ = llms_files.write_index(
         layout,
-        api_block,
+        reference,
         run.project.manifest,
         site_url=config.site_url,
         report=print,
         webmcp_tools=webmcp_tools.site_tools(config, _webmcp_features(run, config)),
         webmcp_js_api=config.webmcp_js_api,
-        reference=run.api_reference,
     )
 
     cli: CliCommand | None = None
@@ -129,14 +128,7 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
             # The CLI reference step reports import and Typer conversion failures.
             # Omit CLI help here so `llms-full.txt` is still written.
             pass
-    _ = llms_files.write_full(
-        layout,
-        api_block,
-        cli=cli,
-        user_guide=run.user_guide,
-        report=print,
-        reference=run.api_reference,
-    )
+    _ = llms_files.write_full(layout, reference, cli=cli, user_guide=run.user_guide, report=print)
     return "Created llms.txt + llms-full.txt"
 
 

@@ -1,16 +1,17 @@
 """
 The `llms.txt` and `llms-full.txt` files that describe the API reference to language models
 
-`llms.txt` links to documented pages with semantic summaries and optional WebMCP
-tools. `llms-full.txt` assembles prepared API text, command-line help and user
-guide sources. Builds supply one prepared reference; standalone full exports
-own their configuration, missing-entry policy and reference cleanup.
+`llms.txt` links to each reference page with the first line of each object's prepared
+docstring and, when the site has WebMCP tools, lists them. `llms-full.txt` contains the
+prepared API documentation, followed by command-line help and the user guide. Both files
+come from the build's prepared reference. The homepage decides from the configuration
+whether to link to them, before that reference exists.
 """
 
 from __future__ import annotations
 
 import importlib
-from typing import TYPE_CHECKING, Any, TypeGuard, cast
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 from ..._build.steps import USER_CODE_ERRORS
 from ..._project.manifest import Manifest
@@ -40,11 +41,7 @@ _WEBMCP_EXAMPLES = (
 
 def _describes_api(api_block: Mapping[str, Any] | None) -> TypeGuard[Mapping[str, Any]]:
     """
-    Check whether standalone configuration names a package and contains sections
-
-    This guard applies to authored configuration before a reference is prepared.
-    Writers supplied with a prepared reference use its resolved documentation
-    directly. Planning homepage links also requires the package to import.
+    Check whether the API reference configuration names a package and contains sections
 
     Parameters
     ----------
@@ -63,10 +60,9 @@ def is_planned(api_block: Mapping[str, Any] | None) -> bool:
     """
     Check whether the homepage should link to `llms.txt` and `llms-full.txt`
 
-    The homepage checks availability before either file exists or configured
-    extension setup runs. Require a package that imports and at least one
-    authored section. Writers with a supplied prepared reference do not repeat
-    this import check.
+    The homepage checks before either file exists and before the extension's `setup`
+    runs. Both files require an API reference configuration with an importable `package`
+    and at least one section.
 
     Parameters
     ----------
@@ -90,15 +86,14 @@ def is_planned(api_block: Mapping[str, Any] | None) -> bool:
 
 def write_index(
     layout: Layout,
-    api_block: Mapping[str, Any] | None,
+    reference: APIReference,
     metadata: Manifest,
     *,
     site_url: str | None,
     report: Callable[[str], None],
     webmcp_tools: Sequence[WebMCPTool] = (),
     webmcp_js_api: bool = False,
-    reference: APIReference | None = None,
-) -> Path | None:
+) -> Path:
     """
     Write `llms.txt` with a link and one-line summary for each API reference page
 
@@ -112,8 +107,9 @@ def write_index(
     ----------
     layout
         Project directories, including the build directory for `llms.txt`.
-    api_block
-        The API reference configuration, or `None` when the site has none.
+    reference
+        The build's prepared reference. Its exclusions, prepared docstrings and page
+        destinations apply.
     metadata
         The package metadata, including `description` and the `Documentation` entry of `urls`.
     site_url
@@ -124,39 +120,22 @@ def write_index(
         The WebMCP tools the site registers, in registration order, or none.
     webmcp_js_api
         Whether pages expose the tools to scripts through `window.greatDocs.tools`.
-    reference
-        The build's prepared reference, or `None` to retain standalone planned
-        links and runtime summaries. A supplied reference shares exclusions,
-        semantic summaries and authored destinations.
 
     Returns
     -------
     :
-        The path written, or `None` without a supplied reference or usable
-        authored API configuration.
+        The path written.
 
     Raises
     ------
     ExtensionError
-        If resolving a supplied reference fails in configured setup or semantic hooks.
+        If the extension's `setup` or an object or docstring hook fails while the
+        reference resolves.
     """
-    from ..._apiref import APIReference, SpecObject
     from ..._apiref._export import summary
     from ..._apiref.content import Page
 
-    if reference is None and not _describes_api(api_block):
-        return None
-
-    sections = (
-        reference.resolved
-        if reference is not None
-        else APIReference({"api-reference": api_block}).sections
-    )
-    package_name = (
-        reference.package
-        if reference is not None
-        else str(cast("Mapping[str, Any]", api_block)["package"])
-    )
+    sections = reference.resolved
     description = metadata.get("description", "")
 
     # The `Documentation` URL from `pyproject.toml` takes precedence over the site URL.
@@ -169,7 +148,7 @@ def write_index(
         if not site_url.endswith("/"):
             site_url += "/"
 
-    lines = [f"# {package_name}", ""]
+    lines = [f"# {reference.package}", ""]
     if description:
         lines += [f"> {description}", ""]
     lines += ["## Docs", "", "### API Reference", ""]
@@ -185,19 +164,14 @@ def write_index(
             lines.append("")
 
         for entry in section.contents:
-            if isinstance(entry, Page) and reference is not None:
-                rows = (
-                    [(entry.summary.name, entry.summary.desc)]
-                    if entry.summary is not None
-                    else [(doc.name, summary(doc.obj)) for doc in entry.contents]
-                )
-                page_path = f"{reference.settings.dir}/{entry.path}"
-            elif isinstance(entry, SpecObject):
-                rows = [(entry.name, docstring_summary(package_name, entry.name))]
-                page_path = f"reference/{entry.page_path}"
-            else:
+            if not isinstance(entry, Page):
                 continue
-            url = f"{site_url}{page_path}.html"
+            rows = (
+                [(entry.summary.name, entry.summary.desc)]
+                if entry.summary is not None
+                else [(doc.name, summary(doc.obj)) for doc in entry.contents]
+            )
+            url = f"{site_url}{reference.settings.dir}/{entry.path}.html"
             for item_name, item_desc in rows:
                 if item_desc:
                     lines.append(f"- [{item_name}]({url}): {item_desc}")
@@ -302,13 +276,12 @@ def docstring_summary(package_name: str, item_name: str) -> str:
 
 def write_full(
     layout: Layout,
-    api_block: Mapping[str, Any] | None,
+    reference: APIReference,
     *,
     cli: Mapping[str, Any] | None,
     user_guide: Mapping[str, Any] | None,
     report: Callable[[str], None],
-    reference: APIReference | None = None,
-) -> Path | None:
+) -> Path:
     """
     Write `llms-full.txt` with API documentation, command-line help and user guide pages
 
@@ -321,52 +294,36 @@ def write_full(
     ----------
     layout
         Project directories, including the build directory for `llms-full.txt`.
-    api_block
-        The API reference configuration, or `None` when the site has none.
+    reference
+        The build's prepared reference, reused without running `setup` or the object and
+        docstring hooks again. The caller closes it.
     cli
         The package's Click interface, discovered for the CLI reference, or `None` to omit
         the command-line section.
     user_guide
         The discovered user guide pages, or `None` to omit the user guide section.
     report
-        A callback that receives the line announcing the written file, or the reason the
-        package could not be imported.
-    reference
-        The build's prepared reference, reused without repeating setup or early
-        hooks. `None` owns a fresh operation from the selected layout and skips
-        missing entries. Explicit API-block parser/dynamic settings override the
-        selected configuration. Configured failures propagate in either mode.
+        A callback that receives the line announcing the written file.
 
     Returns
     -------
     :
-        The path written, or `None` when the project has no usable API reference
-        configuration and no supplied reference, or when a standalone package
-        import raises `ImportError`.
+        The path written.
 
     Raises
     ------
     ExtensionError
-        If configured loading, setup or semantic hooks fail. A supplied reference
-        retains its caller-owned lifetime; an owned standalone reference closes.
+        If the extension's `setup` or an object or docstring hook fails while the
+        reference resolves.
     """
-    if reference is None and not _describes_api(api_block):
-        return None
+    from ..._apiref._export import reference_text
 
-    package_name = (
-        reference.package
-        if reference is not None
-        else str(cast("Mapping[str, Any]", api_block)["package"])
-    )
-    api_text = _full_api_text(layout, api_block, reference, report)
-    if api_text is None:
-        return None
     lines = [
         _SEPARATOR,
-        f"This is the API documentation for the {package_name} library.",
+        f"This is the API documentation for the {reference.package} library.",
         _SEPARATOR,
         "",
-        api_text,
+        reference_text(reference),
         "",
     ]
 
@@ -396,53 +353,6 @@ def write_full(
     _ = path.write_text("\n".join(lines), encoding="utf-8")
     report(f"Created {path}")
     return path
-
-
-def _full_api_text(
-    layout: Layout,
-    api_block: Mapping[str, Any] | None,
-    reference: APIReference | None,
-    report: Callable[[str], None],
-) -> str | None:
-    """
-    Export a supplied prepared reference or own a tolerant standalone operation
-
-    Preserve the standalone import diagnostic and missing-entry tolerance. Read
-    configured setup and semantic defaults from the selected layout's original
-    configuration, then apply explicit API-block settings. Close the owned
-    reference on success or failure. A supplied reference stays strict and
-    retains its caller-owned lifetime.
-    """
-    from ..._apiref._export import reference_text, tolerant_sections
-    from ..._apiref._extension_loading import _ExtensionSource
-    from ..._apiref.api_reference import APIReference
-
-    if reference is not None:
-        return reference_text(reference)
-    assert api_block is not None
-    package_name = str(api_block["package"])
-    import_name = package_name.replace("-", "_")
-    try:
-        _ = importlib.import_module(import_name)
-    except ImportError as error:
-        report(f"Could not import {package_name}: {error}")
-        return None
-    config = layout.load_config()
-    block = {
-        "dynamic": config.dynamic,
-        "parser": config.parser or "numpy",
-        **api_block,
-        "package": import_name,
-    }
-    owned = APIReference(
-        {"api-reference": block, "format": {"html": {"lang": config.lang}}},
-        extension_source=_ExtensionSource.make(config, layout.source_dir),
-        output_root=layout.build_dir,
-    )
-    try:
-        return reference_text(owned, tolerant_sections(owned))
-    finally:
-        owned.close()
 
 
 def _cli_text(cli: Mapping[str, Any]) -> str:

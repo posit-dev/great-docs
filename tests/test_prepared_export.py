@@ -1,4 +1,4 @@
-"""Verify prepared callable facts and standalone semantic-export ownership"""
+"""Verify prepared callable facts and the semantic export of a prepared reference"""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from great_docs._apiref.content import Doc
 from great_docs._project.layout import Layout
 from great_docs._website.ai_agents import llms_txt
 from great_docs.rendering import FunctionRenderer, Renderers
-from tests.support import write_config, write_pyproject
+from tests.support import prepared_reference, write_config, write_pyproject
 
 
 def test_signature_retains_parameter_kinds_without_synthetic_variadic_defaults() -> None:
@@ -136,32 +136,32 @@ def test_export_uses_prepared_sections_without_presentation_or_repeated_hooks() 
         extension.close()
 
 
+PACKAGE = "prepared_export_example"
+
+
 @pytest.fixture
-def standalone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Layout]:
-    """Own an importable package and explicit standalone-export configuration"""
-    name = "standalone_export_example"
-    write_pyproject(tmp_path, name)
-    package = tmp_path / name
+def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Layout]:
+    """Own an importable package whose configuration names `extension.py`"""
+    write_pyproject(tmp_path, PACKAGE)
+    package = tmp_path / PACKAGE
     package.mkdir()
     (package / "__init__.py").write_text('def public():\n    """Original subject"""\n')
     write_config(tmp_path, {"api_reference_extension": "extension.py"})
     layout = Layout.make(tmp_path)
     layout.build_dir.mkdir()
     monkeypatch.syspath_prepend(str(tmp_path))
-    monkeypatch.delitem(sys.modules, name, raising=False)
+    monkeypatch.delitem(sys.modules, PACKAGE, raising=False)
     try:
         yield layout
     finally:
         for module in list(sys.modules):
-            if module == name or module.startswith(name + "."):
+            if module == PACKAGE or module.startswith(PACKAGE + "."):
                 del sys.modules[module]
 
 
-def test_standalone_export_loads_selected_setup_and_releases_owned_imports(
-    standalone: Layout,
-) -> None:
-    root = standalone.source_dir
-    (root / "helper.py").write_text("TOKEN = 'Prepared standalone subject'\n")
+def test_export_reads_configured_preparation_without_repeating_setup(project: Layout):
+    root = project.source_dir
+    (root / "helper.py").write_text("TOKEN = 'Prepared export subject'\n")
     (root / "extension.py").write_text(
         "from pathlib import Path\n"
         "from .helper import TOKEN\n"
@@ -174,88 +174,47 @@ def test_standalone_export_loads_selected_setup_and_releases_owned_imports(
         "            obj.docstring.value = TOKEN\n"
         "        return obj\n"
     )
-    before = {name for name in sys.modules if name.startswith("_great_docs_extension_")}
-    path = llms_txt.write_full(
-        standalone,
-        {"package": "standalone_export_example", "sections": [{"contents": ["missing", "public"]}]},
-        cli=None,
-        user_guide=None,
-        report=lambda _: None,
-    )
-    assert path is not None
-    assert "Prepared standalone subject" in path.read_text()
-    assert "missing" not in path.read_text()
+    block = {"package": PACKAGE, "sections": [{"contents": ["public"]}]}
+    with prepared_reference(block, project) as reference:
+        path = llms_txt.write_full(
+            project, reference, cli=None, user_guide=None, report=lambda _: None
+        )
+    assert "Prepared export subject" in path.read_text()
     assert (root / "setups.txt").read_text() == "setup\n"
-    assert {name for name in sys.modules if name.startswith("_great_docs_extension_")} == before
 
 
-def test_standalone_export_propagates_configured_hook_failure_and_closes(
-    standalone: Layout,
-) -> None:
-    (standalone.source_dir / "extension.py").write_text(
+def test_configured_hook_failure_is_an_extension_error(project: Layout):
+    (project.source_dir / "extension.py").write_text(
         "def setup(extension):\n"
         "    @extension.on_object_resolved\n"
         "    def transform(obj):\n"
         "        raise ImportError('configured semantic failure')\n"
     )
-    before = {name for name in sys.modules if name.startswith("_great_docs_extension_")}
-    with pytest.raises(ExtensionError, match="object_resolved") as failure:
-        llms_txt.write_full(
-            standalone,
-            {"package": "standalone_export_example", "sections": [{"contents": ["public"]}]},
-            cli=None,
-            user_guide=None,
-            report=lambda _: None,
-        )
+    block = {"package": PACKAGE, "sections": [{"contents": ["public"]}]}
+    with (
+        pytest.raises(ExtensionError, match="object_resolved") as failure,
+        prepared_reference(block, project),
+    ):
+        pass
+    # A bare `ImportError` would read to the build as a package failure, which it reports
+    # as a warning or retries with static analysis.
     assert isinstance(failure.value.__cause__, ImportError)
-    assert {name for name in sys.modules if name.startswith("_great_docs_extension_")} == before
 
 
 def test_undocumented_class_retains_signature_without_unselected_constructor_body(
-    standalone: Layout,
-) -> None:
-    (standalone.source_dir / "standalone_export_example/__init__.py").write_text(
+    project: Layout,
+):
+    (project.source_dir / PACKAGE / "__init__.py").write_text(
         "class Example:\n"
         "    def __init__(self, value: int = 7):\n"
         '        """An unselected constructor description"""\n'
     )
-    (standalone.source_dir / "extension.py").write_text("def setup(extension):\n    pass\n")
-    path = llms_txt.write_full(
-        standalone,
-        {
-            "package": "standalone_export_example",
-            "sections": [{"contents": [{"name": "Example", "members": []}]}],
-        },
-        cli=None,
-        user_guide=None,
-        report=lambda _: None,
-    )
-    assert path is not None
+    (project.source_dir / "extension.py").write_text("def setup(extension):\n    pass\n")
+    block = {"package": PACKAGE, "sections": [{"contents": [{"name": "Example", "members": []}]}]}
+    with prepared_reference(block, project) as reference:
+        path = llms_txt.write_full(
+            project, reference, cli=None, user_guide=None, report=lambda _: None
+        )
     text = path.read_text()
     assert "Example(value: int = 7)" in text
     assert "An unselected constructor description" not in text
-
-
-@pytest.mark.parametrize("explicit", [False, True])
-def test_standalone_setup_observes_selected_settings_and_explicit_precedence(
-    standalone: Layout, explicit: bool
-) -> None:
-    write_config(
-        standalone.source_dir,
-        {"api_reference_extension": "extension.py", "parser": "google", "dynamic": False},
-    )
-    (standalone.source_dir / "extension.py").write_text(
-        "from pathlib import Path\n"
-        "def setup(extension):\n"
-        "    Path(__file__).with_name('settings.txt').write_text(\n"
-        "        f'{extension.settings.parser} {extension.settings.dynamic}'\n"
-        "    )\n"
-    )
-    block = {"package": "standalone_export_example", "sections": [{"contents": ["public"]}]}
-    if explicit:
-        block.update({"parser": "numpy", "dynamic": True})
-    path = llms_txt.write_full(standalone, block, cli=None, user_guide=None, report=lambda _: None)
-    assert path is not None
-    assert (standalone.source_dir / "settings.txt").read_text() == (
-        "numpy True" if explicit else "google False"
-    )

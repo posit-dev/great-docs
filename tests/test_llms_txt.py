@@ -10,7 +10,7 @@ from great_docs._build import generated
 from great_docs._project.layout import Layout
 from great_docs._website.ai_agents import llms_txt
 from great_docs._website.ai_agents.webmcp_tools import TOOLS
-from tests.support import write_config, write_pyproject
+from tests.support import prepared_reference, write_config, write_pyproject
 
 # The standard library's `json` always imports; its `dumps` and `JSONDecoder.decode`
 # docstrings provide stable expectations for the documented package.
@@ -52,10 +52,10 @@ def _write_index(
     site_url: str | None = None,
 ) -> str:
     """Write `llms.txt` in the layout's build directory and return its text"""
-    path = llms_txt.write_index(
-        layout, api_block, metadata or {}, site_url=site_url, report=lambda _: None
-    )
-    assert path is not None
+    with prepared_reference(api_block) as reference:
+        path = llms_txt.write_index(
+            layout, reference, metadata or {}, site_url=site_url, report=lambda _: None
+        )
     return path.read_text(encoding="utf-8")
 
 
@@ -66,62 +66,44 @@ def _write_full(
     user_guide: dict[str, Any] | None = None,
 ) -> str:
     """Write `llms-full.txt` in the layout's build directory and return its text"""
-    path = llms_txt.write_full(
-        layout, api_block, cli=cli, user_guide=user_guide, report=lambda _: None
-    )
-    assert path is not None
+    with prepared_reference(api_block) as reference:
+        path = llms_txt.write_full(
+            layout, reference, cli=cli, user_guide=user_guide, report=lambda _: None
+        )
     return path.read_text(encoding="utf-8")
 
 
 SECTION = {"title": "Core", "contents": ["dumps"]}
 
-# API reference configurations (`None` for a site without one), expected file
-# availability, and whether the index is written.
-GUARD_CASES: dict[str, tuple[dict[str, Any] | None, bool, bool]] = {
-    "no API reference": (None, False, False),
-    "no sections": ({"package": "json", "sections": []}, False, False),
-    "no package": ({"sections": [SECTION]}, False, False),
-    # The index can list an unimportable package without summaries; the full file
-    # requires an importable package.
-    "unimportable package": (_api_reference("no_such_package_xyz", SECTION), False, True),
-    "importable package with sections": (_api_reference("json", SECTION), True, True),
+# API reference configurations (`None` for a site without one) and whether the
+# homepage advertises both files.
+PLANNING_CASES: dict[str, tuple[dict[str, Any] | None, bool]] = {
+    "no API reference": (None, False),
+    "no sections": ({"package": "json", "sections": []}, False),
+    "no package": ({"sections": [SECTION]}, False),
+    "unimportable package": (_api_reference("no_such_package_xyz", SECTION), False),
+    "importable package with sections": (_api_reference("json", SECTION), True),
 }
 
 
-@pytest.mark.parametrize("label", GUARD_CASES)
-def test_writes_the_full_file_exactly_when_planned(label: str, layout: Layout):
-    api_block, planned, index_written = GUARD_CASES[label]
-
-    index = llms_txt.write_index(layout, api_block, {}, site_url=None, report=lambda _: None)
-    full = llms_txt.write_full(layout, api_block, cli=None, user_guide=None, report=lambda _: None)
+@pytest.mark.parametrize("label", PLANNING_CASES)
+def test_files_are_planned_for_an_importable_package_with_sections(label: str):
+    api_block, planned = PLANNING_CASES[label]
 
     assert llms_txt.is_planned(api_block) is planned
-    assert (full is not None) is planned
-    assert (layout.build_dir / "llms-full.txt").exists() is planned
-    assert (index is not None) is index_written
-    assert (layout.build_dir / "llms.txt").exists() is index_written
 
 
 def test_reports_the_written_files(layout: Layout):
-    api_block = _api_reference("json", SECTION)
     lines: list[str] = []
 
-    llms_txt.write_index(layout, api_block, {}, site_url=None, report=lines.append)
-    llms_txt.write_full(layout, api_block, cli=None, user_guide=None, report=lines.append)
+    with prepared_reference(_api_reference("json", SECTION)) as reference:
+        llms_txt.write_index(layout, reference, {}, site_url=None, report=lines.append)
+        llms_txt.write_full(layout, reference, cli=None, user_guide=None, report=lines.append)
 
     assert lines == [
         f"Created {layout.build_dir / 'llms.txt'}",
         f"Created {layout.build_dir / 'llms-full.txt'}",
     ]
-
-
-def test_reports_a_package_that_does_not_import(layout: Layout):
-    api_block = _api_reference("no_such_package_xyz", SECTION)
-    lines: list[str] = []
-
-    llms_txt.write_full(layout, api_block, cli=None, user_guide=None, report=lines.append)
-
-    assert lines == ["Could not import no_such_package_xyz: No module named 'no_such_package_xyz'"]
 
 
 def test_index_lists_each_section_with_links_and_summaries(layout: Layout):
@@ -163,9 +145,17 @@ def test_index_has_no_section_heading_for_a_single_section(layout: Layout):
     assert "> " not in text
 
 
-def test_index_links_a_module_qualified_entry_to_its_page(layout: Layout):
+def test_index_links_a_module_qualified_entry_to_its_page(
+    layout: Layout, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    devices = tmp_path / "llms_instruments" / "devices"
+    devices.mkdir(parents=True)
+    (devices.parent / "__init__.py").write_text("")
+    (devices / "__init__.py").write_text("")
+    (devices / "keithley.py").write_text('class Keithley2400:\n    """A source meter"""\n')
+    monkeypatch.syspath_prepend(str(tmp_path))
     api_block = _api_reference(
-        "pkg", {"title": "Devices", "contents": ["devices.keithley:Keithley2400"]}
+        "llms_instruments", {"title": "Devices", "contents": ["devices.keithley:Keithley2400"]}
     )
 
     text = _write_index(layout, api_block)
@@ -209,7 +199,7 @@ def test_full_file_holds_signatures_and_docstrings_by_section(layout: Layout):
     api_block = _api_reference(
         "json",
         {"title": "Encoding", "desc": "Write JSON", "contents": ["dumps"]},
-        {"subtitle": "Decoding", "contents": [{"name": "JSONDecoder.decode"}, "missing"]},
+        {"subtitle": "Decoding", "contents": [{"name": "JSONDecoder.decode"}]},
         {"contents": ["decoder"]},
     )
 
@@ -223,7 +213,6 @@ def test_full_file_holds_signatures_and_docstrings_by_section(layout: Layout):
     assert DUMPS_SUMMARY + "." in text
     assert "\n## Decoding\n" in text
     assert "\ndecode(self, s, " in text
-    assert "missing" not in text
     # A module has no signature, so its name replaces the signature.
     assert "\njson.decoder\n\nImplementation of JSONDecoder" in text
     assert "CLI documentation" not in text
@@ -362,16 +351,16 @@ def _write_index_with_tools(
     layout: Layout, *names: str, site_url: str | None = None, js_api: bool = True
 ) -> str:
     tools = [tool for tool in TOOLS if tool.name in names]
-    path = llms_txt.write_index(
-        layout,
-        _api_reference("json", SECTION),
-        {},
-        site_url=site_url,
-        report=lambda _: None,
-        webmcp_tools=tools,
-        webmcp_js_api=js_api,
-    )
-    assert path is not None
+    with prepared_reference(_api_reference("json", SECTION)) as reference:
+        path = llms_txt.write_index(
+            layout,
+            reference,
+            {},
+            site_url=site_url,
+            report=lambda _: None,
+            webmcp_tools=tools,
+            webmcp_js_api=js_api,
+        )
     return path.read_text(encoding="utf-8")
 
 
@@ -442,15 +431,17 @@ def _build_llms_txt(tmp_path: Path, settings: dict[str, Any], *, repository: obj
     config = write_config(tmp_path, settings)
     layout = Layout.make(tmp_path)
     layout.build_dir.mkdir(parents=True)
-    run = SimpleNamespace(
-        api_block=_api_reference("json", SECTION),
-        api_reference=None,
-        project=SimpleNamespace(
-            manifest={}, name="json", importable_name=None, repository=repository
-        ),
-        user_guide=None,
-    )
-    with contextlib.redirect_stdout(io.StringIO()):
+    with (
+        prepared_reference(_api_reference("json", SECTION)) as reference,
+        contextlib.redirect_stdout(io.StringIO()),
+    ):
+        run = SimpleNamespace(
+            api_reference=reference,
+            project=SimpleNamespace(
+                manifest={}, name="json", importable_name=None, repository=repository
+            ),
+            user_guide=None,
+        )
         _ = generated.llms_txt(run, config, layout)  # type: ignore[arg-type]
     return (layout.build_dir / "llms.txt").read_text(encoding="utf-8")
 

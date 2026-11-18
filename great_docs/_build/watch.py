@@ -40,7 +40,6 @@ __all__ = [
     "forget_package",
     "serve",
     "source_changes",
-    "source_filter",
     "stage",
     "sync",
     "watched_dirs",
@@ -424,42 +423,30 @@ def watched_dirs(
     ]
 
 
-def source_filter(
-    layout: Layout, package: Path | None, dependencies: tuple[Path, ...] = ()
+def _source_filter(
+    layout: Layout, trees: tuple[Path, ...], patterns: tuple[Path, ...]
 ) -> Callable[[watchfiles.Change, str], bool]:
     """
-    Create a filter for changes to the documentation sources and the package
+    Create a filter that accepts changes to the selected inputs
 
     Parameters
     ----------
-    layout
-        The project's directories.
-    package
-        The documented package's source directory, or `None` when no package was
-        located.
-    dependencies
-        Fixed files, directory trees or glob declarations, including missing
-        inputs. Exact external files do not include their siblings.
+    layout :
+        The project's directories, whose generated directories are excluded.
+    trees :
+        Absolute files and directory trees to observe. An exact file does not
+        include its siblings.
+    patterns :
+        Absolute glob declarations, including those with no current match.
 
     Returns
     -------
     :
         A filter that accepts a change and its path, excluding editor and Python
         byproducts, hidden files and directories, and generated output. Hidden path
-        components are checked below the selected source/package directory or
-        the external input's directory or glob prefix.
+        components are checked below the matching directory tree, the directory of
+        a matching file, or the matching glob's prefix.
     """
-    paths = _input_paths(layout.source_dir, dependencies)
-    roots = (layout.source_dir,) if package is None else (layout.source_dir, package)
-    trees = (*roots, *(path for path in paths if not glob.has_magic(str(path))))
-    patterns = tuple(path for path in paths if glob.has_magic(str(path)))
-    return _source_filter(layout, trees, patterns)
-
-
-def _source_filter(
-    layout: Layout, trees: tuple[Path, ...], patterns: tuple[Path, ...]
-) -> Callable[[watchfiles.Change, str], bool]:
-    """Retain initial input coverage and ordinary source exclusions"""
     default = watchfiles.DefaultFilter(ignore_paths=layout.generated_dirs())
     selected = tuple((tree, tree if tree.is_dir() else tree.parent) for tree in trees)
 

@@ -434,19 +434,35 @@ class Resolver:
         el: SpecObject,
         obj: gf.Object | gf.Alias,
         *,
-        path: str | None = None,
-        dynamic: bool | None = None,
+        path: str,
+        dynamic: bool,
     ) -> list[str]:
         """
         Select the names of the members to document
 
-        Apply structural filters before acquisition. Hydrate dynamic candidates
-        before semantic hooks, then apply documentation-based eligibility rules.
-        An explicit member list retains the authored selection.
+        Use an explicit member list as it is. Otherwise filter candidates by name and
+        origin, then load and prepare the rest, importing each one in dynamic mode before
+        the object and docstring hooks run. Filters that read documentation see the
+        prepared members.
+
+        Parameters
+        ----------
+        el :
+            The entry whose options, or explicit member list, select the members.
+        obj :
+            The prepared parent object.
+        path :
+            The parent's lookup path, which prefixes each dynamic member lookup.
+        dynamic :
+            Whether to load each candidate by importing it.
+
+        Returns
+        -------
+        :
+            The selected member names in the entry's member order.
         """
         if el.members is not None:
             return el.members
-        dynamic = self.dynamic if dynamic is None else dynamic
 
         candidates: dict[str, gf.Object | gf.Alias] = (
             dict(obj.all_members) if el.include_inherited else dict(obj.members)
@@ -481,7 +497,7 @@ class Resolver:
         prepared_candidates: dict[str, gf.Object | gf.Alias] = {}
         for name, member in candidates.items():
             if dynamic:
-                member = self.get_object_or_raise(_join_path(path or obj.path, name), dynamic=True)
+                member = self.get_object_or_raise(_join_path(path, name), dynamic=True)
             prepared = self.prepare(member)
             if prepared is not None:
                 prepared_candidates[name] = prepared

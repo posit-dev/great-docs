@@ -141,10 +141,10 @@ class TestGenerateSidebar:
         assert section["contents"][0]["href"] == "reference/func_a.qmd"
 
 
-class TestWriteTypingInformation:
-    def test_iterates_module_paths(self, tmp_path: Path) -> None:
-        """Publish the collected typing source for each requested module"""
-        from great_docs._apiref.write import RenderedPage, write_typing_information
+class TestCollectTypingInformation:
+    def test_collects_each_module(self, tmp_path: Path):
+        """Collect a publishable typing source for each requested module"""
+        from great_docs._apiref.write import RenderedPage, collect_typing_information
 
         mock_api_ref = MagicMock()
 
@@ -156,8 +156,10 @@ class TestWriteTypingInformation:
             ]
             MockTI.return_value = mock_instance
 
-            write_typing_information(["pkg.types", "pkg.protocols"], mock_api_ref)
+            collected = collect_typing_information(["pkg.types", "pkg.protocols"], mock_api_ref)
 
+        for rendered in collected:
+            rendered.write()
         assert MockTI.call_count == 2
         MockTI.assert_any_call("pkg.types", mock_api_ref)
         MockTI.assert_any_call("pkg.protocols", mock_api_ref)
