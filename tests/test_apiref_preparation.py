@@ -7,6 +7,7 @@ from __future__ import annotations
 import gc
 import sys
 import weakref
+from contextvars import copy_context
 from pathlib import Path
 
 import griffe as gf
@@ -18,7 +19,7 @@ from great_docs._apiref._extension_loading import _ExtensionSource
 from great_docs._apiref._settings import Settings
 from great_docs._apiref.api_reference import APIReference
 from great_docs._apiref.content import DocFunction
-from great_docs._apiref.resolve import Resolver
+from great_docs._apiref.resolve import Resolver, resolution_lang
 
 
 def make_extension(tmp_path: Path, setup: str, *, parser: str = "numpy") -> Extension:
@@ -168,6 +169,32 @@ def test_invalid_parsed_result_reports_exact_phase_and_cause(tmp_path: Path) -> 
     with pytest.raises(ExtensionError, match="docstring_parsed for example") as error:
         extension.prepare(gf.Function(name="example", docstring=gf.Docstring("Description")))
     assert isinstance(error.value.__cause__, TypeError)
+    extension.close()
+
+
+def test_semantic_hooks_see_the_operation_language_only_while_preparing():
+    extension = Extension(Settings(lang="fr"))
+    seen: list[tuple[str, str]] = []
+
+    @extension.on_object_resolved
+    def record_object(obj: gf.Object) -> gf.Object:
+        seen.append(("object_resolved", resolution_lang.get()))
+        return obj
+
+    @extension.on_docstring_parsed
+    def record_sections(
+        obj: gf.Object, sections: list[gf.DocstringSection]
+    ) -> list[gf.DocstringSection]:
+        seen.append(("docstring_parsed", resolution_lang.get()))
+        return sections
+
+    def prepare() -> str:
+        resolution_lang.set("ja")
+        extension.prepare(gf.Function(name="example", docstring=gf.Docstring("Description")))
+        return resolution_lang.get()
+
+    assert copy_context().run(prepare) == "ja"
+    assert seen == [("object_resolved", "fr"), ("docstring_parsed", "fr")]
     extension.close()
 
 

@@ -9,9 +9,8 @@ project modules it imported.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from contextlib import contextmanager
 from pathlib import Path
-from types import TracebackType
 from typing import TYPE_CHECKING, Callable, TypeVar, cast, overload
 
 import griffe as gf
@@ -26,6 +25,8 @@ from ._extension_loading import _ExtensionSource, _ImportOwner
 from ._rendering._renderers import Renderers
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from griffe import DocstringOptions
 
     from ._settings import Settings
@@ -33,57 +34,8 @@ if TYPE_CHECKING:
 _Hook = TypeVar("_Hook", bound=Callable[..., object])
 
 
-@dataclass(frozen=True)
-class _PreparedObject:
-    """A retained canonical identity and its prepared result or exclusion"""
-
-    original: gf.Object
-    result: gf.Object | None
-
-
 class ExtensionError(Exception):
     """An error in the API reference extension, naming its file and phase"""
-
-
-class _ExtensionErrorContext:
-    """The phase and optional object appearance of a configured operation"""
-
-    def __init__(
-        self,
-        entry_path: Path | None,
-        close: Callable[[], None],
-        phase: str,
-        subject: str | None = None,
-    ) -> None:
-        self.entry_path = entry_path
-        self.close = close
-        self.phase = phase
-        self.subject = subject
-
-    def __enter__(self) -> None:
-        """Enter the diagnostic boundary without running configured code"""
-        return None
-
-    def __exit__(
-        self,
-        kind: type[BaseException] | None,
-        error: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        """Release owned imports and preserve the original configured failure as its cause"""
-        if error is None:
-            return
-        self.close()
-        if (
-            self.entry_path is None
-            or not isinstance(error, Exception)
-            or isinstance(error, ExtensionError)
-        ):
-            return
-        subject = f" for {self.subject}" if self.subject else ""
-        raise ExtensionError(
-            f"API reference extension {self.entry_path}: {self.phase}{subject}: {error}"
-        ) from error
 
 
 class Extension:
@@ -152,7 +104,7 @@ class Extension:
         self._renderers = Renderers()
         self._declared_inputs: list[Path] = []
         self._input_hashes: dict[Path, str] = {}
-        self._prepared_objects: dict[int, _PreparedObject] = {}
+        self._prepared: dict[gf.Object, gf.Object | None] = {}
         self._loaded = False
         self._closed = False
         self._registration_open = True
@@ -367,12 +319,15 @@ class Extension:
 
     def load(self) -> None:
         """
-        Run configured entry and setup once, then freeze registration
+        Import the extension file and run its `setup` once, then close registration
 
-        Load relative helpers from current source bytes and preserve installed-package
-        caching. Restore global hook templates if configured code changes them and
-        reject that registration path. Report load and setup failures in their actual
-        phase, preserve their causes and release owned imports.
+        The extension file and the helpers it imports relatively load from their current
+        source, while installed packages keep their usual import cache. Extension code
+        that registers hooks globally, instead of through the extension, fails, and the
+        global hooks are restored. A failure while loading or in setup raises
+        `ExtensionError` naming that phase, chained to the original error. It also
+        closes the extension, which releases the imported project modules and stops a
+        failed setup from running again.
         """
         if self._closed:
             raise RuntimeError("The API reference extension is closed.")
@@ -403,6 +358,9 @@ class Extension:
                         )
                     _ = setup(self)
                     check_templates()
+            except BaseException:
+                self.close()
+                raise
             finally:
                 OBJECT_HOOKS.restore(object_snapshot)
                 PARSED_HOOKS.restore(parsed_snapshot)
@@ -415,7 +373,7 @@ class Extension:
             target = obj.final_target if isinstance(obj, gf.Alias) else obj
         except (gf.AliasResolutionError, gf.CyclicAliasError):
             return False
-        return id(target) in self._prepared_objects
+        return target in self._prepared
 
     def prepare(
         self,
@@ -446,58 +404,53 @@ class Extension:
             The prepared object, the authored alias wrapping it, or `None` when an
             object hook excludes the alias's target.
         """
-        from ._constructor import parse_class_docstring
-        from ._parameter_docs import prepare_parameter_docs
-        from .introspect import get_parser_defaults, resolve_alias
+        from .introspect import resolve_alias
         from .resolve import resolution_lang
 
         self.load()
         original = resolve_alias(obj, get_object)
-        cached = self._prepared_objects.get(id(original))
-        if cached is not None:
-            return self._appearance(obj, original, cached.result)
+        if original in self._prepared:
+            return self._appearance(obj, original, self._prepared[original])
 
-        canonical_objects = [original]
+        seen = {original}
         token = resolution_lang.set(self.settings.lang)
         try:
-            object_phase = self.error_context("object_resolved", original.path)
-            with object_phase:
-                outcome = self._apply_object_resolved_hooks(original, canonical_objects, get_object)
-            if isinstance(outcome, gf.Object):
-                with object_phase:
-                    prepare_parameter_docs(outcome)
-                    if outcome.docstring is not None:
-                        outcome.docstring.parent = outcome
-                        outcome.docstring.parser = gf.Parser(self.settings.parser)
-                        outcome.docstring.parser_options = cast(
-                            "DocstringOptions", get_parser_defaults(self.settings.parser)
-                        )
-                        outcome.docstring.__dict__.pop("parsed", None)
-                if outcome.docstring is not None:
-                    with self.error_context("docstring_parsed", original.path):
-                        if outcome.is_class:
-                            parse_class_docstring(cast("gf.Class", outcome))
-                        sections = outcome.docstring.parsed
-                        outcome.docstring.__dict__["parsed"] = self._apply_docstring_parsed_hooks(
-                            outcome, sections
-                        )
+            with self.error_context("object_resolved", original.path):
+                result = self._apply_object_resolved_hooks(original, seen, get_object)
+            # Every recorded result is also a key, so a result that is a key was parsed by
+            # an earlier preparation.
+            if result is not None and result not in self._prepared:
+                self._parse_docstring(result, original.path)
         finally:
             resolution_lang.reset(token)
-        result = outcome.result if isinstance(outcome, _PreparedObject) else outcome
-        for canonical in canonical_objects:
-            self._prepared_objects[id(canonical)] = _PreparedObject(canonical, result)
+        self._prepared.update(dict.fromkeys(seen, result))
         return self._appearance(obj, original, result)
 
     def _apply_object_resolved_hooks(
         self,
         obj: gf.Object,
-        canonical_objects: list[gf.Object],
+        seen: set[gf.Object],
         get_object: Callable[..., gf.Object | gf.Alias] | None,
-    ) -> gf.Object | _PreparedObject | None:
+    ) -> gf.Object | None:
         """
-        Apply object handlers until the chain finishes, excludes or reaches a cached target
+        Run the object hooks until they finish, exclude the object or reach a prepared one
 
-        Retain each replacement in `canonical_objects` so every target shares the final result.
+        Parameters
+        ----------
+        obj
+            The canonical object that the first hook receives.
+        seen
+            The canonical objects met so far. Each hook's resolved result is added, so
+            all of them share the final result.
+        get_object
+            The loader for alias targets that are not loaded yet, or `None` to require
+            targets that are already in the model.
+
+        Returns
+        -------
+        :
+            The final object, `None` for an exclusion, or the recorded result of the
+            first already prepared object that a hook returns.
         """
         from .introspect import resolve_alias
 
@@ -508,12 +461,42 @@ class Extension:
             if not isinstance(transformed, (gf.Object, gf.Alias)):
                 raise TypeError("An object handler must return an object or None.")
             obj = resolve_alias(transformed, get_object)
-            if not any(candidate is obj for candidate in canonical_objects):
-                canonical_objects.append(obj)
-            cached = self._prepared_objects.get(id(obj))
-            if cached is not None:
-                return cached
+            seen.add(obj)
+            if obj in self._prepared:
+                return self._prepared[obj]
         return obj
+
+    def _parse_docstring(self, obj: gf.Object, subject: str) -> None:
+        """
+        Parse an object's docstring with the reference's parser, then run the docstring hooks
+
+        Parameters
+        ----------
+        obj
+            The last object hook's result, which no earlier preparation has parsed.
+        subject
+            The original object's path, which error messages name.
+        """
+        from ._constructor import parse_class_docstring
+        from ._parameter_docs import prepare_parameter_docs
+        from .introspect import get_parser_defaults
+
+        with self.error_context("object_resolved", subject):
+            prepare_parameter_docs(obj)
+            if obj.docstring is not None:
+                obj.docstring.parent = obj
+                obj.docstring.parser = gf.Parser(self.settings.parser)
+                obj.docstring.parser_options = cast(
+                    "DocstringOptions", get_parser_defaults(self.settings.parser)
+                )
+                obj.docstring.__dict__.pop("parsed", None)
+        if obj.docstring is None:
+            return
+        with self.error_context("docstring_parsed", subject):
+            if obj.is_class:
+                parse_class_docstring(cast("gf.Class", obj))
+            sections = obj.docstring.parsed
+            obj.docstring.__dict__["parsed"] = self._apply_docstring_parsed_hooks(obj, sections)
 
     def _apply_docstring_parsed_hooks(
         self, obj: gf.Object, sections: list[gf.DocstringSection]
@@ -545,10 +528,37 @@ class Extension:
             inherited=obj.inherited,
         )
 
-    def error_context(self, phase: str, subject: str | None = None) -> _ExtensionErrorContext:
-        """Describe failures in one configured phase and release owned imports"""
-        entry_path = self._source.entry_path if self._source is not None else None
-        return _ExtensionErrorContext(entry_path, self.close, phase, subject)
+    @contextmanager
+    def error_context(self, phase: str, subject: str | None = None) -> Generator[None]:
+        """
+        Re-raise an error from extension code as an `ExtensionError` naming the phase
+
+        With an extension file, an `Exception` raised in the block becomes an
+        `ExtensionError` chained to it. Three kinds of error pass through unchanged: an
+        existing `ExtensionError`, any error when there is no extension file, and an
+        error such as `KeyboardInterrupt` that is not an `Exception`. The imported
+        project modules stay loaded until the extension closes.
+
+        Parameters
+        ----------
+        phase
+            The phase that the error message names, such as `setup`.
+        subject
+            The object or appearance being processed, or `None` for the whole phase.
+        """
+        try:
+            yield
+        except BaseException as error:
+            if (
+                self._source is None
+                or not isinstance(error, Exception)
+                or isinstance(error, ExtensionError)
+            ):
+                raise
+            described = f" for {subject}" if subject else ""
+            raise ExtensionError(
+                f"API reference extension {self._source.entry_path}: {phase}{described}: {error}"
+            ) from error
 
     def close(self) -> None:
         """

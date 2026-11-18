@@ -189,6 +189,8 @@ def test_failed_extension_releases_imports_with_actual_phase(
     assert str(error.value).count(f": {phase}:") == 1
     assert owned_modules() == before
     assert sys.meta_path == finders
+    with pytest.raises(RuntimeError, match="extension is closed"):
+        reference.extension.load()
     reference.close()
 
 
@@ -299,7 +301,7 @@ def test_watch_declarations_keep_entry_relative_missing_paths(tmp_path: Path) ->
     reference.close()
 
 
-def test_error_context_names_callback_phase_and_releases_imports(tmp_path: Path) -> None:
+def test_error_context_names_callback_phase_and_owner_releases_imports(tmp_path: Path) -> None:
     source = make_source(tmp_path, "def setup(extension):\n    pass\n")
     before = owned_modules()
     reference = APIReference({"package": "example"}, extension_source=source)
@@ -310,8 +312,9 @@ def test_error_context_names_callback_phase_and_releases_imports(tmp_path: Path)
             raise ValueError("original")
     assert isinstance(error.value.__cause__, ValueError)
     assert ": setup" not in str(error.value)
-    assert owned_modules() == before
+    assert owned_modules() > before
     reference.close()
+    assert owned_modules() == before
 
 
 def test_hook_snapshots_share_callback_state_and_keep_priority_order() -> None:
