@@ -14531,7 +14531,7 @@ def test_mixin_render_attribute_member_pages_override_omits_group():
     assert getattr(ClassRenderer(doc), "render_attribute_member_pages")() is not None
 
 
-def test_mixin_render_members_group_no_summary() -> None:
+def test_mixin_render_members_group_no_summary():
     """Keep a group's member bodies when its summary is omitted"""
 
     class CustomClass(ClassRenderer):
@@ -14550,7 +14550,7 @@ def test_mixin_render_members_group_no_summary() -> None:
     assert doc.members == original_members
 
 
-def test_mixin_render_members_group_no_body() -> None:
+def test_mixin_render_members_group_no_body():
     """Keep a group's summary when its member bodies are omitted"""
 
     class CustomClass(ClassRenderer):
@@ -14569,7 +14569,7 @@ def test_mixin_render_members_group_no_body() -> None:
     assert doc.members == original_members
 
 
-def test_mixin_render_members_group_no_summary_global() -> None:
+def test_mixin_render_members_group_no_summary_global():
     """Keep member bodies when every summary is omitted"""
 
     class CustomClass(ClassRenderer):
@@ -14602,7 +14602,7 @@ def test_mixin_render_members_group_empty_returns_none():
     assert render.render_functions() is not None
 
 
-def test_mixin_render_members_group_attributes_summary_and_body() -> None:
+def test_mixin_render_members_group_attributes_summary_and_body():
     """Drop the attributes group when it has neither a summary nor a body"""
 
     class CustomClass(ClassRenderer):
@@ -14624,7 +14624,7 @@ def test_mixin_render_members_group_attributes_summary_and_body() -> None:
     assert doc.members == original_members
 
 
-def test_mixin_render_members_group_classes_summary_and_body() -> None:
+def test_mixin_render_members_group_classes_summary_and_body():
     """Drop the classes group when it has neither a summary nor a body"""
 
     class CustomClass(ClassRenderer):
@@ -14646,7 +14646,7 @@ def test_mixin_render_members_group_classes_summary_and_body() -> None:
     assert doc.members == original_members
 
 
-def test_mixin_render_member_pages_group_no_summary() -> None:
+def test_mixin_render_member_pages_group_no_summary():
     """Drop a linked function group without a summary"""
 
     class CustomClass(ClassRenderer):
@@ -14693,7 +14693,7 @@ def test_mixin_render_member_pages_group_functions_slug_for_class():
     assert "Functions" in title_str
 
 
-def test_mixin_render_member_pages_group_attributes_no_summary() -> None:
+def test_mixin_render_member_pages_group_attributes_no_summary():
     """Drop a linked attribute group without a summary"""
 
     class CustomClass(ClassRenderer):
@@ -14710,7 +14710,7 @@ def test_mixin_render_member_pages_group_attributes_no_summary() -> None:
     assert doc.members == original_members
 
 
-def test_mixin_render_member_pages_group_classes_no_summary() -> None:
+def test_mixin_render_member_pages_group_classes_no_summary():
     """Drop a linked class group without a summary"""
 
     class CustomClass(ClassRenderer):
@@ -14727,7 +14727,7 @@ def test_mixin_render_member_pages_group_classes_no_summary() -> None:
     assert doc.members == original_members
 
 
-def test_mixin_render_member_pages_group_global_summary_off() -> None:
+def test_mixin_render_member_pages_group_global_summary_off():
     """Drop a linked group when every summary is omitted"""
 
     class CustomClass(ClassRenderer):
@@ -16818,7 +16818,7 @@ def _make_class_page_with_members(name="MyClass"):
     return content.Page(path=f"reference/{name}", contents=[doc_cls])
 
 
-def test_render_api_page_suppresses_inner_title_at_level_1() -> None:
+def test_render_api_page_suppresses_inner_title_at_level_1():
     """Keep the object title in front matter without a duplicate visible heading"""
     page = _make_function_page()
     renderer = APIPageRenderer(page)
