@@ -336,6 +336,9 @@ class Extension:
             raise RuntimeError("The API reference extension is closed.")
         if self._loaded:
             return
+        # Setup may read `renderers`, which loads, so mark the extension loaded before
+        # setup runs. A failed load closes the extension, so it cannot be retried.
+        self._loaded = True
         if self._imports is not None:
             object_snapshot = OBJECT_HOOKS.snapshot()
             parsed_snapshot = PARSED_HOOKS.snapshot()
@@ -368,7 +371,6 @@ class Extension:
                 OBJECT_HOOKS.restore(object_snapshot)
                 PARSED_HOOKS.restore(parsed_snapshot)
         self._registration_open = False
-        self._loaded = True
 
     def is_prepared(self, obj: gf.Object | gf.Alias) -> bool:
         """Check whether a canonical object's documentation has been prepared"""

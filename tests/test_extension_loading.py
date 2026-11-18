@@ -119,6 +119,28 @@ def test_setup_runs_once_and_selects_renderers(
     assert owned_modules() == before
 
 
+def test_setup_reads_renderer_choices_without_running_again(write_extension: WriteExtension):
+    source = write_extension(
+        """
+        from great_docs.rendering import ClassRenderer, Renderers
+
+        class CustomClass(ClassRenderer):
+            pass
+
+        def setup(extension):
+            extension.cache['calls'] = extension.cache.get('calls', 0) + 1
+            current = extension.renderers
+            extension.set_renderers(Renderers(classes=CustomClass, functions=current.functions))
+        """
+    )
+    extension = Extension(Settings(), source)
+    try:
+        assert extension.renderers.classes.__name__ == "CustomClass"
+        assert extension.cache["calls"] == 1
+    finally:
+        extension.close()
+
+
 def test_relative_helpers_refresh_same_size_edits(
     tmp_path: Path, write_extension: WriteExtension, make_reference: MakeReference
 ):
