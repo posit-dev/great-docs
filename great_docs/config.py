@@ -704,8 +704,7 @@ class Config:
         value = cast("str | None", self["api_reference_extension"])
         if value is None:
             return None
-        path = Path(value)
-        return (path if path.is_absolute() else self.config_path.parent / path).resolve()
+        return (self.config_path.parent / value).resolve()
 
     @property
     def source_enabled(self) -> bool:

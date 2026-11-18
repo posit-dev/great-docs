@@ -11,6 +11,7 @@ creates a new reference, while one file watcher stays open for the whole session
 
 from __future__ import annotations
 
+import contextlib
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -718,28 +719,41 @@ def _watch(
             current, edited, staging, rebuild_log, remote=remote, refresh=refresh
         )
         rebuild_log.total_steps = count_listed(preparation)
-        try:
-            run_steps(preparation, rebuild_log, staging.build_dir)
-            return current.quarto_config
-        finally:
+        with contextlib.closing(current):
             try:
-                requested = (
-                    current.api_reference.extension_watch_paths
-                    if current.api_reference is not None
-                    else ()
-                )
-                uncovered = set(inputs.uncovered(requested)) - reported_inputs
-                if uncovered:
-                    reported_inputs.update(uncovered)
-                    paths = ", ".join(str(path) for path in sorted(uncovered))
-                    print(
-                        f"Extension inputs need additional preview coverage: {paths}. "
-                        "Stop and rerun `great-docs build --watch` to observe them."
-                    )
+                run_steps(preparation, rebuild_log, staging.build_dir)
+                return current.quarto_config
             finally:
-                current.close()
+                _report_uncovered(current, inputs, reported_inputs)
 
     watch.serve(layout, preview_env, rebuild, run.quarto_config, package, inputs=inputs)
+
+
+def _report_uncovered(current: Run, inputs: watch.WatchInputs, reported: set[Path]) -> None:
+    """
+    Print the extension inputs that the preview's watcher misses, naming each once
+
+    Parameters
+    ----------
+    current
+        The rebuild's state, whose API reference lists the inputs its extension uses.
+    inputs
+        The paths the preview watches, fixed when the preview starts.
+    reported
+        The inputs already named this session. This call adds the inputs it names.
+    """
+    requested = (
+        current.api_reference.extension_watch_paths if current.api_reference is not None else ()
+    )
+    uncovered = set(inputs.uncovered(requested)) - reported
+    if not uncovered:
+        return
+    reported.update(uncovered)
+    paths = ", ".join(str(path) for path in sorted(uncovered))
+    print(
+        f"Extension inputs need additional preview coverage: {paths}. "
+        "Stop and rerun `great-docs build --watch` to observe them."
+    )
 
 
 def _make_log(run: Run, config: Config, layout: Layout) -> BuildLog:

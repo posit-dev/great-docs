@@ -61,8 +61,6 @@ class WatchInputs:
     """Existing, non-nested directories that the file watcher observes"""
     accept: Callable[[watchfiles.Change, str], bool]
     """The change filter, which also excludes hidden files and generated output"""
-    source_root: Path
-    """The explicit documentation root for relative input declarations"""
     _patterns: tuple[Path, ...]
 
     @classmethod
@@ -89,14 +87,13 @@ class WatchInputs:
             The directories and filter that cover the documentation sources, the package
             and the dependencies.
         """
-        paths = _input_paths(layout.source_dir, dependencies)
+        paths = _input_paths(dependencies)
         roots = (layout.source_dir,) if package is None else (layout.source_dir, package)
         trees = (*roots, *(path for path in paths if not glob.has_magic(str(path))))
         patterns = tuple(path for path in paths if glob.has_magic(str(path)))
         return cls(
             tuple(watched_dirs(layout, package, paths)),
             _source_filter(layout, trees, patterns),
-            layout.source_dir,
             patterns,
         )
 
@@ -118,7 +115,7 @@ class WatchInputs:
             The uncovered inputs, resolved, in their given order and without repeats.
         """
         missing: list[Path] = []
-        for path in _input_paths(self.source_root, paths):
+        for path in _input_paths(paths):
             if glob.has_magic(str(path)):
                 if path in self._patterns:
                     continue
@@ -131,13 +128,21 @@ class WatchInputs:
         return tuple(missing)
 
 
-def _input_paths(source_root: Path, paths: tuple[Path, ...]) -> tuple[Path, ...]:
-    """Normalise declared paths against the explicit documentation source root"""
-    return tuple(
-        dict.fromkeys(
-            (path if path.is_absolute() else source_root / path).resolve() for path in paths
-        )
-    )
+def _input_paths(paths: tuple[Path, ...]) -> tuple[Path, ...]:
+    """
+    Resolve input paths and drop repeats, keeping their order
+
+    Parameters
+    ----------
+    paths
+        Absolute input paths or globs.
+
+    Returns
+    -------
+    :
+        The resolved paths in first-seen order.
+    """
+    return tuple(dict.fromkeys(path.resolve() for path in paths))
 
 
 def _pattern_root(path: Path) -> Path:
@@ -402,8 +407,8 @@ def watched_dirs(
         The documented package's source directory, or `None` when no package was
         located.
     dependencies
-        Entry/helper paths and declared files, directories or globs. Observe an
-        existing ancestor for missing inputs and future glob matches.
+        The extension's preview inputs as absolute paths. A missing input or a glob is
+        watched through its nearest existing ancestor.
 
     Returns
     -------
@@ -414,7 +419,7 @@ def watched_dirs(
     roots = [layout.source_dir]
     if package is not None:
         roots.append(package)
-    roots.extend(_watch_directory(path) for path in _input_paths(layout.source_dir, dependencies))
+    roots.extend(_watch_directory(path) for path in _input_paths(dependencies))
     unique = list(dict.fromkeys(roots))
     return [
         root
@@ -431,12 +436,12 @@ def _source_filter(
 
     Parameters
     ----------
-    layout :
+    layout
         The project's directories, whose generated directories are excluded.
-    trees :
+    trees
         Absolute files and directory trees to observe. An exact file does not
         include its siblings.
-    patterns :
+    patterns
         Absolute glob declarations, including those with no current match.
 
     Returns

@@ -152,7 +152,7 @@ class TypeSections(Block):
 
         Parameters
         ----------
-        prepare :
+        prepare
             The reference's preparation function, or `None` to use the extension's.
         """
         prepare = prepare or self.extension.prepare
@@ -259,7 +259,7 @@ class TypeInformation(Block):
 
         Parameters
         ----------
-        obj :
+        obj
             A member of the typing module.
 
         Returns

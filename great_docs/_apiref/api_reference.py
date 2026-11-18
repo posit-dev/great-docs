@@ -1,10 +1,11 @@
 """
 The `APIReference` façade, built from a Quarto config block
 
-Resolve selected objects through one loader and lazily configured extension.
-Reuse the prepared tree for manifests, symbol queries and semantic exports.
-Collect page presentation before final input fingerprinting and publication;
-close the operation after its final consumer.
+A reference loads its objects through one loader and prepares them with one extension,
+whose `setup` runs before the first object is prepared or rendered. Manifests, symbol
+queries and the text export reuse the prepared tree. Building renders every page before
+it fingerprints the extension's inputs and writes any file. Close the reference after
+its last use.
 """
 
 from __future__ import annotations

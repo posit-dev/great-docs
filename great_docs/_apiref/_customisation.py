@@ -296,10 +296,9 @@ class Extension:
         """
         Declare a file, directory or glob that the extension reads
 
-        Resolve relative declarations against the configured entry file's
-        directory. Absolute declarations also work without a configured source.
-        Include these inputs in reference fingerprints and preview observation;
-        declaring a dependency does not copy it into the generated project.
+        A relative path resolves against the extension file's directory. Declared
+        inputs count towards the reference fingerprint and preview watches them, but
+        Great Docs does not copy them into the generated project.
 
         Parameters
         ----------
@@ -308,14 +307,18 @@ class Extension:
             covers a directory's entries and the files a glob matches. A running
             preview keeps watching the paths it started with, so restart it after
             declaring an input outside them.
+
+        Raises
+        ------
+        RuntimeError
+            If setup has finished or the extension is closed.
+        ValueError
+            If there is no extension file.
         """
         self._check_registration()
-        declared = Path(path)
-        if not declared.is_absolute():
-            if self._source is None:
-                raise ValueError("Relative extension inputs require a configured entry file.")
-            declared = self._source.entry_path.parent / declared
-        self._declared_inputs.append(declared.resolve())
+        if self._source is None:
+            raise ValueError("Extension inputs require a configured entry file.")
+        self._declared_inputs.append((self._source.entry_path.parent / path).resolve())
 
     def load(self) -> None:
         """

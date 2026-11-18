@@ -309,17 +309,9 @@ class CallableRendererMixin(ObjectRenderer):
         normalised quotes. Annotations are omitted; `@overload` variants render their
         own annotated parameters. Override this method to change each parameter's text.
         """
-        default = None
         if el.kind == gf.ParameterKind.var_keyword:
-            name = f"**{el.name}"
-        elif el.kind == gf.ParameterKind.var_positional:
-            name = f"*{el.name}"
-        else:
-            name = el.name
-            if el.default is not None:
-                default = repr_obj(el.default)
-
-        annotation, equals = "", "="
-
-        default = (default and f"{equals}{default}") or ""
-        return f"{name}{annotation}{default}"
+            return f"**{el.name}"
+        if el.kind == gf.ParameterKind.var_positional:
+            return f"*{el.name}"
+        default = "" if el.default is None else repr_obj(el.default)
+        return f"{el.name}={default}" if default else el.name

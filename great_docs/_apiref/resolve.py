@@ -201,10 +201,11 @@ class Resolver:
     """
     A translator from the configured sections to the resolved documentation tree
 
-    Translate authored object selections into shallow documentation nodes with
-    selected children. Inherit package and options through nested sections and
-    members. A reference supplies its extension; a standalone resolver prepares
-    through one with default settings and global hook templates alone.
+    Each configured object is loaded, prepared and rebuilt as a documentation node with
+    its selected members. Objects nested under a section or member inherit its package
+    and options. A reference passes in its extension; without one, the resolver prepares
+    objects with a new extension that holds only the settings and the handlers registered
+    through `great_docs.hooks`.
     """
 
     def __init__(
@@ -468,13 +469,13 @@ class Resolver:
 
         Parameters
         ----------
-        el :
+        el
             The entry whose options, or explicit member list, select the members.
-        obj :
+        obj
             The prepared parent object.
-        path :
+        path
             The parent's lookup path, which prefixes each dynamic member lookup.
-        dynamic :
+        dynamic
             Whether to load each candidate by importing it.
 
         Returns

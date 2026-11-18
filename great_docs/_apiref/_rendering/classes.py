@@ -57,11 +57,8 @@ class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer)
         An ordinary class keeps all its attributes. A dataclass leaves out attributes
         named after its constructor parameters, which already document those fields.
         """
-        attributes = super().attributes
-        if self.is_dataclass:
-            params = {p.name for p in self._callable.original_parameters}
-            attributes = [a for a in attributes if a.name not in params]
-        return attributes
+        fields = self._dataclass_field_names
+        return [a for a in super().attributes if a.name not in fields]
 
     @cached_property
     def attribute_member_pages(self) -> list[content.MemberPage]:
@@ -71,11 +68,19 @@ class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer)
         The same fields are left out as from `attributes`. An ordinary class keeps all
         its attribute pages.
         """
-        pages = super().attribute_member_pages
-        if self.is_dataclass:
-            params = {p.name for p in self._callable.original_parameters}
-            pages = [p for p in pages if p.obj.name not in params]
-        return pages
+        fields = self._dataclass_field_names
+        return [p for p in super().attribute_member_pages if p.obj.name not in fields]
+
+    @cached_property
+    def _dataclass_field_names(self) -> frozenset[str]:
+        """
+        Attribute names that a dataclass already documents as constructor parameters
+
+        Empty for an ordinary class, which keeps every attribute.
+        """
+        if not self.is_dataclass:
+            return frozenset()
+        return frozenset(p.name for p in self._callable.original_parameters)
 
     @cached_property
     def docstring_sections_content(self):

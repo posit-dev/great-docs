@@ -266,11 +266,11 @@ def collect_index(
         the index page.
     sections :
         Resolved sections to render in the page body.
-    dir
+    dir :
         Output directory that the page's path starts with.
-    out_index
+    out_index :
         Filename for the index file, such as `index.qmd`.
-    header_level
+    header_level :
         Heading depth used for section titles in the rendered output.
 
     Returns
@@ -331,10 +331,10 @@ def collect_typing_information(
 
     Parameters
     ----------
-    typing_module_paths
+    typing_module_paths :
         Import paths of modules, each documented on one page with the typing objects it
         defines.
-    api_ref
+    api_ref :
         The reference that loads, prepares and renders the objects. Objects that hooks
         do not exclude are added to its inventory.
 
@@ -368,13 +368,13 @@ def collect_pages(
 
     Parameters
     ----------
-    pages
+    pages :
         Resolved page nodes to render.
-    extension
+    extension :
         The reference's extension, which supplies the settings, renderers and body
         callbacks, and names the page in a rendering failure. Object headings start at
         the settings' `header_level`.
-    site_toc_depth
+    site_toc_depth :
         Merged site table-of-contents depth. A page overrides it only when
         member headings require a greater depth.
 
