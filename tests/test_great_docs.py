@@ -15394,18 +15394,14 @@ def test_renderers_reject_unmapped_type():
 
 
 def test_renderbase_title_property():
-    """Render a module heading through the cached `title` property"""
+    """Render a module heading with the module's name and kind classes"""
 
     mod_obj = gf.Module(name="tmod")
     doc_mod = content.DocModule(name="tmod", obj=mod_obj)
 
-    render = ModuleRenderer(doc_mod, level=1)
+    title = str(ModuleRenderer(doc_mod, level=1).title)
 
-    # Access the 'title' cached property, which calls render_title()
-    title = render.title
-
-    # render_title for a module returns a Header or None; just verify it ran
-    assert title is not None or title is None  # doesn't raise
+    assert title == "# [tmod]{.doc-object-name .doc-module .doc-label .doc-label-module}"
 
 
 def test_renderbase_summary_name_property():
@@ -16715,19 +16711,17 @@ def test_render_reference_section_post_init():
 
 
 def test_render_reference_section_title_and_subtitle():
-    """Render title and subtitle text at their respective heading depths"""
+    """Render a section title one level and a subtitle two levels below the base level"""
 
-    # Title case
-    sec_t = content.Section(title="Methods", contents=[spec.SpecObject(name="x")])
-    rs_t = ReferenceSectionRenderer(node=sec_t, level=1)
+    sec_t = content.Section(title="Plotting", contents=[spec.SpecObject(name="x")])
+    rs_t = ReferenceSectionRenderer(node=sec_t, level=2)
 
-    assert "Methods" in str(rs_t.render_title())
+    assert str(rs_t.render_title()) == "### Plotting {.doc-group}"
 
-    # Subtitle case
     sec_s = content.Section(subtitle="Helpers", contents=[spec.SpecObject(name="x")])
-    rs_s = ReferenceSectionRenderer(node=sec_s, level=1)
+    rs_s = ReferenceSectionRenderer(node=sec_s, level=2)
 
-    assert "Helpers" in str(rs_s.render_title())
+    assert str(rs_s.render_title()) == "#### Helpers {.doc-group}"
 
 
 def test_render_api_page_full_lifecycle():
@@ -16895,15 +16889,18 @@ def test_render_api_page_multi_object_renders_all_inner_headers():
 
 
 def test_renderdoc_display_name_relative_level_gt1():
-    """Produce a nested display name with relative naming"""
+    """Shorten a `relative` display name to the bare name below the top heading level"""
 
-    func_obj = gf.Function(name="my_func", lineno=1)
-    doc_func = content.DocFunction(name="my_func", obj=func_obj)
+    pkg = gf.Module(name="pkg")
+    mod = gf.Module(name="mod", parent=pkg)
+    func_obj = gf.Function(name="area", lineno=1, parent=mod)
+    doc_func = content.DocFunction(name="area", obj=func_obj)
 
-    render = FunctionRenderer(doc_func, level=2, display_name_format="relative")
-    name = render.display_name
-    # At level > 1 with "relative" format, it switches to "name"
-    assert isinstance(name, str)
+    top = FunctionRenderer(doc_func, level=1, display_name_format="relative")
+    nested = FunctionRenderer(doc_func, level=2, display_name_format="relative")
+
+    assert top.display_name == "mod.area()"
+    assert nested.display_name == "area()"
 
 
 def test_renderdoc_render_annotation_non_attribute_raises():
