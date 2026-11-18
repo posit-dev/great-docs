@@ -58,8 +58,12 @@ class ReferenceSectionRenderer(BaseRenderer):
         Render the section's title or subtitle as a heading
 
         A title is one level below the base heading level and a subtitle two levels
-        below. Return `None` when the section has neither. Standard group titles are
-        translated; custom titles keep their text.
+        below. Standard group titles are translated; custom titles keep their text.
+
+        Returns
+        -------
+        :
+            The heading, or `None` when the section has neither a title nor a subtitle.
         """
         if self.section.title:
             level, title = self.level + 1, self.section.title
@@ -77,6 +81,11 @@ class ReferenceSectionRenderer(BaseRenderer):
     def render_description(self) -> BlockContent:
         """
         Render the description of the section
+
+        Returns
+        -------
+        :
+            The description in a `doc-description` block.
         """
         return Div(self.section.desc, Attr(classes=["doc-description"]))
 
@@ -84,8 +93,12 @@ class ReferenceSectionRenderer(BaseRenderer):
         """
         Render the section's summary rows as a definition list or table
 
-        Each entry renders only its summary rows, not its body. Return `None` for an
-        empty section.
+        Each entry renders only its summary rows, not its body.
+
+        Returns
+        -------
+        :
+            The entries' summary rows, or `None` for an empty section.
         """
         if not self.section.contents:
             return

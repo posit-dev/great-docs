@@ -19,8 +19,22 @@ class PageRendererMixin(BaseRenderer):
     """
 
     def render_metadata(self) -> BlockContent:
-        """Render page front matter, or return `None` to omit it"""
+        """
+        Render page front matter, or return `None` to omit it
+
+        Returns
+        -------
+        :
+            The front matter, or `None` to omit it.
+        """
 
     def render_title(self):
-        """Render the page title as the page's front matter"""
+        """
+        Render the page title as the page's front matter
+
+        Returns
+        -------
+        :
+            The front matter, or `None` to omit it.
+        """
         return self.render_metadata()

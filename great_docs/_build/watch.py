@@ -211,6 +211,19 @@ def _matches_pattern(path: Path, pattern: Path) -> bool:
 
     @cache
     def matches(path_index: int, pattern_index: int) -> bool:
+        """
+        Check whether the remaining glob components match the remaining path components
+
+        Parameters
+        ----------
+        path_index, pattern_index
+            The positions of the first unmatched path and glob components.
+
+        Returns
+        -------
+        :
+            Whether the rest of the glob matches the rest of the path or a prefix of it.
+        """
         if pattern_index == len(pattern_parts):
             return True
         if pattern_parts[pattern_index] == "**":
@@ -456,6 +469,21 @@ def _source_filter(
     selected = tuple((tree, tree if tree.is_dir() else tree.parent) for tree in trees)
 
     def accept(change: watchfiles.Change, path: str) -> bool:
+        """
+        Check whether a change concerns a selected input
+
+        Parameters
+        ----------
+        change
+            The kind of change.
+        path
+            The changed path.
+
+        Returns
+        -------
+        :
+            Whether to rebuild for the change.
+        """
         if not default(change, path):
             return False
         file = Path(path)

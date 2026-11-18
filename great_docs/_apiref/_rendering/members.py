@@ -58,7 +58,14 @@ class RenderedMemberGroup(Block):
     """The documentation of members on the same page, or `None` for a summary-only group"""
 
     def __str__(self) -> str:
-        """Compose the group heading, summary and optional body as Quarto Markdown"""
+        """
+        Compose the group heading, summary and optional body as Quarto Markdown
+
+        Returns
+        -------
+        :
+            The non-empty parts in that order, separated by blank lines.
+        """
         return str(Blocks([self.title, self.summary, self.body]))
 
 
@@ -86,6 +93,16 @@ class MembersRendererMixin(ObjectRenderer):
 
         Members on the same page get their full documentation; members on their own
         pages get summary links.
+
+        Returns
+        -------
+        :
+            The docstring body followed by the member groups that are not omitted.
+
+        Raises
+        ------
+        ValueError
+            If the members are neither documentation nodes nor member pages.
         """
         docstring = super().render_body()
 
@@ -109,6 +126,11 @@ class MembersRendererMixin(ObjectRenderer):
 
         The groups are type aliases, attributes, classes, then functions or methods.
         Override one group's method to omit or replace only that group.
+
+        Returns
+        -------
+        :
+            One group per kind, with `None` for each omitted group.
         """
         return [
             self.render_type_aliases(),
@@ -123,6 +145,11 @@ class MembersRendererMixin(ObjectRenderer):
 
         The groups are type aliases, attributes, classes, then functions or methods.
         They show summary rows only, without member bodies.
+
+        Returns
+        -------
+        :
+            One group per kind, with `None` for each omitted group.
         """
         return [
             self.render_type_alias_member_pages(),
@@ -176,42 +203,111 @@ class MembersRendererMixin(ObjectRenderer):
         return [p for p in pages if p.obj.is_type_alias]
 
     def render_classes(self) -> RenderedMemberGroup | None:
-        """Render the group of classes documented on this page, or return `None` to omit it"""
+        """
+        Render the group of classes documented on this page, or return `None` to omit it
+
+        Returns
+        -------
+        :
+            The group of classes, or `None` to omit it.
+        """
         return self._render_members_group("classes")
 
     def render_functions(self) -> RenderedMemberGroup | None:
-        """Render the group of functions or methods on this page, or return `None` to omit it"""
+        """
+        Render the group of functions or methods on this page, or return `None` to omit it
+
+        Returns
+        -------
+        :
+            The group of functions or methods, or `None` to omit it.
+        """
         return self._render_members_group("functions")
 
     def render_attributes(self) -> RenderedMemberGroup | None:
-        """Render the group of attributes documented on this page, or return `None` to omit it"""
+        """
+        Render the group of attributes documented on this page, or return `None` to omit it
+
+        Returns
+        -------
+        :
+            The group of attributes, or `None` to omit it.
+        """
         return self._render_members_group("attributes")
 
     def render_type_aliases(self) -> RenderedMemberGroup | None:
-        """Render the group of type aliases on this page, or return `None` to omit it"""
+        """
+        Render the group of type aliases on this page, or return `None` to omit it
+
+        Returns
+        -------
+        :
+            The group of type aliases, or `None` to omit it.
+        """
         return self._render_members_group("type-aliases")
 
     def render_class_member_pages(self) -> RenderedMemberGroup | None:
-        """Render links to classes on their own pages, or return `None` to omit them"""
+        """
+        Render links to classes on their own pages, or return `None` to omit them
+
+        Returns
+        -------
+        :
+            The group of links to classes, or `None` to omit it.
+        """
         return self._render_member_pages_group("classes")
 
     def render_function_member_pages(self) -> RenderedMemberGroup | None:
-        """Render links to functions or methods on their own pages, or return `None` to omit them"""
+        """
+        Render links to functions or methods on their own pages, or return `None` to omit them
+
+        Returns
+        -------
+        :
+            The group of links to functions or methods, or `None` to omit it.
+        """
         return self._render_member_pages_group("functions")
 
     def render_attribute_member_pages(self) -> RenderedMemberGroup | None:
-        """Render links to attributes on their own pages, or return `None` to omit them"""
+        """
+        Render links to attributes on their own pages, or return `None` to omit them
+
+        Returns
+        -------
+        :
+            The group of links to attributes, or `None` to omit it.
+        """
         return self._render_member_pages_group("attributes")
 
     def render_type_alias_member_pages(self) -> RenderedMemberGroup | None:
-        """Render links to type aliases on their own pages, or return `None` to omit them"""
+        """
+        Render links to type aliases on their own pages, or return `None` to omit them
+
+        Returns
+        -------
+        :
+            The group of links to type aliases, or `None` to omit it.
+        """
         return self._render_member_pages_group("type-aliases")
 
     def _render_members_group(
         self,
         group: Literal["type-aliases", "classes", "functions", "attributes"],
     ) -> RenderedMemberGroup | None:
-        """Build the group of members of one kind documented on this page"""
+        """
+        Build the group of members of one kind documented on this page
+
+        Parameters
+        ----------
+        group
+            The kind of member in the group.
+
+        Returns
+        -------
+        :
+            The group with each member's summary row and documentation, or `None` when
+            it has no members or no content.
+        """
         members = {
             "type-aliases": self.type_aliases,
             "classes": self.classes,
@@ -234,7 +330,20 @@ class MembersRendererMixin(ObjectRenderer):
         self,
         group: Literal["type-aliases", "classes", "functions", "attributes"],
     ) -> RenderedMemberGroup | None:
-        """Build the group of links to members of one kind on their own pages"""
+        """
+        Build the group of links to members of one kind on their own pages
+
+        Parameters
+        ----------
+        group
+            The kind of member in the group.
+
+        Returns
+        -------
+        :
+            The group with a summary row for each member, or `None` when it has no
+            members or no content.
+        """
         pages = {
             "type-aliases": self.type_alias_member_pages,
             "classes": self.class_member_pages,
@@ -258,7 +367,25 @@ class MembersRendererMixin(ObjectRenderer):
         *,
         separate: bool,
     ) -> RenderedMemberGroup | None:
-        """Build a member group with its heading, or return `None` when it has no content"""
+        """
+        Build a member group with its heading, or return `None` when it has no content
+
+        Parameters
+        ----------
+        kind
+            The kind of member in the group.
+        member_renderers
+            The renderers of the group's members.
+        separate
+            Whether the members are documented on their own pages, so the group has
+            no body.
+
+        Returns
+        -------
+        :
+            The group, or `None` when it has no members or both its summary and body
+            are omitted.
+        """
         if not member_renderers:
             return None
         summary = self.render_members_summary(kind, member_renderers)
@@ -329,5 +456,17 @@ class MembersRendererMixin(ObjectRenderer):
         return Blocks(renderers) if renderers else None
 
     def render_attributes_section(self, el: gf.DocstringSectionAttributes) -> BlockContent:
-        """Render an `Attributes` section"""
+        """
+        Render an `Attributes` section
+
+        Parameters
+        ----------
+        el
+            The parsed section.
+
+        Returns
+        -------
+        :
+            The section's attributes as definition items.
+        """
         return self.render_definition_items(el)

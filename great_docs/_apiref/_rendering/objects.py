@@ -209,6 +209,11 @@ class ObjectRenderer(BaseRenderer):
         Callable and value renderers use their own order. Return `None` from
         `render_signature`, `render_usage_source` or `render_docstring_subject` to omit
         that part.
+
+        Returns
+        -------
+        :
+            The parts that are not omitted.
         """
         return Blocks([self.signature, self.render_usage_source(), self.render_docstring_subject()])
 
@@ -222,11 +227,30 @@ class ObjectRenderer(BaseRenderer):
 
     @cached_property
     def title_content(self) -> InlineContent:
-        """The title label from `render_title_content`, shared by page front matter and headings"""
+        """
+        The object's labelled name as inline text
+
+        `title` is the block that places this label in the document: a heading, or
+        `None` where no heading is shown. An API page's front-matter title is the
+        label of its first object, even when that object's `title` is `None`.
+
+        Override `render_title_content` to change it.
+        """
         return self.render_title_content()
 
     def render_title_content(self) -> InlineContent:
-        """Render the object's display name and labels without a heading wrapper"""
+        """
+        Render the object's display name and labels as inline text
+
+        The result is the text of the object's heading and, for the first object on an
+        API page, the page's front-matter title.
+
+        Returns
+        -------
+        :
+            The labelled display name. Return text rather than `None`; the front matter
+            would otherwise show the title `None`.
+        """
         return Span(
             self.display_name,
             Attr(
@@ -241,12 +265,17 @@ class ObjectRenderer(BaseRenderer):
 
     def render_title(self) -> BlockContent:
         """
-        Render the object heading around `title_content`
+        Render the heading that holds `title_content`, or return `None` to omit it
 
-        Return `None` for the object of a single-object API page, whose front matter
-        already shows the title. Contained objects and the objects of a multi-object
-        page keep their headings. Override `render_title_content` to change the label
-        and keep the heading.
+        Contained objects and the objects of a multi-object page keep their headings.
+        Override `render_title_content` instead to change the label, so the heading and
+        the page's front-matter title stay the same.
+
+        Returns
+        -------
+        :
+            The heading, or `None` for the object of a single-object API page, whose
+            front matter already shows `title_content`.
         """
         if self._purpose is _RenderingPurpose.API_PAGE and self.level == 1:
             return None
@@ -483,6 +512,11 @@ class ObjectRenderer(BaseRenderer):
         Renderers for objects with members add member groups after it. Override
         `render_docstring_body` to change the docstring sections while keeping
         those groups.
+
+        Returns
+        -------
+        :
+            The rendered docstring sections, or `None` to omit them.
         """
         return self.render_docstring_body()
 
@@ -490,8 +524,12 @@ class ObjectRenderer(BaseRenderer):
         """
         Render the docstring sections that follow the subject
 
-        Return `None` when no section has content. Member groups are not part of this
-        result.
+        Member groups are not part of this result.
+
+        Returns
+        -------
+        :
+            The rendered sections, or `None` when no section has content.
         """
         return None if not self.docstring_sections else Blocks(self.docstring_sections)
 
@@ -641,7 +679,17 @@ class ObjectRenderer(BaseRenderer):
         Parameters, attributes and type parameters share the same declaration markup.
         Consecutive unnamed return, yield or receive items with the same annotation
         merge into one definition. The merge works on copies, so rendering again leaves
-        the prepared items unchanged. Return `None` when the section has no items.
+        the prepared items unchanged.
+
+        Parameters
+        ----------
+        el
+            The prepared section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items.
         """
 
         def render_section_item(el: DocstringDefinitionType) -> DefinitionItem:
@@ -720,8 +768,13 @@ class ObjectRenderer(BaseRenderer):
         Render one summary row that links `summary_name` and shows the subject
 
         Contained members link to their heading on the same page. Other objects link to
-        `page_path` and the object's anchor. Return an empty sequence to omit the row; the
-        object stays in the reference.
+        `page_path` and the object's anchor.
+
+        Returns
+        -------
+        :
+            The summary row, or an empty sequence to omit it; the object stays in the
+            reference.
         """
         # For contained members (e.g. methods within a class page), use the
         # short name as anchor since Quarto generates section IDs from heading
@@ -741,6 +794,11 @@ class ObjectRenderer(BaseRenderer):
 
         The Usage label appears only with a signature. The source link appears whenever
         one is available, even without a signature.
+
+        Returns
+        -------
+        :
+            The label and link that apply, or `None` when neither applies.
         """
         source = self.source_link
         usage = translate("usage", self.settings.lang) if self.signature is not None else None

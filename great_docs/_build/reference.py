@@ -182,6 +182,15 @@ def api(
     links = source_links(config, layout.package_root, run.project.repository, warn=print_warning)
 
     def build_reference() -> APIReference:
+        """
+        Generate the API reference and record it on the run
+
+        Returns
+        -------
+        :
+            The generated reference. A failed build closes its extension before the error
+            propagates.
+        """
         ref = APIReference(
             run.quarto_config,
             links,

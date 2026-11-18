@@ -30,14 +30,28 @@ if TYPE_CHECKING:
 
 
 def _default_renderers() -> Renderers:
-    """Create independent default choices for a directly constructed renderer"""
+    """
+    Create independent default choices for a directly constructed renderer
+
+    Returns
+    -------
+    :
+        New choices that use the built-in renderer for every kind.
+    """
     from ._renderers import Renderers
 
     return Renderers()
 
 
 def _default_extension() -> Extension:
-    """Create an extension with default settings and no callbacks, for a renderer built directly"""
+    """
+    Create an extension with default settings and no callbacks, for a renderer built directly
+
+    Returns
+    -------
+    :
+        A new extension without an extension file.
+    """
     from .._customisation import Extension
     from .._settings import Settings
 
@@ -144,7 +158,14 @@ class BaseRenderer(Block):
         """End the chain of `super().__post_init__()` calls from subclasses and mixins"""
 
     def __str__(self) -> str:
-        """Compose the cached title, description and body as Quarto Markdown"""
+        """
+        Compose the cached title, description and body as Quarto Markdown
+
+        Returns
+        -------
+        :
+            The non-empty parts in that order, separated by blank lines.
+        """
         return str(
             Blocks(
                 [
@@ -197,13 +218,34 @@ class BaseRenderer(Block):
         return self.render_summary()
 
     def render_title(self) -> BlockContent:
-        """Render an object's heading or a page's front matter, or return `None` to omit it"""
+        """
+        Render an object's heading or a page's front matter, or return `None` to omit it
+
+        Returns
+        -------
+        :
+            The rendered title, or `None` to omit it.
+        """
 
     def render_description(self) -> BlockContent:
-        """Render the description, or return `None` to omit it"""
+        """
+        Render the description, or return `None` to omit it
+
+        Returns
+        -------
+        :
+            The rendered description, or `None` to omit it.
+        """
 
     def render_body(self) -> BlockContent:
-        """Render the body, or return `None` to omit it"""
+        """
+        Render the body, or return `None` to omit it
+
+        Returns
+        -------
+        :
+            The rendered body, or `None` to omit it.
+        """
 
     @property
     def summary_name(self) -> str:
@@ -211,5 +253,12 @@ class BaseRenderer(Block):
         return ""
 
     def render_summary(self) -> Sequence[DefinitionItem]:
-        """Render linked summary items, or return an empty sequence to omit them"""
+        """
+        Render linked summary items, or return an empty sequence to omit them
+
+        Returns
+        -------
+        :
+            The summary items, or an empty sequence to omit them.
+        """
         return []

@@ -192,7 +192,14 @@ class _SignatureExpression:
     """The source spelling of an annotation or default value"""
 
     def __repr__(self) -> str:
-        """Return the expression without adding string-literal quotes"""
+        """
+        Return the expression without adding string-literal quotes
+
+        Returns
+        -------
+        :
+            The source spelling, as written.
+        """
         return self.text
 
 

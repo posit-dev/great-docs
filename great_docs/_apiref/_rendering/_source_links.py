@@ -186,6 +186,17 @@ def _declared_in_stub(obj: gf.Object | gf.Alias) -> bool:
     Definitions that a merged stub adds keep the stub's line numbers but may report
     the module's `.py` path. Definitions under `TYPE_CHECKING` are also absent at
     runtime, so a source lookup also requires the stub file to exist.
+
+    Parameters
+    ----------
+    obj
+        The object, or an alias to it.
+
+    Returns
+    -------
+    :
+        Whether the object or a class containing it is absent at runtime. `False` for an
+        alias that does not resolve.
     """
     current: gf.Object | None
     try:

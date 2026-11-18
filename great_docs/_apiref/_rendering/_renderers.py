@@ -114,7 +114,31 @@ class Renderers:
         default: type[_Renderer],
         mixin: type | None = None,
     ) -> type[_Renderer]:
-        """Validate an explicit replacement or apply a mixin to the default renderer"""
+        """
+        Validate an explicit replacement or apply a mixin to the default renderer
+
+        Parameters
+        ----------
+        slot
+            The constructor argument that error messages name.
+        replacement
+            The project's renderer for this slot, or `None` to use the default.
+        default
+            The built-in renderer that a replacement must subclass.
+        mixin
+            The class to put before `default` when there is no replacement, or `None`.
+
+        Returns
+        -------
+        :
+            `replacement`, `default`, or a new subclass of `mixin` and `default` when
+            `default` does not already inherit from `mixin`.
+
+        Raises
+        ------
+        TypeError
+            If `replacement` is not a subclass of `default`.
+        """
         if replacement is not None:
             if not isinstance(cast("object", replacement), type) or not issubclass(
                 replacement, default

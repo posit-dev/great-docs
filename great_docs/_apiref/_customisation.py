@@ -166,10 +166,51 @@ class Extension:
     def _register(
         self, registry: HookRegistry[_Hook], callback: _Hook | None, priority: int
     ) -> _Hook | Callable[[_Hook], _Hook]:
-        """Register a callable while setup remains open, directly or through a decorator"""
+        """
+        Register a callable while setup remains open, directly or through a decorator
+
+        Parameters
+        ----------
+        registry
+            The registry of this extension's handlers for one hook.
+        callback
+            The handler to register, or `None` to return a decorator that registers one.
+        priority
+            The run order. Lower values run first.
+
+        Returns
+        -------
+        :
+            `callback`, or a decorator that registers one when `callback` is `None`.
+
+        Raises
+        ------
+        RuntimeError
+            If setup has finished or the extension is closed.
+        """
         self._check_registration()
 
         def add(handler: _Hook) -> _Hook:
+            """
+            Register a handler with the captured registry and priority
+
+            Parameters
+            ----------
+            handler
+                The callable to register.
+
+            Returns
+            -------
+            :
+                `handler`, unchanged, so that `add` works as a decorator.
+
+            Raises
+            ------
+            RuntimeError
+                If setup has finished or the extension is closed.
+            TypeError
+                If `handler` is not callable.
+            """
             self._check_registration()
             if not callable(handler):
                 raise TypeError("An extension handler must be callable.")
@@ -373,7 +414,21 @@ class Extension:
         self._registration_open = False
 
     def is_prepared(self, obj: gf.Object | gf.Alias) -> bool:
-        """Check whether a canonical object's documentation has been prepared"""
+        """
+        Check whether a canonical object's documentation has been prepared
+
+        Parameters
+        ----------
+        obj
+            The loaded object, or an alias to it.
+
+        Returns
+        -------
+        :
+            Whether this extension has prepared the alias's final target or the object,
+            including preparation that excluded it. `False` for an alias that does not
+            resolve.
+        """
         try:
             target = obj.final_target if isinstance(obj, gf.Alias) else obj
         except (gf.AliasResolutionError, gf.CyclicAliasError):
@@ -506,7 +561,27 @@ class Extension:
     def _apply_docstring_parsed_hooks(
         self, obj: gf.Object, sections: list[gf.DocstringSection]
     ) -> list[gf.DocstringSection]:
-        """Pass each docstring hook's sections to the next and return the last result"""
+        """
+        Pass each docstring hook's sections to the next and return the last result
+
+        Parameters
+        ----------
+        obj
+            The object whose docstring was parsed.
+        sections
+            The parsed docstring sections.
+
+        Returns
+        -------
+        :
+            The sections that the last hook returned, or `sections` when there are no
+            hooks.
+
+        Raises
+        ------
+        TypeError
+            If a hook returns `None`.
+        """
         for callback in self._parsed_hooks:
             transformed = cast("list[gf.DocstringSection] | None", callback(obj, sections))
             if transformed is None:
@@ -518,7 +593,25 @@ class Extension:
     def _appearance(
         obj: gf.Object | gf.Alias, original: gf.Object, result: gf.Object | None
     ) -> gf.Object | gf.Alias | None:
-        """Give the prepared result an authored alias's name without copying its documentation"""
+        """
+        Give the prepared result an authored alias's name without copying its documentation
+
+        Parameters
+        ----------
+        obj
+            The object or authored alias that was asked for.
+        original
+            The canonical object that was prepared.
+        result
+            The prepared object, or `None` when preparation excluded it.
+
+        Returns
+        -------
+        :
+            `result` for a canonical object or an exclusion, `obj` when preparation kept
+            the original object, or a new alias with `obj`'s name and placement that
+            targets `result`.
+        """
         if result is None or not isinstance(obj, gf.Alias):
             return result
         if result is original:

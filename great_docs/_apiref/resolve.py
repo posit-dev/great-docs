@@ -234,6 +234,22 @@ class Resolver:
         pending_source_dir = self.settings.source_dir
 
         def acquire(path: str, **kwargs: Any) -> gf.Object | gf.Alias:
+            """
+            Look up an object, adding the source directory to `sys.path` on the first call
+
+            Parameters
+            ----------
+            path
+                A `module:object` or dotted object path.
+            **kwargs
+                Further lookup options, such as `dynamic`.
+
+            Returns
+            -------
+            :
+                The object modelled at `path`, or its authored alias when reached through a
+                re-export.
+            """
             nonlocal pending_source_dir
             if pending_source_dir:
                 source_dir = str(Path(pending_source_dir).absolute())
@@ -391,7 +407,25 @@ class Resolver:
         return path, el, dynamic
 
     def _resolve_documented_object(self, el: SpecObject) -> Doc | None:
-        """Locate the subject object in griffe and rebuild it with its resolved members"""
+        """
+        Locate the subject object in griffe and rebuild it with its resolved members
+
+        Parameters
+        ----------
+        el
+            The configured object, before it inherits the enclosing section's options.
+
+        Returns
+        -------
+        :
+            The documentation node with its selected members, or `None` when an object hook
+            excludes the object.
+
+        Raises
+        ------
+        ObjectNotFoundError
+            If the loaded package does not contain the object.
+        """
         path, el, dynamic = self._locate(el)
 
         _log.info(f"Getting object for {path}")
@@ -417,7 +451,26 @@ class Resolver:
         path: str,
         dynamic: bool,
     ) -> list[object]:
-        """Resolve selected members on their parent page or separate pages"""
+        """
+        Resolve selected members on their parent page or separate pages
+
+        Parameters
+        ----------
+        el
+            The parent's entry, whose options select and place the members.
+        obj
+            The prepared parent object.
+        path
+            The parent's lookup path.
+        dynamic
+            Whether to load each member by importing it.
+
+        Returns
+        -------
+        :
+            The members' documentation nodes, or one member page per member when they go on
+            separate pages. Excluded members and modules are left out.
+        """
         # Global placement applies only to top-level entries. Nested members
         # share their immediate parent's page unless `member_options` sets placement.
         member_defaults = SpecOptions(dynamic=dynamic, package=path, members_on_same_page=True)

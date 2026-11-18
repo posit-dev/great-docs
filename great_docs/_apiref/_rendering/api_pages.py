@@ -90,6 +90,11 @@ class APIPageRenderer(PageRendererMixin, BaseRenderer):
         The description comes from the authored summary, or else the first object's
         subject. The page raises `toc-depth` only when the site setting would hide
         members.
+
+        Returns
+        -------
+        :
+            The front matter.
         """
         obj = self.object_renderers[0]
         title = obj.title_content
@@ -110,15 +115,31 @@ class APIPageRenderer(PageRendererMixin, BaseRenderer):
         return Meta(metadata)
 
     def render_body(self) -> BlockContent:
-        """Render the page's objects in their authored order"""
+        """
+        Render the page's objects in their authored order
+
+        Returns
+        -------
+        :
+            The objects' documentation.
+        """
         return Blocks(self.object_renderers)
 
     def render_summary(self) -> Sequence[DefinitionItem]:
         """
         Render the page's authored summary row, or else its objects' own summary rows
 
-        Raise `ValueError` for a page with several objects that has neither a summary
-        nor `flatten` set. Summaries do not render object bodies.
+        Summaries do not render object bodies.
+
+        Returns
+        -------
+        :
+            One linked row from the authored summary, or the rows of the page's objects.
+
+        Raises
+        ------
+        ValueError
+            If the page has several objects and neither a summary nor `flatten` set.
         """
         page = self.page
         if page.summary is not None:

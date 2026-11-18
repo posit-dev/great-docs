@@ -140,7 +140,14 @@ class CallableRendererMixin(ObjectRenderer):
         return CallableDocumentation.make(self.obj)
 
     def render_description(self) -> BlockContent:
-        """Render the subject, the Usage and source row, and the signature, in that order"""
+        """
+        Render the subject, the Usage and source row, and the signature, in that order
+
+        Returns
+        -------
+        :
+            The parts that are not omitted.
+        """
         return Blocks([self.render_docstring_subject(), self.render_usage_source(), self.signature])
 
     def render_signature(self) -> BlockContent:
@@ -153,6 +160,11 @@ class CallableRendererMixin(ObjectRenderer):
         block cannot. Callable names use `fu` in `highlighted` and `sig-name`
         in `plain`; parameters use `va` and `doc-parameter-name`, respectively.
         Literal colours apply only within the code block's `sourceCode` wrapper.
+
+        Returns
+        -------
+        :
+            The signature, one line per `@overload` variant when there are any.
         """
         name = self.signature_name
         attr = Attr(classes=["doc-signature", f"doc-{self.kind_slug}"])
@@ -308,6 +320,16 @@ class CallableRendererMixin(ObjectRenderer):
         Variadic parameters keep their `*` or `**` prefix, and string defaults use
         normalised quotes. Annotations are omitted; `@overload` variants render their
         own annotated parameters. Override this method to change each parameter's text.
+
+        Parameters
+        ----------
+        el
+            The parameter.
+
+        Returns
+        -------
+        :
+            The parameter's text in the signature.
         """
         if el.kind == gf.ParameterKind.var_keyword:
             return f"**{el.name}"
