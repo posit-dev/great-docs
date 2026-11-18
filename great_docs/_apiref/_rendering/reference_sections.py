@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from ..content import Section
-    from ..typing import RenderObjType
 
 # Translate the standard English titles used by `great-docs init` and
 # preserve custom titles.
@@ -91,17 +90,9 @@ class ReferenceSectionRenderer(BaseRenderer):
         if not self.section.contents:
             return
 
-        object_renderers: list[RenderObjType] = [
-            self.renderers.make(
-                c,
-                settings=self.settings,
-                extension=self.extension,
-                output_root=self.output_root,
-                context_page_path=self.context_page_path,
-            )
-            for c in self.section.contents
+        rows = [
+            row for c in self.section.contents for row in self.make_renderer(c).render_summary()
         ]
-        rows = [row for r in object_renderers for row in r.render_summary()]
         items = (
             DefinitionList(rows)
             if self.display_format == "list"

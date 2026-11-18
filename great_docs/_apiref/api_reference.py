@@ -125,11 +125,6 @@ class APIReference:
         return self.extension.renderers
 
     @property
-    def output_root(self) -> Path | None:
-        """The generated documentation root, or `None` for semantic queries"""
-        return self.extension.output_root
-
-    @property
     def extension_watch_paths(self) -> tuple[Path, ...]:
         """
         The paths that a preview watches for the extension, readable after closing
@@ -373,14 +368,7 @@ class APIReference:
         )
 
         _log.info("Collecting docs pages")
-        object_pages = collect_pages(
-            pages,
-            s,
-            site_toc_depth=self.site_toc_depth,
-            renderers=self.renderers,
-            extension=self.extension,
-            output_root=self.output_root,
-        )
+        object_pages = collect_pages(pages, self.extension, site_toc_depth=self.site_toc_depth)
         typing_pages = collect_typing_information(s.typing_module_paths, self)
         fingerprint = self.extension.fingerprint()
         index.write(fingerprint=fingerprint)

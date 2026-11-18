@@ -8,7 +8,6 @@ the other API pages.
 
 from __future__ import annotations
 
-from contextlib import nullcontext
 from dataclasses import InitVar, dataclass, field
 from functools import cached_property
 from pathlib import Path
@@ -34,7 +33,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from ._customisation import Extension
-    from ._settings import Settings
     from .api_reference import APIReference
     from .typing import RenderObjType
     from .write import RenderedPage
@@ -56,22 +54,45 @@ class _TypeCategory:
         cls,
         title: str,
         items: list[inventory.InventoryItem],
-        settings: Settings,
-        choices: Renderers,
         purpose: _RenderingPurpose,
         *,
-        extension: Extension | None = None,
-        page_path: str | None = None,
-        output_root: Path | None = None,
-        prepare: Callable[[gf.Object | gf.Alias], gf.Object | gf.Alias | None] | None = None,
+        choices: Renderers,
+        extension: Extension,
+        page_path: str | None,
+        prepare: Callable[[gf.Object | gf.Alias], gf.Object | gf.Alias | None],
     ) -> _TypeCategory:
         """
         Prepare a category's objects and create a renderer for each
 
-        Filter semantic exclusions from both renderer and inventory lists. Preserve
-        one heading depth and typing presentation purpose for this category; use the
-        active operation for appearance context and configured render failures.
+        Leave out the objects that object hooks exclude, from both the renderers and the
+        inventory entries. Every object in the category renders at the same heading level
+        and for the same purpose.
+
+        Parameters
+        ----------
+        title
+            The category heading.
+        items
+            Candidate objects and their typing-page inventory destinations.
+        purpose
+            How every object in the category is presented.
+        choices
+            The renderers selected for the category's objects.
+        extension
+            The extension, which supplies the render context and names the object in a
+            rendering failure.
+        page_path
+            The typing page's path, or `None` when it is unknown.
+        prepare
+            The function that prepares each candidate object.
+
+        Returns
+        -------
+        :
+            The category with the entries that hooks did not exclude and one renderer for
+            each.
         """
+        context_page_path = output_page_path(page_path, extension.output_root)
         renderers: list[RenderObjType] = []
         retained_items: list[inventory.InventoryItem] = []
         for item in items:
@@ -79,16 +100,13 @@ class _TypeCategory:
             if doc is None:
                 continue
             occurrence = f"{item.name} on {page_path}" if page_path else item.name
-            context = extension.error_context("render", occurrence) if extension else nullcontext()
-            with context:
+            with extension.error_context("render", occurrence):
                 renderer = choices.make(
                     doc,
                     3,
-                    settings=settings,
-                    _purpose=purpose,
                     extension=extension,
-                    output_root=output_root,
-                    context_page_path=output_page_path(page_path, output_root),
+                    context_page_path=context_page_path,
+                    _purpose=purpose,
                 )
             renderers.append(renderer)
             retained_items.append(item)
@@ -112,16 +130,14 @@ class TypeSections(Block):
     """Candidate type-variable inventory entries"""
     typealiases_items: list[inventory.InventoryItem]
     """Candidate type-alias inventory entries"""
-    settings: Settings
-    """The operation settings used for preparation and presentation"""
     renderers: Renderers = field(default_factory=Renderers, kw_only=True)
     """The renderers selected for every category"""
     extension: Extension = field(kw_only=True)
-    """The extension that supplies settings and prepares objects by default"""
+    """
+    The extension that supplies settings and prepares objects by default
+    """
     page_path: str | None = field(default=None, kw_only=True)
     """The typing page's path, which a rendering failure names"""
-    output_root: Path | None = field(default=None, kw_only=True)
-    """The documentation output root"""
 
     prepare: InitVar[Callable[[gf.Object | gf.Alias], gf.Object | gf.Alias | None] | None] = field(
         default=None, kw_only=True
@@ -139,59 +155,25 @@ class TypeSections(Block):
         prepare :
             The reference's preparation function, or `None` to use the extension's.
         """
-        self.categories = self._make_categories(prepare or self.extension.prepare)
-
-    def _make_categories(
-        self, prepare: Callable[[gf.Object | gf.Alias], gf.Object | gf.Alias | None]
-    ) -> list[_TypeCategory]:
-        """
-        Prepare all categories through one shared operation owner
-
-        Parameters
-        ----------
-        prepare :
-            The preparation applied to every candidate object.
-
-        Returns
-        -------
-        :
-            The protocol, typing-variable and type-alias categories, in that order.
-        """
-        return [
+        prepare = prepare or self.extension.prepare
+        categories = (
+            ("Protocols", self.protocols_items, _RenderingPurpose.PROTOCOL),
+            ("Type Variables", self.typevars_items, _RenderingPurpose.TYPE_VARIABLE),
+            ("Type Aliases", self.typealiases_items, _RenderingPurpose.TYPE_ALIAS),
+        )
+        self.categories = [
             _TypeCategory.make(
-                "Protocols",
-                self.protocols_items,
-                self.settings,
-                self.renderers,
-                _RenderingPurpose.PROTOCOL,
+                title,
+                items,
+                purpose,
+                choices=self.renderers,
                 extension=self.extension,
                 page_path=self.page_path,
-                output_root=self.output_root,
                 prepare=prepare,
-            ),
-            _TypeCategory.make(
-                "Type Variables",
-                self.typevars_items,
-                self.settings,
-                self.renderers,
-                _RenderingPurpose.TYPE_VARIABLE,
-                extension=self.extension,
-                page_path=self.page_path,
-                output_root=self.output_root,
-                prepare=prepare,
-            ),
-            _TypeCategory.make(
-                "Type Aliases",
-                self.typealiases_items,
-                self.settings,
-                self.renderers,
-                _RenderingPurpose.TYPE_ALIAS,
-                extension=self.extension,
-                page_path=self.page_path,
-                output_root=self.output_root,
-                prepare=prepare,
-            ),
+            )
+            for title, items, purpose in categories
         ]
+        """The protocol, type-variable and type-alias categories, in that order"""
 
     def __str__(self) -> str:
         """Render the prepared typing categories as Quarto Markdown"""
@@ -326,12 +308,10 @@ class TypeInformation(Block):
             protocols_items=[make_item(m) for m in members if is_protocol(m)],
             typevars_items=[make_item(m) for m in members if is_typevar(m)],
             typealiases_items=[make_item(m) for m in members if is_typealias(m)],
-            settings=self.api_ref.settings,
             renderers=self.api_ref.renderers,
             extension=self.api_ref.extension,
             page_path=f"{self.base_uri}.qmd",
             prepare=self.api_ref.prepare,
-            output_root=self.api_ref.output_root,
         )
 
     @cached_property

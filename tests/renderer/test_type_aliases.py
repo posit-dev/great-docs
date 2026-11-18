@@ -7,7 +7,6 @@ import textwrap
 
 import pytest
 
-from great_docs._apiref._settings import Settings
 
 pytestmark = pytest.mark.skipif(
     sys.version_info < (3, 12),
@@ -337,7 +336,7 @@ def test_valueless_alias_omits_default_clause():
     assert obj.value is None
 
     doc = Doc.from_griffe("Empty", obj)
-    qmd = str(Renderers().make(doc, 1, settings=Settings()))
+    qmd = str(Renderers().make(doc, 1))
 
     assert "None" not in qmd
     assert "doc-parameter-default-sep" not in qmd

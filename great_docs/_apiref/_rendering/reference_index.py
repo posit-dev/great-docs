@@ -21,11 +21,8 @@ from great_docs.pandoc.components import Attr
 from .base import BaseRenderer
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from great_docs.pandoc.blocks import BlockContent
 
-    from .._customisation import Extension
     from ..api_reference import APIReference
     from ..content import Section
     from ._renderers import Renderers
@@ -46,9 +43,6 @@ class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
         level: int = 1,
         *,
         renderers: Renderers | None = None,
-        extension: Extension | None = None,
-        output_root: Path | None = None,
-        context_page_path: str | None = None,
     ) -> None:
         """
         Set up the index for a reference and its resolved sections
@@ -56,19 +50,14 @@ class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
         Parameters
         ----------
         api_ref
-            The reference supplying the title, description, settings and default choices.
+            The reference that supplies the title, description, extension and default
+            renderer choices.
         sections
             Resolved top-level sections in the order to display.
         level
             Base heading depth for section titles and subtitles.
         renderers
             The renderer choices to use, or `None` for the reference's own.
-        extension
-            Active operation owner, or `None` to use the reference's owner.
-        output_root
-            The documentation output root, or `None` to use the reference's root.
-        context_page_path
-            Output-relative containing page context when explicitly known.
         """
         self.api_ref = api_ref
         """The API reference being documented"""
@@ -82,13 +71,7 @@ class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
         self.options = api_ref.options
 
         super().__init__(
-            api_ref,
-            level,
-            settings=api_ref.settings,
-            renderers=renderers or api_ref.renderers,
-            extension=extension or api_ref.extension,
-            output_root=output_root if output_root is not None else api_ref.output_root,
-            context_page_path=context_page_path,
+            api_ref, level, renderers=renderers or api_ref.renderers, extension=api_ref.extension
         )
 
     def render_description(self) -> BlockContent:
@@ -124,15 +107,4 @@ class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
 
         Each section renders its heading, description and summary rows.
         """
-        object_renderers = [
-            self.renderers.make(
-                s,
-                self.level,
-                settings=self.settings,
-                extension=self.extension,
-                output_root=self.output_root,
-                context_page_path=self.context_page_path,
-            )
-            for s in self.sections
-        ]
-        return Blocks(object_renderers)
+        return Blocks([self.make_renderer(s, self.level) for s in self.sections])

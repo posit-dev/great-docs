@@ -64,8 +64,9 @@ class APIPageRenderer(PageRendererMixin, BaseRenderer):
         """The page's path relative to the reference directory, used in summary links"""
 
         self.context_page_path = output_page_path(
-            self.context_page_path or Path(self.settings.dir) / self.path, self.output_root
+            Path(self.settings.dir) / self.path, self.output_root
         )
+        """The page's path relative to the output directory, which its objects' `context` reports"""
 
     @property
     def _has_one_object(self) -> bool:
@@ -76,21 +77,10 @@ class APIPageRenderer(PageRendererMixin, BaseRenderer):
     def object_renderers(self) -> list[ObjectRenderer]:
         """The renderers of the page's objects, which share the page's context"""
         level = self.level if self._has_one_object else self.level + 1
-        object_renderers: list[ObjectRenderer] = [
-            self.renderers.make(
-                c,
-                level,
-                page_path=self.path,
-                _purpose=_RenderingPurpose.API_PAGE,
-                settings=self.settings,
-                extension=self.extension,
-                output_root=self.output_root,
-                context_page_path=self.context_page_path,
-            )
+        return [
+            self.make_renderer(c, level, page_path=self.path, _purpose=_RenderingPurpose.API_PAGE)
             for c in self.page.contents
         ]
-
-        return object_renderers
 
     def render_metadata(self) -> BlockContent:
         # Derive the title of the page from the first (top-level) object

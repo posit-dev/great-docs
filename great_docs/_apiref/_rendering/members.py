@@ -218,16 +218,12 @@ class MembersRendererMixin(ObjectRenderer):
             "attributes": self.attributes,
             "functions": self.functions,
         }[group]
-        member_renderers: list[ObjectRenderer] = [
-            self.renderers.make(
+        member_renderers = [
+            self.make_renderer(
                 obj,
                 self.level + 2,
                 contained=True,
                 page_path=self.page_path,
-                settings=self.settings,
-                extension=self.extension,
-                output_root=self.output_root,
-                context_page_path=self.context_page_path,
                 _purpose=_RenderingPurpose.OBJECT,
             )
             for obj in members
@@ -245,15 +241,11 @@ class MembersRendererMixin(ObjectRenderer):
             "attributes": self.attribute_member_pages,
             "functions": self.function_member_pages,
         }[group]
-        member_renderers: list[ObjectRenderer] = [
-            self.renderers.make(
+        member_renderers = [
+            self.make_renderer(
                 Doc.from_griffe(page.obj.name, page.obj, anchor=""),
                 contained=False,
                 page_path=f"{page.path}.qmd",
-                settings=self.settings,
-                extension=self.extension,
-                output_root=self.output_root,
-                context_page_path=self.context_page_path,
             )
             for page in pages
         ]

@@ -596,7 +596,7 @@ def test_annotation_in_signature():
             default = f" = {repr_obj(el.default)}" if el.default is not None else ""
             return f"{name}{annotation}{default}"
 
-    rd = AnnotatedFunction(doc, settings=Settings())
+    rd = AnnotatedFunction(doc)
     qmd = str(rd)
 
     # Annotations should appear in the signature with ': type' format

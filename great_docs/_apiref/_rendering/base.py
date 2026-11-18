@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, overload
 
 from great_docs.pandoc.blocks import (
     Block,
@@ -22,7 +22,11 @@ if TYPE_CHECKING:
     from .._customisation import Extension
     from .._settings import Settings
     from ..api_reference import APIReference
+    from ..typing import DocType
     from ._renderers import Renderers
+    from .api_pages import APIPageRenderer
+    from .objects import ObjectRenderer
+    from .reference_sections import ReferenceSectionRenderer
 
 
 def _default_renderers() -> Renderers:
@@ -30,6 +34,14 @@ def _default_renderers() -> Renderers:
     from ._renderers import Renderers
 
     return Renderers()
+
+
+def _default_extension() -> Extension:
+    """Create an extension with default settings and no callbacks, for a renderer built directly"""
+    from .._customisation import Extension
+    from .._settings import Settings
+
+    return Extension(Settings())
 
 
 @dataclass
@@ -62,22 +74,71 @@ class BaseRenderer(Block):
     renderers: Renderers = field(default_factory=_default_renderers, kw_only=True)
     """Renderer choices shared with nested objects, pages and summaries"""
 
-    extension: Extension | None = field(default=None, kw_only=True)
-    """The extension that supplies project context"""
+    extension: Extension = field(default_factory=_default_extension, kw_only=True)
+    """
+    The extension that supplies settings and project directories
 
-    output_root: Path | None = field(default=None, kw_only=True)
-    """The documentation output root, or `None` outside a known build"""
+    A standalone renderer uses default settings and has no project directories.
+    """
 
     context_page_path: str | None = field(default=None, kw_only=True)
     """The containing page's path relative to the output directory, apart from summary links"""
 
-    settings: Settings = field(kw_only=True)
-    """
-    The settings of the API reference being rendered
+    @property
+    def settings(self) -> Settings:
+        """
+        The settings of the API reference being rendered
 
-    A renderer reads the language, signature style and source
-    links of its reference here.
-    """
+        A renderer reads the language, signature style and source
+        links of its reference here.
+        """
+        return self.extension.settings
+
+    @property
+    def output_root(self) -> Path | None:
+        """The directory the documentation is generated into, or `None` outside a build"""
+        return self.extension.output_root
+
+    @overload
+    def make_renderer(self, node: DocType, level: int = 1, **kwargs: Any) -> ObjectRenderer: ...
+    @overload
+    def make_renderer(
+        self, node: content.Page, level: int = 1, **kwargs: Any
+    ) -> APIPageRenderer: ...
+    @overload
+    def make_renderer(
+        self, node: content.Section, level: int = 1, **kwargs: Any
+    ) -> ReferenceSectionRenderer: ...
+
+    def make_renderer(
+        self, node: DocType | content.Page | content.Section, level: int = 1, **kwargs: Any
+    ) -> BaseRenderer:
+        """
+        Construct a nested renderer with this renderer's choices and context
+
+        Parameters
+        ----------
+        node
+            The prepared object, page or section to render.
+        level
+            The heading depth of the nested appearance.
+        **kwargs
+            Further constructor arguments for the selected renderer, such as an object's
+            summary-link `page_path` or `contained` state.
+
+        Returns
+        -------
+        :
+            A renderer from the same choices, with the same extension and containing
+            page path.
+        """
+        return self.renderers.make(
+            node,
+            level,
+            extension=self.extension,
+            context_page_path=self.context_page_path,
+            **kwargs,
+        )
 
     def __post_init__(self) -> None:
         """End the chain of `super().__post_init__()` calls from subclasses and mixins"""

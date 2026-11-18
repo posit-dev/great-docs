@@ -12,7 +12,6 @@ import pytest
 from great_docs._apiref._conversion import griffe_to_doc
 
 from great_docs._apiref._rendering._context import _RenderingPurpose
-from great_docs._apiref._settings import Settings
 from great_docs._apiref.collect import build_manifest
 from great_docs._apiref.content import DocClass, DocFunction, Page, Section
 from great_docs.pandoc.blocks import BlockContent
@@ -128,7 +127,6 @@ def test_embedded_members_reset_typing_purpose_and_keep_the_page_path() -> None:
     choices = Renderers(functions=ObservedFunction)
     renderer = choices.make(
         make_class_doc(),
-        settings=Settings(),
         page_path="reference/Example.qmd",
         _purpose=_RenderingPurpose.PROTOCOL,
     )

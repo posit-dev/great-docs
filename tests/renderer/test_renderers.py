@@ -199,11 +199,6 @@ def test_reference_index_uses_common_state_and_explicit_sections() -> None:
     assert "Explicit" in str(renderer)
 
 
-def test_reference_index_rejects_conflicting_settings() -> None:
-    with pytest.raises(ValueError, match="settings"):
-        Renderers().make(make_node("reference_index"), sections=[], settings=Settings(lang="fr"))
-
-
 def test_choices_reach_index_sections_pages_and_objects() -> None:
     from great_docs.pandoc.blocks import BlockContent, Blocks, Header, Para
 
@@ -300,7 +295,6 @@ def test_choices_reach_typing_categories() -> None:
         protocols_items=[protocol],
         typevars_items=[variable],
         typealiases_items=[alias],
-        settings=Settings(),
         renderers=Renderers(
             classes=CustomClass, attributes=CustomAttribute, type_aliases=CustomTypeAlias
         ),

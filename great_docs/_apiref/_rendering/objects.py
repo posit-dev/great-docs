@@ -53,7 +53,7 @@ from .._format import (
     render_formatted_expr,
     repr_obj,
 )
-from ._context import RenderContext, _RenderingPurpose, output_page_path
+from ._context import RenderContext, _RenderingPurpose
 from ._section_dispatch import SECTION_METHOD
 from ._source_links import source_link
 from .base import BaseRenderer
@@ -146,10 +146,10 @@ class ObjectRenderer(BaseRenderer):
             obj=self.obj,
             authored_name=self.doc.name,
             canonical_identity=self.obj.canonical_path,
-            page_path=output_page_path(self.context_page_path, self.output_root),
+            page_path=self.context_page_path,
             level=self.level,
             contained=self.contained,
-            source_root=self.extension.source_root if self.extension is not None else None,
+            source_root=self.extension.source_root,
             output_root=self.output_root,
             settings=self.settings,
         )

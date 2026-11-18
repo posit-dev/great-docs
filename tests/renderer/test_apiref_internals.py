@@ -11,7 +11,6 @@ import pytest
 
 from great_docs._apiref import content
 from great_docs._apiref._docstring_sections import _DocstringSectionPatched, transform
-from great_docs._apiref._settings import Settings
 from great_docs._apiref._tools import render_code_variable, render_type_object
 from great_docs._apiref._type_checks import is_typealias, is_typevar
 from great_docs._apiref._visitor import NodeVisitor
@@ -263,7 +262,7 @@ def test_render_value_non_expr_uses_format_value():
     mock_obj.type_parameters = []
 
     doc = DocTypeAlias(name="X", obj=mock_obj)  # type: ignore[arg-type]
-    renderer = TypeAliasRenderer(doc, settings=Settings())
+    renderer = TypeAliasRenderer(doc)
 
     with patch(
         "great_docs._apiref._rendering.type_aliases.format_value", return_value="int | str"
@@ -319,7 +318,7 @@ def test_render_value_long_expr_with_ruff():
     mock_obj.type_parameters = []
 
     doc = DocTypeAlias(name="Y", obj=mock_obj)  # type: ignore[arg-type]
-    renderer = TypeAliasRenderer(doc, settings=Settings())
+    renderer = TypeAliasRenderer(doc)
 
     with (
         patch.object(dta, "HAS_RUFF", True),

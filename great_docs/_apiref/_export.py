@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, cast
 import griffe as gf
 
 from ._constructor import without_receiver
+from ._customisation import Extension
 from ._parameter_docs import CallableDocumentation
 from ._rendering._renderers import Renderers
 from ._rendering._type_parameters import render_type_parameters
@@ -107,15 +108,27 @@ def _documents(entry: object) -> Iterator[Doc]:
 
 def object_text(doc: Doc, settings: Settings) -> str:
     """
-    Format a prepared object's signatures and own documentation sections
+    Format a prepared object's signatures and its own docstring sections as text
 
-    Keep defaults, annotations, overloads and constructor exclusions from the
-    prepared model. Render recognised sections with the built-in renderers.
-    Constructor descriptions follow selected membership; an undocumented class
-    does not gain the body of an unselected constructor.
+    Take defaults, annotations, overloads and constructor exclusions from the prepared
+    object. Render the sections with the built-in renderers. A class shows its
+    constructor's description only when the constructor is selected.
+
+    Parameters
+    ----------
+    doc
+        The object to format.
+    settings
+        The reference's settings, used to render the sections.
+
+    Returns
+    -------
+    :
+        The signatures, the docstring's subject and the rendered sections, separated by
+        blank lines.
     """
     node = Doc.from_griffe(doc.name, doc.obj)
-    renderer = Renderers().make(node, settings=settings)
+    renderer = Renderers().make(node, extension=Extension(settings))
     body = renderer.render_docstring_body()
     parts = [signature_text(doc.obj), renderer.docstring_subject, str(body) if body else None]
     return "\n\n".join(part.strip() for part in parts if part and part.strip())

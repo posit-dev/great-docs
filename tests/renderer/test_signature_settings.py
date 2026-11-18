@@ -9,6 +9,7 @@ from great_docs._apiref._settings import CallableSignatures, Settings
 from great_docs._apiref._signature import make_call_signature_text
 from great_docs._apiref._tools import _render
 from great_docs._apiref.api_reference import APIReference
+from great_docs.extensions import Extension
 
 
 def test_settings_read_the_api_reference_block():
@@ -116,7 +117,7 @@ def test_references_render_with_their_own_settings_when_interleaved(tmp_path, mo
     monkeypatch.syspath_prepend(str(tmp_path / "src"))
 
     def render(ref: APIReference) -> str:
-        return str(APIPageRenderer(ref.manifest.pages[0], settings=ref.settings))
+        return str(APIPageRenderer(ref.manifest.pages[0], extension=Extension(ref.settings)))
 
     plain, highlighted = _reference("plain"), _reference("highlighted")
 
@@ -143,7 +144,7 @@ def _signature(source: str, name: str, renderer_type: type | None = None) -> str
     ) as package:
         obj = package[name]
     doc = content.Doc.from_griffe(obj.name, obj)
-    qmd = str(Renderers(functions=renderer_type).make(doc, settings=Settings()))
+    qmd = str(Renderers(functions=renderer_type).make(doc))
     signature = qmd.split(".doc-signature", 1)[1]
     return re.search(r"```\w+\n(.*?)```", signature, re.S).group(1)
 

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, TypeVar, cast, overload
 
-from .._settings import Settings
 from ..content import DocAttribute, DocClass, DocFunction, DocModule, DocTypeAlias, Page, Section
 from .api_pages import APIPageRenderer
 from .attributes import AttributeRenderer
@@ -23,10 +22,9 @@ from .reference_sections import ReferenceSectionRenderer
 from .type_aliases import TypeAliasRenderer
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from .._customisation import Extension
     from ..api_reference import APIReference
+    from ..typing import Documentable
 
 
 _Renderer = TypeVar("_Renderer", bound=BaseRenderer)
@@ -131,53 +129,59 @@ class Renderers:
 
     @overload
     def make(
-        self, node: DocClass, level: int = 1, *, settings: Settings | None = None, **kwargs: Any
+        self, node: DocClass, level: int = 1, *, extension: Extension | None = None, **kwargs: Any
     ) -> ClassRenderer: ...
     @overload
     def make(
-        self, node: DocFunction, level: int = 1, *, settings: Settings | None = None, **kwargs: Any
+        self,
+        node: DocFunction,
+        level: int = 1,
+        *,
+        extension: Extension | None = None,
+        **kwargs: Any,
     ) -> FunctionRenderer: ...
     @overload
     def make(
-        self, node: DocAttribute, level: int = 1, *, settings: Settings | None = None, **kwargs: Any
+        self,
+        node: DocAttribute,
+        level: int = 1,
+        *,
+        extension: Extension | None = None,
+        **kwargs: Any,
     ) -> AttributeRenderer: ...
     @overload
     def make(
-        self, node: DocTypeAlias, level: int = 1, *, settings: Settings | None = None, **kwargs: Any
+        self,
+        node: DocTypeAlias,
+        level: int = 1,
+        *,
+        extension: Extension | None = None,
+        **kwargs: Any,
     ) -> TypeAliasRenderer: ...
     @overload
     def make(
-        self, node: DocModule, level: int = 1, *, settings: Settings | None = None, **kwargs: Any
+        self, node: DocModule, level: int = 1, *, extension: Extension | None = None, **kwargs: Any
     ) -> ModuleRenderer: ...
     @overload
     def make(
-        self, node: Page, level: int = 1, *, settings: Settings | None = None, **kwargs: Any
+        self, node: Page, level: int = 1, *, extension: Extension | None = None, **kwargs: Any
     ) -> APIPageRenderer: ...
     @overload
     def make(
-        self, node: Section, level: int = 1, *, settings: Settings | None = None, **kwargs: Any
+        self, node: Section, level: int = 1, *, extension: Extension | None = None, **kwargs: Any
     ) -> ReferenceSectionRenderer: ...
     @overload
     def make(
-        self,
-        node: APIReference,
-        level: int = 1,
-        *,
-        sections: list[Section],
-        settings: Settings | None = None,
-        **kwargs: Any,
+        self, node: APIReference, level: int = 1, *, sections: list[Section], **kwargs: Any
     ) -> ReferenceIndexRenderer: ...
 
     def make(
         self,
-        node: object,
+        node: Documentable | APIReference,
         level: int = 1,
         *,
-        settings: Settings | None = None,
-        sections: list[Section] | None = None,
         extension: Extension | None = None,
-        output_root: Path | None = None,
-        context_page_path: str | None = None,
+        sections: list[Section] | None = None,
         **kwargs: Any,
     ) -> BaseRenderer:
         """
@@ -189,23 +193,16 @@ class Renderers:
             The prepared object, resolved page or section, or reference index to render.
         level
             The heading depth of this appearance.
-        settings
-            Explicit operation settings. Omit these to use the supplied extension's
-            settings, the index reference's settings or standalone defaults.
+        extension
+            The extension that supplies settings and project directories, or `None`
+            for default settings. A reference index uses its reference's extension.
         sections
             The resolved sections, which a reference index requires and every other
             kind of node rejects.
-        extension
-            The extension that supplies the project context. A reference index uses its
-            reference's extension.
-        output_root
-            The documentation output root, or `None` outside a known build.
-        context_page_path
-            The output-relative containing page destination when known. Absolute paths
-            require an enclosing explicit output root before appearing in the renderer context.
         **kwargs
-            Additional constructor arguments for the selected kind, such as an object's
-            summary-link `page_path` or `contained` state.
+            Further constructor arguments for the selected renderer, such as an object's
+            summary-link `page_path`, its `contained` state, or the `context_page_path`
+            of its containing page relative to the output directory.
 
         Returns
         -------
@@ -218,56 +215,51 @@ class Renderers:
             If index sections are absent, sections are supplied to another kind, or
             constructor arguments are invalid.
         ValueError
-            If the node kind is unsupported or explicit settings conflict with its operation.
+            If the node kind is unsupported.
         """
         from ..api_reference import APIReference
 
         if isinstance(node, APIReference):
             if sections is None:
                 raise TypeError("A reference index requires resolved `sections`.")
-            if settings is not None and settings != node.settings:
-                raise ValueError("Renderer settings conflict with the API reference settings.")
-            extension = extension or node.extension
-            if extension.settings != node.settings:
-                raise ValueError(
-                    "Renderer extension settings conflict with the API reference settings."
-                )
-            return self.reference_index(
-                node,
-                sections,
-                level,
-                renderers=self,
-                extension=extension,
-                output_root=output_root if output_root is not None else node.output_root,
-                context_page_path=context_page_path,
-                **kwargs,
-            )
+            return self.reference_index(node, sections, level, renderers=self, **kwargs)
         if sections is not None:
             raise TypeError("Only a reference index accepts `sections`.")
+        options: dict[str, Any] = {"renderers": self, **kwargs}
         if extension is not None:
-            if settings is not None and settings != extension.settings:
-                raise ValueError("Renderer settings conflict with the active extension settings.")
-            settings = extension.settings
-        options: dict[str, Any] = {
-            "settings": settings or Settings(),
-            "renderers": self,
-            "extension": extension,
-            "output_root": output_root,
-            "context_page_path": context_page_path,
-            **kwargs,
+            options["extension"] = extension
+        return self._renderer_for(node)(node, level, **options)
+
+    def _renderer_for(self, node: Documentable) -> type[BaseRenderer]:
+        """
+        Select the renderer class for a node's kind
+
+        Parameters
+        ----------
+        node
+            The prepared object, resolved page or section to present.
+
+        Returns
+        -------
+        :
+            The class in the slot for the first kind the node is an instance of, so
+            a subclass of `Page` uses the page slot.
+
+        Raises
+        ------
+        ValueError
+            If the node is of no supported kind.
+        """
+        slots: dict[type[Documentable], type[BaseRenderer]] = {
+            DocClass: self.classes,
+            DocFunction: self.functions,
+            DocAttribute: self.attributes,
+            DocTypeAlias: self.type_aliases,
+            DocModule: self.modules,
+            Page: self.api_pages,
+            Section: self.reference_sections,
         }
-        if isinstance(node, DocClass):
-            return self.classes(node, level, **options)
-        if isinstance(node, DocFunction):
-            return self.functions(node, level, **options)
-        if isinstance(node, DocAttribute):
-            return self.attributes(node, level, **options)
-        if isinstance(node, DocTypeAlias):
-            return self.type_aliases(node, level, **options)
-        if isinstance(node, DocModule):
-            return self.modules(node, level, **options)
-        if isinstance(node, Page):
-            return self.api_pages(node, level, **options)
-        if isinstance(node, Section):
-            return self.reference_sections(node, level, **options)
+        for kind, renderer in slots.items():
+            if isinstance(node, kind):
+                return renderer
         raise ValueError(f"Cannot document object of type {type(node)}")

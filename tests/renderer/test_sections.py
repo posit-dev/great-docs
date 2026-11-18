@@ -581,14 +581,13 @@ def test_property_only_section_methods_are_independently_overridable():
     import griffe as gf
 
     from great_docs._apiref._conversion import griffe_to_doc
-    from great_docs._apiref.api_reference import Settings
     from great_docs.rendering import Renderers
 
     with gf.temporary_visited_package(
         "package", {"__init__.py": textwrap.dedent(source)}, docstring_parser="numpy"
     ) as package:
         doc = griffe_to_doc(package["Widget.size"])
-        qmd = str(Renderers(attributes=_MarkedRenderDocAttribute).make(doc, settings=Settings()))
+        qmd = str(Renderers(attributes=_MarkedRenderDocAttribute).make(doc))
 
     assert "MARKER" in qmd
     assert "If the size is guessed." in qmd

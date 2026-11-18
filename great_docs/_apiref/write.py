@@ -9,7 +9,6 @@ page. Write the sidebar YAML directly.
 from __future__ import annotations
 
 import logging
-from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -21,8 +20,6 @@ from .content import Page, Section
 
 if TYPE_CHECKING:
     from ._customisation import Extension
-    from ._rendering._renderers import Renderers
-    from ._settings import Settings
     from .api_reference import APIReference
 
 _log = logging.getLogger(__name__)
@@ -358,65 +355,44 @@ def collect_typing_information(
 
 def collect_pages(
     pages: list[Page],
-    settings: Settings,
+    extension: Extension,
     *,
     site_toc_depth: int,
-    renderers: Renderers | None = None,
-    extension: Extension | None = None,
-    output_root: Path | None = None,
 ) -> list[RenderedPage]:
     """
     Render API reference pages without writing them
 
-    Each page lands at its path under `settings.dir`, with
-    `settings.out_page_suffix` appended. Each page is Quarto Markdown with
-    navigation and table-processing directives in its front matter. Collection
-    writes no files.
+    Each page's path is its path under the settings' `dir`, with their `out_page_suffix`
+    appended. Each page is Quarto Markdown with navigation and table-processing
+    directives in its front matter.
 
     Parameters
     ----------
     pages
         Resolved page nodes to render.
-    settings
-        The reference's semantic and presentation settings. Output paths use
-        `dir` and `out_page_suffix`; object headings use `header_level`.
+    extension
+        The reference's extension, which supplies the settings, renderers and body
+        callbacks, and names the page in a rendering failure. Object headings start at
+        the settings' `header_level`.
     site_toc_depth
         Merged site table-of-contents depth. A page overrides it only when
         member headings require a greater depth.
-    renderers
-        Renderer choices shared by pages and nested objects. `None` uses defaults.
-    extension
-        The extension for project context and rendering failures, or `None` for
-        standalone rendering.
-    output_root
-        The documentation output root, or `None`
-        outside a known build.
 
     Returns
     -------
     :
         The rendered pages, in the order given.
     """
-    from ._rendering._context import output_page_path
-    from ._rendering._renderers import Renderers
-
-    choices = renderers or Renderers()
+    settings = extension.settings
     collected: list[RenderedPage] = []
 
     for page in pages:
         _log.info(f"Rendering {page.path}")
         page_path = str(Path(settings.dir) / (page.path + settings.out_page_suffix))
-        context = extension.error_context("render", page_path) if extension else nullcontext()
-        with context:
+        with extension.error_context("render", page_path):
             rendered = str(
-                choices.make(
-                    page,
-                    settings.header_level,
-                    toc_depth=site_toc_depth,
-                    settings=settings,
-                    extension=extension,
-                    output_root=output_root,
-                    context_page_path=output_page_path(page_path, output_root),
+                extension.renderers.make(
+                    page, settings.header_level, extension=extension, toc_depth=site_toc_depth
                 )
             )
 

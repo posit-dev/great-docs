@@ -290,7 +290,7 @@ def test_dataclass_fields_do_not_reappear_as_attributes() -> None:
         qmd = _rendered(obj)
         members = [Doc.from_griffe(name, attribute) for name, attribute in obj.attributes.items()]
         node = Doc.from_griffe("C", obj, members)
-        renderer = ClassRenderer(node, settings=Settings())
+        renderer = ClassRenderer(node)
         assert not renderer.attributes
         assert "Retained field description" in qmd
         assert "Excluded field description" not in qmd

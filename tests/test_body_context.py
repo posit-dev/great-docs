@@ -138,10 +138,8 @@ def test_build_reports_alias_member_and_typing_destinations(
 def test_summaries_skip_docstring_bodies_and_renderers_cache_their_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    with recorded_reference(tmp_path, monkeypatch) as (ref, _, output):
-        index = ref.renderers.make(
-            ref, sections=ref.resolved, extension=ref.extension, output_root=output
-        )
+    with recorded_reference(tmp_path, monkeypatch) as (ref, _, _):
+        index = ref.renderers.make(ref, sections=ref.resolved)
         returns = cast("list[gf.DocstringReturn]", ref.extension.cache["returns"])
         before = [item.description for item in returns]
         assert "Document" in str(index)
@@ -149,19 +147,15 @@ def test_summaries_skip_docstring_bodies_and_renderers_cache_their_output(
         prepared = list(cast("list[str]", ref.extension.cache["prepared"]))
         page = ref.resolved[0].contents[0]
         doc = page.contents[0].members[0]
-        arguments = {
-            "extension": ref.extension,
-            "output_root": output,
-            "context_page_path": "reference/Document.qmd",
-        }
-        renderer = ref.renderers.make(doc, settings=ref.settings, **arguments)
+        arguments = {"extension": ref.extension, "context_page_path": "reference/Document.qmd"}
+        renderer = ref.renderers.make(doc, **arguments)
         assert renderer.render_summary()
         assert contexts(ref) == []
         first = str(renderer)
         assert len(contexts(ref)) == 1
         assert str(renderer) == first
         assert len(contexts(ref)) == 1
-        assert str(ref.renderers.make(doc, settings=ref.settings, **arguments)) == first
+        assert str(ref.renderers.make(doc, **arguments)) == first
         assert len(contexts(ref)) == 2
         assert ref.extension.cache["prepared"] == prepared
         # Each rendering reads the prepared continuation definitions without changing them.

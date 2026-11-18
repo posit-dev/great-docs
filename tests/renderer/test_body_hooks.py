@@ -172,7 +172,7 @@ def test_absolute_output_directories_use_explicit_context_coordinates(
     output = tmp_path / "output"
     destination = output / "reference" if inside else tmp_path / "elsewhere"
     settings = Settings(dir=str(destination))
-    extension = Extension(settings)
+    extension = Extension(settings, output_root=output if known_root else None)
     contexts: list[RenderContext] = []
 
     class RecordContextMixin:
@@ -185,13 +185,7 @@ def test_absolute_output_directories_use_explicit_context_coordinates(
     try:
         doc = make_doc(extension, "def run(): pass\n", "run")
         page = Page(path="run", contents=[doc])
-        for rendered in collect_pages(
-            [page],
-            settings,
-            site_toc_depth=2,
-            extension=extension,
-            output_root=output if known_root else None,
-        ):
+        for rendered in collect_pages([page], extension, site_toc_depth=2):
             rendered.write()
         assert (destination / "run.qmd").is_file()
         assert len(contexts) == 1
@@ -206,11 +200,9 @@ def test_absolute_output_directories_use_explicit_context_coordinates(
             protocols_items=[InventoryItem(name="Readable", obj=protocol)],
             typevars_items=[],
             typealiases_items=[],
-            settings=settings,
             renderers=extension.renderers,
             extension=extension,
             page_path=str(destination / "types.qmd"),
-            output_root=output if known_root else None,
         )
         _ = str(typing)
         assert len(contexts) == 1

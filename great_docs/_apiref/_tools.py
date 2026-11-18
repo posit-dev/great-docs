@@ -62,7 +62,7 @@ def _render(obj: gf.Object | gf.Alias, settings: Settings | None = None) -> str:
         if node is None:
             return ""
         with extension.error_context("render", obj.path):
-            return str(extension.renderers.make(node, settings=settings, extension=extension))
+            return str(extension.renderers.make(node, extension=extension))
     finally:
         extension.close()
 

@@ -15,6 +15,7 @@ from great_docs._apiref._export import reference_text
 from great_docs._apiref._extension_loading import _ExtensionSource
 from great_docs._apiref.api_reference import APIReference
 from great_docs._apiref.typing_information import TypeInformation
+from great_docs.extensions import Extension
 from tests.support import write_config
 
 
@@ -107,7 +108,9 @@ def test_consumers_share_preparation_regardless_of_order(
                 outputs[consumer] = reference_text(ref)
             elif consumer == "page":
                 outputs[consumer] = str(
-                    ref.renderers.make(ref.resolved[0].contents[0], settings=ref.settings)
+                    ref.renderers.make(
+                        ref.resolved[0].contents[0], extension=Extension(ref.settings)
+                    )
                 )
             else:
                 outputs[consumer] = str(TypeInformation(f"{ref.package}.types", ref))
@@ -178,7 +181,9 @@ def test_hook_added_parameter_directive_affects_pages_and_export(
                 return obj
     """
     with reference_from_source(tmp_path, monkeypatch, files, extension, ["call"]) as ref:
-        page = str(ref.renderers.make(ref.resolved[0].contents[0], settings=ref.settings))
+        page = str(
+            ref.renderers.make(ref.resolved[0].contents[0], extension=Extension(ref.settings))
+        )
         for output in (page, reference_text(ref)):
             assert "visible" in output
             assert "hidden" not in output
