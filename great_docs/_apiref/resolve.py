@@ -222,11 +222,12 @@ class Resolver:
             `settings`.
         """
         from .introspect import get_object as _get_object
-        from .introspect import make_loader
+        from .introspect import make_loader, register_preparation_check
 
         self.settings = settings if settings is not None else Settings()
         self.extension = extension or Extension(self.settings)
         loader = make_loader(self.settings.parser)
+        register_preparation_check(loader, self.extension.is_prepared)
         # Extend `sys.path` at the first lookup, so a resolver that never looks up an
         # object leaves the interpreter unchanged.
         pending_source_dir = self.settings.source_dir
@@ -238,7 +239,7 @@ class Resolver:
                 if source_dir not in sys.path:
                     sys.path.append(source_dir)
                 pending_source_dir = None
-            return _get_object(path, loader=loader, preserve=self.extension.is_prepared, **kwargs)
+            return _get_object(path, loader=loader, **kwargs)
 
         self.get_object: _GetObject = acquire
 
