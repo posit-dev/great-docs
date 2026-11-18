@@ -77,13 +77,26 @@ class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
     def render_description(self) -> BlockContent:
         """
         Render the description of the reference page
+
+        Returns
+        -------
+        :
+            The description in a `doc-description` division, or `None` when the reference
+            has no description.
         """
         return (
             Div(self.api_ref.desc, Attr(classes=["doc-description"])) if self.api_ref.desc else None
         )
 
     def render_metadata(self) -> BlockContent:
-        """Render the reference title, description metadata and index navigation settings"""
+        """
+        Render the reference title, description metadata and index navigation settings
+
+        Returns
+        -------
+        :
+            The front matter of the reference index page.
+        """
         metadata: dict[str, object] = {
             "title": self.api_ref.title,
             "body-classes": "doc-reference doc-py-reference",
@@ -106,5 +119,10 @@ class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
         Render the sections in their authored order
 
         Each section renders its heading, description and summary rows.
+
+        Returns
+        -------
+        :
+            The rendered sections.
         """
         return Blocks([self.make_renderer(s, self.level) for s in self.sections])

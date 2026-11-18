@@ -223,7 +223,14 @@ class ObjectRenderer(BaseRenderer):
         return self.render_signature()
 
     def render_signature(self) -> BlockContent:
-        """Render the object declaration, or return `None` to omit it"""
+        """
+        Render the object declaration, or return `None` to omit it
+
+        Returns
+        -------
+        :
+            The declaration, or `None` to omit it.
+        """
 
     @cached_property
     def title_content(self) -> InlineContent:
@@ -311,7 +318,19 @@ class ObjectRenderer(BaseRenderer):
             annotation = self.obj.annotation
 
         def _render(ann: Annotation | None) -> str:
-            """Render one annotation fragment without resolving cross references"""
+            """
+            Render one annotation fragment without resolving cross references
+
+            Parameters
+            ----------
+            ann
+                The annotation fragment. `None` renders as empty text.
+
+            Returns
+            -------
+            :
+                The fragment as plain text, with names escaped for Markdown.
+            """
             # Recursively render annotation as plain text (no links)
             if ann is None:
                 return ""
@@ -428,6 +447,11 @@ class ObjectRenderer(BaseRenderer):
     def render_docstring_subject(self) -> BlockContent:
         """
         Render the subject of the docstring
+
+        Returns
+        -------
+        :
+            The subject paragraph in a `doc-subject` division.
         """
         return Div(Para(self.docstring_subject), Attr(classes=["doc-subject"]))
 
@@ -561,6 +585,11 @@ class ObjectRenderer(BaseRenderer):
     def _unhandled_section(self, el: AnyDocstringSection) -> None:
         """
         Discard a section this renderer has no method for, and say so
+
+        Parameters
+        ----------
+        el
+            The section without a method.
         """
         name = el.title or el.kind.value
         _log.warning(
@@ -571,7 +600,14 @@ class ObjectRenderer(BaseRenderer):
         return None
 
     def _suppress_section(self, el: AnyDocstringSection) -> None:
-        """Omit a hand-written member summary that automatic groups would duplicate"""
+        """
+        Omit a hand-written member summary that automatic groups would duplicate
+
+        Parameters
+        ----------
+        el
+            The member summary section.
+        """
         return None
 
     def render_functions_section(self, el: gf.DocstringSectionFunctions) -> None:
@@ -581,6 +617,11 @@ class ObjectRenderer(BaseRenderer):
         Griffe parses both headings as the same section kind. The member groups list
         the functions and methods instead. Override this method to keep the
         hand-written list; the other member-summary sections stay omitted.
+
+        Parameters
+        ----------
+        el
+            The `Functions` or `Methods` section.
         """
         return self._suppress_section(el)
 
@@ -590,6 +631,11 @@ class ObjectRenderer(BaseRenderer):
 
         The member groups list the nested classes instead. Override this method to keep
         the hand-written list; the other member-summary sections stay omitted.
+
+        Parameters
+        ----------
+        el
+            The `Classes` section.
         """
         return self._suppress_section(el)
 
@@ -599,6 +645,11 @@ class ObjectRenderer(BaseRenderer):
 
         Override this method to keep the hand-written list; the other member-summary
         sections stay omitted.
+
+        Parameters
+        ----------
+        el
+            The `Modules` section.
         """
         return self._suppress_section(el)
 
@@ -608,20 +659,60 @@ class ObjectRenderer(BaseRenderer):
 
         The member groups list the type aliases instead. Override this method to keep
         the hand-written list; the other member-summary sections stay omitted.
+
+        Parameters
+        ----------
+        el
+            The `Type Aliases` section.
         """
         return self._suppress_section(el)
 
     def render_text_section(self, el: gf.DocstringSectionText) -> BlockContent:
-        """Render a `Text` section"""
+        """
+        Render a `Text` section
+
+        Parameters
+        ----------
+        el
+            The `Text` section.
+
+        Returns
+        -------
+        :
+            The text as written in the docstring.
+        """
         return el.value
 
     def render_examples_section(self, el: gf.DocstringSectionExamples) -> BlockContent:
-        """Render an `Examples` section"""
+        """
+        Render an `Examples` section
+
+        Parameters
+        ----------
+        el
+            The `Examples` section.
+
+        Returns
+        -------
+        :
+            The code fragments as Python code blocks and the prose fragments as written.
+        """
         return Blocks([self._render_example_fragment(c) for c in el.value])
 
     def _render_example_fragment(self, fragment: object) -> BlockContent:
         """
         Render one code or prose fragment of an `Examples` section
+
+        Parameters
+        ----------
+        fragment
+            A fragment of the section's value.
+
+        Returns
+        -------
+        :
+            A Python code block for code, the text for prose, or an empty string for
+            anything else.
         """
         el = transform(fragment)
         if isinstance(el, ExampleCode):
@@ -631,7 +722,20 @@ class ObjectRenderer(BaseRenderer):
         return ""
 
     def render_deprecated_section(self, el: gf.DocstringSectionDeprecated) -> BlockContent:
-        """Render a `Deprecated` section"""
+        """
+        Render a `Deprecated` section
+
+        Parameters
+        ----------
+        el
+            The `Deprecated` section.
+
+        Returns
+        -------
+        :
+            A `doc-deprecated` division that labels the description with the version
+            that deprecated the object.
+        """
         label = translate_versioned(
             "deprecated_since_version", self.settings.lang, el.value.version
         )
@@ -650,19 +754,68 @@ class ObjectRenderer(BaseRenderer):
         return str(content)
 
     def render_admonition_section(self, el: gf.DocstringSectionAdmonition) -> BlockContent:
-        """Render the descriptive content of an additional numpydoc section"""
+        """
+        Render the descriptive content of an additional numpydoc section
+
+        Parameters
+        ----------
+        el
+            The additional section.
+
+        Returns
+        -------
+        :
+            The section's description.
+        """
         return el.value.description
 
     def render_warnings_section(self, el: DocstringSectionWarnings) -> BlockContent:
-        """Render a `Warnings` section"""
+        """
+        Render a `Warnings` section
+
+        Parameters
+        ----------
+        el
+            The `Warnings` section.
+
+        Returns
+        -------
+        :
+            The text as written in the docstring.
+        """
         return el.value
 
     def render_notes_section(self, el: DocstringSectionNotes) -> BlockContent:
-        """Render a `Notes` section"""
+        """
+        Render a `Notes` section
+
+        Parameters
+        ----------
+        el
+            The `Notes` section.
+
+        Returns
+        -------
+        :
+            The text as written in the docstring.
+        """
         return el.value
 
     def render_see_also_section(self, el: DocstringSectionSeeAlso) -> BlockContent:
-        """Render a `See Also` section"""
+        """
+        Render a `See Also` section
+
+        Parameters
+        ----------
+        el
+            The `See Also` section.
+
+        Returns
+        -------
+        :
+            A definition list with one item per reference: the name as an interlink and
+            its description.
+        """
         content = format_see_also(el.value)
         items: list[DefinitionItem] = []
         for line in content.split("\n"):
@@ -695,6 +848,17 @@ class ObjectRenderer(BaseRenderer):
         def render_section_item(el: DocstringDefinitionType) -> DefinitionItem:
             """
             Render a single definition in a section
+
+            Parameters
+            ----------
+            el
+                The definition.
+
+            Returns
+            -------
+            :
+                The declaration as an HTML code element, so that cross references in its
+                annotation resolve, and the description.
             """
             name = getattr(el, "name", None) or ""
             default = getattr(el, "default", None)

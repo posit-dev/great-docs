@@ -46,7 +46,19 @@ def get_label(obj: gf.Alias | gf.Object) -> str:
 
 
 def _function_label(obj: gf.Function) -> str:
-    """Label a function defined in a class `method`, and any other by its function kind"""
+    """
+    Label a function defined in a class `method`, and any other by its function kind
+
+    Parameters
+    ----------
+    obj
+        The function.
+
+    Returns
+    -------
+    :
+        `"method"`, or the function kind.
+    """
     if obj.parent and obj.parent.is_class:
         return "method"
     return function_kind(obj)

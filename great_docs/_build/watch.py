@@ -333,6 +333,7 @@ def serve(
     preview = subprocess.Popen(["quarto", "preview", "--no-browser"], cwd=layout.build_dir, env=env)
 
     def wait_for_preview() -> None:
+        """Wait for `quarto preview` to exit, then signal the watcher to stop"""
         _ = preview.wait()
         stopped.set()
 

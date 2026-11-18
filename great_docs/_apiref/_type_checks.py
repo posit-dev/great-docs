@@ -71,6 +71,16 @@ def is_typealias(obj: gf.Object | gf.Alias) -> bool:
 
     Covers both PEP 695 `type X = ...` aliases, which Griffe models as a
     dedicated `TypeAlias`, and explicit `X: TypeAlias = ...` attributes.
+
+    Parameters
+    ----------
+    obj
+        The object or alias to check.
+
+    Returns
+    -------
+    :
+        Whether the object is a type alias.
     """
     target = _resolved(obj)
     if isinstance(target, gf.TypeAlias):
@@ -85,7 +95,19 @@ def is_typealias(obj: gf.Object | gf.Alias) -> bool:
 
 
 def is_protocol(obj: gf.Object | gf.Alias) -> bool:
-    """Check whether a class defines a typing `Protocol`"""
+    """
+    Check whether a class defines a typing `Protocol`
+
+    Parameters
+    ----------
+    obj
+        The object or alias to check.
+
+    Returns
+    -------
+    :
+        Whether the last base of the class is `typing.Protocol`.
+    """
     cls = _as_class(obj)
     return (
         cls is not None
@@ -271,6 +293,16 @@ def is_typeddict(obj: gf.Object | gf.Alias) -> bool:
 
     A `@dataclass`-decorated class that also derives from `TypedDict` is a
     dataclass, so it keeps its constructor brackets.
+
+    Parameters
+    ----------
+    obj
+        The object or alias to check.
+
+    Returns
+    -------
+    :
+        Whether the object is a `TypedDict` class.
     """
     cls = _as_class(obj)
     return cls is not None and class_kind(cls) == "typeddict"
@@ -282,6 +314,16 @@ def is_enum(obj: gf.Object | gf.Alias) -> bool:
 
     A `@dataclass`-decorated class that also derives from an `enum` base is a
     dataclass, so it keeps its constructor brackets.
+
+    Parameters
+    ----------
+    obj
+        The object or alias to check.
+
+    Returns
+    -------
+    :
+        Whether the object is an enumeration class.
     """
     cls = _as_class(obj)
     return cls is not None and class_kind(cls) == "enum"
@@ -296,6 +338,16 @@ def is_typevar(obj: gf.Object | gf.Alias) -> bool:
 
     A type variable is a `TypeVar`, `ParamSpec` or `TypeVarTuple`, called by
     its bare name or through any module, such as `typing.TypeVar`.
+
+    Parameters
+    ----------
+    obj
+        The object or alias to check.
+
+    Returns
+    -------
+    :
+        Whether the object is an attribute whose value creates a type variable.
     """
     target = _resolved(obj)
     if not (isinstance(target, gf.Attribute) and isinstance(target.value, gf.ExprCall)):
@@ -308,7 +360,19 @@ def is_typevar(obj: gf.Object | gf.Alias) -> bool:
 
 
 def is_initvar(obj: str | gf.Expr | None) -> TypeGuard[gf.ExprSubscript]:
-    """Check whether an annotation is an `InitVar`"""
+    """
+    Check whether an annotation is an `InitVar`
+
+    Parameters
+    ----------
+    obj
+        The annotation, or `None` when there is none.
+
+    Returns
+    -------
+    :
+        Whether the annotation subscripts `dataclasses.InitVar`.
+    """
     return (
         isinstance(obj, gf.ExprSubscript)
         and isinstance(obj.left, gf.ExprName)
@@ -317,27 +381,87 @@ def is_initvar(obj: str | gf.Expr | None) -> TypeGuard[gf.ExprSubscript]:
 
 
 def is_doc_function(el: DocMemberType) -> TypeGuard[content.DocFunction]:
-    """Check whether a documentation member represents a function"""
+    """
+    Check whether a documentation member represents a function
+
+    Parameters
+    ----------
+    el
+        The documentation member to check.
+
+    Returns
+    -------
+    :
+        Whether the member documents a function.
+    """
     return el.obj.is_function
 
 
 def is_doc_class(el: DocMemberType) -> TypeGuard[content.DocClass]:
-    """Check whether a documentation member represents a class"""
+    """
+    Check whether a documentation member represents a class
+
+    Parameters
+    ----------
+    el
+        The documentation member to check.
+
+    Returns
+    -------
+    :
+        Whether the member documents a class.
+    """
     return el.obj.is_class
 
 
 def is_doc_attribute(el: DocMemberType) -> TypeGuard[content.DocAttribute]:
-    """Check whether a documentation member represents an attribute"""
+    """
+    Check whether a documentation member represents an attribute
+
+    Parameters
+    ----------
+    el
+        The documentation member to check.
+
+    Returns
+    -------
+    :
+        Whether the member documents an attribute.
+    """
     return el.obj.is_attribute
 
 
 def is_doc_type_alias(el: DocMemberType) -> TypeGuard[content.DocTypeAlias]:
-    """Check whether a documentation member represents a type alias"""
+    """
+    Check whether a documentation member represents a type alias
+
+    Parameters
+    ----------
+    el
+        The documentation member to check.
+
+    Returns
+    -------
+    :
+        Whether the member documents a type alias.
+    """
     return el.obj.is_type_alias
 
 
 def is_field_init_false(el: gf.Parameter) -> bool:
-    """Check whether a parameter's default is a `field(init=False, ...)` call"""
+    """
+    Check whether a parameter's default is a `field(init=False, ...)` call
+
+    Parameters
+    ----------
+    el
+        The dataclass parameter to check.
+
+    Returns
+    -------
+    :
+        Whether the default calls `field` with `init=False`.
+    """
     if not (
         isinstance(el.default, gf.ExprCall)
         and isinstance(el.default.function, gf.ExprName)

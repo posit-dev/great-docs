@@ -49,6 +49,16 @@ class TypeAliasRenderer(ObjectRenderer):
 
         When ruff is available, it wraps long expressions; other values use the
         ordinary inline markup.
+
+        Parameters
+        ----------
+        value
+            The alias value.
+
+        Returns
+        -------
+        :
+            The highlighted value.
         """
         if not isinstance(value, gf.Expr):
             return format_value(value)
@@ -59,6 +69,11 @@ class TypeAliasRenderer(ObjectRenderer):
     def render_signature(self) -> BlockContent:
         """
         Render the alias in its source form, e.g. `type Pair[T] = tuple[T, T]`
+
+        Returns
+        -------
+        :
+            The declaration in a `doc-signature` division.
         """
         name = self.signature_name
         declared = f"{name}{render_type_parameters(self.obj.type_parameters)}"
@@ -86,7 +101,14 @@ class TypeAliasRenderer(ObjectRenderer):
         )
 
     def render_description(self) -> BlockContent:
-        """Render the subject followed by the alias declaration, without a Usage row"""
+        """
+        Render the subject followed by the alias declaration, without a Usage row
+
+        Returns
+        -------
+        :
+            The subject and the declaration.
+        """
         return Blocks(
             [
                 self.render_docstring_subject(),
@@ -95,5 +117,17 @@ class TypeAliasRenderer(ObjectRenderer):
         )
 
     def render_type_parameters_section(self, el: gf.DocstringSectionTypeParameters) -> BlockContent:
-        """Render a `Type Parameters` section for a generic alias"""
+        """
+        Render a `Type Parameters` section for a generic alias
+
+        Parameters
+        ----------
+        el
+            The `Type Parameters` section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items.
+        """
         return self.render_definition_items(el)

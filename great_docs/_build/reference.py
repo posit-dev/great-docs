@@ -34,7 +34,14 @@ __all__ = ["add_api_block", "api", "api_config", "cli", "go_cli", "interlinks", 
 
 
 def _prepare_imports(config: Config) -> None:
-    """Make the project's packages importable using Quarto's source paths"""
+    """
+    Make the project's packages importable using Quarto's source paths
+
+    Parameters
+    ----------
+    config
+        The project's configuration.
+    """
     for path in quarto.environment(config).get("PYTHONPATH", "").split(os.pathsep):
         if path and path not in sys.path:
             sys.path.insert(0, path)

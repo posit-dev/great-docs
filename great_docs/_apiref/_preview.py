@@ -17,7 +17,20 @@ from ._walkable import MISSING, Walkable
 
 
 def fields(el: object) -> list[object] | None:
-    """List the relevant fields for an object, for preview purposes"""
+    """
+    List the relevant fields for an object, for preview purposes
+
+    Parameters
+    ----------
+    el
+        The object to preview.
+
+    Returns
+    -------
+    :
+        The attribute names, keys or indices to show as the object's children, or
+        `None` for an object to show as its `repr`.
+    """
 
     # dataclass types (ExampleCode, ExampleText)
     if isinstance(el, (ExampleCode, ExampleText)):
@@ -99,12 +112,41 @@ class Formatter:
     def __init__(
         self, string_max_length: int = 50, max_depth: int = 999, compact: bool = False
     ) -> None:
+        """
+        Create a formatter
+
+        Parameters
+        ----------
+        string_max_length
+            The length beyond which a leaf value's `repr` is truncated.
+        max_depth
+            The depth at which nodes are shown by class name only.
+        compact
+            Whether to start nested values on a new line at the parent's indent,
+            instead of indenting them past the field name.
+        """
         self.string_max_length = string_max_length
         self.max_depth = max_depth
         self.compact = compact
 
     def format(self, call: object, depth: int = 0, pad: int = 0) -> str:
-        """Format `call` as a tree diagram, with boxes for nodes"""
+        """
+        Format `call` as a tree diagram, with boxes for nodes
+
+        Parameters
+        ----------
+        call
+            The object to format.
+        depth
+            The nesting depth of `call` in the tree.
+        pad
+            The number of spaces before the branches of `call`.
+
+        Returns
+        -------
+        :
+            The diagram.
+        """
 
         call = transform(call)
 
@@ -146,6 +188,22 @@ class Formatter:
         return "".join([call_str, *padded])
 
     def get_field(self, obj: object, k: object) -> object:
+        """
+        Get the value of one field of a node
+
+        Parameters
+        ----------
+        obj
+            The node.
+        k
+            A key for a dict, an index for a list or parameters, and an attribute name
+            otherwise.
+
+        Returns
+        -------
+        :
+            The field's value.
+        """
         if isinstance(obj, dict):
             return cast("dict[object, object]", obj)[k]
 
@@ -157,6 +215,24 @@ class Formatter:
         return getattr(obj, str(k))
 
     def fmt_pipe(self, x: str, is_final: bool = False, pad: int = 0) -> str:
+        """
+        Attach a formatted field to its parent with a tree branch
+
+        Parameters
+        ----------
+        x
+            The formatted field.
+        is_final
+            Whether the field is the parent's last, which ends the vertical line.
+        pad
+            The number of spaces before the branch.
+
+        Returns
+        -------
+        :
+            The field on a new line after the branch, with its continuation lines
+            prefixed by the vertical line.
+        """
         if not is_final:
             connector = self.icon_connector
             prefix = self.icon_pipe
@@ -175,7 +251,25 @@ def preview(
     compact: bool = False,
     as_string: bool = False,
 ) -> str | None:
-    """Print a friendly representation of a griffe object, or return it as a string"""
+    """
+    Print a friendly representation of a griffe object, or return it as a string
+
+    Parameters
+    ----------
+    ast
+        The object to preview.
+    max_depth
+        The depth at which nodes are shown by class name only.
+    compact
+        Whether to start nested values on a new line at the parent's indent.
+    as_string
+        Whether to return the representation instead of printing it.
+
+    Returns
+    -------
+    :
+        The representation when `as_string` is true, otherwise `None`.
+    """
 
     res = Formatter(max_depth=max_depth, compact=compact).format(ast)
 

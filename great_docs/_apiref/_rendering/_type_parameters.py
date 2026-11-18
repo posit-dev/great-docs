@@ -25,8 +25,16 @@ def render_type_parameters(type_parameters: gf.TypeParameters | None) -> str:
     """
     Render a PEP 695 type parameter list, brackets included
 
-    Returns an empty string when there are no type parameters, so callers can
-    concatenate the result unconditionally.
+    Parameters
+    ----------
+    type_parameters
+        The type parameters, or `None` when the object declares none.
+
+    Returns
+    -------
+    :
+        The bracketed list, or an empty string when there are no type parameters, so
+        callers can concatenate the result unconditionally.
     """
     if not type_parameters:
         return ""
@@ -41,6 +49,16 @@ def _render_type_parameter(tp: gf.TypeParameter) -> str:
 
     A constrained parameter (`S: (str, bytes)`) carries no bound, so the two
     are alternatives rather than a bound with extra detail.
+
+    Parameters
+    ----------
+    tp
+        The type parameter.
+
+    Returns
+    -------
+    :
+        The parameter as it appears in a declaration, such as `*Ts` or `T: int = int`.
     """
     out = f"{_KIND_PREFIX.get(tp.kind.value, '')}{tp.name}"
 

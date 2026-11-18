@@ -85,6 +85,16 @@ def merge_frontmatter(content: str, extra: dict[str, Any]) -> str:
         Full document text, optionally starting with a `---` frontmatter block.
     extra :
         YAML key-value pairs to add or overwrite in the frontmatter.
+
+    Returns
+    -------
+    :
+        The document with the merged front matter.
+
+    Raises
+    ------
+    ValueError
+        If `content` opens a front matter block that it never closes.
     """
     if content.startswith("---\n"):
         block = locate_front_matter(content)
@@ -111,8 +121,7 @@ def _insert_contents(
     Insert contents at a sidebar sentinel and report whether it was found
 
     Recursively searches the structure for the sentinel string and replaces it
-    with the items in `contents`. Returns `True` if the sentinel was found and
-    replaced, `False` otherwise.
+    with the items in `contents`, changing `x` in place.
 
     Parameters
     ----------
@@ -122,6 +131,11 @@ def _insert_contents(
         Items to splice in at the sentinel position.
     sentinel :
         The placeholder string to search for.
+
+    Returns
+    -------
+    :
+        `True` if the sentinel was found and replaced, `False` otherwise.
     """
     if isinstance(x, dict):
         for value in x.values():
@@ -146,7 +160,19 @@ def _insert_contents(
 
 
 def _page_sidebar_text(page: Page) -> str:
-    """Choose a page's sidebar label: its summary name, its only object's name, or its filename"""
+    """
+    Choose a page's sidebar label: its summary name, its only object's name, or its filename
+
+    Parameters
+    ----------
+    page
+        The resolved page.
+
+    Returns
+    -------
+    :
+        The label, with `()` after the name of a page's only object when it is a function.
+    """
     if page.summary is not None:
         return page.summary.name
     if len(page.contents) == 1:
@@ -168,9 +194,6 @@ def _generate_sidebar(
     """
     Generate the Quarto sidebar YAML structure for the given resolved sections
 
-    Produces a `{"website": {"sidebar": [...]}}` dict suitable for writing
-    directly to a `.yml` file.
-
     Parameters
     ----------
     sections :
@@ -182,6 +205,17 @@ def _generate_sidebar(
     sidebar :
         Raw sidebar configuration from the settings (may include `"file"`,
         `"id"`, `"contents"`, and other Quarto keys).
+
+    Returns
+    -------
+    :
+        A `{"website": {"sidebar": [...]}}` dict suitable for writing directly to a
+        `.yml` file.
+
+    Raises
+    ------
+    TypeError
+        If the configured `contents` is not a list.
     """
     contents: list[Any] = [f"{dir}/index{out_page_suffix}"]
     in_subsection = False

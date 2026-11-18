@@ -56,43 +56,151 @@ class CallableRendererMixin(ObjectRenderer):
         self._parameter_kinds = {p.name: p.kind for p in self.parameters}
 
     def render_parameters_section(self, el: gf.DocstringSectionParameters) -> BlockContent:
-        """Render a `Parameters` section"""
+        """
+        Render a `Parameters` section
+
+        Parameters
+        ----------
+        el
+            The `Parameters` section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items.
+        """
         return self.render_definition_items(el)
 
     def render_other_parameters_section(
         self, el: gf.DocstringSectionOtherParameters
     ) -> BlockContent:
-        """Render an `Other Parameters` section"""
+        """
+        Render an `Other Parameters` section
+
+        Parameters
+        ----------
+        el
+            The `Other Parameters` section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items.
+        """
         return self.render_definition_items(el)
 
     def render_returns_section(self, el: gf.DocstringSectionReturns) -> BlockContent:
-        """Render a `Returns` section"""
+        """
+        Render a `Returns` section
+
+        Parameters
+        ----------
+        el
+            The `Returns` section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items.
+        """
         return self.render_definition_items(el)
 
     def render_yields_section(self, el: gf.DocstringSectionYields) -> BlockContent:
-        """Render a `Yields` section"""
+        """
+        Render a `Yields` section
+
+        Parameters
+        ----------
+        el
+            The `Yields` section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items.
+        """
         return self.render_definition_items(el)
 
     def render_receives_section(self, el: gf.DocstringSectionReceives) -> BlockContent:
-        """Render a `Receives` section"""
+        """
+        Render a `Receives` section
+
+        Parameters
+        ----------
+        el
+            The `Receives` section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items.
+        """
         return self.render_definition_items(el)
 
     def render_raises_section(self, el: gf.DocstringSectionRaises) -> BlockContent:
-        """Render a `Raises` section"""
+        """
+        Render a `Raises` section
+
+        Parameters
+        ----------
+        el
+            The `Raises` section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items.
+        """
         return self.render_definition_items(el)
 
     def render_warns_section(self, el: gf.DocstringSectionWarns) -> BlockContent:
-        """Render a `Warns` section"""
+        """
+        Render a `Warns` section
+
+        Parameters
+        ----------
+        el
+            The `Warns` section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items.
+        """
         return self.render_definition_items(el)
 
     def render_init_parameters_section(self, el: DCDocstringSectionInitParameters) -> BlockContent:
-        """Render the `Init Parameters` section of a dataclass"""
+        """
+        Render the `Init Parameters` section of a dataclass
+
+        Parameters
+        ----------
+        el
+            The `Init Parameters` section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items.
+        """
         return self.render_definition_items(el)
 
     def render_parameter_attributes_section(
         self, el: DCDocstringSectionParameterAttributes
     ) -> BlockContent:
-        """Render the `Parameter Attributes` section of a dataclass"""
+        """
+        Render the `Parameter Attributes` section of a dataclass
+
+        Parameters
+        ----------
+        el
+            The `Parameter Attributes` section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items.
+        """
         return self.render_definition_items(el)
 
     def render_type_parameters_section(self, el: gf.DocstringSectionTypeParameters) -> BlockContent:
@@ -101,6 +209,16 @@ class CallableRendererMixin(ObjectRenderer):
 
         A generic class or function declares its type parameters as part of
         the signature this renderer builds.
+
+        Parameters
+        ----------
+        el
+            The `Type Parameters` section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items.
         """
         return self.render_definition_items(el)
 
@@ -188,8 +306,9 @@ class CallableRendererMixin(ObjectRenderer):
 
         Returns
         -------
-        One pair per line: the line's text, and the parameters it was
-        built from.
+        :
+            One pair per line: the line's text, and the parameters it was
+            built from.
         """
         overloads = self._callable.overloads
         if overloads:
@@ -220,10 +339,11 @@ class CallableRendererMixin(ObjectRenderer):
 
         Returns
         -------
-        One pair per variant: the variant's text, including its return
-        annotation, and the parameters it was built from. A class's
-        variants drop `self` or `cls` and the return annotation, as
-        calling the class returns an instance.
+        :
+            One pair per variant: the variant's text, including its return
+            annotation, and the parameters it was built from. A class's
+            variants drop `self` or `cls` and the return annotation, as
+            calling the class returns an instance.
         """
         is_class = self.obj.is_class
         is_method = (
@@ -282,13 +402,37 @@ class CallableRendererMixin(ObjectRenderer):
 
         Override `render_signature_parameter` to change how each parameter renders; the
         separators stay in place.
+
+        Returns
+        -------
+        :
+            The rendered parameters in signature order, with the separators as items of
+            their own.
         """
         return self._signature_parameters(self.parameters, self.render_signature_parameter)
 
     def _signature_parameters(
         self, parameters: gf.Parameters, render: Callable[[gf.Parameter], str]
     ) -> list[str]:
-        """Place parameter-kind separators around the retained arguments"""
+        """
+        Place parameter-kind separators around the retained arguments
+
+        A `/` also ends the list when its last parameter is positional-only and the
+        callable has excluded parameters.
+
+        Parameters
+        ----------
+        parameters
+            The parameters that the signature shows.
+        render
+            The function that renders one parameter.
+
+        Returns
+        -------
+        :
+            The rendered parameters in order, with `/` after the last positional-only one
+            and `*` before the first keyword-only one unless `*args` precedes it.
+        """
         params: list[str] = []
         prev, cur = 0, 1
         state: tuple[str, str] = (

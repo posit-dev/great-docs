@@ -35,7 +35,14 @@ class ModuleRenderer(MembersRendererMixin, ObjectRenderer):
         self.obj: gf.Module = self.obj
 
     def render_signature(self) -> BlockContent:
-        """Render the module name declaration, or return `None` for an empty name"""
+        """
+        Render the module name declaration, or return `None` for an empty name
+
+        Returns
+        -------
+        :
+            The name as code in a `doc-signature` division, or `None` for an empty name.
+        """
         if not self.signature_name:
             return None
         return Div(

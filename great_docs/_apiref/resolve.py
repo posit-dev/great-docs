@@ -80,7 +80,27 @@ class ObjectNotFoundError(Exception):
 
 
 def _is_external_alias(obj: gf.Alias | gf.Object, mod: gf.Module) -> bool:
-    """Check whether an object is an alias to something outside the module's package"""
+    """
+    Check whether an object is an alias to something outside the module's package
+
+    Parameters
+    ----------
+    obj
+        The member to check.
+    mod
+        The module that holds it.
+
+    Returns
+    -------
+    :
+        Whether `obj` is an alias whose chain of targets leaves the package or reaches
+        a target that is not loaded.
+
+    Raises
+    ------
+    ValueError
+        If an alias in the chain targets itself.
+    """
     package_name = mod.path.split(".")[0]
 
     if not isinstance(obj, gf.Alias):
@@ -113,6 +133,18 @@ def _is_documented_dunder(name: str, obj: gf.Object | gf.Alias) -> bool:
 
     Dunders with docstrings (e.g. `__enter__`, `__getitem__`) are documented
     even when private members are excluded.
+
+    Parameters
+    ----------
+    name
+        The member's name.
+    obj
+        The member.
+
+    Returns
+    -------
+    :
+        Whether `name` is a dunder and the member has a docstring.
     """
     return name.startswith("__") and name.endswith("__") and obj.docstring is not None
 
@@ -124,6 +156,18 @@ def _sections_from_package(mod: gf.Module) -> list[SpecSection]:
     Use declared export names when they can be resolved, including names from an
     imported `__all__`. When an `__all__` expression cannot be resolved, use public
     members without treating the expression's variable name as an export.
+
+    Parameters
+    ----------
+    mod
+        The package module.
+
+    Returns
+    -------
+    :
+        One section titled with the module's path and described by its docstring's
+        summary. It lists the chosen members except modules, dunders and aliases to
+        objects outside the package.
     """
 
     has_all = "__all__" in mod.members
@@ -171,6 +215,16 @@ def _to_simple_dict(el: object) -> object:
 
     Leave unspecified options out so a later build can still choose their
     values automatically.
+
+    Parameters
+    ----------
+    el
+        A reference node, a list or tuple of them, or a plain value.
+
+    Returns
+    -------
+    :
+        A dict for a node, a list for a list or tuple, or `el` itself otherwise.
     """
     if isinstance(el, SpecOptions):
         return {name: _to_simple_dict(value) for name, value in el.specified_options().items()}
@@ -188,6 +242,18 @@ def _join_path(pkg: str | None, name: str) -> str:
     A lookup path carries at most one `:` (separating the module from the
     object within it), so once either part already has one, the remaining
     components join with `.`.
+
+    Parameters
+    ----------
+    pkg
+        The package or parent path, or `None` when `name` is already a full path.
+    name
+        The object's name, relative to `pkg` or prefixed with it.
+
+    Returns
+    -------
+    :
+        The lookup path.
     """
     if pkg is None:
         return name
@@ -291,7 +357,27 @@ class Resolver:
         return self.extension.prepare(obj, get_object=self.get_object)
 
     def get_object_or_raise(self, path: str, **kwargs: object) -> gf.Object | gf.Alias:
-        """Get the Griffe object at `path`, raising `ObjectNotFoundError` if absent"""
+        """
+        Get the Griffe object at `path`, raising `ObjectNotFoundError` if absent
+
+        Parameters
+        ----------
+        path
+            A `module:object` or dotted object path.
+        **kwargs
+            Further lookup options, such as `dynamic`.
+
+        Returns
+        -------
+        :
+            The object modelled at `path`, or its authored alias when reached through a
+            re-export.
+
+        Raises
+        ------
+        ObjectNotFoundError
+            If the loaded package does not contain the object.
+        """
         try:
             return self.get_object(path, **kwargs)
         except KeyError as e:
@@ -308,6 +394,16 @@ class Resolver:
         A section whose entries all resolve away (e.g. every entry is `%nodoc`)
         carries no documentation and is omitted, matching the pre-existing
         config-level behaviour.
+
+        Parameters
+        ----------
+        sections
+            The configured sections.
+
+        Returns
+        -------
+        :
+            The resolved sections that have contents, in order.
         """
         resolved = [self._resolve_section(s) for s in sections]
         return [section for section in resolved if section.contents]
@@ -324,6 +420,14 @@ class Resolver:
 
         Entries inherit `current_package` and `options` from the enclosing
         context unless the section or object carries its own.
+
+        Parameters
+        ----------
+        package
+            The package for entries in the scope, `None` for no package, or `MISSING` to
+            keep the enclosing one.
+        options
+            The options for entries in the scope, or `None` to keep the enclosing ones.
         """
         old_package = self.current_package
         old_options = self.options
@@ -340,7 +444,19 @@ class Resolver:
             self.options = old_options
 
     def _resolve_section(self, el: SpecSection) -> Section:
-        """Rebuild a top-level `spec` section with each entry wrapped in a `Page`"""
+        """
+        Rebuild a top-level `spec` section with each entry wrapped in a `Page`
+
+        Parameters
+        ----------
+        el
+            The configured section.
+
+        Returns
+        -------
+        :
+            The resolved section, without the entries that resolve to nothing.
+        """
         with self._scoped(package=el.package, options=el.options):
             contents: list[Any] = [
                 resolved
@@ -361,7 +477,22 @@ class Resolver:
         Rebuild a single section entry as its resolved `content` counterpart
 
         A documented object becomes its own single-object `Page`; a free-text
-        block stays inline as a `Text`. A skipped object yields `None`.
+        block stays inline as a `Text`.
+
+        Parameters
+        ----------
+        el
+            The configured entry.
+
+        Returns
+        -------
+        :
+            The page or text, or `None` when an object hook excludes the object.
+
+        Raises
+        ------
+        TypeError
+            If `el` is neither an object nor a text block.
         """
         if isinstance(el, SpecObject):
             doc = self._resolve_object(el)
@@ -373,11 +504,35 @@ class Resolver:
         raise TypeError(f"Cannot resolve section entry of type: {type(el)}")
 
     def _resolve_text(self, el: SpecText) -> Text:
-        """Rebuild a `spec` free-text block as a `content.Text`"""
+        """
+        Rebuild a `spec` free-text block as a `content.Text`
+
+        Parameters
+        ----------
+        el
+            The configured text block.
+
+        Returns
+        -------
+        :
+            The text block.
+        """
         return Text(kind=el.kind, contents=el.contents)
 
     def _resolve_object(self, el: SpecObject) -> Doc | None:
-        """Resolve a `SpecObject` to a concrete `Doc`, or skip it"""
+        """
+        Resolve a `SpecObject` to a concrete `Doc`, or skip it
+
+        Parameters
+        ----------
+        el
+            The configured object.
+
+        Returns
+        -------
+        :
+            The documentation node, or `None` when an object hook excludes the object.
+        """
         # A member `SpecObject` carries its parent's path as `package`; adopt it
         # so the member's full path is computed relative to the parent.
         with self._scoped(package=el.package):
@@ -390,6 +545,23 @@ class Resolver:
         Look the object up exactly as resolving the section would, but skip the hooks,
         docstring parsing and members, so reading the configured sections never runs the
         extension file.
+
+        Parameters
+        ----------
+        section
+            The section that holds the entry.
+        el
+            The entry.
+
+        Returns
+        -------
+        :
+            The loaded object, or its authored alias when reached through a re-export.
+
+        Raises
+        ------
+        ObjectNotFoundError
+            If the loaded package does not contain the object.
         """
         with self._scoped(package=section.package, options=section.options):
             with self._scoped(package=el.package):
@@ -397,7 +569,21 @@ class Resolver:
                 return self.get_object_or_raise(path, dynamic=dynamic)
 
     def _locate(self, el: SpecObject) -> tuple[str, SpecObject, bool]:
-        """Determine an entry's lookup path, inherited options and dynamic setting"""
+        """
+        Determine an entry's lookup path, inherited options and dynamic setting
+
+        Parameters
+        ----------
+        el
+            The configured entry.
+
+        Returns
+        -------
+        :
+            The lookup path under the current package, the entry with its unspecified
+            options taken from the enclosing scope, and whether to load the object
+            dynamically.
+        """
         path = _join_path(self.current_package, el.name)
 
         # Merge inherited section-level options under the entry's own settings.
@@ -613,7 +799,24 @@ class Resolver:
             raise ValueError(f"Unsupported value of member_order: {el.member_order}")
 
     def autogenerate_sections(self, package: str | None) -> list[SpecSection]:
-        """Generate default API sections and print the equivalent configuration"""
+        """
+        Generate default API sections and print the equivalent configuration
+
+        Parameters
+        ----------
+        package
+            The name of the package to document.
+
+        Returns
+        -------
+        :
+            The sections derived from the package's exports.
+
+        Raises
+        ------
+        ObjectNotFoundError
+            If the package cannot be found.
+        """
         print("Autogenerating contents (since no contents specified in config)")
 
         assert isinstance(package, str)

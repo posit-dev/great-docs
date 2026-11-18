@@ -176,7 +176,14 @@ class TypeSections(Block):
         """The protocol, type-variable and type-alias categories, in that order"""
 
     def __str__(self) -> str:
-        """Render the prepared typing categories as Quarto Markdown"""
+        """
+        Render the prepared typing categories as Quarto Markdown
+
+        Returns
+        -------
+        :
+            The non-empty categories under their headings.
+        """
         return str(self.render_body())
 
     @cached_property
@@ -229,7 +236,14 @@ class TypeInformation(Block):
         self.dir = self.api_ref.settings.dir
 
     def __str__(self) -> str:
-        """Render the typing page with the selected renderers"""
+        """
+        Render the typing page with the selected renderers
+
+        Returns
+        -------
+        :
+            The page's metadata followed by its categories, as Quarto Markdown.
+        """
         content = self.content
         with self.api_ref.extension.error_context("render", f"{self.base_uri}.qmd"):
             return str(content)
@@ -283,7 +297,20 @@ class TypeInformation(Block):
         """
 
         def make_item(obj: gf.Object | gf.Alias) -> inventory.InventoryItem:
-            """Build an `InventoryItem` for a typing object"""
+            """
+            Build an `InventoryItem` for a typing object
+
+            Parameters
+            ----------
+            obj
+                The prepared typing object.
+
+            Returns
+            -------
+            :
+                The entry, named by the object's canonical path and linking to its
+                anchor on the typing page.
+            """
             return inventory.InventoryItem(
                 name=obj.canonical_path,
                 obj=obj,

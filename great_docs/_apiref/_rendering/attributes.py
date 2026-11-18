@@ -50,6 +50,11 @@ class AttributeRenderer(ObjectRenderer):
 
         A typing-variable page leaves out the name, and a type alias leaves out its
         `TypeAlias` annotation.
+
+        Returns
+        -------
+        :
+            The declaration in a `doc-signature` division.
         """
         name = "" if self._purpose is _RenderingPurpose.TYPE_VARIABLE else self.signature_name
         annotation = None if self._purpose is _RenderingPurpose.TYPE_ALIAS else self.obj.annotation
@@ -62,7 +67,14 @@ class AttributeRenderer(ObjectRenderer):
         )
 
     def render_description(self) -> BlockContent:
-        """Render the subject followed by the declaration, without a Usage row"""
+        """
+        Render the subject followed by the declaration, without a Usage row
+
+        Returns
+        -------
+        :
+            The subject and the declaration.
+        """
         return Blocks(
             [
                 self.render_docstring_subject(),
@@ -88,23 +100,86 @@ class AttributeRenderer(ObjectRenderer):
         cannot, so its section is omitted with a warning. The check uses Griffe's
         `property` label rather than the kind label, which can classify a property by
         a return annotation such as `TypeVar` instead.
+
+        Parameters
+        ----------
+        el
+            The section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items
+            or the object is not a property.
         """
         if "property" not in self.obj.labels:
             return self._unhandled_section(el)
         return self.render_definition_items(el)
 
     def render_raises_section(self, el: gf.DocstringSectionRaises) -> BlockContent:
-        """Render a `Raises` section on a property"""
+        """
+        Render a `Raises` section on a property
+
+        Parameters
+        ----------
+        el
+            The `Raises` section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items
+            or the object is not a property.
+        """
         return self._render_property_only_section(el)
 
     def render_warns_section(self, el: gf.DocstringSectionWarns) -> BlockContent:
-        """Render a `Warns` section on a property"""
+        """
+        Render a `Warns` section on a property
+
+        Parameters
+        ----------
+        el
+            The `Warns` section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items
+            or the object is not a property.
+        """
         return self._render_property_only_section(el)
 
     def render_yields_section(self, el: gf.DocstringSectionYields) -> BlockContent:
-        """Render a `Yields` section on a property"""
+        """
+        Render a `Yields` section on a property
+
+        Parameters
+        ----------
+        el
+            The `Yields` section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items
+            or the object is not a property.
+        """
         return self._render_property_only_section(el)
 
     def render_receives_section(self, el: gf.DocstringSectionReceives) -> BlockContent:
-        """Render a `Receives` section on a property"""
+        """
+        Render a `Receives` section on a property
+
+        Parameters
+        ----------
+        el
+            The `Receives` section.
+
+        Returns
+        -------
+        :
+            The definitions as a definition list, or `None` when the section has no items
+            or the object is not a property.
+        """
         return self._render_property_only_section(el)

@@ -196,7 +196,8 @@ class APIReference:
 
         Returns
         -------
-        The language at `format.html.lang`, with `en` as the default when absent.
+        :
+            The language at `format.html.lang`, with `en` as the default when absent.
         """
         format_config = cfg.get("format")
         html = (
@@ -222,7 +223,8 @@ class APIReference:
 
         Returns
         -------
-        Configured depth or the built-in default.
+        :
+            Configured depth or the built-in default.
         """
         format_config = cfg.get("format")
         html = (
@@ -254,7 +256,8 @@ class APIReference:
 
         Returns
         -------
-        Copy of the selected API reference mapping.
+        :
+            Copy of the selected API reference mapping.
 
         Raises
         ------
@@ -323,6 +326,16 @@ class APIReference:
         stems: list[str] = []
 
         def visit(node: Doc | Page, stem: str) -> None:
+            """
+            Record the name of an object and of its nested members
+
+            Parameters
+            ----------
+            node
+                The object, or the member page that holds it.
+            stem
+                The object's dotted name.
+            """
             stems.append(stem)
             for member in _member_children(node):
                 visit(member, f"{stem}.{_member_name(member)}")
@@ -388,13 +401,37 @@ class APIReference:
 
 
 def _member_name(node: Doc | Page) -> str:
-    """Return a member's name relative to its documented parent"""
+    """
+    Return a member's name relative to its documented parent
+
+    Parameters
+    ----------
+    node
+        The member, or the member page that holds it.
+
+    Returns
+    -------
+    :
+        The name.
+    """
     if isinstance(node, Page):
         return node.contents[0].name
     return node.name
 
 
 def _member_children(node: Doc | Page) -> list[Doc | Page]:
-    """Return the nested member nodes of a resolved object or member page"""
+    """
+    Return the nested member nodes of a resolved object or member page
+
+    Parameters
+    ----------
+    node
+        The object, or the member page that holds it.
+
+    Returns
+    -------
+    :
+        The members, or an empty list for an object that has none.
+    """
     doc = node.contents[0] if isinstance(node, Page) else node
     return list(getattr(doc, "members", []))

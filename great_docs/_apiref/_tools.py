@@ -29,7 +29,19 @@ __all__ = (
 
 
 def _canonical_path(klass: type | MethodType) -> str:
-    """Return the canonical import path of a Python type object"""
+    """
+    Return the canonical import path of a Python type object
+
+    Parameters
+    ----------
+    klass
+        The type, or an object whose type to use.
+
+    Returns
+    -------
+    :
+        The dotted path, without the module for built-in types.
+    """
     if not isinstance(klass, type):
         klass = klass.__class__
     module = klass.__module__

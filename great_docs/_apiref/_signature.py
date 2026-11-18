@@ -91,8 +91,9 @@ def _wrap_per_parameter(name: str, params: list[str]) -> str:
 
     Returns
     -------
-    The signature on one line when it has fewer than two parameters, and one
-    parameter per line otherwise.
+    :
+        The signature on one line when it has fewer than two parameters, and one
+        parameter per line otherwise.
     """
     if len(params) < 2:
         return f"{name}({', '.join(params)})"
@@ -114,8 +115,9 @@ def _wrap_to_width(name: str, params: list[str]) -> str:
 
     Returns
     -------
-    The signature on one line when it fits within 78 characters, and broken
-    across lines otherwise.
+    :
+        The signature on one line when it fits within 78 characters, and broken
+        across lines otherwise.
     """
     opening = f"{name}("
     params_string = ", ".join(params)
@@ -158,9 +160,10 @@ def _mark_parameter(param: str) -> str:
 
     Returns
     -------
-    The parameter with its name and any default marked up, or merely
-    escaped if it is a bare `/` or `*` separator rather than a named
-    parameter.
+    :
+        The parameter with its name and any default marked up, or merely
+        escaped if it is a bare `/` or `*` separator rather than a named
+        parameter.
     """
     match = _PARAMETER_NAME_RE.match(param)
     if not match:
@@ -207,7 +210,8 @@ def _splice_marked_parameters(rest: str, params: list[str]) -> str:
 
     Returns
     -------
-    `rest` with each parameter's own text replaced by its marked-up form.
+    :
+        `rest` with each parameter's own text replaced by its marked-up form.
     """
     pieces: list[str] = []
     cursor = 0
@@ -235,8 +239,9 @@ def _mark_signature_text(text: str, params: list[str]) -> str:
 
     Returns
     -------
-    The signature with its name and each of its parameters marked up, and
-    everything else escaped.
+    :
+        The signature with its name and each of its parameters marked up, and
+        everything else escaped.
     """
     name, bracket, rest = text.partition("(")
     marked_name = str(Span(escape_signature_markup(name), Attr(classes=["sig-name"])))
