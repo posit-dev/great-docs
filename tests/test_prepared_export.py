@@ -1,25 +1,46 @@
-"""Verify prepared callable facts and the semantic export of a prepared reference"""
+"""
+Verify the text export of prepared objects and of a build's prepared reference
+
+The text export uses prepared signatures and docstrings with the built-in
+renderers. A build reuses its prepared reference and stops if the export fails.
+"""
 
 from __future__ import annotations
 
 import sys
-from collections.abc import Iterator
 from pathlib import Path
+from textwrap import dedent
+from unittest.mock import MagicMock, patch
 
 import griffe as gf
 import pytest
 
-from great_docs._apiref._customisation import Extension, ExtensionError
+from great_docs import GreatDocs
 from great_docs._apiref._export import object_text, signature_text
 from great_docs._apiref._settings import Settings
+from great_docs._apiref.api_reference import APIReference
 from great_docs._apiref.content import Doc
+from great_docs._build import generated, reference
+from great_docs._build.pipeline import Run
+from great_docs._build.steps import BuildError, Outcome
 from great_docs._project.layout import Layout
+from great_docs._website import quarto_yml
 from great_docs._website.ai_agents import llms_txt
+from great_docs.extensions import Extension, ExtensionError
 from great_docs.rendering import FunctionRenderer, Renderers
-from tests.support import prepared_reference, write_config, write_pyproject
+from tests.support import (
+    MakeReference,
+    StubRemote,
+    WriteExtension,
+    stubbed_build,
+    write_config,
+    write_pyproject,
+)
+
+PACKAGE = "prepared_export_example"
 
 
-def test_signature_retains_parameter_kinds_without_synthetic_variadic_defaults() -> None:
+def test_signature_retains_parameter_kinds_without_synthetic_variadic_defaults():
     source = (
         "def example(a: int = 1, /, *args: str, b: bool = True, **kwargs: float) -> str:\n"
         "    pass\n"
@@ -30,13 +51,13 @@ def test_signature_retains_parameter_kinds_without_synthetic_variadic_defaults()
     compile(f"def {text}:\n    pass\n", "<exported-signature>", "exec")
 
 
-def test_signature_accepts_replacement_parameters_without_explicit_kinds() -> None:
+def test_signature_accepts_replacement_parameters_without_explicit_kinds():
     obj = gf.Function("run", parameters=gf.Parameters(gf.Parameter("value", annotation="int")))
     assert signature_text(obj) == "run(value: int)"
 
 
 @pytest.mark.skipif(sys.version_info < (3, 13), reason="PEP 696 defaults require Python 3.13")
-def test_signature_retains_type_parameter_bounds_constraints_and_defaults() -> None:
+def test_signature_retains_type_parameter_bounds_constraints_and_defaults():
     source = (
         "type Alias[T: int = int, S: (str, bytes) = str] = tuple[T, S]\n"
         "def make[T: int](value: T) -> list[T]:\n    pass\n"
@@ -48,7 +69,7 @@ def test_signature_retains_type_parameter_bounds_constraints_and_defaults() -> N
         assert signature_text(module["make"]) == "make[T: int](value: T) -> list[T]"
 
 
-def test_signatures_retain_overloads_and_constructor_exclusions() -> None:
+def test_signatures_retain_overloads_and_constructor_exclusions():
     source = '''
 from typing import overload
 
@@ -99,7 +120,7 @@ class Example:
         extension.close()
 
 
-def test_export_uses_prepared_sections_without_presentation_or_repeated_hooks() -> None:
+def test_export_uses_prepared_sections_without_presentation_or_repeated_hooks():
     extension = Extension(Settings())
     calls: list[str] = []
 
@@ -136,85 +157,154 @@ def test_export_uses_prepared_sections_without_presentation_or_repeated_hooks() 
         extension.close()
 
 
-PACKAGE = "prepared_export_example"
-
-
-@pytest.fixture
-def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Layout]:
-    """Own an importable package whose configuration names `extension.py`"""
+def test_undocumented_class_retains_signature_without_unselected_constructor_body(
+    tmp_path: Path, make_reference: MakeReference
+):
+    ref = make_reference(
+        {"package": PACKAGE, "sections": [{"contents": [{"name": "Example", "members": []}]}]},
+        package_files={
+            "__init__.py": '''
+                class Example:
+                    def __init__(self, value: int = 7):
+                        """An unselected constructor description"""
+            '''
+        },
+    )
     write_pyproject(tmp_path, PACKAGE)
-    package = tmp_path / PACKAGE
-    package.mkdir()
-    (package / "__init__.py").write_text('def public():\n    """Original subject"""\n')
-    write_config(tmp_path, {"api_reference_extension": "extension.py"})
+    write_config(tmp_path)
     layout = Layout.make(tmp_path)
     layout.build_dir.mkdir()
-    monkeypatch.syspath_prepend(str(tmp_path))
-    monkeypatch.delitem(sys.modules, PACKAGE, raising=False)
-    try:
-        yield layout
-    finally:
-        for module in list(sys.modules):
-            if module == PACKAGE or module.startswith(PACKAGE + "."):
-                del sys.modules[module]
-
-
-def test_export_reads_configured_preparation_without_repeating_setup(project: Layout):
-    root = project.source_dir
-    (root / "helper.py").write_text("TOKEN = 'Prepared export subject'\n")
-    (root / "extension.py").write_text(
-        "from pathlib import Path\n"
-        "from .helper import TOKEN\n"
-        "def setup(extension):\n"
-        "    with Path(__file__).with_name('setups.txt').open('a') as stream:\n"
-        "        stream.write('setup\\n')\n"
-        "    @extension.on_object_resolved\n"
-        "    def transform(obj):\n"
-        "        if obj.docstring is not None:\n"
-        "            obj.docstring.value = TOKEN\n"
-        "        return obj\n"
-    )
-    block = {"package": PACKAGE, "sections": [{"contents": ["public"]}]}
-    with prepared_reference(block, project) as reference:
-        path = llms_txt.write_full(
-            project, reference, cli=None, user_guide=None, report=lambda _: None
-        )
-    assert "Prepared export subject" in path.read_text()
-    assert (root / "setups.txt").read_text() == "setup\n"
-
-
-def test_configured_hook_failure_is_an_extension_error(project: Layout):
-    (project.source_dir / "extension.py").write_text(
-        "def setup(extension):\n"
-        "    @extension.on_object_resolved\n"
-        "    def transform(obj):\n"
-        "        raise ImportError('configured semantic failure')\n"
-    )
-    block = {"package": PACKAGE, "sections": [{"contents": ["public"]}]}
-    with (
-        pytest.raises(ExtensionError, match="object_resolved") as failure,
-        prepared_reference(block, project),
-    ):
-        pass
-    # A bare `ImportError` would read to the build as a package failure, which it reports
-    # as a warning or retries with static analysis.
-    assert isinstance(failure.value.__cause__, ImportError)
-
-
-def test_undocumented_class_retains_signature_without_unselected_constructor_body(
-    project: Layout,
-):
-    (project.source_dir / PACKAGE / "__init__.py").write_text(
-        "class Example:\n"
-        "    def __init__(self, value: int = 7):\n"
-        '        """An unselected constructor description"""\n'
-    )
-    (project.source_dir / "extension.py").write_text("def setup(extension):\n    pass\n")
-    block = {"package": PACKAGE, "sections": [{"contents": [{"name": "Example", "members": []}]}]}
-    with prepared_reference(block, project) as reference:
-        path = llms_txt.write_full(
-            project, reference, cli=None, user_guide=None, report=lambda _: None
-        )
+    path = llms_txt.write_full(layout, ref, cli=None, user_guide=None, report=lambda _: None)
     text = path.read_text()
     assert "Example(value: int = 7)" in text
     assert "An unselected constructor description" not in text
+
+
+def test_build_exports_prepared_documentation_without_repeating_presentation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, write_extension: WriteExtension
+):
+    write_pyproject(tmp_path, PACKAGE)
+    package = tmp_path / PACKAGE
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        dedent('''
+            def document(visible: int, hidden: str = "private-default") -> str:
+                """Original runtime subject
+
+                Parameters
+                ----------
+                visible
+                    Visible description.
+                hidden
+                    Hidden description.
+                """
+
+            def excluded():
+                """Excluded object description"""
+        ''')
+    )
+    write_extension(
+        """
+        from pathlib import Path
+        import griffe as gf
+        from great_docs.extensions import Extension
+        from great_docs.pandoc.blocks import BlockContent, Blocks, Para
+        from great_docs.rendering import FunctionRenderer, Renderers
+
+        def record(name: str) -> None:
+            with Path(__file__).with_name('events.txt').open('a') as stream:
+                stream.write(name + '\\n')
+
+        class Presentation(FunctionRenderer):
+            def render_signature(self) -> BlockContent:
+                return None
+
+            @property
+            def summary_name(self) -> str:
+                return 'PRESENTATION_LABEL'
+
+            def render_docstring_body(self) -> BlockContent:
+                record('body:' + self.context.authored_name)
+                return Blocks([super().render_docstring_body(), Para('PRESENTATION_ONLY_NOTE')])
+
+        def setup(extension: Extension) -> None:
+            record('setup')
+            extension.set_renderers(Renderers(functions=Presentation))
+
+            @extension.on_object_resolved(priority=-200)
+            def prepare(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias | None:
+                record('prepare:' + obj.name)
+                if obj.name == 'excluded':
+                    return None
+                if obj.name == 'document' and obj.docstring is not None:
+                    obj.docstring.value = obj.docstring.value.replace('Original runtime subject', 'Prepared subject')
+                    obj.docstring.value += '\\n\\nPREPARED_NOTE\\n\\n%nodoc_param hidden'
+                return obj
+        """
+    )
+    write_config(tmp_path, {"api_reference_extension": "extension.py", "dynamic": False})
+    docs = GreatDocs(str(tmp_path))
+    docs._remote = StubRemote()
+    docs.layout.build_dir.mkdir()
+    quarto_yml.write(
+        docs.layout.build_dir,
+        {
+            "api-reference": {
+                "package": PACKAGE,
+                "dynamic": False,
+                "sections": [{"title": "API", "contents": ["document", "excluded"]}],
+            }
+        },
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    with stubbed_build(api_reference=True):
+        docs.build(refresh=False)
+
+    page = (docs.layout.build_dir / "reference" / "document.qmd").read_text()
+    full = (docs.layout.build_dir / "llms-full.txt").read_text()
+    index = (docs.layout.build_dir / "llms.txt").read_text()
+    assert "PRESENTATION_ONLY_NOTE" in page
+    assert "doc-signature" not in page
+    for text in (full, index):
+        assert "Prepared subject" in text
+        assert "PRESENTATION_ONLY_NOTE" not in text
+        assert "PRESENTATION_LABEL" not in text
+        assert "Original runtime subject" not in text
+        assert "excluded" not in text
+    assert "PREPARED_NOTE" in full
+    assert "document(" in full
+    assert "visible" in full
+    assert "hidden" not in full
+    assert "private-default" not in full
+    events = (tmp_path / "events.txt").read_text().splitlines()
+    assert events.count("setup") == 1
+    assert events.count("prepare:document") == 1
+    assert events.count("prepare:excluded") == 1
+    assert events.count("body:document") == 1
+
+
+def test_configured_export_failure_stops_the_build_and_releases_its_reference(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    write_config(tmp_path)
+    docs = GreatDocs(str(tmp_path))
+    docs.layout.build_dir.mkdir()
+    quarto_yml.write_initial(docs.layout.build_dir)
+    active = MagicMock(spec=APIReference)
+
+    def install(run: Run, *args: object, **kwargs: object) -> tuple[Outcome, APIReference]:
+        run.api_reference = active
+        return "API reference generated", active
+
+    with (
+        stubbed_build(),
+        patch.object(reference, "api", autospec=True, side_effect=install),
+        patch.object(
+            generated, "llms_txt", autospec=True, side_effect=ExtensionError("export failed")
+        ),
+        pytest.raises(BuildError) as failure,
+    ):
+        docs.build(refresh=False)
+    assert isinstance(failure.value.__cause__, ExtensionError)
+    active.close.assert_called_once_with()
+    assert "llms.txt generation had issues" not in capsys.readouterr().out

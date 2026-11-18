@@ -48,7 +48,7 @@ def make_class_doc() -> DocClass:
         return cast("DocClass", griffe_to_doc(package["Example"]))
 
 
-def test_signature_is_materialised_once_per_renderer() -> None:
+def test_signature_is_materialised_once_per_renderer():
     calls: list[str] = []
 
     class CountingFunction(FunctionRenderer):
@@ -66,7 +66,7 @@ def test_signature_is_materialised_once_per_renderer() -> None:
 
 
 @pytest.mark.parametrize("with_source", [False, True])
-def test_signature_omission_retains_only_a_useful_source_row(with_source: bool) -> None:
+def test_signature_omission_retains_only_a_useful_source_row(with_source: bool):
     class HiddenSignature(FunctionRenderer):
         def render_signature(self) -> BlockContent:
             return None
@@ -84,9 +84,7 @@ def test_signature_omission_retains_only_a_useful_source_row(with_source: bool) 
 
 
 @pytest.mark.parametrize("hide_summary, hide_body", [(True, False), (False, True), (True, True)])
-def test_member_presentation_preserves_semantic_membership(
-    hide_summary: bool, hide_body: bool
-) -> None:
+def test_member_presentation_preserves_inventory_membership(hide_summary: bool, hide_body: bool):
     class CustomClass(ClassRenderer):
         def render_members_summary(
             self,
@@ -116,7 +114,7 @@ def test_member_presentation_preserves_semantic_membership(
     assert ("doc-methods" in rendered) is not (hide_summary and hide_body)
 
 
-def test_embedded_members_reset_typing_purpose_and_keep_the_page_path() -> None:
+def test_embedded_members_reset_typing_purpose_and_keep_the_page_path():
     appearances: list[tuple[_RenderingPurpose, str | None]] = []
 
     class ObservedFunction(FunctionRenderer):

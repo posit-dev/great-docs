@@ -14,8 +14,7 @@ from textwrap import dedent
 import pytest
 from bs4 import BeautifulSoup
 
-from great_docs._apiref._extension_loading import _ExtensionSource
-from great_docs._apiref.api_reference import APIReference
+from tests.support import MakeReference, WriteExtension
 
 _REPOSITORY = Path(__file__).resolve().parents[2]
 _FINGERPRINT = re.compile(r"<!-- great-docs-api-reference-inputs: ([0-9a-f]{64}) -->")
@@ -191,7 +190,7 @@ def page_fingerprint(docs: Path) -> str:
 
 def test_dependency_only_edit_refreshes_automatic_execution(
     tmp_path: Path, quarto_environment: dict[str, str]
-) -> None:
+):
     docs, data = execution_project(tmp_path, "auto")
     run_cli(tmp_path, quarto_environment, "initial", "build")
     assert rendered_values(docs) == ["execution-original"]
@@ -204,7 +203,7 @@ def test_dependency_only_edit_refreshes_automatic_execution(
 
 def test_locked_execution_refreshes_explicitly_and_persists(
     tmp_path: Path, quarto_environment: dict[str, str]
-) -> None:
+):
     docs, data = execution_project(tmp_path, "true")
     run_cli(tmp_path, quarto_environment, "initial", "build")
     assert rendered_values(docs) == ["execution-original"]
@@ -231,58 +230,59 @@ def test_locked_execution_refreshes_explicitly_and_persists(
 
 
 def test_late_helpers_share_one_final_fingerprint(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    package = tmp_path / "fingerprint_fixture"
-    package.mkdir()
-    (package / "__init__.py").write_text('def run():\n    """Run an example"""\n', encoding="utf-8")
-    (package / "types.py").write_text(
-        'from typing import Protocol\nclass Reader(Protocol):\n    """A reader"""\n',
-        encoding="utf-8",
+    tmp_path: Path, write_extension: WriteExtension, make_reference: MakeReference
+):
+    source_root = tmp_path / "docs"
+    source = write_extension(
+        """
+        from great_docs.pandoc.blocks import BlockContent, Blocks, Para
+        from great_docs.rendering import FunctionRenderer, Renderers
+
+        class Presentation(FunctionRenderer):
+            def render_docstring_body(self) -> BlockContent:
+                from .late import NOTE
+
+                return Blocks([super().render_docstring_body(), Para(NOTE)])
+
+        def setup(extension):
+            extension.set_renderers(Renderers(functions=Presentation))
+        """,
+        config_root=source_root,
     )
-    source = tmp_path / "docs"
-    source.mkdir()
-    entry = source / "extension.py"
-    entry.write_text(
-        "from great_docs.pandoc.blocks import BlockContent, Blocks, Para\n"
-        "from great_docs.rendering import FunctionRenderer, Renderers\n"
-        "class Presentation(FunctionRenderer):\n"
-        "    def render_docstring_body(self) -> BlockContent:\n"
-        "        from .late import NOTE\n"
-        "        return Blocks([super().render_docstring_body(), Para(NOTE)])\n"
-        "def setup(extension):\n"
-        "    extension.set_renderers(Renderers(functions=Presentation))\n",
-        encoding="utf-8",
-    )
-    helper = source / "late.py"
+    helper = source_root / "late.py"
     helper.write_text("NOTE = 'first'\n", encoding="utf-8")
     timestamp = helper.stat().st_mtime_ns
     output = tmp_path / "output"
-    output.mkdir()
-    monkeypatch.syspath_prepend(str(tmp_path))
-    monkeypatch.chdir(output)
 
     def generate() -> tuple[str, set[Path]]:
-        reference = APIReference(
+        reference = make_reference(
             {
                 "package": "fingerprint_fixture",
                 "dynamic": False,
                 "sections": [{"contents": ["run"]}],
                 "typing_module_paths": ["fingerprint_fixture.types"],
             },
-            extension_source=_ExtensionSource(entry, source, source),
+            source,
+            package_files={
+                "__init__.py": 'def run():\n    """Run an example"""\n',
+                "types.py": '''
+                    from typing import Protocol
+
+                    class Reader(Protocol):
+                        """A reader"""
+                ''',
+            },
             output_root=output,
         )
-        try:
-            reference.build()
-            paths = sorted((output / "reference").glob("*.qmd"))
-            assert {path.name for path in paths} == {"index.qmd", "run.qmd", "types.qmd"}
-            markers = [_FINGERPRINT.findall(path.read_text(encoding="utf-8")) for path in paths]
-            assert all(len(marker) == 1 for marker in markers)
-            assert len({marker[0] for marker in markers}) == 1
-            return markers[0][0], set(reference.extension.imported_paths)
-        finally:
-            reference.close()
+        reference.build()
+        paths = sorted((output / "reference").glob("*.qmd"))
+        assert {path.name for path in paths} == {"index.qmd", "run.qmd", "types.qmd"}
+        markers = [_FINGERPRINT.findall(path.read_text(encoding="utf-8")) for path in paths]
+        assert all(len(marker) == 1 for marker in markers)
+        assert len({marker[0] for marker in markers}) == 1
+        # Consecutive builds close one reference before they prepare the next.
+        reference.close()
+        return markers[0][0], set(reference.extension.imported_paths)
 
     first, imported = generate()
     assert helper in imported

@@ -84,7 +84,7 @@ SLOTS = [
 
 
 @pytest.mark.parametrize("slot, expected", SLOTS)
-def test_default_renderer_for_each_kind(slot: str, expected: type) -> None:
+def test_default_renderer_for_each_kind(slot: str, expected: type):
     choices = Renderers()
     node = make_node(slot)
     kwargs = {"sections": []} if slot == "reference_index" else {}
@@ -96,7 +96,7 @@ def test_default_renderer_for_each_kind(slot: str, expected: type) -> None:
 
 
 @pytest.mark.parametrize("slot, expected", SLOTS)
-def test_explicit_renderer_for_each_kind(slot: str, expected: type) -> None:
+def test_explicit_renderer_for_each_kind(slot: str, expected: type):
     replacement = type("Replacement", (expected,), {})
     choices = Renderers(**{slot: replacement})
     node = make_node(slot)
@@ -107,22 +107,22 @@ def test_explicit_renderer_for_each_kind(slot: str, expected: type) -> None:
 
 @pytest.mark.parametrize("slot, expected", SLOTS)
 @pytest.mark.parametrize("invalid", [object, 3, "ClassRenderer"])
-def test_reject_invalid_slot(slot: str, expected: type, invalid: object) -> None:
+def test_reject_invalid_slot(slot: str, expected: type, invalid: object):
     with pytest.raises(TypeError, match=slot):
         Renderers(**{slot: invalid})
 
 
-def test_reject_renderer_for_another_kind() -> None:
+def test_reject_renderer_for_another_kind():
     with pytest.raises(TypeError, match="classes"):
         Renderers(classes=FunctionRenderer)
 
 
-def test_reject_nonclass_object_renderer_mixin() -> None:
+def test_reject_nonclass_object_renderer_mixin():
     with pytest.raises(TypeError, match="object_renderer_mixin"):
         Renderers(object_renderer_mixin=object())
 
 
-def test_subclass_declaration_does_not_mutate_defaults() -> None:
+def test_subclass_declaration_does_not_mutate_defaults():
     before = dict(vars(ClassRenderer))
     default_choices = Renderers()
 
@@ -138,7 +138,7 @@ def test_subclass_declaration_does_not_mutate_defaults() -> None:
     assert not default_choices.make(node).summary_name.startswith("custom ")
 
 
-def test_object_renderer_mixin_precedes_each_default_object_renderer() -> None:
+def test_object_renderer_mixin_precedes_each_default_object_renderer():
     class SharedMixin:
         @property
         def summary_name(self) -> str:
@@ -155,7 +155,7 @@ def test_object_renderer_mixin_precedes_each_default_object_renderer() -> None:
     assert choices.reference_sections is ReferenceSectionRenderer
 
 
-def test_explicit_renderer_owns_mixin_inheritance() -> None:
+def test_explicit_renderer_owns_mixin_inheritance():
     class SharedMixin:
         @property
         def summary_name(self) -> str:
@@ -176,19 +176,19 @@ def test_explicit_renderer_owns_mixin_inheritance() -> None:
     assert choices.make(make_node("functions")).summary_name == "shared"
 
 
-def test_existing_object_renderer_mixin_is_not_inserted_twice() -> None:
+def test_existing_object_renderer_mixin_is_not_inserted_twice():
     choices = Renderers(object_renderer_mixin=ObjectRenderer)
     for slot, expected in SLOTS[:5]:
         assert getattr(choices, slot) is expected
         assert isinstance(choices.make(make_node(slot)), ObjectRenderer)
 
 
-def test_reference_index_requires_resolved_sections() -> None:
+def test_reference_index_requires_resolved_sections():
     with pytest.raises(TypeError, match="sections"):
         Renderers().make(make_node("reference_index"))
 
 
-def test_reference_index_uses_common_state_and_explicit_sections() -> None:
+def test_reference_index_uses_common_state_and_explicit_sections():
     ref = make_node("reference_index")
     sections = [Section(title="Explicit", contents=[])]
     renderer = Renderers().make(ref, 3, sections=sections)
@@ -199,7 +199,7 @@ def test_reference_index_uses_common_state_and_explicit_sections() -> None:
     assert "Explicit" in str(renderer)
 
 
-def test_choices_reach_index_sections_pages_and_objects() -> None:
+def test_choices_reach_index_sections_pages_and_objects():
     from great_docs.pandoc.blocks import BlockContent, Blocks, Header, Para
 
     class CustomClass(ClassRenderer):
@@ -243,7 +243,7 @@ def test_choices_reach_index_sections_pages_and_objects() -> None:
 
 
 @pytest.mark.parametrize("separate", [False, True])
-def test_choices_reach_embedded_bodies_and_separate_member_summaries(separate: bool) -> None:
+def test_choices_reach_embedded_bodies_and_separate_member_summaries(separate: bool):
     from great_docs._apiref.content import MemberPage
     from great_docs.pandoc.blocks import BlockContent, Para
 
@@ -270,7 +270,7 @@ def test_choices_reach_embedded_bodies_and_separate_member_summaries(separate: b
     assert "function summary marker" not in str(Renderers().make(doc))
 
 
-def test_choices_reach_typing_categories() -> None:
+def test_choices_reach_typing_categories():
     from great_docs._apiref.inventory import InventoryItem
     from great_docs._apiref.typing_information import TypeSections
     from great_docs.extensions import Extension
@@ -306,7 +306,7 @@ def test_choices_reach_typing_categories() -> None:
     assert "typing alias body marker" in output
 
 
-def test_omitted_member_presentation_keeps_inventory() -> None:
+def test_omitted_member_presentation_keeps_inventory():
     from great_docs._apiref.collect import build_manifest
 
     class CustomClass(ClassRenderer):

@@ -26,31 +26,54 @@ from great_docs._build.steps import Outcome, Step
 from great_docs._project.layout import Layout
 from great_docs._reference import documented
 from great_docs._website import quarto_yml
-from tests.support import StubRemote, make_run, stubbed_build, write_config, write_pyproject
+from tests.support import (
+    StubRemote,
+    WriteExtension,
+    make_run,
+    stubbed_build,
+    write_config,
+    write_pyproject,
+)
 
 
-def make_project(root: Path) -> GreatDocs:
-    """Create a project with a relative extension helper and one documented function"""
-    write_pyproject(root, "extension_lifetime_example")
-    package = root / "extension_lifetime_example"
+@pytest.fixture
+def docs(tmp_path: Path, write_extension: WriteExtension) -> GreatDocs:
+    """
+    Create a project whose extension imports a relative helper
+
+    Parameters
+    ----------
+    tmp_path
+        The project directory.
+    write_extension
+        The factory that writes the extension. The extension stores its import
+        namespace and the helper's token in its cache.
+
+    Returns
+    -------
+    :
+        The project, configured for dynamic introspection of its one documented function.
+    """
+    write_pyproject(tmp_path, "extension_lifetime_example")
+    package = tmp_path / "extension_lifetime_example"
     package.mkdir()
     (package / "__init__.py").write_text('def example():\n    """Example subject"""\n')
-    (root / "helper.py").write_text("TOKEN = 'current'\n")
-    (root / "extension.py").write_text(
-        "from great_docs.extensions import Extension\n"
-        "from .helper import TOKEN\n\n"
-        "def setup(extension: Extension) -> None:\n"
-        "    extension.cache['namespace'] = __package__\n"
-        "    extension.cache['token'] = TOKEN\n"
+    (tmp_path / "helper.py").write_text("TOKEN = 'current'\n")
+    write_extension(
+        """
+        from great_docs.extensions import Extension
+        from .helper import TOKEN
+
+        def setup(extension: Extension) -> None:
+            extension.cache['namespace'] = __package__
+            extension.cache['token'] = TOKEN
+        """
     )
-    write_config(root, {"api_reference_extension": "extension.py", "dynamic": True})
-    return GreatDocs(str(root))
+    write_config(tmp_path, {"api_reference_extension": "extension.py", "dynamic": True})
+    return GreatDocs(str(tmp_path))
 
 
-def test_dynamic_retry_releases_the_failed_extension_before_loading_the_next(
-    tmp_path: Path,
-) -> None:
-    docs = make_project(tmp_path)
+def test_dynamic_retry_releases_the_failed_extension_before_loading_the_next(docs: GreatDocs):
     block = {"package": "extension_lifetime_example", "sections": [], "dynamic": True}
     run = make_run(docs, quarto_config={"api-reference": block}, api_block=block)
     attempts: list[APIReference] = []
@@ -83,9 +106,10 @@ def test_dynamic_retry_releases_the_failed_extension_before_loading_the_next(
     assert not any(name.startswith(tuple(namespaces)) for name in sys.modules)
 
 
-def test_configured_setup_failure_is_fatal_without_static_retry(tmp_path: Path) -> None:
-    docs = make_project(tmp_path)
-    (tmp_path / "extension.py").write_text("from .helper import TOKEN\n")
+def test_configured_setup_failure_is_fatal_without_static_retry(
+    docs: GreatDocs, write_extension: WriteExtension
+):
+    write_extension("from .helper import TOKEN\n")
     block = {"package": "extension_lifetime_example", "sections": [], "dynamic": True}
     run = make_run(docs, quarto_config={"api-reference": block}, api_block=block)
     before = set(sys.modules)
@@ -105,28 +129,36 @@ def test_configured_setup_failure_is_fatal_without_static_retry(tmp_path: Path) 
 
 @pytest.mark.parametrize("phase", ["summary", "body"])
 def test_configured_renderer_failure_is_fatal_without_static_retry(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, phase: str
-) -> None:
-    docs = make_project(tmp_path)
-    (tmp_path / "extension.py").write_text(
-        "from collections.abc import Sequence\n"
-        "from pathlib import Path\n"
-        "from great_docs.extensions import Extension\n"
-        "from great_docs.pandoc.blocks import BlockContent, DefinitionItem\n"
-        "from great_docs.rendering import FunctionRenderer, Renderers\n\n"
-        "class BrokenRenderer(FunctionRenderer):\n"
-        "    def render_summary(self) -> Sequence[DefinitionItem]:\n"
-        f"        if {phase!r} == 'summary':\n"
-        "            raise ImportError('configured presentation failed')\n"
-        "        return super().render_summary()\n"
-        "    def render_body(self) -> BlockContent:\n"
-        f"        if {phase!r} == 'body':\n"
-        "            raise ImportError('configured presentation failed')\n"
-        "        return super().render_body()\n\n"
-        "def setup(extension: Extension) -> None:\n"
-        "    with Path(__file__).with_name('setups.txt').open('a') as stream:\n"
-        "        stream.write('setup\\n')\n"
-        "    extension.set_renderers(Renderers(functions=BrokenRenderer))\n"
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    docs: GreatDocs,
+    write_extension: WriteExtension,
+    phase: str,
+):
+    write_extension(
+        f"""
+        from collections.abc import Sequence
+        from pathlib import Path
+        from great_docs.extensions import Extension
+        from great_docs.pandoc.blocks import BlockContent, DefinitionItem
+        from great_docs.rendering import FunctionRenderer, Renderers
+
+        class BrokenRenderer(FunctionRenderer):
+            def render_summary(self) -> Sequence[DefinitionItem]:
+                if {phase!r} == 'summary':
+                    raise ImportError('configured presentation failed')
+                return super().render_summary()
+
+            def render_body(self) -> BlockContent:
+                if {phase!r} == 'body':
+                    raise ImportError('configured presentation failed')
+                return super().render_body()
+
+        def setup(extension: Extension) -> None:
+            with Path(__file__).with_name('setups.txt').open('a') as stream:
+                stream.write('setup\\n')
+            extension.set_renderers(Renderers(functions=BrokenRenderer))
+        """
     )
     docs.layout.build_dir.mkdir()
     monkeypatch.chdir(docs.layout.build_dir)
@@ -155,9 +187,8 @@ def test_configured_renderer_failure_is_fatal_without_static_retry(
 
 @pytest.mark.parametrize("fail_consumer", [False, True])
 def test_query_releases_owned_imports_and_restores_package_state(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fail_consumer: bool
-) -> None:
-    docs = make_project(tmp_path)
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, docs: GreatDocs, fail_consumer: bool
+):
     name = "extension_lifetime_example"
     original = ModuleType(name)
     monkeypatch.setitem(sys.modules, name, original)
@@ -194,7 +225,7 @@ def test_query_releases_owned_imports_and_restores_package_state(
 
 
 @pytest.mark.parametrize("fail_consumer", [False, True])
-def test_build_closes_its_reference_after_consumers(tmp_path: Path, fail_consumer: bool) -> None:
+def test_build_closes_its_reference_after_consumers(tmp_path: Path, fail_consumer: bool):
     write_config(tmp_path)
     docs = GreatDocs(str(tmp_path))
     docs.layout.build_dir.mkdir()
@@ -225,7 +256,7 @@ def test_build_closes_its_reference_after_consumers(tmp_path: Path, fail_consume
 
 
 @pytest.mark.parametrize("fail_consumer", [False, True])
-def test_freeze_preparation_closes_its_reference(tmp_path: Path, fail_consumer: bool) -> None:
+def test_freeze_preparation_closes_its_reference(tmp_path: Path, fail_consumer: bool):
     write_config(tmp_path)
     docs = GreatDocs(str(tmp_path))
     active = MagicMock(spec=APIReference)
@@ -256,7 +287,7 @@ def test_freeze_preparation_closes_its_reference(tmp_path: Path, fail_consumer: 
 @pytest.mark.parametrize("fail_rebuild", [False, True])
 def test_preview_closes_each_generation_before_serving_or_retrying(
     tmp_path: Path, fail_rebuild: bool
-) -> None:
+):
     write_config(tmp_path)
     docs = GreatDocs(str(tmp_path))
     initial = MagicMock(spec=APIReference)

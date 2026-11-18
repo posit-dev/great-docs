@@ -11,6 +11,7 @@ import threading
 import time
 from collections.abc import Callable, Generator, Iterator
 from pathlib import Path
+from textwrap import dedent
 from typing import Any
 
 import pytest
@@ -424,7 +425,7 @@ def test_forget_package_ignores_stale_bytecode(tmp_path: Path, monkeypatch: pyte
 
 def test_extension_inputs_keep_missing_glob_and_exact_file_coverage(
     tmp_path: Path,
-) -> None:
+):
     docs = _project(tmp_path)
     external = tmp_path / "external"
     external.mkdir()
@@ -457,7 +458,7 @@ def test_extension_inputs_keep_missing_glob_and_exact_file_coverage(
     assert external in initial
 
 
-def test_relative_helpers_are_covered_by_the_initial_entry_directory(tmp_path: Path) -> None:
+def test_relative_helpers_are_covered_by_the_initial_entry_directory(tmp_path: Path):
     docs = _project(tmp_path)
     entry_directory = tmp_path / "extension"
     entry_directory.mkdir()
@@ -467,7 +468,7 @@ def test_relative_helpers_are_covered_by_the_initial_entry_directory(tmp_path: P
     assert inputs.accept(watchfiles.Change.added, str(helper))
 
 
-def test_glob_matched_directories_include_new_contents(tmp_path: Path) -> None:
+def test_glob_matched_directories_include_new_contents(tmp_path: Path):
     docs = _project(tmp_path)
     external = tmp_path / "external"
     external.mkdir()
@@ -484,9 +485,7 @@ def test_glob_matched_directories_include_new_contents(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("middle", ["one", "a/one", "one/b", "a/one/b/c"])
-def test_recursive_glob_segments_match_independent_directory_depths(
-    tmp_path: Path, middle: str
-) -> None:
+def test_recursive_glob_segments_match_independent_directory_depths(tmp_path: Path, middle: str):
     docs = _project(tmp_path)
     external = tmp_path / "external"
     external.mkdir()
@@ -502,7 +501,7 @@ def test_recursive_glob_segments_match_independent_directory_depths(
 
 def test_native_observation_buffers_an_edit_between_yields(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+):
     docs = _project(tmp_path)
     first = docs.layout.source_dir / "first.txt"
     second = docs.layout.source_dir / "second.txt"
@@ -555,7 +554,7 @@ def test_native_observation_buffers_an_edit_between_yields(
 @pytest.mark.parametrize("failure", [None, BuildError, RuntimeError])
 def test_preview_keeps_one_observer_across_rebuilds_and_closes_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: type[RuntimeError] | None
-) -> None:
+):
     docs = _project(tmp_path)
     docs.layout.build_dir.mkdir(parents=True)
     (docs.layout.build_dir / "index.qmd").write_text("last good")
@@ -601,7 +600,7 @@ def test_preview_keeps_one_observer_across_rebuilds_and_closes_it(
 
 def test_preview_reports_new_extension_inputs_after_failed_and_successful_rebuilds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+):
     config = CONFIG.replace("reference: false\n", "") + (
         "dynamic: false\napi_reference_extension: extension.py\n"
         "reference:\n  - title: API\n    contents: [example]\n"
@@ -620,23 +619,26 @@ def test_preview_reports_new_extension_inputs_after_failed_and_successful_rebuil
     entry = docs.layout.source_dir / "extension.py"
 
     def extension(path: Path, *, fail: bool = False) -> str:
-        return (
-            "from pathlib import Path\n"
-            "from great_docs.extensions import Extension\n"
-            "from great_docs.pandoc.blocks import BlockContent, Blocks, Para\n"
-            "from great_docs.rendering import FunctionRenderer, Renderers\n"
-            "def setup(extension: Extension) -> None:\n"
-            f"    path = Path({str(path)!r})\n"
-            "    extension.watch(path)\n"
-            "    class Presentation(FunctionRenderer):\n"
-            "        def render_docstring_body(self) -> BlockContent:\n"
-            + (
-                "            raise ValueError('broken body')\n"
-                if fail
-                else "            return Blocks([super().render_docstring_body(), Para(path.read_text())])\n"
-            )
-            + "    extension.set_renderers(Renderers(functions=Presentation))\n"
-        )
+        if fail:
+            result = "raise ValueError('broken body')"
+        else:
+            result = "return Blocks([super().render_docstring_body(), Para(path.read_text())])"
+        return dedent(f"""
+            from pathlib import Path
+            from great_docs.extensions import Extension
+            from great_docs.pandoc.blocks import BlockContent, Blocks, Para
+            from great_docs.rendering import FunctionRenderer, Renderers
+
+            def setup(extension: Extension) -> None:
+                path = Path({str(path)!r})
+                extension.watch(path)
+
+                class Presentation(FunctionRenderer):
+                    def render_docstring_body(self) -> BlockContent:
+                        {result}
+
+                extension.set_renderers(Renderers(functions=Presentation))
+        """)
 
     entry.write_text(extension(first))
     seen: list[str] = []

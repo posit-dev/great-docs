@@ -14207,7 +14207,7 @@ def test_mixin_render_members_returns_groups():
         assert isinstance(m, RenderedMemberGroup)
 
 
-def test_mixin_render_members_override_omits_groups() -> None:
+def test_mixin_render_members_override_omits_groups():
     """Omit embedded member groups without changing resolved membership"""
 
     class CustomClass(ClassRenderer):
@@ -14236,7 +14236,7 @@ def test_mixin_render_member_pages_returns_groups():
         assert isinstance(p, RenderedMemberGroup)
 
 
-def test_mixin_render_member_pages_override_omits_groups() -> None:
+def test_mixin_render_member_pages_override_omits_groups():
     """Omit linked member groups without changing resolved membership"""
 
     class CustomClass(ClassRenderer):
@@ -14285,7 +14285,7 @@ def test_mixin_render_type_alias_member_pages():
     assert "Type Aliases" in str(result.title)
 
 
-def test_mixin_render_type_alias_member_pages_override_omits_group() -> None:
+def test_mixin_render_type_alias_member_pages_override_omits_group():
     """Omit one member kind without changing resolved membership"""
 
     class CustomClass(ClassRenderer):
@@ -14411,7 +14411,7 @@ def test_mixin_render_attributes():
     assert "Attributes" in str(result.title)
 
 
-def test_mixin_render_classes_override_omits_group() -> None:
+def test_mixin_render_classes_override_omits_group():
     """Omit one member kind without changing resolved membership"""
 
     class CustomClass(ClassRenderer):
@@ -14426,7 +14426,7 @@ def test_mixin_render_classes_override_omits_group() -> None:
     assert getattr(ClassRenderer(doc), "render_classes")() is not None
 
 
-def test_mixin_render_functions_override_omits_group() -> None:
+def test_mixin_render_functions_override_omits_group():
     """Omit one member kind without changing resolved membership"""
 
     class CustomClass(ClassRenderer):
@@ -14441,7 +14441,7 @@ def test_mixin_render_functions_override_omits_group() -> None:
     assert getattr(ClassRenderer(doc), "render_functions")() is not None
 
 
-def test_mixin_render_attributes_override_omits_group() -> None:
+def test_mixin_render_attributes_override_omits_group():
     """Omit one member kind without changing resolved membership"""
 
     class CustomClass(ClassRenderer):
@@ -14486,7 +14486,7 @@ def test_mixin_render_attribute_member_pages():
     assert isinstance(result, RenderedMemberGroup)
 
 
-def test_mixin_render_class_member_pages_override_omits_group() -> None:
+def test_mixin_render_class_member_pages_override_omits_group():
     """Omit one member kind without changing resolved membership"""
 
     class CustomClass(ClassRenderer):
@@ -14501,7 +14501,7 @@ def test_mixin_render_class_member_pages_override_omits_group() -> None:
     assert getattr(ClassRenderer(doc), "render_class_member_pages")() is not None
 
 
-def test_mixin_render_function_member_pages_override_omits_group() -> None:
+def test_mixin_render_function_member_pages_override_omits_group():
     """Omit one member kind without changing resolved membership"""
 
     class CustomClass(ClassRenderer):
@@ -14516,7 +14516,7 @@ def test_mixin_render_function_member_pages_override_omits_group() -> None:
     assert getattr(ClassRenderer(doc), "render_function_member_pages")() is not None
 
 
-def test_mixin_render_attribute_member_pages_override_omits_group() -> None:
+def test_mixin_render_attribute_member_pages_override_omits_group():
     """Omit one member kind without changing resolved membership"""
 
     class CustomClass(ClassRenderer):
@@ -15383,7 +15383,7 @@ def test_module_renderer_post_init_narrows_types():
     assert render.obj is mod_obj
 
 
-def test_renderers_reject_unmapped_type() -> None:
+def test_renderers_reject_unmapped_type():
     """Reject an unsupported documentation node"""
 
     class FakeDocObj:
@@ -15454,7 +15454,7 @@ def test_page_renderer_mixin_render_title():
     assert result is None
 
 
-def test_renderers_select_class_renderer() -> None:
+def test_renderers_select_class_renderer():
     """Construct the default class renderer for a class node"""
 
     obj = DocClass(name="X", obj=gf.Class(name="X", lineno=1))
@@ -16268,7 +16268,7 @@ def test_create_inventory_publishes_a_module_level_attribute_as_data():
     assert result.entries[0].role == "data"
 
 
-def test_renderer_subclass_keeps_new_methods_local() -> None:
+def test_renderer_subclass_keeps_new_methods_local():
     """Keep subclass additions independent of the default renderer"""
 
     class CustomClass(ClassRenderer):
@@ -16280,7 +16280,7 @@ def test_renderer_subclass_keeps_new_methods_local() -> None:
     assert not hasattr(ClassRenderer, "added_method")
 
 
-def test_renderer_subclass_keeps_plain_method() -> None:
+def test_renderer_subclass_keeps_plain_method():
     """Retain an ordinary method on the selected subclass"""
 
     class CustomClass(ClassRenderer):
@@ -16293,7 +16293,7 @@ def test_renderer_subclass_keeps_plain_method() -> None:
     assert not hasattr(ClassRenderer, "answer")
 
 
-def test_renderer_subclass_keeps_property() -> None:
+def test_renderer_subclass_keeps_property():
     """Evaluate properties on the selected subclass"""
 
     class CustomClass(ClassRenderer):
@@ -16306,7 +16306,7 @@ def test_renderer_subclass_keeps_property() -> None:
     assert not hasattr(ClassRenderer, "answer")
 
 
-def test_renderer_subclass_keeps_cached_property() -> None:
+def test_renderer_subclass_keeps_cached_property():
     """Cache a subclass's cached property separately for each instance"""
     calls: list[str] = []
 
@@ -16612,7 +16612,7 @@ def test_get_label_typealias_kind():
         assert get_label(obj) == "typealias"
 
 
-def test_renderer_subclass_keeps_cooperative_super() -> None:
+def test_renderer_subclass_keeps_cooperative_super():
     """Extend a default property through `super()` without changing the default renderer"""
 
     class CustomClass(ClassRenderer):
@@ -16626,7 +16626,7 @@ def test_renderer_subclass_keeps_cooperative_super() -> None:
     assert Renderers().make(doc).summary_name == default
 
 
-def test_renderer_subclass_preserves_defaults_and_captured_values() -> None:
+def test_renderer_subclass_preserves_defaults_and_captured_values():
     """Preserve captured values and default arguments alongside `super()`"""
     prefix = "custom "
 
@@ -16641,7 +16641,7 @@ def test_renderer_subclass_preserves_defaults_and_captured_values() -> None:
     assert render.label("?") == "custom " + default + "?"
 
 
-def test_renderer_subclass_property_preserves_captured_values() -> None:
+def test_renderer_subclass_property_preserves_captured_values():
     """Preserve closure values in an overridden property"""
     prefix = "custom "
 
@@ -16654,7 +16654,7 @@ def test_renderer_subclass_property_preserves_captured_values() -> None:
     assert Renderers(classes=CustomClass).make(doc).summary_name.startswith(prefix)
 
 
-def test_renderer_subclass_keeps_static_method() -> None:
+def test_renderer_subclass_keeps_static_method():
     """Retain a subclass static method without changing the default class"""
 
     class CustomClass(ClassRenderer):
@@ -17163,7 +17163,7 @@ def test_type_sections_items_combines_all():
     assert [len(category.renderers) for category in ts.categories] == [1, 1, 1]
 
 
-def test_type_sections_protocols_keep_member_bodies_without_summary() -> None:
+def test_type_sections_protocols_keep_member_bodies_without_summary():
     """Keep protocol member documentation while omitting member summaries"""
     protocol = gf.Class(name="Protocol")
     method = gf.Function(name="run", docstring=gf.Docstring("Protocol method body marker"))
@@ -17181,7 +17181,7 @@ def test_type_sections_protocols_keep_member_bodies_without_summary() -> None:
     assert sections.items == [item]
 
 
-def test_type_sections_type_variables_keep_heading_without_repeated_name() -> None:
+def test_type_sections_type_variables_keep_heading_without_repeated_name():
     """Keep a type variable's heading while omitting its name from the signature"""
     variable = gf.Attribute(name="GenericValue", value="TypeVar('T')")
     item = InventoryItem(name="GenericValue", obj=variable)
@@ -17198,7 +17198,7 @@ def test_type_sections_type_variables_keep_heading_without_repeated_name() -> No
     assert sections.items == [item]
 
 
-def test_type_sections_pep613_aliases_keep_heading_without_marker() -> None:
+def test_type_sections_pep613_aliases_keep_heading_without_marker():
     """Keep alias names and values while omitting the redundant `TypeAlias` annotation"""
     alias = gf.Attribute(name="MyAlias", value="int", annotation=gf.ExprName("TypeAlias"))
     item = InventoryItem(name="MyAlias", obj=alias)

@@ -1,7 +1,10 @@
-"""Verify docstring body overrides"""
+"""
+Verify docstring body overrides and their rendering context
+"""
 
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 from typing import cast
 
@@ -10,15 +13,35 @@ import pytest
 
 from great_docs._apiref._conversion import griffe_to_doc
 from great_docs._apiref._settings import Settings
-from great_docs._apiref.content import DocFunction
+from great_docs._apiref.content import DocFunction, Page
+from great_docs._apiref.inventory import InventoryItem
 from great_docs._apiref.typing import DocType
+from great_docs._apiref.typing_information import TypeSections
+from great_docs._apiref.write import collect_pages
 from great_docs.extensions import Extension
 from great_docs.pandoc.blocks import BlockContent, Blocks, Para
 from great_docs.rendering import FunctionRenderer, RenderContext, Renderers
+from tests.support import MakeReference, WriteExtension
 
 
 def make_doc(extension: Extension, code: str, name: str) -> DocType:
-    """Prepare a snippet through the operation before constructing its documentation"""
+    """
+    Prepare an object from a package snippet and convert it to documentation
+
+    Parameters
+    ----------
+    extension
+        The extension whose parser, object hooks and docstring hooks prepare the object.
+    code
+        The source of the package's `__init__.py`.
+    name
+        The object to document.
+
+    Returns
+    -------
+    :
+        The documentation of the prepared object.
+    """
     with gf.temporary_visited_package(
         "package", {"__init__.py": code}, docstring_parser=extension.settings.parser
     ) as module:
@@ -27,6 +50,36 @@ def make_doc(extension: Extension, code: str, name: str) -> DocType:
         )
     assert doc is not None
     return doc
+
+
+def test_continuation_rendering_preserves_prepared_definitions() -> None:
+    extension = Extension(Settings())
+
+    @extension.on_docstring_parsed
+    def sections(
+        obj: gf.Object | gf.Alias, parsed: list[gf.DocstringSection]
+    ) -> list[gf.DocstringSection]:
+        return [
+            gf.DocstringSectionText("A summary"),
+            gf.DocstringSectionReturns(
+                [
+                    gf.DocstringReturn("", annotation="int", description="First paragraph"),
+                    gf.DocstringReturn("", annotation="int", description="Second paragraph"),
+                ]
+            ),
+        ]
+
+    try:
+        doc = cast("DocFunction", make_doc(extension, 'def run():\n    """A summary"""\n', "run"))
+        definitions = doc.obj.docstring.parsed[1].value
+        before = [item.description for item in definitions]
+        first = str(extension.renderers.make(doc, extension=extension))
+        second = str(extension.renderers.make(doc, extension=extension))
+        assert first == second
+        assert first.count("Second paragraph") == 1
+        assert [item.description for item in definitions] == before
+    finally:
+        extension.close()
 
 
 def test_docstring_body_mixin_runs_for_parent_and_each_member() -> None:
@@ -62,6 +115,7 @@ class Example:
         assert "Child detail" not in seen["Example"]
         assert "Note for child" not in seen["Example"]
         assert "Child detail" in seen["child"]
+        assert "Note for child" in output
         assert output.index("Note for Example") < output.index("## Methods")
     finally:
         extension.close()
@@ -129,34 +183,86 @@ def run(old=False):
         extension.close()
 
 
-def test_continuation_rendering_preserves_prepared_definitions() -> None:
-    extension = Extension(Settings())
+def test_build_reports_alias_member_and_typing_destinations(
+    tmp_path: Path, write_extension: WriteExtension, make_reference: MakeReference
+) -> None:
+    source_root = tmp_path / "docs"
+    output = tmp_path / "output"
+    source = write_extension(
+        """
+        from great_docs.extensions import Extension
+        from great_docs.pandoc.blocks import BlockContent
+        from great_docs.rendering import RenderContext, Renderers
 
-    @extension.on_docstring_parsed
-    def sections(
-        obj: gf.Object | gf.Alias, parsed: list[gf.DocstringSection]
-    ) -> list[gf.DocstringSection]:
-        return [
-            gf.DocstringSectionText("A summary"),
-            gf.DocstringSectionReturns(
-                [
-                    gf.DocstringReturn("", annotation="int", description="First paragraph"),
-                    gf.DocstringReturn("", annotation="int", description="Second paragraph"),
-                ]
-            ),
-        ]
+        def setup(extension: Extension) -> None:
+            contexts: list[RenderContext] = []
+            extension.cache['contexts'] = contexts
 
-    try:
-        doc = cast("DocFunction", make_doc(extension, 'def run():\n    """A summary"""\n', "run"))
-        definitions = doc.obj.docstring.parsed[1].value
-        before = [item.description for item in definitions]
-        first = str(extension.renderers.make(doc, extension=extension))
-        second = str(extension.renderers.make(doc, extension=extension))
-        assert first == second
-        assert first.count("Second paragraph") == 1
-        assert [item.description for item in definitions] == before
-    finally:
-        extension.close()
+            class RecordContextMixin:
+                def render_docstring_body(self) -> BlockContent:
+                    contexts.append(self.context)
+                    return super().render_docstring_body()
+
+            extension.set_renderers(Renderers(object_renderer_mixin=RecordContextMixin))
+        """,
+        config_root=source_root,
+    )
+    ref = make_reference(
+        {
+            "package": "body_context_example",
+            "dynamic": False,
+            "typing_module_paths": ["body_context_example.types"],
+            "sections": [{"title": "API", "contents": ["Document", "Alias"]}],
+        },
+        source,
+        package_files={
+            "__init__.py": "from .impl import Document\nfrom .impl import Document as Alias\n",
+            "impl.py": '''
+                class Document:
+                    """Document subject"""
+
+                    def render(self) -> str:
+                        """Render subject"""
+            ''',
+            "types.py": '''
+                from typing import Protocol
+
+                class Readable(Protocol):
+                    """Readable subject"""
+
+                    def read(self) -> str:
+                        """Read subject"""
+            ''',
+        },
+        output_root=output,
+    )
+    ref.build()
+    appearances = cast("list[RenderContext]", ref.extension.cache["contexts"])
+    parents = [context for context in appearances if context.authored_name in {"Document", "Alias"}]
+    assert {context.authored_name for context in parents} == {"Document", "Alias"}
+    assert {context.canonical_identity for context in parents} == {
+        "body_context_example.impl.Document"
+    }
+    assert {context.page_path for context in parents} == {
+        "reference/Document.qmd",
+        "reference/Alias.qmd",
+    }
+    methods = [
+        context for context in appearances if context.canonical_identity.endswith("Document.render")
+    ]
+    assert len(methods) == 2
+    assert all(context.contained and context.level == 3 for context in methods)
+    assert {context.page_path for context in methods} == {context.page_path for context in parents}
+    assert any(context.page_path == "reference/types.qmd" for context in appearances)
+    assert all(context.page_path != "reference/index.qmd" for context in appearances)
+    for context in appearances:
+        assert context.source_root == source_root
+        assert context.output_root == output
+        assert context.settings is ref.settings
+        assert context.page_path is not None
+        assert (output / context.page_path).is_file()
+    with pytest.raises(FrozenInstanceError):
+        setattr(appearances[0], "level", 99)
 
 
 @pytest.mark.parametrize(
@@ -166,9 +272,6 @@ def test_continuation_rendering_preserves_prepared_definitions() -> None:
 def test_absolute_output_directories_use_explicit_context_coordinates(
     tmp_path: Path, known_root: bool, inside: bool, expected: str | None
 ) -> None:
-    from great_docs._apiref.content import Page
-    from great_docs._apiref.write import collect_pages
-
     output = tmp_path / "output"
     destination = output / "reference" if inside else tmp_path / "elsewhere"
     settings = Settings(dir=str(destination))
@@ -190,9 +293,6 @@ def test_absolute_output_directories_use_explicit_context_coordinates(
         assert (destination / "run.qmd").is_file()
         assert len(contexts) == 1
         assert contexts[0].page_path == expected
-
-        from great_docs._apiref.inventory import InventoryItem
-        from great_docs._apiref.typing_information import TypeSections
 
         contexts.clear()
         protocol = gf.Class("Readable", docstring=gf.Docstring("A readable value"))
