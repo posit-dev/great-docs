@@ -61,6 +61,7 @@ def test_dynamic_retry_releases_the_failed_extension_before_loading_the_next(
         if namespaces:
             assert not any(name.startswith(namespaces[-1]) for name in sys.modules)
         extension = ref.extension
+        extension.load()
         assert extension.cache["token"] == "current"
         namespaces.append(str(extension.cache["namespace"]))
         attempts.append(ref)
@@ -90,7 +91,7 @@ def test_configured_setup_failure_is_fatal_without_static_retry(tmp_path: Path) 
     before = set(sys.modules)
 
     def build(ref: APIReference) -> None:
-        _ = ref.extension
+        ref.extension.load()
 
     with (
         patch.object(APIReference, "build", autospec=True, side_effect=build) as generate,
@@ -172,6 +173,7 @@ def test_query_releases_owned_imports_and_restores_package_state(
             create_sections=lambda _: [{"title": "API", "contents": ["example"]}],
         ) as ref:
             assert ref is not None
+            assert ref.documented_symbols == ["example"]
             namespace = str(ref.extension.cache["namespace"])
             assert namespace in sys.modules
             assert ref.extension.source_root == tmp_path

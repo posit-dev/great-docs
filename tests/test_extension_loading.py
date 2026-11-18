@@ -93,11 +93,11 @@ def test_setup_runs_once_and_selects_renderers(tmp_path: Path) -> None:
     reference = APIReference({"package": "example", "sections": []}, extension_source=source)
     before = owned_modules()
     extension = reference.extension
+    renderers = reference.renderers
+    assert reference.renderers is renderers is extension.renderers
     assert extension.cache["calls"] == 1
-    assert reference.extension is extension
-    assert reference.renderers is extension.renderers
-    assert issubclass(reference.renderers.classes, ClassRenderer)
-    assert reference.renderers.classes is not ClassRenderer
+    assert issubclass(renderers.classes, ClassRenderer)
+    assert renderers.classes is not ClassRenderer
     assert extension.settings is reference.settings
     assert extension.config_root == tmp_path
     assert extension.source_root == tmp_path / "docs"
@@ -116,11 +116,13 @@ def test_relative_helpers_refresh_same_size_edits(tmp_path: Path) -> None:
     )
     first = APIReference({"package": "example"}, extension_source=source)
     first_extension = first.extension
+    first_extension.load()
     assert first_extension.cache["value"] == "first"
     first.close()
     helper.write_text("VALUE = 'other'\n", encoding="utf-8")
     os.utime(helper, ns=(timestamp, timestamp))
     second = APIReference({"package": "example"}, extension_source=source)
+    second.extension.load()
     assert second.extension.cache["value"] == "other"
     assert second.extension.cache is not first_extension.cache
     second.close()
@@ -140,6 +142,7 @@ def test_late_relative_imports_and_dataclass_inspection_work_until_close(tmp_pat
     before = owned_modules()
     reference = APIReference({"package": "example"}, extension_source=source)
     extension = reference.extension
+    extension.load()
     callback = extension.cache["read"]
     assert callable(callback)
     value = callback()
@@ -157,6 +160,7 @@ def test_closing_extension_preserves_installed_package_cache(tmp_path: Path) -> 
         "import json\ndef setup(extension):\n    extension.cache['json'] = json\n",
     )
     reference = APIReference({"package": "example"}, extension_source=source)
+    reference.extension.load()
     assert reference.extension.cache["json"] is json
     reference.close()
     assert sys.modules["json"] is json
@@ -180,7 +184,7 @@ def test_failed_extension_releases_imports_with_actual_phase(
     finders = list(sys.meta_path)
     reference = APIReference({"package": "example"}, extension_source=source)
     with pytest.raises(ExtensionError, match=rf"extension.py: {phase}:") as error:
-        _ = reference.extension
+        reference.extension.load()
     assert isinstance(error.value.__cause__, cause)
     assert str(error.value).count(f": {phase}:") == 1
     assert owned_modules() == before
@@ -208,7 +212,7 @@ def test_missing_entry_is_a_lazy_load_error(tmp_path: Path) -> None:
     reference = APIReference({"package": "example"}, extension_source=source)
     assert reference.sections == []
     with pytest.raises(ExtensionError, match="missing.py: load:") as error:
-        _ = reference.extension
+        _ = reference.resolved
     assert isinstance(error.value.__cause__, FileNotFoundError)
     reference.close()
 
@@ -229,7 +233,7 @@ def test_global_template_mutation_is_rejected_and_restored(
     parsed_snapshot = PARSED_HOOKS.snapshot()
     reference = APIReference({"package": "example"}, extension_source=source)
     with pytest.raises(ExtensionError, match="supplied extension"):
-        _ = reference.extension
+        reference.extension.load()
     assert OBJECT_HOOKS.snapshot() == object_snapshot
     assert PARSED_HOOKS.snapshot() == parsed_snapshot
     reference.close()
@@ -246,7 +250,7 @@ def test_setup_failure_restores_global_templates(tmp_path: Path) -> None:
     before = OBJECT_HOOKS.snapshot()
     reference = APIReference({"package": "example"}, extension_source=source)
     with pytest.raises(ExtensionError) as error:
-        _ = reference.extension
+        reference.extension.load()
     assert isinstance(error.value.__cause__, ValueError)
     assert OBJECT_HOOKS.snapshot() == before
     reference.close()
@@ -263,6 +267,7 @@ def test_registration_freezes_after_setup(tmp_path: Path) -> None:
     )
     reference = APIReference({"package": "example"}, extension_source=source)
     extension = reference.extension
+    extension.load()
     for operation in [
         lambda: extension.on_object_resolved(lambda obj: obj),
         lambda: extension.on_docstring_parsed(lambda obj, sections: sections),
@@ -286,6 +291,7 @@ def test_watch_declarations_keep_entry_relative_missing_paths(tmp_path: Path) ->
         "    extension.watch('data/*.txt')\n",
     )
     reference = APIReference({"package": "example"}, extension_source=source)
+    reference.extension.load()
     assert reference.extension.declared_inputs == (
         tmp_path / "missing.txt",
         tmp_path / "data/*.txt",
@@ -298,6 +304,7 @@ def test_error_context_names_callback_phase_and_releases_imports(tmp_path: Path)
     before = owned_modules()
     reference = APIReference({"package": "example"}, extension_source=source)
     extension = reference.extension
+    extension.load()
     with pytest.raises(ExtensionError, match="body for example.run: original") as error:
         with extension.error_context("body", "example.run"):
             raise ValueError("original")

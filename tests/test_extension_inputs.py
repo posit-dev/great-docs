@@ -120,8 +120,9 @@ def test_watch_paths_retain_patterns_and_do_not_activate_unused_reference(tmp_pa
     entry.write_text("def setup(extension):\n    extension.watch('data/*.txt')\n")
     source = _ExtensionSource(entry, tmp_path, tmp_path)
     reference = APIReference({"package": "unused"}, extension_source=source)
-    assert reference.extension_watch_paths == ()
-    _ = reference.extension
+    assert reference.extension_watch_paths == (tmp_path,)
+    assert reference.extension.declared_inputs == ()
+    reference.extension.load()
     expected = (tmp_path, entry, tmp_path / "data/*.txt")
     assert reference.extension_watch_paths == expected
     reference.close()

@@ -90,11 +90,10 @@ class Extension:
     """
     The API reference extension that `setup(extension)` receives
 
-    Setup may inspect `settings`, `source_root` and `config_root` and keep its own
-    values in `cache`. Treat settings and roots as read-only. Register callbacks,
-    renderer choices and dependencies only during setup. Each operation starts
-    with fresh cache and canonical preparation state. Callbacks inherited from
-    global templates retain their own state.
+    Great Docs creates a new `Extension` each time it generates the API reference, so
+    `cache` starts empty and every object is prepared afresh. Hooks registered
+    globally through `great_docs.hooks` are shared by every run and keep their own
+    state.
 
     During setup, register hooks, select renderers with `set_renderers` and declare
     inputs with `watch`. Registration closes when setup returns. Setup may read
@@ -113,11 +112,20 @@ class Extension:
         The project's documentation source directory, or `None` outside a project.
     config_root
         The directory of the selected configuration file, or `None` outside a project.
+    output_root
+        The directory the documentation is generated into, or `None` when nothing is
+        written.
     cache
         The extension's own values, shared by setup and its callbacks for one run.
     """
 
-    def __init__(self, settings: Settings, source: _ExtensionSource | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        source: _ExtensionSource | None = None,
+        *,
+        output_root: Path | None = None,
+    ) -> None:
         """
         Copy the global hooks and start empty, without loading the extension file
 
@@ -128,10 +136,14 @@ class Extension:
         source
             The extension file and the project's directories, or `None` when there is
             no extension file and only the global hooks apply.
+        output_root
+            The directory the documentation is generated into, or `None` when nothing
+            is written.
         """
         self.settings = settings
         self.source_root = source.source_root if source else None
         self.config_root = source.config_root if source else None
+        self.output_root = output_root
         self.cache: dict[str, object] = {}
         self._source = source
         self._imports = _ImportOwner(source) if source is not None else None
@@ -147,7 +159,8 @@ class Extension:
 
     @property
     def renderers(self) -> Renderers:
-        """Validated renderer choices selected during setup"""
+        """The renderer choices from setup, which the first read runs"""
+        self.load()
         return self._renderers
 
     @property

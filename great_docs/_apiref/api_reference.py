@@ -10,7 +10,6 @@ close the operation after its final consumer.
 from __future__ import annotations
 
 import logging
-import sys
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -25,7 +24,7 @@ from ._rendering._renderers import Renderers
 from ._settings import Settings, SourceLinks
 from .content import Doc, Page
 from .inventory import create_inventory, write_inventory
-from .resolve import ObjectNotFoundError, Resolver, resolution_lang
+from .resolve import ObjectNotFoundError, Resolver
 from .spec import SpecObject, SpecOptions, SpecSection, unique_page_paths
 from .write import (
     collect_index,
@@ -67,6 +66,7 @@ class APIReference:
     options: SpecOptions | None
     settings: Settings
     site_toc_depth: int
+    extension: Extension
 
     def __init__(
         self,
@@ -93,10 +93,6 @@ class APIReference:
             The generated documentation root, or `None` when the reference writes no
             files.
         """
-        self._extension_source = extension_source
-        self.output_root = output_root
-        self._extension: Extension | None = None
-        self._closed = False
         self.site_toc_depth = self._read_site_toc_depth(config)
         block = self._select_block(config)
         block = {k: v for k, v in block.items() if k not in _REMOVED_KEYS}
@@ -109,9 +105,10 @@ class APIReference:
         self.desc = block.get("desc")
         # Parity: stored as-is (no coercion), matching the previous behaviour.
         self.options = block.get("options")
+        self.extension = Extension(self.settings, extension_source, output_root=output_root)
         # Raw config dicts become `SpecSection` objects; their `contents` are
         # upgraded to `SpecObject` inside `SpecSection.__post_init__`.
-        self._resolver = Resolver(self.settings)
+        self._resolver = Resolver(self.settings, self.extension)
         self._resolver.current_package = self.package
 
         raw_sections: list[Any] = block.get("sections", []) or []
@@ -123,52 +120,48 @@ class APIReference:
         )
 
     @property
-    def extension(self) -> Extension:
-        """
-        The operation owner, loading configured Python on first access
-
-        Execute the entry file and its `setup(extension)` once for this reference.
-        Reading authored sections and closing an unused reference do not access it.
-        """
-        if self._closed:
-            raise RuntimeError("The API reference is closed.")
-        if self._extension is None:
-            self._extension = Extension(self.settings, self._extension_source)
-        if self.settings.source_dir:
-            source_dir = str(Path(self.settings.source_dir).absolute())
-            if source_dir not in sys.path:
-                sys.path.append(source_dir)
-        self._extension.load()
-        self._resolver.extension = self._extension
-        return self._extension
+    def renderers(self) -> Renderers:
+        """The renderers that the extension's `setup` selected, running `setup` on first read"""
+        return self.extension.renderers
 
     @property
-    def renderers(self) -> Renderers:
-        """
-        Renderer choices selected by this operation's setup
-
-        Access activates configured Python through the lazy operation owner.
-        """
-        return self.extension.renderers
+    def output_root(self) -> Path | None:
+        """The generated documentation root, or `None` for semantic queries"""
+        return self.extension.output_root
 
     @property
     def extension_watch_paths(self) -> tuple[Path, ...]:
         """
-        Inputs reported by an already-created extension, including after close
+        The paths that a preview watches for the extension, readable after closing
 
-        Keep raw glob declarations for preview coverage. Reading unused
-        reference inputs never loads configured Python.
+        Globs stay unexpanded, so the preview can watch for new matches. Reading the paths
+        never loads the extension file, so before `setup` runs they hold only the
+        extension file's directory.
         """
-        return self._extension.watch_paths if self._extension is not None else ()
+        return self.extension.watch_paths
 
     def get_object(self, path: str) -> gf.Object | gf.Alias:
         """
         Load a Python object through the reference's shared loader
 
-        Initialise configured setup and use the operation's parser, source path
-        and dynamic setting. Keep acquisition separate from semantic preparation.
+        Use the reference's parser, source directory and dynamic setting. Loading neither
+        runs the extension's `setup` nor prepares the object.
+
+        Parameters
+        ----------
+        path
+            The object's import path.
+
+        Returns
+        -------
+        :
+            The loaded object or alias.
+
+        Raises
+        ------
+        ObjectNotFoundError
+            If the package has no object at `path`.
         """
-        _ = self.extension
         return self._resolver.get_object_or_raise(path, dynamic=self._resolver.dynamic)
 
     def prepare(self, obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias | None:
@@ -189,16 +182,11 @@ class APIReference:
         :
             The prepared object, or `None` when an object hook excludes it.
         """
-        _ = self.extension
         return self._resolver.prepare(obj)
 
     def close(self) -> None:
-        """Release an active extension without loading an unused reference"""
-        if self._closed:
-            return
-        self._closed = True
-        if self._extension is not None:
-            self._extension.close()
+        """Close the extension without loading it, removing the modules it imported"""
+        self.extension.close()
 
     @staticmethod
     def _read_lang(cfg: dict[str, Any]) -> str:
@@ -304,9 +292,6 @@ class APIReference:
         """
         from ._rendering._label import get_label
 
-        s = self.settings
-        if s.source_dir and (source_dir := str(Path(s.source_dir).absolute())) not in sys.path:
-            sys.path.append(source_dir)
         try:
             return get_label(self._resolver.entry_object(section, entry))
         except (ObjectNotFoundError, ImportError, AliasResolutionError, CyclicAliasError):
@@ -322,15 +307,13 @@ class APIReference:
         """
         from .collect import unique_member_page_paths
 
-        _ = self.extension
-        token = resolution_lang.set(self.settings.lang)
-        try:
-            secs = self.sections or unique_page_paths(
-                self._resolver.autogenerate_sections(self.package), self._entry_label
-            )
-            return unique_member_page_paths(self._resolver.resolve_sections(secs))
-        finally:
-            resolution_lang.reset(token)
+        # Load before resolving, so a broken extension fails a query that selects
+        # no objects.
+        self.extension.load()
+        secs = self.sections or unique_page_paths(
+            self._resolver.autogenerate_sections(self.package), self._entry_label
+        )
+        return unique_member_page_paths(self._resolver.resolve_sections(secs))
 
     @cached_property
     def documented_symbols(self) -> list[str]:

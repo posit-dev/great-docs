@@ -10,8 +10,10 @@ and page placement, and rendering, inventories and the text export all read it.
 from __future__ import annotations
 
 import logging
+import sys
 from contextlib import contextmanager
 from contextvars import ContextVar
+from pathlib import Path
 from textwrap import indent
 from typing import TYPE_CHECKING, Any, Callable, cast
 
@@ -201,22 +203,42 @@ class Resolver:
 
     Translate authored object selections into shallow documentation nodes with
     selected children. Inherit package and options through nested sections and
-    members. A reference supplies its active extension; standalone resolution
-    creates default preparation state lazily.
+    members. A reference supplies its extension; a standalone resolver prepares
+    through one with default settings and global hook templates alone.
     """
 
-    def __init__(self, settings: Settings | None = None) -> None:
-        """Configure shared acquisition without activating extension setup"""
+    def __init__(
+        self, settings: Settings | None = None, extension: Extension | None = None
+    ) -> None:
+        """
+        Create a resolver without running the extension's `setup`
+
+        Parameters
+        ----------
+        settings
+            The reference's settings, or `None` for defaults.
+        extension
+            The extension that prepares loaded objects, or `None` to create one from
+            `settings`.
+        """
         from .introspect import get_object as _get_object
         from .introspect import make_loader
 
         self.settings = settings if settings is not None else Settings()
+        self.extension = extension or Extension(self.settings)
         loader = make_loader(self.settings.parser)
-        self.extension: Extension | None = None
+        # Extend `sys.path` at the first lookup, so a resolver that never looks up an
+        # object leaves the interpreter unchanged.
+        pending_source_dir = self.settings.source_dir
 
         def acquire(path: str, **kwargs: Any) -> gf.Object | gf.Alias:
-            preserve = self.extension.is_prepared if self.extension is not None else None
-            return _get_object(path, loader=loader, preserve=preserve, **kwargs)
+            nonlocal pending_source_dir
+            if pending_source_dir:
+                source_dir = str(Path(pending_source_dir).absolute())
+                if source_dir not in sys.path:
+                    sys.path.append(source_dir)
+                pending_source_dir = None
+            return _get_object(path, loader=loader, preserve=self.extension.is_prepared, **kwargs)
 
         self.get_object: _GetObject = acquire
 
@@ -248,8 +270,6 @@ class Resolver:
             The prepared object, under the alias's name when `obj` is an alias, or `None`
             when an object hook excludes it.
         """
-        if self.extension is None:
-            self.extension = Extension(self.settings)
         return self.extension.prepare(obj, get_object=self.get_object)
 
     def get_object_or_raise(self, path: str, **kwargs: object) -> gf.Object | gf.Alias:
