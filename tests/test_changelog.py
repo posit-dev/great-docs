@@ -78,6 +78,7 @@ def test_write_page_lists_each_release(tmp_path: Path, layout: Layout):
         "title: Changelog\n"
         "gd-auto-generated: true\n"
         "body-classes: gd-changelog-page\n"
+        "gd-autolink: false\n"
         "toc: true\n"
         "toc-depth: 1\n"
         "toc-title: Releases\n"
