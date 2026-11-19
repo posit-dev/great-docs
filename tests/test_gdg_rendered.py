@@ -11930,6 +11930,36 @@ def test_DED_sidebar_sections_expanded_by_css():
     assert "display:block" in section, "Collapsible sidebar sections must stay visible"
 
 
+@pytest.mark.dedicated
+def test_DED_links_and_toc_avoid_theme_accent():
+    """
+    Deployed CSS keeps cross-reference links, the TOC and heading anchors off the theme accent
+
+    Links outside `p` and `li`, Quarto's `!important` active TOC entry and the anchor icons would
+    otherwise take the theme's link colour.
+    """
+    pkg = "gdtest_user_guide_sections"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    css = _deployed_css(pkg)
+    assert css, "No CSS files found in _site"
+
+    link = _mermaid_css_rule(css, "a.gdls-link")
+    assert "color:var(--gd-link-color)" in link
+
+    linked_code = _mermaid_css_rule(css, "body a.gdls-link > code:not(.sourceCode)")
+    assert "background-color:rgba(0,0,0,0)" in linked_code, "Linked code must not show a chip"
+
+    active = _mermaid_css_rule(css, "#quarto-margin-sidebar nav ul li a.active")
+    assert "color:var(--gd-active-link)!important" in active
+
+    toc_code = _mermaid_css_rule(css, "#TOC .nav-link code")
+    assert "color:inherit" in toc_code
+
+    anchor = _mermaid_css_rule(css, ".anchorjs-link")
+    assert "color:var(--gd-text-muted)" in anchor
+
+
 # ── ref_section_order ───────────────────────────────────────────────────────
 
 
