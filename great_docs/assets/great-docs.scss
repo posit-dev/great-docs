@@ -8,6 +8,12 @@
 $h2-font-size: 1.5rem;
 $h3-font-size: 1.3rem;
 
+// Use the paragraph font for everything that inherits from the body (list items, definition
+// lists, disclosure labels, page widgets) rather than Flatly's Lato. Nothing uses Lato then, so
+// skip loading it. `!default` lets a user stylesheet listed after this one choose its own.
+$font-family-sans-serif: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !default;
+$web-font-path: false !default;
+
 /*-- scss:mixins --*/
 $headings-font-weight: 300 !default;
 
@@ -1394,7 +1400,7 @@ p,h1,h2,h3,#toc-title,#toc-function-reference,.nav-link,.table {
 }
 
 summary::marker {
-  font-size: 1.5em;
+  font-size: 0.75em;
 }
 
 /* #toc-title -- handled by SCSS rules above */
