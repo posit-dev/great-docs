@@ -520,6 +520,9 @@ _AUTOLINK_RE = re.compile(
 _LINK_RE = re.compile(r"\[[^\]]*\]\([^)\s]*\)")
 """A Markdown link, whose text the build leaves as written"""
 
+_HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}(?:[ \t].*)?$", re.MULTILINE)
+"""An ATX heading, whose code spans the build leaves unlinked"""
+
 
 _LIST_MARKER_RE = re.compile(r"(?:[-*+]|\d+[.)])\s")
 """The start of a Markdown list item"""
@@ -721,8 +724,8 @@ def _check_ambiguous_references(
     `` `flush()` `` is a warning: the build would link it if one object claimed the
     name, but the span may be plain code, like a dictionary key, rather than a
     reference. A docstring naming its own object is not reported, and neither is a
-    span marked `{.gd-no-link}` or one inside the text of a link, which the build
-    leaves alone.
+    span marked `{.gd-no-link}` or one inside a heading or the text of a link, which
+    the build leaves alone.
 
     Parameters
     ----------
@@ -758,7 +761,7 @@ def _check_ambiguous_references(
             )
         if autolinked is not None and origin not in autolinked:
             continue
-        for name in _AUTOLINK_RE.findall(_LINK_RE.sub("", text)):
+        for name in _AUTOLINK_RE.findall(_LINK_RE.sub("", _HEADING_RE.sub("", text))):
             targets = dropped.get(name)
             if targets is None or origin in targets:
                 continue

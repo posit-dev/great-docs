@@ -94,12 +94,14 @@ def write_page(
 
     # Pin the heading shift so release headings always render at level 1. This keeps the TOC
     # limited to release headings: without it, `toc-depth: 1` could include release-note
-    # subsections or list nothing.
+    # subsections or list nothing. Release notes are written on the repository host rather than
+    # against this site, so the interlinks filter leaves their code spans unlinked.
     front_matter = format_yaml(
         {
             "title": "Changelog",
             page_dates.AUTO_GENERATED: True,
             "body-classes": "gd-changelog-page",
+            "gd-autolink": False,
             "toc": True,
             "toc-depth": 1,
             "toc-title": toc_title,
