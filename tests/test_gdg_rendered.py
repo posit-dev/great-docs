@@ -12070,6 +12070,38 @@ def test_DED_search_overlay_uses_the_site_colors():
     assert re.search(r"body\.quarto-dark\s*\{[^}]*--gd-search-bg:\s*#222222", css)
 
 
+@pytest.mark.dedicated
+def test_DED_heading_anchors_cover_section_h1s_and_copy_links():
+    """
+    Pages load the script that anchors section h1 headings and copies anchor links
+
+    The site's heading shift makes top-level sections h1 headings, which Quarto leaves
+    without anchors. The confirmation keeps the icon visible after a click.
+    """
+    pkg = "gdtest_index_frontmatter"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    site = _site_dir(pkg)
+    soup = _load_html(site / "index.html")
+
+    heading = soup.select_one("main section.level1[id] > h1")
+    assert heading is not None, "Expected a top-level section with an h1 heading"
+    assert "anchored" not in (heading.get("class") or []), "Quarto anchors h2-h6 only"
+    assert soup.find("script", src=re.compile(r"(^|/)heading-anchors\.js$"))
+
+    script = (site / "heading-anchors.js").read_text(encoding="utf-8")
+    assert "main section.level1[id] > h1:not(.no-anchor)" in script
+    assert "navigator.clipboard.writeText" in script
+
+    css = _deployed_css(pkg)
+    assert css, "No CSS files found in _site"
+    copied = _css_rules(css, ".anchorjs-link.gd-anchor-link-copied")
+    assert copied and "opacity:1" in copied[-1][1]
+    note = _css_rules(css, ".gd-anchor-copied")
+    assert note and "position:absolute" in note[-1][1]
+    assert "pointer-events:none" in note[-1][1]
+
+
 # ── ref_section_order ───────────────────────────────────────────────────────
 
 

@@ -1458,6 +1458,38 @@ summary::marker {
     color: var(--gd-text-primary);
 }
 
+/* A clicked anchor copies its link, and `heading-anchors.js` confirms the copy
+   beside the icon. The icon stays visible while the confirmation shows. */
+.anchorjs-link {
+    position: relative;
+}
+
+.anchorjs-link.gd-anchor-link-copied {
+    opacity: 1;
+}
+
+.gd-anchor-copied {
+    position: absolute;
+    top: 50%;
+    inset-inline-start: calc(100% + 0.4rem);
+    transform: translateY(-50%);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background-color: var(--gd-text-primary);
+    color: var(--gd-bg-primary);
+    font: 500 0.75rem/1.2 var(--bs-body-font-family);
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.gd-anchor-link-copied > .gd-anchor-copied {
+    opacity: 1;
+}
+
 #navbarCollapse > ul.navbar-nav.navbar-nav-scroll.me-auto > li > a:hover {
     background-color: rgb(240, 112, 0);
     color: white;

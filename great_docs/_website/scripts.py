@@ -382,6 +382,7 @@ SCRIPTS: tuple[Script, ...] = (
     Script("wide-layout.js", _AFTER_BODY, lambda c: c.wide_layout_enabled),
     Script("keyboard-nav.js", _AFTER_BODY, lambda c: c.keyboard_nav),
     Script("copy-code.js", _AFTER_BODY),
+    Script("heading-anchors.js", _AFTER_BODY),
     Script("details.js", _AFTER_BODY),
     Script("mermaid-renderer.js", _AFTER_BODY),
     Script("page-metadata.js", _AFTER_BODY, lambda c: c.show_dates),

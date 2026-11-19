@@ -7444,6 +7444,7 @@ def test_prepare_build_directory_copies_js_files():
         assert (docs.layout.build_dir / "dark-mode-toggle.js").exists()
         assert (docs.layout.build_dir / "theme-init.js").exists()
         assert (docs.layout.build_dir / "copy-code.js").exists()
+        assert (docs.layout.build_dir / "heading-anchors.js").exists()
         assert (docs.layout.build_dir / "tooltips.js").exists()
         assert (docs.layout.build_dir / "responsive-tables.js").exists()
 
@@ -19319,6 +19320,22 @@ def test_update_quarto_config_includes_copy_code_js_in_after_body():
         after_body_str = str(after_body)
 
         assert "copy-code.js" in after_body_str
+
+
+def test_update_quarto_config_includes_heading_anchors_js():
+    """
+    Register `heading-anchors.js` as a Quarto resource and include it after the page body
+    """
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        update_quarto_config(docs, make_run(docs))
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        assert "heading-anchors.js" in result["project"]["resources"]
+        assert "heading-anchors.js" in str(result["format"]["html"]["include-after-body"])
 
 
 def test_update_quarto_config_includes_tooltips_js_in_resources():
