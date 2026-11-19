@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, cast
 from .._contribution import Contribution, NavbarLink, Sidebar
 
 if TYPE_CHECKING:
+    from .._apiref.api_reference import APIReference
     from ..config import Config
     from .discovery import Categories
 
@@ -341,13 +342,69 @@ def sidebar(site_config: Config, api_block: dict[str, Any]) -> Sidebar:
     for section in APIReference({"api-reference": api_block}).sections:
         heading = section.title or section.subtitle or ""
         links = [
-            {"text": entry.name, "href": f"reference/{entry.page_path}.qmd"}
+            {"text": entry.name, "href": _page_href(entry.page_path)}
             for entry in section.contents
             if isinstance(entry, SpecObject)
         ]
         contents.append({"section": heading, "contents": links})
 
     return Sidebar("reference", None, tuple(contents))
+
+
+def _page_href(page_path: str) -> str:
+    """
+    Make the sidebar link target of a reference page
+
+    Parameters
+    ----------
+    page_path
+        The page's path in the reference directory, without a suffix.
+
+    Returns
+    -------
+    :
+        The page's path relative to the Quarto project.
+    """
+    return f"reference/{page_path}.qmd"
+
+
+def prune_sidebar(quarto_config: dict[str, Any], api_reference: APIReference) -> None:
+    """
+    Remove reference sidebar links to pages that the API reference did not generate
+
+    The sidebar lists the configured objects before the extension runs, so it still
+    links to objects that an object hook excludes. Remove those links, and any section
+    that loses all of its links.
+
+    Parameters
+    ----------
+    quarto_config
+        The Quarto configuration whose `reference` sidebar to update in place.
+    api_reference
+        The generated API reference.
+
+    Returns
+    -------
+    :
+    """
+    website = cast("dict[str, Any]", quarto_config.get("website", {}))
+    sidebars = cast("list[dict[str, Any]]", website.get("sidebar", []))
+    reference = next((s for s in sidebars if s.get("id") == "reference"), None)
+    if reference is None:
+        return
+
+    generated = {_page_href(page.path) for page in api_reference.manifest.pages}
+    contents: list[Any] = []
+    for item in cast("list[Any]", reference["contents"]):
+        if isinstance(item, dict) and "section" in item:
+            section = cast("dict[str, Any]", item)
+            links = cast("list[dict[str, str]]", section["contents"])
+            kept = [link for link in links if link["href"] in generated]
+            if links and not kept:
+                continue
+            item = {**section, "contents": kept}
+        contents.append(item)
+    reference["contents"] = contents
 
 
 def contribution(site_config: Config, api_block: dict[str, Any]) -> Contribution:

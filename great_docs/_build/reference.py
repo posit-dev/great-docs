@@ -18,6 +18,7 @@ from .._cliref import click as cli_click
 from .._cliref import render as cli_render
 from .._reference import block as reference_block
 from .._reference import discovery_cache
+from .._reference import sections as reference_sections
 from . import quarto
 from .facts import source_links
 from .steps import USER_CODE_ERRORS, Outcome, Skipped, StepError, print_warning
@@ -148,6 +149,9 @@ def api(
     extension failure propagates without a retry. Leave a successful reference open for
     the text export and interlinks; the build closes it.
 
+    The reference sidebar links only to generated pages, so it leaves out the objects
+    that the extension excludes.
+
     Parameters
     ----------
     run
@@ -210,6 +214,7 @@ def api(
         except BaseException:
             ref.close()
             raise
+        reference_sections.prune_sidebar(run.quarto_config, ref)
         return ref
 
     try:
