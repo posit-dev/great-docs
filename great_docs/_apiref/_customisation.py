@@ -25,11 +25,12 @@ from ._extension_loading import _ExtensionSource, _ImportOwner
 from ._rendering._renderers import Renderers
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Mapping
 
     from griffe import DocstringOptions
 
     from ._settings import Settings
+    from .inventory import InventoryItem
 
 _Hook = TypeVar("_Hook", bound=Callable[..., object])
 
@@ -97,6 +98,7 @@ class Extension:
         self.config_root = source.config_root if source else None
         self.output_root = output_root
         self.cache: dict[str, object] = {}
+        self.class_targets: Mapping[str, InventoryItem] = {}
         self._source = source
         self._imports = _ImportOwner(source) if source is not None else None
         self._object_hooks = OBJECT_HOOKS.copy()

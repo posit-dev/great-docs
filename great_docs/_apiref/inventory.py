@@ -26,6 +26,31 @@ class InventoryItem(Walkable):
     """Short names this object claims, before ambiguity is arbitrated"""
 
 
+def class_targets(items: list[InventoryItem]) -> dict[str, InventoryItem]:
+    """
+    Index published classes by documentation path and canonical path
+
+    Prefer a public path that matches the lookup name, then a public re-export.
+    Use reference order to break ties.
+    """
+    targets: dict[str, InventoryItem] = {}
+    for item in items:
+        if not item.uri or item.name != item.obj.path or not item.obj.is_class:
+            continue
+        for path in (item.name, item.obj.canonical_path):
+            current = targets.get(path)
+            if current is None or _class_target_rank(item, path) > _class_target_rank(
+                current, path
+            ):
+                targets[path] = item
+    return targets
+
+
+def _class_target_rank(item: InventoryItem, path: str) -> tuple[bool, bool]:
+    public = not item.obj.name.startswith("_")
+    return public, public and item.name == path
+
+
 def reference_uri(dir: str, stem: str, anchor: str | None = None) -> str:
     """
     Return a reference page's URI, relative to the site root

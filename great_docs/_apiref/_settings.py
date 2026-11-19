@@ -101,8 +101,13 @@ class Settings:
     source_links: SourceLinks = field(default_factory=SourceLinks)
     """The source-link destinations for documented objects"""
 
+    show_bases: bool = False
+    """Whether class documentation lists direct base classes"""
+
     def __post_init__(self) -> None:
-        """Validate global member placement settings"""
+        """Validate display and member placement settings"""
+        if not isinstance(cast("object", self.show_bases), bool):
+            raise ValueError("`show_bases` must be true or false.")
         same_page = cast("object", self.members_on_same_page)
         if same_page is not None and not isinstance(same_page, bool):
             raise ValueError("Global `members_on_same_page` must be true, false or null.")

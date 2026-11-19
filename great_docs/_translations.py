@@ -7840,6 +7840,38 @@ UI_TRANSLATIONS: dict[str, dict[str, str]] = {
 # ══════════════════════════════════════════════════════════════════════════════
 
 
+# Reference labels render into the page and need no browser translation bundle.
+_REFERENCE_TRANSLATIONS: dict[str, dict[str, str]] = {
+    "base_classes": {
+        "en": "Bases",
+        "fr": "Bases",
+        "de": "Basisklassen",
+        "es": "Bases",
+        "pt": "Bases",
+        "it": "Basi",
+        "nl": "Basisklassen",
+        "ja": "基底クラス",
+        "ko": "기반 클래스",
+        "zh-Hans": "基类",
+        "zh-Hant": "基底類別",
+        "ru": "Базовые классы",
+        "pl": "Klasy bazowe",
+        "tr": "Temel sınıflar",
+        "sv": "Baser",
+        "da": "Basisklasser",
+        "nb": "Basisklasser",
+        "is": "Grunnklasar",
+        "fi": "Kantaluokat",
+        "cs": "Základní třídy",
+        "ro": "Clase de bază",
+        "el": "Βάσεις",
+        "hi": "आधार",
+        "ar": "الفئات الأساسية",
+        "he": "מחלקות בסיס",
+    },
+}
+
+
 def translate(key: str, language: str = DEFAULT_LANGUAGE) -> str:
     """
     Look up a single translation string.
@@ -7857,7 +7889,7 @@ def translate(key: str, language: str = DEFAULT_LANGUAGE) -> str:
     str
         The translated string (may contain ``{placeholder}`` tokens).
     """
-    entry = UI_TRANSLATIONS.get(key)
+    entry = UI_TRANSLATIONS.get(key) or _REFERENCE_TRANSLATIONS.get(key)
     if entry is None:
         return key
     return entry.get(language, entry.get(DEFAULT_LANGUAGE, key))

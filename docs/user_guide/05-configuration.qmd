@@ -937,6 +937,19 @@ reference:
 
 If no `reference` config is provided, Great Docs auto-generates sections from discovered exports.
 
+### Base Classes
+
+Set `reference.show_bases` to `true` to list direct base classes below each class signature.
+The setting defaults to `false`.
+
+```{.yaml filename="docs/great-docs.yml"}
+reference:
+  show_bases: true
+```
+
+Great Docs still discovers sections automatically. To provide your own sections, put them under
+`reference.sections` alongside `show_bases`.
+
 ### Page Title and Description
 
 You can set a custom heading and introductory paragraph for the API reference index page:
