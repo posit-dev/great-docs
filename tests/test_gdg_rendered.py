@@ -2333,6 +2333,19 @@ def test_logo_in_rendered_html():
 
 
 @pytest.mark.dedicated
+def test_DED_navbar_logo_is_larger_in_the_expanded_navbar():
+    """The navbar logo grows to 32px only where the navbar is expanded."""
+    pkg = "gdtest_logo"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    css = _deployed_css(pkg)
+    assert css, "No CSS files found in _site"
+
+    assert "height:24px" in _mermaid_css_rule(css, ".navbar-logo")
+    assert re.search(r"@media\s*\(min-width:\s*992px\)\s*\{\s*\.navbar-logo\s*\{\s*height:\s*32px", css)
+
+
+@pytest.mark.dedicated
 @requires_bs4
 def test_display_name_in_title():
     """Config display_name appears in the site navbar/title."""
@@ -8846,6 +8859,19 @@ def test_DED_tag_location_tags_index_page_generated():
     text = soup.get_text()
     for tag in ("Python", "API", "Setup"):
         assert tag in text, f"Tag '{tag}' missing from tags index page"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_tags_index_linked_from_homepage_not_navbar():
+    """The homepage sidebar links the tags index, and the navbar has no Tags item."""
+    pkg = "gdtest_page_tags"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    soup = _load_html(_site_dir(pkg) / "index.html")
+    assert soup.select_one('nav.navbar a[href*="tags/"]') is None
+    assert soup.select_one('.gd-homepage-sidebar a[href="tags/index.html"]') is not None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
