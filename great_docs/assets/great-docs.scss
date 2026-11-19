@@ -1576,6 +1576,14 @@ div.sidebar-item-container {
     flex-shrink: 0;
 }
 
+/* The expanded navbar is tall enough for a larger logo without growing. The collapsed
+   navbar stacks the logo in its own row, so it keeps the smaller size there. */
+@media (min-width: 992px) {
+    .navbar-logo {
+        height: 32px;
+    }
+}
+
 /* Version badge in navbar title */
 .version-badge {
     font-size: 0.65em;

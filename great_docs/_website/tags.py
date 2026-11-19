@@ -17,11 +17,10 @@ from typing import TYPE_CHECKING, Any
 from yaml12 import format_yaml
 
 from .._content.naming import title_from_name
-from .._contribution import Contribution, InlineData, NavbarLink
+from .._contribution import Contribution, InlineData
 from .._translations import translate
 from . import page_scan
 from .icons import get_icon_svg
-from .navigation import navbar
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -327,8 +326,9 @@ def write(config: Config, layout: Layout, *, report: Callable[[str], None]) -> C
     """
     Write the tags index page and the tag pill data
 
-    When `tags.index_page` is set, the index page is written with a navbar link labelled
-    in the site's language. The data file is written when `tags.show_on_pages` is set.
+    The index page is written when `tags.index_page` is set. It gets no navbar link: the
+    homepage sidebar and each tag pill link to it. The data file is written when
+    `tags.show_on_pages` is set.
 
     Parameters
     ----------
@@ -342,8 +342,7 @@ def write(config: Config, layout: Layout, *, report: Callable[[str], None]) -> C
     Returns
     -------
     :
-        The index page's navbar link before Reference and the data for `page-tags.js`,
-        each when enabled, or `None` when no page has a visible tag.
+        The data for `page-tags.js` when enabled, or `None` when no page has a visible tag.
     """
     build_dir = layout.build_dir
     pages = collect(config, layout)
@@ -351,23 +350,18 @@ def write(config: Config, layout: Layout, *, report: Callable[[str], None]) -> C
     if not groups:
         return None
 
-    links: tuple[NavbarLink, ...] = ()
     if config.tags_index_page:
         index = build_dir / INDEX_PAGE
         index.parent.mkdir(parents=True, exist_ok=True)
         _ = index.write_text(render_index(groups, config), encoding="utf-8")
         report(f"Created {index.relative_to(build_dir)}")
-        link = NavbarLink(
-            text=navbar.TAGS.label(config), href=INDEX_PAGE, before="reference/index.qmd"
-        )
-        links = (link,)
 
     data: tuple[InlineData, ...] = ()
     if config.tags_show_on_pages:
         pills = page_data(pages, groups, config, report=report)
         _ = (build_dir / DATA_FILENAME).write_text(json.dumps(pills), encoding="utf-8")
         data = (InlineData("__GD_TAGS_DATA__", pills, before="page-tags.js"),)
-    return Contribution(navbar=links, inline_data=data)
+    return Contribution(inline_data=data)
 
 
 def _levels(tag: str, config: Config) -> tuple[str, ...]:
