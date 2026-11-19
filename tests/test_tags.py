@@ -14,7 +14,7 @@ import pytest
 from great_docs._build import generated
 from great_docs._build.ownership import validate_build_dir
 from great_docs._build.steps import Skipped
-from great_docs._contribution import Contribution, InlineData, NavbarLink
+from great_docs._contribution import Contribution, InlineData
 from great_docs._project.layout import Layout
 from great_docs._website import inline_data, page_scan, quarto_yml, tags
 from great_docs._yaml import split_front_matter
@@ -748,7 +748,6 @@ class TestWrite:
         written = json.loads((layout.build_dir / "_tags.json").read_text(encoding="utf-8"))
         assert reported == ["Created tags/index.qmd"]
         assert contribution == Contribution(
-            navbar=(NavbarLink("Tags", "tags/index.qmd", before="reference/index.qmd"),),
             inline_data=(InlineData("__GD_TAGS_DATA__", written, before="page-tags.js"),),
         )
 
@@ -884,17 +883,18 @@ class TestTagsStep:
         assert entries[1] == "page-tags.js"
         validate_build_dir(docs.layout.build_dir)
 
-    def test_links_the_index_page_before_reference(self, tmp_path: Path):
-        """Insert a translated Tags link before Reference"""
-        docs = _docs(tmp_path, "tags: true\nsite:\n  lang: fr\n")
+    def test_leaves_the_navbar_unchanged(self, tmp_path: Path):
+        """Add no navbar link for the index page, which the homepage sidebar links instead"""
+        docs = _docs(tmp_path)
         _make_qmd(docs.layout.build_dir / "user-guide" / "page.qmd", "Page", tags=["Python"])
 
         run = make_run(docs)
         _ = generated.tags(run, docs._config, docs.layout)
         apply_contributions(docs, run)
 
+        assert (docs.layout.build_dir / "tags" / "index.qmd").exists()
         left = quarto_yml.read(docs.layout.build_dir)["website"]["navbar"]["left"]
-        assert left == [{"text": "Étiquettes", "href": "tags/index.qmd"}, REFERENCE]
+        assert left == [REFERENCE]
 
     def test_skips_without_tagged_pages(self, tmp_path: Path):
         """Report a skipped step when the project has no tagged pages"""
