@@ -2204,6 +2204,110 @@ body.quarto-light .navbar .aa-SubmitButton svg {
     fill: var(--gd-navbar-text);
 }
 
+/* Search overlay and results. Quarto gives every result row and container a light
+   background and marks the selected row with the theme's primary color, so these
+   rules match its selectors and use the --gd-search-* colors of the current mode. */
+.aa-DetachedContainer,
+.aa-DetachedFormContainer,
+.aa-DetachedContainer .aa-Panel,
+.aa-DetachedOverlay .aa-Panel,
+#quarto-search-results .aa-Panel {
+    background-color: var(--gd-search-bg);
+}
+
+#quarto-search-results .aa-Panel {
+    border-color: var(--gd-border-color);
+}
+
+.aa-DetachedContainer {
+    box-shadow: 0 0 0 1px var(--gd-border-color);
+}
+
+.aa-DetachedFormContainer {
+    border-bottom-color: var(--gd-border-color);
+}
+
+.aa-DetachedCancelButton {
+    color: var(--gd-text-secondary);
+
+    &:hover {
+        box-shadow: 0 0 0 1px var(--gd-border-color);
+    }
+}
+
+.aa-Autocomplete .aa-Form,
+.aa-DetachedFormContainer .aa-Form {
+    background-color: var(--gd-search-input-bg);
+    border-color: var(--gd-search-input-border);
+    color: var(--gd-text-primary);
+
+    // Replace Quarto's 2px outline with a lighter ring that still marks focus
+    &:has(.aa-Input:focus-visible) {
+        outline: none;
+        border-color: var(--gd-search-focus);
+        box-shadow: 0 0 0 3px var(--gd-search-focus-ring);
+    }
+
+    .aa-InputWrapper .aa-Input,
+    .aa-InputWrapper .aa-Input::placeholder {
+        color: var(--gd-text-primary);
+    }
+}
+
+.aa-DetachedOverlay,
+#quarto-search-results {
+    .aa-SourceHeader .search-result-header {
+        background-color: var(--gd-search-header-bg);
+        color: var(--gd-text-muted);
+    }
+
+    .aa-Item .search-item {
+        background-color: var(--gd-search-bg);
+        border-color: var(--gd-border-color);
+        color: var(--gd-text-primary);
+    }
+
+    .aa-Item .search-result-doc {
+        border-top-color: var(--gd-border-color);
+    }
+
+    .aa-Item .search-result-doc:not(.document-selectable) .search-result-title-container {
+        background-color: var(--gd-search-bg);
+        color: var(--gd-text-primary);
+    }
+
+    li.aa-Item[aria-selected="false"] .search-item {
+        background-color: var(--gd-search-bg);
+    }
+
+    li.aa-Item[aria-selected] .search-item {
+        &.search-result-more,
+        .search-result-section,
+        .search-result-text,
+        .search-result-title-container,
+        .search-result-text-container {
+            color: var(--gd-text-primary);
+        }
+
+        mark.search-match,
+        .search-match.mark {
+            background-color: var(--gd-search-match-bg);
+            color: inherit;
+        }
+    }
+
+    li.aa-Item[aria-selected="true"] .search-item {
+        &,
+        &.search-result-more,
+        .search-result-section,
+        .search-result-text,
+        .search-result-title-container,
+        .search-result-text-container {
+            background-color: var(--gd-search-selected-bg);
+        }
+    }
+}
+
 body.quarto-light .navbar .quarto-navbar-tools button,
 body.quarto-light .navbar .quarto-navbar-tools .quarto-navigation-tool {
     display: flex;
@@ -3839,6 +3943,16 @@ body.quarto-dark .gd-keyboard-btn {
     --gd-accent-blue: rgba(101, 180, 237, 0.75);
     --gd-citation-color: #1a6cae;
 
+    /* Search overlay - light mode */
+    --gd-search-bg: #fff;
+    --gd-search-header-bg: #f2f2f2;
+    --gd-search-input-bg: #fff;
+    --gd-search-input-border: #dee2e6;
+    --gd-search-selected-bg: #e8f3fc;
+    --gd-search-match-bg: #fde68a;
+    --gd-search-focus: #65b4ed;
+    --gd-search-focus-ring: rgba(101, 180, 237, 0.25);
+
     /* Syntax highlighting - light mode */
     --gd-syn-class: #0e84b5;
     --gd-syn-name: #4758AB;
@@ -3876,6 +3990,16 @@ body.quarto-dark {
     --gd-active-link: #ff9f43;
     --gd-accent-blue: rgba(101, 180, 237, 0.6);
     --gd-citation-color: #7cb8e8;
+
+    /* Search overlay - dark mode */
+    --gd-search-bg: #222222;
+    --gd-search-header-bg: #2a2a2a;
+    --gd-search-input-bg: #2a2a2a;
+    --gd-search-input-border: #3d3d3d;
+    --gd-search-selected-bg: #2b3742;
+    --gd-search-match-bg: #6b5714;
+    --gd-search-focus: #7cb8e8;
+    --gd-search-focus-ring: rgba(124, 184, 232, 0.25);
 
     /* Syntax highlighting - dark mode (optimized for contrast) */
     --gd-syn-class: #56c8ff;
@@ -4603,51 +4727,7 @@ body.quarto-dark .navbar .navbar-toggler .navbar-toggler-icon {
     --bs-navbar-toggler-icon-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='%23e0e0e0' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
 }
 
-body.quarto-dark .aa-Panel {
-    background-color: var(--gd-bg-secondary);
-    border-color: var(--gd-border-color);
-}
-
-body.quarto-dark .aa-Item {
-    color: var(--gd-text-primary);
-}
-
-body.quarto-dark .aa-Item:hover,
-body.quarto-dark .aa-Item[aria-selected="true"] {
-    background-color: var(--gd-bg-tertiary);
-}
-
-/* Search results styling - ensure readable text in dark mode */
-body.quarto-dark .search-result-title,
-body.quarto-dark p.search-result-title,
-body.quarto-dark .aa-Panel .search-result-title,
-body.quarto-dark #quarto-search-results .search-result-title,
-html.quarto-dark .search-result-title,
-html.quarto-dark p.search-result-title {
-    color: var(--gd-text-primary) !important;
-}
-
-body.quarto-dark .search-result-header,
-body.quarto-dark div.search-result-header,
-body.quarto-dark .aa-Panel .search-result-header,
-body.quarto-dark #quarto-search-results .search-result-header,
-html.quarto-dark .search-result-header,
-html.quarto-dark div.search-result-header {
-    color: var(--gd-text-secondary) !important;
-}
-
-body.quarto-dark .search-result-text {
-    color: var(--gd-text-secondary);
-}
-
-body.quarto-dark .search-result-doc-title {
-    color: var(--gd-text-primary);
-}
-
-body.quarto-dark .search-result-section {
-    color: var(--gd-text-muted);
-}
-
+/* The search overlay's dark colors come from the --gd-search-* properties */
 body.quarto-dark .aa-SourceHeader {
     color: var(--gd-text-muted);
     border-bottom-color: var(--gd-border-color);
@@ -4672,13 +4752,6 @@ body.quarto-dark .search-result-link:hover {
 /* Algolia/Autocomplete specific dark mode */
 body.quarto-dark .aa-Autocomplete {
     background-color: transparent;
-}
-
-body.quarto-dark .aa-Form,
-html.quarto-dark .aa-Form,
-:root[data-bs-theme="dark"] .aa-Form {
-    background-color: var(--gd-bg-tertiary);
-    border-color: var(--gd-border-color);
 }
 
 body.quarto-dark .aa-Input,
