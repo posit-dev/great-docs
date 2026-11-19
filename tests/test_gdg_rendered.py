@@ -2342,7 +2342,9 @@ def test_DED_navbar_logo_is_larger_in_the_expanded_navbar():
     assert css, "No CSS files found in _site"
 
     assert "height:24px" in _mermaid_css_rule(css, ".navbar-logo")
-    assert re.search(r"@media\s*\(min-width:\s*992px\)\s*\{\s*\.navbar-logo\s*\{\s*height:\s*32px", css)
+    assert re.search(
+        r"@media\s*\(min-width:\s*992px\)\s*\{\s*\.navbar-logo\s*\{\s*height:\s*32px", css
+    )
 
 
 @pytest.mark.dedicated
