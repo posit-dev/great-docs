@@ -11914,6 +11914,18 @@ def test_DED_sidebar_sections_expanded_by_css():
     toggle = _mermaid_css_rule(css, "a.sidebar-item-toggle.text-start")
     assert "display:none" in toggle, "Section chevrons must be hidden"
 
+    # Quarto 1.11 puts the label and the chevron in one <button>
+    header = (
+        "#quarto-sidebar .sidebar-item-section > .sidebar-item-container"
+        " > .sidebar-item-text:not([href])"
+    )
+    chevron = _mermaid_css_rule(css, header + " > .bi-chevron-right")
+    assert "display:none" in chevron, "Chevrons inside heading buttons must be hidden"
+
+    label = _mermaid_css_rule(css, header + " > .menu-text")
+    assert "text-transform:uppercase" in label
+    assert "font-weight:700" in label
+
     section = _mermaid_css_rule(css, "#quarto-sidebar ul.collapse.sidebar-section")
     assert "display:block" in section, "Collapsible sidebar sections must stay visible"
 
