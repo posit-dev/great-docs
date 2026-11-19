@@ -12009,6 +12009,67 @@ def test_DED_body_text_uses_the_paragraph_font():
     assert "font-size:.75em" in marker
 
 
+def _css_rules(css: str, selector: str) -> list[tuple[int, str]]:
+    """Return the offset and declarations of every CSS rule whose selector list contains `selector`."""
+    rules: list[tuple[int, str]] = []
+    for match in re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
+        selectors = [re.sub(r"\s+", " ", s).strip() for s in match.group(1).split(",")]
+        if selector in selectors:
+            rules.append((match.start(), re.sub(r"\s+", "", match.group(2))))
+    return rules
+
+
+@pytest.mark.dedicated
+def test_DED_search_overlay_uses_the_site_colors():
+    """
+    Deployed CSS overrides Quarto's search result colors in both modes
+
+    Quarto gives each result row a light background and the selected row the theme's
+    primary color. The GD rules share Quarto's selectors, so they must come later.
+    """
+    pkg = "gdtest_index_frontmatter"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    css = _deployed_css(pkg)
+    assert css, "No CSS files found in _site"
+
+    def last_rule(selector: str) -> tuple[int, str]:
+        rules = _css_rules(css, selector)
+        assert len(rules) >= 2, f"Expected Quarto and GD rules for {selector!r}"
+        return rules[-1]
+
+    row = ".aa-DetachedOverlay li.aa-Item[aria-selected=false] .search-item"
+    assert "background-color:var(--gd-search-bg)" in last_rule(row)[1]
+    selected = ".aa-DetachedOverlay li.aa-Item[aria-selected=true] .search-item"
+    assert "background-color:var(--gd-search-selected-bg)" in last_rule(selected)[1]
+
+    # Text and match highlights use one rule for selected and unselected rows
+    for element, declaration in (
+        (".search-result-text", "color:var(--gd-text-primary)"),
+        ("mark.search-match", "background-color:var(--gd-search-match-bg)"),
+    ):
+        gd = _css_rules(
+            css, f".aa-DetachedOverlay li.aa-Item[aria-selected] .search-item {element}"
+        )
+        assert gd and declaration in gd[-1][1]
+        for state in ("true", "false"):
+            quarto = _css_rules(
+                css, f".aa-DetachedOverlay li.aa-Item[aria-selected={state}] .search-item {element}"
+            )
+            # Quarto's rule comes first; the GD selected-row rule may follow it
+            assert quarto and quarto[0][0] < gd[-1][0]
+
+    # A light ring replaces the 2px focus outline that newer Quarto releases add
+    quarto_focus = _css_rules(css, ".aa-Form:has(.aa-Input:focus-visible)")
+    gd_focus = _css_rules(css, ".aa-DetachedFormContainer .aa-Form:has(.aa-Input:focus-visible)")
+    assert gd_focus
+    assert not quarto_focus or quarto_focus[0][0] < gd_focus[-1][0]
+    assert "outline:none" in gd_focus[-1][1]
+    assert "box-shadow:0003pxvar(--gd-search-focus-ring)" in gd_focus[-1][1]
+
+    assert re.search(r"body\.quarto-dark\s*\{[^}]*--gd-search-bg:\s*#222222", css)
+
+
 # ── ref_section_order ───────────────────────────────────────────────────────
 
 
