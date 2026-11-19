@@ -50,15 +50,31 @@ a {
    text-decoration: none;
 }
 
+// Cross-reference links take the body link colour wherever they appear. Only
+// links in `p` and `li` got it before, so links elsewhere (See Also terms,
+// headings) fell back to the theme's accent colour.
 a.gdls-link {
+   color: var(--gd-link-color);
    text-decoration: underline;
    text-underline-offset: 0.25em;
    text-decoration-thickness: 0.125em;
 }
 
+body.quarto-dark a.gdls-link:hover {
+   color: #9dcaf0;
+}
+
 a.gdls-code {
    font-family: $font-family-monospace;
    font-size: 0.875em;
+}
+
+// A link around `code` looks like a `gdls-code` link: no code chip. `body` and
+// `:not(.sourceCode)` outrank the chip rules for `p code` and dark-mode `code`.
+body a.gdls-link > code:not(.sourceCode) {
+   color: inherit;
+   background-color: transparent;
+   padding: 0;
 }
 
 // Let the browser position and size the wrapped `sup`. Generate the brackets on
@@ -1411,9 +1427,29 @@ summary::marker {
     color: #333;
 }
 
+/* The active entry matches the active page in the left sidebar. Quarto colours
+   it with an !important rule, so this one needs !important too. */
 #quarto-margin-sidebar nav ul li a.active {
-    color: #0d6efd;
+    color: var(--gd-active-link) !important;
+    border-left-color: var(--gd-active-link);
     font-weight: 500;
+}
+
+/* Code in an entry keeps its font but takes the entry's colour, without the
+   chip that code in sidebar links gets */
+#TOC .nav-link code {
+    color: inherit;
+    background-color: transparent;
+    padding: 0;
+}
+
+/* Heading anchor icons take a muted text colour instead of the theme accent */
+.anchorjs-link {
+    color: var(--gd-text-muted);
+}
+
+.anchorjs-link:hover {
+    color: var(--gd-text-primary);
 }
 
 #navbarCollapse > ul.navbar-nav.navbar-nav-scroll.me-auto > li > a:hover {
