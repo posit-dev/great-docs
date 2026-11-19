@@ -1,5 +1,7 @@
 """Tests for annotation formatting."""
 
+import re
+
 import pytest
 
 from great_docs._apiref._format import render_formatted_expr
@@ -85,11 +87,12 @@ class TestCSSAnnotationHeight:
         assert "min-height: 32px" in css_source
 
     def test_dt_no_fixed_height(self, css_source):
-        # Ensure we didn't accidentally leave a fixed height
-        # Match "height: 32px" that is NOT preceded by "min-"
-        lines = css_source.splitlines()
-        for line in lines:
+        # Ensure we didn't accidentally leave a fixed height on a dt rule. Other
+        # rules, like the navbar logo's, may set a fixed 32px height.
+        selector = ""
+        for line in css_source.splitlines():
             stripped = line.strip()
-            if stripped == "height: 32px;":
-                # Check it's inside a dt block
-                pytest.fail("Found fixed 'height: 32px' in CSS — should be 'min-height'")
+            if stripped.endswith("{"):
+                selector = stripped
+            elif stripped == "height: 32px;" and re.search(r"(?<![\w-])dt\b", selector):
+                pytest.fail(f"Found fixed 'height: 32px' in {selector!r} — should be 'min-height'")
