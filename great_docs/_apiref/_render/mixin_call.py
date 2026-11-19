@@ -230,7 +230,9 @@ class __RenderDocCallMixin(RenderDoc):
                 if is_class or (self._callable.excluded_names and is_method)
                 else ov.parameters
             )
-            if self._callable.excluded_names:
+            if self._callable.excluded_names or (
+                parameters and parameters[-1].kind == gf.ParameterKind.positional_only
+            ):
                 params = self._signature_parameters(parameters, render_parameter)
             else:
                 params = [render_parameter(p) for p in parameters]
@@ -276,11 +278,7 @@ class __RenderDocCallMixin(RenderDoc):
                     params.append("*")
 
             params.append(render(parameter))
-        if (
-            parameters
-            and parameters[-1].kind == gf.ParameterKind.positional_only
-            and self._callable.excluded_names
-        ):
+        if parameters and parameters[-1].kind == gf.ParameterKind.positional_only:
             params.append("/")
         return params
 

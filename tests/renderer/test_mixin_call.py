@@ -4,10 +4,10 @@ RST directive handling, overload signatures, parameter exclusion, and **kwargs r
 
 from __future__ import annotations
 
-from great_docs._apiref._settings import Settings
 import griffe as gf
 import pytest
 
+from great_docs._apiref._settings import CallableSignatures, Settings
 from great_docs._apiref._tools import render_code_variable
 
 
@@ -209,7 +209,7 @@ def test_overload_with_defaults_and_return():
     assert "process" in qmd
 
 
-def test_overload_untyped_and_no_return():
+def test_overload_untyped_and_no_return() -> None:
     """Overloads with default-only and bare params, no return type."""
     code = '''
     from typing import overload
@@ -218,7 +218,7 @@ def test_overload_untyped_and_no_return():
     def func(x: int) -> int: ...
 
     @overload
-    def func(x=5): ...
+    def func(x=5, /): ...
 
     @overload
     def func(x): ...
@@ -229,8 +229,7 @@ def test_overload_untyped_and_no_return():
     '''
     qmd = render_code_variable(code, "func")
 
-    # All three overload forms should render
-    assert "func" in qmd
+    assert "func(x: int) -> int\nfunc(\n    x=5,\n    /,\n)\nfunc(x)" in qmd
 
 
 def test_var_keyword_in_signature():
@@ -488,6 +487,23 @@ def test_positional_only_separator():
     qmd = render_code_variable(code, "func")
 
     assert "/" in qmd
+
+
+@pytest.mark.parametrize(
+    ("style", "expected"),
+    [
+        ("highlighted", "```pythonsignature\nf(a, b, /)\n```"),
+        (
+            "plain",
+            "<code>[f]{.sig-name}([a]{.doc-parameter-name}, [b]{.doc-parameter-name}, /)</code>",
+        ),
+    ],
+)
+def test_trailing_positional_only_separator(style: str, expected: str) -> None:
+    settings = Settings(callable_signatures=CallableSignatures(style=style, wrap="width"))
+    qmd = render_code_variable("def f(a, b, /): ...", "f", settings=settings)
+
+    assert expected in qmd
 
 
 def test_keyword_only_separator():
