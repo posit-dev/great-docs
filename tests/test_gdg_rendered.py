@@ -11960,6 +11960,27 @@ def test_DED_links_and_toc_avoid_theme_accent():
     assert "color:var(--gd-text-muted)" in anchor
 
 
+@pytest.mark.dedicated
+def test_DED_body_text_uses_the_paragraph_font():
+    """
+    Deployed CSS sets the body in the paragraph font and keeps disclosure triangles small
+
+    List items, definition lists and code-fold labels inherit the body font, so they would
+    otherwise render in Flatly's Lato beside Open Sans paragraphs.
+    """
+    pkg = "gdtest_index_frontmatter"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    css = _deployed_css(pkg)
+    assert css, "No CSS files found in _site"
+
+    assert re.search(r'--bs-body-font-family:\s*"Open Sans"', css)
+    assert "family=Lato" not in css, "Lato is unused, so it must not be loaded"
+
+    marker = _mermaid_css_rule(css, "summary::marker")
+    assert "font-size:.75em" in marker
+
+
 # ── ref_section_order ───────────────────────────────────────────────────────
 
 
