@@ -23,7 +23,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape as xml_escape
 
 from .manifest import Manifest
-from .renderer import Line
+from .renderer import BG_RENDERING, Line
 
 # Past this size, README viewers can play an animated SVG slowly or not at all
 SIZE_WARNING_BYTES = 2 * 1024 * 1024
@@ -362,11 +362,14 @@ def _has_content(line: Line) -> bool:
 def _row_def(line_id: int, line: Line, cell_w: float, cell_h: float) -> str:
     """One row as a reusable group, drawn at y=0 (see `render_svg`)."""
     parts = [f'<g id="l{line_id}">']
-    for col, length, color in line[0]:
-        parts.append(
-            f'<rect x="{col * cell_w:.1f}" width="{length * cell_w:.1f}" '
-            f'height="{cell_h:.1f}" fill="{color}"/>'
-        )
+    if line[0]:
+        parts.append(f"<g {BG_RENDERING}>")
+        for col, length, color in line[0]:
+            parts.append(
+                f'<rect x="{col * cell_w:.1f}" width="{length * cell_w:.1f}" '
+                f'height="{cell_h:.1f}" fill="{color}"/>'
+            )
+        parts.append("</g>")
     for col, text, color, classes in line[1]:
         cls = " ".join(["t", *(_CLASSES.get(c, c) for c in classes.split())])
         parts.append(f'<text x="{col * cell_w:.1f}" class="{cls}" fill="{color}">')
