@@ -172,6 +172,7 @@ def run(
     version_tags: list[str] | None = None,
     latest_only: bool = False,
     jobs: int | str | None = None,
+    watch_port: int | None = None,
 ) -> None:
     """
     Build the documentation site or serve it with `quarto preview`
@@ -200,6 +201,8 @@ def run(
     jobs
         The number of Quarto processes that render a single-version site, `"auto"`, or
         `None` to read the `GREAT_DOCS_RENDER_JOBS` environment variable.
+    watch_port
+        The requested localhost port in watch mode, or `None` to let Quarto choose.
 
     Raises
     ------
@@ -288,7 +291,9 @@ def run(
 
     try:
         if watch:
-            _watch(current, config, layout, log, steps, remote=remote, refresh=refresh)
+            _watch(
+                current, config, layout, log, steps, remote=remote, refresh=refresh, port=watch_port
+            )
             return
 
         run_steps(steps, log, layout.build_dir)
@@ -661,6 +666,7 @@ def _watch(
     *,
     remote: Remote,
     refresh: bool,
+    port: int | None = None,
 ) -> None:
     """
     Prepare the Quarto project and preview it with rebuilds after source edits
@@ -689,11 +695,13 @@ def _watch(
         The source of repository and PyPI data.
     refresh
         Whether each rebuild rediscovers the package's exports for the API reference.
+    port
+        The requested localhost port, or `None` to let Quarto choose.
 
     Raises
     ------
     BuildError
-        If an initial preparation step fails. The log already contains the report.
+        If initial preparation or the preview fails. The failure has already been reported.
     """
     try:
         run_steps(steps, log, layout.build_dir)
@@ -726,7 +734,7 @@ def _watch(
             finally:
                 _report_uncovered(current, inputs, reported_inputs)
 
-    watch.serve(layout, preview_env, rebuild, run.quarto_config, package, inputs=inputs)
+    watch.serve(layout, preview_env, rebuild, run.quarto_config, package, inputs=inputs, port=port)
 
 
 def _report_uncovered(current: Run, inputs: watch.WatchInputs, reported: set[Path]) -> None:

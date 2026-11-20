@@ -9015,8 +9015,8 @@ def test_build_with_assets_triggers_config_update(tmp_path):
     assert (docs.layout.build_dir / "assets" / "logo.png").read_bytes() == b"png"
 
 
-def test_build_watch_mode(tmp_path):
-    """Check that watch mode starts `quarto preview`"""
+@pytest.mark.parametrize("port_args", [[], ["--port", "4200"]])
+def test_build_watch_mode(tmp_path: Path, port_args: list[str]) -> None:
     docs = _buildable_docs(tmp_path)
 
     with (
@@ -9024,10 +9024,11 @@ def test_build_watch_mode(tmp_path):
         patch("great_docs._build.watch.source_changes", return_value=(paths for paths in ())),
     ):
         popen = subprocess.Popen
-        docs.build(watch=True, refresh=False)
+        watch_port = int(port_args[-1]) if port_args else None
+        docs.build(watch=True, refresh=False, watch_port=watch_port)
 
     quarto_calls = [call.args[0] for call in popen.call_args_list if call.args[0][0] == "quarto"]
-    assert quarto_calls == [["quarto", "preview", "--no-browser"]]
+    assert quarto_calls == [["quarto", "preview", "--no-browser", *port_args]]
 
 
 def test_build_watch_mode_counts_only_the_steps_it_runs(
@@ -12596,12 +12597,17 @@ def test_cli_build_success():
             result = runner.invoke(build, ["--project-path", tmp_dir])
             assert result.exit_code == 0
             mock_instance.build.assert_called_once_with(
-                watch=False, refresh=True, version_tags=None, latest_only=False, jobs=None
+                watch=False,
+                refresh=True,
+                version_tags=None,
+                latest_only=False,
+                jobs=None,
+                watch_port=None,
             )
 
 
-def test_cli_build_with_watch():
-    """CLI build command passes watch flag."""
+@pytest.mark.parametrize("port", [None, 4200])
+def test_cli_build_with_watch(port: int | None) -> None:
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -12609,11 +12615,37 @@ def test_cli_build_with_watch():
             mock_instance = MagicMock()
             MockGD.return_value = mock_instance
 
-            result = runner.invoke(build, ["--project-path", tmp_dir, "--watch"])
+            args = ["--project-path", tmp_dir, "--watch"]
+            if port is not None:
+                args.extend(["--port", str(port)])
+            result = runner.invoke(build, args)
             assert result.exit_code == 0
             mock_instance.build.assert_called_once_with(
-                watch=True, refresh=True, version_tags=None, latest_only=False, jobs=None
+                watch=True,
+                refresh=True,
+                version_tags=None,
+                latest_only=False,
+                jobs=None,
+                watch_port=port,
             )
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        (["--port", "4200"], "requires --watch"),
+        (["--watch", "--port", "0"], "1<=x<=65535"),
+        (["--watch", "--port", "65536"], "1<=x<=65535"),
+        (["--watch", "--port", "auto"], "is not a valid integer"),
+    ],
+)
+def test_cli_build_rejects_invalid_watch_port(args: list[str], message: str) -> None:
+    with patch("great_docs._cli.build.GreatDocs") as docs:
+        result = CliRunner().invoke(build, args)
+
+    assert result.exit_code == 2
+    assert message in result.output
+    docs.assert_not_called()
 
 
 def test_cli_build_no_refresh():
@@ -12628,7 +12660,12 @@ def test_cli_build_no_refresh():
             result = runner.invoke(build, ["--project-path", tmp_dir, "--no-refresh"])
             assert result.exit_code == 0
             mock_instance.build.assert_called_once_with(
-                watch=False, refresh=False, version_tags=None, latest_only=False, jobs=None
+                watch=False,
+                refresh=False,
+                version_tags=None,
+                latest_only=False,
+                jobs=None,
+                watch_port=None,
             )
 
 
@@ -12644,7 +12681,12 @@ def test_cli_build_jobs():
             result = runner.invoke(build, ["--project-path", tmp_dir, "--jobs", "auto"])
             assert result.exit_code == 0
             mock_instance.build.assert_called_once_with(
-                watch=False, refresh=True, version_tags=None, latest_only=False, jobs="auto"
+                watch=False,
+                refresh=True,
+                version_tags=None,
+                latest_only=False,
+                jobs="auto",
+                watch_port=None,
             )
 
 

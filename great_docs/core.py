@@ -213,9 +213,11 @@ class GreatDocs:
         version_tags: list[str] | None = None,
         latest_only: bool = False,
         jobs: int | str | None = None,
+        *,
+        watch_port: int | None = None,
     ) -> None:
         """
-        Build the documentation site.
+        Build the documentation site
 
         Generates API reference pages followed by `quarto render`. By default, re-discovers package
         exports and updates the API reference configuration before building.
@@ -246,6 +248,9 @@ class GreatDocs:
             reads the `GREAT_DOCS_RENDER_JOBS` environment variable and otherwise renders in one
             process. Sites that can't be split safely are rendered in one process anyway. Ignored
             for multi-version sites and in watch mode.
+        watch_port
+            A fixed localhost port from 1 to 65535 for watch mode. If omitted, Quarto
+            chooses an available port.
 
         Raises
         ------
@@ -256,6 +261,8 @@ class GreatDocs:
             configured reference name is missing from the installed package, the API reference
             cannot be generated, or Quarto fails to render the site. The failure has already
             been reported in the build log or on standard error.
+        ValueError
+            If the watch port is invalid or supplied with watch mode off.
 
         Examples
         --------
@@ -280,6 +287,16 @@ class GreatDocs:
         docs.build(refresh=False)
         ```
         """
+        if watch_port is not None:
+            if not watch:
+                raise ValueError("watch_port requires watch=True")
+            if (
+                not isinstance(watch_port, int)
+                or isinstance(watch_port, bool)
+                or not 1 <= watch_port <= 65535
+            ):
+                raise ValueError("watch_port must be an integer from 1 to 65535")
+
         pipeline.run(
             self._config,
             self.layout,
@@ -289,6 +306,7 @@ class GreatDocs:
             version_tags=version_tags,
             latest_only=latest_only,
             jobs=jobs,
+            watch_port=watch_port,
         )
 
     def preview(self, port: int = 3000, *, open_path: str = "", open_browser: bool = True) -> None:
