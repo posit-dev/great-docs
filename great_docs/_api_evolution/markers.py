@@ -8,7 +8,7 @@ from pathlib import Path
 
 from great_docs._api_evolution.compare import diff_snapshots
 from great_docs._api_evolution.model import ApiSnapshot
-from great_docs._api_evolution.render import _escape_html, render_evolution_table
+from great_docs._api_evolution.render import _escape_html, render_evolution_markdown
 from great_docs._build.steps import USER_CODE_ERRORS
 
 EVOLUTION_ERRORS: tuple[type[Exception], ...] = (*USER_CODE_ERRORS, tomllib.TOMLDecodeError)
@@ -40,14 +40,14 @@ def process_evolution_markers(
     package: str | None = None,
 ) -> str:
     """
-    Replace `<!-- %evolution ... -->` markers in text with rendered tables
+    Replace `<!-- %evolution ... -->` markers with Quarto Markdown tables
 
     This function scans *content* (typically a `.qmd` file body) for HTML comment markers of the
     form::
 
         <!-- %evolution symbol="build" -->
 
-    and replaces each one with the output of :func:`render_evolution_table`.
+    and replaces each one with a table of the symbol’s signature changes.
 
     Supported attributes
     --------------------
@@ -62,7 +62,7 @@ def process_evolution_markers(
     disclosure
         `"true"` (default) or `"false"`.
     summary
-        Custom `<summary>` text for the disclosure wrapper.
+        Custom text for the collapsible table’s label.
     css
         `"true"` (default) or `"false"`: whether to include the `<style>` block. Set to `"false"`
         when multiple tables appear on the same page and only the first needs the CSS.
@@ -79,7 +79,7 @@ def process_evolution_markers(
     Returns
     -------
     :
-        `content` with evolution markers replaced by HTML tables. A missing `symbol` produces
+        `content` with evolution markers replaced by Quarto Markdown tables. A missing `symbol` produces
         an HTML error comment. Handled package and command-line loading errors, invalid
         `pyproject.toml` files, and Git or file errors also produce an error comment. Other
         exception types propagate.
@@ -94,8 +94,7 @@ def process_evolution_markers(
 
         <!-- %evolution symbol="build" changes_only="true" -->
 
-    After processing, the marker line is replaced with the full HTML table (and optionally embedded
-    CSS).
+    After processing, the table appears below the paragraph, with optional embedded CSS.
     """
     project_root = Path(project_path).resolve()
 
@@ -113,7 +112,7 @@ def process_evolution_markers(
             return val.lower() not in ("false", "no", "0")
 
         try:
-            return render_evolution_table(
+            markdown = render_evolution_markdown(
                 project_root,
                 symbol,
                 package=attrs.get("package") or package,
@@ -126,6 +125,10 @@ def process_evolution_markers(
             )
         except EVOLUTION_ERRORS as exc:
             return f"<!-- %evolution error for {_escape_html(symbol)}: {_escape_html(str(exc))} -->"
+
+        if markdown.startswith("<!--"):
+            return markdown
+        return f"\n\n{markdown}\n\n"
 
     return _EVOLUTION_MARKER_RE.sub(_replace, content)
 

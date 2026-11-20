@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -1819,19 +1821,19 @@ def test_whitespace_around_equals():
     assert _parse_marker_attrs('symbol = "build"') == {"symbol": "build"}
 
 
-@patch("great_docs._api_evolution.markers.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_markdown")
 def test_replaces_marker(mock_render):
-    mock_render.return_value = "<table>mock</table>"
+    mock_render.return_value = "| Version |\n| --- |\n| mock |"
     content = 'Before\n<!-- %evolution symbol="build" -->\nAfter'
     result = process_evolution_markers(content, "/fake")
 
-    assert "<table>mock</table>" in result
+    assert result == "Before\n\n\n| Version |\n| --- |\n| mock |\n\n\nAfter"
     assert "Before" in result
     assert "After" in result
     assert "<!-- %evolution" not in result
 
 
-@patch("great_docs._api_evolution.markers.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_markdown")
 def test_passes_attributes(mock_render):
     mock_render.return_value = "<table/>"
     content = '<!-- %evolution symbol="build" old_version="v1" new_version="v2" changes_only="false" disclosure="false" css="false" -->'
@@ -1854,7 +1856,7 @@ def test_missing_symbol_gives_error():
     assert result.startswith("<!--")
 
 
-@patch("great_docs._api_evolution.markers.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_markdown")
 def test_multiple_markers(mock_render):
     mock_render.side_effect = ["<table>A</table>", "<table>B</table>"]
     content = '<!-- %evolution symbol="foo" -->\n<!-- %evolution symbol="bar" -->'
@@ -1865,7 +1867,7 @@ def test_multiple_markers(mock_render):
     assert mock_render.call_count == 2
 
 
-@patch("great_docs._api_evolution.markers.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_markdown")
 def test_no_markers_returns_unchanged(mock_render):
     content = "No markers here."
     result = process_evolution_markers(content, "/fake")
@@ -1892,14 +1894,14 @@ def test_package_that_fails_to_load_gives_error_comment(tmp_path: Path):
     assert result.startswith("<!-- %evolution error for build: Syntax error")
 
 
-@patch("great_docs._api_evolution.markers.render_evolution_table", side_effect=TypeError("bug"))
+@patch("great_docs._api_evolution.markers.render_evolution_markdown", side_effect=TypeError("bug"))
 def test_unexpected_error_propagates(mock_render):
     """Propagate unexpected errors raised while rendering an evolution table"""
     with pytest.raises(TypeError, match="bug"):
         process_evolution_markers('<!-- %evolution symbol="build" -->', "/fake")
 
 
-@patch("great_docs._api_evolution.markers.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_markdown")
 def test_summary_attr(mock_render):
     mock_render.return_value = "<table/>"
     content = '<!-- %evolution symbol="build" summary="Build history" -->'
@@ -1910,7 +1912,7 @@ def test_summary_attr(mock_render):
     assert kwargs["summary_text"] == "Build history"
 
 
-@patch("great_docs._api_evolution.markers.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_markdown")
 def test_package_attr_overrides_argument(mock_render):
     mock_render.return_value = "<table/>"
     content = '<!-- %evolution symbol="fn" package="other_pkg" -->'
@@ -1921,7 +1923,7 @@ def test_package_attr_overrides_argument(mock_render):
     assert kwargs["package"] == "other_pkg"
 
 
-@patch("great_docs._api_evolution.markers.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_markdown")
 def test_reads_and_processes(mock_render, tmp_path):
     mock_render.return_value = "<table>result</table>"
     qmd = tmp_path / "test.qmd"
@@ -1935,7 +1937,7 @@ def test_reads_and_processes(mock_render, tmp_path):
     assert "<!-- %evolution" in qmd.read_text()
 
 
-@patch("great_docs._api_evolution.markers.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_markdown")
 def test_in_place(mock_render, tmp_path):
     mock_render.return_value = "<table>replaced</table>"
     qmd = tmp_path / "test.qmd"
@@ -1948,7 +1950,7 @@ def test_in_place(mock_render, tmp_path):
     assert "<!-- %evolution symbol" not in written
 
 
-@patch("great_docs._api_evolution.markers.render_evolution_table")
+@patch("great_docs._api_evolution.markers.render_evolution_markdown")
 def test_no_markers_skips_write(mock_render, tmp_path):
     qmd = tmp_path / "test.qmd"
     qmd.write_text("No markers.")
@@ -2030,9 +2032,98 @@ def test_python_bridge_renders_demo_json(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert result.stderr == ""
-    assert '<table class="gd-evolution-table">' in result.stdout
-    assert "project_path" in result.stdout
-    assert "v0.1.0" in result.stdout
+    assert "::: {.gd-evolution-table}" in result.stdout
+    assert "[project&#95;path]{.gd-evo-name}" in result.stdout
+    assert "v0&#46;1&#46;0" in result.stdout
+
+
+@pytest.mark.skipif(shutil.which("quarto") is None, reason="Quarto is not installed")
+def test_quarto_renders_evolution_tables(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    soup = pytest.importorskip("bs4").BeautifulSoup
+    monkeypatch.setenv("PATH", str(Path(sys.executable).parent), prepend=os.pathsep)
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).resolve().parents[1]))
+    monkeypatch.setenv("GIT_AUTHOR_DATE", "2024-01-15T12:00:00+00:00")
+
+    _git(tmp_path, "init")
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+    package = tmp_path / "mypkg"
+    package.mkdir()
+    source = package / "__init__.py"
+    source.write_text("def build(path: str) -> str: ...\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@t.co", "commit", "-m", "first")
+    _git(tmp_path, "tag", "v1.0.0")
+    source.write_text("def build(path: str | bytes, *, use_cache: bool = False) -> str: ...\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@t.co", "commit", "-m", "second")
+    _git(tmp_path, "tag", "v2.0.0")
+
+    project = tmp_path / "quarto-project"
+    shutil.copytree(_ext_dir(), project / "_extensions" / "evolution")
+    (project / "_quarto.yml").write_text("project:\n  type: website\n")
+    saved = {
+        "symbol": "build",
+        "versions": ["v1.0.0", "v2.0.0"],
+        "dates": ["2024-01-15", None],
+        "slots": [
+            {
+                "position": 0,
+                "cells": [
+                    {"name": "path", "type": "str | Path", "default": None},
+                    {
+                        "name": "path",
+                        "type": 'Literal["<&>`|"]',
+                        "default": "'`label` | *literal* [x] _x_ & <tag>'",
+                    },
+                ],
+            },
+            {"position": 1, "separator": "*"},
+        ],
+    }
+    (project / "saved.json").write_text(json.dumps(saved))
+    content = """Before.
+
+{{< evolution build >}}
+
+{{< evolution build disclosure="true" summary="Live history" css="false" >}}
+
+{{< evolution build json="saved.json" css="false" >}}
+
+{{< evolution build json="saved.json" disclosure="true" summary="Saved history" css="false" >}}
+
+<!-- %evolution symbol="build" summary="Marker history" css="false" -->
+
+After.
+"""
+    (project / "index.qmd").write_text(process_evolution_markers(content, tmp_path))
+    rendered = subprocess.run(
+        ["quarto", "render"], cwd=project, capture_output=True, text=True, timeout=60
+    )
+    assert rendered.returncode == 0, rendered.stderr
+
+    page = soup((project / "_site" / "index.html").read_text(), "html.parser")
+    tables = page.select(".gd-evolution-table > table")
+    assert len(tables) == 5
+    assert [th.get_text(strip=True) for th in tables[0].select("th")] == ["v1.0.0", "v2.0.0"]
+    assert tables[0].select_one("th [title]")["title"] == "2024-01-15"
+    assert tables[0].select_one(".gd-evo-absent").get_text(strip=True) == "—"
+    assert [
+        " ".join(span.get_text().split())
+        for span in tables[0].select("tr:first-child .gd-evo-type")
+    ] == ["str", "str | bytes"]
+    assert tables[0].select_one(".gd-evo-name + br + .gd-evo-type") is not None
+    assert tables[2].select_one(".gd-evo-separator").get_text(strip=True) == "*"
+    assert tables[2].select_one("th [title]")["title"] == "2024-01-15"
+    assert " ".join(tables[2].select(".gd-evo-type")[1].get_text().split()) == (
+        "Literal[\"<&>`|\"] = '`label` | *literal* [x] _x_ & <tag>'"
+    )
+    assert [element.get_text(strip=True) for element in page.select("details > summary")] == [
+        "Live history",
+        "Saved history",
+        "Marker history",
+    ]
+    assert page.select_one("details[open]") is None
+    assert [p.get_text(strip=True) for p in page.select("main p")] == ["Before.", "After."]
 
 
 def test_python_bridge_reports_a_missing_json_file(tmp_path: Path):

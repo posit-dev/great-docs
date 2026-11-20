@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+from string import punctuation
 
 from great_docs._api_evolution.history import SymbolHistory, symbol_history
 from great_docs._api_evolution.model import ParameterInfo
@@ -40,29 +42,101 @@ def _augment_params_with_separators(
     return augmented
 
 
-def _cell_text(param: ParameterInfo) -> str:
-    """Render a parameter's type + default as file line 2 of a cell."""
-    parts: list[str] = []
-    if param.annotation:
-        parts.append(param.annotation)
-    if param.default is not None:
-        parts.append(f"= {param.default}")
-    return " ".join(parts) if parts else ""
-
-
-def _cell_lines(param: ParameterInfo) -> tuple[str, str]:
-    """Return (line1, line2) for a parameter cell.
-
-    Line 1 is the parameter name, line 2 is `type (= default)`.
-    """
-    return (param.name, _cell_text(param))
-
-
 def _escape_html(text: str) -> str:
     """Minimal HTML escaping for table cell content."""
     return (
         text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     )
+
+
+_Cell = tuple[str, str]
+_ABSENT_CELL = ("—", "")
+
+
+def _parameter_cell(name: str, annotation: str | None, default: str | None) -> _Cell:
+    parts: list[str] = []
+    if annotation:
+        parts.append(annotation)
+    if default is not None:
+        parts.append(f"= {default}")
+    return name, " ".join(parts)
+
+
+@dataclass
+class _EvolutionTable:
+    """Positional parameter rows and version labels for a symbol"""
+
+    symbol_name: str
+    versions: list[str]
+    dates: dict[str, str]
+    rows: list[list[_Cell]]
+
+    @classmethod
+    def from_history(cls, history: SymbolHistory, *, changes_only: bool) -> _EvolutionTable:
+        entries = history.changed_entries if changes_only else history.entries
+        dates = {entry.version: entry.date for entry in entries if entry.date}
+        versions: list[str] = []
+        parameters: list[list[ParameterInfo]] = []
+        returns: list[str | None] = []
+
+        for entry in entries:
+            if not entry.present or entry.symbol_info is None:
+                continue
+            versions.append(entry.version)
+            parameters.append(_augment_params_with_separators(entry.symbol_info.parameters))
+            returns.append(entry.symbol_info.return_annotation)
+
+        rows: list[list[_Cell]] = []
+        for position in range(max(map(len, parameters), default=0)):
+            row: list[_Cell] = []
+            for params in parameters:
+                if position < len(params):
+                    param = params[position]
+                    row.append(_parameter_cell(param.name, param.annotation, param.default))
+                else:
+                    row.append(_ABSENT_CELL)
+            rows.append(row)
+
+        if any(returns):
+            rows.append(_return_row(returns, len(versions)))
+
+        return cls(history.symbol_name, versions, dates, rows)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> _EvolutionTable:
+        symbol_name: str = data.get("symbol", "unknown")
+        versions: list[str] = data.get("versions", [])
+        if not versions:
+            return cls(symbol_name, [], {}, [])
+
+        dates = {v: date for v, date in zip(versions, data.get("dates", [])) if date}
+        n_cols = len(versions)
+        rows: list[list[_Cell]] = []
+        for slot in data.get("slots", []):
+            if "separator" in slot:
+                rows.append([("*", "")] * n_cols)
+                continue
+
+            row = [
+                _ABSENT_CELL
+                if cell is None
+                else _parameter_cell(cell.get("name", ""), cell.get("type"), cell.get("default"))
+                for cell in slot.get("cells", [])
+            ]
+            row.extend([_ABSENT_CELL] * (n_cols - len(row)))
+            rows.append(row)
+
+        returns = data.get("returns")
+        if returns and any(value is not None for value in returns):
+            rows.append(_return_row(returns, n_cols))
+
+        return cls(symbol_name, versions, dates, rows)
+
+
+def _return_row(returns: list[str | None], n_cols: int) -> list[_Cell]:
+    row = [("Returns:", annotation or "—") for annotation in returns]
+    row.extend([("Returns:", "—")] * (n_cols - len(row)))
+    return row
 
 
 def evolution_table(
@@ -92,51 +166,10 @@ def evolution_table(
         with `line1 == "Returns:"` is appended when any version has a return annotation. Empty slots
         use `("—", "")`.
     """
-    entries = history.changed_entries if changes_only else history.entries
-    present_entries = [e for e in entries if e.present and e.symbol_info is not None]
-
-    if not present_entries:
+    table = _EvolutionTable.from_history(history, changes_only=changes_only)
+    if not table.versions:
         return []
-
-    versions = [e.version for e in present_entries]
-    header: list[tuple[str, str]] = [("", v) for v in versions]
-
-    # Augment each version's params with * separators
-    augmented_params = [
-        _augment_params_with_separators(e.symbol_info.parameters)  # type: ignore[union-attr]
-        for e in present_entries
-    ]
-
-    # Determine the maximum parameter count across all versions
-    max_params = max(len(p) for p in augmented_params)
-
-    rows: list[list[tuple[str, str]]] = [header]
-    empty_cell: tuple[str, str] = ("\u2014", "")
-
-    for slot in range(max_params):
-        row: list[tuple[str, str]] = []
-        for params in augmented_params:
-            if slot < len(params):
-                row.append(_cell_lines(params[slot]))
-            else:
-                row.append(empty_cell)
-        rows.append(row)
-
-    # Return-type row
-    return_values: list[tuple[str, str]] = []
-    has_return = False
-    for entry in present_entries:
-        assert entry.symbol_info is not None
-        ann = entry.symbol_info.return_annotation
-        if ann:
-            has_return = True
-            return_values.append(("Returns:", ann))
-        else:
-            return_values.append(("Returns:", "\u2014"))
-    if has_return:
-        rows.append(return_values)
-
-    return rows
+    return [[("", version) for version in table.versions], *table.rows]
 
 
 def evolution_table_text(
@@ -231,19 +264,25 @@ def evolution_table_html(
     str
         An HTML string.
     """
-    rows = evolution_table(history, changes_only=changes_only)
-    if not rows:
-        return "<!-- no evolution data -->"
+    table = _EvolutionTable.from_history(history, changes_only=changes_only)
+    return _render_table_html(table, disclosure=disclosure, summary_text=summary_text)
 
-    header = rows[0]
-    body = rows[1:]
 
-    # Build a version→date lookup from the history entries
-    date_map: dict[str, str] = {}
-    entries = history.changed_entries if changes_only else history.entries
-    for entry in entries:
-        if entry.date:
-            date_map[entry.version] = entry.date
+_NO_EVOLUTION_DATA = "<!-- no evolution data -->"
+
+
+def _disclosure_label(symbol: str) -> str:
+    return translate("evo_disclosure_summary").format(symbol=symbol)
+
+
+def _render_table_html(
+    table: _EvolutionTable,
+    *,
+    disclosure: bool,
+    summary_text: str | None,
+) -> str:
+    if not table.versions:
+        return _NO_EVOLUTION_DATA
 
     parts: list[str] = []
     parts.append('<table class="gd-evolution-table">')
@@ -251,8 +290,8 @@ def evolution_table_html(
     # Header
     parts.append("  <thead>")
     parts.append("    <tr>")
-    for _, version in header:
-        date = date_map.get(version)
+    for version in table.versions:
+        date = table.dates.get(version)
         title_attr = f' title="{_escape_html(date)}"' if date else ""
         parts.append(f"      <th{title_attr}>{_escape_html(version)}</th>")
     parts.append("    </tr>")
@@ -260,7 +299,7 @@ def evolution_table_html(
 
     # Body
     parts.append("  <tbody>")
-    for row in body:
+    for row in table.rows:
         parts.append("    <tr>")
         for line1, line2 in row:
             is_absent = line1 == "\u2014" and not line2
@@ -270,18 +309,11 @@ def evolution_table_html(
                 parts.append('      <td class="gd-evo-absent">\u2014</td>')
             elif is_star:
                 parts.append('      <td class="gd-evo-separator">*</td>')
-            elif is_return:
-                type_html = _escape_html(line2) if line2 else ""
-                inner = '<span class="gd-evo-return-label">Returns:</span>'
-                if type_html:
-                    inner += f'<br><span class="gd-evo-type">{type_html}</span>'
-                parts.append(f"      <td>{inner}</td>")
             else:
-                name_html = _escape_html(line1)
-                type_html = _escape_html(line2) if line2 else ""
-                inner = f'<span class="gd-evo-name">{name_html}</span>'
-                if type_html:
-                    inner += f'<br><span class="gd-evo-type">{type_html}</span>'
+                label_class = "gd-evo-return-label" if is_return else "gd-evo-name"
+                inner = f'<span class="{label_class}">{_escape_html(line1)}</span>'
+                if line2:
+                    inner += f'<br><span class="gd-evo-type">{_escape_html(line2)}</span>'
                 parts.append(f"      <td>{inner}</td>")
         parts.append("    </tr>")
     parts.append("  </tbody>")
@@ -290,11 +322,7 @@ def evolution_table_html(
     table_html = "\n".join(parts)
 
     if disclosure:
-        if summary_text:
-            label = summary_text
-        else:
-            template = translate("evo_disclosure_summary")
-            label = template.format(symbol=_escape_html(history.symbol_name))
+        label = summary_text or _disclosure_label(_escape_html(table.symbol_name))
         return (
             f'<details class="gd-evolution-disclosure">\n'
             f"  <summary>{label}</summary>\n"
@@ -376,11 +404,10 @@ def render_evolution_table(
     include_css: bool = True,
 ) -> str:
     """
-    Generate a self-contained HTML block for a symbol's evolution table.
+    Generate a self-contained HTML block for a symbol's evolution table
 
-    This is the high-level entry point that combines git history lookup, parameter evolution
-    analysis, and HTML rendering into a single call. The output is ready to be inserted into a
-    documentation page (e.g., via a `%` directive or a Quarto shortcode).
+    The output includes the version headers, signature changes and optional CSS in a single
+    HTML fragment.
 
     Parameters
     ----------
@@ -399,7 +426,7 @@ def render_evolution_table(
     changes_only
         If `True` (default), only show versions where the signature actually changed.
     disclosure
-        If `True` (default), wrap the table in a collapsible `<details>/<summary>` element.
+        If `True`, wrap the table in a collapsible `<details>/<summary>` element.
     summary_text
         Custom label for the `<summary>` element. Defaults to
         `"Signature evolution for <symbol>()"`.
@@ -410,7 +437,7 @@ def render_evolution_table(
 
     Returns
     -------
-    str
+    :
         A complete HTML string (optionally with embedded CSS) that can be inserted directly into a
         page. Returns an HTML comment `<!-- no evolution data for <symbol> -->` when the symbol has
         no history.
@@ -422,35 +449,55 @@ def render_evolution_table(
     <style>
     .gd-evolution-table {
     """
-    project_root = Path(project_path).resolve()
+    table = _load_evolution_table(
+        project_path,
+        symbol,
+        package=package,
+        old_version=old_version,
+        new_version=new_version,
+        changes_only=changes_only,
+    )
+    if isinstance(table, str):
+        return table
+    return _html_block(
+        table, disclosure=disclosure, summary_text=summary_text, include_css=include_css
+    )
 
-    # Resolve tags
+
+def _load_evolution_table(
+    project_path: str | Path,
+    symbol: str,
+    *,
+    package: str | None,
+    old_version: str | None,
+    new_version: str | None,
+    changes_only: bool,
+) -> _EvolutionTable | str:
+    project_root = Path(project_path).resolve()
     all_tags = list_version_tags(project_root)
     if not all_tags:
         return f"<!-- no version tags found for {_escape_html(symbol)} -->"
 
-    # Filter tag range
     tags = _filter_tag_range(all_tags, old_version, new_version)
     if not tags:
         return f"<!-- no matching tags for {_escape_html(symbol)} -->"
 
-    # Build history
     history = symbol_history(project_root, symbol, package_name=package, tags=tags)
     if history is None or not history.entries:
         return f"<!-- no evolution data for {_escape_html(symbol)} -->"
 
-    # Render HTML table
-    html = evolution_table_html(
-        history,
-        changes_only=changes_only,
-        disclosure=disclosure,
-        summary_text=summary_text,
-    )
+    return _EvolutionTable.from_history(history, changes_only=changes_only)
 
-    if html.startswith("<!--"):
-        return html
 
-    if include_css:
+def _html_block(
+    table: _EvolutionTable,
+    *,
+    disclosure: bool,
+    summary_text: str | None,
+    include_css: bool,
+) -> str:
+    html = _render_table_html(table, disclosure=disclosure, summary_text=summary_text)
+    if include_css and table.versions:
         return f"{_EVOLUTION_TABLE_CSS}\n{html}"
     return html
 
@@ -493,121 +540,135 @@ def render_evolution_table_from_dict(
     str
         A complete HTML string.
     """
-    versions: list[str] = data.get("versions", [])
-    if not versions:
-        return "<!-- no evolution data -->"
+    return _html_block(
+        _EvolutionTable.from_dict(data),
+        disclosure=disclosure,
+        summary_text=summary_text,
+        include_css=include_css,
+    )
 
-    symbol_name: str = data.get("symbol", "unknown")
-    dates: list[str | None] = data.get("dates", [])
-    n_cols = len(versions)
 
-    # Build the rows structure: list[list[tuple[str, str]]]
-    header: list[tuple[str, str]] = [("", v) for v in versions]
-    rows: list[list[tuple[str, str]]] = [header]
-    empty_cell: tuple[str, str] = ("\u2014", "")
+# Pandoc decodes entities after recognising table separators and inline markup.
+_MARKDOWN_ENTITIES = str.maketrans({char: f"&#{ord(char)};" for char in punctuation})
 
-    for slot in data.get("slots", []):
-        # Handle * separator slots
-        if "separator" in slot:
-            row: list[tuple[str, str]] = [("*", "")] * n_cols
-            rows.append(row)
-            continue
 
-        cells = slot.get("cells", [])
-        row = []
-        for cell in cells:
-            if cell is None:
-                row.append(empty_cell)
-            else:
-                name = cell.get("name", "")
-                type_str = cell.get("type") or ""
-                default = cell.get("default")
-                line2_parts: list[str] = []
-                if type_str:
-                    line2_parts.append(type_str)
-                if default is not None:
-                    line2_parts.append(f"= {default}")
-                row.append((name, " ".join(line2_parts)))
-        # Pad if fewer cells than versions
-        while len(row) < n_cols:
-            row.append(empty_cell)
-        rows.append(row)
+def _markdown_text(text: str) -> str:
+    return " ".join(text.splitlines()).translate(_MARKDOWN_ENTITIES)
 
-    # Return-type row
-    returns: list[str | None] | None = data.get("returns")
-    if returns and any(r is not None for r in returns):
-        ret_row: list[tuple[str, str]] = []
-        for r in returns:
-            ret_row.append(("Returns:", r if r else "\u2014"))
-        while len(ret_row) < n_cols:
-            ret_row.append(("Returns:", "\u2014"))
-        rows.append(ret_row)
 
-    # Build date map
-    date_map: dict[str, str] = {}
-    for i, v in enumerate(versions):
-        if i < len(dates) and dates[i]:
-            date_map[v] = dates[i]  # type: ignore[assignment]
+def _markdown_cell(line1: str, line2: str) -> str:
+    if line1 == "—" and not line2:
+        return "[—]{.gd-evo-absent}"
+    if line1 == "*" and not line2:
+        return "[&#42;]{.gd-evo-separator}"
+    label_class = "gd-evo-return-label" if line1 == "Returns:" else "gd-evo-name"
+    label = f"[{_markdown_text(line1)}]{{.{label_class}}}"
+    if line2:
+        return f"{label}<br> [{_markdown_text(line2)}]{{.gd-evo-type}}"
+    return label
 
-    # Render HTML using the same logic as evolution_table_html
-    body = rows[1:]
-    parts: list[str] = []
-    parts.append('<table class="gd-evolution-table">')
-    parts.append("  <thead>")
-    parts.append("    <tr>")
-    for _, version in header:
-        date = date_map.get(version)
-        title_attr = f' title="{_escape_html(date)}"' if date else ""
-        parts.append(f"      <th{title_attr}>{_escape_html(version)}</th>")
-    parts.append("    </tr>")
-    parts.append("  </thead>")
 
-    parts.append("  <tbody>")
-    for row in body:
-        parts.append("    <tr>")
-        for line1, line2 in row:
-            is_absent = line1 == "\u2014" and not line2
-            is_star = line1 == "*" and not line2
-            is_return = line1 == "Returns:"
-            if is_absent:
-                parts.append('      <td class="gd-evo-absent">\u2014</td>')
-            elif is_star:
-                parts.append('      <td class="gd-evo-separator">*</td>')
-            elif is_return:
-                type_html = _escape_html(line2) if line2 else ""
-                inner = '<span class="gd-evo-return-label">Returns:</span>'
-                if type_html:
-                    inner += f'<br><span class="gd-evo-type">{type_html}</span>'
-                parts.append(f"      <td>{inner}</td>")
-            else:
-                name_html = _escape_html(line1)
-                type_html = _escape_html(line2) if line2 else ""
-                inner = f'<span class="gd-evo-name">{name_html}</span>'
-                if type_html:
-                    inner += f'<br><span class="gd-evo-type">{type_html}</span>'
-                parts.append(f"      <td>{inner}</td>")
-        parts.append("    </tr>")
-    parts.append("  </tbody>")
-    parts.append("</table>")
+def _pipe_row(cells: list[str]) -> str:
+    return "| " + " | ".join(cells) + " |"
 
-    table_html = "\n".join(parts)
 
-    if disclosure:
-        if summary_text:
-            label = summary_text
-        else:
-            template = translate("evo_disclosure_summary")
-            label = template.format(symbol=_escape_html(symbol_name))
-        table_html = (
-            f'<details class="gd-evolution-disclosure">\n'
-            f"  <summary>{label}</summary>\n"
-            f"  {table_html}\n"
-            f"</details>"
-        )
+def _raw_html(html: str) -> str:
+    return f"```{{=html}}\n{html}\n```"
 
+
+_EVOLUTION_MARKDOWN_CSS = _EVOLUTION_TABLE_CSS.replace(
+    ".gd-evolution-table", ".gd-evolution-table > table"
+).replace(
+    "</style>",
+    """.gd-evolution-table > table .gd-evo-absent,
+.gd-evolution-table > table .gd-evo-separator {
+  display: block;
+}
+</style>""",
+)
+
+
+def _render_table_markdown(
+    table: _EvolutionTable,
+    *,
+    disclosure: bool,
+    summary_text: str | None,
+    include_css: bool,
+) -> str:
+    if not table.versions:
+        return _NO_EVOLUTION_DATA
+
+    headers: list[str] = []
+    for version in table.versions:
+        label = _markdown_text(version)
+        if date := table.dates.get(version):
+            label = f'[{label}]{{title="{_markdown_text(date)}"}}'
+        headers.append(label)
+
+    lines = [
+        "::: {.gd-evolution-table}",
+        _pipe_row(headers),
+        _pipe_row(["---"] * len(headers)),
+        *(_pipe_row([_markdown_cell(*cell) for cell in row]) for row in table.rows),
+        ":::",
+    ]
+    blocks: list[str] = []
     if include_css:
-        return f"{_EVOLUTION_TABLE_CSS}\n{table_html}"
-    return table_html
+        blocks.append(_raw_html(_EVOLUTION_MARKDOWN_CSS))
+    if disclosure:
+        label = summary_text or _disclosure_label(table.symbol_name)
+        label = _escape_html(" ".join(label.splitlines()))
+        blocks.append(
+            _raw_html(f'<details class="gd-evolution-disclosure">\n<summary>{label}</summary>')
+        )
+    blocks.append("\n".join(lines))
+    if disclosure:
+        blocks.append(_raw_html("</details>"))
+    return "\n\n".join(blocks)
+
+
+def render_evolution_markdown(
+    project_path: str | Path,
+    symbol: str,
+    *,
+    package: str | None = None,
+    old_version: str | None = None,
+    new_version: str | None = None,
+    changes_only: bool = True,
+    disclosure: bool = False,
+    summary_text: str | None = None,
+    include_css: bool = True,
+) -> str:
+    """Render a symbol's tagged signature history as Quarto Markdown"""
+    table = _load_evolution_table(
+        project_path,
+        symbol,
+        package=package,
+        old_version=old_version,
+        new_version=new_version,
+        changes_only=changes_only,
+    )
+    if isinstance(table, str):
+        return table
+    return _render_table_markdown(
+        table, disclosure=disclosure, summary_text=summary_text, include_css=include_css
+    )
+
+
+def render_evolution_markdown_from_dict(
+    data: dict,
+    *,
+    disclosure: bool = False,
+    summary_text: str | None = None,
+    include_css: bool = True,
+) -> str:
+    """Render a saved evolution table as Quarto Markdown"""
+    return _render_table_markdown(
+        _EvolutionTable.from_dict(data),
+        disclosure=disclosure,
+        summary_text=summary_text,
+        include_css=include_css,
+    )
 
 
 def _filter_tag_range(
