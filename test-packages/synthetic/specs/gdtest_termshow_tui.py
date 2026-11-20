@@ -1,7 +1,7 @@
 """
 gdtest_termshow_tui — Check that termshow reproduces full-screen terminal apps faithfully.
 
-Dimensions: A1, B1, C4, D2, E4, F1, G1, H3
+Dimensions: A1, B1, C1, D1, E6, F1, G5, H7
 Focus: Recordings of the kind a TUI produces, built so each known way of getting
        them wrong shows on screen:
 
@@ -211,7 +211,7 @@ _ASCIINEMA = "https://cdn.jsdelivr.net/npm/asciinema-player@3.9.0/dist/bundle/as
 SPEC = {
     "name": "gdtest_termshow_tui",
     "description": "Termshow recordings of a TUI, checked against asciinema",
-    "dimensions": ["A1", "B1", "C4", "D2", "E4", "F1", "G1", "H3"],
+    "dimensions": ["A1", "B1", "C1", "D1", "E6", "F1", "G5", "H7"],
     "pyproject_toml": {
         "project": {
             "name": "gdtest-termshow-tui",
@@ -323,6 +323,21 @@ SPEC = {
         "user_guide": True,
     },
     "expected": {
+        "detected_name": "gdtest-termshow-tui",
+        "detected_module": "gdtest_termshow_tui",
+        "detected_parser": "numpy",
+        "export_names": ["nyan"],
+        "num_exports": 1,
+        "section_titles": ["Functions"],
+        "has_user_guide": True,
+        "user_guide_files": [
+            "01-nyan.qmd",
+            "02-escape-sequences.qmd",
+            "03-background-blocks.qmd",
+        ],
+        "has_license_page": False,
+        "has_citation_page": False,
+        "coverage_exclude": ["nodoc", "bigcl", "supp"],
         "files_exist": [
             "user-guide/nyan.html",
             "user-guide/escape-sequences.html",
