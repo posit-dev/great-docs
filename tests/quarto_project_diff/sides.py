@@ -2,8 +2,8 @@
 Checkouts and controlled build environments for the two sides of a comparison
 
 A side is a checkout with its own virtual environment. The base side is a detached worktree
-of the base commit, kept in the cache directory with a virtual environment synced from the
-test checkout's `uv.lock`. Every build command runs with a stub `quarto` first on `PATH`,
+of the base commit with a virtual environment synced from the test checkout's `uv.lock`.
+Every build command runs with a stub `quarto` first on `PATH`,
 the side's `bin` directory next, a failing HTTP proxy and a fixed hash seed.
 """
 
@@ -15,7 +15,8 @@ import os
 import shlex
 import shutil
 import subprocess
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -215,13 +216,21 @@ def branch_point(checkout: Path) -> str:
     return run_checked(["git", "merge-base", "main", "HEAD"], checkout)
 
 
-def base_side(checkout: Path, ref: str, cache: Path, python_version: str) -> Side:
+@contextmanager
+def base_side(
+    checkout: Path,
+    ref: str,
+    cache: Path,
+    python_version: str,
+    run_name: str,
+    *,
+    reuse: bool = False,
+) -> Iterator[Side]:
     """
-    Prepare a clean worktree of a base commit with its own virtual environment
+    Provide a clean worktree of the base commit for a comparison
 
-    The worktree lives in `cache/worktrees/<sha>` and is reused by later runs against the
-    same commit; a lock file serialises its preparation between concurrent runs. The
-    environment is synced from the checkout's `uv.lock` with the given interpreter.
+    Remove the worktree when the context exits. With reuse enabled, keep one worktree
+    per commit and serialise access to its shared virtual environment.
 
     Parameters
     ----------
@@ -233,9 +242,13 @@ def base_side(checkout: Path, ref: str, cache: Path, python_version: str) -> Sid
         The cache directory.
     python_version :
         Interpreter version for the environment, matching the test side.
+    run_name :
+        Name of the run's job directory, unique within the cache.
+    reuse :
+        Keep the worktree and its environment for later comparisons of the same commit.
 
-    Returns
-    -------
+    Yields
+    ------
     :
         The side, labelled `base`, without facts.
 
@@ -243,7 +256,7 @@ def base_side(checkout: Path, ref: str, cache: Path, python_version: str) -> Sid
     ------
     RequirementError
         If the revision is unknown, `uv.lock` or `uv` is missing, the worktree has local
-        changes, or the sync fails.
+        changes, or Git or the environment sync fails.
     """
     sha = run_checked(["git", "rev-parse", "--verify", f"{ref}^{{commit}}"], checkout)
     lock_file = checkout / "uv.lock"
@@ -254,13 +267,20 @@ def base_side(checkout: Path, ref: str, cache: Path, python_version: str) -> Sid
         raise RequirementError("`uv` is not on PATH; the base worktree needs it")
     worktrees = cache / "worktrees"
     worktrees.mkdir(parents=True, exist_ok=True)
-    tree = worktrees / sha[:12]
-    with (worktrees / f"{sha[:12]}.lock").open("w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        if not tree.exists():
+    tree = worktrees / (sha[:12] if reuse else f"run-{run_name}")
+    with ExitStack() as cleanup:
+        if reuse:
+            lock = cleanup.enter_context(tree.with_suffix(".lock").open("w"))
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        if not reuse or not tree.exists():
+            flags = ["--force"] if reuse else []
             _ = run_checked(
-                ["git", "worktree", "add", "--force", "--detach", str(tree), sha], checkout
+                ["git", "worktree", "add", *flags, "--detach", str(tree), sha], checkout
             )
+            if not reuse:
+                cleanup.callback(
+                    run_checked, ["git", "worktree", "remove", "--force", str(tree)], checkout
+                )
         if run_checked(["git", "rev-parse", "HEAD"], tree) != sha:
             raise RequirementError(f"{tree} is not at {sha}; remove it with `git worktree remove`")
         if run_checked(["git", "status", "--porcelain"], tree):
@@ -274,7 +294,7 @@ def base_side(checkout: Path, ref: str, cache: Path, python_version: str) -> Sid
             tree,
             env,
         )
-    return Side("base", tree, tree / ".venv")
+        yield Side("base", tree, tree / ".venv")
 
 
 def write_stub(directory: Path, real_quarto: str) -> Path:
