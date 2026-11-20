@@ -599,10 +599,11 @@ def test_function_pages_have_signature(pkg_name: str):
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
     nodoc_items = set(expected.get("nodoc_items", []))
+    hidden_signatures = set(expected.get("hidden_signatures", []))
     ref = _ref_dir(pkg_name)
 
     for name in export_names:
-        if name in nodoc_items:
+        if name in nodoc_items or name in hidden_signatures:
             continue
         page = _find_export_page(ref, name)
         if page is None:

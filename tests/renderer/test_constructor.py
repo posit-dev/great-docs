@@ -16,8 +16,8 @@ import griffe as gf
 
 from great_docs._apiref._constructor import class_constructor, parse_class_docstring
 from great_docs._apiref._settings import Settings, SourceLinks
-from great_docs._project.repository import Repository
 from great_docs._apiref._tools import _render
+from great_docs._project.repository import Repository
 
 STUB = '''\
 from typing import Any, final
@@ -192,7 +192,7 @@ class Yaml:
         parse_class_docstring(yaml)
     assert not caplog.records
 
-    qmd = _render(yaml)
+    qmd = _render(yaml, Settings(parser="google"))
     assert "[value]{.doc-parameter-name}[:]{.doc-parameter-annotation-sep} [Any]" in qmd
     assert "[tag]{.doc-parameter-name}[:]{.doc-parameter-annotation-sep} [str | None]" in qmd
 

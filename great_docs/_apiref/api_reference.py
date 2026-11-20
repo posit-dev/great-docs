@@ -1,28 +1,37 @@
 """
 The `APIReference` façade, built from a Quarto config block
+
+A reference loads its objects through one loader and prepares them with one extension,
+whose `setup` runs before the first object is prepared or rendered. Manifests, symbol
+queries and the text export reuse the prepared tree. Building renders every page before
+it fingerprints the extension's inputs and writes any file. Close the reference after
+its last use.
 """
 
 from __future__ import annotations
 
 import logging
-import sys
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+import griffe as gf
 from griffe import AliasResolutionError, CyclicAliasError
 
 from .._interlinks.sphinx_inventory import INVENTORY_FILENAME
+from ._customisation import Extension
+from ._extension_loading import _ExtensionSource
+from ._rendering._renderers import Renderers
 from ._settings import Settings, SourceLinks
 from .content import Doc, Page
 from .inventory import create_inventory, write_inventory
-from .resolve import ObjectNotFoundError, Resolver, resolution_lang
+from .resolve import ObjectNotFoundError, Resolver
 from .spec import SpecObject, SpecOptions, SpecSection, unique_page_paths
 from .write import (
-    write_index,
-    write_pages,
+    collect_index,
+    collect_pages,
+    collect_typing_information,
     write_sidebar,
-    write_typing_information,
 )
 
 if TYPE_CHECKING:
@@ -42,7 +51,14 @@ _DEFAULT_SITE_TOC_DEPTH = 2
 
 
 class APIReference:
-    """A package's API reference: the sections to document plus the settings that govern how they are generated"""
+    """
+    A package's API reference: its sections, their settings and its extension
+
+    Reading the sections never loads the extension file. The first preparation or
+    rendering runs the extension's `setup`, and every page then shares the prepared
+    objects, exclusions and renderer choices. The resolved tree and manifest are cached.
+    Call `close()` after the last use, including after a failure.
+    """
 
     package: str
     title: str
@@ -51,11 +67,15 @@ class APIReference:
     options: SpecOptions | None
     settings: Settings
     site_toc_depth: int
+    extension: Extension
 
     def __init__(
         self,
         config: dict[str, Any],
         source_links: SourceLinks | None = None,
+        *,
+        extension_source: _ExtensionSource | None = None,
+        output_root: Path | None = None,
     ) -> None:
         """
         Configure an API reference from Quarto settings and source-link destinations
@@ -66,6 +86,13 @@ class APIReference:
             The Quarto configuration mapping or its `api-reference` block.
         source_links
             The source-link destinations, or `None` to disable source links.
+        extension_source
+            The extension file and the project directories, or `None` to use only the
+            handlers registered through `great_docs.hooks`. Reading the configuration
+            and sections never loads the file.
+        output_root
+            The generated documentation root, or `None` when the reference writes no
+            files.
         """
         self.site_toc_depth = self._read_site_toc_depth(config)
         block = self._select_block(config)
@@ -77,11 +104,12 @@ class APIReference:
         self.package = block["package"]
         self.title = block.get("title", "Function reference")
         self.desc = block.get("desc")
-        # Parity: stored as-is (no coercion), matching the previous behavior.
+        # Parity: stored as-is (no coercion), matching the previous behaviour.
         self.options = block.get("options")
+        self.extension = Extension(self.settings, extension_source, output_root=output_root)
         # Raw config dicts become `SpecSection` objects; their `contents` are
         # upgraded to `SpecObject` inside `SpecSection.__post_init__`.
-        self._resolver = Resolver(self.settings)
+        self._resolver = Resolver(self.settings, self.extension)
         self._resolver.current_package = self.package
 
         raw_sections: list[Any] = block.get("sections", []) or []
@@ -91,6 +119,70 @@ class APIReference:
             [s if isinstance(s, SpecSection) else SpecSection(**s) for s in raw_sections],
             self._entry_label,
         )
+
+    @property
+    def renderers(self) -> Renderers:
+        """The renderers that the extension's `setup` selected, running `setup` on first read"""
+        return self.extension.renderers
+
+    @property
+    def extension_watch_paths(self) -> tuple[Path, ...]:
+        """
+        The paths that a preview watches for the extension, readable after closing
+
+        Globs stay unexpanded, so the preview can watch for new matches. Reading the paths
+        never loads the extension file, so before `setup` runs they hold only the
+        extension file's directory.
+        """
+        return self.extension.watch_paths
+
+    def get_object(self, path: str) -> gf.Object | gf.Alias:
+        """
+        Load a Python object through the reference's shared loader
+
+        Use the reference's parser, source directory and dynamic setting. Loading neither
+        runs the extension's `setup` nor prepares the object.
+
+        Parameters
+        ----------
+        path
+            The object's import path.
+
+        Returns
+        -------
+        :
+            The loaded object or alias.
+
+        Raises
+        ------
+        ObjectNotFoundError
+            If the package has no object at `path`.
+        """
+        return self._resolver.get_object_or_raise(path, dynamic=self._resolver.dynamic)
+
+    def prepare(self, obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias | None:
+        """
+        Prepare a loaded object's documentation with the reference's extension
+
+        Each underlying object is prepared once, and pages, helpers and typing pages
+        share its result or exclusion. An alias keeps its own name without a second copy
+        of the documentation.
+
+        Parameters
+        ----------
+        obj
+            The loaded object or alias.
+
+        Returns
+        -------
+        :
+            The prepared object, or `None` when an object hook excludes it.
+        """
+        return self._resolver.prepare(obj)
+
+    def close(self) -> None:
+        """Close the extension without loading it, removing the modules it imported"""
+        self.extension.close()
 
     @staticmethod
     def _read_lang(cfg: dict[str, Any]) -> str:
@@ -104,7 +196,8 @@ class APIReference:
 
         Returns
         -------
-        The language at `format.html.lang`, with `en` as the default when absent.
+        :
+            The language at `format.html.lang`, with `en` as the default when absent.
         """
         format_config = cfg.get("format")
         html = (
@@ -130,7 +223,8 @@ class APIReference:
 
         Returns
         -------
-        Configured depth or the built-in default.
+        :
+            Configured depth or the built-in default.
         """
         format_config = cfg.get("format")
         html = (
@@ -162,7 +256,8 @@ class APIReference:
 
         Returns
         -------
-        Copy of the selected API reference mapping.
+        :
+            Copy of the selected API reference mapping.
 
         Raises
         ------
@@ -176,17 +271,26 @@ class APIReference:
 
     def _entry_label(self, section: SpecSection, entry: SpecObject) -> str | None:
         """
-        The label shown on the page of the object an entry documents
+        Read the kind label of an entry whose page path collides with another's
 
-        Used to name the page of an entry whose path collides with another's.
-        Returns `None` when the object cannot be found, so the page falls back
-        to a numbered suffix.
+        Load the object without running the extension's `setup` or the object and
+        docstring hooks.
+
+        Parameters
+        ----------
+        section
+            The section that contains the entry.
+        entry
+            The entry whose page path collides.
+
+        Returns
+        -------
+        :
+            The label, or `None` when the object cannot be loaded, so the page falls back
+            to a numbered suffix.
         """
-        from ._render._label import get_label
+        from ._rendering._label import get_label
 
-        s = self.settings
-        if s.source_dir and (source_dir := str(Path(s.source_dir).absolute())) not in sys.path:
-            sys.path.append(source_dir)
         try:
             return get_label(self._resolver.entry_object(section, entry))
         except (ObjectNotFoundError, ImportError, AliasResolutionError, CyclicAliasError):
@@ -194,30 +298,44 @@ class APIReference:
 
     @cached_property
     def resolved(self) -> list[Section]:
-        """The resolved section tree, computed once per instance"""
+        """
+        The resolved section tree, computed once per reference
+
+        Reading it runs the extension's `setup` and the object and docstring hooks,
+        including during member selection. It leaves file generation to the build.
+        """
         from .collect import unique_member_page_paths
 
-        token = resolution_lang.set(self.settings.lang)
-        try:
-            secs = self.sections or unique_page_paths(
-                self._resolver.autogenerate_sections(self.package), self._entry_label
-            )
-            return unique_member_page_paths(self._resolver.resolve_sections(secs))
-        finally:
-            resolution_lang.reset(token)
+        # Load before resolving, so a broken extension fails a query that selects
+        # no objects.
+        self.extension.load()
+        secs = self.sections or unique_page_paths(
+            self._resolver.autogenerate_sections(self.package), self._entry_label
+        )
+        return unique_member_page_paths(self._resolver.resolve_sections(secs))
 
     @cached_property
     def documented_symbols(self) -> list[str]:
         """
-        Return the authored Python names of documented objects, `%nodoc` excluded
+        The authored names of documented objects and their selected members
 
-        Preserve first-occurrence order and include each documented member
-        recursively. Convert module separators to dots and keep names independent
-        of the filenames assigned to reference pages.
+        Names keep their first-seen order, use dots as module separators and leave out
+        objects that object hooks exclude. Reading them prepares the reference without
+        generating pages.
         """
         stems: list[str] = []
 
         def visit(node: Doc | Page, stem: str) -> None:
+            """
+            Record the name of an object and of its nested members
+
+            Parameters
+            ----------
+            node
+                The object, or the member page that holds it.
+            stem
+                The object's dotted name.
+            """
             stems.append(stem)
             for member in _member_children(node):
                 visit(member, f"{stem}.{_member_name(member)}")
@@ -242,10 +360,15 @@ class APIReference:
         return self.manifest.items
 
     def build(self) -> None:
-        """Write reference pages, index, inventory, and (optionally) sidebar to disk"""
+        """
+        Write the reference pages, index, inventory and, optionally, sidebar
+
+        Render the index, object pages and typing pages before writing any of them. When
+        an extension file is configured, every page then carries one fingerprint of its
+        inputs, including helpers first imported while rendering. Leave unchanged object
+        pages alone unless `rewrite_all_pages` is set.
+        """
         s = self.settings
-        if s.source_dir:
-            sys.path.append(str(Path(s.source_dir).absolute()))
 
         _log.info("Resolving sections.")
         resolved = self.resolved
@@ -253,14 +376,20 @@ class APIReference:
         _log.info("Collecting pages and inventory items.")
         pages = self.manifest.pages
 
-        _log.info("Writing index")
-        _ = write_index(
+        _log.info("Collecting index")
+        index = collect_index(
             self, resolved, dir=s.dir, out_index=s.out_index, header_level=s.header_level
         )
 
-        _log.info("Writing docs pages")
-        write_pages(pages, s, site_toc_depth=self.site_toc_depth)
-        write_typing_information(s.typing_module_paths, self)
+        _log.info("Collecting docs pages")
+        object_pages = collect_pages(pages, self.extension, site_toc_depth=self.site_toc_depth)
+        typing_pages = collect_typing_information(s.typing_module_paths, self)
+        fingerprint = self.extension.fingerprint()
+        index.write(fingerprint=fingerprint)
+        for page in object_pages:
+            page.write(fingerprint=fingerprint, rewrite_unchanged=s.rewrite_all_pages)
+        for page in typing_pages:
+            page.write(fingerprint=fingerprint)
 
         _log.info("Creating inventory file")
         version = "0.0.9999" if s.version is None else s.version
@@ -274,6 +403,16 @@ class APIReference:
 def _member_name(node: Doc | Page) -> str:
     """
     Return a member's name relative to its documented parent
+
+    Parameters
+    ----------
+    node
+        The member, or the member page that holds it.
+
+    Returns
+    -------
+    :
+        The name.
     """
     if isinstance(node, Page):
         return node.contents[0].name
@@ -281,6 +420,19 @@ def _member_name(node: Doc | Page) -> str:
 
 
 def _member_children(node: Doc | Page) -> list[Doc | Page]:
-    """The nested member nodes of a resolved member node, if any"""
+    """
+    Return the nested members and dataclass fields of a resolved object or member page
+
+    Parameters
+    ----------
+    node
+        The object, or the member page that holds it.
+
+    Returns
+    -------
+    :
+        The members, then any dataclass fields, or an empty list for an object that has
+        neither.
+    """
     doc = node.contents[0] if isinstance(node, Page) else node
-    return list(getattr(doc, "members", []))
+    return [*getattr(doc, "members", []), *getattr(doc, "fields", [])]

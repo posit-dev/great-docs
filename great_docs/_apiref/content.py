@@ -1,10 +1,10 @@
 """
 Resolved (output) shapes of the API-reference tree
 
-Every class here is the fully-built, resolved counterpart of a `spec`
-input node: a `Section` here holds rendered `Page`/`Doc` objects rather than
-raw YAML, and so on down the tree. Produced by the API-reference resolver from
-the input family defined in `spec.py`; consumed by `collect` and `write`.
+Each node pairs a loaded Griffe object with its configured name, anchor and selected
+members, and keeps the prepared documentation apart from how it is rendered.
+`Doc.from_griffe` builds one node without finding members; resolution or recursive
+conversion adds the members before manifests and renderers read the tree.
 """
 
 from __future__ import annotations
@@ -23,9 +23,13 @@ class Doc(Walkable):
     """A resolved Python object ready to be rendered as documentation"""
 
     obj: gf.Object | gf.Alias
+    """The loaded object, or the alias it is documented under, with its prepared documentation"""
     name: str = ""
+    """The name the object is documented under, which the `doc` name format shows"""
     anchor: str = ""
+    """The object's anchor on its page"""
     signature_name: str = "relative"
+    """How a callable's name is written in its signature"""
 
     @classmethod
     def from_griffe(
@@ -35,7 +39,42 @@ class Doc(Walkable):
         members: list[Any] | None = None,
         anchor: str | None = None,
         signature_name: str = "relative",
+        fields: list[DocAttribute] | None = None,
     ) -> DocFunction | DocAttribute | DocTypeAlias | DocClass | DocModule:
+        """
+        Build a documentation node for a loaded object
+
+        Choose the node class from the object's Griffe kind. A class or module node keeps
+        the members it is given. This method finds no members and runs no object or
+        docstring hooks, so callers prepare objects and drop exclusions first.
+
+        Parameters
+        ----------
+        name
+            The name to document the object under, which may differ from its canonical
+            name.
+        obj
+            The loaded object or alias.
+        members
+            The selected members of a class or module node, or `None` for none.
+        anchor
+            The anchor, or `None` to use the object's qualified path.
+        signature_name
+            How a callable's name is written in its signature.
+        fields
+            The attributes a dataclass node documents as constructor parameters, or
+            `None` for none.
+
+        Returns
+        -------
+        :
+            A node of the class that matches the object's kind.
+
+        Raises
+        ------
+        TypeError
+            If the object has no supported documentation kind.
+        """
         if members is None:
             members = []
 
@@ -56,7 +95,7 @@ class Doc(Walkable):
         elif kind == "type alias":
             return DocTypeAlias(**kwargs)
         elif kind == "class":
-            return DocClass(members=members, **kwargs)
+            return DocClass(members=members, fields=fields or [], **kwargs)
         elif kind == "module":
             return DocModule(members=members, **kwargs)
 
@@ -78,6 +117,14 @@ class DocClass(Doc):
     members: list[DocClass | DocFunction | DocAttribute | DocTypeAlias] = field(
         default_factory=list["DocClass | DocFunction | DocAttribute | DocTypeAlias"]
     )
+    """The selected members, documented on this page or on member pages of their own"""
+    fields: list[DocAttribute] = field(default_factory=list["DocAttribute"])
+    """
+    The selected attributes that the class documents as constructor parameters
+
+    A dataclass documents each of these fields with its parameter, so they stay on the
+    class's page whatever the member placement and are never members.
+    """
 
 
 @dataclass
@@ -102,6 +149,7 @@ class DocModule(Doc):
     members: list[DocClass | DocFunction | DocAttribute | DocTypeAlias | DocModule] = field(
         default_factory=list["DocClass | DocFunction | DocAttribute | DocTypeAlias | DocModule"]
     )
+    """The selected members, documented on this page or on member pages of their own"""
 
 
 @dataclass
@@ -109,23 +157,39 @@ class SummaryItem(Walkable):
     """Name and description line for a summary table entry"""
 
     name: str = ""
+    """The label shown for a page in an index summary"""
     desc: str = ""
+    """The description shown beside the label"""
 
 
 @dataclass
 class Page(Walkable):
-    """A single rendered page in the API reference"""
+    """
+    A reference page documenting one or more objects
+
+    A page with one object takes its title from that object. In the index, a page with
+    several objects shows its explicit summary or, when flattened, a row for each object.
+    """
 
     kind: str = "page"
     path: str = ""
+    """The page's configured path, without a filename suffix"""
     summary: SummaryItem | None = None
+    """The page's label and description in the index, or `None` to take them from its objects"""
     flatten: bool = False
+    """Whether the index lists each object of a multiple-object page separately"""
     contents: list[DocClass | DocFunction | DocAttribute | DocTypeAlias | DocModule] = field(
         default_factory=list[DocClass | DocFunction | DocAttribute | DocTypeAlias | DocModule]
     )
+    """The objects documented on this page"""
 
     @property
     def obj(self) -> gf.Object | gf.Alias:
+        """
+        The page's only object
+
+        Raises `ValueError` when the page has no object or several.
+        """
         if len(self.contents) == 1:
             return self.contents[0].obj
         raise ValueError(
@@ -146,11 +210,15 @@ class Section(Walkable):
 
     kind: str = "section"
     title: str | None = None
+    """The section heading, or `None`"""
     subtitle: str | None = None
+    """The subsection heading, or `None`"""
     desc: str | None = None
+    """The section description, or `None`"""
     contents: list[DocClass | DocFunction | DocAttribute | DocModule | Page] = field(
         default_factory=list[DocClass | DocFunction | DocAttribute | DocModule | Page]
     )
+    """The section's pages, objects and text, in configured order"""
 
 
 @dataclass

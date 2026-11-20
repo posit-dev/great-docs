@@ -76,6 +76,16 @@ def class_constructor(cls: gf.Class | gf.Alias) -> Constructor:
 def without_receiver(parameters: gf.Parameters) -> gf.Parameters:
     """
     Drop a leading `self` or `cls` from a constructor's parameters
+
+    Parameters
+    ----------
+    parameters
+        The parameters of a method.
+
+    Returns
+    -------
+    :
+        The parameters without the receiver, or `parameters` itself when it has none.
     """
     params = list(parameters)
     if params and params[0].name in ("self", "cls"):
@@ -89,6 +99,17 @@ def takes_arguments(parameters: gf.Parameters) -> bool:
 
     A bare `*args` or `**kwargs` does not count, as it only passes the
     arguments on.
+
+    Parameters
+    ----------
+    parameters
+        The parameters of a constructor.
+
+    Returns
+    -------
+    :
+        `True` when a parameter other than the receiver is neither `*args` nor
+        `**kwargs`.
     """
     variadic = (gf.ParameterKind.var_positional, gf.ParameterKind.var_keyword)
     return any(p.kind not in variadic for p in without_receiver(parameters))
@@ -154,14 +175,46 @@ def _without_parameter_warnings(signature: dict[str, gf.Parameter]) -> Generator
 
     A missing-parameter warning is held back for parameters in the
     signature, a missing-type warning for parameters it annotates.
+
+    Parameters
+    ----------
+    signature
+        The constructor's parameters by name, without the receiver.
     """
 
     def names(match: re.Match[str]) -> list[str]:
+        """
+        List the parameter names that a warning concerns
+
+        Parameters
+        ----------
+        match
+            A match of one of the parameter warnings.
+
+        Returns
+        -------
+        :
+            The names without quotes or leading asterisks.
+        """
         text = next(group for group in match.groups() if group is not None)
         found = re.findall(r"'([^']+)'", text) or [text]
         return [name.strip().lstrip("*") for name in found]
 
     def keep(record: logging.LogRecord) -> bool:
+        """
+        Decide whether a log record passes the filter
+
+        Parameters
+        ----------
+        record
+            A record from the `griffe` logger.
+
+        Returns
+        -------
+        :
+            `False` for a parameter warning that the signature resolves, `True`
+            otherwise.
+        """
         message = record.getMessage()
         if missing := _MISSING_WARNING.search(message):
             return not all(name in signature for name in names(missing))

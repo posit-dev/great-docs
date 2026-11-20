@@ -76,6 +76,23 @@ class SpecOptions(Walkable):
     _fields_specified: tuple[str, ...] = field(default=(), init=False, repr=False, compare=False)
 
     def __init__(self, **kwargs: object) -> None:
+        """
+        Set the given options and record their names as caller-specified
+
+        Parameters
+        ----------
+        **kwargs
+            Option values by field name. A `member_options` dict becomes a `SpecOptions`.
+            Fields not given take their defaults.
+
+        Raises
+        ------
+        ValueError
+            If `kwargs` holds `inline_methods` or `children`, or a `members_on_same_page`
+            that is not a boolean.
+        TypeError
+            If `kwargs` holds a name that is not an option.
+        """
         if "inline_methods" in kwargs:
             raise ValueError(
                 "Per-entry `inline_methods` is unsupported. Use `members_on_same_page` "
@@ -119,16 +136,37 @@ class SpecOptions(Walkable):
     def specified_options(self) -> dict[str, object]:
         """
         Return explicitly supplied option names and their current values
+
+        Returns
+        -------
+        :
+            The current values, keyed by the names of the options the caller supplied.
         """
         return {name: getattr(self, name) for name in self._fields_specified}
 
     def replace(self, **changes: object) -> Self:
-        """Return a copy with the given fields replaced
+        """
+        Return a copy with the given fields replaced
 
         A replaced field counts as caller-specified from then on; the
         untouched fields keep their original specified/default standing.
         (`dataclasses.replace` would instead re-run `__init__` with every
         field and mark them all as specified.)
+
+        Parameters
+        ----------
+        **changes
+            New values by field name. A `member_options` dict becomes a `SpecOptions`.
+
+        Returns
+        -------
+        :
+            The copy.
+
+        Raises
+        ------
+        ValueError
+            If `changes` holds a `members_on_same_page` that is not a boolean.
         """
         if "dynamic" in changes:
             validate_dynamic(changes["dynamic"], allow_none=True)
@@ -154,6 +192,16 @@ class SpecOptions(Walkable):
         A field the caller set explicitly — even to its default value —
         keeps this element's value; every other field takes the value
         `base` was explicitly given.
+
+        Parameters
+        ----------
+        base
+            The options to inherit from, or `None` to inherit nothing.
+
+        Returns
+        -------
+        :
+            A copy with the inherited values, or this element when `base` is `None`.
         """
         if base is None:
             return self
@@ -190,7 +238,19 @@ class SpecObject(SpecOptions):
         return self.name.replace(":", ".")
 
     def with_page_path(self, path: str) -> Self:
-        """Return a copy whose reference page is written to `path`"""
+        """
+        Return a copy whose reference page is written to `path`
+
+        Parameters
+        ----------
+        path
+            The page path, without a directory or suffix.
+
+        Returns
+        -------
+        :
+            The copy.
+        """
         new = self.copy()
         object.__setattr__(new, "_page_path", path)
         return new
@@ -219,6 +279,15 @@ class SpecSection(Walkable):
     options: SpecOptions | None = None
 
     def __post_init__(self) -> None:
+        """
+        Validate the heading and turn raw config entries into spec objects
+
+        Raises
+        ------
+        ValueError
+            If the section has no title, subtitle or contents, or has both a title and
+            a subtitle.
+        """
         if self.title is None and self.subtitle is None and not self.contents:
             raise ValueError("Section must specify a title, subtitle, or contents field")
         elif self.title is not None and self.subtitle is not None:
@@ -236,7 +305,19 @@ SpecEntry = SpecSection | SpecObject | SpecText
 
 
 def _coerce_spec_object(value: str | dict[str, Any]) -> SpecObject:
-    """Coerce a YAML string or dict entry into a `SpecObject`"""
+    """
+    Coerce a YAML string or dict entry into a `SpecObject`
+
+    Parameters
+    ----------
+    value
+        An object name, or a dict of the object's name and options.
+
+    Returns
+    -------
+    :
+        The spec object.
+    """
     if isinstance(value, dict):
         return SpecObject(**value)
     return SpecObject(name=value)
@@ -275,6 +356,19 @@ def claim_page_path(
     """
 
     def is_free(candidate: str) -> bool:
+        """
+        Check whether a path is unclaimed or claimed by itself
+
+        Parameters
+        ----------
+        candidate
+            The path to check.
+
+        Returns
+        -------
+        :
+            Whether `candidate` can be claimed without a clash.
+        """
         owner = claimed.get(candidate.casefold())
         return owner is None or owner == candidate
 
@@ -326,6 +420,19 @@ def unique_page_paths(
     claimed: dict[str, str] = {}
 
     def visit(section: SpecSection) -> SpecSection:
+        """
+        Claim page paths for the entries of a section and its subsections
+
+        Parameters
+        ----------
+        section
+            The section.
+
+        Returns
+        -------
+        :
+            The section, or a copy when an entry moved to another page path.
+        """
         contents: list[SpecEntry] = []
         for entry in section.contents:
             if isinstance(entry, SpecSection):

@@ -2,6 +2,8 @@ import griffe as gf
 import pytest
 
 from great_docs import hooks
+from great_docs._apiref._settings import Settings
+from great_docs.extensions import Extension
 from great_docs.hooks import _docstring_parsed, _object_resolved
 
 
@@ -23,19 +25,21 @@ def test_only_registration_decorators_are_exported():
     assert hooks.__all__ == ["on_docstring_parsed", "on_object_resolved"]
 
 
-def test_emit_object_resolved_threads_object_through_handlers(clean_hooks):
-    seen: list[str] = []
+def test_object_resolved_threads_object_through_handlers(clean_hooks):
+    original = gf.Function("original")
+    replacement = gf.Function("replacement")
+    seen = []
 
     @hooks.on_object_resolved
     def annotate(obj):
         seen.append(obj)
-        return f"{obj}!"
+        return replacement
 
-    assert _object_resolved.emit_object_resolved("X") == "X!"
-    assert seen == ["X"]
+    assert Extension(Settings()).prepare(original) is replacement
+    assert seen == [original]
 
 
-def test_emit_object_resolved_none_skips_and_short_circuits(clean_hooks):
+def test_object_resolved_none_skips_and_short_circuits(clean_hooks):
     calls: list[str] = []
 
     @hooks.on_object_resolved
@@ -48,7 +52,7 @@ def test_emit_object_resolved_none_skips_and_short_circuits(clean_hooks):
         calls.append("never")
         return obj
 
-    assert _object_resolved.emit_object_resolved("X") is None
+    assert Extension(Settings()).prepare(gf.Function("f")) is None
     assert calls == ["drop"]
 
 
@@ -59,9 +63,9 @@ def test_on_object_resolved_returns_the_handler(clean_hooks):
     assert hooks.on_object_resolved(h) is h
 
 
-def test_emit_object_resolved_with_no_handlers_is_identity(clean_hooks):
-    sentinel = object()
-    assert _object_resolved.emit_object_resolved(sentinel) is sentinel
+def test_object_resolved_with_no_handlers_is_identity(clean_hooks):
+    sentinel = gf.Function("f")
+    assert Extension(Settings()).prepare(sentinel) is sentinel
 
 
 def test_bare_decorator_registers_the_hook(clean_hooks):
@@ -73,7 +77,7 @@ def test_bare_decorator_registers_the_hook(clean_hooks):
     assert list(_object_resolved.REGISTRY) == [h]
 
 
-def test_priority_orders_emit_low_to_high(clean_hooks):
+def test_priority_orders_handlers_low_to_high(clean_hooks):
     order: list[str] = []
 
     @hooks.on_object_resolved(priority=100)
@@ -91,7 +95,7 @@ def test_priority_orders_emit_low_to_high(clean_hooks):
         order.append("mid")
         return obj
 
-    _object_resolved.emit_object_resolved("X")
+    Extension(Settings()).prepare(gf.Function("f"))
     assert order == ["early", "mid", "late"]
 
 
@@ -108,7 +112,7 @@ def test_low_priority_none_short_circuits_before_high(clean_hooks):
         calls.append("drop")
         return None
 
-    assert _object_resolved.emit_object_resolved("X") is None
+    assert Extension(Settings()).prepare(gf.Function("f")) is None
     assert calls == ["drop"]
 
 
@@ -122,10 +126,10 @@ def test_object_resolved_invalidates_final_docstring_parse(clean_hooks):
         value.docstring.value = "After."
         return value
 
-    result = _object_resolved.emit_object_resolved(obj)
+    result = Extension(Settings()).prepare(obj)
 
     assert result is obj
-    assert "parsed" not in obj.docstring.__dict__
+    assert obj.docstring.parsed[0].value == "After."
 
 
 def test_object_resolved_invalidates_cache_read_by_handler(clean_hooks):
@@ -134,15 +138,16 @@ def test_object_resolved_invalidates_cache_read_by_handler(clean_hooks):
 
     @hooks.on_object_resolved
     def inspect(value):
-        assert value.docstring.parsed
+        assert value.docstring.parsed[0].value == "Summary."
+        value.docstring.value = "Revised."
         return value
 
-    _object_resolved.emit_object_resolved(obj)
+    Extension(Settings()).prepare(obj)
 
-    assert "parsed" not in obj.docstring.__dict__
+    assert obj.docstring.parsed[0].value == "Revised."
 
 
-def test_emit_docstring_parsed_threads_and_caches_sections(clean_hooks):
+def test_docstring_parsed_threads_and_caches_sections(clean_hooks):
     obj = gf.Function("f")
     obj.docstring = gf.Docstring("Summary.", parent=obj, parser="numpy")
 
@@ -151,10 +156,9 @@ def test_emit_docstring_parsed_threads_and_caches_sections(clean_hooks):
         assert value is obj
         return [*sections, gf.DocstringSectionText("More.")]
 
-    result = _docstring_parsed.emit_docstring_parsed(obj)
+    assert Extension(Settings()).prepare(obj) is obj
 
-    assert [section.value for section in result] == ["Summary.", "More."]
-    assert obj.docstring.__dict__["parsed"] is result
+    assert [section.value for section in obj.docstring.parsed] == ["Summary.", "More."]
 
 
 def test_docstring_parsed_rejects_none(clean_hooks):
@@ -165,13 +169,8 @@ def test_docstring_parsed_rejects_none(clean_hooks):
     def invalid(value, sections):
         return None
 
-    with pytest.raises(TypeError, match="returned None"):
-        _docstring_parsed.emit_docstring_parsed(obj)
-
-
-def test_docstring_parsed_rejects_object_without_docstring(clean_hooks):
-    with pytest.raises(ValueError, match="without a docstring"):
-        _docstring_parsed.emit_docstring_parsed(gf.Function("f"))
+    with pytest.raises(TypeError, match="must return sections"):
+        Extension(Settings()).prepare(obj)
 
 
 def test_docstring_parsed_keeps_empty_section_list(clean_hooks):
@@ -182,7 +181,7 @@ def test_docstring_parsed_keeps_empty_section_list(clean_hooks):
     def remove_body(value, sections):
         return []
 
-    assert _docstring_parsed.emit_docstring_parsed(obj) == []
+    assert Extension(Settings()).prepare(obj) is obj
     assert obj.docstring.__dict__["parsed"] == []
 
 
@@ -201,6 +200,6 @@ def test_docstring_parsed_orders_handlers_by_priority(clean_hooks):
         calls.append("early")
         return sections
 
-    _docstring_parsed.emit_docstring_parsed(obj)
+    Extension(Settings()).prepare(obj)
 
     assert calls == ["early", "late"]

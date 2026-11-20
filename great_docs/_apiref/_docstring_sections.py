@@ -53,11 +53,28 @@ class DCDocstringSection:
     """The section kind."""
 
     def __init__(self, value: list[gf.DocstringParameter], title: str):
+        """
+        Create a section from its documented parameters
+
+        Parameters
+        ----------
+        value
+            The documented parameters.
+        title
+            The section title.
+        """
         self.value = value
         self.title = title
 
     def __bool__(self) -> bool:
-        """Whether this section has a true-ish value."""
+        """
+        Whether this section has a true-ish value
+
+        Returns
+        -------
+        :
+            `True` when the section documents at least one parameter.
+        """
         return bool(self.value)
 
 
@@ -78,7 +95,21 @@ class DCDocstringSectionInitParameters(DCDocstringSection):
 
 
 def transform(el: object) -> object:
-    """Cast `el` to a more specific docstring element, falling back to `el` itself"""
+    """
+    Cast `el` to a more specific docstring element, falling back to `el` itself
+
+    Parameters
+    ----------
+    el
+        A docstring element: an example-section `(kind, value)` tuple, a list of
+        sections, or anything else.
+
+    Returns
+    -------
+    :
+        An `ExampleCode` or `ExampleText` for an example tuple, the specialised
+        sections for a list of sections, and `el` itself otherwise.
+    """
 
     if isinstance(el, tuple):
         match cast("tuple[object, object]", el):
@@ -125,10 +156,35 @@ class _DocstringSectionPatched(gf.DocstringSection):
     _registry: ClassVar[dict[str, type[_DocstringSectionPatched]]] = {}
 
     def __init__(self, value: str, title: str | None = None) -> None:
+        """
+        Create a section from its text
+
+        Parameters
+        ----------
+        value
+            The section body.
+        title
+            The section title as written in the docstring.
+        """
         super().__init__(title)
         self.value = value
 
     def __init_subclass__(cls, title: str, **kwargs: object) -> None:
+        """
+        Register a subclass as the section type for a title
+
+        Parameters
+        ----------
+        title
+            The lowercase section title that the subclass handles.
+        **kwargs
+            Keyword arguments for the parent class.
+
+        Raises
+        ------
+        KeyError
+            If another subclass already handles `title`.
+        """
         super().__init_subclass__(**kwargs)
 
         if title in cls._registry:
@@ -138,7 +194,20 @@ class _DocstringSectionPatched(gf.DocstringSection):
 
     @staticmethod
     def split_sections(text: str) -> list[tuple[str, str]]:
-        """Split text into (title, body) tuples for all numpydoc style sections"""
+        """
+        Split text into (title, body) tuples for all numpydoc style sections
+
+        Parameters
+        ----------
+        text
+            Docstring text that may contain numpydoc section headers.
+
+        Returns
+        -------
+        :
+            The sections in order. Text before the first header comes first, with an
+            empty title. The list is empty when `text` has no section header.
+        """
         comp = re.compile(r"^([\S \t]+)\n-+$\n?", re.MULTILINE)
 
         current_match = comp.search(text)
@@ -164,7 +233,23 @@ class _DocstringSectionPatched(gf.DocstringSection):
 
     @classmethod
     def transform(cls, el: gf.DocstringSection) -> list[gf.DocstringSection]:
-        """Cast `el` to a more specific `DocstringSection` type, when possible"""
+        """
+        Cast `el` to a more specific `DocstringSection` type, when possible
+
+        A text section is split at its numpydoc section headers first, so it can
+        become several sections. Sections with titles that have no registered type
+        stay text sections or admonitions.
+
+        Parameters
+        ----------
+        el
+            A parsed docstring section.
+
+        Returns
+        -------
+        :
+            The sections that replace `el`, or `[el]` when nothing changes.
+        """
 
         if not isinstance(el, (gf.DocstringSectionText, gf.DocstringSectionAdmonition)):
             return [el]
@@ -212,7 +297,24 @@ class ExampleText:
 
 
 def tuple_to_data(el: "tuple[gf.DocstringSectionKind, str]") -> ExampleCode | ExampleText:
-    """Build an `ExampleCode` or `ExampleText` from the example-section tuple"""
+    """
+    Build an `ExampleCode` or `ExampleText` from the example-section tuple
+
+    Parameters
+    ----------
+    el
+        The section kind and the text of one example block.
+
+    Returns
+    -------
+    :
+        An `ExampleCode` for code and an `ExampleText` for prose.
+
+    Raises
+    ------
+    ValueError
+        If the kind is neither `examples` nor `text`.
+    """
     assert len(el) == 2
 
     kind, value = el

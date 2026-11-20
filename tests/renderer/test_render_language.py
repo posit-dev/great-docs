@@ -156,10 +156,13 @@ def test_english_output_is_unchanged():
     [("Functions", "関数"), ("Data Loaders", "Data Loaders")],
 )
 def test_index_section_titles_translate_only_standard_names(title: str, expected: str):
-    from great_docs._apiref._render import RenderReferenceSection
+    from great_docs._apiref._rendering import ReferenceSectionRenderer
     from great_docs._apiref.content import Section
+    from great_docs.extensions import Extension
 
-    render = RenderReferenceSection(Section(title=title), settings=Settings(lang="ja"))
+    render = ReferenceSectionRenderer(
+        Section(title=title), extension=Extension(Settings(lang="ja"))
+    )
     header = str(render.render_title())
 
     assert f"{expected} {{.doc-group}}" in header

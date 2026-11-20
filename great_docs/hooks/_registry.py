@@ -1,10 +1,10 @@
 """
-A priority-ordered registry of event handlers, shared by the pipeline events
+A priority-ordered registry of hook handlers
 
-Holds handlers paired with a numeric priority and yields them in run order:
-lower priority first, ties in registration order. Registration doubles as a
-decorator, used bare or with a priority. The event modules each own one
-instance and supply their own emit semantics.
+Handlers with lower priorities run first, and handlers with equal priorities run in
+registration order. Snapshots and copies duplicate the list of registrations but share
+the handlers themselves. They let an API reference extension register its own handlers
+and undo any change its code makes to the global registries.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ H = TypeVar("H", bound=Callable[..., object])
 
 class HookRegistry(Generic[H]):
     """
-    A priority-ordered collection of event handlers
+    A priority-ordered collection of hook handlers
 
     Iterating the registry yields handlers in run order: lower priority first,
     ties in registration order. The run order is cached and rebuilt only when a
@@ -60,7 +60,7 @@ class HookRegistry(Generic[H]):
         return add(hook) if hook is not None else add
 
     def __iter__(self):
-        """Iterate the handlers in run order, sorted by `(priority, sequence)`"""
+        """Iterate handlers by priority, preserving registration order for ties"""
         if self._ordered is None:
             self._ordered = [h for _, _, h in sorted(self._entries, key=lambda e: e[:2])]
         return iter(self._ordered)
@@ -70,6 +70,48 @@ class HookRegistry(Generic[H]):
 
     def __len__(self) -> int:
         return len(self._entries)
+
+    def snapshot(self) -> tuple[tuple[int, int, H], ...]:
+        """
+        Capture the current registrations without copying their handlers
+
+        Returns
+        -------
+        :
+            The `(priority, sequence, handler)` entries in registration order.
+        """
+        return tuple(self._entries)
+
+    def restore(self, entries: tuple[tuple[int, int, H], ...]) -> None:
+        """
+        Replace the registrations with an earlier snapshot
+
+        Handlers registered afterwards follow the snapshot's handlers in tie order.
+
+        Parameters
+        ----------
+        entries
+            The registrations that `snapshot` returned.
+        """
+        self._entries = list(entries)
+        self._sequence = max((sequence for _, sequence, _ in entries), default=-1) + 1
+        self._ordered = None
+
+    def copy(self) -> HookRegistry[H]:
+        """
+        Copy the registrations into a new registry
+
+        Both registries hold the same handler objects, but a later registration on
+        one does not appear in the other.
+
+        Returns
+        -------
+        :
+            A registry with the same handlers in the same run order.
+        """
+        registry = HookRegistry[H]()
+        registry.restore(self.snapshot())
+        return registry
 
     def clear(self) -> None:
         """Drop all registered handlers"""

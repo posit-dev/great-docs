@@ -1,0 +1,236 @@
+---
+title: "API reference customisation"
+guide-section: "Site Content"
+bread-crumbs: false
+tags: [API, Content]
+---
+
+# API reference customisation
+
+A Python extension gives you two ways to customise your API reference.
+
+- Use a [hook](#hooks) to run a function when Great Docs handles an event. For
+  example, you can leave an object out of the reference or edit its docstring.
+- Use a [custom renderer](#custom-renderers) to change how objects or pages
+  appear. For example, you can hide class signatures or add a note below each
+  object's docstring.
+
+## Extension setup
+
+Set `api_reference_extension` to the path to your Python file, relative to
+`great-docs.yml`. In this example, the two files sit side by side.
+
+```{.yaml filename="docs/great-docs.yml"}
+api_reference_extension: _api_reference_extension.py
+```
+
+You can also use an absolute path to the `.py` file. Leave
+`api_reference_extension` at its default of `null` to use the built-in output.
+
+Define a `setup(extension)` function in the Python file to register your hooks
+and/or select custom renderers.
+
+## Hooks {#hooks}
+
+Each decorator registers a function for one event. Both events let you change
+the reference pages and `llms-full.txt`.
+
+| Event | Decorator | What your function returns |
+|---|---|---|
+| Great Docs finds the object to document | `@extension.on_object_resolved` | The object, with any docstring edits, or `None` to exclude it |
+| Great Docs finishes parsing a docstring | `@extension.on_docstring_parsed` | The sections to keep, in the order you want them to appear |
+
+### A note in the text export
+
+To include a note in both the reference page and `llms-full.txt`, add it to the
+docstring itself. For example, point `api_reference_extension` at the following
+file and rebuild.
+
+```{.python filename="docs/_add_note_extension.py"}
+import griffe as gf
+
+from great_docs.extensions import Extension
+
+
+def setup(extension: Extension) -> None:
+    @extension.on_object_resolved
+    def add_note(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
+        if obj.docstring is not None:
+            obj.docstring.value += "\n\nThis description includes a project note."
+        return obj
+```
+
+If an object has aliases, editing its docstring changes the text under every
+name. Excluding the object also excludes its aliases.
+
+## Custom renderers {#custom-renderers}
+
+A renderer controls how Great Docs displays an object or page. To exclude class
+signatures, subclass `ClassRenderer` and pass your subclass to `Renderers` in
+`setup`.
+
+```{.python filename="docs/_signature_extension.py"}
+from great_docs.extensions import Extension
+from great_docs.pandoc.blocks import BlockContent
+from great_docs.rendering import ClassRenderer, Renderers
+
+
+class QuietClass(ClassRenderer):
+    def render_signature(self) -> BlockContent:
+        return None
+
+
+def setup(extension: Extension) -> None:
+    extension.set_renderers(Renderers(classes=QuietClass))
+```
+
+The source link still appears if one is available. Great Docs omits the Usage
+row when there is neither a signature nor a source link.
+
+You can register a hook and a custom renderer in the same `setup` function.
+For example, add the `set_renderers` call above to the `setup` function that
+registers `add_note` to include the note and hide class signatures.
+
+To change the label that readers see for each function in a summary, override
+`summary_name` on `FunctionRenderer`.
+
+```{.python filename="docs/_summary_extension.py"}
+from great_docs.extensions import Extension
+from great_docs.rendering import FunctionRenderer, Renderers
+
+
+class LabelledFunction(FunctionRenderer):
+    @property
+    def summary_name(self) -> str:
+        return f"Run {super().summary_name}"
+
+
+def setup(extension: Extension) -> None:
+    extension.set_renderers(Renderers(functions=LabelledFunction))
+```
+
+You can supply a renderer for `classes`, `functions`, `attributes`,
+`type_aliases`, `modules`, `api_pages`, `reference_index` or
+`reference_sections`. Each takes a subclass of the corresponding renderer.
+Great Docs uses its defaults for any you leave out. The subclasses apply only to
+this project's API reference.
+
+| To change                                             | Override                                  |
+|-------------------------------------------------------|-------------------------------------------|
+| An object's label, in its heading and page title      | `render_title_content`                    |
+| The heading around that label, or whether it appears  | `render_title`                            |
+| The description or signature                          | `render_description`, `render_signature`  |
+| Docstring sections and their headings                 | `render_docstring_body`                   |
+| Summaries of members, whether on this page or another | `render_members_summary(kind, renderers)` |
+| Documentation for members on this page                | `render_members_body(kind, renderers)`    |
+| The whole body, including member groups               | `render_body`                             |
+| Summary entries or their labels                       | `render_summary`, `summary_name`          |
+
+Return `None` from a method that renders a block to exclude that part of the page.
+To exclude summary entries, return an empty sequence from `render_summary()`.
+Hidden members still belong to the reference and appear in its inventories.
+
+### Shared formatting with `object_renderer_mixin`
+
+To add a note to every object's documentation, write a mixin that overrides
+`render_docstring_body` and pass it to `Renderers` as `object_renderer_mixin`.
+Call `super().render_docstring_body()` to keep the usual docstring sections
+and append the note after them.
+
+```{.python filename="docs/_api_reference_extension.py"}
+from great_docs.extensions import Extension
+from great_docs.pandoc.blocks import BlockContent, Blocks, Para
+from great_docs.rendering import Renderers
+
+
+class AppendNoteMixin:
+    def render_docstring_body(self) -> BlockContent:
+        body = super().render_docstring_body()
+        return Blocks([body, Para("Prepared for this project's documentation.")])
+
+
+def setup(extension: Extension) -> None:
+    extension.set_renderers(Renderers(object_renderer_mixin=AppendNoteMixin))
+```
+
+On a class page, the note appears before the member groups. Each method
+documented on the same page gets its own note, even if its docstring body is
+empty.
+
+The mixin applies to the default renderers for classes, functions, attributes,
+type aliases and modules. To use the same formatting in a custom object
+renderer, inherit from the mixin first. For example, declare
+`class LabelledFunction(AppendNoteMixin, FunctionRenderer)`.
+
+#### Page details {#page-details}
+
+Check `self.context.authored_name` to limit the note to a single name.
+For example, add these lines after the call to `super()` to show the note
+only on the object documented as `Document`.
+
+```python
+if self.context.authored_name != "Document":
+    return body
+```
+
+To select by page instead, check `self.context.page_path`, the QMD path
+relative to the output directory. Methods shown on a class page share that
+page's path.
+
+### Examples in docstrings {#example-in-docstrings}
+
+Suppose a docstring's Usage section shows `old_usage()` and you want the page
+to show `new_usage()`. Override `render_docstring_body` to replace the text in
+the rendered docstring sections, including fenced code examples.
+
+```{.python filename="docs/_usage_extension.py"}
+from great_docs.extensions import Extension
+from great_docs.pandoc.blocks import BlockContent
+from great_docs.rendering import Renderers
+
+
+class ReplaceUsageMixin:
+    def render_docstring_body(self) -> BlockContent:
+        body = super().render_docstring_body()
+        if body is None:
+            return None
+        return str(body).replace("old_usage()", "new_usage()")
+
+
+def setup(extension: Extension) -> None:
+    extension.set_renderers(Renderers(object_renderer_mixin=ReplaceUsageMixin))
+```
+
+The opening line of the docstring appears in the object's description. Use
+`render_description` to change it, `render_title` to change the heading, or
+`render_usage_source` to change the automatic Usage label and source link.
+
+## Preview and freeze {#preview-and-freeze}
+
+If your extension reads files, tell Great Docs which ones to watch in `setup`.
+You can name a file, use a pattern or watch a whole directory.
+
+```python
+extension.watch("data.txt")
+extension.watch("data/*.txt")
+extension.watch("examples")
+```
+
+Use absolute paths or paths relative to the extension file. If preview asks
+you to restart after you add a file to watch, rerun `great-docs build --watch`.
+
+With `freeze: auto`, changes to the extension or its watched files cause
+affected code to run again. With `freeze: true`, refresh the saved results
+yourself.
+
+To refresh a page explicitly, build the project once, then pass the generated
+page's path to `great-docs freeze`. For example, the following command runs the
+current customised page and saves its results.
+
+```bash
+great-docs freeze docs/_quarto/default/reference/Document.qmd
+```
+
+Use the path for your own layout and reference entry. For more on refreshing
+pages, see [Freeze](freeze.qmd). For help choosing which objects to document
+and where they appear, see [API documentation](api-documentation.qmd).

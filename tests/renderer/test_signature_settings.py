@@ -4,11 +4,12 @@ from pathlib import Path
 
 import griffe as gf
 
-from great_docs._apiref._render import RenderAPIPage
+from great_docs._apiref._rendering import APIPageRenderer
 from great_docs._apiref._settings import CallableSignatures, Settings
 from great_docs._apiref._signature import make_call_signature_text
 from great_docs._apiref._tools import _render
 from great_docs._apiref.api_reference import APIReference
+from great_docs.extensions import Extension
 
 
 def test_settings_read_the_api_reference_block():
@@ -116,7 +117,7 @@ def test_references_render_with_their_own_settings_when_interleaved(tmp_path, mo
     monkeypatch.syspath_prepend(str(tmp_path / "src"))
 
     def render(ref: APIReference) -> str:
-        return str(RenderAPIPage(ref.manifest.pages[0], settings=ref.settings))
+        return str(APIPageRenderer(ref.manifest.pages[0], extension=Extension(ref.settings)))
 
     plain, highlighted = _reference("plain"), _reference("highlighted")
 
@@ -133,17 +134,17 @@ def test_references_render_with_their_own_settings_when_interleaved(tmp_path, mo
     assert after == before
 
 
-def _signature(source: str, name: str, **options: bool) -> str:
+def _signature(source: str, name: str, renderer_type: type | None = None) -> str:
     """Return the rendered signature of the named callable in `source`"""
     from great_docs._apiref import content
-    from great_docs._apiref._render import get_render_type
+    from great_docs._apiref._rendering import Renderers
 
     with gf.temporary_visited_package(
         "package", {"__init__.py": textwrap.dedent(source)}
     ) as package:
         obj = package[name]
     doc = content.Doc.from_griffe(obj.name, obj)
-    qmd = str(get_render_type(doc)(doc, **options, settings=Settings()))
+    qmd = str(Renderers(functions=renderer_type).make(doc))
     signature = qmd.split(".doc-signature", 1)[1]
     return re.search(r"```\w+\n(.*?)```", signature, re.S).group(1)
 
@@ -156,7 +157,14 @@ def test_an_annotation_shows_double_quoted_strings():
     def pick(mode: Literal['fast', 'slow']): ...
     """
 
-    sig = _signature(source, "pick", show_signature_annotation=True)
+    from great_docs._apiref._format import repr_obj
+    from great_docs.rendering import FunctionRenderer
+
+    class AnnotatedFunction(FunctionRenderer):
+        def render_signature_parameter(self, el: gf.Parameter) -> str:
+            return f"{el.name}: {repr_obj(el.annotation)}"
+
+    sig = _signature(source, "pick", AnnotatedFunction)
 
     assert 'Literal["fast", "slow"]' in sig
 

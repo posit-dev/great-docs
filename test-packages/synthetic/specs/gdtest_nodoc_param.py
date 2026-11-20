@@ -1,4 +1,4 @@
-"""Deprecated parameters omitted from signatures and parameter descriptions"""
+"""Deprecated parameters omitted from signatures, parameter descriptions and dataclass fields"""
 
 SPEC = {
     "name": "gdtest_nodoc_param",
@@ -12,7 +12,9 @@ SPEC = {
         "gdtest_nodoc_param/__init__.py": '''
             """Deprecated arguments retained for compatibility"""
 
-            __all__ = ['configure', 'Widget']
+            from dataclasses import dataclass
+
+            __all__ = ['configure', 'Widget', 'Settings']
 
             def configure(value: int, old_option: bool = False) -> int:
                 """
@@ -58,6 +60,25 @@ SPEC = {
                     %nodoc_param old_option
                     """
                     self.value = value
+
+            @dataclass
+            class Settings:
+                """
+                Plot settings
+
+                %nodoc_param old_dpi
+                """
+
+                dpi: int = 100
+                "The retained resolution"
+                old_dpi: int = 0
+                "The excluded resolution"
+                title: str = "plot"
+                "The retained title"
+
+                def scale(self, factor: float) -> float:
+                    """Scale the resolution"""
+                    return self.dpi * factor
         ''',
         "README.md": "# Parameter exclusion\n\nKeep deprecated arguments out of public documentation.\n",
     },
@@ -65,9 +86,9 @@ SPEC = {
         "detected_name": "gdtest-nodoc-param",
         "detected_module": "gdtest_nodoc_param",
         "detected_parser": "numpy",
-        "export_names": ["configure", "Widget"],
-        "num_exports": 2,
-        "documented_items": ["configure", "Widget"],
+        "export_names": ["configure", "Widget", "Settings"],
+        "num_exports": 3,
+        "documented_items": ["configure", "Widget", "Settings"],
         "has_user_guide": False,
     },
 }

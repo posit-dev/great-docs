@@ -4,10 +4,12 @@ Shared configuration and build setup for `GreatDocs` tests
 `write_config` writes and loads `great-docs.yml`. `mock_config` provides a `Config` double
 with empty defaults. `write_pyproject` declares a project's name. `make_project` reads a
 project's facts as a build does, `make_exports` prepares to find its exports, and `make_run`
-creates build state for testing build methods directly. `prepare_build_directory`,
-`update_quarto_config`, `add_api_block` and `write_homepage` provide the project inputs for
-individual build operations. `user_guide_step`, `sections_step`, `custom_pages_step` and
-`freeze_cache_step` run individual steps with the build's arguments, and
+creates build state for testing build methods directly. `prepared_reference` prepares the API
+reference that the `llms.txt` writers read and closes it afterwards. `WriteExtension` and
+`MakeReference` describe the factories of the `write_extension` and `make_reference` fixtures.
+`prepare_build_directory`, `update_quarto_config`, `add_api_block` and `write_homepage` provide
+the project inputs for individual build operations. `user_guide_step`, `sections_step`,
+`custom_pages_step` and `freeze_cache_step` run individual steps with the build's arguments, and
 `apply_contributions` adds what a step records to `_quarto.yml`.
 `stubbed_build` stubs Quarto and build steps while preserving the build's control flow.
 `StubRemote` supplies repository and PyPI data without network requests. `homepage_hero` and
@@ -28,12 +30,14 @@ from collections.abc import Callable, Collection, Generator, Iterable, Iterator,
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 from unittest.mock import DEFAULT, MagicMock, NonCallableMagicMock, patch
 
 from yaml12 import format_yaml
 
 from great_docs import Config, GreatDocs
+from great_docs._apiref._extension_loading import _ExtensionSource
+from great_docs._apiref.api_reference import APIReference
 from great_docs._build import content, pipeline, prepare, reference, site
 from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
@@ -209,6 +213,94 @@ def make_run(docs: GreatDocs, **values: Any) -> Run:
         The build state with the supplied values.
     """
     return replace(Run.make(docs._config, docs.layout, watch=False), **values)
+
+
+@contextmanager
+def prepared_reference(api_block: Mapping[str, object]) -> Iterator[APIReference]:
+    """
+    Prepare an API reference as the build's API step leaves it, and close it afterwards
+
+    Parameters
+    ----------
+    api_block
+        The `api-reference` configuration.
+
+    Yields
+    ------
+    :
+        The reference, with its sections resolved.
+    """
+    ref = APIReference({"api-reference": dict(api_block)})
+    try:
+        _ = ref.resolved
+        yield ref
+    finally:
+        ref.close()
+
+
+class WriteExtension(Protocol):
+    """The factory that the `write_extension` fixture returns"""
+
+    def __call__(
+        self, setup: str, *, config_root: Path | None = None, source_root: Path | None = None
+    ) -> _ExtensionSource:
+        """
+        Write setup code to `extension.py`
+
+        Parameters
+        ----------
+        setup
+            The entry file's Python source, dedented before writing.
+        config_root
+            The directory for `extension.py`, which stands in for the configuration
+            file's directory, or `None` for the test's temporary directory.
+        source_root
+            The documentation source directory, or `None` for `config_root`.
+
+        Returns
+        -------
+        :
+            The entry file with its configuration and documentation roots.
+        """
+        ...
+
+
+class MakeReference(Protocol):
+    """The factory that the `make_reference` fixture yields"""
+
+    def __call__(
+        self,
+        block: Mapping[str, object],
+        source: _ExtensionSource | None = None,
+        *,
+        package_files: Mapping[str, str] | None = None,
+        output_root: Path | None = None,
+    ) -> APIReference:
+        """
+        Configure an API reference that closes when the test ends
+
+        Parameters
+        ----------
+        block
+            The `api-reference` configuration.
+        source
+            The extension to load, or `None` for globally registered hooks alone.
+        package_files
+            The sources of the package that `block` names, keyed by path within the
+            package and dedented before writing, or `None` to write no package. The
+            package's parent directory joins `sys.path`, and its modules leave
+            `sys.modules` before the reference is built and after the test.
+        output_root
+            The generated documentation root, or `None` when the reference writes no
+            files. The factory creates it and makes it the working directory, because
+            `build` writes pages relative to the working directory.
+
+        Returns
+        -------
+        :
+            The reference, with its sections not yet resolved.
+        """
+        ...
 
 
 def prepare_build_directory(docs: GreatDocs, run: Run) -> Outcome:

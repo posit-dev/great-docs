@@ -1,5 +1,9 @@
 """
-Repository data and local checkout facts, read once per documentation build
+Repository metadata and source-link destinations for a documentation build
+
+Fetch optional navbar counts and release details. Resolve source-link refs from
+explicit configuration, exact checkout tags or the current branch, with `main`
+as the fallback when checkout facts are unavailable.
 """
 
 from __future__ import annotations

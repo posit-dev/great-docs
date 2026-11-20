@@ -1,3 +1,10 @@
+"""
+Checks for the kinds of Python objects and documentation members
+
+Each check looks through an alias to the object it points to. A check treats an alias
+that cannot be resolved as not matching, although loading that alias still raises.
+"""
+
 from __future__ import annotations
 
 import builtins
@@ -10,7 +17,7 @@ from . import content
 if TYPE_CHECKING:
     from typing import TypeGuard
 
-    from .typing import DocMemberType, DocType  # noqa: TCH001
+    from .typing import DocMemberType  # noqa: TCH001
 
 
 def _resolved(obj: gf.Object | gf.Alias) -> gf.Object | None:
@@ -60,10 +67,20 @@ def _as_class(obj: gf.Object | gf.Alias) -> gf.Class | None:
 
 def is_typealias(obj: gf.Object | gf.Alias) -> bool:
     """
-    Whether `obj` is a type alias
+    Check whether an object is a PEP 613 or PEP 695 type alias
 
-    Covers both PEP 695 ``type X = ...`` aliases, which griffe models as a
-    dedicated `TypeAlias`, and explicit ``X: TypeAlias = ...`` attributes.
+    Covers both PEP 695 `type X = ...` aliases, which Griffe models as a
+    dedicated `TypeAlias`, and explicit `X: TypeAlias = ...` attributes.
+
+    Parameters
+    ----------
+    obj
+        The object or alias to check.
+
+    Returns
+    -------
+    :
+        Whether the object is a type alias.
     """
     target = _resolved(obj)
     if isinstance(target, gf.TypeAlias):
@@ -79,7 +96,17 @@ def is_typealias(obj: gf.Object | gf.Alias) -> bool:
 
 def is_protocol(obj: gf.Object | gf.Alias) -> bool:
     """
-    Whether `obj` is a class defining a typing `Protocol`
+    Check whether a class defines a typing `Protocol`
+
+    Parameters
+    ----------
+    obj
+        The object or alias to check.
+
+    Returns
+    -------
+    :
+        Whether the last base of the class is `typing.Protocol`.
     """
     cls = _as_class(obj)
     return (
@@ -135,10 +162,10 @@ def _inherits_exception(obj: gf.Class | gf.Alias) -> bool:
     """
     Return whether `obj` derives from a built-in exception class
 
-    Follow the bases that resolve to classes griffe has loaded, so a subclass
+    Follow the bases that resolve to classes Griffe has loaded, so a subclass
     of an exception defined in the package counts. The chain stops at a base
-    from a package griffe has not loaded, such as `json.JSONDecodeError`. If
-    griffe reports an inheritance cycle, only the class's own bases count.
+    from a package Griffe has not loaded, such as `json.JSONDecodeError`. If
+    Griffe reports an inheritance cycle, only the class's own bases count.
 
     Parameters
     ----------
@@ -198,7 +225,7 @@ def class_kind(obj: gf.Class | gf.Alias) -> ClassKind:
 
 def function_kind(obj: gf.Function | gf.Alias) -> FunctionKind:
     """
-    Classify a function by its griffe labels
+    Classify a function by its Griffe labels
 
     The first label that matches decides: `async`, `classmethod`,
     `staticmethod`, then `property`.
@@ -262,10 +289,20 @@ def attribute_kind(obj: gf.Attribute | gf.TypeAlias | gf.Alias) -> AttributeKind
 
 def is_typeddict(obj: gf.Object | gf.Alias) -> bool:
     """
-    Whether `obj` is a class that `class_kind` classifies as a `TypedDict`
+    Check whether an object is a `TypedDict` class
 
     A `@dataclass`-decorated class that also derives from `TypedDict` is a
     dataclass, so it keeps its constructor brackets.
+
+    Parameters
+    ----------
+    obj
+        The object or alias to check.
+
+    Returns
+    -------
+    :
+        Whether the object is a `TypedDict` class.
     """
     cls = _as_class(obj)
     return cls is not None and class_kind(cls) == "typeddict"
@@ -273,10 +310,20 @@ def is_typeddict(obj: gf.Object | gf.Alias) -> bool:
 
 def is_enum(obj: gf.Object | gf.Alias) -> bool:
     """
-    Whether `obj` is a class that `class_kind` classifies as an enum
+    Check whether an object is an enumeration class
 
     A `@dataclass`-decorated class that also derives from an `enum` base is a
     dataclass, so it keeps its constructor brackets.
+
+    Parameters
+    ----------
+    obj
+        The object or alias to check.
+
+    Returns
+    -------
+    :
+        Whether the object is an enumeration class.
     """
     cls = _as_class(obj)
     return cls is not None and class_kind(cls) == "enum"
@@ -287,10 +334,20 @@ _TYPE_VARIABLE_KINDS = frozenset({"TypeVar", "ParamSpec", "TypeVarTuple"})
 
 def is_typevar(obj: gf.Object | gf.Alias) -> bool:
     """
-    Whether `obj` is a declaration of a type variable
+    Check whether an object declares a type variable
 
     A type variable is a `TypeVar`, `ParamSpec` or `TypeVarTuple`, called by
     its bare name or through any module, such as `typing.TypeVar`.
+
+    Parameters
+    ----------
+    obj
+        The object or alias to check.
+
+    Returns
+    -------
+    :
+        Whether the object is an attribute whose value creates a type variable.
     """
     target = _resolved(obj)
     if not (isinstance(target, gf.Attribute) and isinstance(target.value, gf.ExprCall)):
@@ -304,7 +361,17 @@ def is_typevar(obj: gf.Object | gf.Alias) -> bool:
 
 def is_initvar(obj: str | gf.Expr | None) -> TypeGuard[gf.ExprSubscript]:
     """
-    Whether `obj` is an `InitVar` annotation
+    Check whether an annotation is an `InitVar`
+
+    Parameters
+    ----------
+    obj
+        The annotation, or `None` when there is none.
+
+    Returns
+    -------
+    :
+        Whether the annotation subscripts `dataclasses.InitVar`.
     """
     return (
         isinstance(obj, gf.ExprSubscript)
@@ -314,54 +381,86 @@ def is_initvar(obj: str | gf.Expr | None) -> TypeGuard[gf.ExprSubscript]:
 
 
 def is_doc_function(el: DocMemberType) -> TypeGuard[content.DocFunction]:
-    """Whether the member documents a function"""
+    """
+    Check whether a documentation member represents a function
+
+    Parameters
+    ----------
+    el
+        The documentation member to check.
+
+    Returns
+    -------
+    :
+        Whether the member documents a function.
+    """
     return el.obj.is_function
 
 
 def is_doc_class(el: DocMemberType) -> TypeGuard[content.DocClass]:
-    """Whether the member documents a class"""
+    """
+    Check whether a documentation member represents a class
+
+    Parameters
+    ----------
+    el
+        The documentation member to check.
+
+    Returns
+    -------
+    :
+        Whether the member documents a class.
+    """
     return el.obj.is_class
 
 
 def is_doc_attribute(el: DocMemberType) -> TypeGuard[content.DocAttribute]:
-    """Whether the member documents an attribute"""
+    """
+    Check whether a documentation member represents an attribute
+
+    Parameters
+    ----------
+    el
+        The documentation member to check.
+
+    Returns
+    -------
+    :
+        Whether the member documents an attribute.
+    """
     return el.obj.is_attribute
 
 
 def is_doc_type_alias(el: DocMemberType) -> TypeGuard[content.DocTypeAlias]:
-    """Whether the member documents a type alias"""
+    """
+    Check whether a documentation member represents a type alias
+
+    Parameters
+    ----------
+    el
+        The documentation member to check.
+
+    Returns
+    -------
+    :
+        Whether the member documents a type alias.
+    """
     return el.obj.is_type_alias
-
-
-def griffe_to_doc(
-    obj: gf.Object | gf.Alias,
-    *,
-    deep: bool = True,
-    inherited: bool = True,
-    skip_aliases: bool = False,
-) -> DocType:
-    """
-    Convert a griffe object to a documentable type
-
-    By default all members, including inherited ones, are included
-    recursively. `inherited=False` limits members to those defined on the
-    object itself; `skip_aliases=True` leaves out members that are aliases
-    (e.g. imported names).
-    """
-    members = None
-    if deep:
-        member_map = obj.all_members if inherited else obj.members
-        members = [
-            griffe_to_doc(m, inherited=inherited, skip_aliases=skip_aliases)
-            for m in member_map.values()
-            if not (skip_aliases and isinstance(m, gf.Alias))
-        ]
-    return content.Doc.from_griffe(obj.name, obj, members=members)
 
 
 def is_field_init_false(el: gf.Parameter) -> bool:
     """
-    Whether `el` is a `field(init=False, ...)` expression
+    Check whether a parameter's default is a `field(init=False, ...)` call
+
+    Parameters
+    ----------
+    el
+        The dataclass parameter to check.
+
+    Returns
+    -------
+    :
+        Whether the default calls `field` with `init=False`.
     """
     if not (
         isinstance(el.default, gf.ExprCall)

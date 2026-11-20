@@ -1,9 +1,9 @@
 """
-The `object_resolved` event — emitted per object once its reference resolves to a griffe object
+The global registry of object hooks, which every API reference extension copies
 
-A registered handler receives the resolved object and returns it (optionally
-annotated or replaced), or `None` to skip it, before the API-reference resolver
-builds its `Doc`. great-docs registers its own built-in handlers here.
+A handler receives each object before Great Docs parses its docstring, and returns
+the object, a replacement, or `None` to exclude it. Great Docs registers its built-in
+handlers here; a project registers its own through `Extension.on_object_resolved`.
 """
 
 from __future__ import annotations
@@ -23,40 +23,11 @@ REGISTRY: HookRegistry[ObjectResolvedHook] = HookRegistry()
 
 on_object_resolved = REGISTRY.register
 """
-Register a handler that customizes an object after resolution
+Register a global object hook, which every extension created afterwards copies
 
-Great Docs emits `object_resolved` before it parses the object's final
-docstring or builds its API-reference document. A handler may inspect, mutate,
-or replace the resolved object, or return `None` to exclude it.
-
-After all handlers run, Great Docs invalidates the resulting object's
-parsed-docstring cache so later parsing reflects the final `docstring.value`.
+The hook runs on each object before Great Docs parses its docstring. It may inspect,
+mutate or replace the object, or return `None` to exclude it. After the hooks run,
+Great Docs clears the object's parsed-docstring cache, so parsing reads the final
+`docstring.value`. Extension files register through `Extension.on_object_resolved`
+instead; registering here from one fails.
 """
-
-
-def emit_object_resolved(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias | None:
-    """
-    Emit the `object_resolved` event and return the object its handlers produce
-
-    Handlers run in priority order (lower first, ties in registration order);
-    the first to return `None` skips the object and the rest are not consulted.
-
-    Parameters
-    ----------
-    obj
-        The object just resolved from its reference.
-
-    Returns
-    -------
-    The object to document, or `None` when a handler skips it.
-    """
-    for hook in REGISTRY:
-        result = hook(obj)
-        if result is None:
-            return None
-        obj = result
-
-    docstring = getattr(obj, "docstring", None)
-    if docstring is not None:
-        docstring.__dict__.pop("parsed", None)
-    return obj

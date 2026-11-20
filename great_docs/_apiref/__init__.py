@@ -5,17 +5,17 @@ Share source and metadata values with content processing; keep website assembly
 out of reference rendering.
 """
 
-from ._render.api_page import RenderAPIPage
-from ._render.doc import RenderDoc
-from ._render.docattribute import RenderDocAttribute
-from ._render.docclass import RenderDocClass
-from ._render.docfunction import RenderDocFunction
-from ._render.docmodule import RenderDocModule
-from ._render.doctypealias import RenderDocTypeAlias
-from ._render.mixin_call import RenderDocCallMixin
-from ._render.mixin_members import RenderDocMembersMixin
-from ._render.reference_page import RenderReferencePage
-from ._render.reference_section import RenderReferenceSection
+from ._rendering.api_pages import APIPageRenderer
+from ._rendering.attributes import AttributeRenderer
+from ._rendering.callables import CallableRendererMixin
+from ._rendering.classes import ClassRenderer
+from ._rendering.functions import FunctionRenderer
+from ._rendering.members import MembersRendererMixin
+from ._rendering.modules import ModuleRenderer
+from ._rendering.objects import ObjectRenderer
+from ._rendering.reference_index import ReferenceIndexRenderer
+from ._rendering.reference_sections import ReferenceSectionRenderer
+from ._rendering.type_aliases import TypeAliasRenderer
 
 # Re-exports from the _apiref submodules
 from .api_reference import APIReference
@@ -25,17 +25,17 @@ from .inventory import create_inventory, write_inventory
 from .spec import SpecObject
 
 __all__ = (
-    "RenderDoc",
-    "RenderDocClass",
-    "RenderDocFunction",
-    "RenderDocAttribute",
-    "RenderDocModule",
-    "RenderDocTypeAlias",
-    "RenderDocCallMixin",
-    "RenderDocMembersMixin",
-    "RenderReferencePage",
-    "RenderAPIPage",
-    "RenderReferenceSection",
+    "ObjectRenderer",
+    "ClassRenderer",
+    "FunctionRenderer",
+    "AttributeRenderer",
+    "ModuleRenderer",
+    "TypeAliasRenderer",
+    "CallableRendererMixin",
+    "MembersRendererMixin",
+    "ReferenceIndexRenderer",
+    "APIPageRenderer",
+    "ReferenceSectionRenderer",
     "get_object",
     "APIReference",
     "remove_package_prefix",

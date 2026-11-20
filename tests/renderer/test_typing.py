@@ -65,14 +65,14 @@ def test_render_obj_type_union_members():
 
     args = get_args(RenderObjType)
     type_names = {t.__name__ for t in args}
-    assert "RenderDoc" in type_names
-    assert "RenderDocClass" in type_names
-    assert "RenderDocFunction" in type_names
-    assert "RenderDocAttribute" in type_names
-    assert "RenderDocModule" in type_names
-    assert "RenderReferencePage" in type_names
-    assert "RenderAPIPage" in type_names
-    assert "RenderReferenceSection" in type_names
+    assert "ObjectRenderer" in type_names
+    assert "ClassRenderer" in type_names
+    assert "FunctionRenderer" in type_names
+    assert "AttributeRenderer" in type_names
+    assert "ModuleRenderer" in type_names
+    assert "ReferenceIndexRenderer" in type_names
+    assert "APIPageRenderer" in type_names
+    assert "ReferenceSectionRenderer" in type_names
 
 
 def test_any_docstring_section_union():

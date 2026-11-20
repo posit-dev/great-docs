@@ -99,8 +99,8 @@ await window.greatDocs.tools.call("search_docs", { query: "install" });
 
 The comprehensive file includes everything in `llms.txt` plus:
 
-- **Full function and class signatures** with all parameters and type annotations
-- **Complete docstrings** (not just the first line)
+- **Function and class signatures** with the parameters and annotations that the API reference shows
+- **Recognised docstring sections**, including edits and exclusions from [object and docstring hooks](api-reference-customisation.qmd#hooks)
 - **CLI help text** for all commands and subcommands (if CLI documentation is enabled)
 - **User guide content** from all user guide pages, with YAML frontmatter stripped
 
@@ -110,18 +110,20 @@ selectively.
 
 ## How It Works
 
-Both files are generated during Step 3 of the build pipeline (`great-docs build`), right after the
-API reference configuration is refreshed and before the `SKILL.md` is generated. The generation
-requires an `api-reference` block in `great-docs.yml`. Without one, both files are silently skipped.
+Great Docs generates both files after it prepares the API reference pages. It reuses
+the same objects, including any docstring edits and exclusions from object and
+docstring hooks, without running setup or those hooks again. The text export uses
+the built-in renderers. See [API reference customisation](api-reference-customisation.qmd)
+for examples of changes that carry through to the export.
 
-Great Docs imports your package at build time to extract docstrings and signatures. This means the
-package must be importable in the build environment. For CI builds, make sure your package is
-installed before running `great-docs build`.
+The files follow the same `parser` and `dynamic` settings as the API reference.
+Keep the package available in the build environment, because dynamic
+introspection imports it. Without an API reference, Great Docs skips both files.
 
 The build log shows the generation as a single step:
 
 ```
-━━ Step 3/18 ─ Generate llms.txt / llms-full.txt ━━━━━━━━
+── Generate llms.txt / llms-full.txt ────────────────────
    ✔ Created llms.txt + llms-full.txt                <0.2s
 ```
 

@@ -9,7 +9,6 @@ from textwrap import dedent
 import griffe as gf
 import pytest
 
-from great_docs._apiref._constructor import parse_class_docstring
 from great_docs._apiref._parameter_docs import (
     CallableDocumentation,
     ParameterDirectiveError,
@@ -17,8 +16,7 @@ from great_docs._apiref._parameter_docs import (
 )
 from great_docs._apiref._settings import CallableSignatures, Settings
 from great_docs._apiref._tools import _render
-from great_docs.hooks._docstring_parsed import emit_docstring_parsed
-from great_docs.hooks._object_resolved import emit_object_resolved
+from great_docs.extensions import Extension
 
 
 def _function(doc: str = "%nodoc_param old") -> gf.Function:
@@ -33,12 +31,11 @@ def _function(doc: str = "%nodoc_param old") -> gf.Function:
 
 def _rendered(obj: gf.Object | gf.Alias, style: str = "highlighted") -> str:
     """Render a callable through the documentation hooks"""
-    assert emit_object_resolved(obj) is obj
-    if obj.docstring is not None:
-        if obj.is_class:
-            parse_class_docstring(obj)
-        emit_docstring_parsed(obj)
-    return _render(obj, Settings(callable_signatures=CallableSignatures(style=style)))
+    parser = obj.docstring.parser if obj.docstring is not None else "numpy"
+    parser = parser.value if isinstance(parser, gf.Parser) else parser or "numpy"
+    return _render(
+        obj, Settings(parser=parser, callable_signatures=CallableSignatures(style=style))
+    )
 
 
 def _signature(qmd: str) -> str:
@@ -52,7 +49,7 @@ def test_directive_is_stripped_without_changing_signature() -> None:
     obj = _function("Configure values\n\n%nodoc_param old\n%nodoc_param old")
     original = obj.parameters
     for _ in range(2):
-        assert emit_object_resolved(obj) is obj
+        assert Extension(Settings()).prepare(obj) is obj
         assert obj.docstring is not None
         assert obj.docstring.value == "Configure values"
         assert CallableDocumentation.make(obj).excluded_names == {"old"}
@@ -64,20 +61,20 @@ def test_directive_is_stripped_without_changing_signature() -> None:
 def test_invalid_declarations_fail(name: str) -> None:
     obj = _function(f"%nodoc_param {name}")
     with pytest.raises(ParameterDirectiveError, match="configure: %nodoc_param"):
-        emit_object_resolved(obj)
+        Extension(Settings()).prepare(obj)
 
 
 @pytest.mark.parametrize("declaration", ["%nodoc_param(old)", "%nodoc_param=old"])
 def test_attached_directive_arguments_are_invalid(declaration: str) -> None:
     with pytest.raises(ParameterDirectiveError, match="one bare Python parameter name"):
-        emit_object_resolved(_function(declaration))
+        Extension(Settings()).prepare(_function(declaration))
 
 
 @pytest.mark.parametrize("fence", ["```", "~~~"])
 def test_fenced_directive_stays_literal(fence: str) -> None:
     doc = f"Example\n\n{fence}text\n%nodoc_param missing\n{fence}"
     obj = _function(doc)
-    assert emit_object_resolved(obj) is obj
+    assert Extension(Settings()).prepare(obj) is obj
     assert obj.docstring is not None
     assert obj.docstring.value == doc
     assert not CallableDocumentation.make(obj).excluded_names
@@ -90,14 +87,15 @@ def test_alias_and_target_keep_the_same_exclusions(alias_first: bool) -> None:
     module.set_member("configure", target)
     alias = gf.Alias("alias", target, parent=module)
     objects = [alias, target] if alias_first else [target, alias]
+    extension = Extension(Settings())
     for obj in objects * 2:
-        assert emit_object_resolved(obj) is obj
+        assert extension.prepare(obj) is obj
         assert CallableDocumentation.make(obj).excluded_names == {"old"}
 
 
 def test_nodoc_discards_object_before_parameter_validation() -> None:
     obj = _function("%nodoc\n%nodoc_param missing")
-    assert emit_object_resolved(obj) is None
+    assert Extension(Settings()).prepare(obj) is None
 
 
 @pytest.mark.parametrize("style", ["highlighted", "plain"])
@@ -126,7 +124,6 @@ def test_parameter_kind_separators(signature: str, excluded: str, expected: str)
     settings = Settings(callable_signatures=CallableSignatures(wrap="width"))
     with gf.temporary_visited_package("package", {"__init__.py": source}) as module:
         obj = module["f"]
-        assert emit_object_resolved(obj) is obj
         assert _signature(_render(obj, settings)) == expected
 
 
@@ -266,9 +263,6 @@ def test_empty_parameter_section_disappears_but_deprecation_prose_remains() -> N
 
 
 def test_dataclass_fields_do_not_reappear_as_attributes() -> None:
-    from great_docs._apiref._render.docclass import RenderDocClass
-    from great_docs._apiref.content import Doc
-
     source = '''
     from dataclasses import InitVar, dataclass
     @dataclass
@@ -291,16 +285,78 @@ def test_dataclass_fields_do_not_reappear_as_attributes() -> None:
     ) as module:
         obj = module["C"]
         qmd = _rendered(obj)
-        members = [Doc.from_griffe(name, attribute) for name, attribute in obj.attributes.items()]
-        node = Doc.from_griffe("C", obj, members)
-        renderer = RenderDocClass(node, settings=Settings())
-        assert not renderer.attributes
-        assert "Retained field description" in qmd
+        # The retained field is documented once, as a parameter, not again as an attribute.
+        assert qmd.count("Retained field description") == 1
+        assert "## Attributes" not in qmd
         assert "Excluded field description" not in qmd
         assert "Excluded init description" not in qmd
         assert "old" not in _signature(qmd)
         assert "## Init Parameters" not in qmd
         assert {p.name for p in obj.parameters} == {"self", "value", "old", "init_old"}
+
+
+@pytest.mark.parametrize(
+    ("placement", "same_page"),
+    [
+        ({"members_on_same_page": True}, True),
+        ({"members_on_same_page": False}, False),
+        # Fields do not count towards the limit: only `registry` is a member.
+        ({"max_members_on_same_page": 1}, True),
+    ],
+)
+def test_dataclass_fields_are_documented_on_the_class_page_only(
+    placement: dict[str, object],
+    same_page: bool,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from great_docs._apiref import APIReference
+    from great_docs._apiref._export import reference_text
+
+    source = '''
+    from dataclasses import dataclass
+    from typing import ClassVar
+
+    @dataclass
+    class Settings:
+        """
+        Plot settings
+
+        %nodoc_param old_dpi
+        """
+        dpi: int = 100
+        "Resolution in dots per inch"
+        old_dpi: int = 0
+        "Deprecated resolution"
+        registry: ClassVar[int] = 3
+        "A class-level registry"
+    '''
+    (tmp_path / "dcpkg").mkdir()
+    (tmp_path / "dcpkg" / "__init__.py").write_text(dedent(source))
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    reference = APIReference(
+        {
+            "package": "dcpkg",
+            **placement,
+            "sections": [{"title": "API", "contents": ["Settings"]}],
+        }
+    )
+    reference.build()
+
+    # Only the attribute that is not a field may get a page of its own.
+    pages = sorted(p.name for p in (tmp_path / "reference").glob("*.qmd"))
+    member_pages = [] if same_page else ["dcpkg.Settings.registry.qmd"]
+    assert pages == sorted(["Settings.qmd", "index.qmd", *member_pages])
+
+    # A documented field's references lead to the class page, which documents it as a
+    # parameter. An excluded field is published nowhere.
+    uris = {item.name: item.uri for item in reference.items}
+    assert uris["dcpkg.Settings.dpi"] == "reference/Settings.html#dcpkg.Settings.dpi"
+    assert "dcpkg.Settings.old_dpi" not in uris
+    assert "Settings.old_dpi" not in reference.documented_symbols
+    assert "Deprecated resolution" not in reference_text(reference)
+    assert "old_dpi" not in (tmp_path / "reference" / "Settings.qmd").read_text()
 
 
 def test_class_and_constructor_exclusions_are_combined() -> None:
@@ -369,7 +425,7 @@ def test_implicit_receivers_cannot_be_excluded(receiver: str) -> None:
     obj = gf.Function("f", parent=cls, parameters=gf.Parameters(gf.Parameter(receiver)))
     obj.docstring = gf.Docstring(f"%nodoc_param {receiver}", parent=obj)
     with pytest.raises(ParameterDirectiveError, match=receiver):
-        emit_object_resolved(obj)
+        Extension(Settings()).prepare(obj)
 
 
 def test_explicit_attributes_section_remains_visible() -> None:

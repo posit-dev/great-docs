@@ -8,8 +8,10 @@ import os
 import subprocess
 import sys
 import threading
-from collections.abc import Callable, Iterator
+import time
+from collections.abc import Callable, Generator, Iterator
 from pathlib import Path
+from textwrap import dedent
 from typing import Any
 
 import pytest
@@ -17,7 +19,9 @@ import watchfiles
 
 from great_docs import GreatDocs
 from great_docs._build import watch
+from great_docs._build.steps import BuildError
 from great_docs._project.layout import Layout
+from tests.support import StubRemote
 
 CONFIG = "reference: false\nchangelog:\n  enabled: false\nskill:\n  enabled: false\n"
 MARKER = "A line added while watching."
@@ -134,9 +138,17 @@ def _watch(
     monkeypatch.setattr("great_docs._build.quarto.ensure_installed", lambda: None)
     monkeypatch.setattr(subprocess, "Popen", start)
 
-    def changes(layout: Layout, package: Path | None, stop: threading.Event) -> Iterator[set[Path]]:
+    def changes(
+        layout: Layout,
+        package: Path | None,
+        stop: threading.Event,
+        *,
+        inputs: watch.WatchInputs | None = None,
+    ) -> Iterator[set[Path]]:
         if watched is not None:
-            watched.extend(watch.watched_dirs(layout, package))
+            watched.extend(
+                inputs.directories if inputs is not None else watch.watched_dirs(layout, package)
+            )
         return edits(layout)
 
     monkeypatch.setattr(watch, "source_changes", changes)
@@ -342,10 +354,10 @@ def test_watched_dirs_cover_each_directory_once(
         ("watch_demo/.notes.py", False),
     ],
 )
-def test_source_filter_accepts_package_sources(tmp_path: Path, path: str, accepted: bool):
+def test_watch_filter_accepts_package_sources(tmp_path: Path, path: str, accepted: bool):
     docs = _project(tmp_path)
 
-    accept = watch.source_filter(docs.layout, tmp_path.resolve() / PACKAGE)
+    accept = watch.WatchInputs.make(docs.layout, tmp_path.resolve() / PACKAGE).accept
 
     assert accept(watchfiles.Change.modified, str(tmp_path.resolve() / path)) is accepted
 
@@ -364,10 +376,10 @@ def test_source_filter_accepts_package_sources(tmp_path: Path, path: str, accept
         ("docs/user_guide/__pycache__/hook.cpython-313.pyc", False),
     ],
 )
-def test_source_filter_skips_generated_and_hidden_files(tmp_path: Path, path: str, accepted: bool):
+def test_watch_filter_skips_generated_and_hidden_files(tmp_path: Path, path: str, accepted: bool):
     docs = _project(tmp_path)
 
-    accept = watch.source_filter(docs.layout, None)
+    accept = watch.WatchInputs.make(docs.layout, None).accept
 
     assert accept(watchfiles.Change.modified, str(tmp_path.resolve() / path)) is accepted
 
@@ -409,3 +421,244 @@ def test_forget_package_ignores_stale_bytecode(tmp_path: Path, monkeypatch: pyte
 
     assert stale_bytecode_pkg.VALUE == "new"
     sys.modules.pop("stale_bytecode_pkg", None)
+
+
+def test_extension_inputs_keep_missing_glob_and_exact_file_coverage(
+    tmp_path: Path,
+):
+    docs = _project(tmp_path)
+    external = tmp_path / "external"
+    external.mkdir()
+    exact = external / "only.txt"
+    exact.write_text("first")
+    pattern = external / "data" / "**" / "*.txt"
+    missing = external / "future"
+    inputs = watch.WatchInputs.make(docs.layout, None, (exact, pattern, missing))
+    initial = inputs.directories
+
+    def accepted(path: Path) -> bool:
+        return inputs.accept(watchfiles.Change.modified, str(path))
+
+    assert accepted(exact)
+    assert not accepted(external / "sibling.txt")
+    assert accepted(external / "data" / "new.txt")
+    assert accepted(external / "data" / "nested" / "new.txt")
+    assert not accepted(external / "data" / "new.py")
+    assert not accepted(external / "data" / ".hidden.txt")
+    assert not accepted(docs.layout.build_dir / "generated.qmd")
+    exact.unlink()
+    assert accepted(exact)
+    missing.mkdir()
+    child = missing / "created.txt"
+    child.write_text("created")
+    assert accepted(child)
+    assert inputs.uncovered((exact, pattern, missing, child)) == ()
+    assert inputs.uncovered((external / "sibling.txt",)) == (external / "sibling.txt",)
+    assert inputs.directories == initial
+    assert external in initial
+
+
+def test_relative_helpers_are_covered_by_the_initial_entry_directory(tmp_path: Path):
+    docs = _project(tmp_path)
+    entry_directory = tmp_path / "extension"
+    entry_directory.mkdir()
+    inputs = watch.WatchInputs.make(docs.layout, None, (entry_directory,))
+    helper = entry_directory / "nested" / "new_helper.py"
+    assert inputs.uncovered((helper, entry_directory / "*.txt")) == ()
+    assert inputs.accept(watchfiles.Change.added, str(helper))
+
+
+def test_glob_matched_directories_include_new_contents(tmp_path: Path):
+    docs = _project(tmp_path)
+    external = tmp_path / "external"
+    external.mkdir()
+    pattern = external / "run-*.snapshot"
+    inputs = watch.WatchInputs.make(docs.layout, None, (pattern,))
+    directory = external / "run-1.snapshot"
+    directory.mkdir()
+    child = directory / "value.csv"
+    child.write_text("current")
+    assert inputs.accept(watchfiles.Change.added, str(directory))
+    assert inputs.accept(watchfiles.Change.modified, str(child))
+    assert inputs.uncovered((directory / "*.csv", child)) == ()
+    assert not inputs.accept(watchfiles.Change.added, str(directory / ".hidden.csv"))
+
+
+@pytest.mark.parametrize("middle", ["one", "a/one", "one/b", "a/one/b/c"])
+def test_recursive_glob_segments_match_independent_directory_depths(tmp_path: Path, middle: str):
+    docs = _project(tmp_path)
+    external = tmp_path / "external"
+    external.mkdir()
+    pattern = external / "**" / "one" / "**" / "two.txt"
+    inputs = watch.WatchInputs.make(docs.layout, None, (pattern,))
+    matching = external / middle / "two.txt"
+    matching.parent.mkdir(parents=True)
+    matching.write_text("current")
+    assert matching in external.glob("**/one/**/two.txt")
+    assert inputs.accept(watchfiles.Change.modified, str(matching))
+    assert not inputs.accept(watchfiles.Change.modified, str(matching.with_name("other.txt")))
+
+
+def test_native_observation_buffers_an_edit_between_yields(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    docs = _project(tmp_path)
+    first = docs.layout.source_dir / "first.txt"
+    second = docs.layout.source_dir / "second.txt"
+    first.write_text("initial")
+    second.write_text("initial")
+    native_watch = watchfiles.watch
+
+    def polling(
+        *paths: Path, **options: Any
+    ) -> Generator[set[tuple[watchfiles.Change, str]], None, None]:
+        return native_watch(
+            *paths,
+            **options,
+            force_polling=True,
+            poll_delay_ms=20,
+            debounce=10,
+            step=5,
+            rust_timeout=250,
+            yield_on_timeout=True,
+        )
+
+    monkeypatch.setattr(watchfiles, "watch", polling)
+    stopped = threading.Event()
+    changes = watch.source_changes(docs.layout, None, stopped)
+
+    def next_edit() -> set[Path]:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if paths := next(changes):
+                return paths
+        pytest.fail("The active observer lost the source edit")
+
+    try:
+        assert next(changes) == set()
+        # Make rapid edits distinct even when polling sees coarse timestamps.
+        first_mtime = first.stat().st_mtime_ns
+        first.write_text("first edit")
+        os.utime(first, ns=(first_mtime + 2_000_000_000, first_mtime + 2_000_000_000))
+        assert first in next_edit()
+        second_mtime = second.stat().st_mtime_ns
+        second.write_text("buffered edit")
+        os.utime(second, ns=(second_mtime + 2_000_000_000, second_mtime + 2_000_000_000))
+        _ = stopped.wait(0.1)
+        assert second in next_edit()
+    finally:
+        stopped.set()
+        changes.close()
+
+
+@pytest.mark.parametrize("failure", [None, BuildError, RuntimeError])
+def test_preview_keeps_one_observer_across_rebuilds_and_closes_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: type[RuntimeError] | None
+):
+    docs = _project(tmp_path)
+    docs.layout.build_dir.mkdir(parents=True)
+    (docs.layout.build_dir / "index.qmd").write_text("last good")
+    calls: list[str] = []
+    preview = _Preview()
+
+    def observe(
+        *paths: Path, **options: Any
+    ) -> Generator[set[tuple[watchfiles.Change, str]], None, None]:
+        calls.append("open")
+        try:
+            yield {(watchfiles.Change.modified, str(docs.layout.source_dir / "first.txt"))}
+            yield {(watchfiles.Change.modified, str(docs.layout.source_dir / "second.txt"))}
+        finally:
+            calls.append("close")
+
+    attempts = 0
+
+    def rebuild(staging: watch.Staging) -> dict[str, Any]:
+        nonlocal attempts
+        attempts += 1
+        assert calls == ["open"]
+        if failure is not None and attempts == 1:
+            raise failure("preparation failed")
+        staging.build_dir.mkdir(parents=True, exist_ok=True)
+        (staging.build_dir / "index.qmd").write_text("updated")
+        return {}
+
+    monkeypatch.setattr(watchfiles, "watch", observe)
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: preview)
+    if failure is RuntimeError:
+        with pytest.raises(RuntimeError, match="preparation failed"):
+            watch.serve(docs.layout, {}, rebuild, {}, None)
+    else:
+        watch.serve(docs.layout, {}, rebuild, {}, None)
+    assert attempts == (1 if failure is RuntimeError else 2)
+    assert calls == ["open", "close"]
+    assert preview.poll() == 0
+    assert not (docs.layout.cache_dir / "watch").exists()
+    expected = "last good" if failure is RuntimeError else "updated"
+    assert (docs.layout.build_dir / "index.qmd").read_text() == expected
+
+
+def test_preview_reports_new_extension_inputs_after_failed_and_successful_rebuilds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    config = CONFIG.replace("reference: false\n", "") + (
+        "dynamic: false\napi_reference_extension: extension.py\n"
+        "reference:\n  - title: API\n    contents: [example]\n"
+    )
+    docs = _project(tmp_path, config)
+    docs._remote = StubRemote()
+    package = tmp_path / PACKAGE
+    package.mkdir()
+    (package / "__init__.py").write_text('def example():\n    """Example subject"""\n')
+    monkeypatch.syspath_prepend(str(tmp_path))
+    first = tmp_path / "first-input" / "value.txt"
+    second = tmp_path / "second-input" / "value.txt"
+    for path, value in ((first, "FIRST_NOTE"), (second, "SECOND_NOTE")):
+        path.parent.mkdir()
+        path.write_text(value)
+    entry = docs.layout.source_dir / "extension.py"
+
+    def extension(path: Path, *, fail: bool = False) -> str:
+        if fail:
+            result = "raise ValueError('broken body')"
+        else:
+            result = "return Blocks([super().render_docstring_body(), Para(path.read_text())])"
+        return dedent(f"""
+            from pathlib import Path
+            from great_docs.extensions import Extension
+            from great_docs.pandoc.blocks import BlockContent, Blocks, Para
+            from great_docs.rendering import FunctionRenderer, Renderers
+
+            def setup(extension: Extension) -> None:
+                path = Path({str(path)!r})
+                extension.watch(path)
+
+                class Presentation(FunctionRenderer):
+                    def render_docstring_body(self) -> BlockContent:
+                        {result}
+
+                extension.set_renderers(Renderers(functions=Presentation))
+        """)
+
+    entry.write_text(extension(first))
+    seen: list[str] = []
+
+    def edits(layout: Layout) -> Iterator[set[Path]]:
+        page = layout.build_dir / "reference" / "example.qmd"
+        entry.write_text(extension(second, fail=True))
+        yield {entry}
+        seen.append(page.read_text())
+        entry.write_text(extension(second))
+        yield {entry}
+        seen.append(page.read_text())
+
+    watched: list[Path] = []
+    _watch(docs, monkeypatch, edits, watched)
+    assert "FIRST_NOTE" in seen[0]
+    assert "SECOND_NOTE" not in seen[0]
+    assert "SECOND_NOTE" in seen[1]
+    assert first.parent in watched
+    assert second.parent not in watched
+    output = capsys.readouterr().out
+    assert output.count("Extension inputs need additional preview coverage:") == 1
+    assert "The preview keeps the last successful build." in output

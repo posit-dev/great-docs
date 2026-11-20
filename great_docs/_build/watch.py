@@ -4,19 +4,25 @@ Live preview with rebuilds after documentation and package source edits
 Edits to documentation sources, `great-docs.yml` or the documented package trigger
 preparation in a staging directory while `quarto preview` serves the build directory.
 Only changed files are copied into the previewed project, so Quarto re-renders the affected
-pages.
+pages. An API reference extension adds its directory and helper modules, and the files,
+directories and globs it declares, to the watched inputs. The session keeps the same
+directories and filter for every rebuild, so an input outside them is watched only after
+the preview restarts.
 """
 
 from __future__ import annotations
 
 import contextlib
 import dataclasses
+import fnmatch
+import glob
 import hashlib
 import importlib
 import shutil
 import subprocess
 import sys
 import threading
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -26,14 +32,14 @@ from .._project.layout import Layout
 from .steps import BuildError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping
+    from collections.abc import Callable, Generator, Mapping
 
 __all__ = [
     "Staging",
+    "WatchInputs",
     "forget_package",
     "serve",
     "source_changes",
-    "source_filter",
     "stage",
     "sync",
     "watched_dirs",
@@ -41,6 +47,196 @@ __all__ = [
 
 # Seconds allowed for `quarto preview` to exit before it is killed
 _STOP_SECONDS = 5
+
+
+@dataclasses.dataclass(frozen=True)
+class WatchInputs:
+    """
+    The directories and change filter that one preview session watches
+
+    The selection stays the same across successful and failed rebuilds.
+    """
+
+    directories: tuple[Path, ...]
+    """Existing, non-nested directories that the file watcher observes"""
+    accept: Callable[[watchfiles.Change, str], bool]
+    """The change filter, which also excludes hidden files and generated output"""
+    _patterns: tuple[Path, ...]
+
+    @classmethod
+    def make(
+        cls, layout: Layout, package: Path | None, dependencies: tuple[Path, ...] = ()
+    ) -> WatchInputs:
+        """
+        Select the inputs that a preview session watches
+
+        Parameters
+        ----------
+        layout
+            The project's directories.
+        package
+            The documented package's source directory, or `None` when no package was
+            located.
+        dependencies
+            The extension's preview inputs as absolute paths: its directory, its helper
+            modules and the files, directories or globs it declares.
+
+        Returns
+        -------
+        :
+            The directories and filter that cover the documentation sources, the package
+            and the dependencies.
+        """
+        paths = _input_paths(dependencies)
+        roots = (layout.source_dir,) if package is None else (layout.source_dir, package)
+        trees = (*roots, *(path for path in paths if not glob.has_magic(str(path))))
+        patterns = tuple(path for path in paths if glob.has_magic(str(path)))
+        return cls(
+            tuple(watched_dirs(layout, package, paths)),
+            _source_filter(layout, trees, patterns),
+            patterns,
+        )
+
+    def uncovered(self, paths: tuple[Path, ...]) -> tuple[Path, ...]:
+        """
+        Find the inputs that the session's change filter does not cover
+
+        A glob selected when the session started keeps covering its new matches. A glob
+        added later is covered only when the filter already accepts its directory prefix.
+
+        Parameters
+        ----------
+        paths
+            The preview inputs of a rebuild's extension.
+
+        Returns
+        -------
+        :
+            The uncovered inputs, resolved, in their given order and without repeats.
+        """
+        missing: list[Path] = []
+        for path in _input_paths(paths):
+            if glob.has_magic(str(path)):
+                if path in self._patterns:
+                    continue
+                prefix = _pattern_root(path)
+                if self.accept(watchfiles.Change.modified, str(prefix)):
+                    continue
+            elif self.accept(watchfiles.Change.modified, str(path)):
+                continue
+            missing.append(path)
+        return tuple(missing)
+
+
+def _input_paths(paths: tuple[Path, ...]) -> tuple[Path, ...]:
+    """
+    Resolve input paths and drop repeats, keeping their order
+
+    Parameters
+    ----------
+    paths
+        Absolute input paths or globs.
+
+    Returns
+    -------
+    :
+        The resolved paths in first-seen order.
+    """
+    return tuple(dict.fromkeys(path.resolve() for path in paths))
+
+
+def _pattern_root(path: Path) -> Path:
+    """
+    Find the part of a glob before its first wildcard component
+
+    Parameters
+    ----------
+    path
+        An absolute glob, or a path without wildcards.
+
+    Returns
+    -------
+    :
+        The leading components that contain no wildcard.
+    """
+    prefix = Path(path.anchor)
+    for part in path.parts[1:] if path.anchor else path.parts:
+        if glob.has_magic(part):
+            break
+        prefix /= part
+    return prefix
+
+
+def _watch_directory(path: Path) -> Path:
+    """
+    Find the nearest existing directory that observes an input, even one not yet created
+
+    Parameters
+    ----------
+    path
+        An absolute input path or glob.
+
+    Returns
+    -------
+    :
+        The input itself when it is a directory, otherwise its nearest existing ancestor.
+        For a glob, the search starts at the part before its first wildcard.
+    """
+    directory = _pattern_root(path) if glob.has_magic(str(path)) else path
+    while not directory.is_dir():
+        directory = directory.parent
+    return directory
+
+
+def _matches_pattern(path: Path, pattern: Path) -> bool:
+    """
+    Check whether a path matches a glob or lies inside a directory that matches it
+
+    Each `**` component matches zero or more path components. Every other component
+    matches exactly one.
+
+    Parameters
+    ----------
+    path
+        The changed path.
+    pattern
+        An absolute glob.
+
+    Returns
+    -------
+    :
+        Whether the glob matches the path or one of its ancestors.
+    """
+    path_parts, pattern_parts = path.parts, pattern.parts
+
+    @cache
+    def matches(path_index: int, pattern_index: int) -> bool:
+        """
+        Check whether the remaining glob components match the remaining path components
+
+        Parameters
+        ----------
+        path_index, pattern_index
+            The positions of the first unmatched path and glob components.
+
+        Returns
+        -------
+        :
+            Whether the rest of the glob matches the rest of the path or a prefix of it.
+        """
+        if pattern_index == len(pattern_parts):
+            return True
+        if pattern_parts[pattern_index] == "**":
+            return matches(path_index, pattern_index + 1) or (
+                path_index < len(path_parts) and matches(path_index + 1, pattern_index)
+            )
+        return (
+            path_index < len(path_parts)
+            and fnmatch.fnmatchcase(path_parts[path_index], pattern_parts[pattern_index])
+            and matches(path_index + 1, pattern_index + 1)
+        )
+
+    return matches(0, 0)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -93,15 +289,18 @@ def serve(
     rebuild: Callable[[Staging], Mapping[str, Any]],
     quarto_config: Mapping[str, Any],
     package: Path | None,
+    *,
+    inputs: WatchInputs | None = None,
 ) -> None:
     """
     Preview a prepared project and rebuild it after source edits
 
-    The preview keeps running across rebuilds, including after edits to `great-docs.yml`.
-    A failed rebuild leaves the previewed project unchanged. After each successful rebuild,
-    compare the `project` settings with those from the last successful preparation. Print
-    a notice if they differ: `quarto preview` may need a restart to apply them. Watching
-    stops when `quarto preview` exits.
+    A rebuild that fails with a `BuildError` or `ValueError` leaves the previewed project
+    unchanged, and watching continues. Any other error stops the preview after closing the
+    file watcher and stopping `quarto preview`. After each successful rebuild, compare the
+    `project` settings with those from the last successful preparation. Print a notice if
+    they differ: `quarto preview` may need a restart to apply them. Watching stops when
+    `quarto preview` exits.
 
     Parameters
     ----------
@@ -118,6 +317,10 @@ def serve(
     package
         The documented package's source directory, or `None` when no package was
         located. Edits to this directory also trigger rebuilds.
+    inputs
+        The inputs to watch for the whole session, or `None` to watch the documentation
+        sources and the package. An input that a later rebuild's extension adds outside
+        them is watched only after a restart.
 
     Raises
     ------
@@ -130,38 +333,47 @@ def serve(
     preview = subprocess.Popen(["quarto", "preview", "--no-browser"], cwd=layout.build_dir, env=env)
 
     def wait_for_preview() -> None:
+        """Wait for `quarto preview` to exit, then signal the watcher to stop"""
         _ = preview.wait()
         stopped.set()
 
     threading.Thread(target=wait_for_preview, daemon=True).start()
     try:
-        for paths in source_changes(layout, package, stopped):
-            print(f"\n🔄 Rebuilding after changes to {_describe(paths, layout)}")
-            try:
-                rebuilt = rebuild(staging)
-            except BuildError:
-                print("The preview keeps the last successful build.")
-            except ValueError as error:
-                print(f"Error: {error}\nThe preview keeps the last successful build.")
-            else:
-                published = sync(staging.build_dir, layout.build_dir, published)
-                if rebuilt.get("project") != quarto_config.get("project"):
-                    print(
-                        "⚠️  Quarto may not apply the changed project settings until it "
-                        "restarts: stop and rerun `great-docs build --watch`."
-                    )
-                quarto_config = rebuilt
-            print("👀 Watching for changes... (Ctrl+C to stop)")
+        with contextlib.closing(source_changes(layout, package, stopped, inputs=inputs)) as changes:
+            for paths in changes:
+                print(f"\n🔄 Rebuilding after changes to {_describe(paths, layout)}")
+                try:
+                    rebuilt = rebuild(staging)
+                except BuildError:
+                    print("The preview keeps the last successful build.")
+                except ValueError as error:
+                    print(f"Error: {error}\nThe preview keeps the last successful build.")
+                else:
+                    published = sync(staging.build_dir, layout.build_dir, published)
+                    if rebuilt.get("project") != quarto_config.get("project"):
+                        print(
+                            "⚠️  Quarto may not apply the changed project settings until it "
+                            "restarts: stop and rerun `great-docs build --watch`."
+                        )
+                    quarto_config = rebuilt
+                print("👀 Watching for changes... (Ctrl+C to stop)")
     finally:
         _stop(preview)
         shutil.rmtree(staging.build_dir, ignore_errors=True)
 
 
 def source_changes(
-    layout: Layout, package: Path | None, stop: threading.Event
-) -> Iterator[set[Path]]:
+    layout: Layout,
+    package: Path | None,
+    stop: threading.Event,
+    *,
+    inputs: WatchInputs | None = None,
+) -> Generator[set[Path], None, None]:
     """
     Wait for documentation and package edits and yield changed paths in batches
+
+    Keep the iterator open while rebuilding, so the file watcher records edits made
+    between batches. Close it when watching ends to release the watcher.
 
     Parameters
     ----------
@@ -173,6 +385,9 @@ def source_changes(
         the documentation sources, or `None` when no package was located.
     stop
         An event that ends the watch when set.
+    inputs
+        The inputs to watch, or `None` to watch the documentation sources and the
+        package.
 
     Yields
     ------
@@ -184,13 +399,17 @@ def source_changes(
     KeyboardInterrupt
         If the user stops watching with Ctrl+C.
     """
-    accept = source_filter(layout, package)
-    directories = watched_dirs(layout, package)
-    for changes in watchfiles.watch(*directories, watch_filter=accept, stop_event=stop):
-        yield {Path(path) for _, path in changes}
+    selected = inputs if inputs is not None else WatchInputs.make(layout, package)
+    with contextlib.closing(
+        watchfiles.watch(*selected.directories, watch_filter=selected.accept, stop_event=stop)
+    ) as changes:
+        for batch in changes:
+            yield {Path(path) for _, path in batch}
 
 
-def watched_dirs(layout: Layout, package: Path | None) -> list[Path]:
+def watched_dirs(
+    layout: Layout, package: Path | None, dependencies: tuple[Path, ...] = ()
+) -> list[Path]:
     """
     List watch directories without nested or duplicate entries
 
@@ -201,49 +420,82 @@ def watched_dirs(layout: Layout, package: Path | None) -> list[Path]:
     package
         The documented package's source directory, or `None` when no package was
         located.
+    dependencies
+        The extension's preview inputs as absolute paths. A missing input or a glob is
+        watched through its nearest existing ancestor.
 
     Returns
     -------
     :
-        The documentation source directory and, if available, the package directory.
-        If one contains the other, only the containing directory is returned.
+        The documentation source directory, the package directory and a directory for
+        each dependency, without nested or duplicate entries.
     """
-    if package is None or package.is_relative_to(layout.source_dir):
-        return [layout.source_dir]
-    if layout.source_dir.is_relative_to(package):
-        return [package]
-    return [layout.source_dir, package]
+    roots = [layout.source_dir]
+    if package is not None:
+        roots.append(package)
+    roots.extend(_watch_directory(path) for path in _input_paths(dependencies))
+    unique = list(dict.fromkeys(roots))
+    return [
+        root
+        for root in unique
+        if not any(root != other and root.is_relative_to(other) for other in unique)
+    ]
 
 
-def source_filter(layout: Layout, package: Path | None) -> Callable[[watchfiles.Change, str], bool]:
+def _source_filter(
+    layout: Layout, trees: tuple[Path, ...], patterns: tuple[Path, ...]
+) -> Callable[[watchfiles.Change, str], bool]:
     """
-    Create a filter for changes to the documentation sources and the package
+    Create a filter that accepts changes to the selected inputs
 
     Parameters
     ----------
     layout
-        The project's directories.
-    package
-        The documented package's source directory, or `None` when no package was
-        located.
+        The project's directories, whose generated directories are excluded.
+    trees
+        Absolute files and directory trees to observe. An exact file does not
+        include its siblings.
+    patterns
+        Absolute glob declarations, including those with no current match.
 
     Returns
     -------
     :
         A filter that accepts a change and its path, excluding editor and Python
         byproducts, hidden files and directories, and generated output. Hidden path
-        components are checked below the documentation source directory, or below the
-        package directory for paths outside the documentation source directory.
+        components are checked below the matching directory tree, the directory of
+        a matching file, or the matching glob's prefix.
     """
     default = watchfiles.DefaultFilter(ignore_paths=layout.generated_dirs())
+    selected = tuple((tree, tree if tree.is_dir() else tree.parent) for tree in trees)
 
     def accept(change: watchfiles.Change, path: str) -> bool:
+        """
+        Check whether a change concerns a selected input
+
+        Parameters
+        ----------
+        change
+            The kind of change.
+        path
+            The changed path.
+
+        Returns
+        -------
+        :
+            Whether to rebuild for the change.
+        """
         if not default(change, path):
             return False
         file = Path(path)
-        root = layout.source_dir
-        if package is not None and not file.is_relative_to(root):
-            root = package
+        root = next((root for tree, root in selected if file.is_relative_to(tree)), None)
+        if root is None:
+            pattern = next(
+                (pattern for pattern in patterns if _matches_pattern(file, pattern)), None
+            )
+            if pattern is None:
+                return False
+            root = _pattern_root(pattern)
         relative = file.relative_to(root)
         return not any(part.startswith(".") for part in relative.parts)
 
@@ -256,6 +508,9 @@ def sync(staged: Path, served: Path, published: Mapping[str, bytes]) -> dict[str
 
     Replace changed files and remove files no longer generated by preparation. Leave
     Quarto's output, such as the rendered site, untouched.
+
+    Call only after a successful preparation, so a failed rebuild never replaces the last
+    successful sources.
 
     Parameters
     ----------

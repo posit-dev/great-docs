@@ -5,6 +5,8 @@ Publish the homepage, user guide, configured sections, custom pages and project 
 the build directory, with their sidebars, navbar links and Quarto resources. In blended homepage
 mode, the first user guide page becomes the homepage. Map source paths to published paths so
 links between pages point to their published destinations.
+Plan homepage links to the API reference and the text export from configuration, so
+publishing authored pages never runs the API reference extension's `setup`.
 """
 
 from __future__ import annotations
@@ -82,6 +84,10 @@ def homepage(
     available. Recreate `index.qmd` from the project's index page or README, or generate a
     landing page from package metadata. With `homepage: user_guide`, leave the homepage to
     the user guide step unless `fallback` is `True`.
+
+    Decide from the API reference configuration whether the homepage links to the
+    reference and the text export. Object and docstring hooks run later, when the
+    reference is generated.
 
     Parameters
     ----------

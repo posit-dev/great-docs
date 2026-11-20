@@ -4,10 +4,14 @@ Documentation build order and shared state
 Builds produce a single-version or versioned site. Watch mode serves a prepared project
 with `quarto preview` and repeats preparation after source edits. Rendering and freezing
 use the same preparation steps, except that freezing skips remote content publication.
+Each build generates the API reference before the text export and interlinks, which
+reuse it, and closes the reference when the build finishes or fails. Each preview rebuild
+creates a new reference, while one file watcher stays open for the whole session.
 """
 
 from __future__ import annotations
 
+import contextlib
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -92,6 +96,10 @@ class Run:
     api_block
         The `api-reference` block of `quarto_config`, or `None` for a site without an API
         reference.
+    api_reference
+        The API reference this build generated, or `None` when the build has none. The
+        reference pages, the text export and interlinks share its prepared
+        documentation, and its extension's input paths stay readable after it closes.
     api_discovery_reused
         Whether this build reused cached API reference sections.
     user_guide
@@ -113,9 +121,15 @@ class Run:
     has_skills: bool = False
     quarto_config: dict[str, Any] = field(default_factory=lambda: dict[str, Any]())
     api_block: dict[str, Any] | None = None
+    api_reference: APIReference | None = None
     api_discovery_reused: bool = False
     user_guide: UserGuide | None = None
     contributions: list[Contribution] = field(default_factory=lambda: list[Contribution]())
+
+    def close(self) -> None:
+        """Close the build's API reference, if it has one, without loading its extension"""
+        if self.api_reference is not None:
+            self.api_reference.close()
 
     @classmethod
     def make(cls, config: Config, layout: Layout, *, watch: bool) -> Run:
@@ -134,7 +148,7 @@ class Run:
         Returns
         -------
         :
-            The initial build state with the project's name, metadata, GitHub repository,
+            The initial build state with the project's name, metadata, repository,
             site identity and page authors.
         """
         project = Project.make(config, layout)
@@ -162,6 +176,10 @@ def run(
     """
     Build the documentation site or serve it with `quarto preview`
 
+    Keep the API reference open for the text export and interlinks, and close it when the
+    build finishes or fails, which removes the project modules its extension imported. In
+    watch mode, close each rebuild's reference before serving the result.
+
     Parameters
     ----------
     config
@@ -169,7 +187,7 @@ def run(
     layout
         The project's directories.
     remote
-        The source of GitHub and PyPI data.
+        The source of repository and PyPI data.
     watch
         Whether to serve the prepared project with `quarto preview` and repeat preparation
         after source edits. Watch mode skips the full render and the steps that follow it.
@@ -268,14 +286,17 @@ def run(
     log.total_steps = count_listed(steps)
     log.header()
 
-    if watch:
-        _watch(current, config, layout, log, steps, remote=remote, refresh=refresh)
-        return
+    try:
+        if watch:
+            _watch(current, config, layout, log, steps, remote=remote, refresh=refresh)
+            return
 
-    run_steps(steps, log, layout.build_dir)
-    site_path = layout.site_dir / "index.html"
-    log.footer(site_path=str(site_path if site_path.exists() else layout.site_dir))
-    finish.print_layout_notice(layout)
+        run_steps(steps, log, layout.build_dir)
+        site_path = layout.site_dir / "index.html"
+        log.footer(site_path=str(site_path if site_path.exists() else layout.site_dir))
+        finish.print_layout_notice(layout)
+    finally:
+        current.close()
 
 
 def prepare_for_freeze(config: Config, layout: Layout, log: BuildLog, *, remote: Remote) -> None:
@@ -283,7 +304,10 @@ def prepare_for_freeze(config: Config, layout: Layout, log: BuildLog, *, remote:
     Prepare the Quarto project for freezing, excluding remote content
 
     Quarto requires matching page sources to reuse frozen results. Use the build's
-    preparation steps so freezing and rendering use matching sources.
+    preparation steps so freezing and rendering use matching sources, including customised
+    reference pages and their input fingerprints. Close the API reference after
+    preparation, because executing the pages does not need the modules its extension
+    imported.
 
     Parameters
     ----------
@@ -294,7 +318,7 @@ def prepare_for_freeze(config: Config, layout: Layout, log: BuildLog, *, remote:
     log
         The build log that the steps write to.
     remote
-        The source of GitHub and PyPI data.
+        The source of repository and PyPI data.
 
     Raises
     ------
@@ -304,7 +328,10 @@ def prepare_for_freeze(config: Config, layout: Layout, log: BuildLog, *, remote:
     config = site.with_ci_site_url(config)
     current = Run.make(config, layout, watch=False)
     steps = preparation_steps(current, config, layout, log, remote=remote)
-    freeze.prepare(steps, log, layout.build_dir)
+    try:
+        freeze.prepare(steps, log, layout.build_dir)
+    finally:
+        current.close()
 
 
 def preparation_steps(
@@ -322,6 +349,9 @@ def preparation_steps(
 
     These steps write the Quarto project before rendering. Step functions are resolved
     when each step runs, so replacements made after this list is created take effect.
+    Generate the API reference before the text export and interlink indexing, which both
+    reuse it. A failing API reference extension stops preparation: it neither triggers
+    the static-analysis retry nor becomes a warning.
 
     Parameters
     ----------
@@ -334,7 +364,7 @@ def preparation_steps(
     log
         The build log that the steps write to.
     remote
-        The source of GitHub and PyPI data.
+        The source of repository and PyPI data.
     refresh
         Whether to discover API reference sections even when the cached sections are valid.
     write_quarto_config
@@ -347,13 +377,12 @@ def preparation_steps(
     :
         The steps in the order they run.
     """
-    # Results shared between preparation steps
-    ref: APIReference | None = None
+    from .._apiref._customisation import ExtensionError
+
     frozen_pages: list[str] = []
 
     def generate_api_reference() -> Outcome:
-        nonlocal ref
-        outcome, ref = reference.api(run, config, layout, log)
+        outcome, _ = reference.api(run, config, layout, log)
         return outcome
 
     def prepare_freeze_cache() -> Outcome:
@@ -392,14 +421,6 @@ def preparation_steps(
         Step(
             "Configure API reference",
             lambda: reference.api_config(run),
-            user_code=True,
-        ),
-        Step(
-            "Generate llms.txt / llms-full.txt",
-            lambda: generated.llms_txt(run, config, layout),
-            warn=Warn(
-                USER_CODE_ERRORS, "Error generating llms.txt", "llms.txt generation had issues"
-            ),
             user_code=True,
         ),
         Step(
@@ -485,10 +506,24 @@ def preparation_steps(
             lambda: content.assets(run, config, layout, remote=remote),
             fails_on=(ValueError, FileNotFoundError),
         ),
-        Step("Generate API reference", generate_api_reference, user_code=True),
+        Step(
+            "Generate API reference",
+            generate_api_reference,
+            fails_on=(ExtensionError,),
+            user_code=True,
+        ),
+        Step(
+            "Generate llms.txt / llms-full.txt",
+            lambda: generated.llms_txt(run, config, layout),
+            fails_on=(ExtensionError,),
+            warn=Warn(
+                USER_CODE_ERRORS, "Error generating llms.txt", "llms.txt generation had issues"
+            ),
+            user_code=True,
+        ),
         Step(
             "Build interlinks index",
-            lambda: reference.interlinks(run, config, layout, log, api_reference=ref),
+            lambda: reference.interlinks(run, config, layout, log, api_reference=run.api_reference),
             quiet=False,
         ),
         Step("Prepare freeze cache", prepare_freeze_cache, quiet=False),
@@ -630,9 +665,13 @@ def _watch(
     """
     Prepare the Quarto project and preview it with rebuilds after source edits
 
-    Edits to documentation sources and the documented package trigger rebuilds.
-    Each rebuild reloads `great-docs.yml`, imports the package again and prepares
-    the project while the preview keeps running.
+    Edits to documentation sources, the documented package and the extension inputs
+    known after the first build trigger rebuilds. Each rebuild reloads configuration
+    and prepares the project in a staging directory, while one file watcher stays open
+    for the session. When a rebuild's extension uses an input that the watcher does not
+    cover, report it once per session, even if the rebuild fails; watching it requires
+    restarting the preview. Close each rebuild's API reference when its steps finish,
+    and keep the last successful output published.
 
     Parameters
     ----------
@@ -647,7 +686,7 @@ def _watch(
     steps
         The steps that prepare the project, ending with the render step.
     remote
-        The source of GitHub and PyPI data.
+        The source of repository and PyPI data.
     refresh
         Whether each rebuild rediscovers the package's exports for the API reference.
 
@@ -656,11 +695,19 @@ def _watch(
     BuildError
         If an initial preparation step fails. The log already contains the report.
     """
-    run_steps(steps, log, layout.build_dir)
+    try:
+        run_steps(steps, log, layout.build_dir)
+    finally:
+        run.close()
     log.footer(watch_mode=True)
     finish.print_layout_notice(layout)
     preview_env = quarto.environment(config)
     preview_env[shared_sidebar.PREVIEW_ENV] = "1"
+    package_init = run.project.package_init if config.is_python_project else None
+    package = package_init.parent if package_init is not None else None
+    initial_paths = run.api_reference.extension_watch_paths if run.api_reference is not None else ()
+    inputs = watch.WatchInputs.make(layout, package, initial_paths)
+    reported_inputs: set[Path] = set()
 
     def rebuild(staging: watch.Staging) -> dict[str, Any]:
         edited = site.with_ci_site_url(layout.load_config())
@@ -672,12 +719,41 @@ def _watch(
             current, edited, staging, rebuild_log, remote=remote, refresh=refresh
         )
         rebuild_log.total_steps = count_listed(preparation)
-        run_steps(preparation, rebuild_log, staging.build_dir)
-        return current.quarto_config
+        with contextlib.closing(current):
+            try:
+                run_steps(preparation, rebuild_log, staging.build_dir)
+                return current.quarto_config
+            finally:
+                _report_uncovered(current, inputs, reported_inputs)
 
-    package_init = run.project.package_init if config.is_python_project else None
-    package = package_init.parent if package_init is not None else None
-    watch.serve(layout, preview_env, rebuild, run.quarto_config, package)
+    watch.serve(layout, preview_env, rebuild, run.quarto_config, package, inputs=inputs)
+
+
+def _report_uncovered(current: Run, inputs: watch.WatchInputs, reported: set[Path]) -> None:
+    """
+    Print the extension inputs that the preview's watcher misses, naming each once
+
+    Parameters
+    ----------
+    current
+        The rebuild's state, whose API reference lists the inputs its extension uses.
+    inputs
+        The paths the preview watches, fixed when the preview starts.
+    reported
+        The inputs already named this session. This call adds the inputs it names.
+    """
+    requested = (
+        current.api_reference.extension_watch_paths if current.api_reference is not None else ()
+    )
+    uncovered = set(inputs.uncovered(requested)) - reported
+    if not uncovered:
+        return
+    reported.update(uncovered)
+    paths = ", ".join(str(path) for path in sorted(uncovered))
+    print(
+        f"Extension inputs need additional preview coverage: {paths}. "
+        "Stop and rerun `great-docs build --watch` to observe them."
+    )
 
 
 def _make_log(run: Run, config: Config, layout: Layout) -> BuildLog:

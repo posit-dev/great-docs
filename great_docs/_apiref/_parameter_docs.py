@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import keyword
 import re
+from collections.abc import Sequence
 from copy import copy
 from dataclasses import dataclass
-from typing import cast
+from typing import TypeVar, cast
 
 import griffe as gf
 
 from great_docs._source_refs import fenced_lines
 
 from ._constructor import class_constructor, without_receiver
+from .content import Doc, DocAttribute
+
+_D = TypeVar("_D", bound=Doc)
 
 _DIRECTIVE = re.compile(r"^[ \t]*%nodoc_param\b(.*)$")
 _METADATA_KEY = "nodoc_params"
@@ -22,12 +26,41 @@ class ParameterDirectiveError(ValueError):
     """An invalid parameter exclusion in a callable's documentation"""
 
     def __init__(self, symbol: str, reason: str) -> None:
+        """
+        Create the error for one callable
+
+        Parameters
+        ----------
+        symbol
+            The path of the callable whose documentation holds the exclusion.
+        reason
+            What is wrong with the exclusion, phrased to follow `%nodoc_param`.
+        """
         self.symbol = symbol
         super().__init__(f"{symbol}: %nodoc_param {reason}")
 
 
 def _declarations(obj: gf.Object | gf.Alias) -> tuple[str | None, frozenset[str]]:
-    """Extract exclusions while preserving fenced directive examples"""
+    """
+    Extract exclusions while preserving fenced directive examples
+
+    Parameters
+    ----------
+    obj
+        The documented object, or an alias to it.
+
+    Returns
+    -------
+    :
+        The docstring text without its `%nodoc_param` lines, or `None` when the object
+        has no docstring, and the excluded names, including any already recorded on
+        the object.
+
+    Raises
+    ------
+    ParameterDirectiveError
+        If a directive does not name exactly one parameter.
+    """
     obj = obj.final_target if isinstance(obj, gf.Alias) else obj
     saved = cast("frozenset[str]", obj.extra.get("great_docs", {}).get(_METADATA_KEY, frozenset()))
     docstring = obj.docstring
@@ -62,7 +95,29 @@ class CallableDocumentation:
 
     @classmethod
     def make(cls, obj: gf.Object | gf.Alias) -> CallableDocumentation:
-        """Build the effective parameter view for a function or selected constructor"""
+        """
+        Build the effective parameter view for a function or selected constructor
+
+        For a class, the view describes its constructor, and exclusions declared on the
+        constructor also apply.
+
+        Parameters
+        ----------
+        obj
+            A function, a class, or an alias to either. Other objects get no
+            parameters.
+
+        Returns
+        -------
+        :
+            The parameters and overloads without the excluded names, alongside the
+            unfiltered parameters.
+
+        Raises
+        ------
+        ParameterDirectiveError
+            If an exclusion names no parameter of the callable or of its overloads.
+        """
         _, names = _declarations(obj)
         parameters = gf.Parameters()
         overloads: list[gf.Function] = []
@@ -101,6 +156,19 @@ class CallableDocumentation:
             )
 
         def retained(params: gf.Parameters) -> gf.Parameters:
+            """
+            Drop the excluded parameters
+
+            Parameters
+            ----------
+            params
+                The parameters of the callable or of one overload.
+
+            Returns
+            -------
+            :
+                New parameters without the excluded names.
+            """
             return gf.Parameters(*(p for p in params if p.name not in names))
 
         variants: list[gf.Function] = []
@@ -112,7 +180,21 @@ class CallableDocumentation:
 
 
 def prepare_parameter_docs(obj: gf.Object | gf.Alias) -> None:
-    """Validate exclusions and strip their declarations before docstring parsing"""
+    """
+    Validate exclusions and strip their declarations before docstring parsing
+
+    The excluded names are recorded on the object, so later views still see them.
+
+    Parameters
+    ----------
+    obj
+        The documented object, or an alias to it.
+
+    Raises
+    ------
+    ParameterDirectiveError
+        If an exclusion is malformed or names an unknown parameter.
+    """
     # Constructor declarations also apply when only their class is documented.
     _ = CallableDocumentation.make(obj)
     text, names = _declarations(obj)
@@ -127,7 +209,23 @@ def prepare_parameter_docs(obj: gf.Object | gf.Alias) -> None:
 def filter_parameter_sections(
     sections: list[gf.DocstringSection], names: frozenset[str]
 ) -> list[gf.DocstringSection]:
-    """Remove excluded descriptions without modifying the input sections"""
+    """
+    Remove excluded descriptions without modifying the input sections
+
+    Parameters
+    ----------
+    sections
+        The parsed sections of a callable's docstring.
+    names
+        The excluded parameter names.
+
+    Returns
+    -------
+    :
+        The sections with the excluded names removed from Parameters and Other
+        Parameters. An entry that documents several names keeps the rest, and a
+        section left empty is dropped.
+    """
     if not names:
         return sections
     result: list[gf.DocstringSection] = []
@@ -152,3 +250,71 @@ def filter_parameter_sections(
             filtered.value = entries
             result.append(filtered)
     return result
+
+
+@dataclass(frozen=True)
+class DataclassFields:
+    """
+    The names of a dataclass's fields that its constructor parameters cover
+
+    A field named after a documented parameter is documented once, by the class, with
+    the parameter. A field named after a parameter excluded with `%nodoc_param` is
+    documented nowhere. An ordinary class has no such fields.
+    """
+
+    documented: frozenset[str] = frozenset()
+    """Fields named after the parameters the class documents"""
+
+    excluded: frozenset[str] = frozenset()
+    """Fields named after excluded parameters"""
+
+    @classmethod
+    def make(cls, obj: gf.Object | gf.Alias) -> DataclassFields:
+        """
+        Find the fields of a prepared class
+
+        Parameters
+        ----------
+        obj
+            The class, or the alias it is documented under, after preparation has read
+            its parameter exclusions.
+
+        Returns
+        -------
+        :
+            The class's documented and excluded fields, both empty unless it is a
+            dataclass.
+        """
+        if not obj.is_class or "dataclass" not in obj.labels:
+            return cls()
+        documentation = CallableDocumentation.make(obj)
+        names = frozenset(p.name for p in documentation.original_parameters)
+        excluded = names & documentation.excluded_names
+        return cls(documented=names - excluded, excluded=excluded)
+
+    def separate(self, members: Sequence[_D]) -> tuple[list[_D], list[DocAttribute]]:
+        """
+        Separate a class's member nodes from the fields its parameters cover
+
+        Parameters
+        ----------
+        members
+            The documentation nodes of the class's selected members.
+
+        Returns
+        -------
+        :
+            The members that keep their own documentation, then the attributes the
+            class documents as parameters. Attributes named after excluded parameters
+            are in neither list.
+        """
+        kept: list[_D] = []
+        fields: list[DocAttribute] = []
+        for member in members:
+            if not isinstance(member, DocAttribute):
+                kept.append(member)
+            elif member.obj.name in self.documented:
+                fields.append(member)
+            elif member.obj.name not in self.excluded:
+                kept.append(member)
+        return kept, fields

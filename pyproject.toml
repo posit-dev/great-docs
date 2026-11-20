@@ -215,6 +215,8 @@ include = [
     "great_docs/contrast.py",
     "great_docs/hooks",
     "great_docs/pandoc",
+    "great_docs/rendering.py",
+    "great_docs/extensions.py",
 ]
 exclude = [
     "**/__pycache__",

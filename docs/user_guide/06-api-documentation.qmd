@@ -15,6 +15,10 @@ docstring page yourself, and as your code evolves the documentation stays up to 
 
 This page explains how discovery works, what gets documented, and how to customize the result.
 
+To edit docstrings during generation, add content to individual objects or change
+how objects and pages render, see
+[API reference customisation](api-reference-customisation.qmd).
+
 ## How Discovery Works
 
 When you run `great-docs init` or `great-docs build`, Great Docs:
@@ -121,7 +125,9 @@ the reference focused on the symbols your users actually need.
 For each top-level reference entry, Great Docs counts the direct members that will be documented.
 Depending on the object, these can include methods, attributes, functions and nested classes.
 Great Docs counts after selection, filtering and documentation hooks. A nested class counts
-once; its descendants do not add to the parent's count.
+once; its descendants do not add to the parent's count. Dataclass fields named after constructor
+parameters do not count: the class page documents each one with its parameter, never on a page
+of its own, and leaves out the fields of excluded parameters.
 
 ### Global policy
 

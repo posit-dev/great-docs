@@ -309,13 +309,14 @@ def test_resolution_hooks_skip_members_before_counting(
     """
     Exclude members omitted by hooks before applying the page limit
     """
-    from great_docs._apiref import resolve
+    from great_docs.hooks._object_resolved import REGISTRY
 
-    original = resolve.emit_object_resolved
-    monkeypatch.setattr(
-        resolve, "emit_object_resolved", lambda obj: None if obj.name == "stop" else original(obj)
-    )
-    doc = _document(tmp_path, monkeypatch, _SOURCE, limit=2)
+    snapshot = REGISTRY.snapshot()
+    REGISTRY.register(lambda obj: None if obj.name == "stop" else obj)
+    try:
+        doc = _document(tmp_path, monkeypatch, _SOURCE, limit=2)
+    finally:
+        REGISTRY.restore(snapshot)
     assert [member.name for member in doc.members] == ["run", "size"]
     assert all(isinstance(member, Doc) for member in doc.members)
 

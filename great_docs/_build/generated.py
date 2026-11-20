@@ -4,6 +4,7 @@ Build steps for generated site files and page data
 Write `llms.txt` files, agent skills, a changelog from repository releases, a tags index and page
 status badges, with their navbar links and page data. Prepare pages for the WebMCP tools. Warn
 if skill installation instructions lack a site URL.
+The text export reuses the API documentation that the build has already prepared.
 """
 
 from __future__ import annotations
@@ -16,8 +17,7 @@ from .._website import page_status
 from .._website import tags as page_tags
 from .._website.ai_agents import llms_txt as llms_files
 from .._website.ai_agents import webmcp_pages as webmcp_page_data
-from .._website.ai_agents import webmcp_tools
-from .._website.ai_agents import well_known
+from .._website.ai_agents import webmcp_tools, well_known
 from .._website.ai_agents.skills import SkillsWriter
 from .steps import Outcome, Skipped
 
@@ -44,10 +44,9 @@ def _webmcp_features(run: Run, config: Config) -> set[str]:
     """
     Name the site's features that the WebMCP tools listed in `llms.txt` need
 
-    `llms.txt` is written only for a site with an API reference, and before the skills,
-    changelog and CLI reference steps run. So a configured CLI reference counts even if its
-    pages turn out empty, a changelog counts for a repository even if it has no
-    releases, and skills count when their discovery files are turned on.
+    Configured features remain discoverable when their content is empty. A CLI
+    reference counts even if its pages are empty; a changelog counts when the
+    project has a repository; and skills count when discovery files are enabled.
 
     Parameters
     ----------
@@ -68,10 +67,7 @@ def _webmcp_features(run: Run, config: Config) -> set[str]:
         features.add("cli")
     if config.has_versions:
         features.add("versions")
-    if (
-        config.changelog_enabled
-        and run.project.repository is not None
-    ):
+    if config.changelog_enabled and run.project.repository is not None:
         features.add("changelog")
     if config.skill_enabled and config.skill_well_known:
         features.add("skills")
@@ -83,13 +79,15 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
     Write `llms.txt` and `llms-full.txt`
 
     `llms.txt` lists the WebMCP tools when WebMCP is on. `llms-full.txt` includes user guide
-    pages and, when `cli.enabled` is set, Click command-line help.
+    pages and, when `cli.enabled` is set, Click command-line help. Both take API
+    documentation from the reference the build has prepared, so they include docstring
+    edits from object and docstring hooks.
 
     Parameters
     ----------
     run
-        Build state containing the package's names and metadata, the API reference
-        configuration and the discovered user guide.
+        Build state containing the package's names and metadata, the prepared API
+        reference and the discovered user guide.
     config
         The project's configuration.
     layout
@@ -98,14 +96,14 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
     Returns
     -------
     :
-        The result line or skip reason.
+        The result line, or a skip reason when the build has no API reference.
     """
-    api_block = run.api_block
-    if not llms_files.is_planned(api_block):
+    reference = run.api_reference
+    if reference is None:
         return Skipped("no API reference")
     _ = llms_files.write_index(
         layout,
-        api_block,
+        reference,
         run.project.manifest,
         site_url=config.site_url,
         report=print,
@@ -130,7 +128,7 @@ def llms_txt(run: Run, config: Config, layout: Layout) -> Outcome:
             # The CLI reference step reports import and Typer conversion failures.
             # Omit CLI help here so `llms-full.txt` is still written.
             pass
-    _ = llms_files.write_full(layout, api_block, cli=cli, user_guide=run.user_guide, report=print)
+    _ = llms_files.write_full(layout, reference, cli=cli, user_guide=run.user_guide, report=print)
     return "Created llms.txt + llms-full.txt"
 
 
