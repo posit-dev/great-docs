@@ -225,7 +225,7 @@ frames. All settings are optional and have sensible defaults.
 | `window_chrome` | `none` | Window decoration style |
 | `theme` | `default` | Terminal color scheme (see [Themes](#themes)) |
 | `font_family` | (monospace stack) | Font family for rendered SVG |
-| `line_height` | `1.5` | Line height multiplier |
+| `line_height` | `1.35` | Line height multiplier |
 | `show_cursor` | `true` | Render the terminal cursor |
 | `speed` | `1.0` | Global playback speed multiplier (applied at render time) |
 | `prompt` | (none) | Prompt replacement character |
