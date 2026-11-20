@@ -234,6 +234,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_ref_big_class",  # 83
     "gdtest_ref_multi_big",  # 84
     "gdtest_ref_title",  # 85
+    "gdtest_extension_hooks",
+    "gdtest_extension_renderers",
     # 86–95: Site theming & display
     "gdtest_theme_cosmo",  # 86
     "gdtest_theme_lumen",  # 87
