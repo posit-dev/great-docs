@@ -291,6 +291,7 @@ def serve(
     package: Path | None,
     *,
     inputs: WatchInputs | None = None,
+    port: int | None = None,
 ) -> None:
     """
     Preview a prepared project and rebuild it after source edits
@@ -321,16 +322,23 @@ def serve(
         The inputs to watch for the whole session, or `None` to watch the documentation
         sources and the package. An input that a later rebuild's extension adds outside
         them is watched only after a restart.
+    port
+        The requested localhost port, or `None` to let Quarto choose.
 
     Raises
     ------
+    BuildError
+        If Quarto exits with a failure. Quarto's diagnostic is visible on standard error.
     KeyboardInterrupt
         If the user stops watching with Ctrl+C.
     """
     staging = stage(layout)
     published = _digests(layout.build_dir)
     stopped = threading.Event()
-    preview = subprocess.Popen(["quarto", "preview", "--no-browser"], cwd=layout.build_dir, env=env)
+    command = ["quarto", "preview", "--no-browser"]
+    if port is not None:
+        command.extend(["--port", str(port)])
+    preview = subprocess.Popen(command, cwd=layout.build_dir, env=env)
 
     def wait_for_preview() -> None:
         """Wait for `quarto preview` to exit, then signal the watcher to stop"""
@@ -357,9 +365,15 @@ def serve(
                         )
                     quarto_config = rebuilt
                 print("👀 Watching for changes... (Ctrl+C to stop)")
+        status = preview.poll()
     finally:
         _stop(preview)
         shutil.rmtree(staging.build_dir, ignore_errors=True)
+
+    if status:
+        message = f"Quarto preview failed with exit status {status}."
+        print(message, file=sys.stderr)
+        raise BuildError(message)
 
 
 def source_changes(

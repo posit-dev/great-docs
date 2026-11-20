@@ -186,6 +186,7 @@ def test_gitlab_pages_addresses_reach_build_freeze_and_watch(
         rebuild: Any,
         *args: Any,
         inputs: watch.WatchInputs | None = None,
+        port: int | None = None,
     ) -> None:
         rebuild(layout)
 

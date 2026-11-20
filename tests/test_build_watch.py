@@ -200,6 +200,44 @@ def test_watch_copies_an_edited_page_into_the_previewed_project(
     assert not (docs.layout.cache_dir / "watch").exists()
 
 
+@pytest.mark.parametrize(
+    ("enabled", "port", "message"),
+    [
+        (False, 4200, "requires watch=True"),
+        (True, 0, "integer from 1 to 65535"),
+        (True, 65536, "integer from 1 to 65535"),
+        (True, True, "integer from 1 to 65535"),
+    ],
+)
+def test_build_rejects_invalid_watch_port(
+    tmp_path: Path, enabled: bool, port: int, message: str
+) -> None:
+    docs = _project(tmp_path)
+
+    with pytest.raises(ValueError, match=message):
+        docs.build(watch=enabled, watch_port=port)
+
+    assert not docs.layout.build_dir.exists()
+
+
+def test_watch_propagates_preview_failure_after_cleanup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    docs = _project(tmp_path)
+    docs.layout.build_dir.mkdir(parents=True)
+    (docs.layout.build_dir / "index.qmd").write_text("last good")
+    preview = _Preview()
+    monkeypatch.setattr(preview, "poll", lambda: 1)
+    monkeypatch.setattr(preview, "wait", lambda: 1)
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: preview)
+
+    with pytest.raises(BuildError, match="exit status 1"):
+        watch.serve(docs.layout, {}, lambda staging: {}, {}, None, port=4200)
+
+    assert "Quarto preview failed with exit status 1" in capsys.readouterr().err
+    assert not (docs.layout.cache_dir / "watch").exists()
+
+
 def test_watch_removes_a_deleted_page_and_keeps_quarto_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):

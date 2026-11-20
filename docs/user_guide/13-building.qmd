@@ -84,6 +84,15 @@ your documentation sources:
 great-docs build --watch
 ```
 
+To reuse the same preview URL across launches, choose a port and open that address in your
+browser or IDE. For example, use `http://localhost:4200` with this command.
+
+```{.bash filename="Terminal"}
+great-docs build --watch --port 4200
+```
+
+If the port is already in use, free it or choose another port before starting watch mode.
+
 Great Docs watches the directory containing `great-docs.yml`, including your pages, assets and
 the configuration itself. It also watches your package's source, so a docstring edit or a new
 export updates the API reference. After each batch of edits, it prepares the project again and
