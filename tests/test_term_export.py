@@ -114,6 +114,12 @@ class TestStructure:
             [i * term_h + 16 for i in range(len(m.frames))]
         )
 
+    def test_bg_rects_have_crisp_edges(self):
+        svg = export_svg(_manifest(events=[[0.0, "o", "\x1b[44mABC\r\nDEF\x1b[0m"]]))
+        groups = re.findall(r'<g shape-rendering="crispEdges">(.*?)</g>', svg)
+        assert len(groups) == 2
+        assert all(g.startswith("<rect") and "<text" not in g for g in groups)
+
     def test_text_is_escaped(self):
         svg = export_svg(_manifest(events=[[0.0, "o", "a < b & c"]]))
         ET.fromstring(svg)

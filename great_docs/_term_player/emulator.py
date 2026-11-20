@@ -105,12 +105,21 @@ ANSI_COLORS_16 = [
     "#ffffff",
 ]
 
-# Regex for CSI sequences: ESC [ (params) (intermediate) (final)
-_CSI_RE = re.compile(r"\x1b\[([0-9;?]*)([^@-~]?)([A-Za-z@-~])")
-# Regex for OSC sequences: ESC ] ... (ST or BEL)
-_OSC_RE = re.compile(r"\x1b\].*?(?:\x1b\\|\x07)")
-# Regex for simple escape sequences
-_ESC_SIMPLE_RE = re.compile(r"\x1b[()][0-9A-B]|\x1b[=>DMEH78]")
+# The levels of each channel in the 256-color palette's 6x6x6 cube. They're
+# xterm's, which asciinema and most terminals share, not evenly spaced
+_CUBE_LEVELS = (0x00, 0x5F, 0x87, 0xAF, 0xD7, 0xFF)
+
+# Regex for CSI sequences: ESC [ (params) (intermediates) (final), with the
+# byte ranges ECMA-48 gives each part
+_CSI_RE = re.compile(r"\x1b\[([0-?]*)([ -/]*)([@-~])")
+# The start of a CSI sequence that has no final byte yet
+_CSI_START_RE = re.compile(r"\x1b\[[0-?]*[ -/]*")
+# Regex for string sequences, which run to ST (or BEL, for OSC): OSC (ESC ]),
+# DCS (ESC P), SOS (ESC X), PM (ESC ^) and APC (ESC _)
+_STRING_RE = re.compile(r"\x1b(?:\].*?(?:\x1b\\|\x07)|[PX^_].*?\x1b\\)", re.S)
+# Regex for other escape sequences: ESC (intermediates) (final)
+_ESC_RE = re.compile(r"\x1b([ -/]*)([0-~])")
+_ESC_START_RE = re.compile(r"\x1b[ -/]*")
 
 _ZWJ = "\u200d"
 # Besides combining marks, these take no column: the zero-width space,
@@ -179,14 +188,27 @@ class TerminalEmulator:
         # Alternate screen buffer (for TUIs)
         self._alt_screen: list[list[Cell]] | None = None
         self._using_alt = False
+        # An escape sequence that the last feed ended partway through
+        self._pending = ""
 
     def _blank_screen(self) -> list[list[Cell]]:
         """Create a blank screen grid."""
         return [[Cell() for _ in range(self.cols)] for _ in range(self.rows)]
 
+    def _blank(self) -> Cell:
+        """Create a blank cell for erasing or inserting.
+
+        Like xterm (whose terminfo entries declare `bce`, background color
+        erase), the cell keeps the current background color, so a program can
+        paint a colored background by erasing.
+        """
+        if self._style.bg is None:
+            return Cell()
+        return Cell(style=CellStyle(bg=self._style.bg))
+
     def _blank_row(self) -> list[Cell]:
         """Create a blank row."""
-        return [Cell() for _ in range(self.cols)]
+        return [self._blank() for _ in range(self.cols)]
 
     @property
     def screen(self) -> ScreenState:
@@ -201,40 +223,26 @@ class TerminalEmulator:
         )
 
     def feed(self, data: str) -> None:
-        """Process terminal output data (a string of characters + escape sequences)."""
+        """Process terminal output data (a string of characters + escape sequences).
+
+        A recording splits output wherever a read of the terminal ended, which
+        can be partway through an escape sequence. The emulator holds on to an
+        unfinished sequence and completes it with the next feed.
+        """
+        data = self._pending + data
+        self._pending = ""
         i = 0
         n = len(data)
 
         while i < n:
             ch = data[i]
 
-            # CSI sequence
-            if ch == "\x1b" and i + 1 < n and data[i + 1] == "[":
-                match = _CSI_RE.match(data, i)
-                if match:
-                    self._handle_csi(match.group(1), match.group(3))
-                    i = match.end()
-                    continue
-
-            # OSC sequence (skip)
-            if ch == "\x1b" and i + 1 < n and data[i + 1] == "]":
-                match = _OSC_RE.match(data, i)
-                if match:
-                    i = match.end()
-                    continue
-                # Incomplete OSC, skip to end
-                i = n
-                continue
-
-            # Simple escape sequences
             if ch == "\x1b":
-                match = _ESC_SIMPLE_RE.match(data, i)
-                if match:
-                    self._handle_esc_simple(data[i + 1] if i + 1 < n else "")
-                    i = match.end()
-                    continue
-                # Unknown escape, skip ESC + next char
-                i += 2
+                end = self._escape(data, i)
+                if end is None:
+                    self._pending = data[i:]
+                    return
+                i = end
                 continue
 
             # Control characters
@@ -272,6 +280,53 @@ class TerminalEmulator:
             # Printable character
             self._put_char(ch)
             i += 1
+
+    def _escape(self, data: str, i: int) -> int | None:
+        """Handle the escape sequence that starts at `data[i]`.
+
+        Returns the index just past the sequence, or `None` when `data` ends
+        before the sequence does.
+        """
+        n = len(data)
+        if i + 1 >= n:
+            return None
+        kind = data[i + 1]
+
+        if kind == "[":
+            match = _CSI_RE.match(data, i)
+            if match:
+                params, intermediates, final = match.groups()
+                # Sequences with intermediates (such as `CSI SP q`) and private
+                # sequences other than DEC modes (such as `CSI > 4 ; 1 m`) aren't
+                # modelled, so they're dropped rather than taken for others
+                marker = params[:1]
+                if not intermediates and (
+                    marker not in ("<", "=", ">", "?") or (marker == "?" and final in "hl")
+                ):
+                    self._handle_csi(params, final)
+                return match.end()
+            start = _CSI_START_RE.match(data, i)
+            assert start is not None
+            if start.end() == n:
+                return None
+            # A character that can't continue the sequence cancels it
+            return start.end()
+
+        if kind in "]PX^_":
+            match = _STRING_RE.match(data, i)
+            return match.end() if match else None
+
+        match = _ESC_RE.match(data, i)
+        if match:
+            if not match.group(1):
+                self._handle_esc_simple(match.group(2))
+            return match.end()
+        start = _ESC_START_RE.match(data, i)
+        assert start is not None
+        if start.end() == n:
+            return None
+        # An ESC that nothing valid follows is dropped
+        return start.end()
 
     def _put_char(self, ch: str) -> None:
         """Place a character at the cursor position and advance."""
@@ -356,7 +411,7 @@ class TerminalEmulator:
         params = _parse_params(params_str)
 
         if final == "m":
-            self._handle_sgr(params)
+            self._handle_sgr(_sgr_params(params_str))
         elif final == "H" or final == "f":
             # CUP: Cursor Position
             row = max(0, (params[0] if params else 1) - 1)
@@ -415,7 +470,7 @@ class TerminalEmulator:
             row = self._screen[self._cursor_row]
             col = self._cursor_col
             del row[col : col + n]
-            row.extend(Cell() for _ in range(n))
+            row.extend(self._blank() for _ in range(n))
             # Trim back to cols
             self._screen[self._cursor_row] = row[: self.cols]
             _repair_wide(self._screen[self._cursor_row])
@@ -425,7 +480,7 @@ class TerminalEmulator:
             row = self._screen[self._cursor_row]
             col = self._cursor_col
             for _ in range(n):
-                row.insert(col, Cell())
+                row.insert(col, self._blank())
             self._screen[self._cursor_row] = row[: self.cols]
             _repair_wide(self._screen[self._cursor_row])
         elif final == "r":
@@ -463,7 +518,7 @@ class TerminalEmulator:
             # ECH: Erase Characters
             n = params[0] if params else 1
             for c in range(self._cursor_col, min(self._cursor_col + n, self.cols)):
-                self._screen[self._cursor_row][c] = Cell()
+                self._screen[self._cursor_row][c] = self._blank()
             _repair_wide(self._screen[self._cursor_row])
 
     def _handle_dec_mode(self, params: list[int], *, set_mode: bool) -> None:
@@ -551,6 +606,10 @@ class TerminalEmulator:
                 i += consumed
             elif p == 49:
                 self._style.bg = None
+            elif p == 58:
+                # Underline color isn't drawn, but its parameters still go
+                _, consumed = self._parse_extended_color(params[i + 1 :])
+                i += consumed
             elif 90 <= p <= 97:
                 # Bright foreground
                 self._style.fg = str(p - 90 + 8)
@@ -584,13 +643,13 @@ class TerminalEmulator:
         if idx < 16:
             return ANSI_COLORS_16[idx]
         elif idx < 232:
-            # 216-color cube: 6x6x6
+            # 216-color cube: 6x6x6, at xterm's levels
             idx -= 16
-            b = (idx % 6) * 51
+            b = _CUBE_LEVELS[idx % 6]
             idx //= 6
-            g = (idx % 6) * 51
+            g = _CUBE_LEVELS[idx % 6]
             idx //= 6
-            r = idx * 51
+            r = _CUBE_LEVELS[idx]
             return f"#{r:02x}{g:02x}{b:02x}"
         else:
             # Grayscale ramp: 24 shades
@@ -602,7 +661,7 @@ class TerminalEmulator:
         if mode == 0:
             # Erase below (including current position)
             for c in range(self._cursor_col, self.cols):
-                self._screen[self._cursor_row][c] = Cell()
+                self._screen[self._cursor_row][c] = self._blank()
             for r in range(self._cursor_row + 1, self.rows):
                 self._screen[r] = self._blank_row()
             _repair_wide(self._screen[self._cursor_row])
@@ -611,11 +670,11 @@ class TerminalEmulator:
             for r in range(self._cursor_row):
                 self._screen[r] = self._blank_row()
             for c in range(min(self._cursor_col + 1, self.cols)):
-                self._screen[self._cursor_row][c] = Cell()
+                self._screen[self._cursor_row][c] = self._blank()
             _repair_wide(self._screen[self._cursor_row])
         elif mode == 2 or mode == 3:
             # Erase all
-            self._screen = self._blank_screen()
+            self._screen = [self._blank_row() for _ in range(self.rows)]
 
     def _erase_line(self, mode: int) -> None:
         """Erase in line."""
@@ -623,12 +682,12 @@ class TerminalEmulator:
         if mode == 0:
             # Erase to right
             for c in range(self._cursor_col, self.cols):
-                self._screen[row][c] = Cell()
+                self._screen[row][c] = self._blank()
             _repair_wide(self._screen[row])
         elif mode == 1:
             # Erase to left
             for c in range(min(self._cursor_col + 1, self.cols)):
-                self._screen[row][c] = Cell()
+                self._screen[row][c] = self._blank()
             _repair_wide(self._screen[row])
         elif mode == 2:
             # Erase entire line
@@ -670,11 +729,40 @@ def _parse_params(params_str: str) -> list[int]:
     cleaned = params_str.lstrip("?")
     if not cleaned:
         return []
-    parts = cleaned.split(";")
-    result = []
-    for p in parts:
-        try:
-            result.append(int(p))
-        except ValueError:
-            result.append(0)
+    return [_int(p) for p in cleaned.split(";")]
+
+
+def _sgr_params(params_str: str) -> list[int]:
+    """Parse SGR parameters, rewriting colon sub-parameters in semicolon form.
+
+    `38:5:n` and `38:2::r:g:b` (or `38:2:r:g:b`) become `38;5;n` and
+    `38;2;r;g;b`, and likewise for 48 and 58. An underline style, `4:n`,
+    becomes `4`, or `24` for `4:0`.
+    """
+    if not params_str:
+        return []
+    result: list[int] = []
+    for part in params_str.split(";"):
+        if ":" not in part:
+            result.append(_int(part))
+            continue
+        head, *subs = part.split(":")
+        code = _int(head)
+        if code in (38, 48, 58):
+            # Truecolor may carry a color space ID before the components
+            if subs[:1] == ["2"] and len(subs) == 5:
+                subs = [subs[0], *subs[2:]]
+            result.extend([code, *(_int(s) for s in subs)])
+        elif code == 4:
+            result.append(24 if subs[:1] == ["0"] else 4)
+        else:
+            result.append(code)
     return result
+
+
+def _int(param: str) -> int:
+    """Read one numeric parameter, taking an empty or malformed one as 0."""
+    try:
+        return int(param)
+    except ValueError:
+        return 0

@@ -152,7 +152,7 @@ These settings control how the recording is rendered:
 | `theme` | `default` | One theme, or a light/dark pair (below) |
 | `window_chrome` | `none` | `none`, `minimal`, or `colorful` |
 | `font_family` | monospace stack | CSS `font-family` list |
-| `line_height` | `1.5` | Row height as a multiple of the font size |
+| `line_height` | `1.35` | Row height as a multiple of the font size |
 | `show_cursor` | `true` | Draw the cursor |
 | `speed` | `1.0` | Speed multiplier for the whole recording |
 | `prompt` | (none) | Replacement for the prompt character on prompt rows |

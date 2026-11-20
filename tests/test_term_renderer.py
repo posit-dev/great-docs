@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from great_docs._term_player.emulator import Cell, CellStyle, ScreenState, TerminalEmulator
@@ -349,6 +351,21 @@ class TestRenderFrameBgSpans:
 
         # Frame bg rect + one span rect for the 3-char blue background
         assert svg.count("<rect") == 2
+
+    def test_bg_rects_have_crisp_edges(self):
+        """Adjacent rows' backgrounds meet without an antialiased seam."""
+        emu = TerminalEmulator(cols=10, rows=3)
+        emu.feed("\x1b[44mABC\r\nDEF\x1b[0m")
+        svg = render_frame(emu.screen, show_cursor=False)
+        groups = re.findall(r'<g shape-rendering="crispEdges">\n(.*?)\n</g>', svg, re.S)
+        assert len(groups) == 2
+        assert all(g.startswith("<rect") and "<text" not in g for g in groups)
+
+    def test_row_without_bg_has_no_group(self):
+        emu = TerminalEmulator(cols=10, rows=3)
+        emu.feed("plain")
+        svg = render_frame(emu.screen, show_cursor=False)
+        assert "crispEdges" not in svg
 
 
 # _render_chrome function (minimal and colorful)

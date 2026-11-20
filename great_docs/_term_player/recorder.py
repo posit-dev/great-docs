@@ -5,6 +5,7 @@ Records terminal output with timing information into the .termshow format.
 
 from __future__ import annotations
 
+import codecs
 import json
 import os
 import select
@@ -99,6 +100,8 @@ def record_session(
 
         start_time = time.monotonic()
         prev_time = start_time
+        output_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        input_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
         sys.stderr.write(
             f"\x1b[32mRecording...\x1b[0m (cols={cols}, rows={rows})\n"
@@ -123,17 +126,17 @@ def record_session(
                         # EOF from PTY
                         break
 
-                    now = time.monotonic()
-                    interval = round(now - prev_time, 3)
-                    prev_time = now
-
                     # Write to real terminal
                     os.write(sys.stdout.fileno(), data)
 
-                    # Record event
-                    text = data.decode("utf-8", errors="replace")
-                    event = json.dumps([interval, "o", text])
-                    events.append(event)
+                    # Record event. A read can end partway through a character,
+                    # whose remaining bytes then wait for the next read
+                    text = output_decoder.decode(data)
+                    if text:
+                        now = time.monotonic()
+                        interval = round(now - prev_time, 3)
+                        prev_time = now
+                        events.append(json.dumps([interval, "o", text]))
 
                 elif fd == sys.stdin.fileno():
                     # Input from user
@@ -150,12 +153,12 @@ def record_session(
 
                     # Optionally record input
                     if capture_input:
-                        now = time.monotonic()
-                        interval = round(now - prev_time, 3)
-                        prev_time = now
-                        text = data.decode("utf-8", errors="replace")
-                        event = json.dumps([interval, "i", text])
-                        events.append(event)
+                        text = input_decoder.decode(data)
+                        if text:
+                            now = time.monotonic()
+                            interval = round(now - prev_time, 3)
+                            prev_time = now
+                            events.append(json.dumps([interval, "i", text]))
             else:
                 continue
             break
@@ -164,8 +167,14 @@ def record_session(
         _, exit_status = os.waitpid(pid, 0)
         exit_code = os.WEXITSTATUS(exit_status) if os.WIFEXITED(exit_status) else 1
 
-        # Record exit event
+        # Record what's left of a character the output ended partway through
         now = time.monotonic()
+        text = output_decoder.decode(b"", final=True)
+        if text:
+            events.append(json.dumps([round(now - prev_time, 3), "o", text]))
+            prev_time = now
+
+        # Record exit event
         interval = round(now - prev_time, 3)
         events.append(json.dumps([interval, "x", str(exit_code)]))
 

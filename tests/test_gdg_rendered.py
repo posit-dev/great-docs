@@ -12344,3 +12344,140 @@ def test_DED_webmcp_llms_txt_section():
         assert f"`{tool}`" in text
     assert "get_changelog" not in text
     assert "list_versions" not in text
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: Termshow TUI fidelity (gdtest_termshow_tui) — split sequences, seams, colors
+#
+# The recordings are built so each way of drawing a full-screen app wrong shows in
+# the frame SVGs: parameters printed as text, backgrounds drawn with antialiased
+# edges, rows the wrong height, and erased cells losing their background.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_TUI_PKG = "gdtest_termshow_tui"
+# The default cell size: 0.6 and 1.35 times the 14px font
+_TUI_CELL_W, _TUI_CELL_H = 8.4, 18.9
+
+
+def _tui_demo(name: str) -> Path:
+    if not _has_rendered_site(_TUI_PKG):
+        pytest.skip(f"{_TUI_PKG} not rendered")
+    return _site_dir(_TUI_PKG) / "termshow" / "demos" / name
+
+
+def _tui_frames(name: str) -> list[str]:
+    return [p.read_text(encoding="utf-8") for p in sorted(_tui_demo(name).glob("frame-*.svg"))]
+
+
+def _tui_last_frame(name: str) -> str:
+    import json
+
+    manifest = json.loads((_tui_demo(name) / "manifest.json").read_text(encoding="utf-8"))
+    return (_tui_demo(name) / manifest["keyframes"][-1]["file"]).read_text(encoding="utf-8")
+
+
+def _tui_rows(svg: str) -> list[str]:
+    """The frame's text, rebuilt row by row from the positions of its spans."""
+    import xml.etree.ElementTree as ET
+
+    rows: dict[int, str] = {}
+    for el in ET.fromstring(svg).iter("{http://www.w3.org/2000/svg}text"):
+        row = round(float(el.get("y")) / _TUI_CELL_H)
+        col = round(float(el.get("x")) / _TUI_CELL_W)
+        rows[row] = rows.get(row, "").ljust(col)[:col] + (el.text or "")
+    return [rows.get(r, "").rstrip() for r in range(max(rows, default=-1) + 1)]
+
+
+@pytest.mark.dedicated
+def test_DED_termshow_tui_nyan_shows_only_the_counter():
+    """gdtest_termshow_tui: sequences split between reads never show as text."""
+    frames = _tui_frames("nyan")
+    assert len(frames) >= 60
+    for svg in frames:
+        text = {row.strip() for row in _tui_rows(svg)} - {""}
+        assert len(text) <= 1, text
+        assert all(re.fullmatch(r"You have nyaned for \d seconds!", t) for t in text), text
+
+
+@pytest.mark.dedicated
+def test_DED_termshow_tui_counter_row_is_navy():
+    """gdtest_termshow_tui: `ESC[J` erases the counter's row in the sky color, edge to edge."""
+    svg = _tui_last_frame("nyan")
+    assert _tui_rows(svg)[23].strip() == "You have nyaned for 5 seconds!"
+    y = 23 * _TUI_CELL_H
+    assert (
+        f'<rect x="0.0" y="{y:.1f}" width="{80 * _TUI_CELL_W:.1f}" height="18.9" fill="#00005f"/>'
+        in svg
+    )
+
+
+@pytest.mark.dedicated
+def test_DED_termshow_tui_rows_are_the_default_height():
+    """gdtest_termshow_tui: rows are 1.35 times the font size, as recorded in the manifest."""
+    import json
+
+    manifest = json.loads((_tui_demo("nyan") / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["screen"]["line_height"] == 1.35
+    svg = _tui_last_frame("nyan")
+    assert f'height="{24 * _TUI_CELL_H + 32:.1f}"' in svg
+
+
+@pytest.mark.dedicated
+def test_DED_termshow_tui_backgrounds_have_crisp_edges():
+    """gdtest_termshow_tui: every cell background is drawn in a crisp-edged group."""
+    for name in ("nyan", "sequences", "seams"):
+        for svg in _tui_frames(name):
+            outside = re.sub(r'<g shape-rendering="crispEdges">.*?</g>', "", svg, flags=re.S)
+            # The cursor is drawn on its own, after the rows
+            assert not re.search(r'<rect [^>]*height="18\.9" fill="[^"]*"/>', outside)
+        assert 'shape-rendering="crispEdges"' in _tui_last_frame(name)
+
+
+@pytest.mark.dedicated
+def test_DED_termshow_tui_sequence_checklist():
+    """gdtest_termshow_tui: each sequence is handled or dropped, leaving a clean word."""
+    rows = _tui_rows(_tui_last_frame("sequences"))
+    results = [row[30:] for row in rows[2:14]]
+    assert results == [
+        "green",
+        "orange",
+        "plain",
+        "plain",
+        "plain",
+        "plain",
+        "plain",
+        "orange",
+        "pink",
+        "underlined",
+        "plain",
+        " blue to the edge",
+    ]
+
+
+@pytest.mark.dedicated
+def test_DED_termshow_tui_colors():
+    """gdtest_termshow_tui: xterm's cube levels, and erased cells keep the background."""
+    svg = _tui_last_frame("sequences")
+    for color in ("#00005f", "#d787af", "#ffaf00", "#ffffd7"):
+        assert f'fill="{color}"' in svg
+    # The erased rest of the line is still color 24, to the right edge
+    y = 13 * _TUI_CELL_H
+    x, width = 30 * _TUI_CELL_W, 34 * _TUI_CELL_W
+    assert (
+        f'<rect x="{x:.1f}" y="{y:.1f}" width="{width:.1f}" height="18.9" fill="#005f87"/>' in svg
+    )
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_termshow_tui_asciinema_comparison():
+    """gdtest_termshow_tui: the nyancat page plays the same recording in asciinema-player."""
+    if not _has_rendered_site(_TUI_PKG):
+        pytest.skip(f"{_TUI_PKG} not rendered")
+    soup = _load_html(_site_dir(_TUI_PKG) / "user-guide" / "nyan.html")
+    assert soup.select_one("div.gd-termshow") is not None
+    assert soup.find(id="gd-nyan-asciinema") is not None
+    script = next(
+        s.string for s in soup.find_all("script") if s.string and "AsciinemaPlayer" in s.string
+    )
+    assert '\\"version\\": 2' in script
