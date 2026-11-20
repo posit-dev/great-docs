@@ -167,6 +167,11 @@ class Config:
                 f"{self.config_path}: max_members_on_same_page: {maximum!r} "
                 "must be a non-negative integer."
             )
+        reference = config["reference"]
+        if isinstance(reference, dict) and not isinstance(
+            cast("ConfigDict", reference).get("show_bases", False), bool
+        ):
+            raise ConfigError(f"{self.config_path}: reference.show_bases must be true or false.")
 
         config = self._normalize_shorthands(config)
         self._validate_repository(config)
@@ -1213,6 +1218,14 @@ class Config:
         if isinstance(val, dict):
             return cast("ConfigDict", val).get("desc")
         return None
+
+    @property
+    def reference_show_bases(self) -> bool:
+        """Whether class documentation shows direct base classes"""
+        reference = self["reference"]
+        return (
+            isinstance(reference, dict) and cast("ConfigDict", reference).get("show_bases") is True
+        )
 
     @property
     def members_on_same_page(self) -> bool | None:

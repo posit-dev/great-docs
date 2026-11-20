@@ -13,6 +13,11 @@ from typing import TYPE_CHECKING
 
 import griffe as gf
 
+from great_docs._translations import translate
+from great_docs.pandoc.blocks import BlockContent, Blocks, Div, Para
+from great_docs.pandoc.components import Attr
+from great_docs.pandoc.inlines import Code, Link, Span, join_inline_content
+
 from .._docstring_sections import (
     DCDocstringSectionInitParameters,
     DCDocstringSectionParameterAttributes,
@@ -30,9 +35,10 @@ class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer)
     The presentation of a class, with its constructor signature and member groups
 
     The description shows the subject, then the Usage and source row and the
-    constructor signature. The body shows the docstring sections followed by member
-    groups. For a dataclass without an authored `Parameters` or `Attributes`
-    section, the renderer generates `Parameter Attributes` and
+    constructor signature, followed by the direct bases when enabled. The body
+    shows the docstring sections followed by member groups. For a dataclass
+    without an authored `Parameters` or `Attributes` section, the renderer generates
+    `Parameter Attributes` and
     `Init Parameters` sections from the constructor parameters.
     """
 
@@ -41,6 +47,68 @@ class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer)
         super().__post_init__()
         self.doc: content.DocClass = self.doc
         self.obj: gf.Class = self.obj
+
+    def __str__(self) -> str:
+        """Compose the class documentation with its published link target"""
+        rendered = super().__str__()
+        if not self.settings.show_bases or not self.doc.anchor:
+            return rendered
+        # The inventory's qualified anchor is independent of custom headings and descriptions.
+        anchor = Div(attr=Attr(identifier=self.doc.anchor))
+        return str(Blocks([anchor, rendered]))
+
+    def render_description(self) -> BlockContent:
+        """Render the class description followed by the direct base classes"""
+        description = super().render_description()
+        bases = self.render_bases()
+        return Blocks([description, bases]) if bases is not None else description
+
+    def render_bases(self) -> BlockContent:
+        """
+        Render direct base classes when the reference enables them
+
+        Returns
+        -------
+        :
+            A paragraph with links to documented bases, or `None` when there are
+            no visible bases or the setting is off.
+        """
+        if not self.settings.show_bases:
+            return None
+        bases = [rendered for base in self.obj.bases if (rendered := self._render_base(base))]
+        if not bases:
+            return None
+        label = translate("base_classes", self.settings.lang)
+        label_span = Span(f"{label}:", Attr(classes=["doc-class-bases"]))
+        return Para([label_span, join_inline_content(bases, sep=", ")])
+
+    def _render_base(self, base: gf.Expr | str) -> Link | Code | None:
+        label = base.rpartition(".")[2] if isinstance(base, str) else str(base)
+        unlinked = Code(label, Attr(classes=["gd-no-link"]))
+        base_name = _expression_name(base)
+        if base_name is None:
+            return unlinked
+
+        path = base_name if isinstance(base_name, str) else base_name.canonical_path
+        if path in {"object", "builtins.object"}:
+            return None
+
+        spelling = str(base_name)
+        private = spelling.rpartition(".")[2].startswith("_") or path.rpartition(".")[2].startswith(
+            "_"
+        )
+        target = self.extension.class_targets.get(path)
+        if target is not None and target.uri:
+            name = target.obj.name
+            canonical_name = target.obj.canonical_path.rpartition(".")[2]
+            if (private or canonical_name.startswith("_")) and not name.startswith("_"):
+                label = name + (
+                    label[len(spelling) :] if isinstance(base, gf.ExprSubscript) else ""
+                )
+            return Link(Code(label), f"/{target.uri.lstrip('/')}")
+        if private:
+            return None
+        return unlinked
 
     @cached_property
     def is_dataclass(self):
@@ -128,3 +196,32 @@ class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer)
 
         lst = [p for p in self.parameters if p.name not in self.obj.attributes]
         return gf.Parameters(*lst)
+
+
+def _expression_name(expression: gf.Expr | str) -> gf.ExprName | gf.ExprAttribute | str | None:
+    """
+    Extract a bare or dotted name from a Griffe expression
+
+    Examples
+    --------
+    Griffe expressions are shown in their source spelling.
+    Quoted values are strings.
+
+    ```text
+    Base            -> Base
+    pkg.Base        -> pkg.Base
+    pkg.Base[T]     -> pkg.Base
+    factory()       -> None
+    factory().Base  -> None
+    "pkg.Base"      -> "pkg.Base"
+    ```
+    """
+    if isinstance(expression, str):
+        return expression
+    expression = expression.left if isinstance(expression, gf.ExprSubscript) else expression
+    if isinstance(expression, gf.ExprName) or (
+        isinstance(expression, gf.ExprAttribute)
+        and all(isinstance(part, gf.ExprName) for part in expression.values)
+    ):
+        return expression
+    return None

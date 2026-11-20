@@ -375,6 +375,8 @@ class APIReference:
 
         _log.info("Collecting pages and inventory items.")
         pages = self.manifest.pages
+        if s.show_bases:
+            self.extension.class_targets = self.manifest.class_targets
 
         _log.info("Collecting index")
         index = collect_index(

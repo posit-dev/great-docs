@@ -331,6 +331,15 @@ reference:
 When `members: false` is set, only the class itself is documented. You can then place individual
 methods wherever you want in your reference structure.
 
+### Linking to Base Classes
+
+Set `reference.show_bases: true` to add a **Bases** line below the class signature.
+For example, readers can follow the link from `Circle` to `Shape` to find the methods that
+`Circle` inherits. The setting works independently of inherited member selection.
+
+Great Docs links to bases that appear in your site's API reference. Public bases without a local
+reference target appear as code. Private bases appear only when you publish them in the reference.
+
 ### Documenting Inherited Methods
 
 By default, only methods defined directly on a class are documented. Inherited methods are excluded

@@ -123,6 +123,8 @@ def configure(
     }
     if ref_desc:
         api_ref_config["desc"] = ref_desc
+    if site_config.reference_show_bases:
+        api_ref_config["show_bases"] = True
     if site_config.members_on_same_page is not None:
         api_ref_config["members_on_same_page"] = site_config.members_on_same_page
     api_ref_config["max_members_on_same_page"] = site_config.max_members_on_same_page

@@ -5,6 +5,7 @@ Specification: https://pandoc.org/lua-filters.html#inline
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence, TypeAlias
@@ -25,6 +26,7 @@ __all__ = (
 )
 
 SEP = " "
+_BACKTICK_RUN = re.compile(r"`+")
 
 
 class Inline:
@@ -108,10 +110,13 @@ class Code(Inline):
     text: str | None = None
     attr: Attr | None = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         content = self.text or ""
+        fence = "`" * (1 + max((len(run) for run in _BACKTICK_RUN.findall(content)), default=0))
+        if len(fence) > 1:
+            content = f" {content} "
         attr = f"{{{self.attr}}}" if self.attr else ""
-        return f"`{content}`{attr}"
+        return f"{fence}{content}{fence}{attr}"
 
     @property
     def html(self):

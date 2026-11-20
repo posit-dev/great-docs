@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import partial
+from functools import cached_property, partial
 
 from ._rendering._label import get_label
 from ._visitor import NodeTransformer, NodeVisitor, ctx_node
 from .content import Doc, MemberPage, Page, Section
-from .inventory import InventoryItem, reference_uri
+from .inventory import InventoryItem, class_targets, reference_uri
 from .spec import claim_page_path
 
 
@@ -16,6 +16,11 @@ class Manifest:
 
     pages: list[Page]
     items: list[InventoryItem]
+
+    @cached_property
+    def class_targets(self) -> dict[str, InventoryItem]:
+        """The published destinations for qualified class names"""
+        return class_targets(self.items)
 
 
 class _ManifestBuilder(NodeVisitor):
