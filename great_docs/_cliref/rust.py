@@ -28,10 +28,11 @@ class RustCliProject:
 
 
 def detect_rust_cli_project(project_root: Path) -> RustCliProject | None:
-    """Detect whether *project_root* is a documentable Rust CLI project.
+    """
+    Detect whether *project_root* is a documentable Rust CLI project
 
-    A project is considered documentable when it has a ``Cargo.toml`` at the root with a
-    ``[package]`` section and at least one binary target (explicit ``[[bin]]`` or ``src/main.rs``).
+    A project is considered documentable when it has a `Cargo.toml` at the root with a
+    `[package]` section and at least one binary target (explicit `[[bin]]` or `src/main.rs`).
 
     Parameters
     ----------
@@ -40,8 +41,8 @@ def detect_rust_cli_project(project_root: Path) -> RustCliProject | None:
 
     Returns
     -------
-    RustCliProject | None
-        Detected project info, or ``None`` if the directory is not a Rust CLI project.
+    :
+        Detected project info, or `None` if the directory is not a Rust CLI project.
     """
     cargo_toml = project_root / "Cargo.toml"
     if not cargo_toml.exists():
@@ -106,12 +107,13 @@ def _find_binary_targets(
     cargo_text: str,
     package_name: str,
 ) -> list[str]:
-    """Determine binary target names.
+    """
+    Determine binary target names
 
     Search order:
 
-    1. Explicit ``[[bin]]`` sections with ``name = "..."``
-    2. ``src/main.rs`` exists → binary name is the package name (Cargo default)
+    1. Explicit `[[bin]]` sections with `name = "..."`
+    2. `src/main.rs` exists → binary name is the package name (Cargo default)
 
     Parameters
     ----------
@@ -124,7 +126,7 @@ def _find_binary_targets(
 
     Returns
     -------
-    list[str]
+    :
         Binary names. Empty if no binary targets are found.
     """
     # Explicit [[bin]] entries
@@ -169,9 +171,10 @@ def build_rust_binary(
     binary_name: str | None = None,
     output_dir: Path | None = None,
 ) -> Path | None:
-    """Compile a Rust CLI binary via ``cargo build``.
+    """
+    Compile a Rust CLI binary via `cargo build`
 
-    Requires ``cargo`` to be on ``PATH``.
+    Requires `cargo` to be on `PATH`.
 
     Parameters
     ----------
@@ -185,8 +188,8 @@ def build_rust_binary(
 
     Returns
     -------
-    Path | None
-        Path to the compiled binary, or ``None`` if the build failed.
+    :
+        Path to the compiled binary, or `None` if the build failed.
     """
     if output_dir is None:
         output_dir = Path(tempfile.mkdtemp(prefix="great-docs-rust-"))

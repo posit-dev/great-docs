@@ -20,7 +20,8 @@ def play_recording(
     out: TextIO | None = None,
     sleep: Callable[[float], None] = time.sleep,
 ) -> float:
-    """Replay a recording's output events to a terminal stream.
+    """
+    Replay a recording's output events to a terminal stream
 
     Cuts and speed changes should already be applied (via `apply_script`). Only
     output (`"o"`) events are written; input, markers, and other event types are
@@ -39,7 +40,7 @@ def play_recording(
 
     Returns
     -------
-    float
+    :
         The playback duration in recording seconds (before the speed multiplier).
     """
     if speed <= 0:

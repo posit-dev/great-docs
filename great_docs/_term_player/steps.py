@@ -151,7 +151,8 @@ class Step:
 
 
 def load_steps(path: str | Path) -> tuple[RecordSettings, list[Step]]:
-    """Read the `record:` settings and the `steps:` from a script.
+    """
+    Read the `record:` settings and the `steps:` from a script
 
     Parameters
     ----------
@@ -160,7 +161,7 @@ def load_steps(path: str | Path) -> tuple[RecordSettings, list[Step]]:
 
     Returns
     -------
-    tuple[RecordSettings, list[Step]]
+    :
         The settings, with `cwd` resolved against the script's directory, and the steps.
 
     Raises
@@ -224,7 +225,8 @@ def record_steps(
     title: str = "",
     on_step: Callable[[int, Step], None] | None = None,
 ) -> Recording:
-    """Run the steps in a new shell and return the recording.
+    """
+    Run the steps in a new shell and return the recording
 
     Parameters
     ----------
@@ -239,7 +241,7 @@ def record_steps(
 
     Returns
     -------
-    Recording
+    :
         The session, ending when the last step finishes, with an exit event (`x`) at the end.
 
     Raises

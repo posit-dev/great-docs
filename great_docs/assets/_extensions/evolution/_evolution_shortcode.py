@@ -34,8 +34,8 @@ def main() -> None:
     try:
         from great_docs._api_evolution.markers import EVOLUTION_ERRORS
         from great_docs._api_evolution.render import (
-            render_evolution_table,
-            render_evolution_table_from_dict,
+            render_evolution_markdown,
+            render_evolution_markdown_from_dict,
         )
     except ImportError as exc:
         _fail(args.symbol, exc)
@@ -47,7 +47,7 @@ def main() -> None:
                 # Quarto runs from `great-docs/`, so relative paths use that directory.
                 json_path = Path(".").resolve() / json_path
             data = json.loads(json_path.read_text(encoding="utf-8"))
-            html = render_evolution_table_from_dict(
+            markdown = render_evolution_markdown_from_dict(
                 data,
                 disclosure=_bool_arg(args.disclosure),
                 summary_text=args.summary,
@@ -57,7 +57,7 @@ def main() -> None:
             # Quarto runs from `great-docs/`, one level below the Git root.
             project_root = Path(".").resolve().parent
 
-            html = render_evolution_table(
+            markdown = render_evolution_markdown(
                 project_root,
                 args.symbol,
                 package=args.package,
@@ -70,7 +70,7 @@ def main() -> None:
             )
     except (*EVOLUTION_ERRORS, json.JSONDecodeError, UnicodeDecodeError) as exc:
         _fail(args.symbol, exc)
-    print(html)
+    print(markdown)
 
 
 if __name__ == "__main__":

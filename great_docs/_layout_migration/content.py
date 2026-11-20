@@ -69,7 +69,7 @@ def _denormalize(
 
     Returns
     -------
-    tuple[Path, Path] | None
+    :
         `(real_source_file, republished_path)`, or `None` if `target` doesn't
         match any recognised content directory.
     """

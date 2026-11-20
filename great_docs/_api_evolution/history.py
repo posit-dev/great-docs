@@ -133,7 +133,7 @@ def _mermaid_id(name: str) -> str:
 
 def build_dependency_graph(snapshot: ApiSnapshot) -> DependencyGraph:
     """
-    Build a dependency graph from an API snapshot.
+    Build a dependency graph from an API snapshot
 
     Includes class inheritance edges and records each symbol as a node.
 
@@ -144,7 +144,7 @@ def build_dependency_graph(snapshot: ApiSnapshot) -> DependencyGraph:
 
     Returns
     -------
-    DependencyGraph
+    :
     """
     graph = DependencyGraph()
 
@@ -168,7 +168,7 @@ def build_timeline(
     tags: list[str] | None = None,
 ) -> list[dict]:
     """
-    Build a timeline showing API surface growth across tagged versions.
+    Build a timeline showing API surface growth across tagged versions
 
     Parameters
     ----------
@@ -181,7 +181,7 @@ def build_timeline(
 
     Returns
     -------
-    list[dict]
+    :
         Each entry has `version`, `symbols`, `classes`, `functions`.
     """
     if package_name is None:
@@ -247,7 +247,7 @@ def symbol_history(
     tags: list[str] | None = None,
 ) -> SymbolHistory | None:
     """
-    Track a single symbol across all tagged versions.
+    Track a single symbol across all tagged versions
 
     Parameters
     ----------
@@ -262,7 +262,7 @@ def symbol_history(
 
     Returns
     -------
-    SymbolHistory | None
+    :
         The history, or `None` if the package name cannot be determined.
     """
     if package_name is None:

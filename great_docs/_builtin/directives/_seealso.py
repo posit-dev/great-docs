@@ -52,7 +52,8 @@ def add_seealso(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
 
     Returns
     -------
-    The object with `%seealso` entries represented by one top-level section.
+    :
+        The object with `%seealso` entries represented by one top-level section.
     """
     docstring = obj.docstring
     if docstring is not None:
@@ -71,7 +72,8 @@ def _normalize_seealso(text: str) -> str:
 
     Returns
     -------
-    Source with canonical cross-references in a `See Also` section.
+    :
+        Source with canonical cross-references in a `See Also` section.
     """
     if "%seealso" not in text:
         return text
@@ -93,7 +95,8 @@ def _extract_seealso(text: str) -> tuple[str, list[tuple[str, str]]]:
 
     Returns
     -------
-    Cleaned source and the entries removed from it.
+    :
+        Cleaned source and the entries removed from it.
     """
     lines, fenced = fenced_lines(text)
     cleaned: list[str] = []
@@ -121,7 +124,8 @@ def _unique_entries(entries: list[tuple[str, str]]) -> list[tuple[str, str]]:
 
     Returns
     -------
-    Entries deduplicated by name.
+    :
+        Entries deduplicated by name.
     """
     seen: set[str] = set()
     unique: list[tuple[str, str]] = []
@@ -145,7 +149,8 @@ def _merge_seealso(text: str, entries: list[tuple[str, str]]) -> str:
 
     Returns
     -------
-    Source containing the merged top-level section.
+    :
+        Source containing the merged top-level section.
     """
     match = _SEE_ALSO_HEADER_RE.search(text) if "See Also\n" in text else None
     if match is None:
@@ -183,7 +188,8 @@ def _section_body_span(text: str, header_end: int) -> tuple[int, int]:
 
     Returns
     -------
-    Start and end offsets for the section body.
+    :
+        Start and end offsets for the section body.
     """
     body_start = header_end + 1 if text[header_end : header_end + 1] == "\n" else header_end
     next_header = _SECTION_HEADER_RE.search(text, body_start)
@@ -204,7 +210,8 @@ def _entry_line(name: str, description: str) -> str:
 
     Returns
     -------
-    A formatted See Also entry.
+    :
+        A formatted See Also entry.
     """
     return f"{name} : {description}" if description else name
 
@@ -220,7 +227,8 @@ def _existing_names(contents: str) -> set[str]:
 
     Returns
     -------
-    The qualified names represented in the section.
+    :
+        The qualified names represented in the section.
     """
     names: set[str] = set()
     for line in contents.splitlines():

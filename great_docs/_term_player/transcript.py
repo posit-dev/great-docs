@@ -242,7 +242,8 @@ def _blocks(recording: Recording, script: Script | None) -> list[tuple[str, obje
 
 
 def transcript_markdown(recording: Recording, script: Script | None = None) -> str:
-    """The text of a recording, as Markdown.
+    """
+    The text of a recording, as Markdown
 
     Parameters
     ----------
@@ -254,7 +255,7 @@ def transcript_markdown(recording: Recording, script: Script | None = None) -> s
 
     Returns
     -------
-    str
+    :
         Each chapter's label in bold, the terminal text in fenced `console` blocks, and each
         annotation as a block quote. Empty when the recording shows no text.
     """
@@ -276,7 +277,8 @@ TRANSCRIPT_FILE = "_transcript.md"
 
 
 def write_transcript(recording: Recording, script: Script | None, output_dir: str | Path) -> bool:
-    """Write the transcript next to a rendered recording's manifest, as `_transcript.md`.
+    """
+    Write the transcript next to a rendered recording's manifest, as `_transcript.md`
 
     The Termshow shortcode embeds it after the player, hidden from view but read by screen
     readers, and the page's Markdown version shows it. The file is removed instead when the
@@ -284,7 +286,7 @@ def write_transcript(recording: Recording, script: Script | None, output_dir: st
 
     Returns
     -------
-    bool
+    :
         Whether the file was written.
     """
     path = Path(output_dir) / TRANSCRIPT_FILE
@@ -317,7 +319,8 @@ def _longest_backtick_run(text: str) -> int:
 def transcript_vtt(
     recording: Recording, script: Script | None = None, *, chapters: bool = False
 ) -> str:
-    """Captions for a recording, as WebVTT.
+    """
+    Captions for a recording, as WebVTT
 
     Parameters
     ----------
@@ -332,7 +335,7 @@ def transcript_vtt(
 
     Returns
     -------
-    str
+    :
         The WebVTT file's text. It has no cues when there's nothing to caption.
     """
     script = script or Script()

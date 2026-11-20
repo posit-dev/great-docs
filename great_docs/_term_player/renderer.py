@@ -45,7 +45,8 @@ def render_frame(
     show_cursor: bool = True,
     window_chrome: str = "none",
 ) -> str:
-    """Render a terminal screen state as an SVG string.
+    """
+    Render a terminal screen state as an SVG string
 
     Parameters
     ----------
@@ -69,7 +70,7 @@ def render_frame(
 
     Returns
     -------
-    str
+    :
         A complete SVG document as a string.
     """
     if theme is None:
@@ -190,7 +191,8 @@ def render_frames(
     theme: Theme | None = None,
     **kwargs,
 ) -> list[tuple[float, str]]:
-    """Render multiple screen states as SVG frames.
+    """
+    Render multiple screen states as SVG frames
 
     Parameters
     ----------
@@ -203,7 +205,8 @@ def render_frames(
 
     Returns
     -------
-    list of (time, svg_string) tuples.
+    :
+        list of (time, svg_string) tuples.
     """
     return [(time, render_frame(state, theme, **kwargs)) for time, state in states]
 

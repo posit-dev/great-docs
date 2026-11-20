@@ -75,7 +75,8 @@ def video_stills(
     annotations: bool = True,
     max_idle: float | None = None,
 ) -> list[Still]:
-    """Split the playback timeline into the stretches a GIF or video shows.
+    """
+    Split the playback timeline into the stretches a GIF or video shows
 
     Parameters
     ----------
@@ -93,7 +94,7 @@ def video_stills(
 
     Returns
     -------
-    list[Still]
+    :
         The stretches in order; none is shorter than `1 / fps`.
     """
     if fps <= 0:
@@ -150,7 +151,8 @@ def export_video(
     annotations: bool = True,
     max_idle: float | None = None,
 ) -> VideoResult:
-    """Write a rendered recording as a GIF, MP4, or WebM file.
+    """
+    Write a rendered recording as a GIF, MP4, or WebM file
 
     Parameters
     ----------
@@ -177,7 +179,7 @@ def export_video(
 
     Returns
     -------
-    VideoResult
+    :
         The output's length, size in pixels, and how many images went into it.
 
     Raises

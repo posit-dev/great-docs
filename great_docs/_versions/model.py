@@ -91,7 +91,7 @@ def version_url_segment(tag: str) -> str:
 
 def parse_versions_config(raw: list[Any]) -> list[VersionEntry]:
     """
-    Parse the `versions:` list from great-docs.yml.
+    Parse the `versions:` list from great-docs.yml
 
     Accepts both the minimal form (list of strings) and the full form (list of dicts). Returns an
     ordered list of `VersionEntry` objects with positional indices assigned (0 = newest).
@@ -103,7 +103,7 @@ def parse_versions_config(raw: list[Any]) -> list[VersionEntry]:
 
     Returns
     -------
-    list[VersionEntry]
+    :
         Parsed and validated version entries, newest first.
 
     Raises
@@ -235,7 +235,7 @@ def evaluate_version_expr(
     versions: list[VersionEntry],
 ) -> bool:
     """
-    Evaluate a version expression against a target version.
+    Evaluate a version expression against a target version
 
     Parameters
     ----------
@@ -248,7 +248,7 @@ def evaluate_version_expr(
 
     Returns
     -------
-    bool
+    :
         Whether the target version matches the expression.
     """
     expr = expr.strip()
@@ -348,7 +348,7 @@ def is_badge_expired(
     expiry: BadgeExpiry,
 ) -> bool:
     """
-    Determine whether a `[version-badge new VERSION]` should be suppressed.
+    Determine whether a `[version-badge new VERSION]` should be suppressed
 
     Parameters
     ----------
@@ -363,7 +363,7 @@ def is_badge_expired(
 
     Returns
     -------
-    bool
+    :
         `True` if the badge should **not** be rendered (expired).
     """
     if expiry.mode == "never":
@@ -459,7 +459,7 @@ def process_version_fences(
     versions: list[VersionEntry],
 ) -> str:
     """
-    Process version fences in .qmd content for a specific target version.
+    Process version fences in .qmd content for a specific target version
 
     Evaluates `::: {.version-only versions="..."}` and `::: {.version-except versions="..."}` fenced
     divs. Matching blocks have their fence markers removed (content kept); non-matching blocks are
@@ -480,7 +480,7 @@ def process_version_fences(
 
     Returns
     -------
-    str
+    :
         The processed content with version fences resolved.
     """
     lines = content.split("\n")
@@ -629,7 +629,7 @@ _LIST_ITEM_RE = re.compile(r"^\s*-\s*[\"']?([^\"'\s]+)[\"']?\s*$", re.MULTILINE)
 
 def extract_page_versions(content: str) -> list[str] | None:
     """
-    Extract the `versions:` list from a .qmd file's YAML frontmatter.
+    Extract the `versions:` list from a .qmd file's YAML frontmatter
 
     Parameters
     ----------
@@ -638,7 +638,7 @@ def extract_page_versions(content: str) -> list[str] | None:
 
     Returns
     -------
-    list[str] | None
+    :
         The list of version tags the page applies to, or `None` if no `versions:` key is present
         (meaning the page applies to all versions).
     """
@@ -682,7 +682,7 @@ def extract_page_versions(content: str) -> list[str] | None:
 
 def is_page_upcoming(content: str, versions: list[VersionEntry]) -> bool:
     """
-    Check whether a page is scoped exclusively to prerelease versions.
+    Check whether a page is scoped exclusively to prerelease versions
 
     A page is "upcoming" when it has a `versions:` frontmatter key and every version it matches is
     marked `prerelease: True`.  Pages with no `versions:` key (visible in all versions) are never
@@ -697,7 +697,7 @@ def is_page_upcoming(content: str, versions: list[VersionEntry]) -> bool:
 
     Returns
     -------
-    bool
+    :
         `True` if the page only targets prerelease versions.
     """
     page_versions = extract_page_versions(content)
@@ -723,7 +723,7 @@ def is_page_upcoming_for_version(
     versions: list[VersionEntry],
 ) -> bool:
     """
-    Check whether the `upcoming` frontmatter key applies to the current build.
+    Check whether the `upcoming` frontmatter key applies to the current build
 
     Returns `True` when the page declares `upcoming: "0.8"` and the current build target is
     **older** than 0.8 (i.e. the feature hasn't shipped yet for this version).
@@ -739,7 +739,7 @@ def is_page_upcoming_for_version(
 
     Returns
     -------
-    bool
+    :
         `True` if the current build is older than the upcoming version.
     """
     upcoming_idx = _resolve_index(upcoming_value, versions)
@@ -759,7 +759,7 @@ def page_matches_version(
     versions: list[VersionEntry] | None = None,
 ) -> bool:
     """
-    Check whether a page should be included for a given target version.
+    Check whether a page should be included for a given target version
 
     Parameters
     ----------
@@ -773,7 +773,7 @@ def page_matches_version(
 
     Returns
     -------
-    bool
+    :
         `True` if the page should be included (no `versions:` key, or the target tag matches
         the expression).
     """
@@ -802,7 +802,7 @@ def build_version_map(
     fallbacks: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """
-    Build the `_version_map.json` manifest consumed by the version selector.
+    Build the `_version_map.json` manifest consumed by the version selector
 
     Parameters
     ----------
@@ -815,7 +815,7 @@ def build_version_map(
 
     Returns
     -------
-    dict
+    :
         The manifest structure ready for JSON serialization.
     """
     latest = get_latest_version(versions)

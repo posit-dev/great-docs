@@ -107,7 +107,7 @@ To insert an evolution table directly into a User Guide page or any `.qmd` file,
 {{< evolution build >}}
 ```
 
-This produces a self-contained HTML table (with embedded CSS) showing how `build()` evolved across all tagged releases. The table is generated at build time so no Python code blocks or manual HTML is required.
+Quarto renders a table showing how `build()` evolved across its tagged releases. The first line of each parameter cell gives its name. The second shows its type and default when available. Hover over a version label to see the release date when the tag or JSON file supplies one.
 
 #### Options
 
@@ -123,9 +123,9 @@ You can customize the output with named arguments:
 | `old_version` | first tag | Earliest version to include |
 | `new_version` | latest tag | Latest version to include |
 | `changes_only` | `"true"` | Only show versions where the signature changed |
-| `disclosure` | `"false"` | Wrap in a collapsible `<details>` element |
-| `summary` | auto | Custom label for the disclosure header |
-| `css` | `"true"` | Include the `<style>` block (set `"false"` for the second table on a page) |
+| `disclosure` | `"false"` | Collapse the table in HTML output |
+| `summary` | auto | Plain-text label for the collapsed table |
+| `css` | `"true"` | Include the table styles for HTML output |
 | `json` | — | Path to a JSON file; renders from data instead of live git history |
 
 #### Multiple Tables on One Page

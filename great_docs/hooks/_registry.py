@@ -47,8 +47,9 @@ class HookRegistry(Generic[H]):
 
         Returns
         -------
-        The handler when used bare, otherwise a decorator that registers the
-        handler it receives. Either way the handler is returned unchanged.
+        :
+            The handler when used bare, otherwise a decorator that registers the
+            handler it receives. Either way the handler is returned unchanged.
         """
 
         def add(h: H) -> H:

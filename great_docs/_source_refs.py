@@ -45,8 +45,9 @@ def fenced_lines(text: str) -> tuple[list[str], list[bool]]:
 
     Returns
     -------
-    Source lines and a mask marking opening fences, fenced content, and
-    closing fences.
+    :
+        Source lines and a mask marking opening fences, fenced content, and
+        closing fences.
     """
     lines = text.splitlines()
     if "```" not in text and "~~~" not in text:
@@ -219,7 +220,7 @@ def fenced_code_spans(content: str) -> list[tuple[int, int]]:
 
     Returns
     -------
-    list[tuple[int, int]]
+    :
         Character-offset spans covering each non-raw fenced block, delimiters included.
     """
     spans: list[tuple[int, int]] = []
@@ -263,7 +264,7 @@ def _raw_fence_delimiter_spans(content: str) -> list[tuple[int, int]]:
 
     Returns
     -------
-    list[tuple[int, int]]
+    :
         Character-offset spans for each raw fence's opening and closing
         delimiter lines.
     """
@@ -308,7 +309,7 @@ def inline_code_spans(content: str) -> list[tuple[int, int]]:
 
     Returns
     -------
-    list[tuple[int, int]]
+    :
         Character-offset spans covering each inline code span, backticks included.
     """
     masked = list(content)

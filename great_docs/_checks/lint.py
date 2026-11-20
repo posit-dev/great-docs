@@ -112,7 +112,7 @@ def run_lint(
 
     Returns
     -------
-    LintResult
+    :
         Aggregated lint results.
     """
     result = LintResult()
@@ -405,7 +405,7 @@ def _check_cross_references(
 
     Parameters
     ----------
-    pkg :
+    pkg
         The package loaded by Griffe, whose docstrings contain directives.
     package_name :
         Importable package name used in documented object paths.
@@ -801,7 +801,8 @@ def _section_kinds(docstring: str, style: str) -> set[str]:
 
     Returns
     -------
-    The section kinds found, named as griffe names them.
+    :
+        The section kinds found, named as griffe names them.
     """
     import griffe
 
@@ -835,8 +836,9 @@ def _lost_sections(docstring: str, config_style: str) -> dict[str, set[str]]:
 
     Returns
     -------
-    Each rival style mapped to the section kinds it finds and the configured
-    style misses, empty when the configured style reads everything.
+    :
+        Each rival style mapped to the section kinds it finds and the configured
+        style misses, empty when the configured style reads everything.
     """
     configured = _section_kinds(docstring, config_style)
     lost: dict[str, set[str]] = {}

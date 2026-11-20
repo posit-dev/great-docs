@@ -45,7 +45,8 @@ def is_great_docs_build_dir(path: Path) -> bool:
 
     Returns
     -------
-    Whether Great Docs generated this directory's contents.
+    :
+        Whether Great Docs generated this directory's contents.
     """
     if path.is_symlink():
         return False
@@ -90,7 +91,8 @@ def is_in_great_docs_build_dir(
 
     Returns
     -------
-    Whether the path belongs to current or historical build output.
+    :
+        Whether the path belongs to current or historical build output.
     """
     if not parts:
         return False
