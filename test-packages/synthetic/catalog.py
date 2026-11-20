@@ -427,6 +427,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_responsive_tables",  # 212
     # 213: WebMCP tools with every feature they read
     "gdtest_webmcp",  # 213
+    # 214: Termshow recordings of a TUI (split sequences, seams, colors)
+    "gdtest_termshow_tui",  # 214
 ]
 
 
@@ -2363,6 +2365,15 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "with a nested group, a guide page that opts out with `webmcp: false`, a "
         "draft, a blog post and a curated skill. `gd-webmcp.json` should list them "
         "all except the draft, and every page should load `webmcp.js`."
+    ),
+    # ── 214: Termshow TUI fidelity ───────────────────────────────────
+    "gdtest_termshow_tui": (
+        "Termshow recordings of the kind a full-screen app produces: a nyancat-style "
+        "animation split into 1024-character PTY reads (so escape sequences straddle "
+        "events), a checklist of sequences termshow must handle or drop, and solid "
+        "background blocks. Nothing should leak onto the screen, rows of one color "
+        "should meet without seams, and the nyancat page plays the same recording "
+        "in asciinema-player for comparison."
     ),
 }
 
