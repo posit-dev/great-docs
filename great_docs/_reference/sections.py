@@ -5,6 +5,7 @@ Build API reference section descriptions
 from __future__ import annotations
 
 from collections.abc import Sequence
+from contextlib import closing
 from typing import TYPE_CHECKING, Any, cast
 
 from .._contribution import Contribution, NavbarLink, Sidebar
@@ -339,7 +340,10 @@ def sidebar(site_config: Config, api_block: dict[str, Any]) -> Sidebar:
     contents: list[dict[str, Any]] = [
         {"text": translate("api_index", site_config.lang), "href": "reference/index.qmd"}
     ]
-    for section in APIReference({"api-reference": api_block}).sections:
+    with closing(APIReference({"api-reference": api_block})) as reference:
+        sections = reference.sections
+
+    for section in sections:
         heading = section.title or section.subtitle or ""
         links = [
             {"text": entry.name, "href": _page_href(entry.page_path)}

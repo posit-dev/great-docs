@@ -24,7 +24,7 @@ from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
 from great_docs._build.steps import Outcome, Step
 from great_docs._project.layout import Layout
-from great_docs._reference import documented
+from great_docs._reference import documented, sections
 from great_docs._website import quarto_yml
 from tests.support import (
     StubRemote,
@@ -71,6 +71,18 @@ def docs(tmp_path: Path, write_extension: WriteExtension) -> GreatDocs:
     )
     write_config(tmp_path, {"api_reference_extension": "extension.py", "dynamic": True})
     return GreatDocs(str(tmp_path))
+
+
+def test_reference_sidebar_closes_its_api_reference(tmp_path: Path) -> None:
+    config = write_config(tmp_path)
+    api_block = {"package": "example", "sections": [{"title": "API", "contents": ["example"]}]}
+
+    with patch.object(
+        APIReference, "close", autospec=True, side_effect=APIReference.close
+    ) as close:
+        sections.sidebar(config, api_block)
+
+    close.assert_called_once()
 
 
 def test_dynamic_retry_releases_the_failed_extension_before_loading_the_next(docs: GreatDocs):
