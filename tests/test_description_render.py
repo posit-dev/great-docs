@@ -9,11 +9,14 @@ from pathlib import Path
 
 import pytest
 
+from great_docs._build.quarto import executable as quarto_executable
 from great_docs._content.metadata import metadata_value
 from great_docs._website.page_metadata import add_to_page, write_to_pages
 from great_docs.config import Config
 
-pytestmark = pytest.mark.skipif(shutil.which("quarto") is None, reason="Quarto is not installed")
+pytestmark = pytest.mark.skipif(
+    shutil.which(quarto_executable()) is None, reason="Quarto is not installed"
+)
 
 _META_DESCRIPTION = re.compile(r'<meta name="description" content="([^"<>]*)" ?/?>')
 
@@ -51,7 +54,7 @@ def test_descriptions_reach_the_page_intact(tmp_path: Path):
         (project / f"{name}.qmd").write_text(content, encoding="utf-8")
 
     write_to_pages(project, quarto_config, Config(tmp_path), "Site default")
-    subprocess.run(["quarto", "render"], cwd=project, check=True, capture_output=True)
+    subprocess.run([quarto_executable(), "render"], cwd=project, check=True, capture_output=True)
 
     def descriptions(name: str) -> list[str]:
         page = (project / "_site" / f"{name}.html").read_text(encoding="utf-8")

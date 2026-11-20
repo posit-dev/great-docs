@@ -9,9 +9,13 @@ from pathlib import Path
 
 import pytest
 
+from great_docs._build.quarto import executable as quarto_executable
+
 _EXTENSION = Path(__file__).parent.parent / "great_docs" / "assets" / "_extensions" / "page-url"
 
-pytestmark = pytest.mark.skipif(shutil.which("quarto") is None, reason="Quarto is not installed")
+pytestmark = pytest.mark.skipif(
+    shutil.which(quarto_executable()) is None, reason="Quarto is not installed"
+)
 
 
 def _render_site(
@@ -36,7 +40,7 @@ def _render_site(
     for page in ("index.qmd", "guide/index.qmd", "guide/page.qmd"):
         (project / page).write_text("---\ntitle: T\n---\n\nText\n", encoding="utf-8")
 
-    subprocess.run(["quarto", "render"], cwd=project, check=True, capture_output=True)
+    subprocess.run([quarto_executable(), "render"], cwd=project, check=True, capture_output=True)
     return project / "_site"
 
 

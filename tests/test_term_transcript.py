@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
+from great_docs._build.quarto import executable as quarto_executable
 from great_docs._term_player.parser import parse_termshow_str
 from great_docs._term_player.script import _parse_script_data
 from great_docs._term_player.transcript import (
@@ -300,7 +301,7 @@ website:
 
 @pytest.fixture(scope="module")
 def site(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    if shutil.which("quarto") is None:
+    if shutil.which(quarto_executable()) is None:
         pytest.skip("Quarto is not installed")
     root = tmp_path_factory.mktemp("site")
     for name in ("termshow", "markdown-pages"):
@@ -322,7 +323,7 @@ def site(tmp_path_factory: pytest.TempPathFactory) -> Path:
     (root / "old.qmd").write_text(
         '---\ntitle: Old\n---\n\n{{< termshow file="silent" >}}\n', encoding="utf-8"
     )
-    subprocess.run(["quarto", "render"], cwd=root, check=True, capture_output=True)
+    subprocess.run([quarto_executable(), "render"], cwd=root, check=True, capture_output=True)
     return root / "_site"
 
 

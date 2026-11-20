@@ -36,7 +36,10 @@ CITATION_SITES: tuple[str, ...] = (
 )
 
 _TEST_PACKAGES_DIR = Path(__file__).resolve().parent.parent / "test-packages"
-RENDERED_DIR = _TEST_PACKAGES_DIR / "_rendered"
+# `GDG_RENDERED_DIR` selects another Gauntlet build, as `render_all.py` does
+RENDERED_DIR = Path(
+    os.environ.get("GDG_RENDERED_DIR") or _TEST_PACKAGES_DIR / "_rendered"
+).resolve()
 
 # Treat these failures as unavailable rendered fixtures; dependent tests skip
 # absent sites. Fatal API reference configuration errors raise `BuildError`.
@@ -319,9 +322,11 @@ def quarto_available() -> bool:
 
     Returns
     -------
-        Whether the `quarto` executable is available.
+        Whether the Quarto executable that great-docs renders with is available.
     """
-    return shutil.which("quarto") is not None
+    from great_docs._build import quarto
+
+    return shutil.which(quarto.executable()) is not None
 
 
 def build_site(rendered_dir: Path, name: str) -> Path:
@@ -369,7 +374,7 @@ def build_site(rendered_dir: Path, name: str) -> Path:
             pipeline.prepare_for_freeze(docs._config, docs.layout, log, remote=docs._remote)
 
         result = subprocess.run(
-            ["quarto", "render"],
+            [quarto.executable(), "render"],
             cwd=docs.layout.build_dir,
             env=quarto.environment(docs._config),
             capture_output=True,

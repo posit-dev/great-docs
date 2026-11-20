@@ -1,0 +1,6 @@
+title: Quarto 2 compatibility
+author: Great Docs
+version: 1.0.0
+contributes:
+  filters:
+    - gd-quarto2.lua

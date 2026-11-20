@@ -42,9 +42,6 @@ class Placement(Enum):
     MARGIN_COLUMN = "margin-column"
     """
     Quarto's margin column, written before the body, for the README homepage
-
-    The page also gets a style rule that removes most of the top margin of its first heading,
-    which would otherwise sit below the hero with a gap.
     """
 
     AFTER_BODY = "after-body"
@@ -56,18 +53,6 @@ class Placement(Enum):
     sidebar falls back into the page flow, and writing it after the body keeps the content
     above it.
     """
-
-
-_FIRST_HEADING_STYLE = """<style>
-section.level1:first-of-type > h1:first-child,
-section.level2:first-of-type > h2:first-child,
-.column-body-outset-right > section.level1:first-of-type > h1,
-#quarto-document-content > section:first-of-type > h1 {
-  margin-top: 4px !important;
-}
-</style>
-
-"""
 
 
 def write(
@@ -105,7 +90,7 @@ def write(
     hero_block = f"```{{=html}}\n{hero}```\n\n" if hero else ""
     content = front_matter + "\n"
     if placement is Placement.MARGIN_COLUMN:
-        content += _FIRST_HEADING_STYLE + hero_block
+        content += hero_block
         if sidebar:
             content += f"::: {{.column-margin .gd-homepage-sidebar}}\n{sidebar}\n:::\n\n"
         content += body + "\n"

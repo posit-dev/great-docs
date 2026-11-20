@@ -86,11 +86,93 @@ def markdown_escape(s: str) -> str:
     Escape a string that may be interpreted as markdown
 
     This function is deliberately not robust to all possibilities. It
-    will improve as needed.
+    will improve as needed. Quarto 2 reports an unclosed emphasis as an
+    error, so for it every `_` and `*` is escaped (experimental).
     """
+    if _is_q2():
+        return re.sub(r"([_*])", r"\\\1", s)
     if s and s[0] in MARKDOWN_START_CHARS:
         s = rf"\{s}"
     return s
+
+
+_CODE_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+# A list item or a definition, whose indented lines continue it
+_LIST_ITEM_RE = re.compile(r"^ {0,3}(?:[-*+:]|\d+[.)])(?:[ \t]|$)")
+
+
+def fence_indented_code(s: str) -> str:
+    """
+    Rewrite the indented code blocks of docstring Markdown as fenced code blocks
+
+    Quarto 2 reads no indented code blocks, and reports an error for the Markdown inside one,
+    such as the formula under an RST `.. math::` directive (experimental). Pandoc reads both
+    forms as the same code block, so for Quarto 1 the text is returned unchanged. A run of
+    lines indented by four or more spaces is a code block when it follows a blank line and
+    does not continue a list item or a definition.
+    """
+    if not _is_q2():
+        return s
+    lines = s.split("\n")
+    output: list[str] = []
+    fence: str | None = None
+    in_list = False
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if fence is not None:
+            if line.strip().startswith(fence) and not line.strip().lstrip(fence[0]):
+                fence = None
+            output.append(line)
+            i += 1
+            continue
+        opening = _CODE_FENCE_RE.match(line)
+        if opening is not None:
+            fence = opening.group(1)
+            output.append(line)
+            i += 1
+            continue
+        indented = line.startswith(("    ", "\t"))
+        after_blank = i == 0 or not lines[i - 1].strip()
+        if indented and line.strip() and after_blank and not in_list:
+            end = i
+            while end < len(lines) and (
+                not lines[end].strip() or lines[end].startswith(("    ", "\t"))
+            ):
+                end += 1
+            while not lines[end - 1].strip():
+                end -= 1
+            block = [row[1:] if row.startswith("\t") else row[4:] for row in lines[i:end]]
+            longest = max((len(run) for run in re.findall(r"`+", "\n".join(block))), default=0)
+            marker = "`" * max(3, longest + 1)
+            output.extend([marker, *block, marker])
+            i = end
+            continue
+        if _LIST_ITEM_RE.match(line):
+            in_list = True
+        elif line.strip() and not line[0].isspace() and after_blank:
+            in_list = False
+        output.append(line)
+        i += 1
+    return "\n".join(output)
+
+
+def _is_q2() -> bool:
+    from .._build import quarto
+
+    return quarto.is_q2()
+
+
+def _escape_doubled_braces(s: str) -> str:
+    """
+    Write runs of braces as character references, for Quarto 2 (experimental)
+
+    Quarto 2 rejects `{{` and `}}` in Markdown.
+    """
+    if not _is_q2():
+        return s
+    s = re.sub(r"\{\{+", lambda m: "&#123;" * len(m.group()), s)
+    return re.sub(r"\}\}+", lambda m: "&#125;" * len(m.group()), s)
 
 
 def _highlight_func(m: re.Match[str]) -> str:
@@ -227,7 +309,7 @@ def pretty_code(s: str) -> str:
         the links, but should not be wrapped inside the <code>
         tags. Those tags should wrap the output of this function.
     """
-    return escape_quotes(escape_indents(highlight_repr_value(dedent(s))))
+    return escape_quotes(escape_indents(highlight_repr_value(_escape_doubled_braces(dedent(s)))))
 
 
 def render_formatted_expr(el: gf.Expr) -> str:

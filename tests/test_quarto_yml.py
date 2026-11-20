@@ -488,6 +488,23 @@ def test_navbar_link_rejects_a_placement_its_kind_ignores(fields: dict[str, Any]
         NavbarLink("Demos", "demos/index.qmd", **fields)
 
 
+def test_write_makes_the_render_globs_recursive_for_quarto_2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("GREAT_DOCS_QUARTO", "q2")
+    quarto_config = {"project": {"type": "website", "render": [*quarto_yml.RENDER_GLOBS, "!a.md"]}}
+
+    quarto_yml.write(tmp_path, quarto_config)
+
+    assert quarto_yml.read(tmp_path)["project"]["render"] == [
+        "**/*.qmd",
+        "**/*.md",
+        "**/*.ipynb",
+        "!a.md",
+    ]
+    assert quarto_config["project"]["render"][0] == "*.qmd"
+
+
 @pytest.mark.parametrize("lang", ["en", "fr"])
 def test_mcp_contribution_preserves_existing_reference_and_authored_links(lang: str) -> None:
     config = mock_config(lang=lang)

@@ -190,24 +190,28 @@ def register_site(
             headers.append(entry)
 
 
-def register_extensions(quarto_config: dict[str, Any]) -> None:
+def register_extensions(quarto_config: dict[str, Any], *, has_api_reference: bool) -> None:
     """
     Register Great Docs' Lua filters and publish the interlinks inventory
 
     Quarto copies the inventory into the rendered site as a resource so
-    other projects can link to its documented objects.
+    other projects can link to its documented objects. Only the API reference
+    writes an inventory, and Quarto 2 fails a render whose resources are missing.
 
     Parameters
     ----------
     quarto_config
         Contents of `_quarto.yml`, updated in place.
+    has_api_reference
+        Whether the site has an API reference, which writes the inventory.
 
     Returns
     -------
     :
     """
     quarto_yml.entries(quarto_config, "filters").extend(_FILTERS)
-    quarto_yml.add_resources(quarto_config, [INVENTORY_FILENAME])
+    if has_api_reference:
+        quarto_yml.add_resources(quarto_config, [INVENTORY_FILENAME])
 
 
 def register_site_includes(quarto_config: dict[str, Any], config: Config) -> None:
