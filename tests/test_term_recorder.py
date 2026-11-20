@@ -127,6 +127,23 @@ class TestRecordSession:
         o_events = [e for e in events if e[1] == "o"]
         assert len(o_events) >= 1
 
+    def test_character_split_between_reads_is_kept_whole(self, tmp_path: Path):
+        """A read that ends partway through a UTF-8 character doesn't garble it."""
+        encoded = "█▀ é".encode()
+        reads = iter([encoded[:1], encoded[1:4], encoded[4:-1], encoded[-1:], b""])
+        output_path = self._run(
+            tmp_path,
+            select_side_effect=lambda *a, **k: ([_MASTER_FD], [], []),
+            read_side_effect=lambda fd, n: next(reads),
+        )
+
+        lines = output_path.read_text(encoding="utf-8").strip().splitlines()
+        events = [json.loads(line) for line in lines[1:]]
+        output = [e[2] for e in events if e[1] == "o"]
+        assert "".join(output) == "█▀ é"
+        assert "" not in output
+        assert not any("�" in text for text in output)
+
     def test_child_process_execs_the_shell_at_the_requested_size(self, tmp_path: Path):
         """Check that the child sets its terminal size and starts the requested shell"""
         import struct
