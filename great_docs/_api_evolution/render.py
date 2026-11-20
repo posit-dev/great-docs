@@ -145,7 +145,7 @@ def evolution_table(
     changes_only: bool = True,
 ) -> list[list[tuple[str, str]]]:
     """
-    Build a positional-slot table of a symbol's parameter evolution.
+    Build a positional-slot table of a symbol's parameter evolution
 
     Each cell is a `(line1, line2)` tuple where *line1* is the parameter name and *line2* is
     `type (= default)`. Parameters are laid out by **position** (row 0 is the first parameter in
@@ -160,7 +160,7 @@ def evolution_table(
 
     Returns
     -------
-    list[list[tuple[str, str]]]
+    :
         Row 0 is the header: `[("", version1), ("", version2), ...]`. Subsequent rows are positional
         parameter slots. A row with `line1 == "*"` marks the keyword-only boundary. A trailing row
         with `line1 == "Returns:"` is appended when any version has a return annotation. Empty slots
@@ -178,7 +178,7 @@ def evolution_table_text(
     changes_only: bool = True,
 ) -> str:
     """
-    Render the evolution table as aligned plain-text (for terminal output).
+    Render the evolution table as aligned plain-text (for terminal output)
 
     Each cell is two lines: the parameter name and its type/default.
 
@@ -191,7 +191,7 @@ def evolution_table_text(
 
     Returns
     -------
-    str
+    :
         A formatted text table.
     """
     rows = evolution_table(history, changes_only=changes_only)
@@ -243,7 +243,7 @@ def evolution_table_html(
     summary_text: str | None = None,
 ) -> str:
     """
-    Render the evolution table as an HTML `<table>`.
+    Render the evolution table as an HTML `<table>`
 
     Each body cell contains the parameter name on one line and the type/default on a second line.
     When *disclosure* is True the table is wrapped in a `<details>` element so it starts collapsed.
@@ -261,7 +261,7 @@ def evolution_table_html(
 
     Returns
     -------
-    str
+    :
         An HTML string.
     """
     table = _EvolutionTable.from_history(history, changes_only=changes_only)
@@ -510,7 +510,7 @@ def render_evolution_table_from_dict(
     include_css: bool = True,
 ) -> str:
     """
-    Render an evolution table from a JSON-compatible dict.
+    Render an evolution table from a JSON-compatible dict
 
     This accepts the same schema produced by :func:`evolution_table_to_dict` (or loaded from a
     `.json` file) and renders it as a self-contained HTML block. This is useful for demo tables,
@@ -537,7 +537,7 @@ def render_evolution_table_from_dict(
 
     Returns
     -------
-    str
+    :
         A complete HTML string.
     """
     return _html_block(
@@ -708,7 +708,7 @@ def evolution_table_to_dict(
     changes_only: bool = True,
 ) -> dict:
     """
-    Serialize the positional evolution table to a JSON-compatible dict.
+    Serialize the positional evolution table to a JSON-compatible dict
 
     The returned structure captures everything needed to render the table in a documentation page,
     CI report, or external tool.
@@ -722,7 +722,7 @@ def evolution_table_to_dict(
 
     Returns
     -------
-    dict
+    :
         Schema::
 
             {

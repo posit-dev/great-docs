@@ -45,7 +45,8 @@ def add_rst_directives(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
 
     Returns
     -------
-    The object with supported RST directives replaced in its docstring value.
+    :
+        The object with supported RST directives replaced in its docstring value.
     """
     docstring = obj.docstring
     if docstring is None:
@@ -77,7 +78,8 @@ def convert_rst_directives(text: str, directives: frozenset[str] = _RST_DIRECTIV
 
     Returns
     -------
-    The text with supported directives replaced by Quarto markup.
+    :
+        The text with supported directives replaced by Quarto markup.
     """
     if ".." not in text:
         return text

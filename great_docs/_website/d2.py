@@ -129,7 +129,7 @@ def extract_d2_blocks(content: str) -> list[tuple[str, str, int, int]]:
 
 def parse_d2_block(block: str) -> tuple[str, dict[str, str]]:
     """
-    Split a d2 block body into its diagram source and `#|` option lines.
+    Split a d2 block body into its diagram source and `#|` option lines
 
     Parameters
     ----------
@@ -138,7 +138,7 @@ def parse_d2_block(block: str) -> tuple[str, dict[str, str]]:
 
     Returns
     -------
-    tuple[str, dict[str, str]]
+    :
         The diagram source (options stripped) and a dict of recognized options.
     """
     options: dict[str, str] = {}
@@ -196,7 +196,7 @@ def render_d2_svg(
     timeout: int = 30,
 ) -> str | None:
     """
-    Render a d2 diagram to SVG using the `d2` CLI.
+    Render a d2 diagram to SVG using the `d2` CLI
 
     Parameters
     ----------
@@ -211,7 +211,7 @@ def render_d2_svg(
 
     Returns
     -------
-    str | None
+    :
         The SVG content, or `None` if rendering failed.
     """
     args = _build_d2_args(theme, options or {})
@@ -316,14 +316,14 @@ def process_d2_content(
     cache_dir: Path | None = None,
 ) -> tuple[str, int]:
     """
-    Rewrite all d2 blocks in *content* to theme-aware SVG markup.
+    Rewrite all d2 blocks in *content* to theme-aware SVG markup
 
     SVG files are written into *output_dir* (typically the page's own directory, so relative image
     paths resolve).
 
     Returns
     -------
-    tuple[str, int]
+    :
         The rewritten content and the number of diagrams rendered.
     """
     blocks = extract_d2_blocks(content)

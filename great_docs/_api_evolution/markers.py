@@ -141,7 +141,7 @@ def process_evolution_markers_in_file(
     in_place: bool = False,
 ) -> str:
     """
-    Process `<!-- %evolution ... -->` markers in a `.qmd` file.
+    Process `<!-- %evolution ... -->` markers in a `.qmd` file
 
     Parameters
     ----------
@@ -157,7 +157,7 @@ def process_evolution_markers_in_file(
 
     Returns
     -------
-    str
+    :
         The processed file content.
     """
     path = Path(qmd_path)
@@ -175,7 +175,7 @@ def compute_version_badges(
     previous: ApiSnapshot | None,
 ) -> dict[str, dict]:
     """
-    Compute version badges for each symbol in *current* based on a diff against *previous*.
+    Compute version badges for each symbol in *current* based on a diff against *previous*
 
     Parameters
     ----------
@@ -186,7 +186,7 @@ def compute_version_badges(
 
     Returns
     -------
-    dict[str, dict]
+    :
         Mapping of symbol name to badge info. Each value has keys: `"badge"` (`"new"`, `"changed"`,
         or `"deprecated"`), `"version"` (the current snapshot's version label), and optionally
         `"details"` (list of change descriptions).
@@ -228,7 +228,7 @@ def compute_version_badges(
 
 def render_badge_html(badge_info: dict) -> str:
     """
-    Render a single badge as an HTML `<span>` for embedding in QMD pages.
+    Render a single badge as an HTML `<span>` for embedding in QMD pages
 
     Parameters
     ----------
@@ -237,7 +237,7 @@ def render_badge_html(badge_info: dict) -> str:
 
     Returns
     -------
-    str
+    :
         An HTML `<span>` element with appropriate CSS class.
     """
     badge = badge_info["badge"]
@@ -257,7 +257,7 @@ def inject_badges_into_qmd(
     badges: dict[str, dict],
 ) -> str:
     """
-    Inject version badges into QMD content for API reference pages.
+    Inject version badges into QMD content for API reference pages
 
     Looks for lines that define API symbols (e.g. `## SymbolName` or `### package.SymbolName`) and
     inserts the badge HTML immediately after the heading.
@@ -271,7 +271,7 @@ def inject_badges_into_qmd(
 
     Returns
     -------
-    str
+    :
         The content with badge HTML injected after matching headings.
     """
     if not badges:

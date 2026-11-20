@@ -27,7 +27,8 @@ class GoCliProject:
 
 
 def detect_go_cli_project(project_root: Path) -> GoCliProject | None:
-    """Detect whether *project_root* is a documentable Go CLI project.
+    """
+    Detect whether *project_root* is a documentable Go CLI project
 
     A project is considered documentable when it has a `go.mod` at the root and at least one *main*
     package (i.e. a `main.go` entry-point). The check is purely file-system based and never invokes
@@ -40,7 +41,7 @@ def detect_go_cli_project(project_root: Path) -> GoCliProject | None:
 
     Returns
     -------
-    GoCliProject | None
+    :
         Detected project info, or `None` if the directory is not a Go CLI project.
     """
     go_mod = project_root / "go.mod"
@@ -85,7 +86,8 @@ def _find_go_main_package(
     project_root: Path,
     module_path: str,
 ) -> tuple[str, str]:
-    """Locate the main package and infer the binary name.
+    """
+    Locate the main package and infer the binary name
 
     Search order (standard Go project layouts):
 
@@ -102,7 +104,7 @@ def _find_go_main_package(
 
     Returns
     -------
-    tuple[str, str]
+    :
         `(relative_import_path, binary_name)`, e.g. `("./cmd/velocirepo", "velocirepo")`. Returns
         `("", "")` when no main package is found.
     """
@@ -142,7 +144,8 @@ def build_go_binary(
     go_project: GoCliProject,
     output_dir: Path | None = None,
 ) -> Path | None:
-    """Compile the Go CLI to a binary.
+    """
+    Compile the Go CLI to a binary
 
     Requires `go` to be on `PATH`.
 
@@ -156,7 +159,7 @@ def build_go_binary(
 
     Returns
     -------
-    Path | None
+    :
         Path to the compiled binary, or `None` if the build failed.
     """
     if output_dir is None:

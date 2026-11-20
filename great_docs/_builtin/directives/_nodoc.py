@@ -23,7 +23,8 @@ def exclude_nodoc(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias | None:
 
     Returns
     -------
-    The object, or `None` when its docstring carries `%nodoc`.
+    :
+        The object, or `None` when its docstring carries `%nodoc`.
     """
     docstring = obj.docstring
     text = docstring.value if docstring is not None else None

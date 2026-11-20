@@ -35,7 +35,8 @@ def _closes_fence(stripped: str, marker: str) -> bool:
 
     Returns
     -------
-    True when the line ends the fence.
+    :
+        True when the line ends the fence.
     """
     return len(stripped) >= len(marker) and stripped == marker[0] * len(stripped)
 
@@ -60,7 +61,8 @@ def _fence_marker(line: str, previous_line: str | None) -> str | None:
 
     Returns
     -------
-    The opening run, or `None` when the line opens no fence.
+    :
+        The opening run, or `None` when the line opens no fence.
     """
     match = _FENCE_RE.match(line)
     if match is None:
@@ -99,7 +101,8 @@ def _protected_lines(lines: list[str]) -> list[bool]:
 
     Returns
     -------
-    One flag per input line. `True` identifies literal code.
+    :
+        One flag per input line. `True` identifies literal code.
     """
     flags: list[bool] = []
     marker: str | None = None
@@ -138,7 +141,8 @@ def _inline_code_spans(line: str) -> list[tuple[int, int]]:
 
     Returns
     -------
-    Half-open character ranges covering each span and its delimiters.
+    :
+        Half-open character ranges covering each span and its delimiters.
     """
     runs = list(_BACKTICK_RUN_RE.finditer(line))
     spans: list[tuple[int, int]] = []
@@ -170,7 +174,8 @@ def _outside_inline_code(line: str, matches: list[re.Match[str]]) -> list[re.Mat
 
     Returns
     -------
-    The matches whose first character lies outside every closed code span.
+    :
+        The matches whose first character lies outside every closed code span.
     """
     if not matches or "`" not in line:
         return matches
@@ -192,7 +197,8 @@ def _live_reference_matches(line: str) -> list[re.Match[str]]:
 
     Returns
     -------
-    The `[N]_` matches outside inline code, in the order they appear.
+    :
+        The `[N]_` matches outside inline code, in the order they appear.
     """
     return _outside_inline_code(line, list(_RST_CITATION_REF_RE.finditer(line)))
 
@@ -213,7 +219,8 @@ def _wrap_url(match: re.Match[str]) -> str:
 
     Returns
     -------
-    The angle-bracketed URL followed by any trailing punctuation.
+    :
+        The angle-bracketed URL followed by any trailing punctuation.
     """
     url = match.group(1)
     trailer = ""
@@ -241,7 +248,8 @@ def _autolink_urls(text: str) -> str:
 
     Returns
     -------
-    The text with each bare URL angle-bracketed.
+    :
+        The text with each bare URL angle-bracketed.
     """
     matches = _outside_inline_code(text, list(_RST_CITATION_URL_RE.finditer(text)))
     if not matches:
@@ -280,7 +288,8 @@ def normalize_citations(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
 
     Returns
     -------
-    The resolved object with converted citations and references.
+    :
+        The resolved object with converted citations and references.
     """
     docstring = obj.docstring
     if docstring is None:
@@ -315,7 +324,8 @@ def _anchor_slug(path: str) -> str:
 
     Returns
     -------
-    The path with other character runs replaced by hyphens.
+    :
+        The path with other character runs replaced by hyphens.
     """
     return _NON_ANCHOR_CHARS_RE.sub("-", path).strip("-")
 
@@ -331,7 +341,8 @@ def _occurrence_label(index: int) -> str:
 
     Returns
     -------
-    A letter sequence running `a` to `z`, then `aa`, `ab`, and onwards.
+    :
+        A letter sequence running `a` to `z`, then `aa`, `ab`, and onwards.
     """
     label = ""
     position = index + 1
@@ -359,7 +370,8 @@ def _backlinks(anchor_stem: str, number: str, count: int) -> str:
 
     Returns
     -------
-    Markdown ending in a space, or the empty string when nothing names it.
+    :
+        Markdown ending in a space, or the empty string when nothing names it.
     """
     if not count:
         return ""
@@ -401,7 +413,8 @@ def _link_references(
 
     Returns
     -------
-    The line with each match replaced by its link.
+    :
+        The line with each match replaced by its link.
     """
     if not matches:
         return line
@@ -433,7 +446,8 @@ def _indent_width(line: str) -> int:
 
     Returns
     -------
-    The number of leading whitespace characters.
+    :
+        The number of leading whitespace characters.
     """
     return len(line) - len(line.lstrip(" \t"))
 
@@ -452,7 +466,8 @@ def _shifted(line: str, offset: int) -> str:
 
     Returns
     -------
-    The shifted line, or an empty string for a blank line.
+    :
+        The shifted line, or an empty string for a blank line.
     """
     if not line.strip():
         return ""
@@ -485,7 +500,8 @@ def _continuation_lines(
 
     Returns
     -------
-    The continuation lines and the final source index consumed by the body.
+    :
+        The continuation lines and the final source index consumed by the body.
     """
     collected: list[str] = []
     blanks: list[str] = []
@@ -535,7 +551,8 @@ def _span_definition(
 
     Returns
     -------
-    The list item with its complete body inside the anchored span.
+    :
+        The list item with its complete body inside the anchored span.
     """
     body = " ".join([head, *(line.strip() for line in continuations)]).strip()
     return f"{marker}{backlinks}[{_autolink_urls(body)}]{{#{anchor}}}"
@@ -570,7 +587,8 @@ def _block_definition(
 
     Returns
     -------
-    The opening fence, the body, and the closing fence.
+    :
+        The opening fence, the body, and the closing fence.
     """
     content = " " * len(marker)
     offset = len(content) - min(_indent_width(line) for line in continuations if line.strip())
@@ -608,8 +626,9 @@ def _convert_definitions(
 
     Returns
     -------
-    The lines with every unprotected definition converted. Fenced divs add
-    opening and closing lines around multi-paragraph bodies.
+    :
+        The lines with every unprotected definition converted. Fenced divs add
+        opening and closing lines around multi-paragraph bodies.
     """
     result: list[str] = []
     index = 0
@@ -677,7 +696,8 @@ def _convert_rst_citations(text: str, anchor_stem: str) -> str:
 
     Returns
     -------
-    The text with converted citations and bidirectional reference links.
+    :
+        The text with converted citations and bidirectional reference links.
     """
     lines = text.split("\n")
     protected = _protected_lines(lines)

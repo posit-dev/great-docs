@@ -7874,20 +7874,20 @@ _REFERENCE_TRANSLATIONS: dict[str, dict[str, str]] = {
 
 def translate(key: str, language: str = DEFAULT_LANGUAGE) -> str:
     """
-    Look up a single translation string.
+    Look up a single translation string
 
     Parameters
     ----------
     key
-        Logical key (e.g., ``"back_to_top"``).
+        Logical key (e.g., `"back_to_top"`).
     language
-        BCP 47 language code. Falls back to ``"en"`` if the key or language
+        BCP 47 language code. Falls back to `"en"` if the key or language
         is not found.
 
     Returns
     -------
-    str
-        The translated string (may contain ``{placeholder}`` tokens).
+    :
+        The translated string (may contain `{placeholder}` tokens).
     """
     entry = UI_TRANSLATIONS.get(key) or _REFERENCE_TRANSLATIONS.get(key)
     if entry is None:
@@ -7926,10 +7926,10 @@ def translate_versioned(key: str, language: str, version: str) -> str:
 
 def get_translations_bundle(language: str = DEFAULT_LANGUAGE) -> dict[str, str]:
     """
-    Return the full translation bundle for a given language.
+    Return the full translation bundle for a given language
 
     This is the dict that gets serialised to JSON and injected into
-    every HTML page as a ``<meta name="gd-i18n">`` tag so that client-side
+    every HTML page as a `<meta name="gd-i18n">` tag so that client-side
     JavaScript can read the translations.
 
     Parameters
@@ -7939,7 +7939,7 @@ def get_translations_bundle(language: str = DEFAULT_LANGUAGE) -> dict[str, str]:
 
     Returns
     -------
-    dict[str, str]
+    :
         Mapping of key -> translated string for the given language.
     """
     bundle: dict[str, str] = {}
@@ -7950,7 +7950,7 @@ def get_translations_bundle(language: str = DEFAULT_LANGUAGE) -> dict[str, str]:
 
 def is_rtl(language: str) -> bool:
     """
-    Check whether a language uses right-to-left text direction.
+    Check whether a language uses right-to-left text direction
 
     Parameters
     ----------
@@ -7959,7 +7959,7 @@ def is_rtl(language: str) -> bool:
 
     Returns
     -------
-    bool
+    :
     """
     return language in RTL_LANGUAGES
 
@@ -7967,17 +7967,17 @@ def is_rtl(language: str) -> bool:
 def get_locale_for_dates(language: str) -> str:
     """
     Map a BCP 47 language code to the locale string expected by
-    ``Date.toLocaleDateString()`` in JavaScript.
+    `Date.toLocaleDateString()` in JavaScript.
 
     Parameters
     ----------
     language
-        BCP 47 language code (e.g., ``"zh-Hans"``).
+        BCP 47 language code (e.g., `"zh-Hans"`).
 
     Returns
     -------
-    str
-        A locale string suitable for the JS ``Intl`` API (e.g., ``"zh-CN"``).
+    :
+        A locale string suitable for the JS `Intl` API (e.g., `"zh-CN"`).
     """
     mapping: dict[str, str] = {
         "zh-Hans": "zh-CN",

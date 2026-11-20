@@ -219,7 +219,8 @@ def generate_manifest(
     keyframe_interval: float = 2.0,
     prefix: str = "frame",
 ) -> Manifest:
-    """Generate a manifest and render SVG keyframes from a recording.
+    """
+    Generate a manifest and render SVG keyframes from a recording
 
     Parameters
     ----------
@@ -236,7 +237,7 @@ def generate_manifest(
 
     Returns
     -------
-    Manifest
+    :
         The generated manifest with keyframe/delta information.
     """
     out_path = Path(output_dir) if output_dir else None
@@ -570,7 +571,8 @@ def _apply_prompt_substitution(
     replacement: str,
     prompt_pattern: str | None = None,
 ) -> ScreenState:
-    """Apply prompt character substitution to a screen state.
+    """
+    Apply prompt character substitution to a screen state
 
     Finds rows that start with the detected prompt prefix and replaces the
     prompt character with the configured replacement string.
@@ -589,7 +591,7 @@ def _apply_prompt_substitution(
 
     Returns
     -------
-    ScreenState
+    :
         A copy of the state with prompt characters substituted.
     """
     # Find the prompt character position within the prefix
@@ -621,7 +623,8 @@ def _apply_prompt_pattern_substitution(
     pattern: str,
     replacement: str,
 ) -> ScreenState:
-    """Apply prompt substitution using a regex pattern (fallback mode).
+    """
+    Apply prompt substitution using a regex pattern (fallback mode)
 
     Used when no input events are available to detect prompts structurally.
     The pattern should match the prompt portion at the start of a line.
@@ -638,7 +641,7 @@ def _apply_prompt_pattern_substitution(
 
     Returns
     -------
-    ScreenState
+    :
         A copy of the state with prompt characters substituted.
     """
     try:

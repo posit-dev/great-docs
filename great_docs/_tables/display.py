@@ -4,23 +4,21 @@ from typing import Any
 
 
 def enable_tbl_preview(**kwargs: Any) -> None:
-    """Register `tbl_preview()` as the default DataFrame display formatter.
+    """
+    Register `tbl_preview()` as the default DataFrame display formatter
 
     After calling this, any Polars or Pandas DataFrame that is the last expression in a cell (or
     passed to `display()`) will be rendered as a `tbl_preview()` table instead of the library's
     default HTML.
+
+    The formatter is registered as a side effect. IPython suppresses `None` output, so
+    nothing is printed in the cell.
 
     Parameters
     ----------
     **kwargs
         Keyword arguments forwarded to `tbl_preview()` (e.g., `n_head=10`, `show_all=True`,
         `show_dimensions=False`).
-
-    Returns
-    -------
-    None
-        The formatter is registered as a side effect. IPython suppresses `None` output, so
-        nothing is printed in the cell.
 
     Examples
     --------
@@ -83,17 +81,15 @@ def enable_tbl_preview(**kwargs: Any) -> None:
 
 
 def disable_tbl_preview() -> None:
-    """Remove the `tbl_preview()` display formatter and restore defaults.
+    """
+    Remove the `tbl_preview()` display formatter and restore defaults
 
     After calling this, any Polars or Pandas DataFrame will revert to using the library's default
     HTML representation instead of `tbl_preview()`. This undoes the effect of
     `enable_tbl_preview()`.
 
-    Returns
-    -------
-    None
-        The formatter is removed as a side effect. IPython suppresses `None` output, so
-        nothing is printed in the cell.
+    The formatter is removed as a side effect. IPython suppresses `None` output, so
+    nothing is printed in the cell.
 
     Examples
     --------

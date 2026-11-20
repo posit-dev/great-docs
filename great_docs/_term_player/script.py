@@ -150,7 +150,8 @@ class Script:
 
 
 def load_script(path: str | Path) -> Script:
-    """Load a .termshow.yml script file.
+    """
+    Load a .termshow.yml script file
 
     Parameters
     ----------
@@ -159,7 +160,7 @@ def load_script(path: str | Path) -> Script:
 
     Returns
     -------
-    Script
+    :
         Parsed script object.
     """
     from yaml12 import read_yaml
@@ -305,7 +306,8 @@ def _parse_script_data(data: dict[str, Any]) -> Script:
 
 
 def apply_script(recording: Recording, script: Script) -> Recording:
-    """Apply a script overlay to a recording, producing a modified recording.
+    """
+    Apply a script overlay to a recording, producing a modified recording
 
     This retimes every event from the recording's own timeline onto the playback timeline (see
     `playback_time()`): cut ranges are skipped, speed-map ranges are scaled, and the global speed
@@ -324,7 +326,7 @@ def apply_script(recording: Recording, script: Script) -> Recording:
 
     Returns
     -------
-    Recording
+    :
         A new Recording with modified timing.
     """
     events = list(recording.events)
@@ -347,7 +349,8 @@ def apply_script(recording: Recording, script: Script) -> Recording:
 
 
 def playback_time(script: Script) -> Callable[[float], float]:
-    """Build a function that maps a recording time to a playback time.
+    """
+    Build a function that maps a recording time to a playback time
 
     `cuts` and `speed_map` both refer to the recording's own timeline. Each stretch of that
     timeline plays at one rate: not at all inside a cut, at `1 / speed` inside a speed segment,
@@ -362,7 +365,7 @@ def playback_time(script: Script) -> Callable[[float], float]:
 
     Returns
     -------
-    Callable[[float], float]
+    :
         A non-decreasing function from recording time to playback time. Every time inside a cut
         maps to the playback time of the cut's start.
     """

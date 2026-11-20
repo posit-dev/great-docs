@@ -187,7 +187,8 @@ _HEX_RE = re.compile(r"^#([0-9a-fA-F]{3,8})$")
 
 
 def parse_color(color: str) -> tuple[int, int, int]:
-    """Parse a CSS color string to an (R, G, B) tuple.
+    """
+    Parse a CSS color string to an (R, G, B) tuple
 
     Supports hex (#RGB, #RRGGBB, #RRGGBBAA) and CSS named colors.
 
@@ -198,7 +199,7 @@ def parse_color(color: str) -> tuple[int, int, int]:
 
     Returns
     -------
-    tuple[int, int, int]
+    :
         The (R, G, B) components, each in 0-255.
 
     Raises
@@ -279,7 +280,8 @@ def ideal_text_color(
     light: str = "#FFFFFF",
     dark: str = "#000000",
 ) -> str:
-    """Determine the ideal foreground text color for a given background.
+    """
+    Determine the ideal foreground text color for a given background
 
     Uses the APCA (Accessible Perceptual Contrast Algorithm) to decide whether light or dark text
     provides better contrast against the specified background color.
@@ -295,7 +297,7 @@ def ideal_text_color(
 
     Returns
     -------
-    str
+    :
         The chosen text color (either `light` or `dark`).
     """
     bg_rgb = parse_color(bg_color)
@@ -317,7 +319,8 @@ def navbar_color_css(
     light_text: str = "#FFFFFF",
     dark_text: str = "#000000",
 ) -> str:
-    """Generate the CSS variable overrides for a custom navbar color.
+    """
+    Generate the CSS variable overrides for a custom navbar color
 
     Returns a CSS string that sets `--gd-navbar-bg` and `--gd-navbar-text` to provide maximum
     contrast.
@@ -333,7 +336,7 @@ def navbar_color_css(
 
     Returns
     -------
-    str
+    :
         A CSS variable declaration block (without selector).
     """
     text_color = ideal_text_color(bg_color, light=light_text, dark=dark_text)

@@ -47,7 +47,8 @@ def sibling_build_dirs(root: Path, layout: Layout | None = None) -> list[Path]:
 
     Returns
     -------
-    Marked sibling directories in name order.
+    :
+        Marked sibling directories in name order.
     """
     return recognised_build_dirs(layout or Layout.make(root))
 
@@ -66,7 +67,8 @@ def build_output_dirs(root: Path, layout: Layout | None = None) -> list[Path]:
 
     Returns
     -------
-    Current and historical build directories.
+    :
+        Current and historical build directories.
     """
     layout = layout or Layout.make(root)
     current = (

@@ -11530,21 +11530,21 @@ LUCIDE_ICONS: dict[str, list[str]] = {
 
 def get_icon_svg(name: str, size: int = 16, css_class: str = "gd-nav-icon") -> str:
     """
-    Return a complete inline ``<svg>`` string for the named Lucide icon.
+    Return a complete inline `<svg>` string for the named Lucide icon
 
     Parameters
     ----------
     name
-        Lucide icon name (e.g. ``'book-open'``, ``'rocket'``).
+        Lucide icon name (e.g. `'book-open'`, `'rocket'`).
     size
         Width and height in pixels.
     css_class
-        CSS class applied to the ``<svg>`` element.
+        CSS class applied to the `<svg>` element.
 
     Returns
     -------
-    str
-        Full ``<svg>`` markup ready for inline insertion, or an empty
+    :
+        Full `<svg>` markup ready for inline insertion, or an empty
         string if the icon name is not found.
     """
     elements = LUCIDE_ICONS.get(name)

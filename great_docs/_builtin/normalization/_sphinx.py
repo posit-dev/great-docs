@@ -40,7 +40,8 @@ def normalize_sphinx_markup(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
 
     Returns
     -------
-    The object with Sphinx markup normalized when its parser is Sphinx.
+    :
+        The object with Sphinx markup normalized when its parser is Sphinx.
     """
     docstring = obj.docstring
     if docstring is None or docstring.parser != gf.Parser.sphinx:

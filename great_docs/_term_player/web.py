@@ -17,7 +17,8 @@ PLAYER_FILES = (
 
 
 def copy_player(dest: str | Path) -> list[Path]:
-    """Copy the player's script, stylesheet, and fonts into `dest`.
+    """
+    Copy the player's script, stylesheet, and fonts into `dest`
 
     Parameters
     ----------
@@ -26,7 +27,7 @@ def copy_player(dest: str | Path) -> list[Path]:
 
     Returns
     -------
-    list[Path]
+    :
         The copied files.
     """
     dest = Path(dest)
@@ -35,7 +36,8 @@ def copy_player(dest: str | Path) -> list[Path]:
 
 
 def player_snippet(player_url: str, src: str = "termshow/my-demo") -> str:
-    """HTML that loads the player from `player_url` and embeds one recording.
+    """
+    HTML that loads the player from `player_url` and embeds one recording
 
     Parameters
     ----------
@@ -46,7 +48,7 @@ def player_snippet(player_url: str, src: str = "termshow/my-demo") -> str:
 
     Returns
     -------
-    str
+    :
         The `<link>` and `<script>` tags for the page's head, then the element.
     """
     base = player_url.rstrip("/") + "/" if player_url else ""

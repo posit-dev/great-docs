@@ -69,7 +69,8 @@ def export_svg(
     annotations: bool = True,
     font_file: str | Path | None = None,
 ) -> str:
-    """Draw a rendered recording as one animated SVG document.
+    """
+    Draw a rendered recording as one animated SVG document
 
     Parameters
     ----------
@@ -94,7 +95,7 @@ def export_svg(
 
     Returns
     -------
-    str
+    :
         The SVG document.
 
     Raises

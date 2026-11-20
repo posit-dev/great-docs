@@ -159,7 +159,8 @@ def check_script(
     shell: str | None = None,
     on_step: Callable[[int, Step], None] | None = None,
 ) -> CheckResult:
-    """Run a script's steps and compare the result with the recording next to it.
+    """
+    Run a script's steps and compare the result with the recording next to it
 
     Parameters
     ----------
@@ -174,7 +175,7 @@ def check_script(
 
     Returns
     -------
-    CheckResult
+    :
         The differences, which are empty when the recording is up to date.
 
     Raises

@@ -59,7 +59,7 @@ class Layout:
 
         Returns
         -------
-        Layout
+        :
             The resolved package, source, build, site, and cache paths.
 
         Raises
@@ -154,7 +154,7 @@ class Layout:
 
         Returns
         -------
-        Path
+        :
             The default build directory for the latest tag or a sanitised
             historical directory for any other tag.
         """
@@ -197,7 +197,7 @@ def _find_package_root(project_path: Path) -> Path:
 
     Returns
     -------
-    Path
+    :
         The nearest package root, or the initial directory when no manifest is
         found.
     """
@@ -232,7 +232,7 @@ def _select_config(
 
     Returns
     -------
-    Path
+    :
         The selected configuration path before containment validation.
 
     Raises

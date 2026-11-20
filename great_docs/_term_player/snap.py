@@ -36,7 +36,8 @@ class SnapError(Exception):
 
 
 def snap_time(manifest: Manifest, *, at: float | None = None, chapter: str | None = None) -> float:
-    """The playback time to take a screenshot at.
+    """
+    The playback time to take a screenshot at
 
     Parameters
     ----------
@@ -51,7 +52,7 @@ def snap_time(manifest: Manifest, *, at: float | None = None, chapter: str | Non
 
     Returns
     -------
-    float
+    :
         `at`, the chapter's last moment, or the end of the recording when neither is given.
 
     Raises
@@ -109,7 +110,8 @@ def snap_svg(
     font_file: str | Path | None = None,
     cells: tuple[int, int] | None = None,
 ) -> str:
-    """Draw the screen at one moment as a still SVG.
+    """
+    Draw the screen at one moment as a still SVG
 
     Parameters
     ----------
@@ -130,7 +132,7 @@ def snap_svg(
 
     Returns
     -------
-    str
+    :
         The SVG document.
 
     Raises

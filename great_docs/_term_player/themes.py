@@ -222,7 +222,8 @@ def is_theme_pair(spec: Any) -> bool:
 
 
 def resolve_theme_pair(spec: str | dict[str, Any]) -> tuple[Theme, Theme | None]:
-    """Resolve a `settings.theme` value into its light (or only) theme and its dark theme.
+    """
+    Resolve a `settings.theme` value into its light (or only) theme and its dark theme
 
     Parameters
     ----------
@@ -233,7 +234,7 @@ def resolve_theme_pair(spec: str | dict[str, Any]) -> tuple[Theme, Theme | None]
 
     Returns
     -------
-    tuple
+    :
         `(theme, dark)`. For a single theme, `dark` is None. For a pair,
         `theme` is the light side: it's the one used for SVG files and by
         players that don't know about the dark side.

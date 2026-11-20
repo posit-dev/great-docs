@@ -27,7 +27,8 @@ def export_asciicast(
     version: int = 3,
     theme: Theme | None = None,
 ) -> str:
-    """Write a recording as asciicast text.
+    """
+    Write a recording as asciicast text
 
     Parameters
     ----------
@@ -44,7 +45,7 @@ def export_asciicast(
 
     Returns
     -------
-    str
+    :
         The file's text: a header line, then one line per event.
     """
     if version not in VERSIONS:

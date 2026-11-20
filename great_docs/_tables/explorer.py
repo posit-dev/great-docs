@@ -857,7 +857,7 @@ def tbl_explorer(
     id: str | None = None,
 ) -> TblExplorer:
     """
-    Generate an interactive table explorer from almost any tabular data source.
+    Generate an interactive table explorer from almost any tabular data source
 
     The `tbl_explorer()` function creates a self-contained, interactive HTML table widget from
     tabular data. Pass it a Polars DataFrame, a Pandas DataFrame, a PyArrow Table, a file path to a
@@ -963,7 +963,7 @@ def tbl_explorer(
 
     Returns
     -------
-    TblExplorer
+    :
         A rendered interactive table object. The object has `_repr_html_()` for automatic notebook
         display.
 

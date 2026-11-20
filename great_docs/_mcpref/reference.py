@@ -432,7 +432,7 @@ def categorize_tools(
     manual_categories: dict[str, list[str]] | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Group tools into categories.
+    Group tools into categories
 
     Parameters
     ----------
@@ -444,7 +444,7 @@ def categorize_tools(
 
     Returns
     -------
-    list[dict]
+    :
         List of {"title": str, "tools": list[dict]} section dicts.
     """
     if manual_categories:
@@ -503,7 +503,7 @@ def generate_mcp_reference_pages(
     language: str = "en",
 ) -> list[str | dict[str, Any]]:
     """
-    Generate Quarto .qmd pages for an MCP server's tools.
+    Generate Quarto .qmd pages for an MCP server's tools
 
     Parameters
     ----------
@@ -518,7 +518,7 @@ def generate_mcp_reference_pages(
 
     Returns
     -------
-    list[str | dict]
+    :
         Sidebar items for the generated pages.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1112,7 +1112,7 @@ def generate_mcp_manifest(
     install_command: str | None = None,
 ) -> Path:
     """
-    Generate a .well-known/mcp.json discovery manifest.
+    Generate a .well-known/mcp.json discovery manifest
 
     This manifest enables clients and registries to auto-discover the MCP server
     and its capabilities from the documentation site URL.
@@ -1135,7 +1135,7 @@ def generate_mcp_manifest(
 
     Returns
     -------
-    Path
+    :
         Path to the generated mcp.json file.
     """
     import json

@@ -24,7 +24,8 @@ def _find_project_root(start: Path) -> Path:
 
     Returns
     -------
-    Nearest directory containing `great-docs.yml`.
+    :
+        Nearest directory containing `great-docs.yml`.
 
     Raises
     ------

@@ -204,7 +204,7 @@ class shortcode(Inline):
 
     Parameters
     ----------
-    str :
+    name :
         Name of the shortcode
     *args :
         Arguments to the shortcode
