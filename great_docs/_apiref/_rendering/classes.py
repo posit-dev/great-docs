@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import griffe as gf
 
 from great_docs._translations import translate
-from great_docs.pandoc.blocks import BlockContent, Blocks, Div, Para
+from great_docs.pandoc.blocks import BlockContent, Blocks, Para
 from great_docs.pandoc.components import Attr
 from great_docs.pandoc.inlines import Code, Link, Span, join_inline_content
 
@@ -47,15 +47,6 @@ class ClassRenderer(MembersRendererMixin, CallableRendererMixin, ObjectRenderer)
         super().__post_init__()
         self.doc: content.DocClass = self.doc
         self.obj: gf.Class = self.obj
-
-    def __str__(self) -> str:
-        """Compose the class documentation with its published link target"""
-        rendered = super().__str__()
-        if not self.settings.show_bases or not self.doc.anchor:
-            return rendered
-        # The inventory's qualified anchor is independent of custom headings and descriptions.
-        anchor = Div(attr=Attr(identifier=self.doc.anchor))
-        return str(Blocks([anchor, rendered]))
 
     def render_description(self) -> BlockContent:
         """Render the class description followed by the direct base classes"""
