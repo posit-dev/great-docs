@@ -17,6 +17,7 @@ import griffe as gf
 
 from ._constructor import without_receiver
 from ._customisation import Extension
+from ._docstring_summary import summary_text
 from ._parameter_docs import CallableDocumentation
 from ._rendering._renderers import Renderers
 from ._rendering._type_parameters import render_type_parameters
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
 
 def summary(obj: gf.Object | gf.Alias) -> str:
     """
-    Read the first line of an object's prepared docstring, without its trailing period
+    Read the summary of an object's prepared docstring, without its trailing period
 
     Parameters
     ----------
@@ -40,16 +41,15 @@ def summary(obj: gf.Object | gf.Alias) -> str:
     Returns
     -------
     :
-        The first line of the docstring's leading text section, or an empty string when
-        there is no docstring or it does not start with text.
+        The first paragraph of the docstring's leading text section on one line, or an
+        empty string when there is no docstring or it does not start with text.
     """
     if obj.docstring is None or not obj.docstring.parsed:
         return ""
     first = obj.docstring.parsed[0]
     if not isinstance(first, gf.DocstringSectionText):
         return ""
-    lines = first.value.strip().splitlines()
-    return lines[0].strip().rstrip(".") if lines else ""
+    return summary_text(first.value.strip()).rstrip(".")
 
 
 def reference_text(reference: APIReference) -> str:
