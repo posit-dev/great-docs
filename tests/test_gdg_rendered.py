@@ -12482,3 +12482,108 @@ def test_DED_termshow_tui_asciinema_comparison():
         s.string for s in soup.find_all("script") if s.string and "AsciinemaPlayer" in s.string
     )
     assert '\\"version\\": 2' in script
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: Wrapped docstring summaries (gdtest_wrapped_summary)
+#
+# A summary is a docstring's whole first paragraph, so one that wraps shows in full
+# wherever the summary appears, and none of it starts the description.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_WRAPPED_PKG = "gdtest_wrapped_summary"
+_WRAPPED_SUMMARIES = {
+    "view_state": (
+        "Keep the reader’s view of the table, for when the page is opened again, "
+        "and let them undo their changes to it."
+    ),
+    "scale": (
+        "Set where the rows of the table, shown as a widget or in a Shiny app, "
+        "are searched, filtered and sorted."
+    ),
+    "Table": "A table whose view readers can change, kept between their visits to the page.",
+    "inspect_data": "Show readers what’s in the data.",
+    "fenced": "Return a greeting, as the example shows.",
+}
+
+
+def _wrapped_page(name: str) -> "BeautifulSoup":
+    if not _has_rendered_site(_WRAPPED_PKG):
+        pytest.skip(f"{_WRAPPED_PKG} not rendered")
+    return _load_html(_site_dir(_WRAPPED_PKG) / "reference" / f"{name}.html")
+
+
+@pytest.mark.dedicated
+@requires_bs4
+@pytest.mark.parametrize("name", sorted(_WRAPPED_SUMMARIES))
+def test_DED_wrapped_summary_is_the_whole_subject(name: str):
+    """gdtest_wrapped_summary: the subject under the title is the whole first paragraph."""
+    main = _wrapped_page(name).find("main")
+    subject = main.select_one(".doc-subject")
+    assert subject.get_text(" ", strip=True) == _WRAPPED_SUMMARIES[name]
+
+
+@pytest.mark.dedicated
+@requires_bs4
+@pytest.mark.parametrize(
+    ("name", "description"),
+    [
+        ("view_state", "The view is the table’s filters, sort, search, page and hidden columns."),
+        ("scale", "Searching in the browser suits small tables."),
+        ("Table", "The table holds its rows and the reader’s view of them."),
+    ],
+)
+def test_DED_wrapped_summary_leaves_the_description_whole(name: str, description: str):
+    """gdtest_wrapped_summary: the description after the usage block starts after the summary."""
+    main = _wrapped_page(name).find("main")
+    usage = main.select_one("div.sourceCode, pre")
+    first = usage.find_next("p")
+    assert first.get_text(" ", strip=True) == description
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_wrapped_summary_in_the_index_tables():
+    """gdtest_wrapped_summary: the reference index shows each whole summary."""
+    main = _wrapped_page("index").find("main")
+    descriptions = {dd.get_text(" ", strip=True) for dd in main.select("dd")}
+    assert set(_WRAPPED_SUMMARIES.values()) <= descriptions
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_wrapped_summary_of_a_method():
+    """gdtest_wrapped_summary: a method's wrapped summary is whole on its class's page."""
+    main = _wrapped_page("Table").find("main")
+    subjects = [d.get_text(" ", strip=True) for d in main.select(".doc-subject")]
+    assert (
+        "Keep the reader’s view of this table, for when the page is opened again, "
+        "and let them undo their changes to it."
+    ) in subjects
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_wrapped_summary_meta_description():
+    """gdtest_wrapped_summary: the page description is the whole summary."""
+    meta = _wrapped_page("view_state").find("meta", attrs={"name": "description"})
+    assert meta["content"] == _WRAPPED_SUMMARIES["view_state"]
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_wrapped_summary_code_block_stays_in_the_body():
+    """gdtest_wrapped_summary: a code block right after the summary is not part of it."""
+    main = _wrapped_page("fenced").find("main")
+    assert [code.get_text() for code in main.select("pre code")] == ["fenced()", "fenced()"]
+
+
+@pytest.mark.dedicated
+def test_DED_wrapped_summary_in_llms_txt():
+    """gdtest_wrapped_summary: `llms.txt` gives each whole summary, without its period."""
+    if not _has_rendered_site(_WRAPPED_PKG):
+        pytest.skip(f"{_WRAPPED_PKG} not rendered")
+    text = (_site_dir(_WRAPPED_PKG) / "llms.txt").read_text(encoding="utf-8")
+    for name, summary in _WRAPPED_SUMMARIES.items():
+        plain = summary.replace("’", "'").rstrip(".")
+        assert f"- [{name}](reference/{name}.html): {plain}\n" in text
