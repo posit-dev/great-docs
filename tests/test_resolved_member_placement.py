@@ -11,6 +11,7 @@ import pytest
 
 from great_docs._apiref.api_reference import APIReference
 from great_docs._apiref.content import Doc, MemberPage
+from tests.support import reference_from_options
 
 
 def _document(
@@ -30,7 +31,7 @@ def _document(
     package.mkdir(exist_ok=True)
     (package / "__init__.py").write_text(dedent(source), encoding="utf-8")
     monkeypatch.syspath_prepend(str(tmp_path))
-    ref = APIReference(
+    ref = reference_from_options(
         {
             "package": None,
             "dynamic": False,
@@ -371,7 +372,7 @@ def test_module_member_pages_render_without_splitting_descendants(
     )
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.chdir(tmp_path)
-    ref = APIReference(
+    ref = reference_from_options(
         {
             "package": None,
             "dynamic": False,

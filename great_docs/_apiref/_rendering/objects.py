@@ -135,6 +135,17 @@ class ObjectRenderer(BaseRenderer):
         self.obj = self.doc.obj
         """The prepared Python object, or the authored alias that names it"""
 
+    def __str__(self) -> str:
+        """Include the published link target alongside the native heading ID"""
+        rendered = super().__str__()
+        anchor = self.doc.anchor
+        if not self.page_path or not anchor:
+            return rendered
+        title = self.title
+        if isinstance(title, Header) and title.attr and title.attr.identifier == anchor:
+            return rendered
+        return str(Blocks([Div(attr=Attr(identifier=anchor)), rendered]))
+
     @cached_property
     def context(self) -> RenderContext:
         """
@@ -287,7 +298,11 @@ class ObjectRenderer(BaseRenderer):
         """
         if self._purpose is _RenderingPurpose.API_PAGE and self.level == 1:
             return None
-        return Header(level=self.level, content=self.title_content)
+        # A qualified title can already yield the published ID. Claim it on the
+        # heading so the page carries that ID once.
+        title_id = self.display_name.removesuffix("()").lower()
+        attr = Attr(identifier=title_id) if self.page_path and title_id == self.doc.anchor else None
+        return Header(level=self.level, content=self.title_content, attr=attr)
 
     def render_annotation(self, annotation: Annotation | None = None) -> str:
         """
@@ -934,8 +949,8 @@ class ObjectRenderer(BaseRenderer):
         """
         Render one summary row that links `summary_name` and shows the subject
 
-        Contained members link to their heading on the same page. Other objects link to
-        `page_path` and the object's anchor.
+        Contained members link to their own documentation on the same page. Other
+        objects link to `page_path`, with their published fragment when one is set.
 
         Returns
         -------
@@ -943,10 +958,8 @@ class ObjectRenderer(BaseRenderer):
             The summary row, or an empty sequence to omit it; the object stays in the
             reference.
         """
-        # For contained members (e.g. methods within a class page), use the
-        # short name as anchor since Quarto generates section IDs from heading
-        # text (e.g. "get" not "package.ClassName.get").
-        anchor = self.doc.name if self.contained else self.doc.anchor
+        # Standalone snippets use the heading ID derived by Quarto.
+        anchor = self.doc.name if self.contained and not self.page_path else self.doc.anchor
         page_path = "" if self.contained else self.page_path or ""
         link = Link(
             markdown_escape(self.summary_name),

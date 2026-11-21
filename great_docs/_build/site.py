@@ -171,7 +171,7 @@ def update_quarto_config(run: Run, config: Config, layout: Layout, *, remote: Re
         identity=run.identity,
         package_name=run.project.name,
         metadata=run.project.manifest,
-        has_api_reference=run.has_api_reference,
+        has_api_reference=run.api_spec is not None,
         has_cli_reference=run.has_cli_reference,
         has_changelog=run.has_changelog,
         has_skills=run.has_skills,

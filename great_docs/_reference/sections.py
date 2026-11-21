@@ -12,6 +12,7 @@ from .._contribution import Contribution, NavbarLink, Sidebar
 
 if TYPE_CHECKING:
     from .._apiref.api_reference import APIReference
+    from .._apiref.spec import ReferenceSpec
     from ..config import Config
     from .discovery import Categories
 
@@ -315,7 +316,7 @@ def from_explicit_config(
     return sections if sections else None
 
 
-def sidebar(site_config: Config, api_block: dict[str, Any]) -> Sidebar:
+def sidebar(config: Config, spec: ReferenceSpec) -> Sidebar:
     """
     Make the API reference sidebar
 
@@ -324,10 +325,10 @@ def sidebar(site_config: Config, api_block: dict[str, Any]) -> Sidebar:
 
     Parameters
     ----------
-    site_config
+    config
         The project's configuration, which sets the language of the index link.
-    api_block
-        The API reference configuration whose sections the sidebar lists.
+    spec
+        The package and sections to list in the sidebar.
 
     Returns
     -------
@@ -338,9 +339,9 @@ def sidebar(site_config: Config, api_block: dict[str, Any]) -> Sidebar:
     from .._translations import translate
 
     contents: list[dict[str, Any]] = [
-        {"text": translate("api_index", site_config.lang), "href": "reference/index.qmd"}
+        {"text": translate("api_index", config.lang), "href": "reference/index.qmd"}
     ]
-    with closing(APIReference({"api-reference": api_block})) as reference:
+    with closing(APIReference(config, spec)) as reference:
         sections = reference.sections
 
     for section in sections:
@@ -411,17 +412,17 @@ def prune_sidebar(quarto_config: dict[str, Any], api_reference: APIReference) ->
     reference["contents"] = contents
 
 
-def contribution(site_config: Config, api_block: dict[str, Any]) -> Contribution:
+def contribution(config: Config, spec: ReferenceSpec) -> Contribution:
     """
     Build the API reference sidebar and navbar link
 
     Parameters
     ----------
-    site_config
+    config
         The project's configuration, including the navbar label and the language of
         the navbar and sidebar links.
-    api_block
-        The API reference configuration whose sections the sidebar lists.
+    spec
+        The package and sections to list in the sidebar.
 
     Returns
     -------
@@ -431,8 +432,8 @@ def contribution(site_config: Config, api_block: dict[str, Any]) -> Contribution
     """
     from .._translations import translate
 
-    label = site_config.reference_title or translate("reference", site_config.lang)
+    label = config.reference_title or translate("reference", config.lang)
     return Contribution(
         navbar=(NavbarLink(text=label, href="reference/index.qmd"),),
-        sidebars=(sidebar(site_config, api_block),),
+        sidebars=(sidebar(config, spec),),
     )

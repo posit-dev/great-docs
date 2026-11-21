@@ -1,9 +1,9 @@
 """
-Our representation of the parts in the api-reference in the config file
+Sections and entries that specify an API reference
 
-i.e The specification of what is to be documented.
-Every class here is a `spec`-level node from the `api-reference:` config:
-strings and dicts that name an object to document.
+A reference specifies an importable package and its sections. A section's
+entries select Python objects and members to document or supply text for the
+index.
 """
 
 from __future__ import annotations
@@ -19,6 +19,14 @@ from typing import Any, Final, Self, cast
 
 from ._walkable import MISSING, MissingType, Walkable
 from .introspect import validate_dynamic
+
+
+@dataclass(frozen=True)
+class ReferenceSpec:
+    """The importable package and its discovered or authored API sections"""
+
+    package: str
+    sections: list[dict[str, Any]]
 
 
 def _validate_members(members: list[str] | None, owner: object) -> None:

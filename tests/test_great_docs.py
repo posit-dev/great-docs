@@ -233,6 +233,8 @@ from tests.support import (
     mock_config,
     prepare_build_directory,
     prepared_reference,
+    reference_from_options,
+    reference_spec,
     sections_step,
     stubbed_build,
     update_quarto_config,
@@ -5301,7 +5303,7 @@ def test_freeze_writes_the_llms_files_build_would(label: str, tmp_path: Path):
     _write_llms_txt_quarto_yml(docs.layout.build_dir, label)
     log = BuildLog(stream=io.StringIO())
     api_block = _written_api_block(docs)
-    available = llms_txt.is_planned(api_block)
+    available = llms_txt.is_planned(reference_spec(api_block))
 
     with ExitStack() as stack:
 
@@ -5310,8 +5312,12 @@ def test_freeze_writes_the_llms_files_build_would(label: str, tmp_path: Path):
         ) -> tuple[Outcome, APIReference | None]:
             # The real API step gives a reference to every block that plans the text
             # export, or stops the build.
-            if run.api_block is not None and llms_txt.is_planned(run.api_block):
-                run.api_reference = stack.enter_context(prepared_reference(run.api_block))
+            if run.api_spec is not None and llms_txt.is_planned(run.api_spec):
+                run.api_reference = stack.enter_context(
+                    prepared_reference(
+                        {"package": run.api_spec.package, "sections": run.api_spec.sections}
+                    )
+                )
             return Skipped("stubbed"), run.api_reference
 
         stack.enter_context(stubbed_build(api_reference=api_block is not None))
@@ -6088,7 +6094,7 @@ def test_reference_sidebar_lists_the_api_sections():
             ],
         }
 
-        sidebar = reference_sections.sidebar(docs._config, api_block)
+        sidebar = reference_sections.sidebar(docs._config, reference_spec(api_block))
 
         assert sidebar.id == "reference"
         assert sidebar.title is None
@@ -6120,10 +6126,10 @@ def test_reference_navigation_links_the_index_from_the_navbar(
     config = write_config(tmp_path, settings)
     api_block = {"package": "mypkg", "sections": [{"title": "Core", "contents": ["f"]}]}
 
-    contribution = reference_sections.contribution(config, api_block)
+    contribution = reference_sections.contribution(config, reference_spec(api_block))
 
     assert contribution.navbar == (NavbarLink(label, "reference/index.qmd"),)
-    assert contribution.sidebars == (reference_sections.sidebar(config, api_block),)
+    assert contribution.sidebars == (reference_sections.sidebar(config, reference_spec(api_block)),)
 
 
 def test_reference_sidebar_lists_dict_items():
@@ -6146,7 +6152,7 @@ def test_reference_sidebar_lists_dict_items():
             ],
         }
 
-        sidebar = reference_sections.sidebar(docs._config, api_block)
+        sidebar = reference_sections.sidebar(docs._config, reference_spec(api_block))
 
         section = sidebar.contents[1]  # First section after API link
 
@@ -6171,7 +6177,7 @@ def test_reference_sidebar_sanitizes_colons():
             ],
         }
 
-        sidebar = reference_sections.sidebar(docs._config, api_block)
+        sidebar = reference_sections.sidebar(docs._config, reference_spec(api_block))
 
         section = sidebar.contents[1]
         assert {
@@ -7211,15 +7217,11 @@ def test_add_api_block_non_python_project():
             run = make_run(docs)
             add_api_block(docs, run)
 
-        assert run.has_api_reference is False
+        assert run.api_spec is None
 
 
 def test_add_api_block_carries_the_callable_signature_settings():
-    """The `callable_signatures` block reaches the generated api-reference block.
-
-    They are the renderer's only route to those settings: `Settings.make`
-    reads them from the block this method writes.
-    """
+    """Record custom callable signatures in the Quarto project metadata"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -7302,7 +7304,7 @@ def test_add_api_block_with_sections():
             run = make_run(docs)
             add_api_block(docs, run)
 
-        assert run.has_api_reference is True
+        assert run.api_spec is not None
 
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
@@ -10291,7 +10293,7 @@ def test_add_api_block_disabled():
         run = make_run(docs)
         add_api_block(docs, run)
 
-        assert run.has_api_reference is False
+        assert run.api_spec is None
 
 
 def test_add_api_block_without_package_name_warns_and_skips(
@@ -10312,7 +10314,7 @@ def test_add_api_block_without_package_name_warns_and_skips(
     with patch("builtins.input", side_effect=AssertionError("the build must not prompt")):
         add_api_block(docs, run)
 
-    assert run.has_api_reference is False
+    assert run.api_spec is None
     assert (
         "   ⚠️  Could not detect the package name; skipping the API reference"
         in capsys.readouterr().out
@@ -10340,7 +10342,7 @@ def test_add_api_block_no_exports():
             run = make_run(docs)
             add_api_block(docs, run)
 
-        assert run.has_api_reference is False
+        assert run.api_spec is None
 
 
 def test_add_api_block_reports_a_compiled_module_named_unlike_the_distribution(
@@ -10394,10 +10396,10 @@ def test_add_api_block_success():
             run = make_run(docs)
             add_api_block(docs, run)
 
-        assert run.has_api_reference is True
+        assert run.api_spec is not None
         written = read_quarto_yml(docs.layout.build_dir)
         assert written["api-reference"]["sections"] == sections
-        assert run.api_block == written["api-reference"]
+        assert run.api_spec == reference_spec(written["api-reference"])
 
 
 def test_discover_exports_submodule_detection():
@@ -11978,9 +11980,9 @@ def test_spec_options_replace_rejects_a_path_for_dynamic():
 
 
 def _make_api_ref(**block):
-    """An APIReference built from an `api-reference` block, defaulting package to json."""
+    """Provide rendering options for a reference to the `json` package"""
     block.setdefault("package", "json")
-    return APIReference({"api-reference": block})
+    return reference_from_options(block)
 
 
 def test_api_reference_init_basic():
@@ -11991,45 +11993,6 @@ def test_api_reference_init_basic():
     assert ref.settings.dir == "reference"
     assert ref.title == "Function reference"
     assert ref.settings.version is None
-
-
-def test_api_reference_init_with_options():
-    """APIReference routes build keys into Settings."""
-
-    ref = _make_api_ref(
-        dir="api",
-        title="API Reference",
-        out_index="api-index.qmd",
-        rewrite_all_pages=True,
-        parser="google",
-    )
-    assert ref.settings.dir == "api"
-    assert ref.title == "API Reference"
-    assert ref.settings.out_index == "api-index.qmd"
-    assert ref.settings.rewrite_all_pages is True
-    assert ref.settings.parser == "google"
-
-
-def test_api_reference_init_sidebar_string():
-    """APIReference converts sidebar string to dict."""
-
-    ref = _make_api_ref(sidebar="my-sidebar.yml")
-    assert ref.settings.sidebar == {"file": "my-sidebar.yml"}
-
-
-def test_api_reference_init_sidebar_dict_no_file():
-    """APIReference adds default file to sidebar dict if missing."""
-
-    ref = _make_api_ref(sidebar={"id": "api"})
-    assert ref.settings.sidebar["file"] == "_api-reference-sidebar.yml"
-    assert ref.settings.sidebar["id"] == "api"
-
-
-def test_api_reference_init_sidebar_dict_with_file():
-    """APIReference preserves sidebar dict with existing file."""
-
-    ref = _make_api_ref(sidebar={"file": "custom.yml"})
-    assert ref.settings.sidebar["file"] == "custom.yml"
 
 
 def test_api_reference_init_no_sidebar():
@@ -12044,13 +12007,6 @@ def test_api_reference_init_source_dir():
 
     ref = _make_api_ref(source_dir="src")
     assert ref.settings.source_dir == "src"
-
-
-def test_api_reference_init_css():
-    """APIReference accepts css setting."""
-
-    ref = _make_api_ref(css="custom.css")
-    assert ref.settings.css == "custom.css"
 
 
 def test_api_reference_init_dynamic():
@@ -12092,15 +12048,13 @@ def test_api_reference_build_basic():
         old_cwd = os.getcwd()
         os.chdir(tmp_dir)
         try:
-            ref = APIReference(
+            ref = reference_from_options(
                 {
-                    "api-reference": {
-                        "package": "introtest_build",
-                        "sections": [
-                            {"title": "Functions", "desc": "", "contents": [{"name": "greet"}]}
-                        ],
-                        "dir": "reference",
-                    }
+                    "package": "introtest_build",
+                    "sections": [
+                        {"title": "Functions", "desc": "", "contents": [{"name": "greet"}]}
+                    ],
+                    "dir": "reference",
                 }
             )
             ref.build()
@@ -12135,15 +12089,13 @@ def test_api_reference_build_with_sidebar():
         os.chdir(tmp_dir)
         try:
             sidebar_file = str(Path(tmp_dir) / "sidebar.yml")
-            ref = APIReference(
+            ref = reference_from_options(
                 {
-                    "api-reference": {
-                        "package": "introtest_sidebar",
-                        "sections": [
-                            {"title": "Functions", "desc": "", "contents": [{"name": "func"}]}
-                        ],
-                        "sidebar": sidebar_file,
-                    }
+                    "package": "introtest_sidebar",
+                    "sections": [
+                        {"title": "Functions", "desc": "", "contents": [{"name": "func"}]}
+                    ],
+                    "sidebar": sidebar_file,
                 }
             )
             ref.build()
@@ -12171,15 +12123,13 @@ def test_api_reference_build_with_source_dir():
         old_cwd = os.getcwd()
         os.chdir(tmp_dir)
         try:
-            ref = APIReference(
+            ref = reference_from_options(
                 {
-                    "api-reference": {
-                        "package": "introtest_srcdir",
-                        "sections": [
-                            {"title": "Functions", "desc": "", "contents": [{"name": "func"}]}
-                        ],
-                        "source_dir": str(src),
-                    }
+                    "package": "introtest_srcdir",
+                    "sections": [
+                        {"title": "Functions", "desc": "", "contents": [{"name": "func"}]}
+                    ],
+                    "source_dir": str(src),
                 }
             )
             ref.build()
@@ -12207,15 +12157,11 @@ def test_api_reference_write_doc_pages_skip_unchanged():
         old_cwd = os.getcwd()
         os.chdir(tmp_dir)
         try:
-            ref = APIReference(
+            ref = reference_from_options(
                 {
-                    "api-reference": {
-                        "package": "introtest_unchanged",
-                        "sections": [
-                            {"title": "Funcs", "desc": "", "contents": [{"name": "func"}]}
-                        ],
-                        "rewrite_all_pages": False,
-                    }
+                    "package": "introtest_unchanged",
+                    "sections": [{"title": "Funcs", "desc": "", "contents": [{"name": "func"}]}],
+                    "rewrite_all_pages": False,
                 }
             )
             # First build writes everything
@@ -12267,14 +12213,12 @@ def test_api_reference_generate_sidebar_basic():
         old_cwd = os.getcwd()
         os.chdir(tmp_dir)
         try:
-            ref = APIReference(
+            ref = reference_from_options(
                 {
-                    "api-reference": {
-                        "package": "introtest_sb",
-                        "sections": [
-                            {"title": "Functions", "desc": "", "contents": [{"name": "func"}]}
-                        ],
-                    }
+                    "package": "introtest_sb",
+                    "sections": [
+                        {"title": "Functions", "desc": "", "contents": [{"name": "func"}]}
+                    ],
                 }
             )
             resolved = ref.resolved
@@ -12413,57 +12357,6 @@ def test_api_reference_sidebar_page_links():
         sidebar=None,
     )
     assert "api/my_func.qmd" in str(result)
-
-
-def test_api_reference_from_config_dict():
-    """APIReference is created from a dict config."""
-
-    cfg = {
-        "api-reference": {
-            "package": "json",
-            "sections": [],
-        }
-    }
-    ref = APIReference(cfg)
-    assert ref.package == "json"
-
-
-def test_api_reference_no_section_raises():
-    """APIReference raises KeyError when no section found."""
-
-    with pytest.raises(KeyError, match="No .api-reference"):
-        APIReference({"other": {}})
-
-
-def test_api_reference_ignores_style_key():
-    """APIReference ignores the compatibility-only style key."""
-
-    cfg = {
-        "api-reference": {
-            "package": "json",
-            "sections": [],
-            "style": "pkgdown",
-        }
-    }
-    ref = APIReference(cfg)
-    assert ref.package == "json"
-
-
-def test_api_reference_drops_interlinks_fast():
-    """APIReference does not read the dropped interlinks.fast setting."""
-
-    cfg = {
-        "api-reference": {
-            "package": "json",
-            "sections": [],
-        },
-        "interlinks": {
-            "fast": True,
-        },
-    }
-    ref = APIReference(cfg)
-    assert ref.package == "json"
-    assert not hasattr(ref.settings, "fast_inventory")
 
 
 def test_cli_ordered_group_list_commands() -> None:
@@ -16348,12 +16241,11 @@ def test_render_reference_section_body_empty():
     assert body is None
 
 
-def _make_render_ref(*, title="API Reference", desc=None, package="mypkg", options=None):
+def _make_render_ref(*, title="API Reference", desc=None, package="mypkg"):
     """Create a reference with explicit index metadata for renderer tests"""
-    ref = APIReference({"api-reference": {"package": package}})
+    ref = reference_from_options({"package": package})
     ref.title = title
     ref.desc = desc
-    ref.options = options
     return ref
 
 
@@ -16368,7 +16260,6 @@ def test_render_reference_page_post_init():
     assert rp.api_ref is ref
     assert rp.sections == sections
     assert rp.package == "mypkg"
-    assert rp.options is None
 
 
 def test_render_reference_page_description():
@@ -18273,7 +18164,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         skill_md = great_docs_dir / "skill.md"
         assert skill_md.exists()
@@ -18314,7 +18205,7 @@ def test_generated_skill_front_matter_quotes_punctuation(tmp_path: Path):
     )
     docs = GreatDocs(project_path=tmp_path)
 
-    _skills_writer(docs).write(_written_api_block(docs))
+    _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
     front_matter, _ = split_front_matter((build_dir / "skill.md").read_text())
     assert front_matter.string("description").strip() == (
@@ -18351,7 +18242,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         # Check legacy .well-known/skills/default placement
         well_known = great_docs_dir / ".well-known" / "skills" / "default" / "SKILL.md"
@@ -18390,7 +18281,7 @@ def test_write_skill_disabled():
         great_docs_dir = Path(tmp_dir) / "great-docs"
         great_docs_dir.mkdir()
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         skill_md = great_docs_dir / "skill.md"
         assert not skill_md.exists()
@@ -18427,7 +18318,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         # skill.md should exist but .well-known should not
         assert (great_docs_dir / "skill.md").exists()
@@ -18450,7 +18341,7 @@ def test_write_skill_user_override():
         great_docs_dir = Path(tmp_dir) / "great-docs"
         great_docs_dir.mkdir()
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         skill_md = great_docs_dir / "skill.md"
         assert skill_md.exists()
@@ -18474,7 +18365,7 @@ def test_write_skill_publishes_companions_shown_on_page(tmp_path: Path):
     docs = GreatDocs(project_path=tmp_path)
     docs.layout.build_dir.mkdir()
 
-    _skills_writer(docs).write(_written_api_block(docs))
+    _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
     expected = ["SKILL.md", "assets/logo.png", "recipes.md", "references/api.md"]
     published = docs.layout.build_dir / ".well-known" / "agent-skills" / "demo-pkg"
@@ -18501,7 +18392,7 @@ def test_write_skill_at_project_root_has_no_companions(tmp_path: Path):
     docs = GreatDocs(project_path=tmp_path)
     docs.layout.build_dir.mkdir()
 
-    _skills_writer(docs).write(_written_api_block(docs))
+    _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
     published = docs.layout.build_dir / ".well-known" / "agent-skills" / "demo-pkg"
     assert [p.name for p in published.iterdir()] == ["SKILL.md"]
@@ -18541,7 +18432,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         # Should still generate a skill.md (fallback)
         skill_md = great_docs_dir / "skill.md"
@@ -18590,7 +18481,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         content = (great_docs_dir / "skill.md").read_text()
 
@@ -18642,7 +18533,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         content = (great_docs_dir / "skill.md").read_text()
 
@@ -18687,7 +18578,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         content = (great_docs_dir / "skill.md").read_text()
         assert "## Custom Section" in content
@@ -18726,7 +18617,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         content = (great_docs_dir / "skill.md").read_text()
         assert "[Full documentation](https://example.com/docs/)" in content
@@ -18743,7 +18634,7 @@ def test_write_skill_without_quarto_yml():
             "sections": [{"title": "Main", "contents": ["foo"]}],
         }
 
-        _skills_writer(docs).write(api_block)
+        _skills_writer(docs).write(reference_spec(api_block))
 
         assert not (docs.layout.build_dir / "_quarto.yml").exists()
         assert (docs.layout.build_dir / "skill.md").is_file()
@@ -18828,7 +18719,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         skill_md = great_docs_dir / "skill.md"
         assert skill_md.exists()
@@ -18879,7 +18770,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         content = (great_docs_dir / "skill.md").read_text()
         assert "# Hyphenated" in content
@@ -18919,7 +18810,7 @@ api-reference:
 """
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         content = (great_docs_dir / "skill.md").read_text()
 
@@ -18947,7 +18838,7 @@ def test_write_skills_page_basic():
             "        - foo\n"
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         skills_qmd = great_docs_dir / "skills.qmd"
         assert skills_qmd.exists()
@@ -18999,7 +18890,7 @@ def test_write_skills_page_omits_robots_tag_without_seo() -> None:
             "        - foo\n"
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         content = (great_docs_dir / "skills.qmd").read_text()
         assert "gd-head-tags" not in content
@@ -19033,7 +18924,7 @@ def test_write_skills_page_github_repo_detection():
             "        - foo\n"
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         content = (great_docs_dir / "skills.qmd").read_text()
 
@@ -19071,7 +18962,7 @@ def test_write_skills_page_site_url():
             "        - foo\n"
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         content = (great_docs_dir / "skills.qmd").read_text()
 
@@ -19108,7 +18999,7 @@ def test_write_skills_page_frontmatter_display():
             "        - foo\n"
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         content = (great_docs_dir / "skills.qmd").read_text()
 
@@ -19150,7 +19041,7 @@ def test_write_skills_page_curated_skill():
         great_docs_dir = Path(tmp_dir) / "great-docs"
         great_docs_dir.mkdir()
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         skills_qmd = great_docs_dir / "skills.qmd"
         assert skills_qmd.exists()
@@ -19174,7 +19065,7 @@ def test_write_skills_page_disabled():
         great_docs_dir = Path(tmp_dir) / "great-docs"
         great_docs_dir.mkdir()
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         assert not (great_docs_dir / "skills.qmd").exists()
 
@@ -19202,7 +19093,7 @@ def test_write_skills_page_well_known_disabled():
             "        - foo\n"
         )
 
-        _skills_writer(docs).write(_written_api_block(docs))
+        _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
         content = (great_docs_dir / "skills.qmd").read_text()
 
@@ -22425,7 +22316,7 @@ def test_skills_page_ignores_a_non_string_description(tmp_path: Path) -> None:
     (tmp_path / "great-docs").mkdir()
     docs = GreatDocs(project_path=str(tmp_path))
 
-    _skills_writer(docs).write(_written_api_block(docs))
+    _skills_writer(docs).write(reference_spec(_written_api_block(docs)))
 
     assert "# Skill" in (tmp_path / "great-docs" / "skills.qmd").read_text()
 

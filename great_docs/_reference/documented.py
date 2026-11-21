@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._apiref.api_reference import APIReference
 from .._apiref.resolve import ObjectNotFoundError
+from .._apiref.spec import ReferenceSpec
 
 if TYPE_CHECKING:
     from .._apiref.inventory import InventoryItem
@@ -213,17 +214,8 @@ def _resolved_reference(
             from .._apiref._extension_loading import _ExtensionSource
 
             reference = APIReference(
-                {
-                    "format": {"html": {"lang": config.lang}},
-                    "api-reference": {
-                        "package": importable_name,
-                        "sections": sections,
-                        "parser": config.parser or "numpy",
-                        "dynamic": config.dynamic,
-                        "members_on_same_page": config.members_on_same_page,
-                        "max_members_on_same_page": config.max_members_on_same_page,
-                    },
-                },
+                config,
+                ReferenceSpec(importable_name, sections),
                 extension_source=_ExtensionSource.make(config, config.config_path.parent),
             )
             yield reference

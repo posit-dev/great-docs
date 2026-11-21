@@ -12,31 +12,27 @@ import pytest
 
 from great_docs import GreatDocs
 from great_docs._apiref.api_reference import APIReference
-from great_docs._apiref.spec import SpecObject, SpecOptions
+from great_docs._apiref.spec import ReferenceSpec, SpecObject, SpecOptions
 from great_docs._build import reference
 from great_docs._build.log import BuildLog
 from great_docs._interlinks.sphinx_inventory import decode
 from great_docs._reference import sections
-from tests.support import StubRemote, make_run, prepare_build_directory, write_config
+from tests.support import (
+    StubRemote,
+    make_run,
+    prepare_build_directory,
+    write_config,
+)
 
 
 @pytest.mark.parametrize("value", ["embedded", "separate", "linked", "flat"])
-@pytest.mark.parametrize("block", ["api-reference", "quartodoc"])
-def test_legacy_children_has_migration_error(value: str, block: str) -> None:
+def test_legacy_children_has_migration_error(tmp_path: Path, value: str) -> None:
     """
     Reject `children` with guidance on selecting and placing members
     """
+    sections = [{"title": "API", "contents": [{"name": "Widget", "children": value}]}]
     with pytest.raises(ValueError, match="children.*members_on_same_page.*members"):
-        APIReference(
-            {
-                block: {
-                    "package": "unused",
-                    "sections": [
-                        {"title": "API", "contents": [{"name": "Widget", "children": value}]}
-                    ],
-                }
-            }
-        )
+        APIReference(write_config(tmp_path), ReferenceSpec("unused", sections))
 
 
 @pytest.mark.parametrize("value", [None, "false", 0, 1, 5])
@@ -164,7 +160,7 @@ def test_authored_yaml_places_synthetic_methods_on_requested_pages(
     monkeypatch.chdir(package_root)
     run = make_run(docs)
     prepare_build_directory(docs, run)
-    configured_entry = run.api_block["sections"][0]["contents"][0]
+    configured_entry = run.api_spec.sections[0]["contents"][0]
     if members_on_same_page is None:
         assert "members_on_same_page" not in configured_entry
     monkeypatch.chdir(docs.layout.build_dir)

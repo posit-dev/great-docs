@@ -14,6 +14,7 @@ import os
 import sys
 from typing import TYPE_CHECKING
 
+from .._apiref.spec import ReferenceSpec
 from .._cliref import click as cli_click
 from .._cliref import render as cli_render
 from .._reference import block as reference_block
@@ -50,19 +51,19 @@ def _prepare_imports(config: Config) -> None:
 
 def add_api_block(run: Run, config: Config, *, refresh: bool) -> None:
     """
-    Add the API reference configuration to the build's Quarto configuration
+    Discover the reference sections and record them in the Quarto project
 
     Skip the reference when disabled, when the project is not Python, or when no package name
     is detected. Warn for a missing package name. Use an explicit `reference` configuration
     when supplied; otherwise discover sections from the package's exports. When `refresh`
     is false, reuse valid cached sections. Skip when no sections are found. Record the
-    configuration or mark the reference as skipped in the build state.
+    reference specification for the remaining build steps.
 
     Parameters
     ----------
     run
-        The build state, updated with API reference availability and the reference's block
-        in the Quarto configuration.
+        The build state, updated with the reference specification and the Quarto project
+        metadata.
     config
         The project's configuration.
     refresh
@@ -75,19 +76,16 @@ def add_api_block(run: Run, config: Config, *, refresh: bool) -> None:
     # An explicit `reference: false` disables API reference generation.
     if not config.reference_enabled:
         print("API reference disabled (reference: false), skipping")
-        run.has_api_reference = False
         return
 
     # Non-Python projects have no importable Python package to introspect.
     if not config.is_python_project:
         print("API reference skipped (non-Python project)")
-        run.has_api_reference = False
         return
 
     project = run.project
     if not project.name or not (importable_name := project.importable_name):
         print_warning("Could not detect the package name; skipping the API reference")
-        run.has_api_reference = False
         return
 
     print(f"Adding API reference configuration for package: {project.name}")
@@ -106,10 +104,10 @@ def add_api_block(run: Run, config: Config, *, refresh: bool) -> None:
     sections = discovery.sections
     if not sections:
         print("No documentable exports found — skipping API reference")
-        run.has_api_reference = False
         return
 
-    run.api_block = reference_block.configure(config, run.quarto_config, importable_name, sections)
+    run.api_spec = ReferenceSpec(importable_name, sections)
+    reference_block.configure(config, run.quarto_config, run.api_spec)
     # Navigation allocates collision suffixes before the reference pages are written.
     # Both stages need to resolve the same objects to choose the same labels.
     _prepare_imports(config)
@@ -123,14 +121,14 @@ def api_config(run: Run) -> Outcome:
     Parameters
     ----------
     run
-        The build state, including API reference availability and cache reuse.
+        The build state, including the discovered reference and cache reuse.
 
     Returns
     -------
     :
         The result line or skip reason.
     """
-    if not run.has_api_reference:
+    if run.api_spec is None:
         return Skipped("no API reference")
     if run.api_discovery_reused:
         return "Reused cached API discovery"
@@ -144,8 +142,8 @@ def api(
     Write the API reference pages and the inventory of documented objects
 
     Store each attempt's reference on `run` before generating it, and close an attempt
-    that fails. When dynamic introspection fails, set `dynamic: false` in the in-memory
-    API reference configuration and retry once with static analysis. An API reference
+    that fails. When dynamic introspection fails, retry once with static analysis and
+    record the change in the generated Quarto metadata. An API reference
     extension failure propagates without a retry. Leave a successful reference open for
     the text export and interlinks; the build closes it.
 
@@ -155,8 +153,8 @@ def api(
     Parameters
     ----------
     run
-        The build's API reference availability, Quarto configuration and repository
-        details for source links. Receives the reference for later steps and cleanup.
+        The build's reference specification and repository details for source links.
+        Receives the reference for later steps and cleanup.
     config
         The project's configuration.
     layout
@@ -177,7 +175,8 @@ def api(
         If the API reference extension fails during loading, setup, preparation,
         rendering or input fingerprinting.
     """
-    if not run.has_api_reference:
+    spec = run.api_spec
+    if spec is None:
         return Skipped("API reference disabled"), None
 
     from .._apiref._extension_loading import _ExtensionSource
@@ -192,9 +191,14 @@ def api(
     failures = (*USER_CODE_ERRORS, ObjectNotFoundError)
     links = source_links(config, layout.package_root, run.project.repository, warn=print_warning)
 
-    def build_reference() -> APIReference:
+    def build_reference(*, dynamic: bool | None = None) -> APIReference:
         """
         Generate the API reference and record it on the run
+
+        Parameters
+        ----------
+        dynamic
+            The introspection mode for this attempt, or `None` to use the site setting.
 
         Returns
         -------
@@ -203,8 +207,10 @@ def api(
             propagates.
         """
         ref = APIReference(
-            run.quarto_config,
-            links,
+            config,
+            spec,
+            dynamic=dynamic,
+            source_links=links,
             extension_source=_ExtensionSource.make(config, layout.source_dir),
             output_root=layout.build_dir,
         )
@@ -228,12 +234,10 @@ def api(
             "Dynamic introspection failed for a resolved item, retrying with static analysis..."
         )
         log.detail(str(e))
-        # The block belongs to the in-memory Quarto configuration, so the retry sees
-        # this change and the final configuration write saves it.
-        if run.api_block is not None:
-            run.api_block["dynamic"] = False
+        if "api-reference" in run.quarto_config:
+            run.quarto_config["api-reference"]["dynamic"] = False
     try:
-        ref = build_reference()
+        ref = build_reference(dynamic=False)
     except failures as e:
         raise StepError(f"API reference build failed: {e}") from e
     return "API reference generated (static analysis)", ref

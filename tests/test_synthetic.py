@@ -29,6 +29,7 @@ from bs4 import BeautifulSoup
 from great_docs import Config, GreatDocs
 from great_docs._apiref.api_reference import APIReference
 from great_docs._apiref.content import MemberPage
+from great_docs._apiref.spec import ReferenceSpec
 from great_docs._build import content as build_content
 from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
@@ -47,6 +48,7 @@ from tests.support import (
     make_project,
     make_run,
     prepare_build_directory,
+    reference_from_options,
     update_quarto_config,
     user_guide_step,
     write_config,
@@ -295,16 +297,7 @@ def test_L1_big_class_member_pages(pkg_name: str, tmp_path: Path) -> None:
     big_class = expected["big_class_name"]
     assert not any(section["title"] == f"{big_class} Methods" for section in sections)
 
-    ref = APIReference(
-        {
-            "package": module_name,
-            "parser": docs._config.parser,
-            "dynamic": False,
-            "members_on_same_page": docs._config.members_on_same_page,
-            "max_members_on_same_page": docs._config.max_members_on_same_page,
-            "sections": sections,
-        }
-    )
+    ref = APIReference(docs._config, ReferenceSpec(module_name, sections), dynamic=False)
     parent = next(
         doc
         for section in ref.resolved
@@ -1276,7 +1269,7 @@ def test_L3_parameter_exclusion_pages(tmp_path: Path, monkeypatch: pytest.Monkey
     pkg_dir, _ = _make_package("gdtest_nodoc_param", tmp_path)
     monkeypatch.chdir(pkg_dir)
     monkeypatch.syspath_prepend(str(pkg_dir))
-    reference = APIReference(
+    reference = reference_from_options(
         {
             "package": "gdtest_nodoc_param",
             "members_on_same_page": False,

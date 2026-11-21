@@ -12,11 +12,12 @@ from typing import Any
 
 import pytest
 
+from great_docs._apiref.spec import ReferenceSpec
 from great_docs._build.facts import Facts
 from great_docs._cliref import render as cli_render
 from great_docs._mcpref import build as mcp_build
-from great_docs._reference import sections as reference_sections
 from great_docs._project.layout import Layout
+from great_docs._reference import sections as reference_sections
 from great_docs._website import assembly
 from great_docs._website.identity import Identity
 from tests.support import write_config
@@ -60,9 +61,7 @@ def _assemble(
         page.parent.mkdir(parents=True, exist_ok=True)
         page.write_text("---\ntitle: Reference\n---\n", encoding="utf-8")
         if section == "api":
-            contributions.append(
-                reference_sections.contribution(config, {"package": "pkg", "sections": []})
-            )
+            contributions.append(reference_sections.contribution(config, ReferenceSpec("pkg", [])))
         else:
             producer = cli_render if section == "cli" else mcp_build
             contributions.append(producer.contribution(config, [index]))

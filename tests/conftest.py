@@ -30,7 +30,7 @@ import pytest
 from great_docs._apiref._extension_loading import _ExtensionSource
 from great_docs._apiref.api_reference import APIReference
 from tests.gauntlet_sites import RENDERED_DIR
-from tests.support import MakeReference, WriteExtension
+from tests.support import MakeReference, WriteExtension, reference_from_options
 
 
 def _is_local(host: str | bytes | None) -> bool:
@@ -202,7 +202,9 @@ def make_reference(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[
             if output_root is not None:
                 output_root.mkdir(parents=True, exist_ok=True)
                 monkeypatch.chdir(output_root)
-            reference = APIReference(dict(block), extension_source=source, output_root=output_root)
+            reference = reference_from_options(
+                block, extension_source=source, output_root=output_root
+            )
             cleanup.callback(reference.close)
             return reference
 

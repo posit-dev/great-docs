@@ -591,6 +591,21 @@ $all_labels: (
 $class-like-labels: (class, dataclass, namedtuple, typeddict, protocol, abc, enum);
 $method-like-labels: (method, classmethod, staticmethod);
 
+@mixin dark-doc-label-colours($colour) {
+  :is(body.quarto-dark, html.quarto-dark, :root[data-bs-theme="dark"]) & {
+    color: tint-color($colour, 60%);
+    border-color: tint-color($colour, 15%);
+    background-color: shade-color($colour, 75%);
+  }
+}
+
+@mixin doc-label-colours($colour, $dark-grey-weight: 0%) {
+  color: $colour;
+  border-color: $colour;
+  background-color: tint-color($colour, 95%);
+  @include dark-doc-label-colours(mix(#404040, $colour, $dark-grey-weight));
+}
+
 // Quarto copies the page title into the narrow-screen navigation bar;
 // object-kind badges need the same styling in both locations.
 :is(.content, .quarto-secondary-nav-title) span.doc-label::after {
@@ -615,9 +630,7 @@ $method-like-labels: (method, classmethod, staticmethod);
 :is(.content, .quarto-secondary-nav-title) {
   @each $label in $class-like-labels {
     span.doc-label-#{$label}::after {
-      color: $label-class-color;
-      border-color: $label-class-color;
-      background-color: tint-color($label-class-color, 95%);
+      @include doc-label-colours($label-class-color, $dark-grey-weight: 30%);
     }
   }
 }
@@ -625,91 +638,69 @@ $method-like-labels: (method, classmethod, staticmethod);
 :is(.content, .quarto-secondary-nav-title) {
   @each $label in $method-like-labels {
     span.doc-label-#{$label}::after {
-      color: $label-method-color;
-      border-color: $label-method-color;
-      background-color: tint-color($label-method-color, 95%);
+      @include doc-label-colours($label-method-color);
     }
   }
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-function::after,
 :is(.content, .quarto-secondary-nav-title) span.doc-label-async::after {
-  color: $label-function-color;
-  border-color: $label-function-color;
-  background-color: tint-color($label-function-color, 95%);
+  @include doc-label-colours($label-function-color);
+}
+
+:is(.content, .quarto-secondary-nav-title) span.doc-label-exception::after {
+  @include dark-doc-label-colours($label-exception-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-property::after {
-  color: $label-property-color;
-  border-color: $label-property-color;
-  background-color: tint-color($label-property-color, 95%);
+  @include doc-label-colours($label-property-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-constant::after {
-  color: $label-constant-color;
-  border-color: $label-constant-color;
-  background-color: tint-color($label-constant-color, 95%);
+  @include doc-label-colours($label-constant-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-typealias::after {
-  color: $label-typealias-color;
-  border-color: $label-typealias-color;
-  background-color: tint-color($label-typealias-color, 95%);
+  @include doc-label-colours($label-typealias-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-typevar::after {
-  color: $label-typevar-color;
-  border-color: $label-typevar-color;
-  background-color: tint-color($label-typevar-color, 95%);
+  @include doc-label-colours($label-typevar-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-cli::after {
-  color: $label-cli-color;
-  border-color: $label-cli-color;
-  background-color: tint-color($label-cli-color, 95%);
+  @include doc-label-colours($label-cli-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-cli-group::after {
   content: "cli-group";
-  color: $label-cli-group-color;
-  border-color: $label-cli-group-color;
-  background-color: tint-color($label-cli-group-color, 95%);
+  @include doc-label-colours($label-cli-group-color);
 }
 
 // MCP label styles
 :is(.content, .quarto-secondary-nav-title) span.doc-label-mcp-tool::after {
   content: "tool";
-  color: $label-mcp-tool-color;
-  border-color: $label-mcp-tool-color;
-  background-color: tint-color($label-mcp-tool-color, 95%);
+  @include doc-label-colours($label-mcp-tool-color, $dark-grey-weight: 30%);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-mcp-resource::after {
   content: "resource";
-  color: $label-mcp-resource-color;
-  border-color: $label-mcp-resource-color;
-  background-color: tint-color($label-mcp-resource-color, 95%);
+  @include doc-label-colours($label-mcp-resource-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-mcp-resource-template::after {
   content: "resource template";
-  color: $label-mcp-resource-template-color;
-  border-color: $label-mcp-resource-template-color;
-  background-color: tint-color($label-mcp-resource-template-color, 95%);
+  @include doc-label-colours($label-mcp-resource-template-color, $dark-grey-weight: 30%);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-mcp-prompt::after {
   content: "prompt";
-  color: $label-mcp-prompt-color;
-  border-color: $label-mcp-prompt-color;
-  background-color: tint-color($label-mcp-prompt-color, 95%);
+  @include doc-label-colours($label-mcp-prompt-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-mcp::after {
   content: "mcp";
-  color: $label-mcp-color;
-  border-color: $label-mcp-color;
-  background-color: tint-color($label-mcp-color, 95%);
+  @include doc-label-colours($label-mcp-color);
 }
 
 // MCP capability tiles

@@ -68,8 +68,6 @@ class ReferenceIndexRenderer(PageRendererMixin, BaseRenderer):
         self.package = api_ref.package
         """The package being documented"""
 
-        self.options = api_ref.options
-
         super().__init__(
             api_ref, level, renderers=renderers or api_ref.renderers, extension=api_ref.extension
         )

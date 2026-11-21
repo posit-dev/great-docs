@@ -4,7 +4,6 @@ Validation and generated configuration for member-page placement
 
 from __future__ import annotations
 
-import copy
 import warnings
 from pathlib import Path
 
@@ -12,26 +11,29 @@ import pytest
 
 from great_docs._apiref._settings import Settings
 from great_docs._apiref.api_reference import APIReference
+from great_docs._apiref.spec import ReferenceSpec
 from great_docs.config import Config, ConfigError, create_default_config
 from tests.support import write_config
 
 
 @pytest.mark.parametrize("value", [True, False, None])
-def test_reference_block_accepts_global_override(value: bool | None) -> None:
-    ref = APIReference({"package": "example", "members_on_same_page": value})
+def test_reference_accepts_configured_global_override(tmp_path: Path, value: bool | None) -> None:
+    ref = APIReference(
+        write_config(tmp_path, {"members_on_same_page": value}), ReferenceSpec("example", [])
+    )
     assert ref.settings.members_on_same_page is value
 
 
 @pytest.mark.parametrize("value", [0, 1, 5, "true", [], {}])
 def test_reference_block_rejects_non_boolean_override(value: object) -> None:
     with pytest.raises(ValueError, match="members_on_same_page.*true, false or null"):
-        Settings.make({"members_on_same_page": value})
+        Settings(members_on_same_page=value)
 
 
 @pytest.mark.parametrize("value", [True, False, None, -1, 2.5, "5", [], {}])
 def test_reference_block_rejects_invalid_limit(value: object) -> None:
     with pytest.raises(ValueError, match="max_members_on_same_page.*non-negative integer"):
-        Settings.make({"max_members_on_same_page": value})
+        Settings(max_members_on_same_page=value)
 
 
 _LEGACY_CASES: list[tuple[dict[str, object], bool | None, int]] = [
@@ -86,26 +88,6 @@ def test_global_compatibility_preserves_raw_input_and_warns_once(
         _ = config["inline_methods"]
 
 
-@pytest.mark.parametrize(("options", "same_page", "maximum"), _LEGACY_CASES)
-def test_raw_reference_global_compatibility_respects_fieldwise_precedence(
-    options: dict[str, object], same_page: bool | None, maximum: int
-) -> None:
-    """
-    Translate legacy placement without changing the supplied reference block
-
-    Explicit current fields take precedence independently, including `null`.
-    """
-    original = copy.deepcopy(options)
-    with pytest.warns(
-        UserWarning, match="inline_methods.*members_on_same_page.*max_members_on_same_page"
-    ) as emitted:
-        settings = Settings.make(options)
-        assert settings.members_on_same_page is same_page
-        assert settings.max_members_on_same_page == maximum
-    assert len(emitted) == 1
-    assert options == original
-
-
 @pytest.mark.parametrize(
     "override", [{"members_on_same_page": 1}, {"max_members_on_same_page": True}]
 )
@@ -118,8 +100,6 @@ def test_compatibility_input_does_not_relax_new_field_validation(
     options = {"inline_methods": 8, **override}
     with pytest.warns(UserWarning), pytest.raises(ConfigError):
         write_config(tmp_path, options)
-    with pytest.warns(UserWarning), pytest.raises(ValueError):
-        Settings.make(options)
 
 
 def test_current_fields_do_not_emit_deprecation_warnings(tmp_path: Path) -> None:
@@ -129,7 +109,7 @@ def test_current_fields_do_not_emit_deprecation_warnings(tmp_path: Path) -> None
             tmp_path, {"members_on_same_page": None, "max_members_on_same_page": 2}
         )
         assert config.max_members_on_same_page == 2
-        assert Settings.make({"members_on_same_page": None}).members_on_same_page is None
+        assert Settings.make(config).members_on_same_page is None
     assert not emitted
 
 

@@ -1,23 +1,21 @@
 """
 Settings for loading, rendering and linking the objects of an API reference
 
-Read generation options from the Quarto `api-reference` block and combine them with the
-site language and the project's source links. Settings hold values only: building them
-never loads the extension, which keeps its own registrations and imports.
+Read generation options from the documentation configuration and combine them with the
+project's source links. Settings contain only values, so constructing them leaves the
+extension unloaded.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from dataclasses import fields as dc_fields
 from typing import TYPE_CHECKING, Any, cast
-
-from .._config_compat import normalise_member_placement
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from .._project.repository import Repository
+    from ..config import Config
 
 
 @dataclass
@@ -62,9 +60,8 @@ class Settings:
     """
     Settings for generating an API reference
 
-    Generation options come from the `api-reference:` block, the language from the site
-    configuration and the source links from the project. `make()` ignores the block's
-    `version` key, but code that builds settings directly may supply an inventory version.
+    The site's configuration supplies generation options and language. A build can
+    supply source links and choose static introspection when its dynamic attempt fails.
     """
 
     parser: str = "numpy"
@@ -118,46 +115,38 @@ class Settings:
     @classmethod
     def make(
         cls,
-        block: dict[str, Any],
-        lang: str = "en",
+        config: Config,
+        *,
+        dynamic: bool | None = None,
         source_links: SourceLinks | None = None,
     ) -> Settings:
         """
-        Build reference settings from generation options, the site language and source links
+        Read reference generation settings from the documentation configuration
 
         Parameters
         ----------
-        block
-            The `api-reference:` block.
-        lang
-            The reference language as a BCP 47 tag.
+        config
+            The project's documentation configuration.
+        dynamic
+            The introspection mode for this attempt, or `None` to use the site setting.
         source_links
-            The source-link destinations, or `None` to disable source links.
+            The destinations for source links, or `None` to disable them.
 
         Returns
         -------
         :
-            Settings with the supplied generation options, language and source links.
+            The settings for this reference.
         """
-        block = normalise_member_placement(block, default_limit=cls.max_members_on_same_page)
-        kwargs: dict[str, Any] = {
-            k: block[k]
-            for k in _SETTINGS_KEYS
-            if k in block and not (k == "out_index" and block[k] is None)
-        }
-        signatures: dict[str, Any] | None = kwargs.get("callable_signatures")
-        if isinstance(signatures, dict):
-            kwargs["callable_signatures"] = CallableSignatures(**signatures)
-
-        sidebar = kwargs.get("sidebar")
-        if isinstance(sidebar, str):
-            kwargs["sidebar"] = {"file": sidebar}
-        elif isinstance(sidebar, dict) and "file" not in sidebar:
-            # Copy so the caller's config dict is not mutated.
-            kwargs["sidebar"] = {**sidebar, "file": "_api-reference-sidebar.yml"}
-        return cls(**kwargs, lang=lang, source_links=source_links or SourceLinks())
-
-
-# Keys read from the reference block. Only code can set the inventory version, and the
-# language and source links come from the site and the project.
-_SETTINGS_KEYS = {f.name for f in dc_fields(Settings)} - {"version", "lang", "source_links"}
+        return cls(
+            parser=config.parser or "numpy",
+            callable_signatures=CallableSignatures(
+                style=config.callable_signatures_style,
+                wrap=config.callable_signatures_wrap,
+            ),
+            dynamic=config.dynamic if dynamic is None else dynamic,
+            members_on_same_page=config.members_on_same_page,
+            max_members_on_same_page=config.max_members_on_same_page,
+            lang=config.lang,
+            source_links=source_links or SourceLinks(),
+            show_bases=config.reference_show_bases,
+        )

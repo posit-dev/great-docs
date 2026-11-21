@@ -476,6 +476,65 @@ def test_consumers_share_preparation_regardless_of_order(
     assert {"Document", "Alias", "Document.render", "Alias.render"} <= set(ref.documented_symbols)
 
 
+def test_prepared_callable_alias_keeps_its_docstring(make_reference: MakeReference) -> None:
+    ref = make_reference(
+        {"package": PACKAGE, "dynamic": True},
+        package_files={
+            "__init__.py": '''
+                def render():
+                    """Render the document"""
+
+                show = render
+                """Show the document"""
+            ''',
+        },
+    )
+
+    @ref.extension.on_object_resolved
+    def prepare(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
+        obj.docstring = gf.Docstring("Show the prepared document")
+        return obj
+
+    path = f"{PACKAGE}:show"
+    alias = ref.get_object(path)
+    assert isinstance(alias, gf.Function)
+    assert alias.docstring.value == "Show the document"
+    assert ref.prepare(alias) is alias
+
+    reacquired = ref.get_object(path)
+    assert reacquired.docstring.value == "Show the prepared document"
+
+
+def test_prepared_reexposed_class_keeps_its_docstring(make_reference: MakeReference) -> None:
+    ref = make_reference(
+        {"package": PACKAGE, "dynamic": True},
+        package_files={
+            "__init__.py": '''
+                class Document:
+                    """Render a document"""
+
+                Report = Document
+                """Render a report"""
+            ''',
+        },
+    )
+
+    @ref.extension.on_object_resolved
+    def prepare(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
+        obj.docstring = gf.Docstring("Render a prepared report")
+        return obj
+
+    path = f"{PACKAGE}:Report"
+    report = ref.get_object(path)
+    assert isinstance(report, gf.Class)
+    assert report.docstring.value == "Render a report"
+    assert ref.prepare(report) is report
+
+    reacquired = ref.get_object(path)
+    assert reacquired.docstring.value == "Render a prepared report"
+    assert reacquired is report
+
+
 def test_object_hooks_run_before_documented_dunder_selection(
     write_extension: WriteExtension, make_reference: MakeReference
 ):

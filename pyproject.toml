@@ -39,6 +39,7 @@ dependencies = [
     "PyYAML>=6.0",
     "click>=8.2.0",
     "griffe~=2.1.0",
+    "multimark>=0.5.0",
     "requests>=2.27.0",
     "python-dotenv>=1.0.0",
     "Pillow>=9.2.0",

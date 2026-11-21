@@ -35,7 +35,8 @@ def test_descriptions_reach_the_page_intact(tmp_path: Path):
         "own": "---\ntitle: Own\ndescription: Written by the author\n---\n\nText\n",
         "prose": (
             "---\ntitle: Prose\n---\n\n"
-            "Use `sum` with [arrays](a.qmd) *quickly*, at $5 & @home on a_b.\n"
+            "Use `sum` with [arrays](a.qmd) *quickly*, at $5 &amp; @home on a_b."
+            " Keep the literal &amp;amp;.\n"
         ),
         "code": "---\ntitle: Code\n---\n\n```python\nx = 1\n```\n",
         "summary": add_to_page(
@@ -60,6 +61,8 @@ def test_descriptions_reach_the_page_intact(tmp_path: Path):
         return _META_DESCRIPTION.findall(head)
 
     assert descriptions("own") == ["Written by the author"]
-    assert descriptions("prose") == ["Use sum with arrays quickly, at $5 &amp; @home on a_b."]
+    assert descriptions("prose") == [
+        "Use sum with arrays quickly, at $5 &amp; @home on a_b. Keep the literal &amp;amp;."
+    ]
     assert descriptions("code") == ["Site default"]
     assert descriptions("summary") == ["Compare a b with Frame and **kwargs"]
