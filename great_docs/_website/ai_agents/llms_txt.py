@@ -11,7 +11,6 @@ decides from the configuration whether to link to them, before that reference ex
 from __future__ import annotations
 
 import importlib
-
 import inspect
 from typing import TYPE_CHECKING, Any
 
