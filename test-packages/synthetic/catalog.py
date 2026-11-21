@@ -431,6 +431,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_webmcp",  # 213
     # 214: Termshow recordings of a TUI (split sequences, seams, colors)
     "gdtest_termshow_tui",  # 214
+    # 215: Docstring summaries that wrap over several lines
+    "gdtest_wrapped_summary",  # 215
 ]
 
 
@@ -2376,6 +2378,14 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "background blocks. Nothing should leak onto the screen, rows of one color "
         "should meet without seams, and the nyancat page plays the same recording "
         "in asciinema-player for comparison."
+    ),
+    # ── 215: Wrapped docstring summaries ─────────────────────────────
+    "gdtest_wrapped_summary": (
+        "Docstrings whose summary (the first paragraph) wraps over two or three lines, "
+        "on functions, a class and a method, beside a one-line summary and one followed "
+        "directly by a code block. Each summary should show whole under the title, in "
+        "the index tables and in llms.txt, with none of it left at the start of the "
+        "description."
     ),
 }
 
