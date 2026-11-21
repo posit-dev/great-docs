@@ -1,7 +1,8 @@
 import contextlib
 import io
+import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
@@ -185,6 +186,24 @@ def test_index_links_are_absolute_with_a_site_url(
 
 def test_docstring_summary_is_the_first_line_without_its_period():
     assert llms_txt.docstring_summary("json", "dumps") == DUMPS_SUMMARY
+
+
+def test_docstring_summary_is_the_whole_first_paragraph(monkeypatch: pytest.MonkeyPatch):
+    module = ModuleType("gd_wrapped_summary")
+
+    def view_state():
+        """Keep the reader's view of the table,
+        and let them undo their changes to it.
+
+        The view is the table's filters and sort.
+        """
+
+    module.view_state = view_state
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+
+    assert llms_txt.docstring_summary(module.__name__, "view_state") == (
+        "Keep the reader's view of the table, and let them undo their changes to it"
+    )
 
 
 @pytest.mark.parametrize(
