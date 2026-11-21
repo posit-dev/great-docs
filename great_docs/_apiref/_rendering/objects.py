@@ -43,6 +43,7 @@ from .._docstring_sections import (
     transform,
     transform_sections,
 )
+from .._docstring_summary import summary_lines
 from .._format import (
     HAS_RUFF,
     format_name,
@@ -424,25 +425,27 @@ class ObjectRenderer(BaseRenderer):
         return transform_sections(self.obj.docstring.parsed)
 
     @cached_property
-    def docstring_subject(self) -> str | None:
+    def _docstring_subject_lines(self) -> list[str]:
         """
-        The first line of the docstring, shown as the subject
-
-        There is no subject when the docstring does not start with a text section, or
-        when its first line opens display maths (`$$`) or a fenced div (`:::`). Body
-        callbacks do not receive the subject.
+        The lines of the docstring's first paragraph, which make up the subject
         """
         sections = self._docstring_sections
         if not sections or not isinstance(sections[0], gf.DocstringSectionText):
-            return None
+            return []
+        return summary_lines(sections[0].value)
 
-        lines = sections[0].value.splitlines()
-        if not lines:
-            return None
-        first_line = lines[0]
-        if first_line == "$$" or first_line.startswith(":::"):
-            return None
-        return first_line
+    @cached_property
+    def docstring_subject(self) -> str | None:
+        """
+        The first paragraph of the docstring, on one line, shown as the subject
+
+        The paragraph may wrap over several lines; it ends at the first blank line. There
+        is no subject when the docstring does not start with a text section, or when it
+        opens with a code fence, display maths (`$$`) or a fenced div (`:::`). Body
+        callbacks do not receive the subject.
+        """
+        lines = self._docstring_subject_lines
+        return " ".join(line.strip() for line in lines) if lines else None
 
     def render_docstring_subject(self) -> BlockContent:
         """
@@ -472,10 +475,10 @@ class ObjectRenderer(BaseRenderer):
         sections = list(self._docstring_sections)
 
         # Remove the docstring subject from the top of the docstring
-        if self.docstring_subject:
+        if subject_lines := self._docstring_subject_lines:
             # Copy the first section, because every appearance of the object shares it.
             first_section = copy(sections[0])
-            first_section.value = "\n".join(first_section.value.splitlines()[1:])
+            first_section.value = "\n".join(first_section.value.splitlines()[len(subject_lines) :])
             sections = [first_section, *sections[1:]]
 
         for i, section in enumerate(sections):
