@@ -1,16 +1,17 @@
 """
 The `llms.txt` and `llms-full.txt` files that describe the API reference to language models
 
-`llms.txt` links to each reference page with the first line of each object's prepared
-docstring and, when the site has WebMCP tools, lists them. `llms-full.txt` contains the
-prepared API documentation, followed by command-line help and the user guide. Both files
-come from the build's prepared reference. The homepage decides from the configuration
-whether to link to them, before that reference exists.
+`llms.txt` links to each reference page with the summary (the first paragraph) of each
+object's prepared docstring and, when the site has WebMCP tools, lists them.
+`llms-full.txt` contains the prepared API documentation, followed by command-line help
+and the user guide. Both files come from the build's prepared reference. The homepage
+decides from the configuration whether to link to them, before that reference exists.
 """
 
 from __future__ import annotations
 
 import importlib
+import inspect
 from typing import TYPE_CHECKING, Any
 
 from ..._build.steps import USER_CODE_ERRORS
@@ -225,10 +226,11 @@ def _webmcp_lines(tools: Sequence[WebMCPTool], site_url: str, *, js_api: bool) -
 
 def docstring_summary(package_name: str, item_name: str) -> str:
     """
-    Return the first docstring line of an object in a package's top-level namespace
+    Return the docstring summary of an object in a package's top-level namespace
 
-    Importing the package runs its code. Import, syntax, attribute, runtime, OS and griffe
-    errors produce an empty summary; other errors propagate.
+    The summary is the docstring's first paragraph, joined into one line. Importing the
+    package runs its code. Import, syntax, attribute, runtime, OS and griffe errors produce
+    an empty summary; other errors propagate.
 
     Parameters
     ----------
@@ -240,9 +242,11 @@ def docstring_summary(package_name: str, item_name: str) -> str:
     Returns
     -------
     :
-        The first docstring line without trailing periods, or `""` when the object is missing
-        or undocumented, or a handled error occurs.
+        The summary without trailing periods, or `""` when the object is missing or
+        undocumented, or a handled error occurs.
     """
+    from ..._apiref._docstring_summary import summary_text
+
     try:
         module = importlib.import_module(package_name.replace("-", "_"))
         obj = getattr(module, item_name, None)
@@ -251,7 +255,7 @@ def docstring_summary(package_name: str, item_name: str) -> str:
         docstring = getattr(obj, "__doc__", None)
         if not docstring:
             return ""
-        return docstring.strip().split("\n")[0].strip().rstrip(".")
+        return summary_text(inspect.cleandoc(docstring)).rstrip(".")
     except USER_CODE_ERRORS:
         return ""
 

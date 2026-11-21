@@ -114,8 +114,8 @@ or class. Use only what's relevant. The standard sections are:
 
 | Section | Purpose |
 |---------|---------|
-| **Summary line** | A one-line description. Always present. Shows up in API index tables. |
-| **Extended description** | Extra paragraphs after the summary. Markdown formatting applies. |
+| **Summary** | The first paragraph: a short description. Always present. See [The Summary](#the-summary). |
+| **Extended description** | Paragraphs after the summary. Markdown formatting applies. |
 | **Parameters** | Describes each parameter (name, type, meaning, default). |
 | **Returns** | What the function returns, including the type. |
 | **Raises** | Exceptions the function may raise and when. |
@@ -126,9 +126,37 @@ or class. Use only what's relevant. The standard sections are:
 | **References** | Citations or links to external resources. |
 
 Not every section needs to appear, and sections with no content are simply omitted from the
-rendered page. At minimum, include a summary line and a Parameters section for any function that
+rendered page. At minimum, include a summary and a Parameters section for any function that
 accepts arguments. Returns and Raises sections are also high value: they tell users what to expect
 without reading source code.
+
+### The Summary
+
+The summary is the docstring's first paragraph: everything up to the first blank line. It can wrap
+over several lines, which Great Docs joins into one. Everything after the blank line is the extended
+description.
+
+```python
+def view_state(url: bool = True, undo: bool = True) -> GT:
+    """Keep the reader's view of the table, for when the page is opened again,
+    and let them undo their changes to it.
+
+    The view is the table's filters, sort, search, page and hidden columns.
+    ...
+    """
+```
+
+Here the summary is both of the first two lines. Great Docs shows the summary in these places:
+
+- in italics under the object's title on its reference page, above the usage block
+- beside the object's name in the API index tables
+- as the reference page's description in search results (see [SEO](seo.qmd))
+- in `llms.txt` and the page's Markdown version (see [LLMs.txt](llms-txt.qmd))
+
+Great Docs sets no length limit, but readers see the summary in all of these places, so one
+sentence usually works best. Keep the detail for the extended description. A code block, callout
+or display maths (`$$`) on the line right after the summary also ends it. A docstring that opens
+with one of those has no summary, and the whole docstring becomes the description.
 
 ### Custom Sections
 
@@ -582,7 +610,7 @@ A few guidelines apply across all of these:
 more than "`dict[K, ContractId]` where `K` is constrained to `str` or `bytes`."
 - **Use `%seealso` liberally.** Constants, type aliases, and TypeVars rarely stand alone. Link to
 the functions and classes that use them.
-- **Keep the summary line short.** Even for a complex type alias, the first line should fit
+- **Keep the summary short.** Even for a complex type alias, the first paragraph should fit
 comfortably in an API index table.
 - **Don't repeat the type annotation.** The rendered page already shows the type, so the docstring
 should add what the type alone can't express.

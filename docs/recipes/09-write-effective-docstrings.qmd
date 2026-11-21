@@ -69,19 +69,26 @@ Great Docs auto-detects your style during `great-docs init`. You can also set it
 parser: numpy   # or: google, sphinx
 ```
 
-## Write a Good Summary Line
+## Write a Good Summary
 
-The first line of every docstring is the summary. It appears in the API reference sidebar tooltips and in search results. Keep it short (one line) and action-oriented:
+The first paragraph of every docstring is the summary, up to the first blank line. It appears under the object's title, in the API index tables, in search results and in `llms.txt`. It may wrap over several lines, but keep it short (usually one sentence) and action-oriented:
 
 ```python
-# Good: starts with a verb, one line
+# Good: starts with a verb, one sentence
 def save(data: dict, path: str) -> None:
     """Write data to a JSON file."""
+
+# Also fine: one sentence, wrapped
+def save(data: dict, path: str, indent: int = 2) -> None:
+    """Write data to a JSON file, indented so that it can be read
+    and compared in version control."""
 
 # Less useful: vague or overly long
 def save(data: dict, path: str) -> None:
     """This function is used for saving data objects to disk in JSON format with pretty-printing."""
 ```
+
+See [The Summary](../user-guide/writing-docstrings.html#the-summary) in the User Guide for where the summary ends.
 
 ## Add an Extended Description
 
@@ -165,6 +172,6 @@ def encode(data: bytes) -> str:
 
 ## Docstrings That Do Not Render Well
 
-Some patterns render poorly. Keep summary lines short enough for the sidebar. Use
+Some patterns render poorly. Keep summaries short enough for the API index tables. Use
 `parser: sphinx` for reStructuredText field lists and roles such as `:param:` and
 `` :py:exc:`ValueError` ``. If you document one parameter, document them all.

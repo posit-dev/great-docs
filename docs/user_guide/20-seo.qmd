@@ -354,7 +354,7 @@ page. Great Docs generates these automatically from your content.
 Great Docs gives each page a description from the first of these that applies:
 
 1. the page's own `description` or `description-meta` front matter
-2. for an API reference page, the summary line of the object's docstring
+2. for an API reference page, the summary (first paragraph) of the object's docstring
 3. the paragraph the page opens with, when it is longer than 30 characters
 4. the default description
 

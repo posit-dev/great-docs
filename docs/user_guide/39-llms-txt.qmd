@@ -55,7 +55,8 @@ The content is derived from:
 
 - **Package name and description** from `pyproject.toml`
 - **Section titles and descriptions** from the `api-reference.sections` block in `great-docs.yml`
-- **One-line docstring summaries** extracted by importing the package at build time
+- **Docstring summaries** (each docstring's first paragraph, joined into one line)
+  extracted by importing the package at build time
 - **URLs** constructed from the `site-url` in `great-docs.yml` or the `Documentation` URL in
   `pyproject.toml`
 
