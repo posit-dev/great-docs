@@ -5,10 +5,9 @@ Publish AI agent skills and a browsable skills page for a documentation site
 from __future__ import annotations
 
 import shutil
-from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from ..._project.layout import Layout
 from ..._project.manifest import Manifest
@@ -18,6 +17,7 @@ from .skills_page import SkillsPageWriter
 from .well_known import publish
 
 if TYPE_CHECKING:
+    from ..._apiref.spec import ReferenceSpec
     from ..._project.repository import Repository
 
 
@@ -38,7 +38,7 @@ class SkillsWriter:
     repository: Repository | None
     """The selected repository for source links and installation fallbacks"""
 
-    def write(self, api_block: Mapping[str, Any] | None) -> None:
+    def write(self, spec: ReferenceSpec | None) -> None:
         """
         Publish the configured skills and a page for browsing them
 
@@ -47,9 +47,9 @@ class SkillsWriter:
 
         Parameters
         ----------
-        api_block
-            The API reference configuration for a generated skill, or `None` when the site
-            has none.
+        spec
+            The package and sections for a generated skill, or `None` when the site has
+            no API reference.
 
         Returns
         -------
@@ -104,7 +104,7 @@ class SkillsWriter:
             self.layout,
             self.distribution_name,
             self.metadata,
-            api_block,
+            spec,
             repo_url=self.repository.url if self.repository else None,
         )
 

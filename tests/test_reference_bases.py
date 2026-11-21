@@ -6,9 +6,10 @@ from textwrap import dedent
 import pytest
 
 from great_docs._apiref.api_reference import APIReference
+from great_docs._apiref.spec import ReferenceSpec
 from great_docs._reference.block import configure
 from great_docs.config import ConfigError
-from tests.support import MakeReference, WriteExtension, write_config
+from tests.support import MakeReference, WriteExtension, reference_from_options, write_config
 
 PACKAGE = "reference_bases_example"
 BASES_LABEL = "[Bases:]{.doc-class-bases}"
@@ -100,15 +101,17 @@ def test_show_bases_requires_a_boolean(tmp_path: Path, value: object) -> None:
     with pytest.raises(ConfigError, match=r"reference\.show_bases must be true or false"):
         write_config(tmp_path, {"reference": {"show_bases": value}})
     with pytest.raises(ValueError, match="show_bases.*must be true or false"):
-        APIReference({"package": PACKAGE, "show_bases": value})
+        reference_from_options({"package": PACKAGE, "show_bases": value})
 
 
 @pytest.mark.parametrize("enabled", [True, False])
 def test_show_bases_with_automatically_discovered_sections(project: Path, enabled: bool) -> None:
     config = write_config(project, {"reference": {"show_bases": enabled}})
-    block = configure(config, {}, PACKAGE, config.reference)
-    assert ("show_bases" in block) is enabled
-    APIReference(block).build()
+    specification = ReferenceSpec(PACKAGE, config.reference)
+    quarto = {}
+    configure(config, quarto, specification)
+    assert ("show_bases" in quarto["api-reference"]) is enabled
+    APIReference(config, specification).build()
 
     child = (project / "reference/Child.qmd").read_text(encoding="utf-8")
     assert (BASES_LABEL in child) is enabled
@@ -127,8 +130,7 @@ def test_show_bases_uses_only_published_direct_targets(project: Path) -> None:
             },
         },
     )
-    block = configure(config, {}, PACKAGE, config.reference)
-    APIReference(block).build()
+    APIReference(config, ReferenceSpec(PACKAGE, config.reference)).build()
 
     reference = project / "reference"
     child = (reference / "Child.qmd").read_text(encoding="utf-8")
@@ -152,10 +154,10 @@ def test_show_bases_uses_only_published_direct_targets(project: Path) -> None:
     for name in ("Root", "PrivateChild"):
         assert BASES_LABEL not in (reference / f"{name}.qmd").read_text(encoding="utf-8")
 
-    block["sections"] = [
+    sections = [
         {"title": "API", "contents": [*contents, {"name": "Child", "include_inherited": True}]}
     ]
-    APIReference(block).build()
+    APIReference(config, ReferenceSpec(PACKAGE, sections)).build()
     child = (reference / "Child.qmd").read_text(encoding="utf-8")
     assert "Describe a parent" in child
     assert "[`_Mixin[int]`](/reference/_Mixin.html" in child
@@ -163,7 +165,7 @@ def test_show_bases_uses_only_published_direct_targets(project: Path) -> None:
 
 @pytest.mark.parametrize("inline", [True, False])
 def test_show_bases_links_to_the_nested_class_location(project: Path, inline: bool) -> None:
-    ref = APIReference(
+    ref = reference_from_options(
         {
             "package": PACKAGE,
             "show_bases": True,

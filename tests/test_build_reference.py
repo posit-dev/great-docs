@@ -34,6 +34,7 @@ from tests.support import (
     WriteExtension,
     make_run,
     prepare_build_directory,
+    reference_spec,
     update_quarto_config,
     write_config,
     write_pyproject,
@@ -165,7 +166,9 @@ def _write_api_reference(docs: GreatDocs) -> Outcome:
         The step's outcome.
     """
     quarto_config = quarto_yml.read(docs.layout.build_dir)
-    run = make_run(docs, quarto_config=quarto_config, api_block=quarto_config["api-reference"])
+    run = make_run(
+        docs, quarto_config=quarto_config, api_spec=reference_spec(quarto_config["api-reference"])
+    )
     outcome, _ = reference.api(run, docs._config, docs.layout, BuildLog(stream=io.StringIO()))
     return outcome
 
@@ -257,8 +260,8 @@ def test_no_refresh_reuses_the_discovery_of_the_last_build(tmp_path: Path):
         reused = _configure(docs, refresh=False)
 
     sections.assert_not_called()
-    assert reused.has_api_reference
-    assert reused.api_block == discovered.api_block
+    assert reused.api_spec is not None
+    assert reused.api_spec == discovered.api_spec
     assert reference.api_config(reused) == "Reused cached API discovery"
 
 
@@ -279,8 +282,8 @@ def test_no_refresh_discovers_when_a_package_file_changes(tmp_path: Path):
         run = _configure(docs, refresh=False)
 
     sections.assert_called_once()
-    assert run.api_block is not None
-    assert "part" in str(run.api_block["sections"])
+    assert run.api_spec is not None
+    assert "part" in str(run.api_spec.sections)
     assert reference.api_config(run) == "API reference discovered"
 
 
@@ -297,7 +300,7 @@ def test_no_refresh_reuses_the_discovery_of_a_moved_project(tmp_path: Path):
         reused = _configure(GreatDocs(project_path=str(moved)), refresh=False)
 
     sections.assert_not_called()
-    assert reused.api_block == discovered.api_block
+    assert reused.api_spec == discovered.api_spec
 
 
 def test_no_refresh_discovers_when_a_package_file_is_renamed(tmp_path: Path):
@@ -346,8 +349,8 @@ def test_refresh_rediscovers_and_rewrites_the_cache(tmp_path: Path):
         refreshed = _configure(docs, refresh=True)
 
     sections.assert_called_once()
-    assert refreshed.api_block == discovered.api_block
-    assert _configure(docs, refresh=False).api_block == discovered.api_block
+    assert refreshed.api_spec == discovered.api_spec
+    assert _configure(docs, refresh=False).api_spec == discovered.api_spec
 
 
 @pytest.mark.parametrize(
@@ -366,7 +369,7 @@ def test_no_refresh_discovers_when_the_cache_is_unusable(tmp_path: Path, content
         run = _configure(docs, refresh=False)
 
     sections.assert_called_once()
-    assert run.api_block == discovered.api_block
+    assert run.api_spec == discovered.api_spec
     assert reference.api_config(_configure(docs, refresh=False)) == "Reused cached API discovery"
 
 
@@ -377,9 +380,7 @@ def test_api_config_skips_a_site_without_an_api_reference(tmp_path: Path):
     write_config(tmp_path, "module: mypkg\n")
     docs = GreatDocs(project_path=str(tmp_path))
 
-    assert reference.api_config(make_run(docs, has_api_reference=False)) == Skipped(
-        "no API reference"
-    )
+    assert reference.api_config(make_run(docs)) == Skipped("no API reference")
 
 
 def test_api_links_each_project_in_a_process_to_its_own_source(
@@ -418,18 +419,19 @@ def test_api_imports_the_package_from_the_project_root(
     assert root in sys.path
 
 
-def test_api_retry_with_static_analysis_disables_dynamic_introspection_in_the_configuration(
+def test_api_retry_with_static_analysis_uses_the_documentation_config(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     """
-    Disable dynamic introspection in memory before retrying with static analysis
+    Retry a dynamic build in static mode without changing the documentation config
     """
     docs = _source_linked_project(tmp_path / "static_retry", "static_retry", "main")
     monkeypatch.chdir(docs.layout.build_dir)
     quarto_config = quarto_yml.read(docs.layout.build_dir)
     block = quarto_config["api-reference"]
-    block["dynamic"] = True
-    run = make_run(docs, quarto_config=quarto_config, api_block=block)
+    assert block["dynamic"] is False
+    assert docs._config.dynamic is True
+    run = make_run(docs, quarto_config=quarto_config, api_spec=reference_spec(block))
     dynamic: list[bool] = []
 
     def build(ref: APIReference) -> None:
@@ -442,6 +444,7 @@ def test_api_retry_with_static_analysis_disables_dynamic_introspection_in_the_co
 
     assert outcome == "API reference generated (static analysis)"
     assert dynamic == [True, False]
+    assert docs._config.dynamic is True
     assert run.quarto_config["api-reference"]["dynamic"] is False
 
 
@@ -482,7 +485,7 @@ def test_mcp_only_build_links_to_its_generated_index(
     docs._remote = StubRemote()
     run = make_run(docs)
     prepare_build_directory(docs, run)
-    assert not run.has_api_reference
+    assert run.api_spec is None
     server = {
         "name": "Example",
         "tools": [{"name": "hello", "description": "Say hello", "input_schema": {}}],

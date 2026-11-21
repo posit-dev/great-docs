@@ -1,5 +1,5 @@
 """
-The `APIReference` façade, built from a Quarto config block
+A package's API reference from the site's documentation configuration
 
 A reference loads its objects through one loader and prepares them with one extension,
 whose `setup` runs before the first object is prepared or rendered. Manifests, symbol
@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING
 
 import griffe as gf
 from griffe import AliasResolutionError, CyclicAliasError
@@ -26,7 +26,7 @@ from ._settings import Settings, SourceLinks
 from .content import Doc, Page
 from .inventory import create_inventory, write_inventory
 from .resolve import ObjectNotFoundError, Resolver
-from .spec import SpecObject, SpecOptions, SpecSection, unique_page_paths
+from .spec import SpecObject, SpecSection, unique_page_paths
 from .write import (
     collect_index,
     collect_pages,
@@ -35,18 +35,14 @@ from .write import (
 )
 
 if TYPE_CHECKING:
+    from ..config import Config
     from .collect import Manifest
     from .content import Section
     from .inventory import InventoryItem
+    from .spec import ReferenceSpec
 
 _log = logging.getLogger(__name__)
 
-# Compatibility-only keys that earlier configs carried but the renderer never
-# consumed; dropped before parsing so they neither reach `Settings` nor error.
-_REMOVED_KEYS = {"style", "renderer", "render_interlinks"}
-
-# Use the default site depth when a bare API reference config supplies no site
-# settings.
 _DEFAULT_SITE_TOC_DEPTH = 2
 
 
@@ -64,60 +60,55 @@ class APIReference:
     title: str
     desc: str | None
     sections: list[SpecSection]
-    options: SpecOptions | None
     settings: Settings
     site_toc_depth: int
     extension: Extension
 
     def __init__(
         self,
-        config: dict[str, Any],
-        source_links: SourceLinks | None = None,
+        config: Config,
+        spec: ReferenceSpec,
         *,
+        dynamic: bool | None = None,
+        source_links: SourceLinks | None = None,
         extension_source: _ExtensionSource | None = None,
         output_root: Path | None = None,
     ) -> None:
         """
-        Configure an API reference from Quarto settings and source-link destinations
+        Configure an API reference for the project's documented objects
 
         Parameters
         ----------
         config
-            The Quarto configuration mapping or its `api-reference` block.
+            The project's documentation configuration.
+        spec
+            The importable package and its reference sections. An empty section list
+            lets the resolver discover the sections.
+        dynamic
+            The introspection mode for this attempt, or `None` to use the site setting.
         source_links
             The source-link destinations, or `None` to disable source links.
         extension_source
-            The extension file and the project directories, or `None` to use only the
-            handlers registered through `great_docs.hooks`. Reading the configuration
-            and sections never loads the file.
+            The extension file and project directories, or `None` to use only the
+            handlers registered through `great_docs.hooks`. Reading the sections leaves
+            the extension unloaded.
         output_root
             The generated documentation root, or `None` when the reference writes no
             files.
         """
-        self.site_toc_depth = self._read_site_toc_depth(config)
-        block = self._select_block(config)
-        block = {k: v for k, v in block.items() if k not in _REMOVED_KEYS}
-
-        self.settings = Settings.make(
-            block, lang=self._read_lang(config), source_links=source_links
-        )
-        self.package = block["package"]
-        self.title = block.get("title", "Function reference")
-        self.desc = block.get("desc")
-        # Parity: stored as-is (no coercion), matching the previous behaviour.
-        self.options = block.get("options")
+        depth = config.site.get("toc-depth")
+        self.site_toc_depth = depth if isinstance(depth, int) else _DEFAULT_SITE_TOC_DEPTH
+        self.settings = Settings.make(config, dynamic=dynamic, source_links=source_links)
+        self.package = spec.package
+        self.title = config.reference_index_title
+        self.desc = config.reference_desc or None
         self.extension = Extension(self.settings, extension_source, output_root=output_root)
-        # Raw config dicts become `SpecSection` objects; their `contents` are
-        # upgraded to `SpecObject` inside `SpecSection.__post_init__`.
         self._resolver = Resolver(self.settings, self.extension)
         self._resolver.current_package = self.package
 
-        raw_sections: list[Any] = block.get("sections", []) or []
-        # Page paths are settled here, before anything reads them, so the pages,
-        # the index, the sidebar and `llms.txt` all agree on where each page lives.
+        # Pages, the index, the sidebar and the text export share the same page paths.
         self.sections = unique_page_paths(
-            [s if isinstance(s, SpecSection) else SpecSection(**s) for s in raw_sections],
-            self._entry_label,
+            [SpecSection(**section) for section in spec.sections], self._entry_label
         )
 
     @property
@@ -183,91 +174,6 @@ class APIReference:
     def close(self) -> None:
         """Close the extension without loading it, removing the modules it imported"""
         self.extension.close()
-
-    @staticmethod
-    def _read_lang(cfg: dict[str, Any]) -> str:
-        """
-        Read the reference language from the Quarto HTML settings
-
-        Parameters
-        ----------
-        cfg
-            Configuration mapping.
-
-        Returns
-        -------
-        :
-            The language at `format.html.lang`, with `en` as the default when absent.
-        """
-        format_config = cfg.get("format")
-        html = (
-            cast("dict[str, Any]", format_config).get("html")
-            if isinstance(format_config, dict)
-            else None
-        )
-        return cast("dict[str, Any]", html).get("lang", "en") if isinstance(html, dict) else "en"
-
-    @staticmethod
-    def _read_site_toc_depth(cfg: dict[str, Any]) -> int:
-        """
-        Read the configured table-of-contents depth
-
-        Use the integer at `format.html.toc-depth` when available, then the
-        integer at `site.toc-depth`. Return the built-in default when neither
-        setting is an integer.
-
-        Parameters
-        ----------
-        cfg
-            Configuration mapping.
-
-        Returns
-        -------
-        :
-            Configured depth or the built-in default.
-        """
-        format_config = cfg.get("format")
-        html = (
-            cast("dict[str, Any]", format_config).get("html")
-            if isinstance(format_config, dict)
-            else None
-        )
-        depth = cast("dict[str, Any]", html).get("toc-depth") if isinstance(html, dict) else None
-        if isinstance(depth, int):
-            return depth
-
-        site = cfg.get("site")
-        depth = cast("dict[str, Any]", site).get("toc-depth") if isinstance(site, dict) else None
-        return depth if isinstance(depth, int) else _DEFAULT_SITE_TOC_DEPTH
-
-    @staticmethod
-    def _select_block(cfg: dict[str, Any]) -> dict[str, Any]:
-        """
-        Select the API reference configuration
-
-        Select a non-empty `api-reference` mapping before the legacy
-        `quartodoc` mapping. Treat the full configuration as the API reference
-        mapping when both sections are empty or absent.
-
-        Parameters
-        ----------
-        cfg
-            Configuration mapping.
-
-        Returns
-        -------
-        :
-            Copy of the selected API reference mapping.
-
-        Raises
-        ------
-        KeyError
-            If the selected value is not a mapping or omits `package`.
-        """
-        block = cfg.get("api-reference") or cfg.get("quartodoc") or cfg
-        if not isinstance(block, dict) or "package" not in block:
-            raise KeyError("No `api-reference:` section found in your _quarto.yml.")
-        return dict(cast("dict[str, Any]", block))
 
     def _entry_label(self, section: SpecSection, entry: SpecObject) -> str | None:
         """

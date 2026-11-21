@@ -48,6 +48,7 @@ from .steps import USER_CODE_ERRORS, BuildError, Outcome, Step, Warn, count_list
 
 if TYPE_CHECKING:
     from .._apiref.api_reference import APIReference
+    from .._apiref.spec import ReferenceSpec
     from .._content.user_guide import UserGuide
     from .._project.layout import Layout
     from .._project.remote import Remote
@@ -76,10 +77,6 @@ class Run:
         Whether the site is served in watch mode.
     page_authors
         The configured page authors, with local portrait paths replaced by site URLs.
-    has_api_reference
-        Whether the site has an API reference. Preparing the build directory sets it to
-        `False` when the reference is disabled, the project is not a Python project, no
-        package name is detected, or the package has nothing to document.
     has_cli_reference
         Whether the site has command-line reference pages. A CLI reference step sets it when
         it writes them.
@@ -93,9 +90,9 @@ class Run:
         preparation. Preparation writes the finished configuration to `_quarto.yml`
         unless rendering versions separately. Each version then writes its own
         configuration.
-    api_block
-        The `api-reference` block of `quarto_config`, or `None` for a site without an API
-        reference.
+    api_spec
+        The documented package and reference sections, or `None` when discovery found
+        nothing to document or the site has no API reference.
     api_reference
         The API reference this build generated, or `None` when the build has none. The
         reference pages, the text export and interlinks share its prepared
@@ -115,12 +112,11 @@ class Run:
     exports: Exports
     watch: bool
     page_authors: list[dict[str, Any]]
-    has_api_reference: bool = True
     has_cli_reference: bool = False
     has_changelog: bool = False
     has_skills: bool = False
     quarto_config: dict[str, Any] = field(default_factory=lambda: dict[str, Any]())
-    api_block: dict[str, Any] | None = None
+    api_spec: ReferenceSpec | None = None
     api_reference: APIReference | None = None
     api_discovery_reused: bool = False
     user_guide: UserGuide | None = None

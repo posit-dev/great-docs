@@ -10,7 +10,7 @@ from great_docs._build import generated
 from great_docs._project.layout import Layout
 from great_docs._website.ai_agents import llms_txt
 from great_docs._website.ai_agents.webmcp_tools import TOOLS
-from tests.support import prepared_reference, write_config, write_pyproject
+from tests.support import prepared_reference, reference_spec, write_config, write_pyproject
 
 # The standard library's `json` always imports; its `dumps` and `JSONDecoder.decode`
 # docstrings provide stable expectations for the documented package.
@@ -90,7 +90,7 @@ PLANNING_CASES: dict[str, tuple[dict[str, Any] | None, bool]] = {
 def test_files_are_planned_for_an_importable_package_with_sections(label: str):
     api_block, planned = PLANNING_CASES[label]
 
-    assert llms_txt.is_planned(api_block) is planned
+    assert llms_txt.is_planned(reference_spec(api_block)) is planned
 
 
 def test_reports_the_written_files(layout: Layout):
