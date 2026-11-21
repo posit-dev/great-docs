@@ -431,6 +431,7 @@ ALL_PACKAGES: list[str] = [
     "gdtest_webmcp",  # 213
     # 214: Termshow recordings of a TUI (split sequences, seams, colors)
     "gdtest_termshow_tui",  # 214
+    "gdtest_pydantic_fields",
 ]
 
 
@@ -815,6 +816,11 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "'Dataclasses' section. Each dataclass should show its field "
         "signatures with type annotations and default values rendered in "
         "the constructor docs."
+    ),
+    "gdtest_pydantic_fields": (
+        "Open Colour in the API reference to see four documented attributes. "
+        "The red field uses an assigned Field call, green uses a string in Annotated, "
+        "blue uses a Field call in Annotated, and alpha has a docstring below its declaration."
     ),
     "gdtest_enums": (
         "Two enum types: Color (Enum with RED/GREEN/BLUE) and Priority "

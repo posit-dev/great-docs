@@ -120,6 +120,39 @@ listing items there. The `exclude` setting only affects what `great-docs init` d
 generating your initial config. Between the built-in exclusions and the explicit list, you can keep
 the reference focused on the symbols your users actually need.
 
+### Pydantic Model Fields
+
+Great Docs can use literal descriptions in a Pydantic `BaseModel` declaration as attribute
+documentation. The three descriptions below appear in the API reference, including in static mode.
+
+```python
+from typing import Annotated
+
+from pydantic import BaseModel, Field
+
+
+class Colour(BaseModel):
+    red: int = Field(description="Red channel.")
+    green: Annotated[int, "Green channel."]
+    blue: Annotated[int, Field(description="Blue channel.")]
+    alpha: int = 255
+```
+
+A docstring immediately below a field takes precedence. For a field without a docstring, Great
+Docs uses a non-blank literal description from the assigned `Field`, then the last non-blank
+literal `Field` description inside `Annotated`. If neither supplies a description, Great Docs
+accepts a single bare string in the `Annotated` metadata.
+
+To show `alpha` as well, list the fields you want under `members` in `great-docs.yml`.
+
+```{.yaml filename="docs/great-docs.yml"}
+reference:
+  - title: Models
+    contents:
+      - name: Colour
+        members: [red, green, blue, alpha]
+```
+
 ## Member Page Placement
 
 For each top-level reference entry, Great Docs counts the direct members that will be documented.
