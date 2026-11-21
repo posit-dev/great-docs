@@ -30,6 +30,7 @@ from tests.support import (
     StubRemote,
     WriteExtension,
     make_run,
+    reference_spec,
     stubbed_build,
     write_config,
     write_pyproject,
@@ -80,14 +81,14 @@ def test_reference_sidebar_closes_its_api_reference(tmp_path: Path) -> None:
     with patch.object(
         APIReference, "close", autospec=True, side_effect=APIReference.close
     ) as close:
-        sections.sidebar(config, api_block)
+        sections.sidebar(config, reference_spec(api_block))
 
     close.assert_called_once()
 
 
 def test_dynamic_retry_releases_the_failed_extension_before_loading_the_next(docs: GreatDocs):
     block = {"package": "extension_lifetime_example", "sections": [], "dynamic": True}
-    run = make_run(docs, quarto_config={"api-reference": block}, api_block=block)
+    run = make_run(docs, quarto_config={"api-reference": block}, api_spec=reference_spec(block))
     attempts: list[APIReference] = []
     namespaces: list[str] = []
 
@@ -123,7 +124,7 @@ def test_configured_setup_failure_is_fatal_without_static_retry(
 ):
     write_extension("from .helper import TOKEN\n")
     block = {"package": "extension_lifetime_example", "sections": [], "dynamic": True}
-    run = make_run(docs, quarto_config={"api-reference": block}, api_block=block)
+    run = make_run(docs, quarto_config={"api-reference": block}, api_spec=reference_spec(block))
     before = set(sys.modules)
 
     def build(ref: APIReference) -> None:
@@ -180,7 +181,7 @@ def test_configured_renderer_failure_is_fatal_without_static_retry(
         "sections": [{"title": "API", "contents": ["example"]}],
         "dynamic": True,
     }
-    run = make_run(docs, quarto_config={"api-reference": block}, api_block=block)
+    run = make_run(docs, quarto_config={"api-reference": block}, api_spec=reference_spec(block))
     before = set(sys.modules)
     try:
         with pytest.raises(ExtensionError, match="render") as failure:

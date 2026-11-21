@@ -17,6 +17,7 @@ from great_docs._apiref._parameter_docs import (
 from great_docs._apiref._settings import CallableSignatures, Settings
 from great_docs._apiref._tools import _render
 from great_docs.extensions import Extension
+from tests.support import reference_from_options
 
 
 def _function(doc: str = "%nodoc_param old") -> gf.Function:
@@ -310,7 +311,6 @@ def test_dataclass_fields_are_documented_on_the_class_page_only(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    from great_docs._apiref import APIReference
     from great_docs._apiref._export import reference_text
 
     source = '''
@@ -335,7 +335,7 @@ def test_dataclass_fields_are_documented_on_the_class_page_only(
     (tmp_path / "dcpkg" / "__init__.py").write_text(dedent(source))
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.chdir(tmp_path)
-    reference = APIReference(
+    reference = reference_from_options(
         {
             "package": "dcpkg",
             **placement,

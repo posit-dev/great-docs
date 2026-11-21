@@ -16,6 +16,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from .._content import custom_pages as authored_pages
+from .._content import homepage as homepage_source
 from .._content import publish, walk
 from .._content import sections as authored_sections
 from .._content import user_guide as authored_guide
@@ -24,7 +25,6 @@ from .._contribution import Contribution, NavbarLink, Sidebar
 from .._website import page_dates, social_cards
 from .._website.ai_agents import llms_txt as llms_files
 from .._website.homepage import page as homepage_page
-from .._content import homepage as homepage_source
 from .._website.navigation import navbar as nav_navbar
 from .._website.project_pages import citation, licence, package_info
 from . import site
@@ -32,6 +32,7 @@ from .facts import source_ref
 from .steps import Outcome, Skipped, print_warning
 
 if TYPE_CHECKING:
+    from .._apiref.spec import ReferenceSpec
     from .._content.user_guide import UserGuide
     from .._project import Project
     from .._project.layout import Layout
@@ -141,9 +142,9 @@ def homepage(
         package_name=run.project.name,
         pages=page_map(config, layout, guide),
         page_authors=page_authors,
-        has_api_reference=run.has_api_reference,
+        has_api_reference=run.api_spec is not None,
         has_user_guide=lambda: guide is not None,
-        has_llms_txt=llms_files.is_planned(run.api_block),
+        has_llms_txt=llms_files.is_planned(run.api_spec),
         report=print,
     )
 
@@ -212,7 +213,7 @@ def user_guide(
             run.project,
             guide,
             page_authors=page_authors,
-            api_block=run.api_block,
+            api_spec=run.api_spec,
         )
 
     run.contributions.append(_guide_navigation(config, guide, blended_first_page))
@@ -288,7 +289,7 @@ def _promote_first_page(
     guide: UserGuide,
     *,
     page_authors: list[dict[str, Any]],
-    api_block: dict[str, Any] | None,
+    api_spec: ReferenceSpec | None,
 ) -> str | None:
     """
     Promote the first user guide page to `index.qmd` in blended homepage mode
@@ -307,7 +308,7 @@ def _promote_first_page(
         The user guide.
     page_authors
         The site's authors, added to the homepage.
-    api_block
+    api_spec
         The API reference configuration used to plan links to `llms.txt` and
         `llms-full.txt`, or `None` for a site without an API reference.
 
@@ -336,7 +337,7 @@ def _promote_first_page(
         package_name=project.name,
         pages=page_map(config, layout, guide),
         page_authors=page_authors,
-        has_llms_txt=llms_files.is_planned(api_block),
+        has_llms_txt=llms_files.is_planned(api_spec),
     )
 
     first_ug_path.unlink()

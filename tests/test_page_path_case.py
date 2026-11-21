@@ -25,6 +25,7 @@ from great_docs._apiref.spec import (
     unique_page_paths,
 )
 from great_docs._reference import sections as reference_sections
+from tests.support import reference_from_options, reference_spec
 
 
 def _function(name: str, parent: gf.Object | None = None) -> gf.Function:
@@ -50,12 +51,10 @@ def _api_ref(
     monkeypatch.setattr(introspect, "get_object", lambda path, **kwargs: objects[path])
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return APIReference(
+        return reference_from_options(
             {
-                "api-reference": {
-                    "package": "mypkg",
-                    "sections": [{"title": "API", "contents": contents}],
-                }
+                "package": "mypkg",
+                "sections": [{"title": "API", "contents": contents}],
             }
         )
 
@@ -221,7 +220,7 @@ def test_unexpected_label_lookup_errors_propagate(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr(introspect, "get_object", get_object)
     with pytest.raises(RuntimeError, match="broken label lookup"):
-        APIReference(
+        reference_from_options(
             {"package": "mypkg", "sections": [{"title": "API", "contents": ["Foo", "foo"]}]}
         )
 
@@ -236,8 +235,8 @@ def test_sidebar_links_to_the_moved_page():
         docs = GreatDocs(project_path=tmp_dir)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            sidebar = reference_sections.sidebar(docs._config, api_block)
-            ref = APIReference({"api-reference": api_block})
+            sidebar = reference_sections.sidebar(docs._config, reference_spec(api_block))
+            ref = reference_from_options(api_block)
 
     hrefs = [link["href"] for link in sidebar.contents[1]["contents"]]
     assert hrefs == [f"reference/{e.page_path}.qmd" for e in ref.sections[0].contents]  # type: ignore[union-attr]

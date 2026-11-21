@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from great_docs._builtin.directives._nodoc import exclude_nodoc
+from tests.support import reference_from_options
 
 
 def _obj(doc: str | None) -> SimpleNamespace:
@@ -80,9 +81,7 @@ def test_resolver_skips_nodoc_objects(tmp_path, monkeypatch):
     )
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    from great_docs._apiref.api_reference import APIReference
-
-    reference = APIReference(
+    reference = reference_from_options(
         {
             "package": "gdnodoc",
             "sections": [{"title": "API", "contents": ["Visible", "Hidden"]}],
@@ -124,9 +123,7 @@ def test_resolver_drops_section_left_empty_by_nodoc(tmp_path, monkeypatch):
     (pkg / "mod.py").write_text('class Hidden:\n    """Internal.\n\n    %nodoc\n    """\n')
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    from great_docs._apiref.api_reference import APIReference
-
-    reference = APIReference(
+    reference = reference_from_options(
         {"package": "gdempty", "sections": [{"title": "Only", "contents": ["Hidden"]}]}
     )
     assert reference.resolved == []
@@ -145,14 +142,10 @@ def test_apireference_documented_symbols_includes_documented_members(tmp_path, m
     )
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    from great_docs._apiref.api_reference import APIReference
-
-    ref = APIReference(
+    ref = reference_from_options(
         {
-            "api-reference": {
-                "package": "gddisc",
-                "sections": [{"title": "API", "contents": ["Widget"]}],
-            }
+            "package": "gddisc",
+            "sections": [{"title": "API", "contents": ["Widget"]}],
         }
     )
     # `fit` discovered AND documented -> included; `_priv` private -> excluded.

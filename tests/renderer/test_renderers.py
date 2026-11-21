@@ -35,6 +35,7 @@ from great_docs.rendering import (
     Renderers,
     TypeAliasRenderer,
 )
+from tests.support import reference_from_options
 
 
 def make_node(slot: str) -> Any:
@@ -67,7 +68,7 @@ def make_node(slot: str) -> Any:
     if slot == "reference_sections":
         return Section(title="Examples", contents=[])
     if slot == "reference_index":
-        return APIReference({"package": "example", "sections": []})
+        return reference_from_options({"package": "example", "sections": []})
     raise ValueError(slot)
 
 

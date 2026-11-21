@@ -4,8 +4,7 @@ Compose a generated agent skill from package and documentation facts
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any, cast
+from typing import TYPE_CHECKING, cast
 
 from yaml12 import format_yaml
 
@@ -14,13 +13,16 @@ from ..._project.manifest import Manifest
 from ...config import Config
 from . import llms_txt
 
+if TYPE_CHECKING:
+    from ..._apiref.spec import ReferenceSpec
+
 
 def compose(
     config: Config,
     layout: Layout,
     distribution_name: str | None,
     metadata: Manifest,
-    api_block: Mapping[str, Any] | None,
+    spec: ReferenceSpec | None,
     *,
     repo_url: str | None,
 ) -> str:
@@ -39,9 +41,9 @@ def compose(
         The name under which the package is installed, or `None` when unknown.
     metadata
         The package metadata: description, licence, Python requirement and URLs.
-    api_block
-        The API reference configuration for the skill's overview, or `None` to omit
-        the overview.
+    spec
+        The package and sections for the skill's API overview, or `None` to omit the
+        overview.
     repo_url
         The selected repository URL, or `None` when unknown.
 
@@ -51,9 +53,8 @@ def compose(
         The skill's Markdown with its front matter.
     """
     package_name_for_skill = distribution_name or ""
-    api_ref_config = api_block or {}
-    sections = api_ref_config.get("sections", [])
-    package_name = api_ref_config.get("package", "")
+    sections = spec.sections if spec is not None else []
+    package_name = spec.package if spec is not None else ""
 
     description = metadata.get("description", "")
     license_text = metadata.get("license", "")
@@ -174,7 +175,7 @@ def compose(
     lines.append("")
     if site_url:
         lines.append(f"- [Full documentation]({site_url})")
-    if llms_txt.is_planned(api_block):
+    if llms_txt.is_planned(spec):
         lines.append("- [llms.txt](llms.txt) — Indexed API reference for LLMs")
         lines.append("- [llms-full.txt](llms-full.txt) — Comprehensive documentation for LLMs")
     if repo_url:

@@ -11,7 +11,7 @@ whether to link to them, before that reference exists.
 from __future__ import annotations
 
 import importlib
-from typing import TYPE_CHECKING, Any, TypeGuard
+from typing import TYPE_CHECKING, Any
 
 from ..._build.steps import USER_CODE_ERRORS
 from ..._project.manifest import Manifest
@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from ..._apiref.api_reference import APIReference
+    from ..._apiref.spec import ReferenceSpec
     from ..._project.layout import Layout
     from .webmcp_tools import WebMCPTool
 
@@ -39,46 +40,27 @@ _WEBMCP_EXAMPLES = (
 )
 
 
-def _describes_api(api_block: Mapping[str, Any] | None) -> TypeGuard[Mapping[str, Any]]:
-    """
-    Check whether the API reference configuration names a package and contains sections
-
-    Parameters
-    ----------
-    api_block
-        The API reference configuration, or `None` when the site has none.
-
-    Returns
-    -------
-    :
-        Whether the configuration names a `package` and has at least one section.
-    """
-    return api_block is not None and bool(api_block.get("package") and api_block.get("sections"))
-
-
-def is_planned(api_block: Mapping[str, Any] | None) -> bool:
+def is_planned(spec: ReferenceSpec | None) -> bool:
     """
     Check whether the homepage should link to `llms.txt` and `llms-full.txt`
 
     The homepage checks before either file exists and before the extension's `setup`
-    runs. Both files require an API reference configuration with an importable `package`
-    and at least one section.
+    runs. Both files require an importable package and at least one reference section.
 
     Parameters
     ----------
-    api_block
-        The API reference configuration, or `None` when the site has none.
+    spec
+        The package and sections, or `None` when the site has no API reference.
 
     Returns
     -------
     :
-        Whether the configuration supports linking to both files.
+        Whether the site can link to both files.
     """
-    if not _describes_api(api_block):
+    if spec is None or not spec.package or not spec.sections:
         return False
-    package_name = api_block["package"]
     try:
-        _ = importlib.import_module(str(package_name).replace("-", "_"))
+        _ = importlib.import_module(spec.package.replace("-", "_"))
     except ImportError:
         return False
     return True

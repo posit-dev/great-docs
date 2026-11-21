@@ -37,7 +37,9 @@ from yaml12 import format_yaml
 
 from great_docs import Config, GreatDocs
 from great_docs._apiref._extension_loading import _ExtensionSource
+from great_docs._apiref._settings import Settings
 from great_docs._apiref.api_reference import APIReference
+from great_docs._apiref.spec import ReferenceSpec
 from great_docs._build import content, pipeline, prepare, reference, site
 from great_docs._build.log import BuildLog
 from great_docs._build.pipeline import Run
@@ -45,6 +47,7 @@ from great_docs._build.steps import Outcome, Skipped, print_warning
 from great_docs._content import user_guide
 from great_docs._project import Project
 from great_docs._reference.exports import Exports
+from great_docs._translations import translate
 from great_docs._website import quarto_yml
 from great_docs._website.ai_agents import llms_txt
 from great_docs._website.homepage import hero, margin
@@ -52,9 +55,9 @@ from great_docs._website.project_pages import community
 
 if TYPE_CHECKING:
     from great_docs._content.user_guide import UserGuide
-    from great_docs._project.repository import Repository
-    from great_docs._project.remote import ReleaseData
     from great_docs._project.layout import Layout
+    from great_docs._project.remote import ReleaseData
+    from great_docs._project.repository import Repository
 
 # Stub calls within step actions to preserve the step table and build control flow.
 # List functions in first-call order by dotted path relative to `great_docs._build`.
@@ -135,6 +138,10 @@ def mock_config(**values: object) -> NonCallableMagicMock:
             getattr(config, name).return_value = config if result is Config else _empty(result)
     for name, value in values.items():
         setattr(config, name, value)
+    if "reference_index_title" not in values:
+        config.reference_index_title = config.reference_title or translate(
+            "api_reference", config.lang
+        )
     return config
 
 
@@ -215,6 +222,50 @@ def make_run(docs: GreatDocs, **values: Any) -> Run:
     return replace(Run.make(docs._config, docs.layout, watch=False), **values)
 
 
+def reference_spec(block: Mapping[str, Any] | None) -> ReferenceSpec | None:
+    """Read the package and sections from a fixture's generated Quarto metadata"""
+    if block is None:
+        return None
+    return ReferenceSpec(block.get("package", ""), list(block.get("sections") or []))
+
+
+def reference_from_options(
+    block: Mapping[str, Any],
+    *,
+    extension_source: _ExtensionSource | None = None,
+    output_root: Path | None = None,
+) -> APIReference:
+    """
+    Build a reference for renderer tests with explicit generation settings
+
+    Test cases can supply internal rendering fields, such as an alternative output
+    directory, that are unavailable in the site's configuration.
+    """
+    spec = ReferenceSpec(block["package"], block.get("sections") or [])
+    signatures = block.get("callable_signatures", {})
+    config = mock_config(
+        lang="en",
+        reference_index_title=block.get("title", "Function reference"),
+        reference_desc=block.get("desc"),
+        reference_show_bases=block.get("show_bases", False),
+        parser=block.get("parser", "numpy"),
+        dynamic=block.get("dynamic"),
+        members_on_same_page=block.get("members_on_same_page"),
+        max_members_on_same_page=block.get("max_members_on_same_page", 5),
+        callable_signatures_style=signatures.get("style", "highlighted"),
+        callable_signatures_wrap=signatures.get("wrap", "per_parameter"),
+    )
+    args = {"extension_source": extension_source, "output_root": output_root}
+    fields = ("dir", "source_dir", "sidebar", "rewrite_all_pages", "typing_module_paths")
+    if not (overrides := {key: block[key] for key in fields if key in block}):
+        return APIReference(config, spec, **args)
+    if isinstance(sidebar := overrides.get("sidebar"), str):
+        overrides["sidebar"] = {"file": sidebar}
+    settings = replace(Settings.make(config), **overrides)
+    with patch.object(Settings, "make", return_value=settings):
+        return APIReference(config, spec, **args)
+
+
 @contextmanager
 def prepared_reference(api_block: Mapping[str, object]) -> Iterator[APIReference]:
     """
@@ -230,7 +281,7 @@ def prepared_reference(api_block: Mapping[str, object]) -> Iterator[APIReference
     :
         The reference, with its sections resolved.
     """
-    ref = APIReference({"api-reference": dict(api_block)})
+    ref = reference_from_options(api_block)
     try:
         _ = ref.resolved
         yield ref
@@ -468,7 +519,8 @@ def write_homepage(docs: GreatDocs, *, has_api_reference: bool = True) -> None:
     -------
     :
     """
-    run = make_run(docs, user_guide=discover_user_guide(docs), has_api_reference=has_api_reference)
+    spec = ReferenceSpec("example", []) if has_api_reference else None
+    run = make_run(docs, user_guide=discover_user_guide(docs), api_spec=spec)
     content.homepage(
         run, docs._config, docs.layout, page_authors=run.page_authors, remote=docs._remote
     )
@@ -762,7 +814,6 @@ def _configure_no_api_reference(
     """
     if quarto_yml.path(layout.build_dir).exists():
         run.quarto_config = quarto_yml.read(layout.build_dir)
-    run.has_api_reference = False
     return DEFAULT
 
 
@@ -799,7 +850,7 @@ def _record_written_api_reference(
         If the test's `_quarto.yml` has no `api-reference` block.
     """
     run.quarto_config = quarto_yml.read(layout.build_dir)
-    run.api_block = run.quarto_config["api-reference"]
+    run.api_spec = reference_spec(run.quarto_config["api-reference"])
     return DEFAULT
 
 
@@ -1033,7 +1084,7 @@ def homepage_margin(docs: GreatDocs, *, api_block: dict[str, Any] | None = None)
         community_pages=community.write_pages(
             docs._config, docs.layout, make_run(docs).page_authors
         ),
-        has_llms_txt=llms_txt.is_planned(api_block),
+        has_llms_txt=llms_txt.is_planned(reference_spec(api_block)),
     )
 
 

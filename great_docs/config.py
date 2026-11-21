@@ -1213,6 +1213,15 @@ class Config:
         return None
 
     @property
+    def reference_index_title(self) -> str:
+        """
+        The title of the API reference index, including the language-specific default
+        """
+        from ._translations import translate
+
+        return self.reference_title or translate("api_reference", self.lang)
+
+    @property
     def reference_desc(self) -> str | None:
         """Get the custom API reference description, if set.
 

@@ -487,6 +487,7 @@ def test_api_reference_build_uses_selected_cwd(
     source_project: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from great_docs._apiref.api_reference import APIReference
+    from great_docs._apiref.spec import ReferenceSpec
 
     class ReferenceReached(BaseException):
         pass
@@ -498,8 +499,7 @@ def test_api_reference_build_uses_selected_cwd(
 
     def prepare_reference(run: Run, *args: Any, **kwargs: Any) -> Outcome:
         outcome = build_directory(run, *args, **kwargs)
-        run.has_api_reference = True
-        run.quarto_config["api-reference"] = {"package": "sample", "sections": []}
+        run.api_spec = ReferenceSpec("sample", [])
         return outcome
 
     def check_cwd(ref: APIReference) -> None:

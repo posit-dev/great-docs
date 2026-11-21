@@ -7,6 +7,7 @@ import textwrap
 
 import pytest
 
+from tests.support import reference_from_options
 
 pytestmark = pytest.mark.skipif(
     sys.version_info < (3, 12),
@@ -199,10 +200,9 @@ def test_type_information_preserves_alias_name():
 
     import griffe as gf
 
-    from great_docs._apiref.api_reference import APIReference
     from great_docs._apiref.typing_information import TypeInformation
 
-    api_ref = APIReference({"package": "package", "sections": []})
+    api_ref = reference_from_options({"package": "package", "sections": []})
 
     with (
         gf.temporary_visited_package(
@@ -222,10 +222,9 @@ def test_type_information_lists_reexported_names():
 
     import griffe as gf
 
-    from great_docs._apiref.api_reference import APIReference
     from great_docs._apiref.typing_information import TypeInformation
 
-    api_ref = APIReference({"package": "package", "sections": []})
+    api_ref = reference_from_options({"package": "package", "sections": []})
 
     defs = '''
     from typing import Protocol, TypeVar
@@ -265,10 +264,9 @@ def test_type_information_omits_names_imported_from_outside():
 
     import griffe as gf
 
-    from great_docs._apiref.api_reference import APIReference
     from great_docs._apiref.typing_information import TypeInformation
 
-    api_ref = APIReference({"package": "package", "sections": []})
+    api_ref = reference_from_options({"package": "package", "sections": []})
 
     modules = {
         "__init__.py": "",
@@ -462,7 +460,6 @@ def test_api_reference_builds_with_a_type_alias(monkeypatch, tmp_path):
     `type alias` kind showing up among the collected `items` — not by a
     return value.
     """
-    from great_docs._apiref.api_reference import APIReference
 
     pkg = tmp_path / "gdta_build"
     pkg.mkdir()
@@ -476,7 +473,7 @@ def test_api_reference_builds_with_a_type_alias(monkeypatch, tmp_path):
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.chdir(tmp_path)
 
-    ref = APIReference(
+    ref = reference_from_options(
         {
             "package": "gdta_build",
             "sections": [{"title": "All", "desc": "d", "contents": ["Contract", "f"]}],
@@ -516,10 +513,9 @@ def test_type_information_page_is_a_reference_page():
 
     import griffe as gf
 
-    from great_docs._apiref.api_reference import APIReference
     from great_docs._apiref.typing_information import TypeInformation
 
-    api_ref = APIReference({"package": "package", "sections": []})
+    api_ref = reference_from_options({"package": "package", "sections": []})
 
     with (
         gf.temporary_visited_package("package", {"__init__.py": "type Contract = int\n"}) as module,
