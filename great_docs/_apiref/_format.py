@@ -140,6 +140,19 @@ def escape_emphasis(s: str) -> str:
     return re.sub(r"([_*])", r"\\\1", s)
 
 
+def escape_code_text(s: str) -> str:
+    """
+    Escape every `_`, `*` and `$` of code written as Markdown text, for Quarto 2 (experimental)
+
+    Applies to code such as a parameter's default, `_DEFAULT_DEPTH` or `"$HOME"`, which a page
+    shows as text inside spans. Quarto 2 reports an unclosed emphasis or math as an error,
+    while Pandoc reads them as text, so for Quarto 1 the code is returned unchanged.
+    """
+    if not _is_q2():
+        return s
+    return re.sub(r"([_*$])", r"\\\1", s)
+
+
 _CODE_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 # A list item or a definition, whose indented lines continue it
 _LIST_ITEM_RE = re.compile(r"^ {0,3}(?:[-*+:]|\d+[.)])(?:[ \t]|$)")
@@ -470,7 +483,7 @@ def render_formatted_expr(el: gf.Expr) -> str:
         newlines with the `<br>` tag.
     """
     el_str = format_str(str(el))
-    return pretty_code(el_str)
+    return pretty_code(escape_code_text(el_str))
 
 
 @lru_cache(1)
@@ -551,4 +564,4 @@ def format_value(value: str | gf.Expr | None = None) -> str:
         Escaped and highlighted markdown represenation of the value.
         It is not markedup as code.
     """
-    return pretty_code(repr_obj(value))
+    return pretty_code(escape_code_text(repr_obj(value)))
