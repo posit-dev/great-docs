@@ -2,8 +2,9 @@
 ---
 --- Great Docs registers this filter only for a Quarto 2 render, and it reads its settings
 --- from `gd-quarto2` in `_quarto.yml`. Quarto 2 ignores `shift-heading-level-by` for HTML
---- and the `metadata.html` partial, and writes no Open Graph or Twitter card tags, so the
---- filter shifts the headings and adds the partial's page tags and the card tags.
+--- and the `metadata.html` partial, and 0.47.0 and earlier releases write no Open Graph or
+--- Twitter card tags, so the filter shifts the headings and adds the partial's page tags and
+--- the card tags. Later releases write the card tags but `og:type`, which the filter adds.
 
 local pandoc = _G.pandoc --- @diagnostic disable-line:undefined-field
 local quarto = _G.quarto --- @diagnostic disable-line:undefined-field
@@ -130,6 +131,11 @@ local function card_tags(meta, cards, site_title)
   if meta["gd-own-social-cards"] or meta["open-graph"] == false then
     return {}
   end
+  local tags = { '<meta property="og:type" content="website">' }
+  -- Quarto 2 releases after 0.47.0 write the other tags
+  if cards.native then
+    return tags
+  end
   local open_graph, twitter = meta["open-graph"], meta["twitter-card"]
 
   local page_title = text(meta.title)
@@ -145,7 +151,6 @@ local function card_tags(meta, cards, site_title)
     or text(meta.description)
   local image = card_value(open_graph, "image") or text(cards.image)
 
-  local tags = { '<meta property="og:type" content="website">' }
   local function add(kind, key, value)
     if value then
       tags[#tags + 1] = "<meta " .. kind .. '="' .. key .. '" content="' .. attribute(value) .. '">'
