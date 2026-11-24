@@ -46,6 +46,16 @@ local function read_project_file(rel_path)
     return content
 end
 
+--- Return nothing from a shortcode.
+---
+--- Quarto 2 has no `pandoc.Null`, so return no inlines there.
+local function nothing()
+    if pandoc.Null then
+        return pandoc.Null()
+    end
+    return pandoc.Inlines({})
+end
+
 return {
     ["marimo"] = function(args, kwargs, meta)
         -- Get file path (required)
@@ -55,7 +65,7 @@ return {
         end
         if file == "" then
             quarto.log.warning("[marimo] 'file' attribute is required")
-            return pandoc.Null()
+            return nothing()
         end
 
         -- Read options
