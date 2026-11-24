@@ -9,7 +9,7 @@ from great_docs.pandoc.blocks import Blocks, Div
 from great_docs.pandoc.components import Attr
 from great_docs.pandoc.inlines import Code, Inlines0, Span
 
-from .._format import HAS_RUFF, format_value, render_formatted_expr
+from .._format import HAS_RUFF, format_value, markdown_escape, render_formatted_expr
 from ._type_parameters import render_type_parameters
 from .doc import RenderDoc
 
@@ -58,7 +58,8 @@ class __RenderDocTypeAlias(RenderDoc):
         items: list[InlineContentItem] = [
             Span("type", Attr(classes=[f"doc-{self.kind_slug}-keyword", "kw"])),
             " ",
-            Span(declared, Attr(classes=["doc-parameter-name"])),
+            # Escape `*Ts` and `**P`: Quarto 2 reads them as unclosed emphasis
+            Span(markdown_escape(declared), Attr(classes=["doc-parameter-name"])),
         ]
 
         value = self.obj.value
