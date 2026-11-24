@@ -10,7 +10,12 @@ from typing import Any
 
 import pytest
 
-from great_docs._apiref._format import fence_indented_code, markdown_escape, pretty_code
+from great_docs._apiref._format import (
+    escape_emphasis,
+    fence_indented_code,
+    markdown_escape,
+    pretty_code,
+)
 from great_docs._website import metadata_partial, quarto2, quarto_yml
 
 ASSETS = Path(__file__).parents[1] / "great_docs" / "assets"
@@ -33,6 +38,7 @@ class TestAdaptConfig:
     def test_moves_unsupported_settings_to_the_filter(self):
         adapted = quarto2.adapt_config(_site_config())
 
+        assert adapted["quarto-required"] == "^2"
         assert adapted["filters"] == ["gd-quarto2", "output-title", "interlinks"]
         assert adapted["gd-quarto2"] == {
             "site-title": "Demo",
@@ -45,6 +51,16 @@ class TestAdaptConfig:
             "scripts/share-sidebars.py",
             "scripts/quarto2-post-render.py",
         ]
+
+    def test_keeps_card_settings_for_quarto_2_that_writes_the_tags(self):
+        adapted = quarto2.adapt_config(_site_config(), native_social_cards=True)
+
+        assert adapted["gd-quarto2"]["social-cards"] == {"native": True}
+        assert adapted["website"]["open-graph"] == {"image": "card.png"}
+        assert adapted["website"]["twitter-card"]["card-style"] == "summary"
+        assert quarto2.adapt_config(adapted, native_social_cards=True) == adapted
+        no_cards = quarto2.adapt_config({"website": {"title": "Demo"}}, native_social_cards=True)
+        assert "social-cards" not in no_cards["gd-quarto2"]
 
     def test_leaves_the_configuration_unchanged(self):
         quarto_config = _site_config()
@@ -272,6 +288,7 @@ class TestMetadataPartial:
 class TestEscapes:
     def test_quarto_1_escapes_only_a_leading_underscore(self):
         assert markdown_escape("__init__") == r"\__init__"
+        assert escape_emphasis("*Ts") == "*Ts"
         assert pretty_code('"{{"') == "[&quot;{{&quot;]{.st}"
 
     def test_quarto_2_escapes_every_underscore_and_doubled_braces(
@@ -280,6 +297,7 @@ class TestEscapes:
         monkeypatch.setenv("GREAT_DOCS_QUARTO", "q2")
         assert markdown_escape("__init__") == r"\_\_init\_\_"
         assert markdown_escape("a*b") == r"a\*b"
+        assert escape_emphasis("*Ts") == r"\*Ts"
         assert pretty_code('"{{"') == "[&quot;&#123;&#123;&quot;]{.st}"
         assert pretty_code("{'a': 'b'}") == "{[&apos;a&apos;]{.st}: [&apos;b&apos;]{.st}}"
 
