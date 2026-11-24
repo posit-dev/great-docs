@@ -137,6 +137,17 @@ def test_ensure_installed_applies_the_quarto_2_minimum(monkeypatch: pytest.Monke
         quarto.ensure_installed()
 
 
+@pytest.mark.parametrize(
+    ("version", "writes"),
+    [((0, 47, 0), False), ((0, 47, 1), True), ((0, 48, 0), True), (None, False)],
+)
+def test_quarto_2_writes_social_cards_after_0_47_0(
+    monkeypatch: pytest.MonkeyPatch, version: tuple[int, ...] | None, writes: bool
+):
+    monkeypatch.setattr("great_docs._build.quarto.installed_version", lambda: version)
+    assert quarto.q2_writes_social_cards() is writes
+
+
 def test_ensure_installed_names_a_missing_quarto_2(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv(quarto.EXECUTABLE_ENV, "/nowhere/q2")
     monkeypatch.setattr("great_docs._build.quarto.shutil.which", lambda name: None)
