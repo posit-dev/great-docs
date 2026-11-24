@@ -243,6 +243,29 @@ class TestPostRender:
             '<!-- <a href="/e"> --><style>a { background: url("/f.png"); }</style>'
         )
 
+    def test_puts_the_homepage_sidebar_in_the_margin(self):
+        html = (
+            '<body class="gd-homepage fullcontent nav-fixed">'
+            '<main class="content" id="quarto-document-content">'
+            '<div class="column-margin gd-homepage-sidebar"><p class="x">Links</p></div>'
+            '<div class="column-margin">Note</div></main></body>'
+        )
+        assert _post_render().place_homepage_sidebar(html) == (
+            '<body class="gd-homepage nav-fixed">'
+            '<main class="content page-columns page-full" id="quarto-document-content">'
+            '<div class="column-margin gd-homepage-sidebar no-row-height column-container">'
+            '<p class="x">Links</p></div>'
+            '<div class="column-margin">Note</div></main></body>'
+        )
+
+    def test_leaves_pages_without_the_homepage_sidebar_alone(self):
+        html = (
+            '<body class="fullcontent"><main class="content">'
+            '<script>s = `<div class="column-margin gd-homepage-sidebar">`</script>'
+            '<div class="column-margin">Note</div></main></body>'
+        )
+        assert _post_render().place_homepage_sidebar(html) == html
+
     def test_root_page_gets_a_dot_prefix(self):
         assert _post_render().rewrite("<a href='/x.html'>x</a>", "") == ("<a href='./x.html'>x</a>")
 
