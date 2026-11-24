@@ -11,12 +11,16 @@ from typing import Any
 import pytest
 
 from great_docs._apiref._format import (
+    escape_code_text,
     escape_emphasis,
     fence_indented_code,
+    format_value,
     markdown_escape,
     pretty_code,
 )
+from great_docs._cliref import render as cli_render
 from great_docs._website import metadata_partial, quarto2, quarto_yml
+from tests.support import mock_config
 
 ASSETS = Path(__file__).parents[1] / "great_docs" / "assets"
 
@@ -289,6 +293,8 @@ class TestEscapes:
     def test_quarto_1_escapes_only_a_leading_underscore(self):
         assert markdown_escape("__init__") == r"\__init__"
         assert escape_emphasis("*Ts") == "*Ts"
+        assert escape_code_text("_DEFAULT * 2") == "_DEFAULT * 2"
+        assert format_value("'$HOME'") == "[&quot;$HOME&quot;]{.st}"
         assert pretty_code('"{{"') == "[&quot;{{&quot;]{.st}"
 
     def test_quarto_2_escapes_every_underscore_and_doubled_braces(
@@ -298,8 +304,49 @@ class TestEscapes:
         assert markdown_escape("__init__") == r"\_\_init\_\_"
         assert markdown_escape("a*b") == r"a\*b"
         assert escape_emphasis("*Ts") == r"\*Ts"
+        assert escape_code_text("_DEFAULT * 2") == r"\_DEFAULT \* 2"
+        assert format_value("'$HOME'") == r"[&quot;\$HOME&quot;]{.st}"
         assert pretty_code('"{{"') == "[&quot;&#123;&#123;&quot;]{.st}"
         assert pretty_code("{'a': 'b'}") == "{[&apos;a&apos;]{.st}: [&apos;b&apos;]{.st}}"
+
+
+class TestCliHelp:
+    def _page(self) -> str:
+        cli_info = {
+            "name": "mycli",
+            "short_help": "Build docs/_site.",
+            "description": "Build docs/_site.",
+            "options": [
+                {
+                    "name": "--shell",
+                    "name_display": "--shell",
+                    "required": True,
+                    "envvar": "MY_SHELL",
+                    "help": "Shell to spawn (default: $SHELL), as with 'my_shell'",
+                }
+            ],
+            "arguments": [],
+            "commands": [],
+        }
+        return cli_render.command_page(mock_config(lang="en"), cli_info, is_main=True)
+
+    def test_quarto_1_writes_the_help_unchanged(self):
+        page = self._page()
+        assert "Build docs/_site." in page
+        assert (
+            ":   **Required.** Shell to spawn (default: $SHELL), as with `my_shell` "
+            "Environment variable: `MY_SHELL`."
+        ) in page
+
+    def test_quarto_2_escapes_the_help_outside_code(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("GREAT_DOCS_QUARTO", "q2")
+        page = self._page()
+        assert r"Build docs/\_site." in page
+        assert (
+            r":   **Required.** Shell to spawn (default: \$SHELL), as with `my_shell` "
+            "Environment variable: `MY_SHELL`."
+        ) in page
+        assert cli_render.escape_markup("``a ` b_c`` d_e") == r"``a ` b_c`` d\_e"
 
 
 class TestFenceIndentedCode:
