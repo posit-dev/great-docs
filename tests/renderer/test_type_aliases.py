@@ -194,6 +194,16 @@ def test_signature_rendering(source: str, name: str, expected: str):
     assert expected in _render_alias(source, name)
 
 
+def test_signature_escapes_stars_for_quarto_2(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("GREAT_DOCS_QUARTO", "q2")
+    rendered = _render_alias("type Variadic[T, *Ts] = tuple[T, *Ts]\n", "Variadic")
+    assert (
+        "[type]{.doc-type-alias-keyword .kw} [Variadic[T, \\*Ts]]{.doc-parameter-name}"
+        " [=]{.doc-parameter-default-sep .op}"
+        " [tuple[T, \\*Ts]]{.doc-parameter-default}"
+    ) in rendered
+
+
 def test_type_information_preserves_alias_name():
     from unittest.mock import MagicMock, patch
 
