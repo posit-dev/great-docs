@@ -47,16 +47,22 @@ _DEFINITION = re.compile(r"^:(?:[ \t]+(.*))?$")
 _METADATA_FILES = ("_metadata.yml", "_metadata.yaml")
 
 
-def adapt_config(quarto_config: dict[str, Any]) -> dict[str, Any]:
+def adapt_config(
+    quarto_config: dict[str, Any], *, native_social_cards: bool = False
+) -> dict[str, Any]:
     """
     Return a copy of the configuration that Quarto 2 renders as Quarto 1 renders the original
 
     - Quarto 2 writes `search.json` only on request; the site's search and AI agent files
       read it.
-    - Quarto 2 ignores `shift-heading-level-by` for HTML, and writes no Open Graph or
-      Twitter card tags, so their settings move to the gd-quarto2 filter, which runs first.
+    - Quarto 2 ignores `shift-heading-level-by` for HTML, and 0.47.0 and earlier releases
+      write no Open Graph or Twitter card tags, so their settings move to the gd-quarto2
+      filter, which runs first. Later releases write the card tags but `og:type`, which the
+      filter adds.
     - Quarto 2 leaves root-relative addresses unchanged, so a post-render script, run last,
       rewrites them in each page.
+    - Quarto 2 warns about a project that doesn't declare `quarto-required: "^2"`, so the
+      configuration declares it.
 
     Applying it again to its result changes nothing.
 
@@ -64,6 +70,8 @@ def adapt_config(quarto_config: dict[str, Any]) -> dict[str, Any]:
     ----------
     quarto_config
         The configuration, which is not changed.
+    native_social_cards
+        Whether Quarto 2 writes the card tags itself.
 
     Returns
     -------
@@ -71,6 +79,7 @@ def adapt_config(quarto_config: dict[str, Any]) -> dict[str, Any]:
         The adapted configuration.
     """
     adapted = cast("dict[str, Any]", _copy(quarto_config))
+    adapted["quarto-required"] = "^2"
     settings = cast("dict[str, Any]", adapted.get(SETTINGS_KEY) or {})
     website: Any = adapted.get("website")
     if isinstance(website, dict):
@@ -82,7 +91,7 @@ def adapt_config(quarto_config: dict[str, Any]) -> dict[str, Any]:
             _ = cast("dict[str, Any]", search).setdefault("search-json", True)
         if isinstance(website.get("title"), str):
             settings["site-title"] = website["title"]
-        cards = _social_cards(website)
+        cards = _social_cards(website, native=native_social_cards)
         if cards is not None:
             settings["social-cards"] = cards
 
@@ -267,8 +276,14 @@ def _copy(value: Any) -> Any:
     return value
 
 
-def _social_cards(website: dict[str, Any]) -> dict[str, Any] | None:
-    """Remove the site's card options and return them as the filter's settings"""
+def _social_cards(website: dict[str, Any], *, native: bool) -> dict[str, Any] | None:
+    """
+    Return the filter's card settings, and remove the site's card options unless Quarto 2
+    writes the tags itself
+    """
+    if native:
+        enabled = website.get("open-graph") or website.get("twitter-card")
+        return {"native": True} if enabled else None
     open_graph = website.pop("open-graph", None)
     twitter = website.pop("twitter-card", None)
     if not open_graph and not twitter:
