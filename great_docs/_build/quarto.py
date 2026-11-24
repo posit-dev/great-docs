@@ -46,6 +46,7 @@ __all__ = [
     "is_transient_error",
     "page_timings",
     "parse_progress",
+    "q2_writes_social_cards",
     "render",
 ]
 
@@ -60,6 +61,9 @@ MIN_VERSION = (1, 9, 18)
 # site completely; 0.46.0 is the first to write a page's `dir` and keep its layout classes
 # beside `body-classes`.
 Q2_MIN_VERSION = (0, 46, 0)
+
+# The last Quarto 2 release that writes no Open Graph or Twitter card tags
+_Q2_WITHOUT_SOCIAL_CARDS = (0, 47, 0)
 
 # Quarto can fail while copying output in large projects when one process renames
 # a file as another removes it. A retry can succeed after the filesystem race ends.
@@ -132,6 +136,20 @@ def installed_version() -> tuple[int, ...] | None:
         return None
     match = _Q2_VERSION.search(proc.stdout) or re.match(r"\s*(\d+(?:\.\d+)*)", proc.stdout)
     return tuple(int(part) for part in match.group(1).split(".")) if match else None
+
+
+def q2_writes_social_cards() -> bool:
+    """
+    Whether the Quarto 2 that great-docs runs writes Open Graph and Twitter card tags
+
+    Returns
+    -------
+    :
+        Whether its version is later than 0.47.0. A version that cannot be read counts as
+        earlier.
+    """
+    version = installed_version()
+    return version is not None and version > _Q2_WITHOUT_SOCIAL_CARDS
 
 
 def ensure_installed() -> None:
