@@ -14,6 +14,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .._build import quarto
 from .._contribution import Contribution, NavbarLink, Sidebar, SidebarItem
 from .._translations import translate
 from .._website.navigation import navbar
@@ -24,6 +25,9 @@ if TYPE_CHECKING:
     from ..config import Config
 
 INDEX_PAGE = "reference/cli/index.qmd"
+
+# A code span: a run of backticks, its content, and a closing run of the same length
+_CODE_SPAN_RE = re.compile(r"(`+).+?(?<!`)\1(?!`)", flags=re.DOTALL)
 
 
 def write_pages(
@@ -254,7 +258,7 @@ def index_page(config: Config, cli: CliCommand, entry_safe: str) -> str:
         label = "doc-label-cli-group" if cmd.get("is_group") else "doc-label-cli"
         # Show the full invocation (e.g. `great-docs init`), as on the command page titles
         name = cmd.get("full_path") or cmd["name"]
-        short = (cmd.get("short_help") or "").strip()
+        short = escape_markup((cmd.get("short_help") or "").strip())
         lines.append(f"[{name}]({href}){{.doc-function .doc-label .{label}}}")
         lines.append(f":   {short}" if short else ":   &nbsp;")
         lines.append("")
@@ -282,7 +286,7 @@ def index_page(config: Config, cli: CliCommand, entry_safe: str) -> str:
             lines.append(":::")
             lines.append("")
 
-    root_short = (cli.get("short_help") or "").strip()
+    root_short = escape_markup((cli.get("short_help") or "").strip())
     lines.append(
         f"[{entry_name}]({entry_safe}.qmd){{.doc-function .doc-label .doc-label-cli-group}}"
     )
@@ -515,14 +519,14 @@ def command_page(config: Config, cmd: CliCommand, is_main: bool = False) -> str:
             lines.append(f"<code>{''.join(code_parts)}</code>")
 
             help_str = opt.get("help", "")
-            if opt.get("required"):
-                help_str = f"**Required.** {help_str}" if help_str else "**Required.**"
             envvar = opt.get("envvar")
             if envvar:
                 if isinstance(envvar, (list, tuple)):
                     envvar = ", ".join(envvar)
                 help_str += f" Environment variable: `{envvar}`."
             help_str = backtick_prose(help_str.strip(), option_names)
+            if opt.get("required"):
+                help_str = f"**Required.** {help_str}" if help_str else "**Required.**"
             help_str = _mark_deprecated(help_str, opt.get("deprecated"), config, option_names)
 
             lines.append(f":   {help_str}" if help_str else ":   &nbsp;")
@@ -539,7 +543,7 @@ def command_page(config: Config, cmd: CliCommand, is_main: bool = False) -> str:
         for subcmd in commands:
             subcmd_name = subcmd["name"]
             safe_name = subcmd_name.replace("-", "_")
-            short_help = subcmd.get("short_help", "") or ""
+            short_help = escape_markup(subcmd.get("short_help", "") or "")
             # The root's subcommand pages sit beside its own page; a group's sit in a directory
             # named after the group.
             if is_main:
@@ -675,7 +679,8 @@ def backtick_prose(text: str, option_names: set[str]) -> str:
     :
         The text with each option name and each single-quoted token of two or more characters,
         such as `'great-docs/'`, wrapped in backticks. Tokens already in backticks, and
-        apostrophes in words such as "package's", are left alone.
+        apostrophes in words such as "package's", are left alone. For Quarto 2, the text
+        outside code is also escaped with `escape_markup()`.
     """
     if not text:
         return text
@@ -694,7 +699,38 @@ def backtick_prose(text: str, option_names: set[str]) -> str:
             text,
         )
 
-    return text
+    return escape_markup(text)
+
+
+def escape_markup(text: str) -> str:
+    """
+    Escape the `_`, `*` and `$` of help text outside code, for Quarto 2 (experimental)
+
+    Click help is plain text, but the pages write it as Markdown. Quarto 2 reports an
+    unclosed emphasis, as in `docs/_site)`, or unclosed math, as in `$SHELL`, as an error,
+    while Pandoc reads them as text.
+
+    Parameters
+    ----------
+    text
+        A passage of help text, which may hold code spans.
+
+    Returns
+    -------
+    :
+        The text with a backslash before each `_`, `*` and `$` outside code spans for
+        Quarto 2, or the unchanged text for Quarto 1.
+    """
+    if not text or not quarto.is_q2():
+        return text
+    parts: list[str] = []
+    start = 0
+    for span in _CODE_SPAN_RE.finditer(text):
+        parts.append(re.sub(r"([_*$])", r"\\\1", text[start : span.start()]))
+        parts.append(span.group())
+        start = span.end()
+    parts.append(re.sub(r"([_*$])", r"\\\1", text[start:]))
+    return "".join(parts)
 
 
 def order_sidebar_items(
