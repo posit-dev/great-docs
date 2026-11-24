@@ -5,6 +5,9 @@ Quarto 1 rewrites an `href`, `src` or `poster` that starts with `/` relative to 
 in header includes and raw HTML alike. Quarto 2 leaves them as written, so they load only
 when the site is served from the root of a domain, and never from a file. This script does
 the rewriting. Script and style element contents, and comments, are left alone.
+
+Quarto 2 also leaves `.column-margin` content out of the page grid, so the homepage's
+metadata sidebar sits in the body column. This script puts it in the right margin.
 """
 
 import os
@@ -21,6 +24,8 @@ _TOKEN = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 _ATTRIBUTE = re.compile(r"""(\s(?:href|src|poster)=)(["'])/(?!/)""", re.IGNORECASE)
+_CLASS = re.compile(r"""\sclass=(["'])(?P<classes>[^"']*)\1""", re.IGNORECASE)
+_TAG_NAME = re.compile(r"<([a-zA-Z][a-zA-Z0-9-]*)")
 
 
 def _output_dir():
@@ -70,13 +75,58 @@ def rewrite(html, offset):
     return _TOKEN.sub(token, html)
 
 
+def _classes(markup):
+    """Return the classes in a tag's markup"""
+    match = _CLASS.search(markup)
+    return match.group("classes").split() if match else []
+
+
+def _change_classes(markup, add=(), remove=()):
+    """Return a tag's markup with classes added to and removed from its `class` attribute"""
+    match = _CLASS.search(markup)
+    if match is None:
+        return markup
+    classes = [name for name in match.group("classes").split() if name not in remove]
+    classes += [name for name in add if name not in classes]
+    return markup[: match.start("classes")] + " ".join(classes) + markup[match.end("classes") :]
+
+
+def place_homepage_sidebar(html):
+    """
+    Put the homepage's metadata sidebar in the right margin, as Quarto 1 does
+
+    Quarto 2 counts no `.column-margin` content as using the right margin, so it marks the
+    page `fullcontent` and leaves `<main>` off the page grid. Great Docs writes the sidebar
+    directly in `<main>`, so the classes Quarto 1 writes on these three elements place it.
+    """
+    tags = [match.group("tag") for match in _TOKEN.finditer(html) if match.group("tag")]
+    if not any({"column-margin", "gd-homepage-sidebar"} <= set(_classes(tag)) for tag in tags):
+        return html
+
+    def token(match):
+        markup = match.group("tag")
+        if markup is None:
+            return match.group(0)
+        name = _TAG_NAME.match(markup).group(1).lower()
+        classes = _classes(markup)
+        if name == "main" and "content" in classes:
+            return _change_classes(markup, add=("page-columns", "page-full"))
+        if name == "body":
+            return _change_classes(markup, remove=("fullcontent",))
+        if {"column-margin", "gd-homepage-sidebar"} <= set(classes):
+            return _change_classes(markup, add=("no-row-height", "column-container"))
+        return markup
+
+    return _TOKEN.sub(token, html)
+
+
 def main():
     output_dir = _output_dir()
     if not output_dir.is_dir():
         return
     for page in _rendered_pages(output_dir):
         html = page.read_text(encoding="utf-8")
-        finished = rewrite(html, _offset(page, output_dir))
+        finished = rewrite(place_homepage_sidebar(html), _offset(page, output_dir))
         if finished != html:
             page.write_text(finished, encoding="utf-8")
 
