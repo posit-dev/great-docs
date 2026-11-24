@@ -94,7 +94,9 @@ def write(build_dir: Path, quarto_config: dict[str, Any]) -> None:
     if quarto.is_q2():
         from . import quarto2
 
-        ordered = quarto2.adapt_config(_q2_render_globs(ordered))
+        ordered = quarto2.adapt_config(
+            _q2_render_globs(ordered), native_social_cards=quarto.q2_writes_social_cards()
+        )
     with open(path(build_dir), "w", encoding="utf-8") as f:
         _ = f.write(QUARTO_YML_HEADER)
         write_yaml(ordered, f)
