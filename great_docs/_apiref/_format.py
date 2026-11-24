@@ -90,10 +90,22 @@ def markdown_escape(s: str) -> str:
     error, so for it every `_` and `*` is escaped (experimental).
     """
     if _is_q2():
-        return re.sub(r"([_*])", r"\\\1", s)
+        return escape_emphasis(s)
     if s and s[0] in MARKDOWN_START_CHARS:
         s = rf"\{s}"
     return s
+
+
+def escape_emphasis(s: str) -> str:
+    """
+    Escape every `_` and `*` of plain text, for Quarto 2 (experimental)
+
+    Quarto 2 reports an unclosed emphasis as an error. Pandoc reads a lone `*`, as in the
+    unpacked type `*Ts`, as text, so for Quarto 1 the text is returned unchanged.
+    """
+    if not _is_q2():
+        return s
+    return re.sub(r"([_*])", r"\\\1", s)
 
 
 _CODE_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
