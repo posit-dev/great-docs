@@ -38,6 +38,7 @@ from .._docstring_sections import (
 )
 from .._format import (
     HAS_RUFF,
+    escape_emphasis,
     fence_indented_code,
     format_name,
     format_see_also,
@@ -320,7 +321,8 @@ class __RenderDoc(RenderBase):
             if ann is None:
                 return ""
             elif isinstance(ann, str):
-                return repr_obj(ann)
+                # The syntax and literals between names, such as the `*` of `*Ts`
+                return escape_emphasis(repr_obj(ann))
             elif isinstance(ann, gf.ExprName):
                 return markdown_escape(ann.name)
             else:
