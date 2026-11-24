@@ -249,13 +249,15 @@ def test_a_docstring_naming_its_own_object_is_not_reported():
 
 
 def test_a_code_span_the_build_leaves_alone_is_not_reported():
-    """A span marked `.gd-no-link`, in link text, or in example code is never linked"""
+    """A span marked `.gd-no-link`, in a heading, link text, or example code is never linked"""
     result = LintResult()
 
     _check_ambiguous_references(
         _FLUSH,
         {
             "guide.qmd": (
+                "## Calling `flush()`\n"
+                "\n"
                 "The `flush`{.gd-no-link} key, [`flush()`](https://example.com) and "
                 "[`flush()`](`StoreCache.flush`) aren't reported.\n"
                 "\n"

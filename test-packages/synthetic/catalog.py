@@ -234,6 +234,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_ref_big_class",  # 83
     "gdtest_ref_multi_big",  # 84
     "gdtest_ref_title",  # 85
+    "gdtest_extension_hooks",
+    "gdtest_extension_renderers",
     # 86–95: Site theming & display
     "gdtest_theme_cosmo",  # 86
     "gdtest_theme_lumen",  # 87
@@ -427,6 +429,11 @@ ALL_PACKAGES: list[str] = [
     "gdtest_responsive_tables",  # 212
     # 213: WebMCP tools with every feature they read
     "gdtest_webmcp",  # 213
+    # 214: Termshow recordings of a TUI (split sequences, seams, colors)
+    "gdtest_termshow_tui",  # 214
+    # 215: Docstring summaries that wrap over several lines
+    "gdtest_wrapped_summary",  # 215
+    "gdtest_pydantic_fields",
 ]
 
 
@@ -811,6 +818,11 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "'Dataclasses' section. Each dataclass should show its field "
         "signatures with type annotations and default values rendered in "
         "the constructor docs."
+    ),
+    "gdtest_pydantic_fields": (
+        "Open Colour in the API reference to see four documented attributes. "
+        "The red field uses an assigned Field call, green uses a string in Annotated, "
+        "blue uses a Field call in Annotated, and alpha has a docstring below its declaration."
     ),
     "gdtest_enums": (
         "Two enum types: Color (Enum with RED/GREEN/BLUE) and Priority "
@@ -2363,6 +2375,23 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "with a nested group, a guide page that opts out with `webmcp: false`, a "
         "draft, a blog post and a curated skill. `gd-webmcp.json` should list them "
         "all except the draft, and every page should load `webmcp.js`."
+    ),
+    # ── 214: Termshow TUI fidelity ───────────────────────────────────
+    "gdtest_termshow_tui": (
+        "Termshow recordings of the kind a full-screen app produces: a nyancat-style "
+        "animation split into 1024-character PTY reads (so escape sequences straddle "
+        "events), a checklist of sequences termshow must handle or drop, and solid "
+        "background blocks. Nothing should leak onto the screen, rows of one color "
+        "should meet without seams, and the nyancat page plays the same recording "
+        "in asciinema-player for comparison."
+    ),
+    # ── 215: Wrapped docstring summaries ─────────────────────────────
+    "gdtest_wrapped_summary": (
+        "Docstrings whose summary (the first paragraph) wraps over two or three lines, "
+        "on functions, a class and a method, beside a one-line summary and one followed "
+        "directly by a code block. Each summary should show whole under the title, in "
+        "the index tables and in llms.txt, with none of it left at the start of the "
+        "description."
     ),
 }
 

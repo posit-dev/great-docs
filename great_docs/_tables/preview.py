@@ -174,11 +174,12 @@ def _is_arrow(data: Any) -> bool:
 def _normalize_data(
     data: Any,
 ) -> tuple[list[str], list[str], list[list[Any]], int, str]:
-    """Normalize input data to a common internal representation.
+    """
+    Normalize input data to a common internal representation
 
     Returns
     -------
-    tuple
+    :
         (col_names, col_dtypes_short, all_rows, total_row_count, tbl_type) where `all_rows` is a
         list of rows, each row a list of cell values.
     """
@@ -482,7 +483,8 @@ def _compute_head_tail(
     show_all: bool,
     row_index_offset: int = 0,
 ) -> tuple[list[list], list[int], bool]:
-    """Select head and tail rows, compute row numbers.
+    """
+    Select head and tail rows, compute row numbers
 
     Parameters
     ----------
@@ -491,7 +493,7 @@ def _compute_head_tail(
 
     Returns
     -------
-    tuple
+    :
         (display_rows, row_numbers, is_full_dataset)
     """
     if show_all or n_head + n_tail >= total_rows:
@@ -548,11 +550,12 @@ def _compute_col_widths(
     show_row_numbers: bool,
     row_numbers: list[int],
 ) -> tuple[list[int], int]:
-    """Compute pixel widths for each column.
+    """
+    Compute pixel widths for each column
 
     Returns
     -------
-    tuple
+    :
         (col_widths, rownum_width) where rownum_width is 0 if hidden.
     """
     widths: list[int] = []
@@ -1111,7 +1114,7 @@ def tbl_preview(
     id: str | None = None,
 ) -> TblPreview:
     """
-    Generate a self-contained HTML table preview from almost any tabular data source.
+    Generate a self-contained HTML table preview from almost any tabular data source
 
     The `tbl_preview()` function gives you a quick, polished look at a dataset without pulling in
     heavy rendering dependencies. Pass it a Polars DataFrame, a Pandas DataFrame, a PyArrow Table,
@@ -1195,7 +1198,7 @@ def tbl_preview(
 
     Returns
     -------
-    TblPreview
+    :
         A rendered table preview object. The object has `_repr_html_()` for automatic notebook
         display.
 

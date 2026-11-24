@@ -82,7 +82,8 @@ def _version_build_dir(
 
     Returns
     -------
-    Quarto project directory for the version.
+    :
+        Quarto project directory for the version.
     """
     if layout is not None:
         return layout.build_dir_for(entry.tag, latest_tag)
@@ -154,7 +155,8 @@ def _clean_stale_version_dirs(source_dir: Path, layout: Layout | None = None) ->
 
     Returns
     -------
-    Warnings for matching directories retained because they lacked the marker.
+    :
+        Warnings for matching directories retained because they lacked the marker.
     """
     warnings: list[str] = []
     pattern = "*" if layout and layout.source_dir != layout.package_root else f"{source_dir.name}-*"
@@ -573,8 +575,9 @@ def preprocess_version(
 
     Returns
     -------
-    Page paths relative to `dest_dir`, with `.qmd` extensions replaced by
-    `.html`.
+    :
+        Page paths relative to `dest_dir`, with `.qmd` extensions replaced by
+        `.html`.
     """
     # Build a set of directories excluded by section-level version scoping
     excluded_dirs = _compute_excluded_section_dirs(entry.tag, all_versions, section_configs, layout)
@@ -1626,7 +1629,7 @@ def expand_version_badges(
 
     Returns
     -------
-    str
+    :
         Content with markers replaced by HTML spans.
     """
     from great_docs._versions.model import BADGE_EXPIRY_NEVER, _find_entry, is_badge_expired
@@ -1698,7 +1701,7 @@ def expand_version_badges(
 
 def expand_version_callouts(content: str, entry: VersionEntry) -> str:
     """
-    Convert `.version-note` and `.version-deprecated` fenced divs into Quarto callout blocks.
+    Convert `.version-note` and `.version-deprecated` fenced divs into Quarto callout blocks
 
     Transforms::
 
@@ -1733,7 +1736,7 @@ def expand_version_callouts(content: str, entry: VersionEntry) -> str:
 
     Returns
     -------
-    str
+    :
         Content with version callouts converted to Quarto callouts.
     """
 
@@ -1852,7 +1855,7 @@ def render_versions_parallel(
     progress_callback: Callable[[int, int, int], None] | None = None,
 ) -> list[tuple[str, int, str, str, list[dict[str, Any]]]]:
     """
-    Run `quarto render` in parallel for each version build directory.
+    Run `quarto render` in parallel for each version build directory
 
     Parameters
     ----------
@@ -1868,7 +1871,7 @@ def render_versions_parallel(
 
     Returns
     -------
-    list[tuple[str, int, str, str, list[dict[str, Any]]]]
+    :
         List of `(build_dir, returncode, stdout, stderr, page_timings)` tuples in the same order
         as `build_dirs`.
     """
@@ -2129,8 +2132,9 @@ def run_versioned_build(
 
     Returns
     -------
-    Build result containing `success`, `versions_built`, `pages_by_version`,
-    `timings_by_version`, `warnings`, and `errors`.
+    :
+        Build result containing `success`, `versions_built`, `pages_by_version`,
+        `timings_by_version`, `warnings`, and `errors`.
     """
     versions = parse_versions_config(versions_config)
     latest = get_latest_version(versions)

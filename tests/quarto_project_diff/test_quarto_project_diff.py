@@ -26,9 +26,78 @@ from tests.quarto_project_diff.record import (
 from tests.quarto_project_diff.sides import (
     PREVIEW_DIRECTORY_VARIABLE,
     RequirementError,
+    base_side,
     run_checked,
     write_stub,
 )
+
+
+@pytest.fixture
+def baseline_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    checkout = tmp_path / "repo"
+    checkout.mkdir()
+    run_checked(["git", "init", "--quiet"], checkout)
+    (checkout / ".gitignore").write_text("uv.lock\n.venv/\n")
+    (checkout / "uv.lock").touch()
+    run_checked(["git", "add", ".gitignore"], checkout)
+    run_checked(
+        [
+            "git",
+            "-c",
+            "user.name=Quarto Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-m",
+            "Create baseline",
+        ],
+        checkout,
+    )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    uv = bin_dir / "uv"
+    uv.write_text('#!/bin/sh\nmkdir -p .venv\nexit "${UV_TEST_STATUS:-0}"\n')
+    uv.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_dir), prepend=os.pathsep)
+    return checkout
+
+
+@pytest.mark.parametrize("sync_status", ["0", "1"])
+def test_base_side_removes_temporary_worktree(
+    baseline_checkout: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sync_status: str
+) -> None:
+    checkout = baseline_checkout
+    cache = tmp_path / "cache"
+    initial = run_checked(["git", "worktree", "list", "--porcelain"], checkout)
+    with base_side(checkout, "HEAD", cache, "3.13", "other-run") as other:
+        monkeypatch.setenv("UV_TEST_STATUS", sync_status)
+        if sync_status == "0":
+            with base_side(checkout, "HEAD", cache, "3.13", "test-run") as base:
+                assert base.checkout != other.checkout
+                assert base.venv.is_dir()
+        else:
+            with (
+                pytest.raises(RequirementError, match="uv sync"),
+                base_side(checkout, "HEAD", cache, "3.13", "test-run"),
+            ):
+                pytest.fail("Baseline setup should have failed")
+        assert other.checkout.exists()
+        assert list((cache / "worktrees").iterdir()) == [other.checkout]
+    assert run_checked(["git", "worktree", "list", "--porcelain"], checkout) == initial
+    assert not list((cache / "worktrees").iterdir())
+
+
+def test_base_side_retains_worktree_for_reuse(baseline_checkout: Path, tmp_path: Path) -> None:
+    checkout = baseline_checkout
+    cache = tmp_path / "cache"
+    with base_side(checkout, "HEAD", cache, "3.13", "first", reuse=True) as first:
+        marker = first.venv / "marker"
+        marker.touch()
+    with base_side(checkout, "HEAD", cache, "3.13", "second", reuse=True) as second:
+        assert second.checkout == first.checkout
+        assert marker.is_file()
 
 
 def test_file_rules_remove_commit_and_build_time_only():

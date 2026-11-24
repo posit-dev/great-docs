@@ -8,6 +8,12 @@
 $h2-font-size: 1.5rem;
 $h3-font-size: 1.3rem;
 
+// Use the paragraph font for everything that inherits from the body (list items, definition
+// lists, disclosure labels, page widgets) rather than Flatly's Lato. Nothing uses Lato then, so
+// skip loading it. `!default` lets a user stylesheet listed after this one choose its own.
+$font-family-sans-serif: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !default;
+$web-font-path: false !default;
+
 /*-- scss:mixins --*/
 $headings-font-weight: 300 !default;
 
@@ -43,21 +49,38 @@ $member-groups: "section:is(.doc-attributes, .doc-classes, .doc-type-aliases, .d
 // site, Quarto's navigation script strips `index.html`, leaving links that end
 // in `/`.
 $ref-page: "body:is(.doc-reference, .doc-api-page)";
+$sidebar-section-header: "#quarto-sidebar .sidebar-item-section > .sidebar-item-container > .sidebar-item-text:not([href])";
 $ref-index-links: 'a.sidebar-item-text:is([href$="/index.html"], [href$="/"])';
 
 a {
    text-decoration: none;
 }
 
+// Cross-reference links take the body link colour wherever they appear. Only
+// links in `p` and `li` got it before, so links elsewhere (See Also terms,
+// headings) fell back to the theme's accent colour.
 a.gdls-link {
+   color: var(--gd-link-color);
    text-decoration: underline;
    text-underline-offset: 0.25em;
    text-decoration-thickness: 0.125em;
 }
 
+body.quarto-dark a.gdls-link:hover {
+   color: #9dcaf0;
+}
+
 a.gdls-code {
    font-family: $font-family-monospace;
    font-size: 0.875em;
+}
+
+// A link around `code` looks like a `gdls-code` link: no code chip. `body` and
+// `:not(.sourceCode)` outrank the chip rules for `p code` and dark-mode `code`.
+body a.gdls-link > code:not(.sourceCode) {
+   color: inherit;
+   background-color: transparent;
+   padding: 0;
 }
 
 // Let the browser position and size the wrapped `sup`. Generate the brackets on
@@ -568,6 +591,21 @@ $all_labels: (
 $class-like-labels: (class, dataclass, namedtuple, typeddict, protocol, abc, enum);
 $method-like-labels: (method, classmethod, staticmethod);
 
+@mixin dark-doc-label-colours($colour) {
+  :is(body.quarto-dark, html.quarto-dark, :root[data-bs-theme="dark"]) & {
+    color: tint-color($colour, 60%);
+    border-color: tint-color($colour, 15%);
+    background-color: shade-color($colour, 75%);
+  }
+}
+
+@mixin doc-label-colours($colour, $dark-grey-weight: 0%) {
+  color: $colour;
+  border-color: $colour;
+  background-color: tint-color($colour, 95%);
+  @include dark-doc-label-colours(mix(#404040, $colour, $dark-grey-weight));
+}
+
 // Quarto copies the page title into the narrow-screen navigation bar;
 // object-kind badges need the same styling in both locations.
 :is(.content, .quarto-secondary-nav-title) span.doc-label::after {
@@ -592,9 +630,7 @@ $method-like-labels: (method, classmethod, staticmethod);
 :is(.content, .quarto-secondary-nav-title) {
   @each $label in $class-like-labels {
     span.doc-label-#{$label}::after {
-      color: $label-class-color;
-      border-color: $label-class-color;
-      background-color: tint-color($label-class-color, 95%);
+      @include doc-label-colours($label-class-color, $dark-grey-weight: 30%);
     }
   }
 }
@@ -602,91 +638,69 @@ $method-like-labels: (method, classmethod, staticmethod);
 :is(.content, .quarto-secondary-nav-title) {
   @each $label in $method-like-labels {
     span.doc-label-#{$label}::after {
-      color: $label-method-color;
-      border-color: $label-method-color;
-      background-color: tint-color($label-method-color, 95%);
+      @include doc-label-colours($label-method-color);
     }
   }
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-function::after,
 :is(.content, .quarto-secondary-nav-title) span.doc-label-async::after {
-  color: $label-function-color;
-  border-color: $label-function-color;
-  background-color: tint-color($label-function-color, 95%);
+  @include doc-label-colours($label-function-color);
+}
+
+:is(.content, .quarto-secondary-nav-title) span.doc-label-exception::after {
+  @include dark-doc-label-colours($label-exception-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-property::after {
-  color: $label-property-color;
-  border-color: $label-property-color;
-  background-color: tint-color($label-property-color, 95%);
+  @include doc-label-colours($label-property-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-constant::after {
-  color: $label-constant-color;
-  border-color: $label-constant-color;
-  background-color: tint-color($label-constant-color, 95%);
+  @include doc-label-colours($label-constant-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-typealias::after {
-  color: $label-typealias-color;
-  border-color: $label-typealias-color;
-  background-color: tint-color($label-typealias-color, 95%);
+  @include doc-label-colours($label-typealias-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-typevar::after {
-  color: $label-typevar-color;
-  border-color: $label-typevar-color;
-  background-color: tint-color($label-typevar-color, 95%);
+  @include doc-label-colours($label-typevar-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-cli::after {
-  color: $label-cli-color;
-  border-color: $label-cli-color;
-  background-color: tint-color($label-cli-color, 95%);
+  @include doc-label-colours($label-cli-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-cli-group::after {
   content: "cli-group";
-  color: $label-cli-group-color;
-  border-color: $label-cli-group-color;
-  background-color: tint-color($label-cli-group-color, 95%);
+  @include doc-label-colours($label-cli-group-color);
 }
 
 // MCP label styles
 :is(.content, .quarto-secondary-nav-title) span.doc-label-mcp-tool::after {
   content: "tool";
-  color: $label-mcp-tool-color;
-  border-color: $label-mcp-tool-color;
-  background-color: tint-color($label-mcp-tool-color, 95%);
+  @include doc-label-colours($label-mcp-tool-color, $dark-grey-weight: 30%);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-mcp-resource::after {
   content: "resource";
-  color: $label-mcp-resource-color;
-  border-color: $label-mcp-resource-color;
-  background-color: tint-color($label-mcp-resource-color, 95%);
+  @include doc-label-colours($label-mcp-resource-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-mcp-resource-template::after {
   content: "resource template";
-  color: $label-mcp-resource-template-color;
-  border-color: $label-mcp-resource-template-color;
-  background-color: tint-color($label-mcp-resource-template-color, 95%);
+  @include doc-label-colours($label-mcp-resource-template-color, $dark-grey-weight: 30%);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-mcp-prompt::after {
   content: "prompt";
-  color: $label-mcp-prompt-color;
-  border-color: $label-mcp-prompt-color;
-  background-color: tint-color($label-mcp-prompt-color, 95%);
+  @include doc-label-colours($label-mcp-prompt-color);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-mcp::after {
   content: "mcp";
-  color: $label-mcp-color;
-  border-color: $label-mcp-color;
-  background-color: tint-color($label-mcp-color, 95%);
+  @include doc-label-colours($label-mcp-color);
 }
 
 // MCP capability tiles
@@ -1377,7 +1391,7 @@ p,h1,h2,h3,#toc-title,#toc-function-reference,.nav-link,.table {
 }
 
 summary::marker {
-  font-size: 1.5em;
+  font-size: 0.75em;
 }
 
 /* #toc-title -- handled by SCSS rules above */
@@ -1410,9 +1424,61 @@ summary::marker {
     color: #333;
 }
 
+/* The active entry matches the active page in the left sidebar. Quarto colours
+   it with an !important rule, so this one needs !important too. */
 #quarto-margin-sidebar nav ul li a.active {
-    color: #0d6efd;
+    color: var(--gd-active-link) !important;
+    border-left-color: var(--gd-active-link);
     font-weight: 500;
+}
+
+/* Code in an entry keeps its font but takes the entry's colour, without the
+   chip that code in sidebar links gets */
+#TOC .nav-link code {
+    color: inherit;
+    background-color: transparent;
+    padding: 0;
+}
+
+/* Heading anchor icons take a muted text colour instead of the theme accent */
+.anchorjs-link {
+    color: var(--gd-text-muted);
+}
+
+.anchorjs-link:hover {
+    color: var(--gd-text-primary);
+}
+
+/* A clicked anchor copies its link, and `heading-anchors.js` confirms the copy
+   beside the icon. The icon stays visible while the confirmation shows. */
+.anchorjs-link {
+    position: relative;
+}
+
+.anchorjs-link.gd-anchor-link-copied {
+    opacity: 1;
+}
+
+.gd-anchor-copied {
+    position: absolute;
+    top: 50%;
+    inset-inline-start: calc(100% + 0.4rem);
+    transform: translateY(-50%);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background-color: var(--gd-text-primary);
+    color: var(--gd-bg-primary);
+    font: 500 0.75rem/1.2 var(--bs-body-font-family);
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.gd-anchor-link-copied > .gd-anchor-copied {
+    opacity: 1;
 }
 
 #navbarCollapse > ul.navbar-nav.navbar-nav-scroll.me-auto > li > a:hover {
@@ -1428,14 +1494,25 @@ summary::marker {
 
 /* --- Disable sidebar section collapsing --- */
 
+/* Section headings come in two shapes. Quarto 1.9 and earlier render a label
+   <a> plus a separate chevron toggle <a>; Quarto 1.11 renders a single
+   <button class="sidebar-item-text sidebar-item-toggle ..."> holding both the
+   label and the chevron. $sidebar-section-header matches the label element in
+   either shape (it is the only .sidebar-item-text without an href). */
+
 /* Prevent the section heading text from triggering collapse */
-a.sidebar-item-text.sidebar-link.text-start[data-bs-toggle="collapse"] {
+#{$sidebar-section-header} {
     pointer-events: none;
     cursor: default;
 }
 
-/* Hide the chevron toggle element entirely */
+/* Hide the chevron toggle element entirely (Quarto 1.9 and earlier) */
 a.sidebar-item-toggle.text-start {
+    display: none !important;
+}
+
+/* Hide the chevron inside the heading button (Quarto 1.11) */
+#{$sidebar-section-header} > .bi-chevron-right {
     display: none !important;
 }
 
@@ -1522,6 +1599,14 @@ div.sidebar-item-container {
     flex-shrink: 0;
 }
 
+/* The expanded navbar is tall enough for a larger logo without growing. The collapsed
+   navbar stacks the logo in its own row, so it keeps the smaller size there. */
+@media (min-width: 992px) {
+    .navbar-logo {
+        height: 32px;
+    }
+}
+
 /* Version badge in navbar title */
 .version-badge {
     font-size: 0.65em;
@@ -1600,14 +1685,23 @@ div.sidebar-item-container {
     hyphens: none;
 }
 
-/* Keep section headers (categories) in their original sans-serif uppercase style */
-a.sidebar-item-text.sidebar-link.text-start > span {
+/* Section headers (categories) share one style in every sidebar: user guide,
+   custom sections and the API and MCP references. The sans-serif family is set
+   on the label itself so it overrides the monospace that reference sidebars
+   give their items. */
+#{$sidebar-section-header} > .menu-text {
     text-transform: uppercase;
-    font-weight: 600;
-    color: dimgray;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #4a4a4a;
     font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    font-size: 1em;
+    font-size: 0.8rem;
     hyphens: none;
+}
+
+/* Breathing room between a section header and its first item */
+#quarto-sidebar .sidebar-item-section > .sidebar-item-container:has(> .sidebar-item-text:not([href])) {
+    margin-bottom: 0.35rem;
 }
 
 .sidebar-menu-container {
@@ -1655,6 +1749,7 @@ body.doc-cli-api-page #quarto-sidebar .sidebar-item-section
     text-transform: uppercase;
     font-family: $font-family-monospace;
     font-size: 0.7rem;
+    font-weight: 600;
     letter-spacing: 0.04em;
     line-height: 1.2;
     padding: 0.1rem 0.4rem;
@@ -2130,6 +2225,110 @@ body.quarto-light .navbar .aa-SubmitButton,
 body.quarto-light .navbar .aa-SubmitButton svg {
     color: var(--gd-navbar-text) !important;
     fill: var(--gd-navbar-text);
+}
+
+/* Search overlay and results. Quarto gives every result row and container a light
+   background and marks the selected row with the theme's primary color, so these
+   rules match its selectors and use the --gd-search-* colors of the current mode. */
+.aa-DetachedContainer,
+.aa-DetachedFormContainer,
+.aa-DetachedContainer .aa-Panel,
+.aa-DetachedOverlay .aa-Panel,
+#quarto-search-results .aa-Panel {
+    background-color: var(--gd-search-bg);
+}
+
+#quarto-search-results .aa-Panel {
+    border-color: var(--gd-border-color);
+}
+
+.aa-DetachedContainer {
+    box-shadow: 0 0 0 1px var(--gd-border-color);
+}
+
+.aa-DetachedFormContainer {
+    border-bottom-color: var(--gd-border-color);
+}
+
+.aa-DetachedCancelButton {
+    color: var(--gd-text-secondary);
+
+    &:hover {
+        box-shadow: 0 0 0 1px var(--gd-border-color);
+    }
+}
+
+.aa-Autocomplete .aa-Form,
+.aa-DetachedFormContainer .aa-Form {
+    background-color: var(--gd-search-input-bg);
+    border-color: var(--gd-search-input-border);
+    color: var(--gd-text-primary);
+
+    // Replace Quarto's 2px outline with a lighter ring that still marks focus
+    &:has(.aa-Input:focus-visible) {
+        outline: none;
+        border-color: var(--gd-search-focus);
+        box-shadow: 0 0 0 3px var(--gd-search-focus-ring);
+    }
+
+    .aa-InputWrapper .aa-Input,
+    .aa-InputWrapper .aa-Input::placeholder {
+        color: var(--gd-text-primary);
+    }
+}
+
+.aa-DetachedOverlay,
+#quarto-search-results {
+    .aa-SourceHeader .search-result-header {
+        background-color: var(--gd-search-header-bg);
+        color: var(--gd-text-muted);
+    }
+
+    .aa-Item .search-item {
+        background-color: var(--gd-search-bg);
+        border-color: var(--gd-border-color);
+        color: var(--gd-text-primary);
+    }
+
+    .aa-Item .search-result-doc {
+        border-top-color: var(--gd-border-color);
+    }
+
+    .aa-Item .search-result-doc:not(.document-selectable) .search-result-title-container {
+        background-color: var(--gd-search-bg);
+        color: var(--gd-text-primary);
+    }
+
+    li.aa-Item[aria-selected="false"] .search-item {
+        background-color: var(--gd-search-bg);
+    }
+
+    li.aa-Item[aria-selected] .search-item {
+        &.search-result-more,
+        .search-result-section,
+        .search-result-text,
+        .search-result-title-container,
+        .search-result-text-container {
+            color: var(--gd-text-primary);
+        }
+
+        mark.search-match,
+        .search-match.mark {
+            background-color: var(--gd-search-match-bg);
+            color: inherit;
+        }
+    }
+
+    li.aa-Item[aria-selected="true"] .search-item {
+        &,
+        &.search-result-more,
+        .search-result-section,
+        .search-result-text,
+        .search-result-title-container,
+        .search-result-text-container {
+            background-color: var(--gd-search-selected-bg);
+        }
+    }
 }
 
 body.quarto-light .navbar .quarto-navbar-tools button,
@@ -3767,6 +3966,16 @@ body.quarto-dark .gd-keyboard-btn {
     --gd-accent-blue: rgba(101, 180, 237, 0.75);
     --gd-citation-color: #1a6cae;
 
+    /* Search overlay - light mode */
+    --gd-search-bg: #fff;
+    --gd-search-header-bg: #f2f2f2;
+    --gd-search-input-bg: #fff;
+    --gd-search-input-border: #dee2e6;
+    --gd-search-selected-bg: #e8f3fc;
+    --gd-search-match-bg: #fde68a;
+    --gd-search-focus: #65b4ed;
+    --gd-search-focus-ring: rgba(101, 180, 237, 0.25);
+
     /* Syntax highlighting - light mode */
     --gd-syn-class: #0e84b5;
     --gd-syn-name: #4758AB;
@@ -3804,6 +4013,16 @@ body.quarto-dark {
     --gd-active-link: #ff9f43;
     --gd-accent-blue: rgba(101, 180, 237, 0.6);
     --gd-citation-color: #7cb8e8;
+
+    /* Search overlay - dark mode */
+    --gd-search-bg: #222222;
+    --gd-search-header-bg: #2a2a2a;
+    --gd-search-input-bg: #2a2a2a;
+    --gd-search-input-border: #3d3d3d;
+    --gd-search-selected-bg: #2b3742;
+    --gd-search-match-bg: #6b5714;
+    --gd-search-focus: #7cb8e8;
+    --gd-search-focus-ring: rgba(124, 184, 232, 0.25);
 
     /* Syntax highlighting - dark mode (optimized for contrast) */
     --gd-syn-class: #56c8ff;
@@ -4215,8 +4434,9 @@ body.quarto-dark #quarto-sidebar a.sidebar-item-text.sidebar-link.active {
     color: var(--gd-active-link);
 }
 
-body.quarto-dark a.sidebar-item-text.sidebar-link.text-start > span {
-    color: #9e9e9e;
+/* CLI command-group pills keep their own colour (see the CLI reference rules) */
+body.quarto-dark:not(.doc-cli-reference, .doc-cli-api-page) #{$sidebar-section-header} > .menu-text {
+    color: #b4b4b4;
 }
 
 /* Toggle already hidden via display:none above; no dark-mode override needed */
@@ -4530,51 +4750,7 @@ body.quarto-dark .navbar .navbar-toggler .navbar-toggler-icon {
     --bs-navbar-toggler-icon-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='%23e0e0e0' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
 }
 
-body.quarto-dark .aa-Panel {
-    background-color: var(--gd-bg-secondary);
-    border-color: var(--gd-border-color);
-}
-
-body.quarto-dark .aa-Item {
-    color: var(--gd-text-primary);
-}
-
-body.quarto-dark .aa-Item:hover,
-body.quarto-dark .aa-Item[aria-selected="true"] {
-    background-color: var(--gd-bg-tertiary);
-}
-
-/* Search results styling - ensure readable text in dark mode */
-body.quarto-dark .search-result-title,
-body.quarto-dark p.search-result-title,
-body.quarto-dark .aa-Panel .search-result-title,
-body.quarto-dark #quarto-search-results .search-result-title,
-html.quarto-dark .search-result-title,
-html.quarto-dark p.search-result-title {
-    color: var(--gd-text-primary) !important;
-}
-
-body.quarto-dark .search-result-header,
-body.quarto-dark div.search-result-header,
-body.quarto-dark .aa-Panel .search-result-header,
-body.quarto-dark #quarto-search-results .search-result-header,
-html.quarto-dark .search-result-header,
-html.quarto-dark div.search-result-header {
-    color: var(--gd-text-secondary) !important;
-}
-
-body.quarto-dark .search-result-text {
-    color: var(--gd-text-secondary);
-}
-
-body.quarto-dark .search-result-doc-title {
-    color: var(--gd-text-primary);
-}
-
-body.quarto-dark .search-result-section {
-    color: var(--gd-text-muted);
-}
-
+/* The search overlay's dark colors come from the --gd-search-* properties */
 body.quarto-dark .aa-SourceHeader {
     color: var(--gd-text-muted);
     border-bottom-color: var(--gd-border-color);
@@ -4599,13 +4775,6 @@ body.quarto-dark .search-result-link:hover {
 /* Algolia/Autocomplete specific dark mode */
 body.quarto-dark .aa-Autocomplete {
     background-color: transparent;
-}
-
-body.quarto-dark .aa-Form,
-html.quarto-dark .aa-Form,
-:root[data-bs-theme="dark"] .aa-Form {
-    background-color: var(--gd-bg-tertiary);
-    border-color: var(--gd-border-color);
 }
 
 body.quarto-dark .aa-Input,

@@ -367,6 +367,21 @@ dynamic: false
 - the build fails with `AttributeError` during introspection
 - you're documenting a compiled extension (PyO3/Rust/Cython)
 
+## API Reference Extensions
+
+To customise the API reference with Python, point `api_reference_extension` at a
+file that defines `setup(extension)`:
+
+```{.yaml filename="docs/great-docs.yml"}
+api_reference_extension: _api_reference_extension.py  # null disables setup
+```
+
+A relative path resolves against the directory of the configuration file, and an
+absolute path to a `.py` file also works. Great Docs checks the path when it reads
+the configuration, but runs the file only when it generates the API reference. See
+[API reference customisation](api-reference-customisation.qmd) for hooks, body
+callbacks, custom renderers and the files preview watches.
+
 ## Repository integration
 
 Set a GitHub or GitLab repository URL to enable these features:
@@ -922,6 +937,19 @@ reference:
 
 If no `reference` config is provided, Great Docs auto-generates sections from discovered exports.
 
+### Base Classes
+
+Set `reference.show_bases` to `true` to list direct base classes below each class signature.
+The setting defaults to `false`.
+
+```{.yaml filename="docs/great-docs.yml"}
+reference:
+  show_bases: true
+```
+
+Great Docs still discovers sections automatically. To provide your own sections, put them under
+`reference.sections` alongside `show_bases`.
+
 ### Page Title and Description
 
 You can set a custom heading and introductory paragraph for the API reference index page:
@@ -1159,6 +1187,9 @@ display_name: My Package  # Custom display name for navbar/title
 
 # Docstring Parser
 parser: numpy  # Auto-detected: numpy, google, or sphinx
+
+# API reference customisation
+api_reference_extension: null  # Optional .py path, relative to this file
 
 # API Discovery
 exclude:

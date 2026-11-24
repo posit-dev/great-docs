@@ -17,19 +17,44 @@ class Walkable:
     """
 
     def copy(self) -> Self:
-        """Return a shallow copy of this node"""
+        """
+        Return a shallow copy of this node
+
+        Returns
+        -------
+        :
+            The copy.
+        """
         return copy.copy(self)
 
     def replace(self, **changes: object) -> Self:
-        """Return a copy of this node with the given fields replaced
+        """
+        Return a copy of this node with the given fields replaced
 
         Subclasses that carry state outside their dataclass fields override
         this to preserve it.
+
+        Parameters
+        ----------
+        **changes
+            New values keyed by field name.
+
+        Returns
+        -------
+        :
+            The copy.
         """
         return dataclasses.replace(self, **changes)
 
     def iter_fields(self) -> Generator[tuple[str, object], None, None]:
-        """Iterate (field_name, value) pairs for every dataclass field on this node"""
+        """
+        Iterate (field_name, value) pairs for every dataclass field on this node
+
+        Yields
+        ------
+        :
+            The name and value of each field, in declaration order.
+        """
         for f in dc_fields(self):
             yield f.name, getattr(self, f.name)
 
@@ -44,6 +69,14 @@ class MissingType(Walkable):
     """
 
     def __hash__(self) -> int:
+        """
+        Hash the sentinel by identity
+
+        Returns
+        -------
+        :
+            The identity hash.
+        """
         return object.__hash__(self)
 
 

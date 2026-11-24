@@ -248,8 +248,12 @@ local function make_link(content, uri, classes)
 end
 
 --- Resolve an explicit reference
+---
+--- With `linked` false, a resolved reference renders as it would unresolved,
+--- with the resolved display text.
 --- @param link table
-local function Link(link)
+--- @param linked boolean
+local function reference(link, linked)
   local ref = parse_target(link.target)
   if not ref then
     -- Not a reference. Leave the link alone and do not descend: a code span in
@@ -262,10 +266,14 @@ local function Link(link)
 
   if not entry then
     quarto.log.warning("interlinks: no match for " .. ref.name)
+  end
+
+  if not entry or not linked then
     if authored then
       return link.content, false
     end
-    local text = ref.shortened and short_name(ref.name) or ref.name
+    local text = entry and link_text(ref, entry)
+      or (ref.shortened and short_name(ref.name) or ref.name)
     return pandoc.Code(text), false
   end
 
@@ -304,8 +312,11 @@ local function parse_code(text)
 end
 
 --- Link a code span that names a documented object
+---
+--- With `linked` false, the span stays code and only loses its display prefix.
 --- @param code table
-local function Code(code)
+--- @param linked boolean
+local function code_span(code, linked)
   if code.classes:includes("gd-no-link") then
     return nil
   end
@@ -315,7 +326,7 @@ local function Code(code)
     return nil
   end
 
-  local entry = lookup({ name = name }, true)
+  local entry = linked and lookup({ name = name }, true)
   local short = short_name(name)
 
   if not entry then
@@ -339,9 +350,49 @@ local function Code(code)
   return make_link({ pandoc.Str(display) }, entry.uri, { "gdls-link", "gdls-code" })
 end
 
+-- A page sets `gd-autolink: false` to keep its code spans unlinked. The
+-- generated changelog does, since release notes are not written against this
+-- site's API.
+local autolink = true
+
+local function Meta(meta)
+  if meta["gd-autolink"] == false then
+    autolink = false
+  end
+end
+
+local function Link(link)
+  return reference(link, true)
+end
+
+local function Code(code)
+  return code_span(code, autolink)
+end
+
+--- Show references in a heading as code rather than links
+---
+--- A link would sit inside the heading's own anchor target, and Quarto drops
+--- links when it copies a heading into the table of contents. Rendering code
+--- keeps the code font in both places.
+--- @param header table
+local function Header(header)
+  header.content = header.content:walk({
+    traverse = "topdown",
+    Link = function(link)
+      return reference(link, false)
+    end,
+    Code = function(code)
+      return code_span(code, false)
+    end,
+  })
+  return header, false
+end
+
 return {
+  { Meta = Meta },
   {
     traverse = "topdown",
+    Header = Header,
     Link = Link,
     Code = Code,
   },

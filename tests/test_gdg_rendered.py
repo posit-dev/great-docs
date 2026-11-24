@@ -605,10 +605,11 @@ def test_function_pages_have_signature(pkg_name: str):
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
     nodoc_items = set(expected.get("nodoc_items", []))
+    hidden_signatures = set(expected.get("hidden_signatures", []))
     ref = _ref_dir(pkg_name)
 
     for name in export_names:
-        if name in nodoc_items:
+        if name in nodoc_items or name in hidden_signatures:
             continue
         page = _find_export_page(ref, name)
         if page is None:
@@ -2335,6 +2336,21 @@ def test_logo_in_rendered_html():
     assert logo_img is not None, "Navbar should contain an <img class='navbar-logo'>"
     assert "logo" in (logo_img.get("src", "") or "").lower(), (
         "Logo img src should reference the logo file"
+    )
+
+
+@pytest.mark.dedicated
+def test_DED_navbar_logo_is_larger_in_the_expanded_navbar():
+    """The navbar logo grows to 32px only where the navbar is expanded."""
+    pkg = "gdtest_logo"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    css = _deployed_css(pkg)
+    assert css, "No CSS files found in _site"
+
+    assert "height:24px" in _mermaid_css_rule(css, ".navbar-logo")
+    assert re.search(
+        r"@media\s*\(min-width:\s*992px\)\s*\{\s*\.navbar-logo\s*\{\s*height:\s*32px", css
     )
 
 
@@ -8854,6 +8870,19 @@ def test_DED_tag_location_tags_index_page_generated():
         assert tag in text, f"Tag '{tag}' missing from tags index page"
 
 
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_tags_index_linked_from_homepage_not_navbar():
+    """The homepage sidebar links the tags index, and the navbar has no Tags item."""
+    pkg = "gdtest_page_tags"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    soup = _load_html(_site_dir(pkg) / "index.html")
+    assert soup.select_one('nav.navbar a[href*="tags/"]') is None
+    assert soup.select_one('.gd-homepage-sidebar a[href="tags/index.html"]') is not None
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Icon Shortcode — {{< icon >}} renders inline SVG in various contexts
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -11920,8 +11949,164 @@ def test_DED_sidebar_sections_expanded_by_css():
     toggle = _mermaid_css_rule(css, "a.sidebar-item-toggle.text-start")
     assert "display:none" in toggle, "Section chevrons must be hidden"
 
+    # Quarto 1.11 puts the label and the chevron in one <button>
+    header = (
+        "#quarto-sidebar .sidebar-item-section > .sidebar-item-container"
+        " > .sidebar-item-text:not([href])"
+    )
+    chevron = _mermaid_css_rule(css, header + " > .bi-chevron-right")
+    assert "display:none" in chevron, "Chevrons inside heading buttons must be hidden"
+
+    label = _mermaid_css_rule(css, header + " > .menu-text")
+    assert "text-transform:uppercase" in label
+    assert "font-weight:700" in label
+
     section = _mermaid_css_rule(css, "#quarto-sidebar ul.collapse.sidebar-section")
     assert "display:block" in section, "Collapsible sidebar sections must stay visible"
+
+
+@pytest.mark.dedicated
+def test_DED_links_and_toc_avoid_theme_accent():
+    """
+    Deployed CSS keeps cross-reference links, the TOC and heading anchors off the theme accent
+
+    Links outside `p` and `li`, Quarto's `!important` active TOC entry and the anchor icons would
+    otherwise take the theme's link colour.
+    """
+    pkg = "gdtest_user_guide_sections"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    css = _deployed_css(pkg)
+    assert css, "No CSS files found in _site"
+
+    link = _mermaid_css_rule(css, "a.gdls-link")
+    assert "color:var(--gd-link-color)" in link
+
+    linked_code = _mermaid_css_rule(css, "body a.gdls-link > code:not(.sourceCode)")
+    assert "background-color:rgba(0,0,0,0)" in linked_code, "Linked code must not show a chip"
+
+    active = _mermaid_css_rule(css, "#quarto-margin-sidebar nav ul li a.active")
+    assert "color:var(--gd-active-link)!important" in active
+
+    toc_code = _mermaid_css_rule(css, "#TOC .nav-link code")
+    assert "color:inherit" in toc_code
+
+    anchor = _mermaid_css_rule(css, ".anchorjs-link")
+    assert "color:var(--gd-text-muted)" in anchor
+
+
+@pytest.mark.dedicated
+def test_DED_body_text_uses_the_paragraph_font():
+    """
+    Deployed CSS sets the body in the paragraph font and keeps disclosure triangles small
+
+    List items, definition lists and code-fold labels inherit the body font, so they would
+    otherwise render in Flatly's Lato beside Open Sans paragraphs.
+    """
+    pkg = "gdtest_index_frontmatter"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    css = _deployed_css(pkg)
+    assert css, "No CSS files found in _site"
+
+    assert re.search(r'--bs-body-font-family:\s*"Open Sans"', css)
+    assert "family=Lato" not in css, "Lato is unused, so it must not be loaded"
+
+    marker = _mermaid_css_rule(css, "summary::marker")
+    assert "font-size:.75em" in marker
+
+
+def _css_rules(css: str, selector: str) -> list[tuple[int, str]]:
+    """Return the offset and declarations of every CSS rule whose selector list contains `selector`."""
+    rules: list[tuple[int, str]] = []
+    for match in re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
+        selectors = [re.sub(r"\s+", " ", s).strip() for s in match.group(1).split(",")]
+        if selector in selectors:
+            rules.append((match.start(), re.sub(r"\s+", "", match.group(2))))
+    return rules
+
+
+@pytest.mark.dedicated
+def test_DED_search_overlay_uses_the_site_colors():
+    """
+    Deployed CSS overrides Quarto's search result colors in both modes
+
+    Quarto gives each result row a light background and the selected row the theme's
+    primary color. The GD rules share Quarto's selectors, so they must come later.
+    """
+    pkg = "gdtest_index_frontmatter"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    css = _deployed_css(pkg)
+    assert css, "No CSS files found in _site"
+
+    def last_rule(selector: str) -> tuple[int, str]:
+        rules = _css_rules(css, selector)
+        assert len(rules) >= 2, f"Expected Quarto and GD rules for {selector!r}"
+        return rules[-1]
+
+    row = ".aa-DetachedOverlay li.aa-Item[aria-selected=false] .search-item"
+    assert "background-color:var(--gd-search-bg)" in last_rule(row)[1]
+    selected = ".aa-DetachedOverlay li.aa-Item[aria-selected=true] .search-item"
+    assert "background-color:var(--gd-search-selected-bg)" in last_rule(selected)[1]
+
+    # Text and match highlights use one rule for selected and unselected rows
+    for element, declaration in (
+        (".search-result-text", "color:var(--gd-text-primary)"),
+        ("mark.search-match", "background-color:var(--gd-search-match-bg)"),
+    ):
+        gd = _css_rules(
+            css, f".aa-DetachedOverlay li.aa-Item[aria-selected] .search-item {element}"
+        )
+        assert gd and declaration in gd[-1][1]
+        for state in ("true", "false"):
+            quarto = _css_rules(
+                css, f".aa-DetachedOverlay li.aa-Item[aria-selected={state}] .search-item {element}"
+            )
+            # Quarto's rule comes first; the GD selected-row rule may follow it
+            assert quarto and quarto[0][0] < gd[-1][0]
+
+    # A light ring replaces the 2px focus outline that newer Quarto releases add
+    quarto_focus = _css_rules(css, ".aa-Form:has(.aa-Input:focus-visible)")
+    gd_focus = _css_rules(css, ".aa-DetachedFormContainer .aa-Form:has(.aa-Input:focus-visible)")
+    assert gd_focus
+    assert not quarto_focus or quarto_focus[0][0] < gd_focus[-1][0]
+    assert "outline:none" in gd_focus[-1][1]
+    assert "box-shadow:0003pxvar(--gd-search-focus-ring)" in gd_focus[-1][1]
+
+    assert re.search(r"body\.quarto-dark\s*\{[^}]*--gd-search-bg:\s*#222222", css)
+
+
+@pytest.mark.dedicated
+def test_DED_heading_anchors_cover_section_h1s_and_copy_links():
+    """
+    Pages load the script that anchors section h1 headings and copies anchor links
+
+    The site's heading shift makes top-level sections h1 headings, which Quarto leaves
+    without anchors. The confirmation keeps the icon visible after a click.
+    """
+    pkg = "gdtest_index_frontmatter"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    site = _site_dir(pkg)
+    soup = _load_html(site / "index.html")
+
+    heading = soup.select_one("main section.level1[id] > h1")
+    assert heading is not None, "Expected a top-level section with an h1 heading"
+    assert "anchored" not in (heading.get("class") or []), "Quarto anchors h2-h6 only"
+    assert soup.find("script", src=re.compile(r"(^|/)heading-anchors\.js$"))
+
+    script = (site / "heading-anchors.js").read_text(encoding="utf-8")
+    assert "main section.level1[id] > h1:not(.no-anchor)" in script
+    assert "navigator.clipboard.writeText" in script
+
+    css = _deployed_css(pkg)
+    assert css, "No CSS files found in _site"
+    copied = _css_rules(css, ".anchorjs-link.gd-anchor-link-copied")
+    assert copied and "opacity:1" in copied[-1][1]
+    note = _css_rules(css, ".gd-anchor-copied")
+    assert note and "position:absolute" in note[-1][1]
+    assert "pointer-events:none" in note[-1][1]
 
 
 # ── ref_section_order ───────────────────────────────────────────────────────
@@ -12166,3 +12351,245 @@ def test_DED_webmcp_llms_txt_section():
         assert f"`{tool}`" in text
     assert "get_changelog" not in text
     assert "list_versions" not in text
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: Termshow TUI fidelity (gdtest_termshow_tui) — split sequences, seams, colors
+#
+# The recordings are built so each way of drawing a full-screen app wrong shows in
+# the frame SVGs: parameters printed as text, backgrounds drawn with antialiased
+# edges, rows the wrong height, and erased cells losing their background.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_TUI_PKG = "gdtest_termshow_tui"
+# The default cell size: 0.6 and 1.35 times the 14px font
+_TUI_CELL_W, _TUI_CELL_H = 8.4, 18.9
+
+
+def _tui_demo(name: str) -> Path:
+    if not _has_rendered_site(_TUI_PKG):
+        pytest.skip(f"{_TUI_PKG} not rendered")
+    return _site_dir(_TUI_PKG) / "termshow" / "demos" / name
+
+
+def _tui_frames(name: str) -> list[str]:
+    return [p.read_text(encoding="utf-8") for p in sorted(_tui_demo(name).glob("frame-*.svg"))]
+
+
+def _tui_last_frame(name: str) -> str:
+    import json
+
+    manifest = json.loads((_tui_demo(name) / "manifest.json").read_text(encoding="utf-8"))
+    return (_tui_demo(name) / manifest["keyframes"][-1]["file"]).read_text(encoding="utf-8")
+
+
+def _tui_rows(svg: str) -> list[str]:
+    """The frame's text, rebuilt row by row from the positions of its spans."""
+    import xml.etree.ElementTree as ET
+
+    rows: dict[int, str] = {}
+    for el in ET.fromstring(svg).iter("{http://www.w3.org/2000/svg}text"):
+        row = round(float(el.get("y")) / _TUI_CELL_H)
+        col = round(float(el.get("x")) / _TUI_CELL_W)
+        rows[row] = rows.get(row, "").ljust(col)[:col] + (el.text or "")
+    return [rows.get(r, "").rstrip() for r in range(max(rows, default=-1) + 1)]
+
+
+@pytest.mark.dedicated
+def test_DED_termshow_tui_nyan_shows_only_the_counter():
+    """gdtest_termshow_tui: sequences split between reads never show as text."""
+    frames = _tui_frames("nyan")
+    assert len(frames) >= 60
+    for svg in frames:
+        text = {row.strip() for row in _tui_rows(svg)} - {""}
+        assert len(text) <= 1, text
+        assert all(re.fullmatch(r"You have nyaned for \d seconds!", t) for t in text), text
+
+
+@pytest.mark.dedicated
+def test_DED_termshow_tui_counter_row_is_navy():
+    """gdtest_termshow_tui: `ESC[J` erases the counter's row in the sky color, edge to edge."""
+    svg = _tui_last_frame("nyan")
+    assert _tui_rows(svg)[23].strip() == "You have nyaned for 5 seconds!"
+    y = 23 * _TUI_CELL_H
+    assert (
+        f'<rect x="0.0" y="{y:.1f}" width="{80 * _TUI_CELL_W:.1f}" height="18.9" fill="#00005f"/>'
+        in svg
+    )
+
+
+@pytest.mark.dedicated
+def test_DED_termshow_tui_rows_are_the_default_height():
+    """gdtest_termshow_tui: rows are 1.35 times the font size, as recorded in the manifest."""
+    import json
+
+    manifest = json.loads((_tui_demo("nyan") / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["screen"]["line_height"] == 1.35
+    svg = _tui_last_frame("nyan")
+    assert f'height="{24 * _TUI_CELL_H + 32:.1f}"' in svg
+
+
+@pytest.mark.dedicated
+def test_DED_termshow_tui_backgrounds_have_crisp_edges():
+    """gdtest_termshow_tui: every cell background is drawn in a crisp-edged group."""
+    for name in ("nyan", "sequences", "seams"):
+        for svg in _tui_frames(name):
+            outside = re.sub(r'<g shape-rendering="crispEdges">.*?</g>', "", svg, flags=re.S)
+            # The cursor is drawn on its own, after the rows
+            assert not re.search(r'<rect [^>]*height="18\.9" fill="[^"]*"/>', outside)
+        assert 'shape-rendering="crispEdges"' in _tui_last_frame(name)
+
+
+@pytest.mark.dedicated
+def test_DED_termshow_tui_sequence_checklist():
+    """gdtest_termshow_tui: each sequence is handled or dropped, leaving a clean word."""
+    rows = _tui_rows(_tui_last_frame("sequences"))
+    results = [row[30:] for row in rows[2:14]]
+    assert results == [
+        "green",
+        "orange",
+        "plain",
+        "plain",
+        "plain",
+        "plain",
+        "plain",
+        "orange",
+        "pink",
+        "underlined",
+        "plain",
+        " blue to the edge",
+    ]
+
+
+@pytest.mark.dedicated
+def test_DED_termshow_tui_colors():
+    """gdtest_termshow_tui: xterm's cube levels, and erased cells keep the background."""
+    svg = _tui_last_frame("sequences")
+    for color in ("#00005f", "#d787af", "#ffaf00", "#ffffd7"):
+        assert f'fill="{color}"' in svg
+    # The erased rest of the line is still color 24, to the right edge
+    y = 13 * _TUI_CELL_H
+    x, width = 30 * _TUI_CELL_W, 34 * _TUI_CELL_W
+    assert (
+        f'<rect x="{x:.1f}" y="{y:.1f}" width="{width:.1f}" height="18.9" fill="#005f87"/>' in svg
+    )
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_termshow_tui_asciinema_comparison():
+    """gdtest_termshow_tui: the nyancat page plays the same recording in asciinema-player."""
+    if not _has_rendered_site(_TUI_PKG):
+        pytest.skip(f"{_TUI_PKG} not rendered")
+    soup = _load_html(_site_dir(_TUI_PKG) / "user-guide" / "nyan.html")
+    assert soup.select_one("div.gd-termshow") is not None
+    assert soup.find(id="gd-nyan-asciinema") is not None
+    script = next(
+        s.string for s in soup.find_all("script") if s.string and "AsciinemaPlayer" in s.string
+    )
+    assert '\\"version\\": 2' in script
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: Wrapped docstring summaries (gdtest_wrapped_summary)
+#
+# A summary is a docstring's whole first paragraph, so one that wraps shows in full
+# wherever the summary appears, and none of it starts the description.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_WRAPPED_PKG = "gdtest_wrapped_summary"
+_WRAPPED_SUMMARIES = {
+    "view_state": (
+        "Keep the reader’s view of the table, for when the page is opened again, "
+        "and let them undo their changes to it."
+    ),
+    "scale": (
+        "Set where the rows of the table, shown as a widget or in a Shiny app, "
+        "are searched, filtered and sorted."
+    ),
+    "Table": "A table whose view readers can change, kept between their visits to the page.",
+    "inspect_data": "Show readers what’s in the data.",
+    "fenced": "Return a greeting, as the example shows.",
+}
+
+
+def _wrapped_page(name: str) -> "BeautifulSoup":
+    if not _has_rendered_site(_WRAPPED_PKG):
+        pytest.skip(f"{_WRAPPED_PKG} not rendered")
+    return _load_html(_site_dir(_WRAPPED_PKG) / "reference" / f"{name}.html")
+
+
+@pytest.mark.dedicated
+@requires_bs4
+@pytest.mark.parametrize("name", sorted(_WRAPPED_SUMMARIES))
+def test_DED_wrapped_summary_is_the_whole_subject(name: str):
+    """gdtest_wrapped_summary: the subject under the title is the whole first paragraph."""
+    main = _wrapped_page(name).find("main")
+    subject = main.select_one(".doc-subject")
+    assert subject.get_text(" ", strip=True) == _WRAPPED_SUMMARIES[name]
+
+
+@pytest.mark.dedicated
+@requires_bs4
+@pytest.mark.parametrize(
+    ("name", "description"),
+    [
+        ("view_state", "The view is the table’s filters, sort, search, page and hidden columns."),
+        ("scale", "Searching in the browser suits small tables."),
+        ("Table", "The table holds its rows and the reader’s view of them."),
+    ],
+)
+def test_DED_wrapped_summary_leaves_the_description_whole(name: str, description: str):
+    """gdtest_wrapped_summary: the description after the usage block starts after the summary."""
+    main = _wrapped_page(name).find("main")
+    usage = main.select_one("div.sourceCode, pre")
+    first = usage.find_next("p")
+    assert first.get_text(" ", strip=True) == description
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_wrapped_summary_in_the_index_tables():
+    """gdtest_wrapped_summary: the reference index shows each whole summary."""
+    main = _wrapped_page("index").find("main")
+    descriptions = {dd.get_text(" ", strip=True) for dd in main.select("dd")}
+    assert set(_WRAPPED_SUMMARIES.values()) <= descriptions
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_wrapped_summary_of_a_method():
+    """gdtest_wrapped_summary: a method's wrapped summary is whole on its class's page."""
+    main = _wrapped_page("Table").find("main")
+    subjects = [d.get_text(" ", strip=True) for d in main.select(".doc-subject")]
+    assert (
+        "Keep the reader’s view of this table, for when the page is opened again, "
+        "and let them undo their changes to it."
+    ) in subjects
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_wrapped_summary_meta_description():
+    """gdtest_wrapped_summary: the page description is the whole summary."""
+    meta = _wrapped_page("view_state").find("meta", attrs={"name": "description"})
+    assert meta["content"] == _WRAPPED_SUMMARIES["view_state"]
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_wrapped_summary_code_block_stays_in_the_body():
+    """gdtest_wrapped_summary: a code block right after the summary is not part of it."""
+    main = _wrapped_page("fenced").find("main")
+    assert [code.get_text() for code in main.select("pre code")] == ["fenced()", "fenced()"]
+
+
+@pytest.mark.dedicated
+def test_DED_wrapped_summary_in_llms_txt():
+    """gdtest_wrapped_summary: `llms.txt` gives each whole summary, without its period."""
+    if not _has_rendered_site(_WRAPPED_PKG):
+        pytest.skip(f"{_WRAPPED_PKG} not rendered")
+    text = (_site_dir(_WRAPPED_PKG) / "llms.txt").read_text(encoding="utf-8")
+    for name, summary in _WRAPPED_SUMMARIES.items():
+        plain = summary.replace("’", "'").rstrip(".")
+        assert f"- [{name}](reference/{name}.html): {plain}\n" in text

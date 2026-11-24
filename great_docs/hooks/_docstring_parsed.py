@@ -1,14 +1,13 @@
 """
-The `docstring_parsed` event for customizing structured docstring sections
+The global registry of docstring hooks, which every API reference extension copies
 
-Great Docs emits this event after Griffe parses a resolved object's final
-docstring value and before the API-reference document is built. Objects
-without docstrings do not receive this event.
+A handler runs after Griffe parses an object's final docstring and before Great Docs
+builds the object's documentation. Objects without docstrings skip it.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, cast
+from typing import TYPE_CHECKING, Callable
 
 from ._registry import HookRegistry
 
@@ -19,60 +18,18 @@ DocstringParsedHook = Callable[
     ["gf.Object | gf.Alias", "list[gf.DocstringSection]"],
     "list[gf.DocstringSection]",
 ]
-"""A handler that customizes the parsed sections of a resolved object"""
+"""A handler that customises the parsed sections of a resolved object"""
 
 REGISTRY: HookRegistry[DocstringParsedHook] = HookRegistry()
 """The `docstring_parsed` handlers, ordered by priority"""
 
 on_docstring_parsed = REGISTRY.register
 """
-Register a handler that customizes a parsed docstring
+Register a global docstring hook, which every extension created afterwards copies
 
-Great Docs emits `docstring_parsed` after Griffe parses the final docstring
-value and before it builds the object's API-reference document. A handler
-receives the resolved object and its parsed sections and returns the sections
-to retain. Objects without docstrings do not receive this event.
+The hook runs after Griffe parses an object's final docstring and before Great Docs
+builds the object's documentation. It receives the object and its parsed sections
+and returns the sections to keep. Objects without docstrings skip it. Extension
+files register through `Extension.on_docstring_parsed` instead; registering here
+from one fails.
 """
-
-
-def emit_docstring_parsed(
-    obj: gf.Object | gf.Alias,
-) -> list[gf.DocstringSection]:
-    """
-    Apply the `docstring_parsed` handlers to an object's parsed sections
-
-    Handlers run in priority order and each returned list becomes the input to
-    the next handler. The final list becomes the docstring's cached parsed
-    value.
-
-    Parameters
-    ----------
-    obj
-        A resolved object with a docstring.
-
-    Returns
-    -------
-    The parsed sections produced by the handlers.
-
-    Raises
-    ------
-    ValueError
-        If the object has no docstring.
-    TypeError
-        If a handler returns `None`.
-    """
-    docstring = obj.docstring
-    if docstring is None:
-        raise ValueError("Cannot emit `docstring_parsed` for an object without a docstring")
-
-    sections = docstring.parsed
-    for hook in REGISTRY:
-        result = cast("list[gf.DocstringSection] | None", hook(obj, sections))
-        if result is None:
-            raise TypeError(
-                f"`docstring_parsed` handler {hook.__module__}.{hook.__name__} returned None"
-            )
-        sections = result
-
-    docstring.__dict__["parsed"] = sections
-    return sections

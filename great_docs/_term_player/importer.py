@@ -9,7 +9,8 @@ from .parser import Recording, parse_asciicast
 
 
 def import_asciicast(source: str | Path, output: str | Path) -> Recording:
-    """Import an asciicast v2/v3 file and save as .termshow.
+    """
+    Import an asciicast v2/v3 file and save as .termshow
 
     Parameters
     ----------
@@ -20,7 +21,7 @@ def import_asciicast(source: str | Path, output: str | Path) -> Recording:
 
     Returns
     -------
-    Recording
+    :
         The parsed recording.
     """
     recording = parse_asciicast(source)

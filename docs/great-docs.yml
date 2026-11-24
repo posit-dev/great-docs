@@ -329,10 +329,37 @@ reference:
         - GreatDocs.build
         - GreatDocs.preview
         - GreatDocs.check_links
+    - title: API Reference Customisation
+      desc: >-
+        Register hooks to change what the reference includes and use renderers to change
+        how objects and pages appear. See the
+        [customisation guide](../user-guide/api-reference-customisation.qmd) for examples.
+      contents:
+        - name: extensions.Extension
+          members:
+            - on_object_resolved
+            - on_docstring_parsed
+            - set_renderers
+            - watch
+        - rendering.RenderContext
+        - rendering.Renderers
+        - extensions.ObjectResolvedHook
+        - extensions.DocstringParsedHook
+        - rendering.BaseRenderer
+        - rendering.ObjectRenderer
+        - rendering.ClassRenderer
+        - rendering.FunctionRenderer
+        - rendering.AttributeRenderer
+        - rendering.TypeAliasRenderer
+        - rendering.ModuleRenderer
+        - rendering.APIPageRenderer
+        - rendering.ReferenceIndexRenderer
+        - rendering.ReferenceSectionRenderer
     - title: Errors
       desc: The exception raised when a build fails.
       contents:
         - BuildError
+        - extensions.ExtensionError
     - title: Table Preview/Explorer
       desc: >-
         Generate styled HTML table previews from any tabular data source with `tbl_preview()`, and

@@ -21,7 +21,8 @@ BUNDLE_SUFFIX = ".termshow.json"
 
 
 def make_bundle(recording: Recording, script: Script | None = None) -> tuple[Manifest, str]:
-    """Render a recording as a bundle.
+    """
+    Render a recording as a bundle
 
     Parameters
     ----------
@@ -32,7 +33,7 @@ def make_bundle(recording: Recording, script: Script | None = None) -> tuple[Man
 
     Returns
     -------
-    tuple[Manifest, str]
+    :
         The manifest, and the bundle's JSON text. Like a manifest, the text is
         safe to embed in an HTML `<script>` element.
     """

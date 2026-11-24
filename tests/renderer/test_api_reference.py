@@ -1,109 +1,62 @@
 from __future__ import annotations
 
-from typing import Any
+from pathlib import Path
 
 import pytest
 
 from great_docs._apiref import spec
 from great_docs._apiref.api_reference import APIReference, Settings
+from tests.support import write_config
 
 
-def test_flat_config_routes_into_nested_settings():
-    ref = APIReference({"api-reference": {"package": "pkg", "dir": "api", "parser": "google"}})
-    assert ref.package == "pkg"
-    assert ref.settings.dir == "api"
-    assert ref.settings.parser == "google"
-    # build keys are NOT attributes of APIReference itself
-    assert not hasattr(ref, "dir")
+def test_reference_reads_the_documentation_config(tmp_path: Path) -> None:
+    config = write_config(
+        tmp_path,
+        {
+            "parser": "google",
+            "dynamic": True,
+            "members_on_same_page": False,
+            "max_members_on_same_page": 4,
+            "reference": {"title": "My API", "desc": "Tools", "show_bases": True},
+            "site": {"lang": "fr", "toc-depth": 5},
+        },
+    )
+    reference = APIReference(config, spec.ReferenceSpec("pkg", []))
+
+    assert reference.package == "pkg"
+    assert reference.title == "My API"
+    assert reference.desc == "Tools"
+    assert reference.site_toc_depth == 5
+    assert reference.settings.parser == "google"
+    assert reference.settings.lang == "fr"
+    assert reference.settings.dynamic is True
+    assert reference.settings.members_on_same_page is False
+    assert reference.settings.max_members_on_same_page == 4
+    assert reference.settings.show_bases is True
 
 
-def test_legacy_quartodoc_key_is_accepted():
-    ref = APIReference({"quartodoc": {"package": "pkg"}})
-    assert ref.package == "pkg"
+def test_a_static_attempt_does_not_change_the_documentation_config(tmp_path: Path) -> None:
+    config = write_config(tmp_path, {"dynamic": True})
+    reference = APIReference(config, spec.ReferenceSpec("pkg", []), dynamic=False)
+
+    assert reference.settings.dynamic is False
+    assert config.dynamic is True
 
 
-def test_sidebar_string_is_coerced_to_dict():
-    ref = APIReference({"api-reference": {"package": "pkg", "sidebar": "_sb.yml"}})
-    assert ref.settings.sidebar == {"file": "_sb.yml"}
-
-
-def test_sidebar_dict_without_file_gets_default():
-    ref = APIReference({"api-reference": {"package": "pkg", "sidebar": {"id": "api"}}})
-    assert ref.settings.sidebar is not None
-    assert ref.settings.sidebar["file"] == "_api-reference-sidebar.yml"
-    assert ref.settings.sidebar["id"] == "api"
-
-
-def test_sections_and_contents_are_coerced():
+def test_sections_and_contents_are_coerced(tmp_path: Path) -> None:
     ref = APIReference(
-        {"api-reference": {"package": "pkg", "sections": [{"title": "T", "contents": ["a", "b"]}]}}
+        write_config(tmp_path),
+        spec.ReferenceSpec("pkg", [{"title": "T", "contents": ["a", "b"]}]),
     )
     section = ref.sections[0]
     assert isinstance(section, spec.SpecSection)
     assert all(isinstance(c, spec.SpecObject) for c in section.contents)
 
 
-def test_removed_and_dropped_keys_are_ignored():
-    # style/renderer/render_interlinks are compatibility-only; interlinks.fast is dropped
-    ref = APIReference(
-        {
-            "api-reference": {"package": "pkg", "style": "x", "renderer": "y"},
-            "interlinks": {"fast": True},
-        }
-    )
-    assert ref.package == "pkg"
-    assert not hasattr(ref.settings, "fast_inventory")
-
-
-def test_version_is_not_wired_through():
-    # Parity: config `version` never reaches Settings; objects.inv stays "0.0.9999".
-    ref = APIReference({"api-reference": {"package": "pkg", "version": "1.2.3"}})
-    assert ref.settings.version is None
-
-
-def test_options_stored_as_is():
-    opts = {"include_private": True}
-    ref = APIReference({"api-reference": {"package": "pkg", "options": opts}})
-    assert ref.options == opts
-
-
-def test_toc_depth_reads_the_quarto_html_format():
-    ref = APIReference({"api-reference": {"package": "pkg"}, "format": {"html": {"toc-depth": 4}}})
-    assert ref.site_toc_depth == 4
-
-
-def test_toc_depth_reads_source_config():
-    ref = APIReference(
-        {
-            "api-reference": {"package": "pkg"},
-            "site": {"toc-depth": 5},
-        }
-    )
-    assert ref.site_toc_depth == 5
-
-
-def test_lang_reads_the_quarto_html_format():
-    """Use the Quarto HTML language for the reference"""
-    ref = APIReference({"api-reference": {"package": "pkg"}, "format": {"html": {"lang": "fr"}}})
-    assert ref.settings.lang == "fr"
-
-
-def test_lang_defaults_to_english_like_quarto():
-    ref = APIReference({"api-reference": {"package": "pkg"}})
-    assert ref.settings.lang == "en"
-
-
-@pytest.mark.parametrize(
-    "format_config",
-    ["html", {"html": "default"}, None, {"html": None}, {}, {"html": {}}],
-)
-def test_lang_defaults_to_english_without_html_settings(format_config: Any) -> None:
-    ref = APIReference({"api-reference": {"package": "pkg"}, "format": format_config})
-    assert ref.settings.lang == "en"
-
-
-def test_lang_is_not_a_key_of_the_api_reference_block():
-    ref = APIReference({"api-reference": {"package": "pkg", "lang": "fr"}})
+@pytest.mark.parametrize("site", [{}, {"toc-depth": "invalid"}])
+def test_toc_depth_defaults_to_two(tmp_path: Path, site: dict[str, object]) -> None:
+    ref = APIReference(write_config(tmp_path, {"site": site}), spec.ReferenceSpec("pkg", []))
+    assert ref.site_toc_depth == 2
     assert ref.settings.lang == "en"
 
 
@@ -123,10 +76,8 @@ def test_resolution_sees_the_reference_lang(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     ref = APIReference(
-        {
-            "api-reference": {"package": "langpkg", "sections": [{"contents": ["grow"]}]},
-            "format": {"html": {"lang": "fr"}},
-        }
+        write_config(tmp_path, {"site": {"lang": "fr"}}),
+        spec.ReferenceSpec("langpkg", [{"contents": ["grow"]}]),
     )
     (page,) = ref.resolved[0].contents
     (doc,) = page.contents
@@ -142,8 +93,6 @@ def test_settings_defaults():
 
 def test_the_manifest_is_available_without_building(tmp_path, monkeypatch):
     """Reading the claims must not write pages, an index or an inventory."""
-    from great_docs._apiref.api_reference import APIReference
-
     (tmp_path / "mypkg").mkdir()
     (tmp_path / "mypkg" / "__init__.py").write_text(
         '"""A package."""\n\n\nclass Cache:\n    """A cache."""\n\n'
@@ -155,7 +104,7 @@ def test_the_manifest_is_available_without_building(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     ref = APIReference(
-        {"api-reference": {"package": "mypkg", "sections": [{"contents": ["Cache"]}]}}
+        write_config(tmp_path), spec.ReferenceSpec("mypkg", [{"contents": ["Cache"]}])
     )
     names = [item.name for item in ref.items]
 

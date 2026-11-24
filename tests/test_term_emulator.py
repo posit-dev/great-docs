@@ -465,6 +465,14 @@ class TestColor256:
         # Index 196 = rgb(255,0,0)
         assert emu._color_256_to_hex(196) == "#ff0000"
 
+    @pytest.mark.parametrize(
+        ("idx", "hex_color"),
+        [(17, "#00005f"), (175, "#d787af"), (214, "#ffaf00"), (230, "#ffffd7"), (59, "#5f5f5f")],
+    )
+    def test_cube_uses_xterm_levels(self, idx, hex_color):
+        """The cube's levels are xterm's (0, 95, 135, 175, 215, 255)."""
+        assert TerminalEmulator()._color_256_to_hex(idx) == hex_color
+
     def test_grayscale(self):
         emu = TerminalEmulator()
         # Index 232 = darkest gray: v = 8 + (0)*10 = 8
@@ -575,11 +583,119 @@ class TestUnknownEscape:
         assert _screen_text(emu, 0) == "Hello"
 
     def test_unknown_escape_mid_text(self):
-        """Unknown escape in the middle of text."""
+        """Unknown escape in the middle of text.
+
+        `#` is an intermediate, so the sequence runs through its final
+        character, `C`, as it does in a terminal.
+        """
         emu = TerminalEmulator(cols=80, rows=24)
         emu.feed("AB\x1b#CD")
 
-        assert _screen_text(emu, 0) == "ABCD"
+        assert _screen_text(emu, 0) == "ABD"
+
+
+# Escape sequences split between feeds
+
+
+class TestSplitSequences:
+    """A recording's chunks end wherever a read did, often mid-sequence."""
+
+    @pytest.mark.parametrize(
+        "data",
+        [
+            "\x1b[48;5;175mAB\x1b[0m",  # CSI
+            "\x1b]0;nyancat\x07AB",  # OSC ended by BEL
+            "\x1b]0;nyancat\x1b\\AB",  # OSC ended by ST
+            "\x1bPq#0\x1b\\AB",  # DCS
+            "\x1b(BAB",  # character set designation
+            "\x1b7\x1b[5CAB\x1b8",  # save and restore cursor
+        ],
+    )
+    def test_every_split_matches_one_feed(self, data):
+        whole = TerminalEmulator(cols=20, rows=2)
+        whole.feed(data)
+        for cut in range(1, len(data)):
+            split = TerminalEmulator(cols=20, rows=2)
+            split.feed(data[:cut])
+            split.feed(data[cut:])
+            assert split.screen.cells == whole.screen.cells, cut
+            assert (split.screen.cursor_row, split.screen.cursor_col) == (
+                whole.screen.cursor_row,
+                whole.screen.cursor_col,
+            )
+
+    def test_parameters_never_show_as_text(self):
+        emu = TerminalEmulator(cols=20, rows=2)
+        emu.feed("\x1b[48;")
+        emu.feed("5;175m  ")
+        assert _screen_text(emu, 0) == ""
+        assert emu.screen.cells[0][0].style.bg == emu._color_256_to_hex(175)
+
+    def test_one_character_feeds(self):
+        emu = TerminalEmulator(cols=20, rows=2)
+        for ch in "\x1b[1;31mHi\x1b[0m":
+            emu.feed(ch)
+        assert _screen_text(emu, 0) == "Hi"
+        assert emu.screen.cells[0][0].style.bold
+
+    def test_unfinished_osc_waits_for_its_terminator(self):
+        emu = TerminalEmulator(cols=20, rows=2)
+        emu.feed("\x1b]0;a long")
+        emu.feed(" title")
+        assert _screen_text(emu, 0) == ""
+        emu.feed("\x07Hi")
+        assert _screen_text(emu, 0) == "Hi"
+
+
+# CSI and SGR forms beyond the basic ones
+
+
+class TestExtendedSequences:
+    @pytest.mark.parametrize(
+        "seq",
+        [
+            "\x1b[>4;1m",  # xterm modifyOtherKeys
+            "\x1b[?1u",  # kitty keyboard protocol
+            "\x1b[2 q",  # cursor shape
+            "\x1b[=5u",
+        ],
+    )
+    def test_unmodelled_sequences_are_dropped(self, seq):
+        emu = TerminalEmulator(cols=20, rows=2)
+        emu.feed("\x1b[31m" + seq + "Hi")
+        assert _screen_text(emu, 0) == "Hi"
+        # Not taken for an SGR reset or for some other sequence
+        assert emu.screen.cells[0][0].style.fg == "1"
+        assert (emu.screen.cursor_row, emu.screen.cursor_col) == (0, 2)
+
+    def test_colon_256_color(self):
+        emu = TerminalEmulator(cols=20, rows=2)
+        emu.feed("\x1b[38:5:175mX")
+        assert emu.screen.cells[0][0].style.fg == emu._color_256_to_hex(175)
+
+    @pytest.mark.parametrize("seq", ["\x1b[48:2::10:20:30mX", "\x1b[48:2:10:20:30mX"])
+    def test_colon_truecolor(self, seq):
+        emu = TerminalEmulator(cols=20, rows=2)
+        emu.feed(seq)
+        assert emu.screen.cells[0][0].style.bg == "#0a141e"
+
+    def test_underline_styles(self):
+        emu = TerminalEmulator(cols=20, rows=2)
+        emu.feed("\x1b[4:3mA\x1b[4:0mB")
+        assert emu.screen.cells[0][0].style.underline
+        assert not emu.screen.cells[0][1].style.underline
+
+    def test_underline_color_is_skipped_whole(self):
+        emu = TerminalEmulator(cols=20, rows=2)
+        emu.feed("\x1b[58;2;1;3;7mX")
+        style = emu.screen.cells[0][0].style
+        # Its components aren't read as bold, italic and inverse
+        assert not (style.bold or style.italic or style.inverse)
+
+    def test_cancelled_csi_keeps_the_text_after_it(self):
+        emu = TerminalEmulator(cols=20, rows=2)
+        emu.feed("\x1b[12\x07Hi")
+        assert _screen_text(emu, 0) == "Hi"
 
 
 # Bell character
@@ -859,6 +975,46 @@ class TestEraseDisplayAbove:
 
         # Row 2 should be untouched
         assert _screen_text(emu, 2) == "CCCC"
+
+
+# Background color erase
+
+
+class TestBackgroundColorErase:
+    """Like xterm, blanks take the current background color."""
+
+    @pytest.mark.parametrize(
+        "seq",
+        [
+            "\x1b[J",  # ED below
+            "\x1b[2J",  # ED all
+            "\x1b[K",  # EL right
+            "\x1b[2K",  # EL whole line
+            "\x1b[3X",  # ECH
+            "\x1b[@",  # ICH
+            "\x1b[P",  # DCH
+            "\x1b[L",  # IL
+        ],
+    )
+    def test_blanks_take_the_background(self, seq):
+        emu = TerminalEmulator(cols=6, rows=3)
+        emu.feed("abc\x1b[1;2H\x1b[44m" + seq)
+        assert "4" in {cell.style.bg for row in emu.screen.cells for cell in row}
+
+    def test_only_the_background_is_kept(self):
+        emu = TerminalEmulator(cols=6, rows=3)
+        emu.feed("\x1b[1;4;31;44m\x1b[2J")
+        assert emu.screen.cells[2][5].style == CellStyle(bg="4")
+
+    def test_scrolled_in_line_takes_the_background(self):
+        emu = TerminalEmulator(cols=4, rows=2)
+        emu.feed("\x1b[48;5;17m\r\n\r\n")
+        assert emu.screen.cells[1][0].style.bg == "#00005f"
+
+    def test_default_background_erases_to_default(self):
+        emu = TerminalEmulator(cols=4, rows=2)
+        emu.feed("\x1b[44m\x1b[0mab\x1b[2J")
+        assert all(cell == Cell() for row in emu.screen.cells for cell in row)
 
 
 # ---------------------------------------------------------------------------

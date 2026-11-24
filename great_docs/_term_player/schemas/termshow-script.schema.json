@@ -151,7 +151,7 @@
           "description": "Row height as a multiple of the font size. Around 1.2 makes box-drawing characters join up.",
           "type": "number",
           "exclusiveMinimum": 0,
-          "default": 1.5
+          "default": 1.35
         },
         "show_cursor": {
           "description": "Draw the terminal cursor.",

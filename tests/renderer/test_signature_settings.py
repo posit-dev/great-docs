@@ -4,21 +4,18 @@ from pathlib import Path
 
 import griffe as gf
 
-from great_docs._apiref._render import RenderAPIPage
+from great_docs._apiref._rendering import APIPageRenderer
 from great_docs._apiref._settings import CallableSignatures, Settings
 from great_docs._apiref._signature import make_call_signature_text
 from great_docs._apiref._tools import _render
 from great_docs._apiref.api_reference import APIReference
+from great_docs.extensions import Extension
+from tests.support import reference_from_options, write_config
 
 
-def test_settings_read_the_api_reference_block():
-    """Both keys come from the generated api-reference block"""
-    settings = Settings.make(
-        {
-            "package": "pkg",
-            "callable_signatures": {"style": "plain", "wrap": "width"},
-        }
-    )
+def test_settings_read_the_documentation_config(tmp_path: Path) -> None:
+    config = write_config(tmp_path, {"callable_signatures": {"style": "plain", "wrap": "width"}})
+    settings = Settings.make(config)
 
     assert settings.callable_signatures.style == "plain"
     assert settings.callable_signatures.wrap == "width"
@@ -84,14 +81,12 @@ def _write_tiny_package(root: Path) -> None:
 
 def _reference(style: str) -> APIReference:
     """Create an API reference for `tinypkg` with the selected signature style"""
-    return APIReference(
+    return reference_from_options(
         {
-            "api-reference": {
-                "package": "tinypkg",
-                "source_dir": "../src",
-                "callable_signatures": {"style": style, "wrap": "width"},
-                "sections": [{"title": "All", "desc": "", "contents": ["add"]}],
-            }
+            "package": "tinypkg",
+            "source_dir": "../src",
+            "callable_signatures": {"style": style, "wrap": "width"},
+            "sections": [{"title": "All", "desc": "", "contents": ["add"]}],
         }
     )
 
@@ -116,7 +111,7 @@ def test_references_render_with_their_own_settings_when_interleaved(tmp_path, mo
     monkeypatch.syspath_prepend(str(tmp_path / "src"))
 
     def render(ref: APIReference) -> str:
-        return str(RenderAPIPage(ref.manifest.pages[0], settings=ref.settings))
+        return str(APIPageRenderer(ref.manifest.pages[0], extension=Extension(ref.settings)))
 
     plain, highlighted = _reference("plain"), _reference("highlighted")
 
@@ -124,7 +119,7 @@ def test_references_render_with_their_own_settings_when_interleaved(tmp_path, mo
     highlighted_page = render(highlighted)
     # Resolving another reference with default settings must preserve the
     # first reference's render settings.
-    assert APIReference({"api-reference": {"package": "tinypkg"}}).documented_symbols == ["add"]
+    assert reference_from_options({"package": "tinypkg"}).documented_symbols == ["add"]
     after = render(plain)
 
     assert "[add]{.sig-name}" in before
@@ -133,17 +128,17 @@ def test_references_render_with_their_own_settings_when_interleaved(tmp_path, mo
     assert after == before
 
 
-def _signature(source: str, name: str, **options: bool) -> str:
+def _signature(source: str, name: str, renderer_type: type | None = None) -> str:
     """Return the rendered signature of the named callable in `source`"""
     from great_docs._apiref import content
-    from great_docs._apiref._render import get_render_type
+    from great_docs._apiref._rendering import Renderers
 
     with gf.temporary_visited_package(
         "package", {"__init__.py": textwrap.dedent(source)}
     ) as package:
         obj = package[name]
     doc = content.Doc.from_griffe(obj.name, obj)
-    qmd = str(get_render_type(doc)(doc, **options, settings=Settings()))
+    qmd = str(Renderers(functions=renderer_type).make(doc))
     signature = qmd.split(".doc-signature", 1)[1]
     return re.search(r"```\w+\n(.*?)```", signature, re.S).group(1)
 
@@ -156,7 +151,14 @@ def test_an_annotation_shows_double_quoted_strings():
     def pick(mode: Literal['fast', 'slow']): ...
     """
 
-    sig = _signature(source, "pick", show_signature_annotation=True)
+    from great_docs._apiref._format import repr_obj
+    from great_docs.rendering import FunctionRenderer
+
+    class AnnotatedFunction(FunctionRenderer):
+        def render_signature_parameter(self, el: gf.Parameter) -> str:
+            return f"{el.name}: {repr_obj(el.annotation)}"
+
+    sig = _signature(source, "pick", AnnotatedFunction)
 
     assert 'Literal["fast", "slow"]' in sig
 

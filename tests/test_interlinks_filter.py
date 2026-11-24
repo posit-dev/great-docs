@@ -269,6 +269,52 @@ def test_the_filter_degrades_without_breaking(markdown, present, absent, tmp_pat
         assert fragment not in out
 
 
+@pytest.mark.parametrize(
+    "markdown,present,absent",
+    [
+        # Code keeps its font and loses only the display prefix
+        ("## Using `mypkg.Thing`", ['Code ( "" , [] , [] ) "mypkg.Thing"'], ["Link"]),
+        ("## `~~mypkg.run()`", ['Code ( "" , [] , [] ) "run()"'], ["Link", "~~"]),
+        # An explicit reference shows its resolved text as code, or its authored text
+        ("## [](`~mypkg.run`)", ['Code ( "" , [] , [] ) "run()"'], ["Link"]),
+        ("## The [runner](`mypkg.run`)", ['Str "runner"'], ["Link", "/reference/run.html"]),
+        # An ordinary link is the author's own and stays
+        ("## See [`mypkg.Thing`](guide.qmd)", ["guide.qmd"], ["/reference/Thing.html"]),
+    ],
+)
+def test_a_heading_shows_references_as_code(markdown, present, absent, tmp_path):
+    """Leave references in a heading unlinked, as code."""
+    out = _run_filter(markdown + "\n", _CONTRACT_INDEX, tmp_path)
+
+    for fragment in present:
+        assert fragment in out
+    for fragment in absent:
+        assert fragment not in out
+
+
+def test_prose_after_a_heading_still_links(tmp_path):
+    """Link the body's code spans after a heading that holds the same name."""
+    out = _run_filter("## `mypkg.Thing`\n\nUse `mypkg.Thing`.\n", _CONTRACT_INDEX, tmp_path)
+
+    assert out.count("/reference/Thing.html") == 1
+
+
+def test_a_page_can_turn_off_code_autolinks(tmp_path):
+    """Keep code spans unlinked on a `gd-autolink: false` page, leaving other links."""
+    markdown = (
+        "---\ngd-autolink: false\n---\n\n"
+        "Fixed `mypkg.Thing` and `~~mypkg.run()` in [#3](https://example.org/issues/3). "
+        "See [](`mypkg.Boom`).\n"
+    )
+    out = _run_filter(markdown, _CONTRACT_INDEX, tmp_path)
+
+    assert "/reference/Thing.html" not in out
+    assert "/reference/run.html" not in out
+    assert 'Code ( "" , [] , [] ) "run()"' in out
+    assert "https://example.org/issues/3" in out
+    assert "/reference/Boom.html" in out
+
+
 def test_parentheses_are_omitted_when_configured_off(tmp_path):
     """Respect `add_function_parentheses: false` for an interlink target."""
     index = _CONTRACT_INDEX.replace(

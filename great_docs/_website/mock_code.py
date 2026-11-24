@@ -20,7 +20,8 @@ _DELIMITER = "# ---"
 
 
 def expand_mock_cells(text: str) -> str:
-    """Rewrite `source-code: mock` cells in *text* into two-cell pairs.
+    """
+    Rewrite `source-code: mock` cells in *text* into two-cell pairs
 
     Parameters
     ----------
@@ -29,7 +30,7 @@ def expand_mock_cells(text: str) -> str:
 
     Returns
     -------
-    str
+    :
         The rewritten content. Unchanged if no mock cells are found.
     """
     lines = text.split("\n")
@@ -144,7 +145,8 @@ def expand_mock_cells(text: str) -> str:
 
 
 def process_qmd_file(path: Path) -> bool:
-    """Process a single `.qmd` file, rewriting mock cells in place.
+    """
+    Process a single `.qmd` file, rewriting mock cells in place
 
     Parameters
     ----------
@@ -153,7 +155,7 @@ def process_qmd_file(path: Path) -> bool:
 
     Returns
     -------
-    bool
+    :
         `True` if the file was modified, `False` otherwise.
     """
     content = path.read_text(encoding="utf-8")
@@ -169,7 +171,8 @@ def process_qmd_file(path: Path) -> bool:
 
 
 def process_directory(directory: Path) -> list[str]:
-    """Process all `.qmd` files under *directory*.
+    """
+    Process all `.qmd` files under *directory*
 
     Parameters
     ----------
@@ -178,7 +181,7 @@ def process_directory(directory: Path) -> list[str]:
 
     Returns
     -------
-    list[str]
+    :
         Relative paths of files that were modified.
     """
     modified: list[str] = []

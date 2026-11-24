@@ -98,7 +98,8 @@ Report = Callable[[str, str], None]
 def validate(
     source: str | Path, script: str | Path | None = None, *, use_script: bool = True
 ) -> list[Problem]:
-    """Check a recording and its script.
+    """
+    Check a recording and its script
 
     Parameters
     ----------
@@ -114,7 +115,7 @@ def validate(
 
     Returns
     -------
-    list[Problem]
+    :
         Errors and warnings, recording first, then script.
     """
     source = Path(source)

@@ -45,11 +45,12 @@ if TYPE_CHECKING:
 
 
 def _load_default_config() -> ConfigDict:
-    """Load the packaged default configuration
+    """
+    Load the packaged default configuration
 
     Returns
     -------
-    dict
+    :
         The parsed contents of `great-docs.default.yml`, i.e. every config
         field at its default value.
     """
@@ -118,11 +119,11 @@ class Config:
 
     def _load_config(self) -> ConfigDict:
         """
-        Load configuration from great-docs.yml.
+        Load configuration from great-docs.yml
 
         Returns
         -------
-        dict
+        :
             The loaded configuration merged with defaults.
         """
         config = copy.deepcopy(DEFAULT_CONFIG)
@@ -167,9 +168,23 @@ class Config:
                 f"{self.config_path}: max_members_on_same_page: {maximum!r} "
                 "must be a non-negative integer."
             )
+        reference = config["reference"]
+        if isinstance(reference, dict) and not isinstance(
+            cast("ConfigDict", reference).get("show_bases", False), bool
+        ):
+            raise ConfigError(f"{self.config_path}: reference.show_bases must be true or false.")
 
         config = self._normalize_shorthands(config)
         self._validate_repository(config)
+        extension = config["api_reference_extension"]
+        if extension is not None and (
+            not isinstance(extension, str)
+            or not extension.strip()
+            or Path(extension).suffix != ".py"
+        ):
+            raise ConfigError(
+                f"{self.config_path}: api_reference_extension must be a non-empty .py path or null."
+            )
         config["parser"] = self._validate_parser(config["parser"], self.config_path)
         config["webmcp"] = self._validate_webmcp(config["webmcp"], self.config_path)
         return config
@@ -264,7 +279,7 @@ class Config:
 
         Returns
         -------
-        dict
+        :
             The `webmcp` mapping, with empty list keys read as empty lists.
 
         Raises
@@ -324,7 +339,7 @@ class Config:
 
         Returns
         -------
-        dict
+        :
             The configuration with legacy keys rewritten.
         """
         config = dict(user_config)
@@ -372,7 +387,7 @@ class Config:
 
         Returns
         -------
-        dict
+        :
             The configuration with shorthand values expanded.
         """
         for key in self._BOOL_SHORTHAND_KEYS:
@@ -538,7 +553,7 @@ class Config:
 
         Returns
         -------
-        dict
+        :
             Merged configuration.
         """
         result = defaults.copy()
@@ -566,7 +581,7 @@ class Config:
 
         Returns
         -------
-        Any
+        :
             The value in the merged configuration at that path.
 
         Raises
@@ -599,13 +614,14 @@ class Config:
 
     @property
     def project_type(self) -> list[str]:
-        """Get the project type(s).
+        """
+        Get the project type(s)
 
         Describes the primary ecosystem(s) the project belongs to.
 
         Returns
         -------
-        list[str]
+        :
             Always a list, e.g. `["python"]`, `["go"]`, or `["python", "go"]` for mixed projects.
         """
         val = self["project_type"]
@@ -620,11 +636,12 @@ class Config:
 
     @property
     def pypi(self) -> bool | str:
-        """Get the PyPI link configuration.
+        """
+        Get the PyPI link configuration
 
         Returns
         -------
-        bool | str
+        :
             - True: auto-detect package name and link to pypi.org
             - False: disable the PyPI link entirely
             - str: custom package index URL
@@ -681,6 +698,21 @@ class Config:
     def repo_style(self) -> str:
         """Get the repository link style"""
         return self["repo_style"]
+
+    @property
+    def api_reference_extension(self) -> Path | None:
+        """
+        The API reference extension file, resolved against the configuration file's directory
+
+        Loading the configuration checks only that the value is a `.py` path, without
+        importing or running the file. The file and its `setup` are checked when the
+        API reference first loads the extension. `None` when the value is null, which
+        means no extension.
+        """
+        value = cast("str | None", self["api_reference_extension"])
+        if value is None:
+            return None
+        return (self.config_path.parent / value).resolve()
 
     @property
     def source_enabled(self) -> bool:
@@ -1084,11 +1116,12 @@ class Config:
 
     @property
     def homepage(self) -> str:
-        """Get the homepage mode ('index' or 'user_guide').
+        """
+        Get the homepage mode ('index' or 'user_guide')
 
         Returns
         -------
-        str
+        :
             The validated homepage mode. Falls back to 'index' if an
             invalid value is configured.
         """
@@ -1100,11 +1133,12 @@ class Config:
 
     @property
     def user_guide(self) -> str | list[Any] | None:
-        """Get the user guide configuration.
+        """
+        Get the user guide configuration
 
         Returns
         -------
-        str | list | None
+        :
             - None: auto-discover from conventional directories
             - str: custom directory path for user guide files
             - list: explicit section ordering (list of section dicts)
@@ -1179,6 +1213,15 @@ class Config:
         return None
 
     @property
+    def reference_index_title(self) -> str:
+        """
+        The title of the API reference index, including the language-specific default
+        """
+        from ._translations import translate
+
+        return self.reference_title or translate("api_reference", self.lang)
+
+    @property
     def reference_desc(self) -> str | None:
         """Get the custom API reference description, if set.
 
@@ -1189,6 +1232,14 @@ class Config:
         if isinstance(val, dict):
             return cast("ConfigDict", val).get("desc")
         return None
+
+    @property
+    def reference_show_bases(self) -> bool:
+        """Whether class documentation shows direct base classes"""
+        reference = self["reference"]
+        return (
+            isinstance(reference, dict) and cast("ConfigDict", reference).get("show_bases") is True
+        )
 
     @property
     def members_on_same_page(self) -> bool | None:
@@ -1226,7 +1277,8 @@ class Config:
 
     @property
     def site_quarto(self) -> ConfigDict:
-        """Get the `site` subtree destined for `_quarto.yml` `format.html`
+        """
+        Get the `site` subtree destined for `_quarto.yml` `format.html`
 
         Legacy great-docs keys are already normalized out of `site` at load;
         `css` is removed here because great-docs copies the file and references
@@ -1234,7 +1286,7 @@ class Config:
 
         Returns
         -------
-        dict
+        :
             The site settings safe to merge blindly into `format.html`.
         """
         site = dict(self.site)
@@ -1345,11 +1397,12 @@ class Config:
 
     @property
     def favicon(self) -> ConfigDict | None:
-        """Get the normalized favicon configuration.
+        """
+        Get the normalized favicon configuration
 
         Returns
         -------
-        dict | None
+        :
             Normalized favicon dict with at least `icon` key, or `None` if no favicon is explicitly
             configured (auto-generation may still produce one from the logo).
         """
@@ -1467,14 +1520,15 @@ class Config:
 
     @property
     def bibliography(self) -> list[str]:
-        """Get the normalized list of bibliography file paths.
+        """
+        Get the normalized list of bibliography file paths
 
         Accepts a single path string or a list of paths in `great-docs.yml`. Paths are relative to
         the project root.
 
         Returns
         -------
-        list[str]
+        :
             List of bibliography (`.bib`) file paths, or an empty list if none.
         """
         raw = self["bibliography"]
@@ -1486,11 +1540,12 @@ class Config:
 
     @property
     def csl(self) -> str | None:
-        """Get the citation style language (CSL) file path.
+        """
+        Get the citation style language (CSL) file path
 
         Returns
         -------
-        str | None
+        :
             Path to the `.csl` file relative to the project root, or `None`.
         """
         raw = self["csl"]
@@ -1500,14 +1555,15 @@ class Config:
 
     @property
     def css(self) -> list[str]:
-        """Get the normalized list of custom CSS file paths.
+        """
+        Get the normalized list of custom CSS file paths
 
         Accepts a single path string or a list of paths under `site.css` in
         `great-docs.yml`. Paths are relative to the project root.
 
         Returns
         -------
-        list[str]
+        :
             List of `.css` file paths, or an empty list if none.
         """
         raw = self.site.get("css")
@@ -1519,11 +1575,12 @@ class Config:
 
     @property
     def nav_icons(self) -> dict[str, dict[str, str]] | None:
-        """Get the normalized navigation icons configuration.
+        """
+        Get the normalized navigation icons configuration
 
         Returns
         -------
-        dict | None
+        :
             A dict with optional `navbar` and `sidebar` keys, each mapping navigation label text to
             a Lucide icon name. Returns `None` when not configured.
         """
@@ -1564,11 +1621,12 @@ class Config:
 
     @property
     def accent_color(self) -> dict[str, str] | None:
-        """Get the normalized accent color configuration.
+        """
+        Get the normalized accent color configuration
 
         Returns
         -------
-        dict[str, str] | None
+        :
             A dict with `"light"` and/or `"dark"` keys mapping to CSS color strings. Returns `None`
             when not configured.
         """
@@ -1597,11 +1655,12 @@ class Config:
 
     @property
     def navbar_color(self) -> dict[str, str] | None:
-        """Get the normalized navbar color configuration.
+        """
+        Get the normalized navbar color configuration
 
         Returns
         -------
-        dict[str, str] | None
+        :
             A dict with `"light"` and/or `"dark"` keys mapping to CSS color strings. Returns `None`
             when not configured or when `navbar_style` (gradient) takes precedence.
         """
@@ -1881,7 +1940,7 @@ class Config:
 
     def to_dict(self) -> ConfigDict:
         """
-        Get the full configuration as a dictionary.
+        Get the full configuration as a dictionary
 
         The configuration includes merged defaults, rewritten legacy keys and
         expanded shorthands. Use `user_settings` for the settings as written
@@ -1889,7 +1948,7 @@ class Config:
 
         Returns
         -------
-        dict
+        :
             The complete configuration.
         """
         return self._config.copy()
@@ -1918,7 +1977,7 @@ class Config:
 
 def load_config(project_root: Path | str) -> Config:
     """
-    Load Great Docs configuration from a project.
+    Load Great Docs configuration from a project
 
     Parameters
     ----------
@@ -1927,7 +1986,7 @@ def load_config(project_root: Path | str) -> Config:
 
     Returns
     -------
-    Config
+    :
         The loaded configuration.
     """
     return Config(Path(project_root))
@@ -1960,7 +2019,7 @@ def create_default_config(overrides: dict[str, str] | None = None) -> str:
 
     Returns
     -------
-    str
+    :
         The rendered great-docs.yml content.
     """
     text = (

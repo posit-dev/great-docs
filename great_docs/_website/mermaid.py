@@ -45,7 +45,7 @@ def get_diagram_hash(diagram: str) -> str:
 
 def render_mermaid_to_png(diagram: str, theme: str = "default", timeout: int = 30) -> bytes | None:
     """
-    Render a mermaid diagram to PNG using the mermaid.ink API.
+    Render a mermaid diagram to PNG using the mermaid.ink API
 
     Parameters
     ----------
@@ -58,7 +58,7 @@ def render_mermaid_to_png(diagram: str, theme: str = "default", timeout: int = 3
 
     Returns
     -------
-    bytes | None
+    :
         The PNG image data, or None if rendering failed.
     """
     encoded = encode_mermaid_simple(diagram)
@@ -78,7 +78,7 @@ def render_mermaid_to_png(diagram: str, theme: str = "default", timeout: int = 3
 
 def render_mermaid_to_svg(diagram: str, timeout: int = 30) -> str | None:
     """
-    Render a mermaid diagram to SVG using the mermaid.ink API.
+    Render a mermaid diagram to SVG using the mermaid.ink API
 
     Parameters
     ----------
@@ -89,7 +89,7 @@ def render_mermaid_to_svg(diagram: str, timeout: int = 30) -> str | None:
 
     Returns
     -------
-    str | None
+    :
         The SVG content, or None if rendering failed.
     """
     encoded = encode_mermaid_simple(diagram)
@@ -127,7 +127,7 @@ def render_diagrams_for_page(
     cache_dir: Path | None = None,
 ) -> dict[str, tuple[Path, Path]]:
     """
-    Render all mermaid diagrams in a qmd file to PNG (light + dark).
+    Render all mermaid diagrams in a qmd file to PNG (light + dark)
 
     Parameters
     ----------
@@ -140,7 +140,7 @@ def render_diagrams_for_page(
 
     Returns
     -------
-    dict
+    :
         Map of diagram hash to (light_path, dark_path) tuples.
     """
     content = qmd_path.read_text(encoding="utf-8")
@@ -199,7 +199,7 @@ def process_qmd_mermaid(
     cache_dir: Path | None = None,
 ) -> str:
     """
-    Process a qmd file and render all mermaid diagrams to PNG (light + dark).
+    Process a qmd file and render all mermaid diagrams to PNG (light + dark)
 
     Parameters
     ----------
@@ -212,7 +212,7 @@ def process_qmd_mermaid(
 
     Returns
     -------
-    str
+    :
         The modified qmd content with mermaid blocks replaced by theme-aware images.
     """
     content = qmd_path.read_text(encoding="utf-8")
@@ -281,7 +281,7 @@ def process_qmd_mermaid(
 
 def render_mermaid_string(diagram: str, output_path: Path) -> bool:
     """
-    Render a single mermaid diagram string to an SVG file.
+    Render a single mermaid diagram string to an SVG file
 
     Parameters
     ----------
@@ -292,7 +292,7 @@ def render_mermaid_string(diagram: str, output_path: Path) -> bool:
 
     Returns
     -------
-    bool
+    :
         True if rendering succeeded, False otherwise.
     """
     svg_content = render_mermaid_to_svg(diagram)

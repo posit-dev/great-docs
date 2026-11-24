@@ -336,7 +336,7 @@ BUILTIN_DICTIONARY = [
 
 def extract_prose_from_markdown(content: str) -> tuple[str, dict[int, int]]:
     """
-    Extract prose sections from markdown, skipping fenced code blocks and frontmatter.
+    Extract prose sections from markdown, skipping fenced code blocks and frontmatter
 
     Keeps inline code (`code`) in prose for checking - only filters out
     fenced code blocks (``` ... ```) and YAML frontmatter.
@@ -351,7 +351,7 @@ def extract_prose_from_markdown(content: str) -> tuple[str, dict[int, int]]:
 
     Returns
     -------
-    tuple[str, dict[int, int]]
+    :
         (prose_content, line_mapping) where line_mapping maps prose line numbers
         (1-based) to original file line numbers (1-based).
     """
@@ -408,11 +408,11 @@ def extract_prose_from_markdown(content: str) -> tuple[str, dict[int, int]]:
 
 def get_builtin_dictionary() -> list[str]:
     """
-    Get the built-in dictionary of technical terms.
+    Get the built-in dictionary of technical terms
 
     Returns
     -------
-    list[str]
+    :
         List of words that should be considered correct in technical docs.
     """
     return BUILTIN_DICTIONARY.copy()
@@ -420,11 +420,11 @@ def get_builtin_dictionary() -> list[str]:
 
 def get_default_ignore_rules() -> list[str]:
     """
-    Get the default list of rules to ignore for documentation.
+    Get the default list of rules to ignore for documentation
 
     Returns
     -------
-    list[str]
+    :
         List of Harper rule names to skip by default.
     """
     return DEFAULT_IGNORE_RULES_FOR_DOCS.copy()
@@ -499,7 +499,7 @@ class HarperError(Exception):
 
 def find_harper_cli() -> str | None:
     """
-    Locate the harper-cli executable.
+    Locate the harper-cli executable
 
     Checks for:
     1. 'harper-cli' in PATH
@@ -508,7 +508,7 @@ def find_harper_cli() -> str | None:
 
     Returns
     -------
-    str | None
+    :
         Path to harper-cli executable, or None if not found.
     """
     # Check PATH for harper-cli
@@ -531,7 +531,7 @@ def find_harper_cli() -> str | None:
 
 def get_harper_version(harper_path: str | None = None) -> str | None:
     """
-    Get the installed Harper version.
+    Get the installed Harper version
 
     Parameters
     ----------
@@ -540,7 +540,7 @@ def get_harper_version(harper_path: str | None = None) -> str | None:
 
     Returns
     -------
-    str | None
+    :
         Version string (e.g., "1.12.0"), or None if unavailable.
     """
     if harper_path is None:
@@ -579,7 +579,7 @@ def run_harper(
     timeout: int = 120,
 ) -> list[HarperFileResult]:
     """
-    Run harper-cli on files and parse the results.
+    Run harper-cli on files and parse the results
 
     Parameters
     ----------
@@ -600,7 +600,7 @@ def run_harper(
 
     Returns
     -------
-    list[HarperFileResult]
+    :
         Results for each file checked.
 
     Raises
@@ -723,7 +723,7 @@ def run_harper_on_text(
     timeout: int = 30,
 ) -> list[HarperLint]:
     """
-    Run harper-cli on text content via stdin.
+    Run harper-cli on text content via stdin
 
     This is useful for checking content that doesn't have a file extension
     Harper recognizes (like .qmd files).
@@ -747,7 +747,7 @@ def run_harper_on_text(
 
     Returns
     -------
-    list[HarperLint]
+    :
         List of lints found in the text.
 
     Raises
@@ -841,11 +841,11 @@ def run_harper_on_text(
 
 def check_harper_available() -> tuple[bool, str | None]:
     """
-    Check if harper-cli is available and return version info.
+    Check if harper-cli is available and return version info
 
     Returns
     -------
-    tuple[bool, str | None]
+    :
         (is_available, version_string or error_message)
     """
     path = find_harper_cli()

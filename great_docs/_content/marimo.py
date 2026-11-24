@@ -102,7 +102,8 @@ def generate_islands_html(
     reactive: bool = True,
     app_id: str | None = None,
 ) -> str:
-    """Generate marimo island HTML from a notebook file.
+    """
+    Generate marimo island HTML from a notebook file
 
     Uses MarimoIslandGenerator to produce correct island markup that the @marimo-team/islands
     runtime can activate.
@@ -121,7 +122,7 @@ def generate_islands_html(
 
     Returns
     -------
-    str
+    :
         HTML string containing <marimo-island> elements.
     """
     import io

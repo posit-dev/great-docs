@@ -51,7 +51,7 @@ def test_examples_section_renders_code_and_prose():
 def test_example_fragment_renders_directly():
     """`_render_example_fragment` handles a fragment without re-entering dispatch"""
     from great_docs._apiref._docstring_sections import ExampleCode, ExampleText
-    from great_docs._apiref._render.doc import __RenderDoc as RenderDocImpl  # noqa: N813
+    from great_docs._apiref._rendering.objects import ObjectRenderer as RenderDocImpl  # noqa: N813
 
     render = object.__new__(RenderDocImpl)
 
@@ -68,7 +68,7 @@ def test_section_method_table_covers_every_griffe_section_kind():
     """
     import griffe as gf
 
-    from great_docs._apiref._render._section_dispatch import SECTION_METHOD
+    from great_docs._apiref._rendering._section_dispatch import SECTION_METHOD
 
     covered = {getattr(t, "kind", None) for t in SECTION_METHOD}
     missing = {kind for kind in gf.DocstringSectionKind if kind not in covered}
@@ -78,7 +78,7 @@ def test_section_method_table_covers_every_griffe_section_kind():
 
 def test_section_method_values_are_method_names():
     """Every value in `SECTION_METHOD` is a non-empty method name, not a callable or `None`"""
-    from great_docs._apiref._render._section_dispatch import SECTION_METHOD
+    from great_docs._apiref._rendering._section_dispatch import SECTION_METHOD
 
     assert all(isinstance(name, str) and name for name in SECTION_METHOD.values())
 
@@ -87,7 +87,7 @@ def test_parameters_section_on_a_module_is_not_rendered(caplog):
     """
     A module has no parameters, so the section has no renderer and is omitted
 
-    `RenderDocModule` does not inherit `RenderDocCallMixin`. Before table
+    `ModuleRenderer` does not inherit `CallableRendererMixin`. Before table
     dispatch it reached the mixin's handler anyway, because
     `singledispatchmethod` shared one registry across every subclass.
     """
@@ -138,7 +138,7 @@ def test_definition_section_without_items_renders_nothing():
     """
     import griffe as gf
 
-    from great_docs._apiref._render.doc import __RenderDoc as RenderDocImpl  # noqa: N813
+    from great_docs._apiref._rendering.objects import ObjectRenderer as RenderDocImpl  # noqa: N813
 
     render = object.__new__(RenderDocImpl)
 
@@ -247,29 +247,12 @@ def test_suppression_methods_are_independently_overridable():
     `render_type_aliases_section` on a subclass must leave `Methods`
     (`render_functions_section`) dropped as before.
 
-    Subclassing a public `Render*` class outside `great_docs` normally
-    triggers `RenderBase.__init_subclass__`, which copies the subclass's
-    attributes onto its immediate base class (`extend_base_class`) so that
-    user overrides "fill in" the package's internal classes everywhere. That
-    is a deliberate feature for real usage, but here it would leak a
-    test-only override into global state and affect unrelated tests. It is
-    neutralised for the duration of this test by patching
-    `extend_base_class` to a no-op, so the subclass created below stays
-    local to this test.
     """
-    import great_docs._apiref._render.base as base_module
-    from great_docs._apiref import RenderDocClass
+    from great_docs._apiref import ClassRenderer
 
-    original_extend_base_class = base_module.extend_base_class
-    base_module.extend_base_class = lambda cls: None
-    try:
-
-        class _MarkedRenderDocClass(RenderDocClass):
-            def render_type_aliases_section(self, el):
-                return "MARKER"
-
-    finally:
-        base_module.extend_base_class = original_extend_base_class
+    class _MarkedRenderDocClass(ClassRenderer):
+        def render_type_aliases_section(self, el):
+            return "MARKER"
 
     render = object.__new__(_MarkedRenderDocClass)
 
@@ -283,7 +266,7 @@ def test_raises_section_on_a_property_still_renders(caplog):
     """
     A `Raises` section on a property renders, same as on a function
 
-    `RenderDocAttribute` renders properties and plain attributes alike, and
+    `AttributeRenderer` renders properties and plain attributes alike, and
     does not inherit the call mixin that defines `render_raises_section` for
     functions and classes. A `Raises` section is still ordinary, valid
     numpydoc on a property, so it must render rather than fall through to the
@@ -560,34 +543,17 @@ def test_property_only_section_methods_are_independently_overridable():
     Overriding one property-only section method must not affect the others
 
     `render_raises_section`, `render_warns_section`, `render_yields_section`
-    and `render_receives_section` on `RenderDocAttribute` all delegate to the
+    and `render_receives_section` on `AttributeRenderer` all delegate to the
     shared `_render_property_only_section` helper rather than to one
     dispatched method, so overriding `render_raises_section` on a subclass
     must leave `render_warns_section` rendering normally.
 
-    Subclassing a public `Render*` class outside `great_docs` normally
-    triggers `RenderBase.__init_subclass__`, which copies the subclass's
-    attributes onto its immediate base class (`extend_base_class`) so that
-    user overrides "fill in" the package's internal classes everywhere. That
-    is a deliberate feature for real usage, but here it would leak a
-    test-only override into global state and affect unrelated tests. It is
-    neutralised for the duration of this test by patching
-    `extend_base_class` to a no-op, so the subclass created below stays
-    local to this test.
     """
-    import great_docs._apiref._render.base as base_module
-    from great_docs._apiref import RenderDocAttribute
+    from great_docs._apiref import AttributeRenderer
 
-    original_extend_base_class = base_module.extend_base_class
-    base_module.extend_base_class = lambda cls: None
-    try:
-
-        class _MarkedRenderDocAttribute(RenderDocAttribute):
-            def render_raises_section(self, el):
-                return "MARKER"
-
-    finally:
-        base_module.extend_base_class = original_extend_base_class
+    class _MarkedRenderDocAttribute(AttributeRenderer):
+        def render_raises_section(self, el):
+            return "MARKER"
 
     source = '''
         class Widget:
@@ -610,15 +576,18 @@ def test_property_only_section_methods_are_independently_overridable():
                 """
     '''
 
-    import great_docs._apiref._render as render_module
-    from great_docs._apiref.content import DocAttribute
+    import textwrap
 
-    original_render_doc_attribute = render_module._class_mapping[DocAttribute]
-    render_module._class_mapping[DocAttribute] = _MarkedRenderDocAttribute
-    try:
-        qmd = _render(source, "Widget.size")
-    finally:
-        render_module._class_mapping[DocAttribute] = original_render_doc_attribute
+    import griffe as gf
+
+    from great_docs._apiref._conversion import griffe_to_doc
+    from great_docs.rendering import Renderers
+
+    with gf.temporary_visited_package(
+        "package", {"__init__.py": textwrap.dedent(source)}, docstring_parser="numpy"
+    ) as package:
+        doc = griffe_to_doc(package["Widget.size"])
+        qmd = str(Renderers(attributes=_MarkedRenderDocAttribute).make(doc))
 
     assert "MARKER" in qmd
     assert "If the size is guessed." in qmd
@@ -632,20 +601,20 @@ def test_every_table_entry_names_a_real_method():
     warning is logged — so this is the only check that catches a rename.
     """
     from great_docs._apiref import (
-        RenderDocAttribute,
-        RenderDocClass,
-        RenderDocFunction,
-        RenderDocModule,
-        RenderDocTypeAlias,
+        AttributeRenderer,
+        ClassRenderer,
+        FunctionRenderer,
+        ModuleRenderer,
+        TypeAliasRenderer,
     )
-    from great_docs._apiref._render._section_dispatch import SECTION_METHOD
+    from great_docs._apiref._rendering._section_dispatch import SECTION_METHOD
 
     classes = (
-        RenderDocClass,
-        RenderDocFunction,
-        RenderDocAttribute,
-        RenderDocModule,
-        RenderDocTypeAlias,
+        ClassRenderer,
+        FunctionRenderer,
+        AttributeRenderer,
+        ModuleRenderer,
+        TypeAliasRenderer,
     )
     orphans = {
         name for name in SECTION_METHOD.values() if not any(hasattr(c, name) for c in classes)

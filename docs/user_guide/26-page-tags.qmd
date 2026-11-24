@@ -143,8 +143,8 @@ tags.
 ## Tags Index Page
 
 When tags are enabled, Great Docs automatically generates a `tags/index.qmd` page that lists every
-tag and the pages associated with it. A "Tags" link is added to the site's top navigation bar
-(positioned before "Reference").
+tag and the pages associated with it. Readers reach it from the "Site Tags" link in the homepage
+sidebar, or by clicking any tag pill.
 
 Each tag becomes a heading on the index page, with links to all pages that use that tag. Section
 badges (e.g., "User Guide", "Recipes") appear next to each page link so readers can see where the

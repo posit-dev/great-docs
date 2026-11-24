@@ -9,7 +9,7 @@ cover every feature dimension.  The tests are organized by assertion level:
 - **L1**: Export discovery + section structure (fast, griffe only)
 - **L2**: `great-docs init` / config generation (fast, file I/O)
 - **L3**: `_quarto.yml` + `.qmd` generation (medium)
-- **L4**: Full Quarto render to HTML (slow, nightly only)
+- **L4**: Full render to HTML (requires Quarto)
 
 Run with:
     pytest tests/test_synthetic.py -v
@@ -24,19 +24,23 @@ import textwrap
 from pathlib import Path
 
 import pytest
+from bs4 import BeautifulSoup
 
 from great_docs import Config, GreatDocs
 from great_docs._apiref.api_reference import APIReference
 from great_docs._apiref.content import MemberPage
+from great_docs._apiref.spec import ReferenceSpec
 from great_docs._build import content as build_content
 from great_docs._cliref import click as cli_click
 from great_docs._cliref import render as cli_render
 from great_docs._cliref.model import CliCommand
 from great_docs._content import code_includes
+from great_docs._interlinks.sphinx_inventory import decode
 from great_docs._project.model import locate_package_init
 from great_docs._reference import sections as reference_sections
 from great_docs._reference.discovery import discover_exports, parse_dunder_all
 from great_docs._reference.probe import detect_docstring_style
+from tests.gauntlet_sites import build_site, quarto_available
 from tests.support import (
     StubRemote,
     discover_user_guide,
@@ -44,6 +48,7 @@ from tests.support import (
     make_project,
     make_run,
     prepare_build_directory,
+    reference_from_options,
     update_quarto_config,
     user_guide_step,
     write_config,
@@ -292,16 +297,7 @@ def test_L1_big_class_member_pages(pkg_name: str, tmp_path: Path) -> None:
     big_class = expected["big_class_name"]
     assert not any(section["title"] == f"{big_class} Methods" for section in sections)
 
-    ref = APIReference(
-        {
-            "package": module_name,
-            "parser": docs._config.parser,
-            "dynamic": False,
-            "members_on_same_page": docs._config.members_on_same_page,
-            "max_members_on_same_page": docs._config.max_members_on_same_page,
-            "sections": sections,
-        }
-    )
+    ref = APIReference(docs._config, ReferenceSpec(module_name, sections), dynamic=False)
     parent = next(
         doc
         for section in ref.resolved
@@ -1273,19 +1269,90 @@ def test_L3_parameter_exclusion_pages(tmp_path: Path, monkeypatch: pytest.Monkey
     pkg_dir, _ = _make_package("gdtest_nodoc_param", tmp_path)
     monkeypatch.chdir(pkg_dir)
     monkeypatch.syspath_prepend(str(pkg_dir))
-    reference = APIReference(
+    reference = reference_from_options(
         {
             "package": "gdtest_nodoc_param",
-            "sections": [{"title": "API", "contents": ["configure", "Widget"]}],
+            "members_on_same_page": False,
+            "sections": [{"title": "API", "contents": ["configure", "Widget", "Settings"]}],
         }
     )
     reference.build()
-    for name in ("configure", "Widget"):
+    for name in ("configure", "Widget", "Settings"):
         qmd = (pkg_dir / "reference" / f"{name}.qmd").read_text()
         assert "old_option" not in qmd
+        assert "old_dpi" not in qmd
         assert "excluded" not in qmd.lower()
         assert "retained" in qmd
+    # Dataclass fields are documented with their parameters on the class page, so only
+    # the method gets a page of its own.
+    pages = sorted(path.stem for path in (pkg_dir / "reference").glob("*.Settings.*.qmd"))
+    assert pages == ["gdtest_nodoc_param.Settings.scale"]
     function = (pkg_dir / "reference" / "configure.qmd").read_text()
     assert "configure(value)" in function
     assert "The previous option is deprecated." in function
     assert "%nodoc_param literal_example" in function
+
+
+@pytest.mark.skipif(not quarto_available(), reason="Quarto is not installed")
+def test_L4_gdtest_extension_hooks(tmp_path: Path) -> None:
+    """Publish hook edits throughout the CSV reference and its text exports"""
+    package = "gdtest_extension_hooks"
+    site = build_site(tmp_path, package)
+    reference = site / "reference"
+    page = BeautifulSoup((reference / "read_csv.html").read_text(encoding="utf-8"), "html.parser")
+    full = (site / "llms-full.txt").read_text(encoding="utf-8")
+    brief = (site / "llms.txt").read_text(encoding="utf-8")
+    index = (reference / "index.html").read_text(encoding="utf-8")
+    inventory = decode((site / "objects.inv").read_bytes())
+    sidebar = page.select_one("#quarto-sidebar")
+    assert sidebar is not None
+    assert sidebar.select_one('a[href$="read_csv.html"]') is not None
+    assert page.select_one(".doc-parameters") is not None
+    assert page.select_one(".doc-returns") is not None
+    assert "## Parameters" in full
+    assert "## Returns" in full
+    for text in (page.get_text(" ", strip=True), full):
+        assert "Use UTF-8 for new CSV files." in text
+        assert "The legacy reader treats every file as Latin-1." not in text
+    assert "Legacy readers" not in sidebar.get_text()
+    assert "read_csv.html" in index
+    assert "read_csv" in brief
+    inventory_names = {entry.name.rsplit(".", 1)[-1] for entry in inventory.entries}
+    assert "read_csv" in inventory_names
+    for name in ("read_legacy_csv", "read_compat_csv"):
+        assert not (reference / f"{name}.html").exists()
+        assert name not in index
+        assert name not in str(sidebar)
+        assert name not in brief
+        assert name not in full
+        assert name not in inventory_names
+
+
+@pytest.mark.skipif(not quarto_available(), reason="Quarto is not installed")
+def test_L4_gdtest_extension_renderers(tmp_path: Path) -> None:
+    """Keep the report renderer's presentation on the class page"""
+    package = "gdtest_extension_renderers"
+    site = build_site(tmp_path, package)
+    reference = site / "reference"
+    report = BeautifulSoup((reference / "Report.html").read_text(encoding="utf-8"), "html.parser")
+    factory = BeautifulSoup(
+        (reference / "read_report.html").read_text(encoding="utf-8"), "html.parser"
+    )
+    index = (reference / "index.html").read_text(encoding="utf-8")
+    full = (site / "llms-full.txt").read_text(encoding="utf-8")
+    inventory = decode((site / "objects.inv").read_bytes())
+
+    guidance = "Use read_report to open a report from text."
+    assert report.get_text(" ", strip=True).count(guidance) == 1
+    assert "Amounts can include negative adjustments." in report.get_text(" ", strip=True)
+    assert report.select_one("#total .doc-signature") is not None
+    assert report.select_one(".doc-signature.doc-class") is None
+    assert factory.select_one(".doc-signature") is not None
+    assert guidance not in factory.get_text(" ", strip=True)
+    for page in ("Report.html", "read_report.html"):
+        assert page in index
+    assert {f"{package}.Report", f"{package}.Report.total", f"{package}.read_report"} <= {
+        entry.name for entry in inventory.entries
+    }
+    assert guidance not in full
+    assert "Report(amounts: list[int])" in full

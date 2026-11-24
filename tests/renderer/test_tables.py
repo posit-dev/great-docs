@@ -1,6 +1,6 @@
 import pytest
 
-from great_docs._apiref._render._tables import pipe_table, summary_table
+from great_docs._apiref._rendering._tables import pipe_table, summary_table
 
 
 def test_pipe_table_has_a_row_per_input_and_no_attributes_by_default():

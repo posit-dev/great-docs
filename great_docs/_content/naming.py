@@ -22,7 +22,7 @@ def strip_numeric_prefix(filename: str) -> str:
 
     Returns
     -------
-    str
+    :
         The filename with its numeric prefix stripped, or unchanged if it has none.
     """
     return re.sub(r"^\d+-|^\d+_", "", filename)
@@ -122,7 +122,7 @@ def section_slug(name: str) -> str:
 
     Returns
     -------
-    str
+    :
         The name with underscores and spaces replaced by dashes, lowercased.
     """
     return name.replace("_", "-").replace(" ", "-").lower()

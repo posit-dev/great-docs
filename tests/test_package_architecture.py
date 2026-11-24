@@ -237,7 +237,7 @@ def test_import_contexts(source: str, target: str, context: str) -> None:
 @pytest.mark.parametrize(
     ("module", "source", "rejected"),
     [
-        ("great_docs._apiref._render.api_page", "from ..._website import head", True),
+        ("great_docs._apiref._rendering.api_pages", "from ..._website import head", True),
         ("great_docs._content.metadata", "def f():\n from .._website import head", True),
         ("great_docs._content.authored", "from . import homepage", False),
         (

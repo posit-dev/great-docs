@@ -10,6 +10,7 @@ import shutil
 import sys
 from contextlib import AbstractContextManager
 from pathlib import Path
+from textwrap import dedent
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -30,8 +31,10 @@ from great_docs._website import quarto_yml
 from great_docs._website.ai_agents import llms_txt
 from tests.support import (
     StubRemote,
+    WriteExtension,
     make_run,
     prepare_build_directory,
+    reference_spec,
     update_quarto_config,
     write_config,
     write_pyproject,
@@ -69,15 +72,6 @@ def test_case_collision_links_match_pages_from_an_uninstalled_source_package(
             run = make_run(docs)
             prepare_build_directory(docs, run)
             sidebar = run.contributions[0].sidebars[0]
-            index_path = llms_txt.write_index(
-                docs.layout,
-                run.api_block,
-                {},
-                site_url=None,
-                report=lambda _: None,
-            )
-            assert index_path is not None
-            llms_index = index_path.read_text(encoding="utf-8")
             monkeypatch.chdir(docs.layout.build_dir)
             outcome, ref = reference.api(
                 run, docs._config, docs.layout, BuildLog(stream=io.StringIO())
@@ -85,6 +79,10 @@ def test_case_collision_links_match_pages_from_an_uninstalled_source_package(
 
             assert outcome == "API reference generated"
             assert ref is not None
+            index_path = llms_txt.write_index(
+                docs.layout, ref, {}, site_url=None, report=lambda _: None
+            )
+            llms_index = index_path.read_text(encoding="utf-8")
             assert [page.path for page in ref.manifest.pages] == ["Foo", "foo-function"]
             assert [link["href"] for link in sidebar.contents[1]["contents"]] == [
                 "reference/Foo.qmd",
@@ -168,7 +166,9 @@ def _write_api_reference(docs: GreatDocs) -> Outcome:
         The step's outcome.
     """
     quarto_config = quarto_yml.read(docs.layout.build_dir)
-    run = make_run(docs, quarto_config=quarto_config, api_block=quarto_config["api-reference"])
+    run = make_run(
+        docs, quarto_config=quarto_config, api_spec=reference_spec(quarto_config["api-reference"])
+    )
     outcome, _ = reference.api(run, docs._config, docs.layout, BuildLog(stream=io.StringIO()))
     return outcome
 
@@ -260,8 +260,8 @@ def test_no_refresh_reuses_the_discovery_of_the_last_build(tmp_path: Path):
         reused = _configure(docs, refresh=False)
 
     sections.assert_not_called()
-    assert reused.has_api_reference
-    assert reused.api_block == discovered.api_block
+    assert reused.api_spec is not None
+    assert reused.api_spec == discovered.api_spec
     assert reference.api_config(reused) == "Reused cached API discovery"
 
 
@@ -282,8 +282,8 @@ def test_no_refresh_discovers_when_a_package_file_changes(tmp_path: Path):
         run = _configure(docs, refresh=False)
 
     sections.assert_called_once()
-    assert run.api_block is not None
-    assert "part" in str(run.api_block["sections"])
+    assert run.api_spec is not None
+    assert "part" in str(run.api_spec.sections)
     assert reference.api_config(run) == "API reference discovered"
 
 
@@ -300,7 +300,7 @@ def test_no_refresh_reuses_the_discovery_of_a_moved_project(tmp_path: Path):
         reused = _configure(GreatDocs(project_path=str(moved)), refresh=False)
 
     sections.assert_not_called()
-    assert reused.api_block == discovered.api_block
+    assert reused.api_spec == discovered.api_spec
 
 
 def test_no_refresh_discovers_when_a_package_file_is_renamed(tmp_path: Path):
@@ -349,8 +349,8 @@ def test_refresh_rediscovers_and_rewrites_the_cache(tmp_path: Path):
         refreshed = _configure(docs, refresh=True)
 
     sections.assert_called_once()
-    assert refreshed.api_block == discovered.api_block
-    assert _configure(docs, refresh=False).api_block == discovered.api_block
+    assert refreshed.api_spec == discovered.api_spec
+    assert _configure(docs, refresh=False).api_spec == discovered.api_spec
 
 
 @pytest.mark.parametrize(
@@ -369,7 +369,7 @@ def test_no_refresh_discovers_when_the_cache_is_unusable(tmp_path: Path, content
         run = _configure(docs, refresh=False)
 
     sections.assert_called_once()
-    assert run.api_block == discovered.api_block
+    assert run.api_spec == discovered.api_spec
     assert reference.api_config(_configure(docs, refresh=False)) == "Reused cached API discovery"
 
 
@@ -380,9 +380,7 @@ def test_api_config_skips_a_site_without_an_api_reference(tmp_path: Path):
     write_config(tmp_path, "module: mypkg\n")
     docs = GreatDocs(project_path=str(tmp_path))
 
-    assert reference.api_config(make_run(docs, has_api_reference=False)) == Skipped(
-        "no API reference"
-    )
+    assert reference.api_config(make_run(docs)) == Skipped("no API reference")
 
 
 def test_api_links_each_project_in_a_process_to_its_own_source(
@@ -421,18 +419,19 @@ def test_api_imports_the_package_from_the_project_root(
     assert root in sys.path
 
 
-def test_api_retry_with_static_analysis_disables_dynamic_introspection_in_the_configuration(
+def test_api_retry_with_static_analysis_uses_the_documentation_config(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     """
-    Disable dynamic introspection in memory before retrying with static analysis
+    Retry a dynamic build in static mode without changing the documentation config
     """
     docs = _source_linked_project(tmp_path / "static_retry", "static_retry", "main")
     monkeypatch.chdir(docs.layout.build_dir)
     quarto_config = quarto_yml.read(docs.layout.build_dir)
     block = quarto_config["api-reference"]
-    block["dynamic"] = True
-    run = make_run(docs, quarto_config=quarto_config, api_block=block)
+    assert block["dynamic"] is False
+    assert docs._config.dynamic is True
+    run = make_run(docs, quarto_config=quarto_config, api_spec=reference_spec(block))
     dynamic: list[bool] = []
 
     def build(ref: APIReference) -> None:
@@ -445,6 +444,7 @@ def test_api_retry_with_static_analysis_disables_dynamic_introspection_in_the_co
 
     assert outcome == "API reference generated (static analysis)"
     assert dynamic == [True, False]
+    assert docs._config.dynamic is True
     assert run.quarto_config["api-reference"]["dynamic"] is False
 
 
@@ -485,7 +485,7 @@ def test_mcp_only_build_links_to_its_generated_index(
     docs._remote = StubRemote()
     run = make_run(docs)
     prepare_build_directory(docs, run)
-    assert not run.has_api_reference
+    assert run.api_spec is None
     server = {
         "name": "Example",
         "tools": [{"name": "hello", "description": "Say hello", "input_schema": {}}],
@@ -520,3 +520,63 @@ def test_mcp_without_generated_pages_contributes_no_navigation(tmp_path: Path, r
     assert run.contributions == []
     assert discover.call_count == (result != "disabled")
     assert write_pages.call_count == (result == "no_pages")
+
+
+def test_api_leaves_objects_that_an_extension_excludes_out_of_the_sidebar(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, write_extension: WriteExtension
+):
+    """
+    Link the reference sidebar only to the pages the API reference generates
+    """
+    package = tmp_path / "sidebar_exclusion"
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        dedent('''
+            __all__ = ["kept", "excluded"]
+
+            def kept():
+                """Kept"""
+
+            def excluded():
+                """Excluded"""
+        '''),
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    write_pyproject(tmp_path, "sidebar_exclusion")
+    write_extension(
+        """
+        def setup(extension):
+            @extension.on_object_resolved
+            def exclude(obj):
+                return None if obj.name == "excluded" else obj
+        """
+    )
+    write_config(
+        tmp_path,
+        {
+            "api_reference_extension": "extension.py",
+            "dynamic": False,
+            "reference": [
+                {"title": "Kept", "contents": ["kept"]},
+                {"title": "Excluded", "contents": ["excluded"]},
+            ],
+        },
+    )
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs._remote = StubRemote()
+    run = make_run(docs)
+    prepare_build_directory(docs, run)
+    update_quarto_config(docs, run)
+    monkeypatch.chdir(docs.layout.build_dir)
+
+    try:
+        _ = reference.api(run, docs._config, docs.layout, BuildLog(stream=io.StringIO()))
+    finally:
+        run.close()
+
+    (sidebar,) = [s for s in run.quarto_config["website"]["sidebar"] if s["id"] == "reference"]
+    assert sidebar["contents"][1:] == [
+        {"section": "Kept", "contents": [{"text": "kept", "href": "reference/kept.qmd"}]}
+    ]
+    assert not (docs.layout.build_dir / "reference" / "excluded.qmd").exists()

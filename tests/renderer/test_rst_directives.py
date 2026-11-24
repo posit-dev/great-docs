@@ -1,8 +1,7 @@
-from great_docs._apiref._settings import Settings
 import griffe as gf
 import pytest
 
-from great_docs._apiref import RenderDocFunction, content
+from great_docs._apiref import FunctionRenderer, content
 from great_docs._builtin.directives._rst_directives import (
     add_rst_directives,
     convert_rst_directives,
@@ -222,9 +221,7 @@ def test_first_line_rst_directive_is_rendered_in_the_docstring_body(
     )
     add_rst_directives(function)
 
-    renderer = RenderDocFunction(
-        content.Doc.from_griffe(function.name, function), settings=Settings()
-    )
+    renderer = FunctionRenderer(content.Doc.from_griffe(function.name, function))
 
     assert renderer.docstring_subject is None
     body = str(renderer.render_body())

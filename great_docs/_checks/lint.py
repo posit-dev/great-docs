@@ -112,7 +112,7 @@ def run_lint(
 
     Returns
     -------
-    LintResult
+    :
         Aggregated lint results.
     """
     result = LintResult()
@@ -405,7 +405,7 @@ def _check_cross_references(
 
     Parameters
     ----------
-    pkg :
+    pkg
         The package loaded by Griffe, whose docstrings contain directives.
     package_name :
         Importable package name used in documented object paths.
@@ -519,6 +519,9 @@ _AUTOLINK_RE = re.compile(
 
 _LINK_RE = re.compile(r"\[[^\]]*\]\([^)\s]*\)")
 """A Markdown link, whose text the build leaves as written"""
+
+_HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}(?:[ \t].*)?$", re.MULTILINE)
+"""An ATX heading, whose code spans the build leaves unlinked"""
 
 
 _LIST_MARKER_RE = re.compile(r"(?:[-*+]|\d+[.)])\s")
@@ -721,8 +724,8 @@ def _check_ambiguous_references(
     `` `flush()` `` is a warning: the build would link it if one object claimed the
     name, but the span may be plain code, like a dictionary key, rather than a
     reference. A docstring naming its own object is not reported, and neither is a
-    span marked `{.gd-no-link}` or one inside the text of a link, which the build
-    leaves alone.
+    span marked `{.gd-no-link}` or one inside a heading or the text of a link, which
+    the build leaves alone.
 
     Parameters
     ----------
@@ -758,7 +761,7 @@ def _check_ambiguous_references(
             )
         if autolinked is not None and origin not in autolinked:
             continue
-        for name in _AUTOLINK_RE.findall(_LINK_RE.sub("", text)):
+        for name in _AUTOLINK_RE.findall(_LINK_RE.sub("", _HEADING_RE.sub("", text))):
             targets = dropped.get(name)
             if targets is None or origin in targets:
                 continue
@@ -798,7 +801,8 @@ def _section_kinds(docstring: str, style: str) -> set[str]:
 
     Returns
     -------
-    The section kinds found, named as griffe names them.
+    :
+        The section kinds found, named as griffe names them.
     """
     import griffe
 
@@ -832,8 +836,9 @@ def _lost_sections(docstring: str, config_style: str) -> dict[str, set[str]]:
 
     Returns
     -------
-    Each rival style mapped to the section kinds it finds and the configured
-    style misses, empty when the configured style reads everything.
+    :
+        Each rival style mapped to the section kinds it finds and the configured
+        style misses, empty when the configured style reads everything.
     """
     configured = _section_kinds(docstring, config_style)
     lost: dict[str, set[str]] = {}

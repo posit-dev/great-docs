@@ -11,6 +11,7 @@ import pytest
 
 from great_docs._apiref.api_reference import APIReference
 from great_docs._apiref.content import Doc, MemberPage
+from tests.support import reference_from_options
 
 
 def _document(
@@ -30,7 +31,7 @@ def _document(
     package.mkdir(exist_ok=True)
     (package / "__init__.py").write_text(dedent(source), encoding="utf-8")
     monkeypatch.syspath_prepend(str(tmp_path))
-    ref = APIReference(
+    ref = reference_from_options(
         {
             "package": None,
             "dynamic": False,
@@ -309,13 +310,14 @@ def test_resolution_hooks_skip_members_before_counting(
     """
     Exclude members omitted by hooks before applying the page limit
     """
-    from great_docs._apiref import resolve
+    from great_docs.hooks._object_resolved import REGISTRY
 
-    original = resolve.emit_object_resolved
-    monkeypatch.setattr(
-        resolve, "emit_object_resolved", lambda obj: None if obj.name == "stop" else original(obj)
-    )
-    doc = _document(tmp_path, monkeypatch, _SOURCE, limit=2)
+    snapshot = REGISTRY.snapshot()
+    REGISTRY.register(lambda obj: None if obj.name == "stop" else obj)
+    try:
+        doc = _document(tmp_path, monkeypatch, _SOURCE, limit=2)
+    finally:
+        REGISTRY.restore(snapshot)
     assert [member.name for member in doc.members] == ["run", "size"]
     assert all(isinstance(member, Doc) for member in doc.members)
 
@@ -370,7 +372,7 @@ def test_module_member_pages_render_without_splitting_descendants(
     )
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.chdir(tmp_path)
-    ref = APIReference(
+    ref = reference_from_options(
         {
             "package": None,
             "dynamic": False,

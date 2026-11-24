@@ -54,7 +54,8 @@ def add_callouts(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
 
     Returns
     -------
-    The object with canonical directives replaced in its docstring value.
+    :
+        The object with canonical directives replaced in its docstring value.
     """
     docstring = obj.docstring
     if docstring is None:
@@ -81,7 +82,8 @@ def render_callout(name: str, body: str, inline: str = "") -> str:
 
     Returns
     -------
-    Quarto callout markup.
+    :
+        Quarto callout markup.
     """
     content = join_content(inline, body)
     if name in _VERSION_DIRECTIVES:
@@ -111,7 +113,8 @@ def convert_directives(text: str) -> str:
 
     Returns
     -------
-    The text with recognized directives replaced by Quarto callouts.
+    :
+        The text with recognized directives replaced by Quarto callouts.
     """
     if "%" not in text:
         return text
@@ -156,7 +159,8 @@ def join_content(inline: str, body: str) -> str:
 
     Returns
     -------
-    The non-empty inline and body text joined in source order.
+    :
+        The non-empty inline and body text joined in source order.
     """
     parts = [part.strip() for part in (inline, body) if part.strip()]
     return "\n".join(parts)
@@ -181,7 +185,8 @@ def collect_indented_body(
 
     Returns
     -------
-    The collected body lines and the index of the first unconsumed line.
+    :
+        The collected body lines and the index of the first unconsumed line.
     """
     body: list[str] = []
     index = start
@@ -222,6 +227,7 @@ def dedent_lines(lines: list[str]) -> list[str]:
 
     Returns
     -------
-    The body lines with their common indentation removed.
+    :
+        The body lines with their common indentation removed.
     """
     return dedent("\n".join(lines)).splitlines()

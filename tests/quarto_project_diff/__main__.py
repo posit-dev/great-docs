@@ -165,18 +165,20 @@ def command_run(args: argparse.Namespace) -> int:
         test = checkout_side(checkout)
         ref = args.base or branch_point(checkout)
         print(f"preparing base worktree for {ref} in {cache / 'worktrees'}", flush=True)
-        base = base_side(checkout, ref, cache, python_version(test))
-        base, test = describe(base, stub_dir), describe(test, stub_dir)
-        drift = environment_differences(base.facts, test.facts)
-        if drift:
-            raise RequirementError("The two environments differ:\n  " + "\n  ".join(drift))
-        cases = choose_cases(args.catalogue, args.only, own_checkout(), test)
-        out = (args.out or cache / "runs" / work.name).resolve()
-        pristine = generate_all(cases, own_checkout() / "test-packages", work)
-        sides = [
-            (side, out / side.label, child_environment(side, stub_dir)) for side in (base, test)
-        ]
-        wall = record(sides, cases, pristine, work, args.workers, args.timeout, args.keep)
+        with base_side(
+            checkout, ref, cache, python_version(test), work.name, reuse=args.reuse_base_worktree
+        ) as base:
+            base, test = describe(base, stub_dir), describe(test, stub_dir)
+            drift = environment_differences(base.facts, test.facts)
+            if drift:
+                raise RequirementError("The two environments differ:\n  " + "\n  ".join(drift))
+            cases = choose_cases(args.catalogue, args.only, own_checkout(), test)
+            out = (args.out or cache / "runs" / work.name).resolve()
+            pristine = generate_all(cases, own_checkout() / "test-packages", work)
+            sides = [
+                (side, out / side.label, child_environment(side, stub_dir)) for side in (base, test)
+            ]
+            wall = record(sides, cases, pristine, work, args.workers, args.timeout, args.keep)
     finally:
         if not args.keep:
             shutil.rmtree(work)
@@ -262,6 +264,11 @@ def parser() -> argparse.ArgumentParser:
     )
     _ = run.add_argument("--checkout", type=Path, default=None, help="checkout under test")
     _ = run.add_argument("--out", type=Path, default=None, help="directory for recordings")
+    _ = run.add_argument(
+        "--reuse-base-worktree",
+        action="store_true",
+        help="keep the base worktree and its virtual environment for later runs",
+    )
     _ = run.add_argument(
         "--fail-on", choices=["regression", "difference"], default="regression", help=FAIL_ON_HELP
     )

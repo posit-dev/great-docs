@@ -259,6 +259,12 @@ Examples that will not be linked:
 When in doubt, write the name as you normally would in a docstring. If it resolves, it becomes a
 link; if not, it renders as plain code.
 
+Headings are the exception. Code in a heading is never linked: it keeps its code font (with any
+`~~` prefix applied) both in the heading and in the page's table of contents. An inline interlink
+in a heading likewise renders as code, without the link. The generated changelog also leaves its
+code spans unlinked, since release notes are written on the repository host rather than against
+your API; its issue and pull request links are unaffected.
+
 ## Parentheses in Cross-References
 
 The three cross-referencing levels handle parentheses differently, so it helps to know the rules:

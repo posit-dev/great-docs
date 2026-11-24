@@ -38,10 +38,11 @@ otherwise the tool uses `$GREAT_DOCS_QUARTO_PROJECT_DIFF_CACHE`, then
 `~/.cache/great-docs-quarto-project-diff`. Unless `--out` selects another destination for
 recordings and reports, the cache holds all output:
 
-- `worktrees/<sha>`: a detached worktree of each base commit with its own virtual environment,
-  reused by later runs and never deleted by the tool. Remove one with
-  `git worktree remove <path>`;
-- `runs/<timestamp>-<pid>`: each run's recordings, `report.txt` and `report.json`;
+- `worktrees/`: a detached base worktree with its own virtual environment for each active
+  run. The tool removes it on exit, including after a failed run. Pass
+  `--reuse-base-worktree` to keep a checkout under `worktrees/<sha>` for later runs against
+  the same commit.
+- `runs/<timestamp>-<pid>`: each run's recordings, `report.txt` and `report.json`.
 - `work/`: generated packages and job directories, deleted at the end of each run unless
   `--keep` is given.
 """

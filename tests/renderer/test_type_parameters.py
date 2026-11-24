@@ -81,7 +81,7 @@ def test_generic_type_alias_section_renders():
     """
     A generic type alias documents type parameters even though it is not callable
 
-    `RenderDocTypeAlias` does not inherit `RenderDocCallMixin`, so it defines
+    `TypeAliasRenderer` does not inherit `CallableRendererMixin`, so it defines
     its own `render_type_parameters_section` rather than sharing the mixin's.
     """
     source = '''
@@ -170,9 +170,9 @@ def test_module_attributes_section_renders():
     """
     A module can document an `Attributes` section
 
-    `RenderDocModule` reaches `render_attributes_section` through the members
-    mixin it shares with `RenderDocClass`, not through `RenderDocCallMixin` —
-    a module has no `Type Parameters` section.
+    `ModuleRenderer` reaches `render_attributes_section` through the members
+    mixin it shares with `ClassRenderer`, not through `CallableRendererMixin`.
+    A module has no `Type Parameters` section.
     """
     source = '''
         """

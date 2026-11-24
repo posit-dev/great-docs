@@ -1,0 +1,264 @@
+"""Common state and cached presentation for object, page and section renderers"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from functools import cached_property
+from typing import TYPE_CHECKING, Any, overload
+
+from great_docs.pandoc.blocks import (
+    Block,
+    BlockContent,
+    Blocks,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from pathlib import Path
+
+    from great_docs.pandoc.blocks import DefinitionItem
+
+    from .. import content
+    from .._customisation import Extension
+    from .._settings import Settings
+    from ..api_reference import APIReference
+    from ..typing import DocType
+    from ._renderers import Renderers
+    from .api_pages import APIPageRenderer
+    from .objects import ObjectRenderer
+    from .reference_sections import ReferenceSectionRenderer
+
+
+def _default_renderers() -> Renderers:
+    """
+    Create independent default choices for a directly constructed renderer
+
+    Returns
+    -------
+    :
+        New choices that use the built-in renderer for every kind.
+    """
+    from ._renderers import Renderers
+
+    return Renderers()
+
+
+def _default_extension() -> Extension:
+    """
+    Create an extension with default settings and no callbacks, for a renderer built directly
+
+    Returns
+    -------
+    :
+        A new extension without an extension file.
+    """
+    from .._customisation import Extension
+    from .._settings import Settings
+
+    return Extension(Settings())
+
+
+@dataclass
+class BaseRenderer(Block):
+    """
+    The common base of object, page and section renderers
+
+    An object renderer renders a heading and a docstring; a page renderer renders
+    front matter and the objects on the page; a section renderer renders linked
+    summaries. Each renderer renders its title, description, body and summary once
+    and caches them. To change one, override the matching `render_*` method, and
+    return `None` from a method that renders a block to omit that block.
+    """
+
+    node: (
+        APIReference
+        | content.DocClass
+        | content.DocFunction
+        | content.DocAttribute
+        | content.DocTypeAlias
+        | content.DocModule
+        | content.Page
+        | content.Section
+    )
+    """The node being documented"""
+
+    level: int = 1
+    """The heading depth of this appearance"""
+
+    renderers: Renderers = field(default_factory=_default_renderers, kw_only=True)
+    """Renderer choices shared with nested objects, pages and summaries"""
+
+    extension: Extension = field(default_factory=_default_extension, kw_only=True)
+    """
+    The extension that supplies settings and project directories
+
+    A standalone renderer uses default settings and has no project directories.
+    """
+
+    context_page_path: str | None = field(default=None, kw_only=True)
+    """The containing page's path relative to the output directory, apart from summary links"""
+
+    @property
+    def settings(self) -> Settings:
+        """
+        The settings of the API reference being rendered
+
+        A renderer reads the language, signature style and source
+        links of its reference here.
+        """
+        return self.extension.settings
+
+    @property
+    def output_root(self) -> Path | None:
+        """The directory the documentation is generated into, or `None` outside a build"""
+        return self.extension.output_root
+
+    @overload
+    def make_renderer(self, node: DocType, level: int = 1, **kwargs: Any) -> ObjectRenderer: ...
+    @overload
+    def make_renderer(
+        self, node: content.Page, level: int = 1, **kwargs: Any
+    ) -> APIPageRenderer: ...
+    @overload
+    def make_renderer(
+        self, node: content.Section, level: int = 1, **kwargs: Any
+    ) -> ReferenceSectionRenderer: ...
+
+    def make_renderer(
+        self, node: DocType | content.Page | content.Section, level: int = 1, **kwargs: Any
+    ) -> BaseRenderer:
+        """
+        Construct a nested renderer with this renderer's choices and context
+
+        Parameters
+        ----------
+        node
+            The prepared object, page or section to render.
+        level
+            The heading depth of the nested appearance.
+        **kwargs
+            Further constructor arguments for the selected renderer, such as an object's
+            summary-link `page_path` or `contained` state.
+
+        Returns
+        -------
+        :
+            A renderer from the same choices, with the same extension and containing
+            page path.
+        """
+        return self.renderers.make(
+            node,
+            level,
+            extension=self.extension,
+            context_page_path=self.context_page_path,
+            **kwargs,
+        )
+
+    def __post_init__(self) -> None:
+        """End the chain of `super().__post_init__()` calls from subclasses and mixins"""
+
+    def __str__(self) -> str:
+        """
+        Compose the cached title, description and body as Quarto Markdown
+
+        Returns
+        -------
+        :
+            The non-empty parts in that order, separated by blank lines.
+        """
+        return str(
+            Blocks(
+                [
+                    self.title,
+                    self.description,
+                    self.body,
+                ]
+            )
+        )
+
+    @cached_property
+    def title(self) -> BlockContent:
+        """
+        The title, rendered once per renderer and cached
+
+        Override `render_title` to change it. An object's title is a visible heading
+        and a page's title is front matter. `None` omits the title.
+        """
+        return self.render_title()
+
+    @cached_property
+    def description(self) -> BlockContent:
+        """
+        The description, rendered once per renderer and cached
+
+        Override `render_description` to change it. Each kind of object sets its own
+        order for the signature and the docstring's opening line. `None` omits the
+        description.
+        """
+        return self.render_description()
+
+    @cached_property
+    def body(self) -> BlockContent:
+        """
+        The body, rendered once per renderer and cached
+
+        Override `render_body` to change it. An object renderer may follow the object's
+        docstring with automatic member groups. `None` omits the body.
+        """
+        return self.render_body()
+
+    @cached_property
+    def summary(self) -> Sequence[DefinitionItem]:
+        """
+        The linked summary items, rendered once per renderer and cached
+
+        Override `render_summary` to change them. An empty sequence omits the summary
+        rows but keeps the objects in the reference and its inventory.
+        """
+        return self.render_summary()
+
+    def render_title(self) -> BlockContent:
+        """
+        Render an object's heading or a page's front matter, or return `None` to omit it
+
+        Returns
+        -------
+        :
+            The rendered title, or `None` to omit it.
+        """
+
+    def render_description(self) -> BlockContent:
+        """
+        Render the description, or return `None` to omit it
+
+        Returns
+        -------
+        :
+            The rendered description, or `None` to omit it.
+        """
+
+    def render_body(self) -> BlockContent:
+        """
+        Render the body, or return `None` to omit it
+
+        Returns
+        -------
+        :
+            The rendered body, or `None` to omit it.
+        """
+
+    @property
+    def summary_name(self) -> str:
+        """The label in linked summaries, which the base renderer leaves empty"""
+        return ""
+
+    def render_summary(self) -> Sequence[DefinitionItem]:
+        """
+        Render linked summary items, or return an empty sequence to omit them
+
+        Returns
+        -------
+        :
+            The summary items, or an empty sequence to omit them.
+        """
+        return []

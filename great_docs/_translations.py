@@ -755,6 +755,61 @@ UI_TRANSLATIONS: dict[str, dict[str, str]] = {
         "ar": "تم النسخ!",
         "he": "הועתק!",
     },
+    # ── Heading anchor links ──────────────────────────────────────────────
+    "copy_link": {
+        "en": "Copy link",
+        "fr": "Copier le lien",
+        "de": "Link kopieren",
+        "es": "Copiar enlace",
+        "pt": "Copiar link",
+        "it": "Copia link",
+        "nl": "Link kopiëren",
+        "ja": "リンクをコピー",
+        "ko": "링크 복사",
+        "zh-Hans": "复制链接",
+        "zh-Hant": "複製連結",
+        "ru": "Копировать ссылку",
+        "pl": "Kopiuj link",
+        "tr": "Bağlantıyı kopyala",
+        "sv": "Kopiera länk",
+        "da": "Kopiér link",
+        "nb": "Kopier lenke",
+        "is": "Afrita tengil",
+        "fi": "Kopioi linkki",
+        "cs": "Kopírovat odkaz",
+        "ro": "Copiază linkul",
+        "el": "Αντιγραφή συνδέσμου",
+        "hi": "लिंक कॉपी करें",
+        "ar": "نسخ الرابط",
+        "he": "העתק קישור",
+    },
+    "link_copied": {
+        "en": "Link copied!",
+        "fr": "Lien copié !",
+        "de": "Link kopiert!",
+        "es": "¡Enlace copiado!",
+        "pt": "Link copiado!",
+        "it": "Link copiato!",
+        "nl": "Link gekopieerd!",
+        "ja": "リンクをコピーしました！",
+        "ko": "링크가 복사됨!",
+        "zh-Hans": "链接已复制！",
+        "zh-Hant": "連結已複製！",
+        "ru": "Ссылка скопирована!",
+        "pl": "Skopiowano link!",
+        "tr": "Bağlantı kopyalandı!",
+        "sv": "Länken kopierad!",
+        "da": "Link kopieret!",
+        "nb": "Lenke kopiert!",
+        "is": "Tengill afritaður!",
+        "fi": "Linkki kopioitu!",
+        "cs": "Odkaz zkopírován!",
+        "ro": "Link copiat!",
+        "el": "Ο σύνδεσμος αντιγράφηκε!",
+        "hi": "लिंक कॉपी हो गया!",
+        "ar": "تم نسخ الرابط!",
+        "he": "הקישור הועתק!",
+    },
     # ── Copy page widget ──────────────────────────────────────────────────
     "copy_page": {
         "en": "Copy page",
@@ -7785,24 +7840,56 @@ UI_TRANSLATIONS: dict[str, dict[str, str]] = {
 # ══════════════════════════════════════════════════════════════════════════════
 
 
+# Reference labels render into the page and need no browser translation bundle.
+_REFERENCE_TRANSLATIONS: dict[str, dict[str, str]] = {
+    "base_classes": {
+        "en": "Bases",
+        "fr": "Bases",
+        "de": "Basisklassen",
+        "es": "Bases",
+        "pt": "Bases",
+        "it": "Basi",
+        "nl": "Basisklassen",
+        "ja": "基底クラス",
+        "ko": "기반 클래스",
+        "zh-Hans": "基类",
+        "zh-Hant": "基底類別",
+        "ru": "Базовые классы",
+        "pl": "Klasy bazowe",
+        "tr": "Temel sınıflar",
+        "sv": "Baser",
+        "da": "Basisklasser",
+        "nb": "Basisklasser",
+        "is": "Grunnklasar",
+        "fi": "Kantaluokat",
+        "cs": "Základní třídy",
+        "ro": "Clase de bază",
+        "el": "Βάσεις",
+        "hi": "आधार",
+        "ar": "الفئات الأساسية",
+        "he": "מחלקות בסיס",
+    },
+}
+
+
 def translate(key: str, language: str = DEFAULT_LANGUAGE) -> str:
     """
-    Look up a single translation string.
+    Look up a single translation string
 
     Parameters
     ----------
     key
-        Logical key (e.g., ``"back_to_top"``).
+        Logical key (e.g., `"back_to_top"`).
     language
-        BCP 47 language code. Falls back to ``"en"`` if the key or language
+        BCP 47 language code. Falls back to `"en"` if the key or language
         is not found.
 
     Returns
     -------
-    str
-        The translated string (may contain ``{placeholder}`` tokens).
+    :
+        The translated string (may contain `{placeholder}` tokens).
     """
-    entry = UI_TRANSLATIONS.get(key)
+    entry = UI_TRANSLATIONS.get(key) or _REFERENCE_TRANSLATIONS.get(key)
     if entry is None:
         return key
     return entry.get(language, entry.get(DEFAULT_LANGUAGE, key))
@@ -7839,10 +7926,10 @@ def translate_versioned(key: str, language: str, version: str) -> str:
 
 def get_translations_bundle(language: str = DEFAULT_LANGUAGE) -> dict[str, str]:
     """
-    Return the full translation bundle for a given language.
+    Return the full translation bundle for a given language
 
     This is the dict that gets serialised to JSON and injected into
-    every HTML page as a ``<meta name="gd-i18n">`` tag so that client-side
+    every HTML page as a `<meta name="gd-i18n">` tag so that client-side
     JavaScript can read the translations.
 
     Parameters
@@ -7852,7 +7939,7 @@ def get_translations_bundle(language: str = DEFAULT_LANGUAGE) -> dict[str, str]:
 
     Returns
     -------
-    dict[str, str]
+    :
         Mapping of key -> translated string for the given language.
     """
     bundle: dict[str, str] = {}
@@ -7863,7 +7950,7 @@ def get_translations_bundle(language: str = DEFAULT_LANGUAGE) -> dict[str, str]:
 
 def is_rtl(language: str) -> bool:
     """
-    Check whether a language uses right-to-left text direction.
+    Check whether a language uses right-to-left text direction
 
     Parameters
     ----------
@@ -7872,7 +7959,7 @@ def is_rtl(language: str) -> bool:
 
     Returns
     -------
-    bool
+    :
     """
     return language in RTL_LANGUAGES
 
@@ -7880,17 +7967,17 @@ def is_rtl(language: str) -> bool:
 def get_locale_for_dates(language: str) -> str:
     """
     Map a BCP 47 language code to the locale string expected by
-    ``Date.toLocaleDateString()`` in JavaScript.
+    `Date.toLocaleDateString()` in JavaScript.
 
     Parameters
     ----------
     language
-        BCP 47 language code (e.g., ``"zh-Hans"``).
+        BCP 47 language code (e.g., `"zh-Hans"`).
 
     Returns
     -------
-    str
-        A locale string suitable for the JS ``Intl`` API (e.g., ``"zh-CN"``).
+    :
+        A locale string suitable for the JS `Intl` API (e.g., `"zh-CN"`).
     """
     mapping: dict[str, str] = {
         "zh-Hans": "zh-CN",

@@ -33,6 +33,11 @@ from . import options as _options
     help="Watch for changes and rebuild automatically",
 )
 @click.option(
+    "--port",
+    type=click.IntRange(1, 65535),
+    help="Use a fixed localhost port for --watch (default: choose an available port)",
+)
+@click.option(
     "--no-refresh",
     is_flag=True,
     help="Skip re-discovering package exports (faster rebuild when API unchanged)",
@@ -90,6 +95,7 @@ from . import options as _options
 def build(
     project_path: str | None,
     watch: bool,
+    port: int | None,
     no_refresh: bool,
     version_filter: str | None,
     latest_only: bool,
@@ -115,6 +121,7 @@ def build(
     Use '--project-path' to point to a project in a different directory.
     Use '--watch' to serve the site with 'quarto preview' and rebuild after
     changes to the documentation sources, 'great-docs.yml' or the package.
+    Add '--port' to reuse the same localhost address across watch sessions.
 
     Use '--no-refresh' to skip API discovery for faster rebuilds when your
     package's public API hasn't changed.
@@ -141,6 +148,7 @@ def build(
       great-docs build                      # Full build with API refresh
       great-docs build --no-refresh         # Fast rebuild (skip API discovery)
       great-docs build --watch              # Rebuild on file changes
+      great-docs build --watch --port 4200   # Watch at http://localhost:4200
       great-docs build --versions 0.3,dev   # Build specific versions only
       great-docs build --latest-only        # Build only the latest version
       great-docs build --jobs auto          # Render pages in parallel
@@ -151,6 +159,9 @@ def build(
       great-docs build --from-repo https://github.com/owner/pkg.git --shallow
       great-docs build --from-repo https://github.com/owner/pkg.git --preview
     """
+    if port is not None and not watch:
+        raise click.BadParameter("requires --watch", param_hint="--port")
+
     try:
         if from_repo:
             # Remote build: clone, install, build, copy output
@@ -198,6 +209,7 @@ def build(
                 version_tags=version_tags,
                 latest_only=latest_only,
                 jobs=jobs,
+                watch_port=port,
             )
     except KeyboardInterrupt:
         click.echo("\n👋 Stopped watching")

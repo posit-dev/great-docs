@@ -18,7 +18,7 @@ from great_docs._api_evolution.model import (
 
 def diff_snapshots(old: ApiSnapshot, new: ApiSnapshot) -> ApiDiff:
     """
-    Compute the diff between two API snapshots.
+    Compute the diff between two API snapshots
 
     Parameters
     ----------
@@ -29,7 +29,7 @@ def diff_snapshots(old: ApiSnapshot, new: ApiSnapshot) -> ApiDiff:
 
     Returns
     -------
-    ApiDiff
+    :
     """
     result = ApiDiff(
         old_version=old.version,
@@ -366,7 +366,7 @@ def api_diff(
     package_name: str | None = None,
 ) -> ApiDiff | None:
     """
-    High-level entry point: diff a package between two git tags.
+    High-level entry point: diff a package between two git tags
 
     Parameters
     ----------
@@ -381,7 +381,7 @@ def api_diff(
 
     Returns
     -------
-    ApiDiff | None
+    :
         The diff, or `None` if snapshots could not be built.
     """
     from .snapshot import _detect_package_name, snapshot_at_tag, snapshot_from_griffe

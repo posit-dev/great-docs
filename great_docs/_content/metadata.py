@@ -16,6 +16,8 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from multimark import Node, NodeType, parse
+
 if TYPE_CHECKING:
     from .._yaml import YamlMapping
     from ..config import Config
@@ -29,26 +31,27 @@ SHORT_PARAGRAPH = 30
 PAGE_KEYS = ("description", "description-meta")
 """Front matter keys from which Quarto writes a page's description"""
 
-_INTERLINK = re.compile(r"\[\]\(`(~?)([^`]+)`\)")
-_IMAGE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
-_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
-_SPAN = re.compile(r"\[([^\]]*)\]\{[^}]*\}")
-_CODE = re.compile(r"`+([^`]*)`+(?:\{[^}]*\})?")
-_STRONG = re.compile(r"(\*\*|__)(.+?)\1")
-_EMPHASIS = re.compile(r"(?<!\w)([*_])(?!\s)(.+?)(?<!\s)\1(?!\w)")
-_BACKSLASH_ESCAPE = re.compile(r"\\([!-/:-@\[-`{-~])")
+_CODE_SPAN = r"(?<!`)(?P<ticks>`+)(?!`)[\s\S]*?(?<!`)(?P=ticks)(?!`)"
+_LINK_TARGET = r"\]\([^)]*\)"
+_SPAN_LABEL = r"(?:\\.|[^\[\]\\]|\[(?:\\.|[^\[\]\\])*\])*"
+_PANDOC_INLINE = re.compile(
+    r"\\."
+    r"|\[\]\(`(?P<short>~?)(?P<target>[^`\n]+)`\)"
+    rf"|(?P<code>{_CODE_SPAN})(?:\{{[^}}\n]*\}})?"
+    rf"|{_LINK_TARGET}"
+    rf"|\[(?P<span>{_SPAN_LABEL})\]\{{[^}}\n]*\}}"
+)
 
 # A Pandoc citation key, `@key` or `@{key}`, optionally with the `-` that suppresses the author
 _CITATION_KEY = r"-?@(?:\{[^{}]+\}|\w(?:[\w:.#$%&+?<>~/-]*\w)?)"
 # Code spans, escaped characters and link targets match first so that an `@` inside them is
 # never a citation. An `@` after a word character or a `/` belongs to an address or a URL.
 _CITATIONS = re.compile(
-    r"(?P<kept>`+[^`]*`+|\\.|\]\([^)]*\))"
+    rf"(?:{_CODE_SPAN}|\\.|{_LINK_TARGET})"
     rf"|(?P<bracketed>\s*\[[^\[\]]*(?<![\w\\/]){_CITATION_KEY}[^\[\]]*\](?![(\[{{]))"
     rf"|(?P<in_text>(?<![\w\\/]){_CITATION_KEY})"
 )
-_SET_ASIDE = re.compile("\ue000(\\d+)\ue001")
-_MARKDOWN_SPECIAL = re.compile(r"([\\`*_\[\]$@~^])")
+_MARKDOWN_SPECIAL = re.compile(r"([\\`*_\[\]$@~^]|&(?=[#\w]+;))")
 
 _HEADING = re.compile(r"#{1,6}(\s|$)")
 _SETEXT_UNDERLINE = re.compile(r"(=+|-+)\s*")
@@ -74,13 +77,12 @@ class FirstParagraph:
 
 def plain_text(markdown: str) -> str | None:
     """
-    Reduce inline Markdown to the text a reader sees
+    Convert Markdown to plain text for a page description
 
-    Keep the text of links, spans and inline code, and an interlink's target
-    as it is displayed: the short name for `~`, otherwise the full name. Drop emphasis markers, images, and the characters `<` and `>`,
-    which Quarto does not escape inside a meta tag. Drop bracketed citations
-    such as `[@key]` with the space before them, since only rendering resolves
-    them. Truncate the result to `MAX_LENGTH` characters at a word boundary.
+    Keep the visible text of links, spans and code, using the short name for
+    interlinks marked with `~`. Omit images and bracketed citations. Remove
+    literal angle brackets because Quarto emits them directly in the meta
+    tag. Truncate the result to `MAX_LENGTH` characters at a word boundary.
 
     Parameters
     ----------
@@ -92,25 +94,31 @@ def plain_text(markdown: str) -> str | None:
     :
         The text, or `None` when nothing is left.
     """
-    # Set escaped characters aside so that no other pattern matches them
-    escaped: list[str] = []
 
-    def set_aside(match: re.Match[str]) -> str:
-        escaped.append(match.group(1))
-        return f"\ue000{len(escaped) - 1}\ue001"
+    def replace_inline(match: re.Match[str]) -> str:
+        if target := match["target"]:
+            name = target.rsplit(".", 1)[-1] if match["short"] else target
+            return f"`{name}`"
+        if match["code"] is not None:
+            return match["code"]
+        if (span := match["span"]) is not None:
+            return _PANDOC_INLINE.sub(replace_inline, span)
+        return match[0]
 
-    text = _BACKSLASH_ESCAPE.sub(set_aside, markdown)
-    text = _CITATIONS.sub(lambda m: "" if m.group("bracketed") else m.group(0), text)
-    text = _INTERLINK.sub(
-        lambda m: m.group(2).rsplit(".", 1)[-1] if m.group(1) else m.group(2), text
-    )
-    text = _IMAGE.sub("", text)
-    text = _LINK.sub(r"\1", text)
-    text = _SPAN.sub(r"\1", text)
-    text = _CODE.sub(r"\1", text)
-    text = _STRONG.sub(r"\2", text)
-    text = _EMPHASIS.sub(r"\2", text)
-    text = _SET_ASIDE.sub(lambda m: escaped[int(m.group(1))], text)
+    markdown = _CITATIONS.sub(lambda m: "" if m["bracketed"] else m[0], markdown)
+    document = parse(_PANDOC_INLINE.sub(replace_inline, markdown))
+    images = [
+        node for event, node in document.walk() if event == "enter" and node.type == NodeType.IMAGE
+    ]
+    if images:
+        # Keep the omitted nodes in a tree so multimark frees their native memory.
+        omitted = parse("")
+        paragraph = Node.new(NodeType.PARAGRAPH)
+        omitted.append_child(paragraph)
+        for image in images:
+            paragraph.append_child(image)
+
+    text = document.render_plaintext()
     text = " ".join(text.replace("<", "").replace(">", "").split())
     if len(text) > MAX_LENGTH:
         text = text[: MAX_LENGTH - 3].rsplit(" ", 1)[0] + "..."
@@ -121,8 +129,8 @@ def as_metadata(text: str) -> str:
     """
     Escape plain text for a `description-meta` value
 
-    Quarto parses metadata values as Markdown, so an unescaped `*`, `$` or
-    `@` would become emphasis, math or a citation inside the tag.
+    Quarto parses metadata values as Markdown. Escape characters that could
+    start formatting, math, a citation or an HTML entity inside the tag.
 
     Parameters
     ----------

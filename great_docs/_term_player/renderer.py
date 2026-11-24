@@ -11,8 +11,15 @@ from .parser import Theme
 DEFAULT_FONT_FAMILY = "JetBrains Mono, Fira Code, SF Mono, Menlo, Consolas, monospace"
 DEFAULT_FONT_SIZE = 14
 DEFAULT_CELL_WIDTH = 8.4  # Approximate character width at 14px
-DEFAULT_LINE_HEIGHT = 1.5  # Line height multiplier
+# Line height multiplier. It's close to asciinema's 1.333, so recordings keep
+# the same proportions, and at the default font size it makes each row a whole
+# number of tenths of a pixel tall, which is the precision of the SVG's
+# coordinates, so rows stay exactly on the grid
+DEFAULT_LINE_HEIGHT = 1.35
 DEFAULT_PADDING = 16  # Padding inside terminal frame
+# Drawn with antialiased edges, adjacent background rectangles let the terminal
+# background show through as a seam wherever they meet in a scaled image
+BG_RENDERING = 'shape-rendering="crispEdges"'
 
 
 # A rendered row: background spans `(col, length, color)` and text spans
@@ -38,7 +45,8 @@ def render_frame(
     show_cursor: bool = True,
     window_chrome: str = "none",
 ) -> str:
-    """Render a terminal screen state as an SVG string.
+    """
+    Render a terminal screen state as an SVG string
 
     Parameters
     ----------
@@ -62,7 +70,7 @@ def render_frame(
 
     Returns
     -------
-    str
+    :
         A complete SVG document as a string.
     """
     if theme is None:
@@ -141,14 +149,17 @@ def render_svg(
     for row_idx, (bg_spans, text_spans) in enumerate(lines):
         y = row_idx * cell_h
 
-        # Colored backgrounds
-        for span_col, span_len, bg_color in bg_spans:
-            x = span_col * cell_w
-            w = span_len * cell_w
-            parts.append(
-                f'<rect x="{x:.1f}" y="{y:.1f}" '
-                f'width="{w:.1f}" height="{cell_h:.1f}" fill="{bg_color}"/>'
-            )
+        # Colored backgrounds, with crisp edges (see `BG_RENDERING`)
+        if bg_spans:
+            parts.append(f"<g {BG_RENDERING}>")
+            for span_col, span_len, bg_color in bg_spans:
+                x = span_col * cell_w
+                w = span_len * cell_w
+                parts.append(
+                    f'<rect x="{x:.1f}" y="{y:.1f}" '
+                    f'width="{w:.1f}" height="{cell_h:.1f}" fill="{bg_color}"/>'
+                )
+            parts.append("</g>")
 
         # Text runs (grouped by style)
         for span_col, text, fg_color, classes in text_spans:
@@ -180,7 +191,8 @@ def render_frames(
     theme: Theme | None = None,
     **kwargs,
 ) -> list[tuple[float, str]]:
-    """Render multiple screen states as SVG frames.
+    """
+    Render multiple screen states as SVG frames
 
     Parameters
     ----------
@@ -193,7 +205,8 @@ def render_frames(
 
     Returns
     -------
-    list of (time, svg_string) tuples.
+    :
+        list of (time, svg_string) tuples.
     """
     return [(time, render_frame(state, theme, **kwargs)) for time, state in states]
 

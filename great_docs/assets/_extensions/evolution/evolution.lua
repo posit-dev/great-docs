@@ -7,8 +7,7 @@
 --   {{< evolution build old_version="v1.0" new_version="v2.0" >}}
 --   {{< evolution build json="path/to/data.json" >}}
 --
--- Calls the companion _evolution_shortcode.py script, which imports
--- render_evolution_table() and prints the resulting HTML to stdout.
+-- Parse the companion script's Markdown so Quarto receives a native Pandoc table.
 
 -- Helper: stringify a kwarg value; returns "" if the key is absent or empty.
 -- In Quarto >=1.8 kwargs[key] can return a truthy-but-empty object for
@@ -109,6 +108,6 @@ return {
             )
         end
 
-        return pandoc.RawBlock("html", result)
+        return pandoc.read(result, "markdown").blocks
     end
 }

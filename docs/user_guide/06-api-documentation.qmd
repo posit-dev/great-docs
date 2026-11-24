@@ -15,6 +15,10 @@ docstring page yourself, and as your code evolves the documentation stays up to 
 
 This page explains how discovery works, what gets documented, and how to customize the result.
 
+To edit docstrings during generation, add content to individual objects or change
+how objects and pages render, see
+[API reference customisation](api-reference-customisation.qmd).
+
 ## How Discovery Works
 
 When you run `great-docs init` or `great-docs build`, Great Docs:
@@ -116,12 +120,47 @@ listing items there. The `exclude` setting only affects what `great-docs init` d
 generating your initial config. Between the built-in exclusions and the explicit list, you can keep
 the reference focused on the symbols your users actually need.
 
+### Pydantic Model Fields
+
+Great Docs can use literal descriptions in a Pydantic `BaseModel` declaration as attribute
+documentation. The three descriptions below appear in the API reference, including in static mode.
+
+```python
+from typing import Annotated
+
+from pydantic import BaseModel, Field
+
+
+class Colour(BaseModel):
+    red: int = Field(description="Red channel.")
+    green: Annotated[int, "Green channel."]
+    blue: Annotated[int, Field(description="Blue channel.")]
+    alpha: int = 255
+```
+
+A docstring immediately below a field takes precedence. For a field without a docstring, Great
+Docs uses a non-blank literal description from the assigned `Field`, then the last non-blank
+literal `Field` description inside `Annotated`. If neither supplies a description, Great Docs
+accepts a single bare string in the `Annotated` metadata.
+
+To show `alpha` as well, list the fields you want under `members` in `great-docs.yml`.
+
+```{.yaml filename="docs/great-docs.yml"}
+reference:
+  - title: Models
+    contents:
+      - name: Colour
+        members: [red, green, blue, alpha]
+```
+
 ## Member Page Placement
 
 For each top-level reference entry, Great Docs counts the direct members that will be documented.
 Depending on the object, these can include methods, attributes, functions and nested classes.
 Great Docs counts after selection, filtering and documentation hooks. A nested class counts
-once; its descendants do not add to the parent's count.
+once; its descendants do not add to the parent's count. Dataclass fields named after constructor
+parameters do not count: the class page documents each one with its parameter, never on a page
+of its own, and leaves out the fields of excluded parameters.
 
 ### Global policy
 
@@ -324,6 +363,15 @@ reference:
 
 When `members: false` is set, only the class itself is documented. You can then place individual
 methods wherever you want in your reference structure.
+
+### Linking to Base Classes
+
+Set `reference.show_bases: true` to add a **Bases** line below the class signature.
+For example, readers can follow the link from `Circle` to `Shape` to find the methods that
+`Circle` inherits. The setting works independently of inherited member selection.
+
+Great Docs links to bases that appear in your site's API reference. Public bases without a local
+reference target appear as code. Private bases appear only when you publish them in the reference.
 
 ### Documenting Inherited Methods
 

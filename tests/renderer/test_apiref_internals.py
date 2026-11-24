@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from great_docs._apiref._settings import Settings
 import dataclasses
 import sys
 import textwrap
@@ -15,7 +14,6 @@ from great_docs._apiref._docstring_sections import _DocstringSectionPatched, tra
 from great_docs._apiref._tools import render_code_variable, render_type_object
 from great_docs._apiref._type_checks import is_typealias, is_typevar
 from great_docs._apiref._visitor import NodeVisitor
-
 
 # ---------------------------------------------------------------------------
 # content.Doc.from_griffe — unknown kind raises TypeError
@@ -199,23 +197,21 @@ def test_render_type_object_with_type_input():
 
 
 # ---------------------------------------------------------------------------
-# Renderer overrides propagate through a shared extension point
+# Renderer overrides stay on the subclass that defines them
 # ---------------------------------------------------------------------------
 
 
-def test_render_subclass_outside_the_package_fills_in_its_extension_point():
-    """
-    Verify that a user's override reaches package renderers sharing its extension point
-    """
-    from great_docs._apiref._render.base import RenderBase
+def test_render_subclass_preserves_other_renderers():
+    """Keep an override on one renderer subclass out of its base and sibling classes"""
+    from great_docs._apiref._rendering.base import BaseRenderer
 
-    # An isolated extension point prevents the override from affecting
-    # package renderer classes shared by other tests.
-    class ExtensionPoint(RenderBase):
-        __module__ = "great_docs._apiref._render.probe"
+    # If overrides leaked into base classes, this isolated base would keep the
+    # leak away from the package renderers that other tests use.
+    class ExtensionPoint(BaseRenderer):
+        __module__ = "great_docs._apiref._rendering.probe"
 
     class PackageRenderer(ExtensionPoint):
-        __module__ = "great_docs._apiref._render.probe"
+        __module__ = "great_docs._apiref._rendering.probe"
 
     class UserRenderer(ExtensionPoint):
         def render_summary(self):
@@ -223,8 +219,9 @@ def test_render_subclass_outside_the_package_fills_in_its_extension_point():
 
     renderer = object.__new__(PackageRenderer)
 
-    assert renderer.render_summary() == [("user", "summary")]
-    assert "render_summary" not in vars(RenderBase)
+    assert renderer.render_summary() == []
+    assert object.__new__(UserRenderer).render_summary() == [("user", "summary")]
+    assert "render_summary" not in vars(ExtensionPoint)
 
 
 # ---------------------------------------------------------------------------
@@ -242,16 +239,16 @@ def test_docstring_section_patched_duplicate_registration_raises():
 
 
 # ---------------------------------------------------------------------------
-# _render/doctypealias._format_alias_value — non-Expr value
+# _rendering/type_aliases._format_alias_value — non-Expr value
 # and HAS_RUFF long expression
 # ---------------------------------------------------------------------------
 
 
 def test_render_value_non_expr_uses_format_value():
-    """RenderDocTypeAlias._render_value uses format_value when value is not a gf.Expr."""
+    """Format a type alias's plain string value through `format_value`"""
     from unittest.mock import MagicMock, patch
 
-    from great_docs._apiref._render.doctypealias import RenderDocTypeAlias
+    from great_docs._apiref._rendering.type_aliases import TypeAliasRenderer
     from great_docs._apiref.content import DocTypeAlias
 
     # Build a minimal mock griffe object with a plain-string value
@@ -265,10 +262,10 @@ def test_render_value_non_expr_uses_format_value():
     mock_obj.type_parameters = []
 
     doc = DocTypeAlias(name="X", obj=mock_obj)  # type: ignore[arg-type]
-    renderer = RenderDocTypeAlias(doc, settings=Settings())
+    renderer = TypeAliasRenderer(doc)
 
     with patch(
-        "great_docs._apiref._render.doctypealias.format_value", return_value="int | str"
+        "great_docs._apiref._rendering.type_aliases.format_value", return_value="int | str"
     ) as mock_fv:
         result = renderer._render_value("plain string")
 
@@ -278,11 +275,11 @@ def test_render_value_non_expr_uses_format_value():
 
 
 def test_render_value_long_expr_with_ruff():
-    """RenderDocTypeAlias._render_value calls render_formatted_expr when HAS_RUFF and expr is long."""
+    """Use Ruff formatting for long alias expressions when available"""
     from unittest.mock import MagicMock, patch
 
-    from great_docs._apiref._render import doctypealias as dta
-    from great_docs._apiref._render.doctypealias import RenderDocTypeAlias
+    from great_docs._apiref._rendering import type_aliases as dta
+    from great_docs._apiref._rendering.type_aliases import TypeAliasRenderer
     from great_docs._apiref.content import DocTypeAlias
 
     # Build an expression that stringifies to > 79 chars
@@ -321,12 +318,12 @@ def test_render_value_long_expr_with_ruff():
     mock_obj.type_parameters = []
 
     doc = DocTypeAlias(name="Y", obj=mock_obj)  # type: ignore[arg-type]
-    renderer = RenderDocTypeAlias(doc, settings=Settings())
+    renderer = TypeAliasRenderer(doc)
 
     with (
         patch.object(dta, "HAS_RUFF", True),
         patch(
-            "great_docs._apiref._render.doctypealias.render_formatted_expr",
+            "great_docs._apiref._rendering.type_aliases.render_formatted_expr",
             return_value="formatted",
         ) as mock_rfe,
     ):

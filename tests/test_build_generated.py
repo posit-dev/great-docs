@@ -14,9 +14,9 @@ import pytest
 from great_docs import GreatDocs
 from great_docs._build import generated
 from great_docs._build.log import BuildLog
-from tests.support import make_run, write_config
+from tests.support import make_run, prepared_reference, write_config
 
-# Use the standard library's `json` so planning `llms.txt` needs no test package.
+# Use the standard library's `json` so the prepared reference needs no test package.
 LLMS_API_BLOCK = {"package": "json", "sections": [{"contents": ["dumps"]}]}
 
 
@@ -79,8 +79,11 @@ def test_llms_cli_help_is_discovered_in_the_importable_module(tmp_path: Path):
     """
     docs = _cli_project(tmp_path)
 
-    with patch("great_docs._cliref.click.discover", return_value=None) as discover:
-        generated.llms_txt(make_run(docs, api_block=LLMS_API_BLOCK), docs._config, docs.layout)
+    with (
+        prepared_reference(LLMS_API_BLOCK) as ref,
+        patch("great_docs._cliref.click.discover", return_value=None) as discover,
+    ):
+        generated.llms_txt(make_run(docs, api_reference=ref), docs._config, docs.layout)
 
     discover.assert_called_once_with(
         "actual_module",
@@ -100,7 +103,8 @@ def test_llms_cli_heading_uses_the_distribution_name(importable: Path):
         importable, 'import click\n\n\n@click.group()\ndef main():\n    """Main CLI."""\n'
     )
 
-    generated.llms_txt(make_run(docs, api_block=LLMS_API_BLOCK), docs._config, docs.layout)
+    with prepared_reference(LLMS_API_BLOCK) as ref:
+        generated.llms_txt(make_run(docs, api_reference=ref), docs._config, docs.layout)
 
     assert "## CLI: my-dist" in (docs.layout.build_dir / "llms-full.txt").read_text(
         encoding="utf-8"
@@ -113,7 +117,8 @@ def test_llms_full_is_written_without_cli_when_the_cli_module_fails_to_import(im
     """
     docs = _cli_project(importable, "import brokencli_missing_dependency\n")
 
-    generated.llms_txt(make_run(docs, api_block=LLMS_API_BLOCK), docs._config, docs.layout)
+    with prepared_reference(LLMS_API_BLOCK) as ref:
+        generated.llms_txt(make_run(docs, api_reference=ref), docs._config, docs.layout)
 
     assert "## CLI" not in (docs.layout.build_dir / "llms-full.txt").read_text(encoding="utf-8")
 
@@ -131,7 +136,8 @@ def test_llms_full_is_written_without_cli_when_typer_cannot_convert_the_app(impo
         '    """Load."""\n',
     )
 
-    generated.llms_txt(make_run(docs, api_block=LLMS_API_BLOCK), docs._config, docs.layout)
+    with prepared_reference(LLMS_API_BLOCK) as ref:
+        generated.llms_txt(make_run(docs, api_reference=ref), docs._config, docs.layout)
 
     assert "## CLI" not in (docs.layout.build_dir / "llms-full.txt").read_text(encoding="utf-8")
 

@@ -37,7 +37,7 @@ def test_selected_gitlab_repository_reaches_skill_metadata(
     docs = GreatDocs(project_path=tmp_path)
     docs.layout.build_dir.mkdir()
     project = make_project(docs)
-    run = SimpleNamespace(project=project, api_block=None, has_skills=False)
+    run = SimpleNamespace(project=project, api_spec=None, has_skills=False)
 
     generated.skills(run, docs._config, docs.layout)  # type: ignore[arg-type]
 
@@ -92,7 +92,7 @@ def test_the_skills_step_records_whether_it_published_the_index(
     docs = GreatDocs(project_path=str(tmp_path))
     docs.layout.build_dir.mkdir()
     project = make_project(docs)
-    run = SimpleNamespace(project=project, api_block=None, has_skills=False)
+    run = SimpleNamespace(project=project, api_spec=None, has_skills=False)
 
     with contextlib.redirect_stdout(io.StringIO()):
         _ = generated.skills(run, docs._config, docs.layout)  # type: ignore[arg-type]

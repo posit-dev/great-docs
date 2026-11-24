@@ -182,7 +182,8 @@ def install_skill(
     extra_files: dict[str, str] | None = None,
     quiet: bool = False,
 ) -> list[Path]:
-    """Install a SKILL.md file for AI coding agents.
+    """
+    Install a SKILL.md file for AI coding agents
 
     Resolves skill content from one of three sources (in priority order):
 
@@ -222,7 +223,7 @@ def install_skill(
 
     Returns
     -------
-    list[Path]
+    :
         Paths to installed SKILL.md files (one per agent if multiple detected).
     """
     root = root or Path.cwd()
@@ -345,7 +346,8 @@ def check_skill(  # pyright: ignore[reportUnknownParameterType]
     update: bool = False,
     quiet: bool = False,
 ) -> list[dict]:  # pyright: ignore[reportMissingTypeArgument]
-    """Check if installed skills are up to date.
+    """
+    Check if installed skills are up to date
 
     Scans for installed SKILL.md files and compares their version with the version bundled in the
     installed Python package.
@@ -367,7 +369,7 @@ def check_skill(  # pyright: ignore[reportUnknownParameterType]
 
     Returns
     -------
-    list[dict]
+    :
         Status entries: `{"path": Path, "name": str, "installed_version": str,
         "package_version": str, "status": "current"|"outdated"|"unknown"}`.
     """
@@ -475,7 +477,8 @@ def list_skills(  # pyright: ignore[reportUnknownParameterType]
     url: str | None = None,
     quiet: bool = False,
 ) -> list[dict]:  # pyright: ignore[reportMissingTypeArgument]
-    """List available skills from a package or URL.
+    """
+    List available skills from a package or URL
 
     Parameters
     ----------
@@ -488,7 +491,7 @@ def list_skills(  # pyright: ignore[reportUnknownParameterType]
 
     Returns
     -------
-    list[dict]
+    :
         Skill entries: `{"name": str, "description": str, "path": Path|None,
         "version": str|None}`.
     """

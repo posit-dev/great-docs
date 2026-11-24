@@ -19,7 +19,8 @@ def normalize_doctests(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
 
     Returns
     -------
-    The object with unfenced doctest groups converted to Python code fences.
+    :
+        The object with unfenced doctest groups converted to Python code fences.
     """
     docstring = obj.docstring
     if docstring is not None:
@@ -41,7 +42,8 @@ def _fence_doctest_blocks(text: str) -> str:
 
     Returns
     -------
-    The source with each unfenced example enclosed in a Python code fence.
+    :
+        The source with each unfenced example enclosed in a Python code fence.
     """
     lines = text.split("\n")
     result: list[str] = []
@@ -92,6 +94,7 @@ def _is_prompt(stripped: str) -> bool:
 
     Returns
     -------
-    True when the line is a `>>>` prompt or a `...` continuation.
+    :
+        True when the line is a `>>>` prompt or a `...` continuation.
     """
     return stripped.startswith(">>> ") or stripped == ">>>" or stripped.startswith("... ")

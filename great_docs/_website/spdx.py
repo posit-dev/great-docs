@@ -791,19 +791,19 @@ _register(
 
 def get_license_info(identifier: str) -> LicenseInfo | None:
     """
-    Look up license metadata by SPDX identifier.
+    Look up license metadata by SPDX identifier
 
-    The lookup is case-insensitive: ``"mit"`` and ``"MIT"`` both match.
+    The lookup is case-insensitive: `"mit"` and `"MIT"` both match.
 
     Parameters
     ----------
     identifier
-        An SPDX short identifier (e.g. ``"MIT"``, ``"Apache-2.0"``).
+        An SPDX short identifier (e.g. `"MIT"`, `"Apache-2.0"`).
 
     Returns
     -------
-    LicenseInfo | None
-        The matching :class:`LicenseInfo`, or ``None`` for unrecognized identifiers.
+    :
+        The matching :class:`LicenseInfo`, or `None` for unrecognized identifiers.
     """
     # Try exact match first, then case-insensitive
     if identifier in LICENSES:
@@ -823,7 +823,7 @@ def build_license_features_html(
     tooltips: dict[str, str] | None = None,
 ) -> str:
     """
-    Generate the HTML for a collapsible license-features section.
+    Generate the HTML for a collapsible license-features section
 
     Uses the same button + animated-grid pattern as the Skills page install
     dropdown for visual consistency.  Produces color-coded badge lists for
@@ -843,12 +843,12 @@ def build_license_features_html(
         Translated heading for the limitations section.
     tooltips
         Optional mapping of badge label to tooltip description text.
-        When provided, each badge ``<span>`` gets a ``title`` attribute.
+        When provided, each badge `<span>` gets a `title` attribute.
 
     Returns
     -------
-    str
-        An HTML fragment ready for inclusion inside a ``.license-container``.
+    :
+        An HTML fragment ready for inclusion inside a `.license-container`.
     """
     import html as _html
 

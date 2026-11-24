@@ -1,3 +1,9 @@
+"""
+Type aliases for documentation nodes, docstring sections and renderers
+
+The renderer aliases name the instances that renderer selection can return.
+"""
+
 from __future__ import annotations
 
 from typing import Literal, TypeAlias
@@ -9,15 +15,15 @@ from ._docstring_sections import (
     DCDocstringSectionInitParameters,
     DCDocstringSectionParameterAttributes,
 )
-from ._render.api_page import RenderAPIPage
-from ._render.doc import RenderDoc
-from ._render.docattribute import RenderDocAttribute
-from ._render.docclass import RenderDocClass
-from ._render.docfunction import RenderDocFunction
-from ._render.docmodule import RenderDocModule
-from ._render.doctypealias import RenderDocTypeAlias
-from ._render.reference_page import RenderReferencePage
-from ._render.reference_section import RenderReferenceSection
+from ._rendering.api_pages import APIPageRenderer
+from ._rendering.attributes import AttributeRenderer
+from ._rendering.classes import ClassRenderer
+from ._rendering.functions import FunctionRenderer
+from ._rendering.modules import ModuleRenderer
+from ._rendering.objects import ObjectRenderer
+from ._rendering.reference_index import ReferenceIndexRenderer
+from ._rendering.reference_sections import ReferenceSectionRenderer
+from ._rendering.type_aliases import TypeAliasRenderer
 from .content import (
     Doc,
     DocAttribute,
@@ -75,15 +81,15 @@ Documentable: TypeAlias = (
 )
 
 RenderObjType: TypeAlias = (
-    RenderDoc
-    | RenderDocClass
-    | RenderDocFunction
-    | RenderDocAttribute
-    | RenderDocTypeAlias
-    | RenderDocModule
-    | RenderReferencePage
-    | RenderAPIPage
-    | RenderReferenceSection
+    ObjectRenderer
+    | ClassRenderer
+    | FunctionRenderer
+    | AttributeRenderer
+    | TypeAliasRenderer
+    | ModuleRenderer
+    | ReferenceIndexRenderer
+    | APIPageRenderer
+    | ReferenceSectionRenderer
 )
 
 AnyDocstringSection: TypeAlias = gf.DocstringSection | DCDocstringSection

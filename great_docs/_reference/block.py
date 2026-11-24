@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from .._build import quarto
 
 if TYPE_CHECKING:
+    from .._apiref.spec import ReferenceSpec
     from ..config import Config
     from .discovery import Categories
 
@@ -85,56 +86,38 @@ def reference_yaml(categories: Categories) -> str:
     return "\n".join(lines)
 
 
-def configure(
-    site_config: Config,
-    quarto_config: dict[str, Any],
-    importable_name: str,
-    sections: list[dict[str, Any]],
-) -> dict[str, Any]:
+def configure(config: Config, quarto_config: dict[str, Any], spec: ReferenceSpec) -> None:
     """
-    Add the API reference settings to a Quarto mapping
+    Add the discovered API metadata and Jupyter kernel to the Quarto project
 
     Parameters
     ----------
-    site_config
-        The project's configuration.
+    config
+        The project's documentation configuration.
     quarto_config
         The Quarto configuration, updated in place.
-    importable_name
-        The name under which the documented package is imported.
-    sections
-        The API reference sections.
-
-    Returns
-    -------
-    :
-        The `api-reference` block added to the Quarto configuration.
+    spec
+        The package and its discovered or authored sections.
     """
-    ref_title = site_config.reference_title or "API Reference"
-    ref_desc = site_config.reference_desc
-
-    if not site_config.reference_title and site_config.lang != "en":
-        from .._translations import translate
-
-        ref_title = translate("api_reference", site_config.lang)
-
     api_ref_config: dict[str, Any] = {
-        "package": importable_name,
+        "package": spec.package,
         "dir": "reference",
-        "title": ref_title,
+        "title": config.reference_index_title,
     }
-    if ref_desc:
-        api_ref_config["desc"] = ref_desc
-    if site_config.members_on_same_page is not None:
-        api_ref_config["members_on_same_page"] = site_config.members_on_same_page
-    api_ref_config["max_members_on_same_page"] = site_config.max_members_on_same_page
+    if config.reference_desc:
+        api_ref_config["desc"] = config.reference_desc
+    if config.reference_show_bases:
+        api_ref_config["show_bases"] = True
+    if config.members_on_same_page is not None:
+        api_ref_config["members_on_same_page"] = config.members_on_same_page
+    api_ref_config["max_members_on_same_page"] = config.max_members_on_same_page
 
-    dynamic = site_config.dynamic
+    dynamic = config.dynamic
     api_ref_config["dynamic"] = dynamic
     if not dynamic:
         print("Using static introspection mode (dynamic: false)")
 
-    parser = site_config.parser
+    parser = config.parser
     if parser and parser != "numpy":
         api_ref_config["parser"] = parser
         print(f"Using '{parser}' docstring parser")
@@ -142,20 +125,18 @@ def configure(
         api_ref_config["parser"] = "numpy"
 
     # Quarto 2 has no `syntax-definitions`, so it can't highlight `pythonsignature` blocks
-    signature_style = "plain" if quarto.is_q2() else site_config.callable_signatures_style
+    signature_style = "plain" if quarto.is_q2() else config.callable_signatures_style
     api_ref_config["callable_signatures"] = {
         "style": signature_style,
-        "wrap": site_config.callable_signatures_wrap,
+        "wrap": config.callable_signatures_wrap,
     }
 
-    jupyter_kernel = site_config.jupyter
+    jupyter_kernel = config.jupyter
     if jupyter_kernel:
         quarto_config["jupyter"] = jupyter_kernel
         print(f"Using '{jupyter_kernel}' Jupyter kernel")
 
-    api_ref_config["sections"] = sections
-    print(f"Auto-generated {len(sections)} section(s) from package exports")
+    api_ref_config["sections"] = spec.sections
+    print(f"Auto-generated {len(spec.sections)} section(s) from package exports")
 
     quarto_config["api-reference"] = api_ref_config
-
-    return api_ref_config

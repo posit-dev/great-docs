@@ -478,7 +478,7 @@ def load_snapshots_for_annotations(
     previous_version: str | None,
 ) -> tuple[ApiSnapshot | None, ApiSnapshot | None]:
     """
-    Load current and previous snapshots from a directory.
+    Load current and previous snapshots from a directory
 
     Parameters
     ----------
@@ -491,7 +491,7 @@ def load_snapshots_for_annotations(
 
     Returns
     -------
-    tuple[ApiSnapshot | None, ApiSnapshot | None]
+    :
         `(current, previous)` snapshot pair.
     """
     current = None

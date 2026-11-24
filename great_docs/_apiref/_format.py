@@ -67,6 +67,16 @@ MARKDOWN_START_CHARS = {"_", "*"}
 def escape_quotes(s: str) -> str:
     """
     Replace double & single quotes with html escape sequences
+
+    Parameters
+    ----------
+    s
+        Text to escape.
+
+    Returns
+    -------
+    :
+        The text with each quote replaced by its HTML entity.
     """
     return s.translate(QUOTES_TRANSLATION)
 
@@ -77,6 +87,17 @@ def escape_indents(s: str) -> str:
 
     The goal of this function is to convert a few spaces as is required
     to preserve the formatting.
+
+    Parameters
+    ----------
+    s
+        Text to convert.
+
+    Returns
+    -------
+    :
+        The text with each run of four spaces as four `&nbsp;` entities and each
+        newline as `<br>`.
     """
     return s.replace(" " * 4, "&nbsp;" * 4).replace("\n", "<br>")
 
@@ -88,6 +109,17 @@ def markdown_escape(s: str) -> str:
     This function is deliberately not robust to all possibilities. It
     will improve as needed. Quarto 2 reports an unclosed emphasis as an
     error, so for it every `_` and `*` is escaped (experimental).
+
+    Parameters
+    ----------
+    s
+        Text to escape.
+
+    Returns
+    -------
+    :
+        The text with a backslash before a leading `_` or `*`, or before every
+        `_` and `*` for Quarto 2.
     """
     if _is_q2():
         return escape_emphasis(s)
@@ -192,6 +224,16 @@ def _highlight_func(m: re.Match[str]) -> str:
     Wrap the matched group in a `Span` for a string
 
     Helper function for highlight_repr_value
+
+    Parameters
+    ----------
+    m
+        A match of one of the value patterns, whose named group gives the value type.
+
+    Returns
+    -------
+    :
+        The matched value as a Markdown span with the Pygments class for its type.
     """
     matched_type = cast("str", m.lastgroup)
     klass = TYPE_RE_LOOKUP[matched_type][1]
@@ -231,9 +273,33 @@ def highlight_repr_value(value: str) -> str:
 def format_see_also(s: str) -> str:
     """
     Convert qualified names in see-also section content into interlinks
+
+    Parameters
+    ----------
+    s
+        The section content.
+
+    Returns
+    -------
+    :
+        The dedented content with the qualified names that start each line as
+        interlinks and continuation lines joined to their item.
     """
 
     def replace_func(m: re.Match[str]) -> str:
+        """
+        Convert a comma-separated list of qualified names into interlinks
+
+        Parameters
+        ----------
+        m
+            A match of the qualified names at the start of a line.
+
+        Returns
+        -------
+        :
+            The interlinks, separated by commas.
+        """
         # There should only one string in the groups
         txt = [g for g in m.groups() if g][0]
         res = ", ".join([str(InterLink(target=f"~{s.strip()}")) for s in txt.split(",")])
@@ -249,8 +315,20 @@ def format_name(doc: content.Doc, format: DisplayNameFormat = "relative") -> str
 
     Parameters
     ----------
-    format:
+    doc
+        The documented object.
+    format
         The format to use for the object's name.
+
+    Returns
+    -------
+    :
+        The name in that format.
+
+    Raises
+    ------
+    ValueError
+        If `format` is not a known name format.
     """
     obj = doc.obj
     if format == "doc":
@@ -270,6 +348,19 @@ def format_name(doc: content.Doc, format: DisplayNameFormat = "relative") -> str
 
 @singledispatch
 def repr_obj(obj: Any) -> str:
+    """
+    Represent an object as code
+
+    Parameters
+    ----------
+    obj
+        The object.
+
+    Returns
+    -------
+    :
+        The code for the object; `repr(obj)` for types without a registered handler.
+    """
     return repr(obj)
 
 
@@ -277,6 +368,16 @@ def repr_obj(obj: Any) -> str:
 def _(obj: gf.Expr) -> str:
     """
     Represent an expression as code
+
+    Parameters
+    ----------
+    obj
+        The expression.
+
+    Returns
+    -------
+    :
+        The code for each part of the expression, concatenated.
     """
     # We expect the obj expression to consist of
     # a combination of only strings and name expressions
@@ -290,7 +391,17 @@ def _(s: str) -> str:
 
     Preserve any prefix, as in `b"raw"`. Leave literals containing double quotes
     or backslashes unchanged to preserve their value without adding escapes.
-    Leave other input unchanged.
+
+    Parameters
+    ----------
+    s
+        Code, usually a string literal.
+
+    Returns
+    -------
+    :
+        The double-quoted literal, or `s` unchanged when it is not a single-quoted
+        literal that can switch quotes.
     """
     if match := _SINGLE_QUOTED_RE.fullmatch(s):
         return f'{match["prefix"]}"{match["content"]}"'
@@ -301,6 +412,16 @@ def _(s: str) -> str:
 def _(obj: gf.ExprName) -> str:
     """
     Represent a named expression as its bare name
+
+    Parameters
+    ----------
+    obj
+        The named expression.
+
+    Returns
+    -------
+    :
+        The name, without its path.
     """
     return obj.name
 
@@ -316,10 +437,16 @@ def pretty_code(s: str) -> str:
 
     Parameters
     ----------
-    s :
+    s
         Code to be modified. It should already have markdown for
         the links, but should not be wrapped inside the <code>
         tags. Those tags should wrap the output of this function.
+
+    Returns
+    -------
+    :
+        The dedented code with highlighted values, `&nbsp;` indents, `<br>` line
+        breaks and escaped quotes.
     """
     return escape_quotes(escape_indents(highlight_repr_value(_escape_doubled_braces(dedent(s)))))
 
@@ -356,6 +483,12 @@ def _stdin_filename() -> str:
     errors. So a single filename should suffice for all calls to ruff.
 
     ref: https://github.com/astral-sh/ruff/issues/17307
+
+    Returns
+    -------
+    :
+        The name, without a directory, of a `.py` file in the current directory. The
+        file itself does not exist.
     """
     with tempfile.NamedTemporaryFile(suffix=".py", dir=Path.cwd()) as f:
         filename = Path(f.name).name

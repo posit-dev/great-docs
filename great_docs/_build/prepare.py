@@ -170,8 +170,8 @@ def build_directory(
         json.dump(gd_options, f)
 
     reference.add_api_block(run, config, refresh=refresh)
-    if run.api_block is not None:
-        run.contributions.append(reference_sections.contribution(config, run.api_block))
+    if run.api_spec is not None:
+        run.contributions.append(reference_sections.contribution(config, run.api_spec))
 
     # API reference availability determines whether the homepage links to `llms.txt` and
     # `llms-full.txt`; resolve it before writing the homepage.

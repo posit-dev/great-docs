@@ -14,7 +14,7 @@ from great_docs._apiref.api_reference import APIReference
 from great_docs._apiref.inventory import InventoryItem
 from great_docs._reference import documented
 from great_docs.core import GreatDocs
-from tests.support import make_exports, make_project
+from tests.support import make_exports, make_project, reference_from_options
 
 
 @pytest.mark.parametrize("contents", [["Foo", "foo"], ["foo", "Foo"]])
@@ -36,7 +36,9 @@ def test_case_collision_symbols_keep_their_python_names(
     )
     monkeypatch.syspath_prepend(str(tmp_path))
     with pytest.warns(UserWarning, match="only by case"):
-        ref = APIReference({"package": name, "sections": [{"title": "API", "contents": contents}]})
+        ref = reference_from_options(
+            {"package": name, "sections": [{"title": "API", "contents": contents}]}
+        )
 
     expected = ["Foo", "Foo.fit", "foo"] if contents[0] == "Foo" else ["foo", "Foo", "Foo.fit"]
     expected_paths = ["Foo", "foo-function"] if contents[0] == "Foo" else ["foo", "Foo-class"]

@@ -68,6 +68,7 @@ FROZEN_DEFAULT_CONFIG: dict[str, Any] = {
     "bibliography": [],
     "csl": None,
     "reference": [],
+    "api_reference_extension": None,
     "members_on_same_page": None,
     "max_members_on_same_page": 5,
     "logo": {"light": None, "dark": None, "show_title": False},
