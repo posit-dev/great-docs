@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .._build import quarto
 from .._content.marimo import get_islands_head_html
 from . import quarto_yml
 
@@ -368,6 +369,7 @@ SCRIPTS: tuple[Script, ...] = (
         needs_repository=True,
     ),
     Script("copy-page.js", _AFTER_BODY, lambda c: c.markdown_pages_widget),
+    Script("quarto2-nav.js", _AFTER_BODY, lambda c: quarto.is_q2()),
     Script("sidebar-wrap.js", _AFTER_BODY),
     Script("sidebar-float.js", _AFTER_BODY),
     Script(
