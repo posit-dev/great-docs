@@ -50,7 +50,10 @@ class TestAdaptConfig:
             "shift-heading-level-by": -1,
         }
         assert adapted["website"] == {"title": "Demo", "search": {"search-json": True}}
-        assert adapted["format"]["html"] == {"theme": ["flatly", "quarto2.scss"]}
+        assert adapted["format"]["html"] == {
+            "theme": ["flatly", "quarto2.scss"],
+            "syntax-highlighting": "arrow",
+        }
         assert adapted["project"]["post-render"] == [
             "scripts/share-sidebars.py",
             "scripts/quarto2-post-render.py",
@@ -109,6 +112,11 @@ class TestAdaptConfig:
             "dark": ["darkly", "quarto2.scss"],
         }
         assert "theme" not in quarto2.adapt_config({"format": {"html": {}}})["format"]["html"]
+
+    @pytest.mark.parametrize("key", ["syntax-highlighting", "highlight-style"])
+    def test_keeps_a_highlight_style_the_site_names(self, key: str):
+        adapted = quarto2.adapt_config({"format": {"html": {key: "github"}}})
+        assert adapted["format"]["html"] == {key: "github"}
 
     def test_post_render_script_runs_last(self):
         quarto_config = {"project": {"post-render": ["scripts/quarto2-post-render.py", "b.py"]}}
