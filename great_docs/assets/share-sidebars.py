@@ -11,10 +11,15 @@ previewed, removes the template.
 
 During `quarto preview`, a re-render of one page doesn't render the
 template again, so the full sidebar is cached in the project.
+
+Quarto 1 writes sidebar links from the site root (`../reference/a.html`);
+Quarto 2 (experimental) writes them from the page (`a.html`) and marks up
+collapsed sections a little differently. The script reads both.
 """
 
 import json
 import os
+import posixpath
 import re
 from pathlib import Path, PurePosixPath
 
@@ -26,8 +31,11 @@ _NAV_OPEN = re.compile(r'<nav id="quarto-sidebar"[^>]*>')
 _NAV_TAG = re.compile(r"<(/?)nav[\s>]")
 _UL_TAG = re.compile(r"<(/?)ul(?:\s[^>]*)?>")
 _UL_COLLAPSED = re.compile(
-    r'<ul id="(?P<id>[^"]+)" class="collapse list-unstyled sidebar-section depth\d+ ">'
+    r'<ul id="(?P<id>[^"]+)"(?: aria-labelledby="[^"]*")?'
+    r' class="collapse list-unstyled sidebar-section depth\d+ ?">'
 )
+_LINK = re.compile(r'(\s(?:href|src)=")([^"]*)')
+_NOT_RELATIVE = re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*:|[/#?]")
 
 
 def _nav_bounds(html):
@@ -52,24 +60,40 @@ def _offset(page):
 def _rebase(nav, source, target):
     """Point the links of a sidebar taken from page `source` at page `target`"""
     old, new = _offset(source), _offset(target)
-    if old == new:
-        return nav
-    return re.sub(r'(\s(?:href|src)=")' + re.escape(old), lambda m: m.group(1) + new, nav)
+    source_dir, target_dir = posixpath.dirname(source), posixpath.dirname(target)
+
+    def link(match):
+        url = match.group(2)
+        if url.startswith(old):
+            return match.group(1) + new + url[len(old) :]
+        if source_dir == target_dir or not url or _NOT_RELATIVE.match(url):
+            return match.group(0)
+        # A link from the page, as Quarto 2 writes it
+        path, query = re.match(r"([^#?]*)(.*)", url).groups()
+        moved = posixpath.relpath(posixpath.join(source_dir, path), target_dir or ".")
+        return match.group(1) + moved + ("/" if path.endswith("/") else "") + query
+
+    return _LINK.sub(link, nav)
 
 
 def _expand(nav, section_id):
     """Open a collapsed sidebar section, as Quarto does around the current page"""
     sid = re.escape(section_id)
     nav = re.sub(
-        r'(<ul id="' + sid + r'" class="collapse list-unstyled sidebar-section depth\d+ )">',
-        r'\1show">',
+        r'(<ul id="'
+        + sid
+        + r'"(?: aria-labelledby="[^"]*")? class="collapse list-unstyled sidebar-section'
+        + r' depth\d+) ?">',
+        r'\1 show">',
         nav,
         count=1,
     )
     return re.sub(
         r'(class="[^"]*?) collapsed(" data-bs-toggle="collapse" data-bs-target="#'
         + sid
-        + r'"\s+role="navigation" aria-expanded=)"false"',
+        + r'"\s+(?:role="navigation"|aria-controls="'
+        + sid
+        + r'") aria-expanded=)"false"',
         r'\1\2"true"',
         nav,
     )
@@ -79,7 +103,7 @@ def _for_page(nav, template, page):
     """Return the template's sidebar as Quarto renders it on `page`"""
     nav = _rebase(nav, template, page)
     offset = _offset(page)
-    targets = [offset + page]
+    targets = [offset + page, posixpath.basename(page)]
     if page.endswith("/index.html"):
         targets.append(offset + page[: -len("index.html")])
     link = re.search(
