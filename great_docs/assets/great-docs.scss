@@ -958,34 +958,35 @@ code span.sig-name {
 }
 
 /* CLI and MCP pages also use `.doc-signature` for Bash and JSON blocks.
-   Scope signature token colours to `pythonsignature`. */
+   Scope signature token colours to `pythonsignature`. Each rule also names
+   the `hl-*` class that Quarto 2 (experimental) writes for the token. */
 
 /* Callable name, such as `add_node` in `Graph.add_node`. */
-.doc-signature pre.pythonsignature span.fu {
+.doc-signature pre.pythonsignature :is(span.fu, span.hl-function) {
     color: #4758AB;
     font-weight: 600;
 }
 
 /* Class name, such as `Graph` in `Graph.add_node`. */
-.doc-signature pre.pythonsignature span.dt {
+.doc-signature pre.pythonsignature :is(span.dt, span.hl-type) {
     color: #0e84b5;
     font-weight: 600;
 }
 
 /* `None` constant. */
-.doc-signature pre.pythonsignature span.cn {
+.doc-signature pre.pythonsignature :is(span.cn, span.hl-constant) {
     color: #7D4E9E;
     font-weight: 500;
 }
 
 /* `True` and `False` constants. */
-.doc-signature pre.pythonsignature span.bn {
+.doc-signature pre.pythonsignature :is(span.bn, span.hl-boolean) {
     color: #0077AA;
     font-weight: 600;
 }
 
 /* Operators, such as `=`, `**` and `->`. */
-.doc-signature pre.pythonsignature span.op {
+.doc-signature pre.pythonsignature :is(span.op, span.hl-operator) {
     color: #D14D00;
     font-weight: 500;
 }
@@ -997,8 +998,19 @@ code span.sig-name {
 .doc-signature
     pre.pythonsignature
     > code:not(:has(> span > a:first-child + :not(span.fu, span.dt)))
-    > span
+    > span:not(.hl-signature-line)
     ~ span {
+    display: inline-block;
+    margin-top: 1lh;
+}
+
+/* The same gap under Quarto 2 (experimental), which writes no line anchors, so
+   the rule above leaves its lines alone. Each line is a `hl-signature-line` span. */
+.doc-signature
+    pre.pythonsignature
+    > code:not(:has(> span.hl-signature-line > :first-child:not(span.hl-function, span.hl-type)))
+    > span.hl-signature-line
+    ~ span.hl-signature-line {
     display: inline-block;
     margin-top: 1lh;
 }
@@ -4239,44 +4251,59 @@ body.quarto-dark code span.sig-name {
     color: var(--gd-syn-name) !important;
 }
 
-body.quarto-dark .doc-signature pre.pythonsignature span.fu {
+body.quarto-dark .doc-signature pre.pythonsignature :is(span.fu, span.hl-function) {
     color: var(--gd-syn-name) !important;
 }
 
-body.quarto-dark .doc-signature pre.pythonsignature span.dt {
+body.quarto-dark .doc-signature pre.pythonsignature :is(span.dt, span.hl-type) {
     color: var(--gd-syn-class) !important;
 }
 
-body.quarto-dark .doc-signature pre.pythonsignature span.cn {
+body.quarto-dark .doc-signature pre.pythonsignature :is(span.cn, span.hl-constant) {
     color: var(--gd-syn-none) !important;
 }
 
-body.quarto-dark .doc-signature pre.pythonsignature span.bn {
+body.quarto-dark .doc-signature pre.pythonsignature :is(span.bn, span.hl-boolean) {
     color: var(--gd-syn-bool) !important;
 }
 
-body.quarto-dark .doc-signature pre.pythonsignature span.op {
+body.quarto-dark .doc-signature pre.pythonsignature :is(span.op, span.hl-operator) {
     color: var(--gd-syn-operator) !important;
 }
 
-/* Pandoc/Quarto syntax highlighting tokens - dark mode */
+/* Pandoc/Quarto syntax highlighting tokens - dark mode. Each rule also names the
+   `hl-*` classes of Quarto 2 (experimental), as Quarto 2 matches them to the tokens. */
 body.quarto-dark .sourceCode span.kw,       /* Keywords */
-body.quarto-dark .highlight span.k {
+body.quarto-dark .highlight span.k,
+body.quarto-dark .sourceCode :is(
+    span.hl-keyword,
+    span.hl-keyword-operator,
+    span.hl-keyword-function,
+    span.hl-keyword-storage,
+    span.hl-tag
+) {
     color: var(--gd-syn-keyword);
 }
 
-body.quarto-dark .sourceCode span.cf {      /* Control flow */
+body.quarto-dark .sourceCode span.cf,       /* Control flow */
+body.quarto-dark .sourceCode :is(
+    span.hl-keyword-control,
+    span.hl-keyword-conditional,
+    span.hl-keyword-repeat
+) {
     color: var(--gd-syn-keyword);
 }
 
-body.quarto-dark .sourceCode span.op {      /* Operators */
+body.quarto-dark .sourceCode span.op,       /* Operators */
+body.quarto-dark .sourceCode :is(span.hl-operator, span.hl-operator-word) {
     color: var(--gd-syn-operator);
 }
 
 body.quarto-dark .sourceCode span.st,       /* Strings */
 body.quarto-dark .highlight span.s,
 body.quarto-dark .highlight span.s1,
-body.quarto-dark .highlight span.s2 {
+body.quarto-dark .highlight span.s2,
+body.quarto-dark .sourceCode :is(span.hl-string, span.hl-markup-raw) {
     color: var(--gd-syn-string);
 }
 
@@ -4284,39 +4311,80 @@ body.quarto-dark .sourceCode span.dv,       /* Decimal values */
 body.quarto-dark .sourceCode span.fl,       /* Floats */
 body.quarto-dark .sourceCode span.bn,       /* Base-N integers */
 body.quarto-dark .highlight span.mi,
-body.quarto-dark .highlight span.mf {
+body.quarto-dark .highlight span.mf,
+body.quarto-dark .sourceCode :is(span.hl-number, span.hl-constant-numeric) {
     color: var(--gd-syn-number);
 }
 
 body.quarto-dark .sourceCode span.co,       /* Comments */
 body.quarto-dark .highlight span.c,
 body.quarto-dark .highlight span.c1,
-body.quarto-dark .highlight span.cm {
+body.quarto-dark .highlight span.cm,
+body.quarto-dark .sourceCode :is(
+    span.hl-comment,
+    span.hl-comment-line,
+    span.hl-comment-block,
+    span.hl-comment-unused
+) {
     color: var(--gd-syn-comment);
     font-style: italic;
 }
 
 body.quarto-dark .sourceCode span.fu,       /* Functions */
-body.quarto-dark .highlight span.nf {
+body.quarto-dark .highlight span.nf,
+body.quarto-dark .sourceCode :is(
+    span.hl-function,
+    span.hl-function-method,
+    span.hl-function-special,
+    span.hl-function-macro,
+    span.hl-constructor,
+    span.hl-constructor-builtin,
+    span.hl-markup-heading,
+    span.hl-markup-link
+) {
     color: var(--gd-syn-function);
 }
 
 body.quarto-dark .sourceCode span.bu,       /* Built-ins */
-body.quarto-dark .highlight span.nb {
+body.quarto-dark .highlight span.nb,
+body.quarto-dark .sourceCode :is(span.hl-function-builtin, span.hl-variable-builtin) {
     color: var(--gd-syn-builtin);
 }
 
 body.quarto-dark .sourceCode span.va,       /* Variables */
 body.quarto-dark .sourceCode span.at,       /* Attributes */
-body.quarto-dark .highlight span.n {
+body.quarto-dark .highlight span.n,
+body.quarto-dark .sourceCode :is(
+    span.hl-variable,
+    span.hl-variable-parameter,
+    span.hl-variable-other,
+    span.hl-variable-mutable,
+    span.hl-variable-member,
+    span.hl-property,
+    span.hl-property-builtin,
+    span.hl-attribute,
+    span.hl-label
+) {
     color: var(--gd-text-primary);
 }
 
-body.quarto-dark .sourceCode span.sc {      /* Special characters */
+body.quarto-dark .sourceCode span.sc,       /* Special characters */
+body.quarto-dark .sourceCode :is(
+    span.hl-string-escape,
+    span.hl-escape,
+    span.hl-punctuation-special,
+    span.hl-special,
+    span.hl-embedded
+) {
     color: var(--gd-syn-string);
 }
 
-body.quarto-dark .sourceCode span.ss {      /* Special strings */
+body.quarto-dark .sourceCode span.ss,       /* Special strings */
+body.quarto-dark .sourceCode :is(
+    span.hl-string-regexp,
+    span.hl-string-special,
+    span.hl-string-special-symbol
+) {
     color: var(--gd-syn-string);
 }
 
@@ -4324,11 +4392,20 @@ body.quarto-dark .sourceCode span.im {      /* Import */
     color: var(--gd-syn-keyword);
 }
 
-body.quarto-dark .sourceCode span.cn {      /* Constants (None, True, False) */
+body.quarto-dark .sourceCode span.cn,       /* Constants (None, True, False) */
+body.quarto-dark .sourceCode :is(span.hl-constant, span.hl-boolean, span.hl-constant-builtin) {
     color: var(--gd-syn-none);
 }
 
-body.quarto-dark .sourceCode span.dt {      /* Data types */
+body.quarto-dark .sourceCode span.dt,       /* Data types */
+body.quarto-dark .sourceCode :is(
+    span.hl-type,
+    span.hl-type-builtin,
+    span.hl-type-parameter,
+    span.hl-type-enum,
+    span.hl-namespace,
+    span.hl-module
+) {
     color: var(--gd-syn-class);
 }
 
@@ -4336,15 +4413,18 @@ body.quarto-dark .sourceCode span.an {      /* Annotation */
     color: var(--gd-syn-comment);
 }
 
-body.quarto-dark .sourceCode span.pp {      /* Preprocessor */
+body.quarto-dark .sourceCode span.pp,       /* Preprocessor */
+body.quarto-dark .sourceCode span.hl-keyword-directive {
     color: var(--gd-syn-keyword);
 }
 
-body.quarto-dark .sourceCode span.ex {      /* Extension */
+body.quarto-dark .sourceCode span.ex,       /* Extension */
+body.quarto-dark .sourceCode span.hl-extension {
     color: var(--gd-syn-function);
 }
 
-body.quarto-dark .sourceCode span.do {      /* Documentation */
+body.quarto-dark .sourceCode span.do,       /* Documentation */
+body.quarto-dark .sourceCode span.hl-comment-documentation {
     color: var(--gd-syn-comment);
     font-style: italic;
 }
@@ -4354,7 +4434,8 @@ body.quarto-dark .sourceCode span.al {      /* Alert */
     font-weight: bold;
 }
 
-body.quarto-dark .sourceCode span.er {      /* Error */
+body.quarto-dark .sourceCode span.er,       /* Error */
+body.quarto-dark .sourceCode span.hl-error {
     color: #ff5555;
 }
 
