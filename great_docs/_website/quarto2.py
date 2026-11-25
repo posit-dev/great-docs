@@ -63,6 +63,8 @@ def adapt_config(
       rewrites them in each page.
     - Quarto 2 warns about a project that doesn't declare `quarto-required: "^2"`, so the
       configuration declares it.
+    - Quarto 2 ignores the navbar's `logo-dark` and writes a single logo for both color
+      modes, so the two logos become a `logo` with `light` and `dark` paths.
 
     Applying it again to its result changes nothing.
 
@@ -94,6 +96,12 @@ def adapt_config(
         cards = _social_cards(website, native=native_social_cards)
         if cards is not None:
             settings["social-cards"] = cards
+        navbar: Any = website.get("navbar")
+        if isinstance(navbar, dict) and "logo-dark" in navbar:
+            navbar = cast("dict[str, Any]", navbar)
+            dark = navbar.pop("logo-dark")
+            if isinstance(navbar.get("logo"), str):
+                navbar["logo"] = {"light": navbar["logo"], "dark": dark}
 
     html: Any = adapted.get("format", {}).get("html")
     if isinstance(html, dict) and "shift-heading-level-by" in html:
